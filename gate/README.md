@@ -47,12 +47,19 @@ Sem `gate.comandoCompleto` o gate recusa alto — não adivinha o comando.
 }
 ```
 
-`guarda.regras` lista só as regras LIGADAS (padrão: as oito); tirar uma da lista a desliga. `kit.json` ilegível
-não trava o hook: cai nas regras padrão e avisa no stderr. Registro no `settings.json`:
+`guarda.regras` lista só as regras LIGADAS (padrão: as oito); tirar uma da lista a desliga. Nome que não é regra, ou
+valor que não é lista, é erro (`carregarConfig`), e `arvore.extras` exige `nome` único e fora de `arvore`, `runtime`, `env`,
+`envNomes` e `dotenv`. `kit.json` ilegível ou inválido não trava o hook: cai nas regras padrão e avisa no stderr. Registro no `settings.json`:
 `{ "hooks": { "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "node <caminho>/gate/guarda-de-operacao.mjs" }] }] } }`.
 
 O perfil `pnpm-workspace` com `pacotes: "auto"` reproduz o gate do Izanagi (`pnpm -r --workspace-concurrency=2 test`,
 `pnpm --filter <pacote> test`, `pnpm -r typecheck`).
+
+## A raiz do projeto
+
+Os scripts do gate medem o toplevel do git do **diretório de onde rodam** (o `cwd`), não a pasta do script: rodados de
+fora do repositório, medem o `cwd`. Chamados pelo `package.json` da raiz (`scripts/kit/…`), não são afetados.
+A trava e o verde ficam no `git-common-dir`, então valem entre worktrees do mesmo repositório.
 
 ## Variáveis de ambiente
 

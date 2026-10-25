@@ -242,7 +242,8 @@ function alvoDescartavel(alvo, cwd, descartaveis = DESCARTAVEIS) {
 
 /**
  * Avalia UM comando simples. Devolve o motivo (texto para o operador) ou `null`.
- * `ctx.raizDe(dir)` acha a raiz do monorepo (ou `null`); `ctx.devNoAr(raiz)` diz
+ * `ctx.raizDe(dir)` acha a raiz do monorepo com front (ou `null`) e vale só para o build;
+ * `ctx.raizDoGit(dir)` acha o toplevel do git, para a lista de migrations; `ctx.devNoAr(raiz)` diz
  * se há `next dev` desta árvore no ar: `true`, `false` ou `null` (não conferi).
  * `ctx.migracoesForaDaDevelop(raiz)` devolve `{ fora: string[] | null, causa? }`.
  */
@@ -287,7 +288,8 @@ export function avaliarSegmento(seg, ctx) {
     const reset = pos[0] === "db" && pos[1] === "reset";
     if (!aplicaNoLocal && !reset) return null;
     const [workdir] = valoresDe(args, "--workdir");
-    const raiz = ctx.raizDe(workdir ? resolve(ctx.cwd, workdir) : ctx.cwd);
+    // A raiz é o toplevel do git, não a do front: o banco local existe em projeto sem monorepo. Sem git é `cwd`, e a lista vira "não sei".
+    const raiz = (ctx.raizDoGit ?? ctx.raizDe)(workdir ? resolve(ctx.cwd, workdir) : ctx.cwd);
     // `db reset --linked` pergunta pelo apagar; a lista de fora da develop é só do banco local.
     const tronco = ctx.tronco ?? TRONCO_PADRAO;
     const [remoto, ...ramo] = tronco.split("/");
@@ -479,10 +481,10 @@ export function migracoesForaDoTronco(raiz, { migrations = MIGRATIONS_PADRAO, tr
   return { fora: locais.filter((n) => !naDevelop.has(n)).sort() };
 }
 
-/** O processo não existe mais? `kill(pid, 0)` não mata: só pergunta, e ESRCH é "sumiu". */
 /** O nome de antes (lia a `origin/develop` fixa) continua exportado. */
 export const migracoesForaDaDevelop = (raiz) => migracoesForaDoTronco(raiz);
 
+/** O processo não existe mais? `kill(pid, 0)` não mata: só pergunta, e ESRCH é "sumiu". */
 function processoSumiu(pid) {
   try {
     process.kill(Number(pid), 0);
@@ -515,6 +517,7 @@ export function contextoDe(cwd) {
     buildFiltrado: guarda.buildFiltrado,
     descartaveis: new Set(guarda.descartaveis),
     raizDe: raizDoFront,
+    raizDoGit: raizDoProjeto,
     devNoAr: (raiz) => devNoAr(raiz, raizDoFront),
     migracoesForaDoTronco: (raiz) => migracoesForaDoTronco(raiz, { migrations: guarda.migrations, tronco: guarda.tronco }),
   };

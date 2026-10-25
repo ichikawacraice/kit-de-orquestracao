@@ -98,8 +98,38 @@ export function carregarConfig(raiz, kit = lerKitJson(raiz)) {
   if (perfil !== "comando" && perfil !== "pnpm-workspace") {
     throw new Error(`gate.perfil "${perfil}" desconhecido — use "comando" ou "pnpm-workspace"`);
   }
+  validarGuarda(kit.guarda);
+  validarExtras(kit.arvore?.extras);
   const base = perfil === "pnpm-workspace" ? mesclar(PADRAO, PERFIL_PNPM) : PADRAO;
   return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: kit.guarda ?? {} });
+}
+
+/** `guarda.regras`: lista de regras conhecidas. Um typo desligaria a regra calado, e uma string viraria um conjunto de letras. */
+function validarGuarda(guarda) {
+  if (guarda?.regras === undefined) return;
+  if (!Array.isArray(guarda.regras)) throw new Error(`guarda.regras precisa ser uma lista, e veio ${JSON.stringify(guarda.regras)}`);
+  for (const regra of guarda.regras) {
+    if (!PADRAO.guarda.regras.includes(regra)) {
+      throw new Error(`guarda.regras: ${JSON.stringify(regra)} não é uma regra — as conhecidas são ${PADRAO.guarda.regras.join(", ")}`);
+    }
+  }
+}
+
+/** Campos da chave que um extra não pode sobrescrever. */
+const CAMPOS_RESERVADOS = ["arvore", "runtime", "env", "envNomes", "dotenv"];
+
+/** `arvore.extras`: `nome` obrigatório, único e fora dos campos reservados da chave. */
+function validarExtras(extras) {
+  if (extras === undefined) return;
+  if (!Array.isArray(extras)) throw new Error(`arvore.extras precisa ser uma lista, e veio ${JSON.stringify(extras)}`);
+  const vistos = new Set();
+  for (const extra of extras) {
+    const nome = extra?.nome;
+    if (typeof nome !== "string" || nome === "") throw new Error(`arvore.extras: falta o "nome" em ${JSON.stringify(extra)}`);
+    if (CAMPOS_RESERVADOS.includes(nome)) throw new Error(`arvore.extras: o nome "${nome}" é reservado da chave (${CAMPOS_RESERVADOS.join(", ")})`);
+    if (vistos.has(nome)) throw new Error(`arvore.extras: o nome "${nome}" está repetido`);
+    vistos.add(nome);
+  }
 }
 
 /** `KIT_<sufixo>`, e o legado `IZANAGI_<sufixo>` como reserva. */

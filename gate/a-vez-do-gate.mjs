@@ -229,7 +229,7 @@ export function quemSouEu(raiz = RAIZ, agora = Date.now(), prazoMs = PRAZO_DA_VE
  * Lê a trava: `null` se não existe; `{ texto, dono }` se existe, com `dono`
  * `null` quando o conteúdo não é um dono legível.
  */
-function lerTrava(caminho) {
+export function lerTrava(caminho) {
   let texto;
   try {
     texto = readFileSync(caminho, "utf-8");
@@ -269,7 +269,7 @@ export function motivoParaRetomar(caminho, lida, agora = Date.now(), ilegivelMs 
  * Uma tentativa de tomar a vez. `{ tomou: true, retomada? }` ou
  * `{ tomou: false, dono }` — `dono` pode ser `null` (trava sendo escrita).
  */
-export function tentarTomar(caminho, eu, agora = Date.now()) {
+export function tentarTomar(caminho, eu, agora = Date.now(), ilegivelMs = ILEGIVEL_ABANDONADA_MS) {
   for (let tentativa = 0; tentativa < 2; tentativa++) {
     try {
       const fd = openSync(caminho, "wx");
@@ -284,7 +284,7 @@ export function tentarTomar(caminho, eu, agora = Date.now()) {
     }
     const lida = lerTrava(caminho);
     if (lida === null) continue; // soltaram entre o `wx` e a leitura
-    const motivo = motivoParaRetomar(caminho, lida, agora);
+    const motivo = motivoParaRetomar(caminho, lida, agora, ilegivelMs);
     if (motivo === null) return { tomou: false, dono: lida.dono };
     // Apaga só se ainda é a MESMA trava que foi julgada — a janela que sobra está no cabeçalho.
     const deNovo = lerTrava(caminho);
@@ -308,20 +308,20 @@ export function tentarTomar(caminho, eu, agora = Date.now()) {
  * MESMO worktree — nesta fila ou numa das `outras` (`[{ base, n }]`) —, não toma
  * nenhuma e devolve esse dono em `mesmoWorktree`.
  */
-export function tentarTomarUmaVaga(base, n, eu, agora = Date.now(), outras = []) {
+export function tentarTomarUmaVaga(base, n, eu, agora = Date.now(), outras = [], ilegivelMs = ILEGIVEL_ABANDONADA_MS) {
   // O mesmo worktree, em qualquer vaga desta fila ou das `outras` .
   for (const { base: b, n: m } of [{ base, n }, ...outras]) {
     for (let k = 1; k <= m; k++) {
       const lida = lerTrava(caminhoDaVaga(b, k));
       if (lida === null || lida.dono === null) continue;
-      if (lida.dono.worktree === eu.worktree && motivoParaRetomar(caminhoDaVaga(b, k), lida, agora) === null) {
+      if (lida.dono.worktree === eu.worktree && motivoParaRetomar(caminhoDaVaga(b, k), lida, agora, ilegivelMs) === null) {
         return { tomou: false, donos: [lida.dono], mesmoWorktree: lida.dono };
       }
     }
   }
   const donos = [];
   for (let k = 1; k <= n; k++) {
-    const r = tentarTomar(caminhoDaVaga(base, k), eu, agora);
+    const r = tentarTomar(caminhoDaVaga(base, k), eu, agora, ilegivelMs);
     if (r.tomou) return { tomou: true, vaga: k };
     donos.push(r.dono);
   }
@@ -362,6 +362,7 @@ export async function esperarAVez(base, n, eu, opcoes = {}) {
     avisar = (msg) => console.error(msg),
     outras = [],
     fila = "gate",
+    ilegivelMs = ILEGIVEL_ABANDONADA_MS,
   } = opcoes;
   const naFila = fila === "gate" ? "" : ` (fila do ${fila})`;
   const inicio = agora();
@@ -369,7 +370,7 @@ export async function esperarAVez(base, n, eu, opcoes = {}) {
   let ultimoAviso = 0;
   const quem = (r) => (r.donos.length === 0 ? "dono ilegível" : r.donos.map(descrever).join(" | "));
   for (;;) {
-    const r = tentarTomarUmaVaga(base, n, eu, agora(), outras);
+    const r = tentarTomarUmaVaga(base, n, eu, agora(), outras, ilegivelMs);
     if (r.tomou) {
       if (ultimaChave !== undefined) avisar(`[gate] a vez chegou depois de ${Math.round((agora() - inicio) / 1000)} s`);
       return r.vaga;
@@ -474,7 +475,7 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
   const eu = quemSouEu(raiz, Date.now(), prazoMs);
   const n = vagas(env, fila) ?? 1;
   const filho = ambienteDoFilho(env, argv, raiz, cfg);
-  const vaga = await esperarAVez(caminho, n, eu, { outras: [outra], fila });
+  const vaga = await esperarAVez(caminho, n, eu, { outras: [outra], fila, ilegivelMs: cfg.gate.prazos.ilegivelSeg * 1000 });
   const minha = caminhoDaVaga(caminho, vaga);
   console.error(
     `[gate] a vez é minha (fila do ${fila}, vaga ${vaga} de ${n}, ${minha}) — ${comando.cmd} ${comando.args.join(" ")}, até ${availableParallelism()} núcleos repartidos pelo teto`,

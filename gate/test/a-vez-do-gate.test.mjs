@@ -12,6 +12,7 @@ import {
   caminhoDaVaga,
   comandoDaSuite,
   esperarAVez,
+  lerTrava,
   filaDoArgv,
   motivoParaRetomar,
   pacotesDoGate,
@@ -124,6 +125,23 @@ describe("a trava do gate", () => {
     const ha60s = (Date.now() - 60_000) / 1000;
     utimesSync(trava, ha60s, ha60s);
     expect(tentarTomar(trava, quemSouEu(RAIZ))).toEqual({ tomou: true });
+  });
+
+  it("o prazo da trava ilegível vem da configuração (`gate.prazos.ilegivelSeg`)", async () => {
+    writeFileSync(trava, "{ meio escrito");
+    const ha60s = (Date.now() - 60_000) / 1000;
+    utimesSync(trava, ha60s, ha60s);
+    // Precondição: com o prazo padrão (30 s) essa trava de 60 s seria retomada.
+    expect(motivoParaRetomar(trava, lerTrava(trava), Date.now())).toMatch(/ilegível há mais de 30 s/);
+    expect(tentarTomar(trava, quemSouEu(RAIZ), Date.now(), 120_000)).toEqual({ tomou: false, dono: null });
+    const fila = `${trava}.fila`;
+    writeFileSync(fila, "{ meio escrito");
+    utimesSync(fila, ha60s, ha60s);
+    expect(tentarTomarUmaVaga(fila, 1, quemSouEu(RAIZ), Date.now(), [], 120_000).tomou).toBe(false);
+
+    // E o `esperarAVez` repassa o prazo: com 10 s a mesma trava é retomada.
+    const vaga = await esperarAVez(trava, 1, quemSouEu(RAIZ), { ilegivelMs: 10_000, avisar: () => {}, dormir: async () => {} });
+    expect(vaga).toBe(1);
   });
 
   it("soltar não apaga a trava de outro dono", () => {

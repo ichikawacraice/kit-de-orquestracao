@@ -23,6 +23,7 @@ import {
   recusaDoCache,
   verdesDaMesmaArvore,
   linhaDoPulo,
+  nomesDoEnv,
   procurarVerde,
 } from "../o-verde-da-arvore.mjs";
 import { expect } from "./expect.mjs";
@@ -441,5 +442,13 @@ describe("os extras da chave vêm do kit.json", () => {
     gravarVerde(verde, { etapa: "test", chave: "c".repeat(64), arvore: "a".repeat(40), head: "h", branch: "b", worktree: "/w", quando: new Date(quando).toISOString(), duracaoMs: 1, insumos: {} }, quando);
     expect(procurarVerde(verde, "test", "c".repeat(64), quando + 30 * 60_000, 3_600_000) !== null).toBe(true);
     expect(procurarVerde(verde, "test", "c".repeat(64), quando + 61 * 60_000, 3_600_000)).toBeNull();
+  });
+});
+
+describe("as variáveis do próprio kit entram sempre na chave", () => {
+  it("`arvore.prefixosEnv` sem `KIT_` não tira `KIT_*` nem `IZANAGI_*` da chave", () => {
+    const arvore = { prefixosEnv: ["NEXT_PUBLIC_"], avulsas: [], foraDaChave: ["GATE_SEM_CACHE"] };
+    const env = { KIT_TESTE_WORKERS: "3", IZANAGI_TESTE_WORKERS: "3", NEXT_PUBLIC_X: "1", KIT_GATE_SEM_CACHE: "1", OUTRA: "x" };
+    expect(nomesDoEnv(env, arvore)).toEqual(["IZANAGI_TESTE_WORKERS", "KIT_TESTE_WORKERS", "NEXT_PUBLIC_X"]);
   });
 });

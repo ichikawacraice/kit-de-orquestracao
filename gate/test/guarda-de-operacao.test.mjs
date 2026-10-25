@@ -1,6 +1,6 @@
 import { after, describe, it } from "node:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -591,5 +591,87 @@ describe("(c) regra desligada não pergunta", () => {
     const outroFront = { frontend: "apps/site", raizDe: (d) => (d.startsWith("/repo") ? "/repo" : null) };
     expect(pergunta("pnpm --filter @x/site build", ctx(true, RAIZ, { fora: [] }, outroFront))).toBe(true);
     expect(pergunta("pnpm --filter @x/web build", ctx(true, RAIZ, { fora: [] }, outroFront))).toBe(false);
+  });
+});
+
+describe("o kit.json de um repositório real chega até a decisão do hook", () => {
+  const dirs = [];
+  after(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
+  const git = (cwd, ...args) =>
+    execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args], {
+      cwd,
+      timeout: 10_000,
+      killSignal: "SIGKILL",
+      stdio: "pipe",
+      encoding: "utf-8",
+    });
+  /** Repo npm simples (sem `pnpm-workspace.yaml`, sem front) com `a.sql` no tronco e `b.sql` só no disco. */
+  const repoNpm = ({ kit, tronco = "origin/develop" }) => {
+    const raiz = realpathSync(mkdtempSync(join(tmpdir(), "guarda-real-")));
+    dirs.push(raiz);
+    git(raiz, "init", "-q");
+    mkdirSync(join(raiz, "supabase/migrations"), { recursive: true });
+    mkdirSync(join(raiz, ".claude"));
+    writeFileSync(join(raiz, "package.json"), "{}");
+    writeFileSync(join(raiz, "supabase/migrations/a.sql"), "select 1;\n");
+    git(raiz, "add", "-A");
+    git(raiz, "commit", "-q", "-m", "base");
+    git(raiz, "update-ref", `refs/remotes/${tronco}`, "HEAD");
+    writeFileSync(join(raiz, "supabase/migrations/b.sql"), "select 2;\n");
+    if (kit) writeFileSync(join(raiz, ".claude", "kit.json"), JSON.stringify(kit));
+    return raiz;
+  };
+  const rodar = (raiz, command) =>
+    spawnSync("node", [SCRIPT], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: raiz }),
+      encoding: "utf-8",
+      timeout: 15_000,
+      killSignal: "SIGKILL",
+    });
+  const decisao = (r) => (r.stdout ? JSON.parse(r.stdout).hookSpecificOutput : null);
+
+  it("(A2) migration fora do tronco pergunta também num repo npm, sem workspace nem front", () => {
+    const raiz = repoNpm({});
+    expect(existsSync(join(raiz, "pnpm-workspace.yaml"))).toBe(false); // precondição: o repo não tem a forma do Izanagi
+    const r = rodar(raiz, "supabase migration up --local");
+    expect(decisao(r)?.permissionDecision).toBe("ask");
+    expect(decisao(r).permissionDecisionReason).toMatch(/b\.sql/);
+  });
+
+  it("(A2) fora de um repositório git, não conferir é perguntar", () => {
+    const solto = realpathSync(mkdtempSync(join(tmpdir(), "guarda-sem-git-")));
+    dirs.push(solto);
+    mkdirSync(join(solto, "supabase/migrations"), { recursive: true });
+    writeFileSync(join(solto, "supabase/migrations/x.sql"), "select 1;\n");
+    const r = rodar(solto, "supabase migration up --local");
+    expect(decisao(r)?.permissionDecision).toBe("ask");
+    expect(decisao(r).permissionDecisionReason).toMatch(/Não consegui conferir/);
+  });
+
+  it("(A5) `guarda.tronco` declarado é o que entra no ls-tree e na mensagem", () => {
+    const raiz = repoNpm({ kit: { guarda: { tronco: "origin/main" } }, tronco: "origin/main" });
+    expect(() => git(raiz, "rev-parse", "origin/develop")).toThrow(); // precondição: a develop não existe, só o tronco declarado
+    const motivo = decisao(rodar(raiz, "supabase migration up --local"))?.permissionDecisionReason;
+    expect(motivo).toMatch(/origin\/main/);
+    expect(motivo).toMatch(/b\.sql/);
+    expect(motivo).not.toMatch(/develop/);
+  });
+
+  it("(A5) `guarda.descartaveis` declarado vale no lugar do padrão", () => {
+    const raiz = repoNpm({ kit: { guarda: { descartaveis: ["saida-gerada"] } } });
+    const padrao = repoNpm({});
+    // Caminho absoluto fora de /tmp: o repo de teste mora em pasta temporária, onde tudo é descartável.
+    expect(decisao(rodar(padrao, "rm -rf /opt/x/dist"))).toBeNull(); // precondição: `dist` é descartável no padrão
+    expect(decisao(rodar(raiz, "rm -rf /opt/x/saida-gerada"))).toBeNull();
+    expect(decisao(rodar(raiz, "rm -rf /opt/x/dist"))?.permissionDecision).toBe("ask");
+  });
+
+  it("(A1) `guarda.regras` com typo ou string cai no padrão, avisa e continua perguntando", () => {
+    for (const regras of [["destrutivo"], "destrutivos"]) {
+      const raiz = repoNpm({ kit: { guarda: { regras } } });
+      const r = rodar(raiz, "git reset --hard");
+      expect(r.stderr, JSON.stringify(regras)).toMatch(/guarda\.regras/);
+      expect(decisao(r)?.permissionDecision, JSON.stringify(regras)).toBe("ask");
+    }
   });
 });

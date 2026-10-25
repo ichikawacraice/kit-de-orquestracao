@@ -178,3 +178,25 @@ describe("a configuração", () => {
     expect(() => tetoDeWorkers({ KIT_TESTE_WORKERS: "dois" }, 15)).toThrow(/inteiro ≥ 1/);
   });
 });
+
+describe("a configuração recusa o que desligaria algo calado", () => {
+  const RAIZ_QUALQUER = "/nao-importa";
+
+  it("guarda.regras: typo, string e item que não é texto são erro alto com o item nomeado", () => {
+    expect(carregarConfig(RAIZ_QUALQUER, { guarda: { regras: ["destrutivos"] } }).guarda.regras).toEqual(["destrutivos"]);
+    expect(() => carregarConfig(RAIZ_QUALQUER, { guarda: { regras: ["destrutivo", "merge-commit"] } })).toThrow(/"destrutivo"/);
+    expect(() => carregarConfig(RAIZ_QUALQUER, { guarda: { regras: "destrutivos" } })).toThrow(/lista/);
+    expect(() => carregarConfig(RAIZ_QUALQUER, { guarda: { regras: [7] } })).toThrow(/7/);
+  });
+
+  it("arvore.extras: nome obrigatório, único e fora dos campos reservados da chave", () => {
+    const com = (...extras) => () => carregarConfig(RAIZ_QUALQUER, { arvore: { extras } });
+    expect(com({ tipo: "arquivos-gerados", nome: "gerados" })).not.toThrow();
+    expect(com({ tipo: "arquivos-gerados" })).toThrow(/nome/);
+    expect(com({ tipo: "arquivos-gerados", nome: "" })).toThrow(/nome/);
+    for (const reservado of ["arvore", "runtime", "env", "envNomes", "dotenv"]) {
+      expect(com({ tipo: "arquivos-gerados", nome: reservado }), reservado).toThrow(/reservado/);
+    }
+    expect(com({ tipo: "arquivos-gerados", nome: "x" }, { tipo: "banco-postgres", nome: "x" })).toThrow(/repetido/);
+  });
+});

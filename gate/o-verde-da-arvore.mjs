@@ -52,11 +52,6 @@ const PRAZO_DO_GIT_MS = 10_000;
 const PRAZO_DO_ADD_MS = 30_000;
 const PRAZO_DO_PSQL_MS = 30_000;
 
-/** O mesmo default de `packages/runner/test/banco-local-da-arvore.ts` — a outra ponta desta consulta. */
-
-/** Variáveis que mudam o desfecho da suíte: estes prefixos, mais as avulsas. */
-/** Variáveis do próprio gate que não mudam o que a suíte mede. */
-
 const sha256 = (texto) => createHash("sha256").update(texto).digest("hex");
 
 /**
@@ -127,7 +122,7 @@ export function nomesDoEnv(env = process.env, arvore = carregarConfig(RAIZ).arvo
       (n) =>
         env[n] !== undefined &&
         !fora.has(n) &&
-        (arvore.prefixosEnv.some((p) => n.startsWith(p)) || arvore.avulsas.includes(n)),
+        (prefixos.some((p) => n.startsWith(p)) || arvore.avulsas.includes(n)),
     )
     .sort();
 }

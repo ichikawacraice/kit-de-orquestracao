@@ -42,7 +42,7 @@ Decisão: [ADR 0001](../adr/0001-plugin-para-o-nucleo-cli-para-o-projeto.md). Es
 - **Pronto:** a suíte do mod roda como roda hoje (registrar o comando real); validate sem erro.
 
 ### K5 — gate genérico · **Robusta** (duas Es se passar de ~600 linhas de diff: K5a gate+verde+teto, K5b guarda)
-- `gate/` com `a-vez-do-gate.mjs`, `o-verde-da-arvore.mjs`, `o-typecheck-do-gate.mjs`, `o-dist-que-o-gate-le.mjs`, `o-script-principal.mjs`, `teto.mjs`, `guarda-de-operacao.mjs`, a partir do commit `188f37fb8` da `develop` do Izanagi (PR da E7 mergeado; `git show 188f37fb8:scripts/…`).
+- `gate/` com `a-vez-do-gate.mjs`, `o-verde-da-arvore.mjs`, `o-typecheck-do-gate.mjs`, `o-dist-que-o-gate-le.mjs`, `o-script-principal.mjs`, `o-teto-de-workers.mjs`, `guarda-de-operacao.mjs`, a partir do commit `188f37fb8` da `develop` do Izanagi (PR da E7 mergeado; `git show 188f37fb8:scripts/…`).
 - Tudo que é fixo vira `.claude/kit.json` do projeto, com o default de hoje do Izanagi como **perfil `pnpm-workspace`**:
   - `gate.pacotes` (hoje `PACOTES`, `a-vez-do-gate.mjs:93`) ou `"auto"` (lido do `pnpm-workspace.yaml`); `gate.comandoPorPacote`, `gate.comandoCompleto`; `gate.typecheck`;
   - `gate.trava` (nome), `gate.vagas`, prazos (24 h, 7 dias, 1 h, 15 min);
