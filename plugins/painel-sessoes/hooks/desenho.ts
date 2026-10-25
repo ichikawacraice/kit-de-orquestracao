@@ -264,6 +264,33 @@ function quebrarEmDuas(s: string, tam: number, max1: number, max2: number): stri
 
 type Trecho = { t: string; classe?: string; peso?: boolean }
 
+/** Quem aparece na linha 2: os de `com` que seguem na lista; com `com` vazio, o dono, que sem ninguém já está na trava. */
+export function quemDoItem(item: LinhaItem): Trecho[] {
+  // O estado de antes desta versão (que sobrevive ao reload) não tem `com`.
+  const com = item.com ?? []
+  if (com.length > 0) return com.filter(c => c.vivo !== false).map(c => ({ t: c.apelido, classe: 's' }))
+
+  return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ t: item.dono.apelido, classe: 's' }] : []
+}
+
+/** Quem saiu da lista: vai depois do PR, sem ponto do meio (que leria "saiu" como mais um nome). */
+export function quemSaiu(item: LinhaItem): Trecho[] {
+  return (item.com ?? []).filter(c => c.vivo === false).map(c => ({ t: `${c.apelido} saiu`, classe: 'm' }))
+}
+
+/** O texto da espera, com o rótulo que a trava também tem. */
+export function textoDaEspera(e: { motivo: string; texto: string }): string {
+  return `${e.motivo === 'gate' ? 'Espera o gate' : 'Espera você'}: ${e.texto}`
+}
+
+/** O selo da espera: o operador já tem o "aguarda você" da pergunta, e dois selos diriam a mesma coisa. */
+export function seloDaEspera(item: LinhaItem): string | undefined {
+  if (!item.espera) return undefined
+  if (item.espera.motivo === 'operador') return item.perguntas.length > 0 ? undefined : 'espera você'
+
+  return 'espera o gate'
+}
+
 /** O TEMPO: em sessão, há quanto o dono agiu; na fila, há quanto está parado (§4.3). */
 function tempoDoItem(item: LinhaItem, agora: number): string | undefined {
   if (item.situacao === 'feito') return desde(item.feitoEm, agora)
@@ -298,20 +325,28 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
 
   // O que gera decisão (etapa, selo) vem antes do que só informa (dono, PR): o corte com reticências come o fim da linha.
   const ultimoPr = item.prs.length > 0 ? `#${item.prs[item.prs.length - 1]}${item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''}` : ''
-  const trechos: Trecho[] = [
+  const montar = (quem: Trecho[]): Trecho[] => [
     item.situacao === 'fila' ? { t: `espera ${rotulo}`, classe: 's', peso: true } : { t: rotulo, classe: cor, peso: true },
     ...(opcoes.noTravados ? [{ t: item.temaRotulo, classe: 's' }] : []),
     ...(item.perguntas.length > 0 ? [{ t: `aguarda você · ${item.perguntas[0]}`, classe: AVISO, peso: true }] : []),
+    ...(seloDaEspera(item) ? [{ t: seloDaEspera(item) as string, classe: item.espera?.motivo === 'operador' ? AVISO : 's', peso: true }] : []),
     // O dono sem ninguém já está escrito na trava: repetir faria dois textos sobre a mesma sessão que sumiu.
-    ...(item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ t: item.dono.apelido, classe: 's' }] : []),
+    ...quem,
+    // O PR não se corta: ou entra inteiro, ou as pessoas encolhem antes ("E1 +1", o nome completo no alt).
     ...(ultimoPr ? [{ t: ultimoPr, classe: ANDA, peso: true }] : []),
+    ...quemSaiu(item),
   ]
+  const TAM = 13
+  const larguraDe = (ts: Trecho[]) => ts.reduce((w, tr, k) => w + largura((k === 0 ? '' : ' · ') + tr.t, TAM), 0)
+  const pessoas = quemDoItem(item)
+  const encolhidas = pessoas.length > 1 ? [{ t: `${pessoas[0]!.t} +${pessoas.length - 1}`, classe: 's' }] : pessoas
+  const trechos = larguraDe(montar(pessoas)) <= tw ? montar(pessoas) : montar(encolhidas)
   const linha2: string[] = []
   let usado = 0
   const sep = ' · '
   for (const [k, tr] of trechos.entries()) {
     const antes = k === 0 ? '' : sep
-    const tam = 13.6
+    const tam = TAM
     const sobra = tw - usado
     const completo = antes + tr.t
     const atrib = tr.classe ? ` class="${tr.classe}"` : ''
@@ -327,7 +362,7 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   y += 21
   partes.push(`<text x="30" y="${y}" font-family="${FONTE}" font-size="13">${linha2.join('')}</text>`)
 
-  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? item.temaRotulo : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, item.trava?.motivo === 'sem-ninguem' ? undefined : item.dono?.apelido, ultimoPr].filter(Boolean).join(' · ')]
+  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? item.temaRotulo : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, seloDaEspera(item), ...quemDoItem(item).map(q => q.t), ultimoPr, ...quemSaiu(item).map(q => q.t)].filter(Boolean).join(' · ')]
   if (item.trava) {
     const trava = quebrar(textoDaTrava(item.trava), 13, tw, 2)
     for (const l of trava) {
@@ -335,6 +370,13 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
       partes.push(texto(30, y, 13, ERRO, xml(l)))
     }
     alt.push(textoDaTrava(item.trava))
+  }
+  if (item.espera) {
+    for (const l of quebrar(textoDaEspera(item.espera), 13, tw, 2)) {
+      y += 19
+      partes.push(texto(30, y, 13, item.espera?.motivo === 'operador' ? AVISO : 's', xml(l)))
+    }
+    alt.push(textoDaEspera(item.espera))
   }
   if (item.situacao === 'fila' && item.resumo) {
     for (const l of quebrar(item.resumo, 13, tw, 2)) {

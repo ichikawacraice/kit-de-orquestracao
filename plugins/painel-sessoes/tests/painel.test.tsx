@@ -418,7 +418,7 @@ test('a 300 px os quatro rótulos do resumo cabem inteiros, em 2×2', () => {
 })
 
 test('a 300 px o selo da pergunta cabe inteiro na linha 2 e o título quebra em duas linhas', () => {
-  const base = { id: 'F9', titulo: 'x', tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'execucao', situacao: 'andando' as const, prs: [1128], depois: [], perguntas: ['Q225'], dono: { apelido: 'E3', localId: 'local_x' } }
+  const base = { id: 'F9', titulo: 'x', tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'execucao', situacao: 'andando' as const, prs: [1128], depois: [], com: [], perguntas: ['Q225'], dono: { apelido: 'E3', localId: 'local_x' } }
   const item = itemSvg(300, { ...base, titulo: 'Canvas com 60% da largura' }, AGORA)
   expect(item.source, 'o desenho não pode vir vazio').toBeTruthy()
   expect(item.source).toContain('aguarda você · Q225')
@@ -584,7 +584,7 @@ test('prompt recusado e pergunta sem sessaoId também viram aviso', async ($, on
   await ui.unmount()
 })
 
-const itemBase = { id: 'F9', titulo: 'Canvas', tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'execucao', situacao: 'andando' as const, prs: [1128], depois: [], perguntas: ['Q225'], dono: { apelido: 'E3', localId: 'local_x' } }
+const itemBase = { id: 'F9', titulo: 'Canvas', tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'execucao', situacao: 'andando' as const, prs: [1128], depois: [], com: [], perguntas: ['Q225'], dono: { apelido: 'E3', localId: 'local_x' } }
 const luz = (h: string): number => {
   const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
 
@@ -821,4 +821,109 @@ test('abrir: com o list_sessions falho nenhum botão aparece', async ($, on) => 
   expect(await ui.find({ key: `abrir:${P7}` }), 'sem a lista, sem botão').toBeUndefined()
   expect(await ui.find({ key: `abrir:${P1}` })).toBeUndefined()
   await ui.unmount()
+})
+
+// F30 fatia 3: o `com` (quem trabalha agora no item) e a `espera` (o operador ou o gate).
+const COM = (...c: Array<[string, string]>) => c.map(([apelido, localId]) => ({ apelido, localId, oQue: `trabalho de ${apelido}` }))
+const comDuas = (extra: Record<string, unknown> = {}) => ({ F27: { ...FILA_REAL.F27, com: COM(['P2', P2], ['E8', E8]), ...extra } })
+
+test('com: duas sessões vivas aparecem na linha 2 e cada uma ganha o seu "abrir", além do dono', async ($, on) => {
+  const { ui } = await abrirDe({ fila: comDuas(), vivas: vivasDe(P7, P2, E8) }, $, on)
+  for (const id of [P2, E8, P7]) expect(await ui.find({ key: `abrir:${id}` }), `botão de ${id}`).toBeDefined()
+  expect(await ui.findAll({ key: `abrir:${P2}` }), 'um botão só por sessão').toHaveLength(1)
+  const texto = await lerSuperficie(ui)
+  expect(texto).toMatch(/P2 · E8/)
+  expect(texto, 'com `com` o dono deixa a linha 2').not.toMatch(/execução · P7/)
+  await ui.unmount()
+})
+
+test('com: quem saiu da lista vem cinza com "saiu" depois do PR, sem botão e sem virar trava', async ($, on) => {
+  const { ui } = await abrirDe({ fila: comDuas(), vivas: vivasDe(P7, P2) }, $, on)
+  expect(await ui.find({ key: `abrir:${E8}` }), 'sem botão para quem saiu').toBeUndefined()
+  expect(await ui.find({ key: `abrir:${P2}` })).toBeDefined()
+  const texto = await lerSuperficie(ui)
+  expect(texto).toMatch(/execução · P2 · E8 saiu/)
+  expect(texto, 'sem o ponto do meio, "saiu" não vira um terceiro nome').not.toMatch(/ · saiu/)
+  expect(texto).not.toMatch(/Trava \(/)
+  await ui.unmount()
+  const itens = montarItens([docF('F1', { etapa: 'execucao', donoApelido: 'P7', donoLocalId: P7, com: COM(['E8', E8]) })], TEMAS_T, [{ sessionId: P7 }] as never, undefined, [], AGORA)
+  expect(itens.length).toBe(1)
+  expect([itens[0]!.situacao, itens[0]!.com[0]!.vivo, itens[0]!.trava]).toEqual(['andando', false, undefined])
+})
+
+test('com: sem a lista de sessões não há botão nem "saiu" (não se sabe quem saiu)', async ($, on) => {
+  const { ui } = await abrirDe({ fila: comDuas(), listaFalha: true }, $, on)
+  expect(await ui.find({ key: `abrir:${P2}` })).toBeUndefined()
+  expect(await lerSuperficie(ui)).not.toMatch(/saiu/)
+  await ui.unmount()
+})
+
+const ESPERA = (motivo: string, texto: string) => ({ motivo, texto })
+
+test('espera do operador: selo "espera você" e entra na contagem "Esperam você"', async ($, on) => {
+  const fila = { F13: { ...FILA_REAL.F13, espera: ESPERA('operador', 'decidir o nome do botão') } }
+  const { lido } = await lerPane($, on, { fila, perguntas: [], vivas: vivasDe(P2) })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    expect(lido[surface]).toMatch(/espera você/)
+    expect(lido[surface]).toMatch(/decidir o nome do botão/)
+    expect(lido[surface], 'a espera não é trava').not.toMatch(/Trava \(/)
+  }
+  expect(lido.desktop).toMatch(/1 Esperam você, 0 Travados, 1 Andando, 0 Na fila/)
+})
+
+test('espera do gate: selo "espera o gate" e nenhuma contagem', async ($, on) => {
+  const fila = { F13: { ...FILA_REAL.F13, espera: ESPERA('gate', 'gate do lote na develop') } }
+  const { lido } = await lerPane($, on, { fila, perguntas: [], vivas: vivasDe(P2) })
+  expect(lido.desktop).toMatch(/espera o gate/)
+  expect(lido.desktop).toMatch(/gate do lote na develop/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 1 Andando, 0 Na fila/)
+})
+
+test('espera do operador no item que também tem pergunta aberta conta uma vez só', async ($, on) => {
+  const fila = { F13: { ...FILA_REAL.F13, perguntas: ['Q7'], espera: ESPERA('operador', 'a pergunta Q7') } }
+  const { lido } = await lerPane($, on, { fila, perguntas: [PERGUNTAS[0]!], vivas: vivasDe(P2) })
+  expect(lido.desktop).toMatch(/1 Esperam você, 0 Travados, 1 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/aguarda você · Q7/)
+  expect(lido.desktop, 'um selo só diz que espera você').not.toMatch(/espera você/)
+})
+
+test('o item com espera fica no bloco do tema, não em "Travados"', async ($, on) => {
+  const fila = { F13: { ...FILA_REAL.F13, espera: ESPERA('operador', 'decidir') } }
+  const { lido } = await lerPane($, on, { fila, perguntas: [], vivas: vivasDe(P2) })
+  expect(lido.desktop).toMatch(/Editor da loja/i)
+  expect(lido.desktop).not.toMatch(/Travados · [1-9]/)
+})
+
+test('a 300 px os selos de espera e o com cabem inteiros na linha 2', () => {
+  const base = { ...itemBase, perguntas: [], dono: undefined, prs: [], com: [{ apelido: 'E1', localId: 'local_a', oQue: 'x', vivo: true }, { apelido: 'V4', localId: 'local_b', oQue: 'y', vivo: true }] }
+  for (const [motivo, selo] of [['operador', 'espera você'], ['gate', 'espera o gate']] as const) {
+    const r = itemSvg(300, { ...base, espera: { motivo, texto: 'precisa de uma resposta' } }, AGORA)
+    expect(r.source, 'o desenho não pode vir vazio').toBeTruthy()
+    expect(r.source).toContain(selo)
+    expect(r.source.replace(/<[^>]*>/g, '')).toContain('E1 · V4')
+    expect(r.source).not.toMatch(/[^<]*…<\/tspan>/)
+    expect(r.source).toContain('precisa de uma resposta')
+  }
+})
+
+test('a 300 px o PR entra inteiro: com muita gente as pessoas encolhem antes ("E1 +2")', () => {
+  const pessoa = (apelido: string) => ({ apelido, localId: `local_${apelido}`, oQue: 'x', vivo: true })
+  const base = { ...itemBase, perguntas: [], dono: undefined, prs: [1128], com: [pessoa('E1'), pessoa('E2'), pessoa('V4')], espera: { motivo: 'operador' as const, texto: 'decidir' } }
+  const r = itemSvg(300, base, AGORA)
+  const texto = r.source.replace(/<[^>]*>/g, '')
+  expect(texto).toContain('#1128')
+  expect(texto).toContain('E1 +2')
+  expect(texto).not.toMatch(/#1…/)
+  expect(r.alt).toContain('E2')
+})
+
+test('espera do gate fica neutra e a do operador âmbar; a linha de texto leva o rótulo', () => {
+  const base = { ...itemBase, perguntas: [], com: [] }
+  const gate = itemSvg(360, { ...base, espera: { motivo: 'gate', texto: 'lote na develop' } }, AGORA).source
+  const op = itemSvg(360, { ...base, espera: { motivo: 'operador', texto: 'escolher o nome' } }, AGORA).source
+  expect(gate).toContain('Espera o gate: lote na develop')
+  expect(op).toContain('Espera você: escolher o nome')
+  expect(op).toMatch(/class="av"[^>]*>Espera você/)
+  expect(gate).not.toMatch(/class="av"[^>]*>Espera o gate/)
+  expect(gate).not.toMatch(/class="av"[^>]*font-weight="600"> · espera o gate/)
 })

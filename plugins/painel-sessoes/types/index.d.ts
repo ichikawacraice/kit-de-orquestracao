@@ -17,6 +17,10 @@ export type LinhaItem = {
   situacao: Situacao
   /** `link` só quando a sessão dona está viva: o endereço que abre a sessão no app. */
   dono?: { apelido: string; localId: string; link?: string }
+  /** Quem trabalha agora no item (o `com` do painel). `vivo` é null quando a lista de sessões não veio: nem botão, nem "saiu". */
+  com: Array<{ apelido: string; localId: string; oQue: string; vivo: boolean | null; link?: string }>
+  /** Esperando o operador ou o gate: não é trava, e o item fica no bloco do tema. */
+  espera?: { motivo: 'operador' | 'gate'; texto: string }
   prs: number[]
   depois: string[]
   agora?: string

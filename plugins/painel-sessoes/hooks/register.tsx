@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { anteriorSvg, itemSvg, perguntaSvg, resumoSvg, textoDaTrava } from './desenho'
+import { anteriorSvg, itemSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, seloDaEspera, textoDaEspera, textoDaTrava } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -118,6 +118,17 @@ export function montarItens(
     // Dono pela metade não é fila: o item acusa o que falta, em vez de parecer livre.
     if (apelido && !donoLocalId) motivos.push(`dono '${apelido}' sem donoLocalId`)
     else if (donoLocalId && !apelido) motivos.push('donoLocalId sem donoApelido')
+    const com: LinhaItem['com'] = (Array.isArray(d.data.com) ? (d.data.com as Array<Record<string, unknown> | null>) : []).flatMap(c => {
+      const localId = texto(c?.localId)
+      const apelidoCom = texto(c?.apelido)
+      if (!localId || !apelidoCom) return []
+      const vivo = vivos === null ? null : vivos.has(localId)
+
+      return [{ apelido: apelidoCom, localId, oQue: texto(c?.oQue) ?? '', vivo, link: vivo ? linkDe(localId, vivas ?? []) : undefined }]
+    })
+    const esp = d.data.espera as Record<string, unknown> | null | undefined
+    const esperaGravada: LinhaItem['espera'] =
+      (esp?.motivo === 'operador' || esp?.motivo === 'gate') && texto(esp.texto) ? { motivo: esp.motivo, texto: texto(esp.texto) as string } : undefined
     const historico = Array.isArray(d.data.historico) ? (d.data.historico as Array<Record<string, unknown>>) : []
     const feitoEm = texto(d.data.feitoEm)
     const final = etapaCrua === 'feito' || etapaCrua === 'descartado'
@@ -151,6 +162,8 @@ export function montarItens(
       etapa: etapaCrua ?? '?',
       situacao,
       dono,
+      com,
+      espera: final ? undefined : esperaGravada,
       prs: inteiros(d.data.prs),
       depois: Array.isArray(d.data.depois) ? d.data.depois.flatMap(x => (texto((x as Record<string, unknown> | null)?.texto) ? [texto((x as Record<string, unknown>).texto) as string] : [])) : [],
       agora: texto(d.data.agora),
@@ -553,7 +566,7 @@ export const register: Register = on => {
       perguntas: l.perguntas.map(q => q.id),
       itens: (() => {
         const sec = secoes(l.itens, l.temas)
-        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}`
+        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.apelido).join(', ')}` : ''}`
 
         return { emSessao: [...sec.travados, ...sec.andando.flatMap(g => g.itens)].map(dizer), naFila: sec.fila.flatMap(g => g.itens).map(dizer), feitos: sec.feitos.map(dizer) }
       })(),
@@ -572,6 +585,15 @@ export const register: Register = on => {
         {`abrir ${dono.apelido}`}
       </Button>
     )
+    // Um botão por sessão viva do item: as de `com` e o dono, sem repetir quem está nas duas listas.
+    const botoesAbrir = (i: LinhaItem) => {
+      const vistos = new Set<string>()
+      const quem = [...(i.com ?? []).map(c => ({ apelido: c.apelido, localId: c.localId, link: c.link })), ...(i.dono ? [i.dono] : [])]
+
+      const botoes = quem.flatMap(q => (q.link && !vistos.has(q.localId) ? (vistos.add(q.localId), [abrir(q)]) : []))
+
+      return botoes.length > 1 ? <Box key={`abrir:${i.id}`} flexDirection="row" columnGap={1}>{botoes}</Box> : botoes
+    }
     // Campo de texto só onde a superfície tem um; sem ele, a opção "outra" fica sem campo.
     const Input = 'Input' in elementos ? elementos.Input : undefined
     const agora = await $.clock.now()
@@ -583,7 +605,7 @@ export const register: Register = on => {
     const contar = (...sit: Situacao[]) => l.itens.filter(i => sit.includes(i.situacao)).length
     // Quatro decisões, cada uma contada uma vez: travado e andando se excluem, e a soma dos dois é "Em sessão".
     const resumo = [
-      { n: l.perguntas.length, rotulo: 'Esperam você', cor: 'warning' },
+      { n: l.perguntas.length + l.itens.filter(i => i.espera?.motivo === 'operador' && i.perguntas.length === 0).length, rotulo: 'Esperam você', cor: 'warning' },
       { n: contar('travado'), rotulo: 'Travados', cor: 'error' },
       { n: contar('andando'), rotulo: 'Andando', cor: 'suggestion' },
       { n: contar('fila'), rotulo: 'Na fila', cor: 'suggestion', classe: 't' },
@@ -678,7 +700,7 @@ export const register: Register = on => {
         return (
           <Box key={`item:${i.id}`} flexDirection="column">
             <Svg source={linha.source} alt={linha.alt} width={W} height={linha.height} />
-            {i.dono?.link && abrir(i.dono)}
+            {botoesAbrir(i)}
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
           </Box>
         )
@@ -777,8 +799,10 @@ export const register: Register = on => {
         i.situacao === 'fila' ? `espera ${etapa}` : etapa,
         noTravados ? i.temaRotulo : undefined,
         i.perguntas[0] ? `aguarda você · ${i.perguntas[0]}` : undefined,
-        i.dono?.apelido,
+        seloDaEspera(i),
+        ...quemDoItem(i).map(q => q.t),
         i.prs.length > 0 ? `#${i.prs[i.prs.length - 1]}${i.prs.length > 1 ? ` +${i.prs.length - 1}` : ''}` : undefined,
+        ...quemSaiu(i).map(q => q.t),
       ].filter(Boolean).join(' · ')
 
       return (
@@ -787,8 +811,9 @@ export const register: Register = on => {
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">{i.titulo}</Text>
             <Text dimColor wrap="wrap">{info}</Text>
-            {i.dono?.link && abrir(i.dono)}
+            {botoesAbrir(i)}
             {i.trava && <Text color="error" wrap="wrap">{textoDaTrava(i.trava)}</Text>}
+            {i.espera && <Text color={i.espera.motivo === 'operador' ? 'warning' : undefined} dimColor={i.espera.motivo !== 'operador'} wrap="wrap">{textoDaEspera(i.espera)}</Text>}
             {i.situacao === 'fila' && i.resumo && <Text dimColor wrap="wrap">{i.resumo}</Text>}
             {i.situacao !== 'fila' && i.agora && <Text dimColor wrap="wrap">{i.agora}</Text>}
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
