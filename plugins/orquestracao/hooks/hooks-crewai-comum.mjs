@@ -1,5 +1,5 @@
 // Comum às duas travas copiadas da CrewAI (Q62, 23/10): log do piloto e leitura de transcript.
-// Estudo: ~/.claude/orquestracao/izanagi-notas/avaliacao-crewai-swarms-2026-10.md, seção 5.
+// Estudo: estudo de CrewAI/swarms do operador (notas em ~/.claude/orquestracao), seção 5.
 import { appendFileSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';

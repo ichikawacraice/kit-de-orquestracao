@@ -128,9 +128,15 @@ export function pacotesConsumidosCompilados(raiz = RAIZ) {
  * o teste afirmar POR QUE parou: os quatro desfechos de recusa dizem a mesma
  * coisa ao operador (rode o install), mas só um é "a instalação é velha".
  */
-export function instalacaoEmDia(raiz = RAIZ) {
+export function instalacaoEmDia(raiz = RAIZ, exige = true) {
   const lockfile = join(raiz, "pnpm-lock.yaml");
   const instalado = join(raiz, "node_modules", ".pnpm", "lock.yaml");
+  if (!existsSync(lockfile) && !exige) {
+    // Sem lockfile não há o que comparar: com node_modules, o que foi instalado vale.
+    return existsSync(join(raiz, "node_modules"))
+      ? { ok: true }
+      : { ok: false, ramo: "sem-instalacao", motivo: `não há node_modules em ${raiz} — nada foi instalado neste worktree` };
+  }
   if (!existsSync(lockfile)) {
     return { ok: false, ramo: "sem-lockfile", motivo: `não achei o pnpm-lock.yaml em ${raiz}` };
   }
@@ -143,6 +149,7 @@ export function instalacaoEmDia(raiz = RAIZ) {
   if (!existsSync(join(raiz, "node_modules"))) {
     return { ok: false, ramo: "sem-instalacao", motivo: `não há node_modules em ${raiz} — nada foi instalado neste worktree` };
   }
+  if (!existsSync(instalado) && !exige) return { ok: true };
   if (!existsSync(instalado)) {
     return {
       ok: false,
@@ -173,7 +180,7 @@ export function conferirInstalacao(raiz = RAIZ, env = process.env, avisar = (msg
     avisar("[gate] CI: a instalação acabou de ser feita neste job — sem conferir o lockfile");
     return 0;
   }
-  const r = instalacaoEmDia(raiz);
+  const r = instalacaoEmDia(raiz, cfg.gate.exigeDist === true);
   if (r.ok) return 0;
   avisar(
     `[gate] a instalação não corresponde ao pnpm-lock.yaml: ${r.motivo}.\n` +
@@ -189,6 +196,10 @@ export function constroi(raiz = RAIZ, env = process.env, cfg = carregarConfig(ra
   if (instalacao !== 0) return instalacao;
   const prazoMs = cfg.gate.prazos.buildMin * 60_000; // lento ≠ pendurado: o build leva segundos
   const pacotes = pacotesConsumidosCompilados(raiz);
+  if (pacotes.length === 0 && cfg.gate.exigeDist !== true) {
+    console.error(`[dist] nenhum pacote com \`main\` em dist em ${raiz} — pulando o build (gate.exigeDist: true recusa).`);
+    return 0;
+  }
   if (pacotes.length === 0) {
     // Zero pacotes não é "nada a fazer": é "não achei o workspace". Seguir em
     // frente aqui devolveria o gate exatamente ao buraco que ele fechou.

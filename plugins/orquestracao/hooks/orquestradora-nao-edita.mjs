@@ -3,10 +3,10 @@
 // Vale para a sessão com marcador ~/.claude/orquestracao/ativas/<session_id> — inclusive os
 // subagentes dela, que chegam com o mesmo session_id (a reincidência de 11–13/10 foi por subagente).
 // Edit/Write/NotebookEdit fora das pastas da orquestração → `ask` (vale em bypass, de propósito,
-// ao contrário da guarda do Izanagi do ADR 0228: decisão do operador no Q62). Em subagente em
+// ao contrário da guarda de operação: decisão do operador no Q62). Em subagente em
 // background, que não pode abrir pergunta, o Claude Code converte o `ask` em recusa.
 // Bash fica de fora, de propósito: nas orquestradoras de 20–22/10 houve 1.700+ comandos que
-// gravam (360+ `sed -i` só no izanagi.md), e parsear shell deu 50 alertas falsos em 3 sessões
+// gravam (360+ `sed -i` só no arquivo de estado da orquestradora), e parsear shell deu 50 alertas falsos em 3 sessões
 // mesmo só registrando. A reincidência medida (11–13/10) foi Edit/Write de subagente — coberta.
 // Erro do hook vai para o log e a ferramenta segue.
 import { existsSync, readFileSync } from 'node:fs';

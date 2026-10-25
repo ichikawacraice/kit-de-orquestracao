@@ -51,6 +51,8 @@ const PERFIL_PNPM = {
     pacotes: "auto",
     filtroDePacote: "{escopo}/{pacote}",
     typecheck: "pnpm -r typecheck",
+    // true: exige o formato do Izanagi (registro da instalação em `node_modules/.pnpm/lock.yaml` e ao menos um pacote com `main` em `dist`).
+    exigeDist: false,
   },
 };
 

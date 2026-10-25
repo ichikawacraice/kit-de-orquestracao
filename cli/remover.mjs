@@ -1,8 +1,8 @@
 // `kit remover [--simular]`: tira blocos, chaves e arquivos cujo hash bate com o lock; o que foi mexido fica e é listado.
-import { existsSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { LOCK, blocosDe, sha256 } from './lock.mjs';
+import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, lerTexto, modeloClaude, serializar } from './pacote.mjs';
 
 const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -10,8 +10,9 @@ const vazio = (v) => (Array.isArray(v) ? v.length === 0 : ehObjeto(v) && Object.
 
 export function remover({ destino, simular = false }) {
   const caminho = join(destino, LOCK);
-  if (!existsSync(caminho)) return { codigo: 1, saida: '', erro: `kit remover: não achei ${LOCK} aqui — não há o que remover` };
-  const lock = JSON.parse(readFileSync(caminho, 'utf8'));
+  const { lock, erro } = lerLock(destino);
+  if (erro) return { codigo: 1, saida: '', erro: `kit remover: ${erro}` };
+  const ilegiveis = [];
   const c = lock.chaves ?? { settings: {}, package: {}, kitJson: {} };
   const linhas = []; const gravacoes = new Map(); const apagar = [];
   const tirou = (m) => linhas.push(`removido: ${m}`);
@@ -47,7 +48,8 @@ export function remover({ destino, simular = false }) {
   const editarJson = (rel, criado, fn, vazioAposRemover) => {
     const texto = lerTexto(destino, rel);
     if (texto === null) return;
-    const v = JSON.parse(texto);
+    let v;
+    try { v = JSON.parse(texto); } catch (e) { ilegiveis.push(`${rel} ilegível: ${e.message}`); return; }
     fn(v);
     const restante = Object.keys(v).filter((k) => !(vazioAposRemover.includes(k)));
     if (criado && restante.length === 0) { apagar.push(rel); tirou(`${rel} (criado pelo kit, sem mais nada)`); return; }
@@ -75,11 +77,11 @@ export function remover({ destino, simular = false }) {
   const cp = c.package ?? {};
   editarJson('package.json', cp.criado, (pkg) => {
     const sc = pkg.scripts ?? {};
-    if (cp.testeTrocado) {
-      if (sc.test === cp.gate) {
-        if (cp.testeOriginal === null) delete sc.test; else sc.test = cp.testeOriginal;
-        tirou('script test → gate (package.json)');
-      } else deixou('script test (package.json)');
+    for (const t of cp.trocados ?? []) {
+      if (sc[t.nome] === t.gate) {
+        if (t.original === null) delete sc[t.nome]; else sc[t.nome] = t.original;
+        tirou(`script ${t.nome} → gate (package.json)`);
+      } else deixou(`script ${t.nome} (package.json)`);
     }
     for (const [nome, valor] of Object.entries(cp.scripts ?? {})) {
       if (sc[nome] === valor) { delete sc[nome]; tirou(`script ${nome} (package.json)`); } else if (nome in sc) deixou(`script ${nome} (package.json)`);
@@ -102,6 +104,7 @@ export function remover({ destino, simular = false }) {
     }
   }, []);
 
+  if (ilegiveis.length) return { codigo: 1, saida: '', erro: `kit remover: ${ilegiveis.join('; ')} — nada foi removido` };
   if (!simular) {
     for (const rel of apagar) rmSync(join(destino, rel), { force: true });
     for (const [rel, texto] of gravacoes) writeFileSync(join(destino, rel), texto);

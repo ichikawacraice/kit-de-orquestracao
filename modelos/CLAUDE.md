@@ -4,7 +4,7 @@ As seções marcadas `kit:` são do kit de orquestração: o `kit atualizar` tro
 
 <!-- kit:projeto v1 -->
 ## O projeto
-<!-- preencher: o que é, para quem, stack, pastas principais -->
+<!-- preencher: o que é, para quem, stack, pastas principais, idioma e formato dos commits (ex.: convencional) -->
 <!-- /kit:projeto -->
 
 <!-- kit:comandos v1 -->
@@ -20,7 +20,6 @@ Lidos de `.claude/kit.json`:
 - Um gate por vez; gate verde sobre a mesma árvore não se repete (o verde é guardado pela árvore exata).
 - Rebase em vez de merge commit; PR sempre com o rebase em dia sobre a branch de integração do projeto.
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
-- Commit em português, no formato convencional (`feat(escopo): …`).
 <!-- /kit:regras-de-operacao -->
 
 <!-- kit:regras-de-trabalho v1 -->
@@ -34,7 +33,7 @@ Lidos de `.claude/kit.json`:
 ## Convenções de teste
 - Teste que inspeciona um valor afirma antes que ele existe e não é vazio (insumo vazio faz o teste passar sem medir nada).
 - Teste que mede ausência prova antes que a presença seria detectada.
-- Processo filho de teste é síncrono, com `timeout` e `killSignal: 'SIGKILL'`.
+- Teste que dispara subprocesso não sai por `process.exit()` (termina por `process.exitCode`) e todo subprocesso tem prazo: `timeout` e `killSignal: 'SIGKILL'`.
 - Duas coisas que devem concordar (mapa × arquivo, doc × código) ganham um teste que as compara.
 - Laudo só afirma o que mediu, com a saída real colada.
 - O defeito não pode falhar como o que ele é: o teste vermelho falha pelo motivo certo.

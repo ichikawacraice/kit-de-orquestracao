@@ -1,18 +1,17 @@
 // `kit doutor`: confere o ambiente (plugin, hooks duplicados, kit.json, versão, Node, git) e o disco contra o lock.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { carregarConfig } from '../gate/config.mjs';
-import { LOCK, blocosDe, sha256 } from './lock.mjs';
-import { COMPARTILHADOS, PLUGIN, RAIZ_DO_KIT, lerTexto } from './pacote.mjs';
+import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8')); } catch { return null; } };
 
 export function doutor({ destino, versao, home = process.env.HOME || homedir() }) {
-  const caminho = join(destino, LOCK);
-  if (!existsSync(caminho)) return { codigo: 1, saida: '', erro: `kit doutor: não achei ${LOCK} aqui — rode \`kit iniciar\` ou \`kit adotar\`` };
-  const lock = JSON.parse(readFileSync(caminho, 'utf8'));
+  const { lock, erro } = lerLock(destino);
+  if (erro) return { codigo: 1, saida: '', erro: `kit doutor: ${erro}${erro.startsWith('não achei') ? ' — rode `kit iniciar` ou `kit adotar`' : ''}` };
   const linhas = [`kit ${lock.versao}, perfil ${lock.perfil}, ${Object.keys(lock.arquivos).length} arquivos no lock`];
   let falhas = 0;
   const ok = (m) => linhas.push(`ok: ${m}`);
@@ -60,6 +59,14 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
     if (!b) linhas.push(`aviso: bloco ${nome} ausente do CLAUDE.md`);
     else if (sha256(b.conteudo) !== reg.sha256) linhas.push(`aviso: bloco ${nome} editado à mão (o \`kit atualizar\` não o troca)`);
   }
+  // as chaves que o kit escreveu em settings.json e package.json (o resto desses arquivos é do projeto)
+  const c = lock.chaves ?? {};
+  const st = lerJson(join(destino, '.claude', 'settings.json'));
+  if (c.settings?.hook && !(st?.hooks?.PreToolUse ?? []).some((g) => g.hooks?.some((h) => h.command === HOOK_GUARDA))) falha('hook da guarda sumiu do .claude/settings.json (foi o kit que o pôs)');
+  if (c.settings?.marketplace && !st?.extraKnownMarketplaces?.[MARKETPLACE]) linhas.push(`aviso: marketplace ${MARKETPLACE} sumiu do .claude/settings.json`);
+  const pk = lerJson(join(destino, 'package.json'));
+  for (const t of c.package?.trocados ?? []) if (pk?.scripts?.[t.nome] !== t.gate) linhas.push(`aviso: scripts.${t.nome} (package.json) não passa mais pelo gate`);
+  for (const [nome, valor] of Object.entries(c.package?.scripts ?? {})) if (pk?.scripts?.[nome] !== valor) linhas.push(`aviso: scripts.${nome} (package.json) não está mais como o kit deixou`);
   for (const p of lock.pendente ?? []) linhas.push(`aviso: pendente da adoção parcial: ${p}`);
   linhas.push(falhas ? `${falhas} falha(s)` : 'tudo em dia');
   return { codigo: falhas ? 1 : 0, saida: `${linhas.join('\n')}\n`, erro: '' };

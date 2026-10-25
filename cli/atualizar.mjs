@@ -1,16 +1,15 @@
 // `kit atualizar [--simular]`: troca pela versão nova o que o projeto não editou; o que foi editado vira conflito com o diff.
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffTexto } from './diff.mjs';
-import { LOCK, blocosDe, sha256 } from './lock.mjs';
+import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { RAIZ_DO_KIT, arquivosDoGate, blocosDoModelo, gravar, gravarLock, lerTexto } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export function atualizar({ destino, versao, simular = false }) {
-  const caminho = join(destino, LOCK);
-  if (!existsSync(caminho)) return { codigo: 1, saida: '', erro: `kit atualizar: não achei ${LOCK} aqui — rode \`kit iniciar\` ou \`kit adotar\`` };
-  const lock = JSON.parse(readFileSync(caminho, 'utf8'));
+  const { lock, erro } = lerLock(destino);
+  if (erro) return { codigo: 1, saida: '', erro: `kit atualizar: ${erro}` };
   const mudancas = []; const linhas = []; let conflitos = 0;
   const conflito = (msg, diff) => { conflitos++; linhas.push(`conflito: ${msg}`); if (diff) linhas.push(diff); };
 

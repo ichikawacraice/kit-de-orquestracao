@@ -79,30 +79,34 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   // package.json
   const pk = lerJsonOuErro(destino, 'package.json', erros);
   const pkg = pk.valor && structuredClone(pk.valor);
-  const cp = { criado: pk.texto === null, scripts: {}, testeTrocado: false, testeOriginal: null };
+  const cp = { criado: pk.texto === null, scripts: {}, trocados: [] };
   lock.chaves.package = cp;
+  const avisos = [];
   if (pkg) {
     if (pk.texto === null) Object.assign(pkg, { name: basename(destino).toLowerCase().replace(/[^a-z0-9-_.]+/g, '-'), version: '0.1.0', private: true });
     pkg.scripts ??= {};
     const sc = pkg.scripts;
-    const gate = p.scripts.test;
-    const atual = sc.test;
-    const ehGate = atual === gate || atual?.includes('scripts/kit/');
-    const real = atual && !TESTE_PADRAO_DO_NPM.test(atual) && !ehGate;
-    if (!ehGate) {
-      if (p.suitePadrao || real) {
-        const suite = real ? atual : p.suitePadrao;
-        if (sc[nomeScript] === undefined) { sc[nomeScript] = suite; cp.scripts[nomeScript] = suite; }
-        else if (sc[nomeScript] !== suite) conflitos.push(`scripts.${nomeScript} já existe com outro valor — o \`test\` ficou como estava`);
+    const sufixo = nomeScript.split(':')[1] ?? 'suite';
+    // `test` e os demais scripts do perfil passam a ser o gate; o antigo é guardado em `<nome>:<sufixo>` (o `test`, em `nomeScript`) e dito na saída.
+    for (const [nome, gate] of Object.entries(p.scripts)) {
+      const guardado = nome === 'test' ? nomeScript : `${nome}:${sufixo}`;
+      const atual = sc[nome];
+      if (atual === gate || atual?.includes('scripts/kit/')) continue;
+      const real = atual && !TESTE_PADRAO_DO_NPM.test(atual);
+      const padrao = nome === 'test' ? p.suitePadrao : undefined;
+      // `test` que já chama o script guardado (ex.: "npm run test:suite") é só a porta de entrada: a suíte já mora lá, e guardá-lo de novo seria um laço
+      const jaGuardado = real && sc[guardado] !== undefined && atual.includes(guardado);
+      if (!jaGuardado && (real || padrao)) {
+        const valor = real ? atual : padrao;
+        if (sc[guardado] === undefined) { sc[guardado] = valor; cp.scripts[guardado] = valor; }
+        else if (sc[guardado] !== valor) { conflitos.push(`scripts.${guardado} já existe com outro valor — o \`${nome}\` ficou como estava`); continue; }
       }
-      const suiteGuardada = !real || sc[nomeScript] === atual; // o `test` só sai do lugar se o valor dele ficou guardado em outro script
-      if ((!real || trocarTest) && suiteGuardada) { cp.testeTrocado = true; cp.testeOriginal = atual ?? null; cp.gate = gate; sc.test = gate; }
-      else if (real && !trocarTest) pendencias.push(`scripts.test (${JSON.stringify(atual)}) ficou como estava: rode com --trocar-test para o \`npm test\` passar pelo gate (o seu vira ${nomeScript}).`);
-    }
-    for (const [nome, valor] of Object.entries(p.scripts)) {
-      if (nome === 'test') continue;
-      if (sc[nome] === undefined) { sc[nome] = valor; cp.scripts[nome] = valor; }
-      else if (sc[nome] !== valor) conflitos.push(`scripts.${nome} já existe diferente (${JSON.stringify(sc[nome])}) — não troquei`);
+      if (!real || trocarTest) {
+        sc[nome] = gate;
+        cp.trocados.push({ nome, original: atual ?? null, gate });
+        if (real) avisos.push(`scripts.${nome} agora passa pelo gate; o seu \`${atual}\` está em ${guardado}.`);
+      } else if (nome === 'test') pendencias.push(`scripts.test (${JSON.stringify(atual)}) ficou como estava: rode com --trocar-test para o \`npm test\` passar pelo gate (o seu vira ${nomeScript}).`);
+      else conflitos.push(`scripts.${nome} já existe (${JSON.stringify(atual)}) — rode com --trocar-test para guardá-lo em ${guardado} e pôr o do gate no lugar`);
     }
     const novo = serializar(pkg, pk.texto);
     if (novo !== pk.texto) mudancas.push({ arquivo: 'package.json', antigo: pk.texto, novo });
@@ -160,7 +164,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   if (erros.length) return { erro: erros.join('; ') };
   // hashes dos arquivos que o kit criou inteiros (o conteúdo novo)
   for (const rel of Object.keys(lock.arquivos)) if (lock.arquivos[rel] === null) lock.arquivos[rel] = sha256(mudancas.find((m) => m.arquivo === rel).novo);
-  return { mudancas, conflitos, pendencias, lock };
+  return { mudancas, conflitos, pendencias, avisos, lock };
 }
 
 export function gravar(destino, mudancas) {

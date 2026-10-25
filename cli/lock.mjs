@@ -1,6 +1,6 @@
 // O lock do projeto (.claude/kit.lock.json): versão do kit, perfil, sha256 de cada arquivo e de cada bloco marcado do CLAUDE.md.
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const LOCK = '.claude/kit.lock.json';
@@ -17,4 +17,11 @@ export function montarLock({ raiz, versao, perfil, arquivos }) {
   for (const f of [...arquivos].sort()) lock.arquivos[f] = sha256(readFileSync(join(raiz, f), 'utf8'));
   for (const b of blocosDe(readFileSync(join(raiz, 'CLAUDE.md'), 'utf8'))) lock.blocos[b.nome] = { versao: b.versao, sha256: sha256(b.conteudo) };
   return lock;
+}
+
+/** Lê o lock do projeto: { lock } ou { erro } (ausente ou ilegível) — nunca exceção. */
+export function lerLock(destino) {
+  const caminho = join(destino, LOCK);
+  if (!existsSync(caminho)) return { erro: `não achei ${LOCK} aqui` };
+  try { return { lock: JSON.parse(readFileSync(caminho, 'utf8')) }; } catch (e) { return { erro: `${LOCK} ilegível: ${e.message}` }; }
 }

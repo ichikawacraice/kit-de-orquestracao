@@ -8,7 +8,7 @@
 // perguntar. Vale em bypass. Bash fica de fora pelo mesmo motivo do orquestradora-nao-edita
 // (parsear shell deu 50 alertas falsos); o briefing do subagente diz que ele não grava.
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
-// fim casa prefixo, `#` comenta) — o designer do Izanagi e os agentes de plugin que gravam.
+// fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam.
 // Erro do hook vai para o log e a ferramenta segue.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';

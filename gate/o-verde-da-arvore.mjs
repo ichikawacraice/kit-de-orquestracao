@@ -351,7 +351,12 @@ export function verdesDaMesmaArvore(dir, etapa, arvore, agora = Date.now()) {
 /** Roda `git` e devolve a saída, ou o motivo entre parênteses. */
 function gitOuMotivo(args, raiz) {
   const r = rodar("git", args, { cwd: raiz });
-  return r.saida ?? `(ilegível: ${r.erro})`;
+  if (r.saida) return r.saida;
+  // HEAD que não resolve num repositório que existe é "ainda sem commit", não um git quebrado.
+  if (rodar("git", ["rev-parse", "--git-dir"], { cwd: raiz }).saida && !rodar("git", ["rev-parse", "--verify", "-q", "HEAD"], { cwd: raiz }).saida) {
+    return "repositório sem commit";
+  }
+  return `(ilegível: ${r.erro})`;
 }
 
 /**

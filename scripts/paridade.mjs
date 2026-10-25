@@ -48,7 +48,7 @@ const DECLARADAS = {
   'hooks/tests/skills-do-papel.test.mjs': { motivo: 'caminho (+ prefixo/painel nos testes de hooks)', hash: 'cac249df72b44305' },
   'skills/ausente/SKILL.md': { motivo: 'texto', hash: '73c1c6d16efc35b9' },
   'skills/handoff-de-sessao/SKILL.md': { motivo: 'texto', hash: 'a28c0cca36977121' },
-  'skills/orquestradora/SKILL.md': { motivo: 'texto', hash: '64733ecd106cfece' },
+  'skills/orquestradora/SKILL.md': { motivo: 'texto', hash: 'ac0f648b180a1f83' },
   'skills/orquestradora/scripts/painel.mjs': { motivo: 'caminho', hash: '1ef4c4ad43bef9a5' },
   'skills/papeis-e-modelos/SKILL.md': { motivo: 'texto', hash: '3abf78be0f5275c0' },
   'skills/notas-de-release/escrita.md': { motivo: 'texto', hash: 'e2935add495e964c' },
@@ -94,6 +94,6 @@ for (const rel of SO_NO_PLUGIN) if (!existsSync(join(PLUGIN, rel))) achados.push
 if (process.argv.includes('--declarar')) { console.log(JSON.stringify(atual, null, 2)); process.exitCode = 0; }
 else {
   for (const a of achados) console.log(`DIFERE ${a}`);
-  console.log(`${pares} pares conferidos, ${Object.keys(atual).length} com diferença declarada, ${achados.length} não declarada(s)`);
+  console.log(`${pares} pares conferidos, ${Object.keys(atual).filter((k) => DECLARADAS[k]).length} com diferença declarada, ${achados.length} não declarada(s)`);
   process.exitCode = achados.length || pares === 0 ? 1 : 0;
 }

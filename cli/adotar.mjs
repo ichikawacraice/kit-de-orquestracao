@@ -15,6 +15,7 @@ export function adotar({ destino, perfil = 'simples', versao, simular = false, t
   const barrado = plano.conflitos.length > 0 && !parcial; // atômico: com conflito não grava nada, a menos que --parcial
   if (simular) for (const m of plano.mudancas) linhas.push(m.antigo === null ? `+++ b/${m.arquivo} (arquivo novo, ${m.novo.split('\n').length - 1} linhas)` : diffTexto(m.antigo, m.novo, m.arquivo));
   else if (!barrado) { gravar(destino, plano.mudancas); gravarLock(destino, { versao, perfil, ...plano.lock, ...(plano.conflitos.length ? { pendente: plano.conflitos } : {}) }); }
+  for (const t of plano.avisos) linhas.push(`trocado: ${t}`);
   for (const c of plano.conflitos) linhas.push(`conflito: ${c}`);
   for (const p of plano.pendencias) linhas.push(`pendente: ${p}`);
   if (barrado) linhas.push(`kit adotar${simular ? ' --simular' : ''}: ${plano.conflitos.length} conflito(s); nada foi gravado. Resolva e rode de novo, ou use --parcial para gravar o resto e deixar os conflitos registrados no lock como pendentes.`);
