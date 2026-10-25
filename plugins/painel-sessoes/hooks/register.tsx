@@ -61,8 +61,7 @@ export function projetoDe(cwd: string | undefined): string {
   if (!cwd) return '?'
   // Worktree do app (`<repo>/.claude/worktrees/<x>`) e `<repo>/worktrees/<x>` valem o repositório, não o worktree.
   const raiz = cwd.replace(/\/\.claude\/worktrees(\/.*)?$/, '').replace(/\/worktrees\/[^/]+\/?$/, '')
-  const m = /\/Projects\/([^/]+)/.exec(raiz)
-  const nome = m?.[1] ?? raiz.split('/').filter(Boolean).pop() ?? '?'
+  const nome = raiz.split('/').filter(Boolean).pop() ?? '?'
 
   return nome.toLowerCase()
 }
