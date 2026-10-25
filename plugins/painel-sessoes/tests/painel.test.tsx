@@ -1,6 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { porProjeto, projetoDe } from '../hooks/register.js'
+import { itemSvg, resumoSvg } from '../hooks/desenho.js'
+import { FILA_REAL, TEMAS_REAIS } from './fixtura-fila.js'
 
 const PANE = {
   plugin: 'painel-sessoes',
@@ -27,26 +28,6 @@ type Doc = { id: string; data: Record<string, unknown>; version: number }
 const doc = (id: string, data: Record<string, unknown>, version = 1): Doc => ({ id, data, version })
 const banco = (...docs: Doc[]) => docs
 const PASTA = '/home/teste/.claude/orquestracao/painel'
-
-const SESSOES = banco(
-  doc('local_a', {
-    projeto: 'izanagi',
-    titulo: 'frente A',
-    estado: 'trabalhando',
-    etapa: 'medindo',
-    passos: [
-      { estado: 'feito', texto: 'ler' },
-      { estado: 'andamento', texto: 'medir o gate' },
-      { estado: 'pendente', texto: 'abrir PR' },
-    ],
-  }),
-  doc('local_e', { projeto: 'izanagi', titulo: 'frente E', estado: 'bloqueada', bloqueio: 'rebase', motivo: 'conflito' }),
-  doc('local_b', { projeto: 'izanagi', titulo: 'frente B', estado: 'aguarda-merge', pr: 12, prUrl: 'https://x/12' }),
-  doc('local_c', { projeto: 'izanagi', titulo: 'velha', estado: 'concluida' }),
-  doc('local_x', { projeto: 'Izanagi', titulo: 'id que não existe', estado: 'trabalhando' }),
-  doc('orquestradora-izanagi', { projeto: 'izanagi', titulo: 'orq', estado: 'trabalhando', sessionId: 'local_o' }),
-  doc('local_eu', { projeto: 'izanagi', titulo: 'eu mesma', estado: 'trabalhando' }),
-)
 
 const PERGUNTAS = banco(
   doc(
@@ -107,7 +88,19 @@ type Escrita = Record<string, unknown>
 
 type Falhas = { envio?: string; prompt?: string }
 
-function engine(on: On, falhaPasta = false, falhas: Falhas = {}) {
+type Opcoes = {
+  /** O relógio do teste; o padrão é 23/10 12h, o que as respostas gravam. */
+  agora?: number
+  fila?: Record<string, Record<string, unknown>>
+  perguntas?: Doc[]
+  /** list_sessions: o JSON que ele devolve. */
+  vivas?: string
+  listaFalha?: boolean
+  euFalha?: boolean
+  semTemas?: boolean
+}
+
+function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {}) {
   on('command.register', () => ({ value: { command: 'painel' } }))
   on('tool.register', () => ({ value: { tool: 'mcp__painel-sessoes__onde_esta_o_painel' } }))
   let aberto = false
@@ -123,14 +116,14 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}) {
     return { value: undefined }
   })
   on('ui.toast', () => ({ value: undefined }))
-  const relogio = mock.clock(on, { now: Date.UTC(2026, 9, 23, 12) })
+  const relogio = mock.clock(on, { now: opc.agora ?? Date.UTC(2026, 9, 23, 12) })
   mock.env(on, { HOME: '/home/teste' })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   // A pasta do painel em memória: um arquivo por documento.
   const arquivos = new Map<string, string>()
-  for (const [colecao, docs] of [['sessoes', SESSOES], ['perguntas', PERGUNTAS]] as const) {
-    for (const d of docs) arquivos.set(`${PASTA}/${colecao}/${d.id}.json`, JSON.stringify(d))
-  }
+  for (const d of opc.perguntas ?? PERGUNTAS) arquivos.set(`${PASTA}/perguntas/${d.id}.json`, JSON.stringify(d))
+  for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, data)))
+  if (!opc.semTemas) arquivos.set(`${PASTA}/temas.json`, JSON.stringify(TEMAS_REAIS))
   const escritas: Escrita[] = []
   on('fs.list', (_, e) => {
     if (falhaPasta) return { deny: 'sem acesso à pasta do painel' }
@@ -169,50 +162,247 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}) {
       enviadas.push(input)
       return { result: {}, text: 'sent' }
     }
-    if (e.tool === 'mcp__ccd_session_mgmt__get_session') return { result: {}, text: EU }
+    if (e.tool === 'mcp__ccd_session_mgmt__get_session') return opc.euFalha ? { result: {}, text: 'sessão não achada', isError: true } : { result: {}, text: EU }
     contagem.vivas++
-    return { result: {}, text: VIVAS }
+    if (opc.listaFalha) return { result: {}, text: 'app fora do ar', isError: true }
+    return { result: {}, text: opc.vivas ?? VIVAS }
   })
 
   return { relogio, escritas, contagem, enviadas, prompts }
 }
 
-test('o pane cruza o painel com as sessões vivas, em toda superfície', async ($, on) => {
-  const { relogio, escritas, contagem } = engine(on)
+const lerSuperficie = async (ui: { findAll: (q: object) => Promise<Array<{ text: string; props: Record<string, unknown> }>> }) =>
+  (await ui.findAll({})).map(el => `${el.text} ${typeof el.props.alt === 'string' ? el.props.alt : ''}`).join('\n')
+
+/** Abre o pane, deixa a leitura acontecer e devolve o que a pessoa lê em cada superfície. */
+async function lerPane($: Parameters<Parameters<typeof test>[1]>[0], on: On, opc: Opcoes = {}, falhaPasta = false) {
+  const motor = engine(on, falhaPasta, {}, { agora: AGORA, ...opc })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(ABRIR)
+  await motor.relogio.settle()
+  const lido: Record<'terminal' | 'desktop', string> = { terminal: '', desktop: '' }
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    lido[surface] = await lerSuperficie(ui)
+    await ui.unmount()
+  }
+
+  return { ...motor, lido }
+}
+
+const AGORA = Date.UTC(2026, 9, 25, 15)
+const P7 = 'local_112bbb1c-9e59-4f31-9f65-7c3a31f6160f'
+const P2 = 'local_d985d448-ecd4-40a1-b7ea-eb327779056b'
+const P1 = 'local_c19b5998-5821-4435-91f3-320eac727d3b'
+const E8 = 'local_7723bebb-d428-4bb6-ab63-37354ead5c78'
+const vivasDe = (...ids: string[]) => JSON.stringify(ids.map(sessionId => ({ sessionId, title: sessionId, isRunning: true, isArchived: false })))
+const fila = (...ids: string[]) => Object.fromEntries(ids.map(id => [id, FILA_REAL[id] as Record<string, unknown>]))
+// A superfície lida repete o texto: o pai concatena os filhos e cada filho aparece de novo, com o alt dos desenhos.
+// A última ocorrência é a do elemento de folha, na ordem em que a tela os desenha.
+const ultima = (texto: string, r: RegExp) => {
+  const todas = [...texto.matchAll(new RegExp(r.source, 'g'))]
+
+  return todas.length > 0 ? (todas[todas.length - 1]?.index ?? -1) : -1
+}
+const antes = (texto: string, a: RegExp, b: RegExp) => {
+  const ia = ultima(texto, a)
+  const ib = ultima(texto, b)
+  expect([ia >= 0, ib >= 0], `os dois textos existem: ${a} e ${b}`).toEqual([true, true])
+  expect(ia, `${a} vem antes de ${b}`).toBeLessThan(ib)
+}
+
+test('ainda não lido: contadores sem bloco nenhum', async ($, on) => {
+  engine(on, false, {}, { agora: AGORA })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    const lido = await lerSuperficie(ui)
+    expect(lido).toMatch(/ainda não lido/)
+    expect(lido).not.toMatch(/Em sessão|Na fila · /)
+    await ui.unmount()
+  }
+})
+
+test('vazio: os dois blocos dizem que leram e não acharam, e os contadores ficam em zero', async ($, on) => {
+  const { lido } = await lerPane($, on, { fila: {}, perguntas: [] })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    expect(lido[surface]).toMatch(/Em sessão · 0/)
+    expect(lido[surface]).toMatch(/Nada em sessão agora\./)
+    expect(lido[surface]).toMatch(/Na fila · 0/)
+    expect(lido[surface]).toMatch(/Nada na fila\./)
+  }
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 0 Andando, 0 Na fila/)
+})
+
+test('só fila: Em sessão vazio, a fila por tema, o mais antigo primeiro', async ($, on) => {
+  const { lido, escritas } = await lerPane($, on, { fila: fila('F8', 'F17', 'F18'), vivas: vivasDe() })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    expect(lido[surface]).toMatch(/Em sessão · 0/)
+    expect(lido[surface]).toMatch(/Nada em sessão agora\./)
+    expect(lido[surface]).toMatch(/Na fila · 3/)
+    expect(lido[surface]).toMatch(/EDITOR DA LOJA/)
+    antes(lido[surface], /aviso de leitura/, /comCodigo/)
+    antes(lido[surface], /comCodigo/, /painel do componente da loja/)
+  }
+  // Na fila o texto de apoio é o resumo; o "espera <etapa>" diz onde parou.
+  expect(lido.desktop).toMatch(/espera planejamento/)
+  expect(lido.desktop).toMatch(/espera execução/)
+  expect(lido.desktop).toMatch(/Falta um teste que prove/)
+  expect(lido.desktop).toMatch(/parado há 1 h/)
+  expect(escritas).toEqual([])
+})
+
+test('andando: temas na ordem de temas.json, com etapa, dono, PR e o que vem depois', async ($, on) => {
+  const { lido } = await lerPane($, on, { fila: fila('F27', 'F13', 'F1', 'F23'), vivas: vivasDe(P7, P2, P1, E8), perguntas: [] })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    expect(lido[surface]).toMatch(/Em sessão · 4/)
+    expect(lido[surface]).toMatch(/Na fila · 0/)
+    antes(lido[surface], /EDITOR DA LOJA/, /SESSÕES E PAINEL/)
+    antes(lido[surface], /SESSÕES E PAINEL/, /KIT DE ORQUESTRAÇÃO/)
+    expect(lido[surface]).toMatch(/execução · P2 · #1129/)
+    expect(lido[surface]).not.toMatch(/TRAVADOS/)
+  }
+  expect(lido.desktop).toMatch(/depois: validação das duas fatias \(\+2\)/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 4 Andando, 0 Na fila/)
+})
+
+test('travado: abre Em sessão, com o tema na linha 2 e a trava inteira', async ($, on) => {
+  const travada = { ...FILA_REAL.F13, trava: { motivo: 'gate-vermelho', texto: 'três casos do diálogo falham' } }
+  const { lido } = await lerPane($, on, { fila: { ...fila('F1', 'F27'), F13: travada }, vivas: vivasDe(P7, P2, P1), perguntas: [] })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    expect(lido[surface]).toMatch(/Em sessão · 3/)
+    antes(lido[surface], /TRAVADOS/, /SPEC-155 fatia 2/)
+    antes(lido[surface], /SPEC-155 fatia 2/, /EDITOR DA LOJA/)
+    expect(lido[surface]).toMatch(/Trava \(gate-vermelho\): três casos do diálogo falham/)
+  }
+  expect(lido.desktop).toMatch(/execução · Editor da loja · P2 · #1129/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 2 Andando, 0 Na fila/)
+})
+
+test('item com pergunta: o selo vem do item e da pergunta, e só de pergunta aberta', async ($, on) => {
+  const q8 = doc('Q8', { projeto: 'izanagi', sessao: 'P1', sessaoId: P1, titulo: 'posso rebasear', estado: 'aberta', item: 'F1' }, 2)
+  const q7 = doc('Q7', { projeto: 'izanagi', sessao: 'P2', sessaoId: P2, titulo: 'qual caminho', estado: 'aberta' }, 4)
+  const q5 = doc('Q5', { projeto: 'izanagi', sessao: 'P7', titulo: 'já foi', estado: 'respondida', resposta: 'sim' })
+  const itens = {
+    F13: { ...FILA_REAL.F13, perguntas: ['Q7'] },
+    F1: FILA_REAL.F1 as Record<string, unknown>,
+    F27: { ...FILA_REAL.F27, perguntas: ['Q5'] },
+  }
+  const { lido } = await lerPane($, on, { fila: itens, perguntas: [q7, q8, q5], vivas: vivasDe(P7, P2, P1) })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    expect(lido[surface]).toMatch(/aguarda você · Q7/)
+    expect(lido[surface]).toMatch(/aguarda você · Q8/)
+    expect(lido[surface]).not.toMatch(/aguarda você · Q5/)
+  }
+  // O cartão da pergunta com item leva o tema e o título do item no lugar da sessão.
+  expect(lido.desktop).toMatch(/Q8 · Editor da loja · builder: fatias 1 a 8/)
+  expect(lido.desktop).toMatch(/Q7 · P2 · qual caminho/)
+  expect(lido.desktop).toMatch(/2 Esperam você, 0 Travados, 3 Andando, 0 Na fila/)
+})
+
+test('sem ninguém: dono que não está na lista vira trava, com a mesma contagem', async ($, on) => {
+  const { lido } = await lerPane($, on, { fila: fila('F23', 'F13'), vivas: vivasDe(P2), perguntas: [] })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    antes(lido[surface], /TRAVADOS/, /EDITOR DA LOJA/)
+    expect(lido[surface]).toMatch(/Trava \(sem-ninguem\): E8 não está mais ativa/)
+  }
+  expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 1 Andando, 0 Na fila/)
+})
+
+test('o dono vivo é a sessão que olha o painel, mesmo fora do list_sessions', async ($, on) => {
+  // O list_sessions exclui quem chama: a sessão própria vem do get_session (local_eu).
+  const meu = { ...FILA_REAL.F27, donoLocalId: 'local_eu', donoApelido: 'EU' }
+  const { lido } = await lerPane($, on, { fila: { F27: meu }, vivas: vivasDe(), perguntas: [] })
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 1 Andando, 0 Na fila/)
+  expect(lido.desktop).not.toMatch(/sem-ninguem/)
+})
+
+test('list_sessions que falha: o erro aparece e nenhum item vira "sem ninguém"', async ($, on) => {
+  const { lido } = await lerPane($, on, { fila: fila('F23', 'F13'), listaFalha: true, perguntas: [] })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    expect(lido[surface]).toMatch(/list_sessions: app fora do ar/)
+    expect(lido[surface]).not.toMatch(/sem-ninguem|TRAVADOS/)
+  }
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 2 Andando, 0 Na fila/)
+})
+
+test('get_session que falha: a sessão própria é desconhecida, e nenhum item vira "sem ninguém"', async ($, on) => {
+  const { lido } = await lerPane($, on, { fila: fila('F23', 'F13'), vivas: vivasDe(P2), euFalha: true, perguntas: [] })
+  expect(lido.desktop).toMatch(/esta sessão \(get_session\): sessão não achada/)
+  expect(lido.desktop).not.toMatch(/sem-ninguem/)
+  expect(lido.desktop).toMatch(/0 Travados, 2 Andando/)
+})
+
+test('fora do contrato: o item aparece em "Sem tema", no fim, com o motivo, e fora da lista de erros', async ($, on) => {
+  const etapaVelha = { ...FILA_REAL.F18, etapa: 'andando' }
+  const temaVelho = { ...FILA_REAL.F17, tema: 'inexistente' }
+  const { lido } = await lerPane($, on, { fila: { F18: etapaVelha, F17: temaVelho, F8: FILA_REAL.F8 as Record<string, unknown> }, vivas: vivasDe(), perguntas: [] })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    expect(lido[surface]).toMatch(/Na fila · 3/)
+    expect(lido[surface]).toMatch(/SEM TEMA/)
+    antes(lido[surface], /EDITOR DA LOJA/, /SEM TEMA/)
+    expect(lido[surface]).toMatch(/⚠ fora do contrato: etapa 'andando' fora da lista/)
+    expect(lido[surface]).toMatch(/⚠ fora do contrato: tema 'inexistente' fora da lista/)
+    // Aviso de gravação não vai para a lista vermelha do topo, que é de erro de leitura.
+    expect(lido[surface]).not.toMatch(/⚠ (temas|fila|list_sessions)/)
+  }
+})
+
+test('sem temas.json: o erro aparece e os itens caem em "Sem tema"', async ($, on) => {
+  const { lido } = await lerPane($, on, { fila: fila('F8'), vivas: vivasDe(), perguntas: [], semTemas: true })
+  expect(lido.desktop).toMatch(/⚠ temas do painel: /)
+  expect(lido.desktop).toMatch(/SEM TEMA/)
+  expect(lido.desktop).toMatch(/fora do contrato: tema 'editor' fora da lista/)
+})
+
+test('feitos: só nas últimas 24 h, recolhidos, e o botão abre', async ($, on) => {
+  const velho = { ...FILA_REAL.F4, feitoEm: '2026-10-24T10:00:00.000Z' }
+  const { relogio } = engine(on, false, {}, { agora: AGORA, fila: { F28: FILA_REAL.F28 as Record<string, unknown>, F4: velho }, vivas: vivasDe(), perguntas: [] })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.command.run(ABRIR)
   await relogio.settle()
-
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    // O que a pessoa lê: o texto e, no desktop, o alt de cada desenho.
-    const lido = (await ui.findAll({}))
-      .map(el => `${el.text} ${typeof el.props.alt === 'string' ? el.props.alt : ''}`)
-      .join('\n')
-    expect(lido).toMatch(/Q7[^\n]*qual caminho/)
-    expect(lido).not.toMatch(/Q5/)
-    expect(lido).toMatch(/Perguntas anteriores · 1/)
-    expect(lido).toMatch(/mas está parada/)
-    expect(lido).toMatch(/nova sem linha/)
-    expect(lido).toMatch(/sem linha no painel/)
-    expect(lido).not.toMatch(/velha/)
-    expect(lido).toMatch(/Trava \(conflito\): rebase/)
-    expect(lido).toMatch(/bloqueadas/i)
-    if (surface === 'desktop') expect(lido).toMatch(/1\/3 passos, agora: medir o gate — há 5 min/)
-    expect(await ui.find({ key: 'atualizar' })).toBeDefined()
-    // Só a linha de id inexistente falta; a própria sessão e a orquestradora (por sessionId) casam.
-    expect(lido).toMatch(/não está na lista ao vivo/)
-    expect(lido).not.toMatch(/rodando agora/)
+    const fechado = await lerSuperficie(ui)
+    expect(fechado).toMatch(/Feitos \(24 h\) · 1/)
+    expect(fechado).not.toMatch(/executora que termina o turno/)
+    await ui.press({ key: 'feitos' })
+    const aberto = await lerSuperficie(ui)
+    expect(aberto).toMatch(/executora que termina o turno/)
+    expect(aberto).not.toMatch(/crítica ao detalhe do designer/)
+    await ui.press({ key: 'feitos' })
     await ui.unmount()
   }
-  expect(escritas).toEqual([])
-  const antes = contagem.vivas
-  await relogio.advance(60_000)
-  expect(contagem.vivas).toBe(antes + 1)
-  // Fechado, o pane para de ler.
-  await $.command.run(ABRIR)
-  await relogio.advance(180_000)
-  expect(contagem.vivas).toBe(antes + 1)
+})
+
+test('a 300 px os quatro rótulos do resumo cabem inteiros, em 2×2', () => {
+  const contagens = [
+    { rotulo: 'Esperam você', n: 2, cor: '#e2a94e' },
+    { rotulo: 'Travados', n: 1, cor: '#e0846b' },
+    { rotulo: 'Andando', n: 5, cor: '#5b8def' },
+    { rotulo: 'Na fila', n: 4, cor: '#5b8def', classe: 't' },
+  ]
+  for (const W of [300, 420, 480]) {
+    const r = resumoSvg(W, contagens)
+    expect(r.source, 'o desenho não pode vir vazio').toBeTruthy()
+    expect(r.height).toBe(130)
+    for (const rotulo of ['Esperam você', 'Travados', 'Andando', 'Na fila']) expect(r.source).toContain(`>${rotulo}<`)
+    expect(r.source).not.toContain('…')
+  }
+  const largo = resumoSvg(640, contagens)
+  expect(largo.height).toBe(62)
+})
+
+test('a 300 px o selo da pergunta cabe inteiro na linha 2 e o título quebra em duas linhas', () => {
+  const base = { id: 'F9', titulo: 'x', tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'execucao', situacao: 'andando' as const, prs: [1128], depois: [], perguntas: ['Q225'], dono: { apelido: 'E3', localId: 'local_x' } }
+  const item = itemSvg(300, { ...base, titulo: 'Canvas com 60% da largura' }, AGORA)
+  expect(item.source, 'o desenho não pode vir vazio').toBeTruthy()
+  expect(item.source).toContain('aguarda você · Q225')
+  expect(item.source).not.toMatch(/Q225[^<]*…/)
+  const fila = itemSvg(300, { ...base, situacao: 'fila' as const, perguntas: [], dono: undefined, prs: [], paradoDesde: '2026-10-23T15:00:00Z', titulo: 'Aviso de leitura fala de "descarte" que ninguém pediu' }, AGORA)
+  expect(fila.source.match(/font-size="16"/g)?.length).toBe(2)
+  expect(fila.source).not.toMatch(/font-size="16"[^>]*>[^<]*…/)
+  expect(fila.source).toContain('parado há 2 d')
 })
 
 test('sem o pane aberto a sessão não lê nada', async ($, on) => {
@@ -368,24 +558,4 @@ test('prompt recusado e pergunta sem sessaoId também viram aviso', async ($, on
   expect(lido).toMatch(/Q9 gravada, mas não chegou à sessão \(bloqueado por hook\)/)
   expect(lido).toMatch(/Q7 gravada, mas não chegou à sessão \(a pergunta não tem sessaoId\)/)
   await ui.unmount()
-})
-
-test('a orquestradora vem primeiro no grupo do projeto, qualquer que seja o estado', async () => {
-  const linha = (id: string, titulo: string, estado: string) => ({ id, projeto: 'Izanagi', titulo, estado, perguntas: [] })
-  const grupos = porProjeto([
-    linha('a', 'exec · algo', 'aguarda-voce'),
-    linha('o', '🎛 orquestradora — izanagi', 'parada'),
-    linha('b', 'plano · outro', 'trabalhando'),
-  ])
-  expect(grupos.length).toBe(1)
-  expect(grupos[0]?.[1].map(l => l.id)).toEqual(['o', 'a', 'b'])
-})
-
-test('projetoDe: worktree do app, projeto fora de Projects/ e pasta simples', () => {
-  expect(projetoDe('/Users/x/Developer/Projects/Izanagi/.claude/worktrees/ab-12')).toBe('izanagi')
-  expect(projetoDe('/Users/x/Developer/Wake/sumire/.claude/worktrees/q')).toBe('sumire')
-  expect(projetoDe('/Users/x/code/foo')).toBe('foo')
-  expect(projetoDe('/Users/x/code/foo/worktrees/bar')).toBe('foo')
-  expect(projetoDe('/Users/x/Developer/Projects/clientes/loja-x')).toBe('loja-x')
-  expect(projetoDe(undefined)).toBe('?')
 })

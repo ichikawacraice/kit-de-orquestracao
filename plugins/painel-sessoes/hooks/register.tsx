@@ -1,12 +1,13 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { LinhaSessao, Leitura, Passo, PerguntaAberta, PerguntaAnterior } from '../types'
-import { ALTURA_RESUMO, anteriorSvg, perguntaSvg, resumoSvg, sessaoSvg } from './desenho'
+import type { LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
+import { anteriorSvg, itemSvg, perguntaSvg, resumoSvg } from './desenho'
 
-// Painel das sessões num pane (Q63, opção A): lê os documentos de
-// ~/.claude/orquestracao/painel/<coleção>/<id>.json, que as sessões gravam pelo
-// script painel.mjs da skill orquestradora, e cruza com o list_sessions ao vivo.
+// Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
+// que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
+// Desenha a FILA por tema: o que está em sessão e onde, e o que espera alguém começar; o list_sessions
+// ao vivo só diz se o dono do item ainda existe.
 // Só escreve a resposta de uma pergunta aberta (Q67).
 
 const PANE = 'painel-sessoes'
@@ -14,10 +15,11 @@ const TITULO = 'Sessões'
 const INTERVALO_MS = 60_000
 const PASTA = '.claude/orquestracao/painel'
 
-const VAZIA: Leitura = { lidoEm: null, lendo: false, erros: [], avisos: [], sessoes: [], perguntas: [], anteriores: [] }
+const VAZIA: Leitura = { lidoEm: null, lendo: false, erros: [], avisos: [], itens: [], temas: [], perguntas: [], anteriores: [] }
 const leitura = atom({ plugin: 'painel-sessoes', key: 'leitura' } as const, VAZIA)
 const respondendoEm = atom({ plugin: 'painel-sessoes', key: 'respondendoEm' } as const, null as string | null)
 const verAnteriores = atom({ plugin: 'painel-sessoes', key: 'verAnteriores' } as const, false)
+const verFeitos = atom({ plugin: 'painel-sessoes', key: 'verFeitos' } as const, false)
 
 // As respostas rápidas das perguntas sem opções próprias: o texto vai ao banco e à sessão.
 const RAPIDAS = [
@@ -57,79 +59,130 @@ export function lerVivas(texto: string): Vivo[] {
   return JSON.parse(texto.slice(inicio)) as Vivo[]
 }
 
-export function projetoDe(cwd: string | undefined): string {
-  if (!cwd) return '?'
-  // Limite (V1, R4): vale a raiz do repositório quando o `cwd` é a raiz ou um worktree; sessão aberta numa SUBPASTA do repo
-  // (`…/meuapp/apps/web` → `web`) e repositório `x.git` divergem do hook e do painel.mjs, que usam o git common dir.
-  // Worktree do app (`<repo>/.claude/worktrees/<x>`) e `<repo>/worktrees/<x>` valem o repositório, não o worktree.
-  const raiz = cwd.replace(/\/\.claude\/worktrees(\/.*)?$/, '').replace(/\/worktrees\/[^/]+\/?$/, '')
-  const nome = raiz.split('/').filter(Boolean).pop() ?? '?'
-
-  return nome.toLowerCase()
-}
-
 const texto = (v: unknown): string | undefined =>
   typeof v === 'string' && v.trim() !== '' ? v : typeof v === 'number' ? String(v) : undefined
 
-/**
- * Cruza as linhas do painel com o estado vivo das sessões, pelo campo
- * `sessionId` da linha quando existe, senão pelo id do documento.
- * `proprio`: o id desta sessão (o list_sessions exclui quem chama, então ela
- * vem do get_session "self"); sem ele não se afirma que uma linha falta.
- */
-export function cruzar(docs: Doc[], vivas: Vivo[], proprio?: string): LinhaSessao[] {
-  const porId = new Map(vivas.map(v => [v.sessionId, v]))
-  const linhas: LinhaSessao[] = docs.map(d => {
-    const chave = texto(d.data.sessionId) ?? d.id
-    const v = porId.get(chave)
-    const estado = texto(d.data.estado) ?? '?'
-    const linha: LinhaSessao = {
-      id: chave,
-      projeto: (texto(d.data.projeto) ?? projetoDe(v?.cwd)).toLowerCase(),
-      titulo: texto(d.data.titulo) ?? v?.title ?? d.id,
-      estado,
-      etapa: texto(d.data.etapa),
-      pr: texto(d.data.pr),
-      prUrl: texto(d.data.prUrl),
-      bloqueio: texto(d.data.bloqueio),
-      motivo: texto(d.data.motivo),
-      perguntas: Array.isArray(d.data.perguntas) ? d.data.perguntas.map(String) : [],
-      atualizadoEm: texto(d.data.atualizadoEm),
-      passos: lerPassos(d.data.passos),
-      ativaEm: v?.lastActivityAt,
-    }
-    if (v) {
-      linha.vivo = {
-        isRunning: v.isRunning === true,
-        isArchived: v.isArchived === true,
-        prNumber: v.prNumber,
-        prState: v.prState,
-      }
-      linha.divergencia = divergencia(estado, linha.vivo)
-    } else if (proprio && vivas.length > 0 && estado !== 'concluida') {
-      linha.divergencia = 'não está na lista ao vivo (id errado ou sessão antiga)'
-    }
+const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'feito', 'descartado']
+const FEITOS_MS = 24 * 3600 * 1000
+const SEM_TEMA = 'sem-tema'
 
-    return linha
+const inteiros = (v: unknown): number[] => (Array.isArray(v) ? v.filter((n): n is number => Number.isInteger(n) && n > 0) : [])
+
+/** `temas.json`: lista de `{ id, rotulo, projeto? }`; o que não tiver id e rótulo fica de fora. */
+export function lerTemas(texto_: string): Tema[] {
+  const v = JSON.parse(texto_) as unknown
+  if (!Array.isArray(v)) throw new Error('temas.json não é uma lista')
+
+  return v.flatMap(t => {
+    const o = (t ?? {}) as Record<string, unknown>
+    const id = texto(o.id)
+    const rotulo = texto(o.rotulo)
+
+    return id && rotulo ? [{ id, rotulo, projeto: texto(o.projeto) }] : []
   })
-  const comLinha = new Set(docs.map(d => texto(d.data.sessionId) ?? d.id))
-  for (const v of vivas) {
-    if (comLinha.has(v.sessionId) || v.isArchived) continue
-    linhas.push({
-      id: v.sessionId,
-      projeto: projetoDe(v.cwd),
-      titulo: v.title ?? v.sessionId,
-      estado: v.isRunning ? 'trabalhando' : 'parada',
-      pr: v.prNumber ? String(v.prNumber) : undefined,
-      perguntas: [],
-      vivo: { isRunning: v.isRunning === true, isArchived: false, prNumber: v.prNumber, prState: v.prState },
-      semLinha: true,
-      ativaEm: v.lastActivityAt,
-      divergencia: 'sem linha no painel',
+}
+
+/**
+ * Os itens da fila prontos para desenhar. `vivas` é a lista ao vivo do app (sem arquivadas), ou `null` quando ela
+ * falhou ou não diz quem é esta sessão: aí nenhum item vira "sem ninguém", porque a falha já aparece em `⚠`.
+ * `feito` e `descartado` só ficam nas últimas 24 h; etapa ou tema fora da lista vão para "Sem tema", com o motivo.
+ */
+export function montarItens(
+  docs: Doc[],
+  temas: Tema[],
+  vivas: Vivo[] | null,
+  proprio: string | undefined,
+  perguntasAbertas: Array<{ id: string; item?: string }>,
+  agora: number,
+): LinhaItem[] {
+  const vivos = vivas === null ? null : new Set([...vivas.filter(v => v.isArchived !== true).map(v => v.sessionId), ...(proprio ? [proprio] : [])])
+  const abertas = new Set(perguntasAbertas.map(q => q.id))
+  const itens: LinhaItem[] = []
+  for (const d of docs) {
+    const etapaCrua = texto(d.data.etapa)
+    const etapaOk = etapaCrua !== undefined && ETAPAS.includes(etapaCrua)
+    const temaId = texto(d.data.tema)
+    const tema = temas.find(t => t.id === temaId)
+    const motivos: string[] = []
+    if (etapaCrua === undefined) motivos.push('sem etapa')
+    else if (!etapaOk) motivos.push(`etapa '${etapaCrua}' fora da lista`)
+    if (!tema) motivos.push(temaId ? `tema '${temaId}' fora da lista` : 'sem tema')
+    const historico = Array.isArray(d.data.historico) ? (d.data.historico as Array<Record<string, unknown>>) : []
+    const feitoEm = texto(d.data.feitoEm)
+    const final = etapaCrua === 'feito' || etapaCrua === 'descartado'
+    let situacao: Situacao
+    let trava: LinhaItem['trava']
+    const donoLocalId = texto(d.data.donoLocalId)
+    const apelido = texto(d.data.donoApelido)
+    const dono = donoLocalId && apelido ? { apelido, localId: donoLocalId } : undefined
+    const t = d.data.trava as Record<string, unknown> | null | undefined
+    const travaGravada = t && texto(t.motivo) && texto(t.texto) ? { motivo: texto(t.motivo) as string, texto: texto(t.texto) as string } : undefined
+    if (final) {
+      const quando = Date.parse(feitoEm ?? texto(d.data.atualizadoEm) ?? '')
+      if (Number.isNaN(quando) || agora - quando > FEITOS_MS) continue
+      situacao = 'feito'
+    } else if (dono) {
+      if (vivos && !vivos.has(dono.localId)) {
+        situacao = 'travado'
+        trava = { motivo: 'sem-ninguem', texto: `${dono.apelido} não está mais ativa` }
+      } else {
+        situacao = travaGravada ? 'travado' : 'andando'
+        trava = travaGravada
+      }
+    } else situacao = 'fila'
+    itens.push({
+      id: d.id,
+      titulo: texto(d.data.titulo) ?? d.id,
+      resumo: texto(d.data.resumo),
+      tema: tema?.id ?? SEM_TEMA,
+      temaRotulo: tema?.rotulo ?? 'Sem tema',
+      etapa: etapaCrua ?? '?',
+      situacao,
+      dono,
+      prs: inteiros(d.data.prs),
+      depois: Array.isArray(d.data.depois) ? d.data.depois.flatMap(x => (texto((x as Record<string, unknown> | null)?.texto) ? [texto((x as Record<string, unknown>).texto) as string] : [])) : [],
+      agora: texto(d.data.agora),
+      trava,
+      perguntas: [
+        ...new Set([
+          ...(Array.isArray(d.data.perguntas) ? d.data.perguntas.map(String).filter(q => abertas.has(q)) : []),
+          ...perguntasAbertas.filter(q => q.item === d.id).map(q => q.id),
+        ]),
+      ],
+      atualizadoEm: texto(d.data.atualizadoEm),
+      paradoDesde: texto(historico[historico.length - 1]?.em) ?? texto(d.data.atualizadoEm),
+      feitoEm,
+      foraDoContrato: motivos.length > 0 ? motivos.join('; ') : undefined,
     })
   }
 
-  return linhas
+  return itens
+}
+
+/** Os temas, na ordem de `temas.json`, com "Sem tema" no fim; só os que têm item. Dentro, a ordem de `ordenar`. */
+export function porTema(itens: LinhaItem[], temas: Tema[], ordenar: (a: LinhaItem, b: LinhaItem) => number): Array<{ id: string; rotulo: string; itens: LinhaItem[] }> {
+  const ordem = [...temas.map(t => ({ id: t.id, rotulo: t.rotulo })), { id: SEM_TEMA, rotulo: 'Sem tema' }]
+
+  return ordem.flatMap(t => {
+    const meus = itens.filter(i => i.tema === t.id).sort(ordenar)
+
+    return meus.length > 0 ? [{ ...t, itens: meus }] : []
+  })
+}
+
+const pelaOrdemDoId = (a: LinhaItem, b: LinhaItem) => numero(a.id) - numero(b.id)
+/** Na fila, o mais antigo primeiro (assumido, a confirmar). */
+const maisAntigoPrimeiro = (a: LinhaItem, b: LinhaItem) =>
+  (Date.parse(a.paradoDesde ?? '') || Infinity) - (Date.parse(b.paradoDesde ?? '') || Infinity) || pelaOrdemDoId(a, b)
+
+/** Os blocos da tela: travados abrem "Em sessão", depois o que anda por tema; a fila por tema; e os feitos. */
+export function secoes(itens: LinhaItem[], temas: Tema[]) {
+  const travados = porTema(itens.filter(i => i.situacao === 'travado'), temas, pelaOrdemDoId).flatMap(g => g.itens)
+  const andando = porTema(itens.filter(i => i.situacao === 'andando'), temas, pelaOrdemDoId)
+  const fila = porTema(itens.filter(i => i.situacao === 'fila'), temas, maisAntigoPrimeiro)
+  const feitos = itens.filter(i => i.situacao === 'feito').sort((a, b) => (Date.parse(b.feitoEm ?? '') || 0) - (Date.parse(a.feitoEm ?? '') || 0))
+
+  return { travados, andando, fila, feitos, emSessao: travados.length + andando.reduce((n, g) => n + g.itens.length, 0), naFila: fila.reduce((n, g) => n + g.itens.length, 0) }
 }
 
 const numero = (id: string) => Number(id.replace(/\D/g, '')) || 0
@@ -141,100 +194,10 @@ export function linkDe(sessaoId: string | undefined, vivas: Vivo[]): string | un
   return vivas.find(v => v.sessionId === sessaoId)?.link ?? `claude://claude.ai/epitaxy/${sessaoId}`
 }
 
-/** Só os passos com texto; estado fora de feito/andamento conta como pendente. */
-export function lerPassos(v: unknown): Passo[] | undefined {
-  if (!Array.isArray(v)) return undefined
-  const passos = v.flatMap(p => {
-    const o = (p ?? {}) as Record<string, unknown>
-    const t = texto(o.texto)
-    if (!t) return []
-    const estado = o.estado === 'feito' || o.estado === 'andamento' ? o.estado : 'pendente'
-
-    return [{ texto: t, estado, detalhe: texto(o.detalhe) }]
-  })
-
-  return passos.length > 0 ? passos : undefined
-}
-
-export function divergencia(estado: string, vivo: NonNullable<LinhaSessao['vivo']>): string | undefined {
-  if (vivo.isArchived) return estado === 'concluida' ? undefined : `arquivada, o painel diz ${estado}`
-  if (estado === 'trabalhando' && !vivo.isRunning) return 'o painel diz trabalhando, mas está parada'
-  if (estado !== 'trabalhando' && vivo.isRunning) return `rodando agora, o painel diz ${estado}`
-
-  return undefined
-}
-
-const SELO: Record<string, string> = {
-  trabalhando: '🔵',
-  'aguarda-subsessao': '🔵',
-  'aguarda-voce': '🟡',
-  'aguarda-validacao': '🟡',
-  'aguarda-merge': '🟢',
-  bloqueada: '🔴',
-  parada: '⚪',
-  concluida: '⚪',
-}
-
-const ORDEM = [
-  'aguarda-voce',
-  'bloqueada',
-  'trabalhando',
-  'aguarda-subsessao',
-  'aguarda-validacao',
-  'aguarda-merge',
-  'pr-aberto',
-  'esperando',
-  'parada',
-  'concluida',
-]
-
-export const selo = (estado: string) => SELO[estado] ?? '⚪'
-
-/** Cor do ponto e do rótulo de cada estado, em chaves do tema (seguem claro/escuro). */
-const COR: Record<string, string> = {
-  trabalhando: 'suggestion',
-  'aguarda-subsessao': 'suggestion',
-  'aguarda-voce': 'warning',
-  'aguarda-validacao': 'warning',
-  'aguarda-merge': 'success',
-  bloqueada: 'error',
-}
-
+/** O ponto do item no terminal, em chaves do tema. */
+const COR_ETAPA_TERMINAL: Record<string, string> = { planejamento: 'suggestion', design: 'suggestion', execucao: 'suggestion', validacao: 'suggestion', merge: 'success' }
 const COR_RESUMO: Record<string, string> = { warning: '#e2a94e', error: '#e0846b', suggestion: '#5b8def', success: '#4caf6e' }
-
-const ROTULO: Record<string, string> = {
-  trabalhando: 'trabalhando',
-  'aguarda-subsessao': 'espera subsessão',
-  'aguarda-voce': 'espera você',
-  'aguarda-validacao': 'espera validação',
-  'aguarda-merge': 'espera merge',
-  bloqueada: 'bloqueada',
-  parada: 'parada',
-  concluida: 'concluída',
-}
-
-const pos = (estado: string) => {
-  const i = ORDEM.indexOf(estado)
-
-  return i < 0 ? ORDEM.length : i
-}
-
-const orquestradora = (l: LinhaSessao) => /^🎛\s*orquestradora/i.test(l.titulo)
-
-const ativa = (l: LinhaSessao) => l.estado !== 'concluida' && !l.vivo?.isArchived
-
-export function porProjeto(linhas: LinhaSessao[]): Array<[string, LinhaSessao[]]> {
-  const grupos = new Map<string, LinhaSessao[]>()
-  for (const l of linhas.filter(ativa)) {
-    const g = grupos.get(l.projeto) ?? []
-    g.push(l)
-    grupos.set(l.projeto, g)
-  }
-  // A orquestradora abre o grupo, qualquer que seja o estado dela (pedido do operador, 23/10).
-  for (const g of grupos.values()) g.sort((a, b) => Number(orquestradora(b)) - Number(orquestradora(a)) || pos(a.estado) - pos(b.estado))
-
-  return [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b))
-}
+const ROTULO_ETAPA_TERMINAL: Record<string, string> = { planejamento: 'planejamento', design: 'design', execucao: 'execução', validacao: 'validação', merge: 'merge', feito: 'feito', descartado: 'descartado' }
 
 const dois = (n: number) => String(n).padStart(2, '0')
 
@@ -387,7 +350,10 @@ async function ler($: EngineInterface): Promise<void> {
 
   let docsSessoes: Doc[] = []
   let docsPerguntas: Doc[] = []
+  let docsFila: Doc[] = []
+  let temas: Tema[] = []
   let vivas: Vivo[] = []
+  let vivasLidas = false
   await Promise.all([
     lerColecao('sessoes').then(
       d => void (docsSessoes = d),
@@ -397,17 +363,27 @@ async function ler($: EngineInterface): Promise<void> {
       d => void (docsPerguntas = d),
       err => void erros.push(`perguntas do painel: ${mensagem(err)}`),
     ),
+    lerColecao('fila').then(
+      d => void (docsFila = d),
+      err => void erros.push(`fila do painel: ${mensagem(err)}`),
+    ),
+    // Sem a lista de temas os itens caem em "Sem tema": a falta é erro de leitura, não lista vazia calada.
+    $.fs.read(`${pasta}/temas.json`).then(
+      t => void (temas = lerTemas(t as string)),
+      err => void erros.push(`temas do painel: ${mensagem(err)}`),
+    ),
     $.tool
       .call({
         tool: 'mcp__ccd_session_mgmt__list_sessions',
         linked: false,
-        include_archived: true,
-        limit: 40,
+        include_archived: false,
+        limit: 100,
       })
       .then(r => {
         if (r.deny !== undefined) throw new Error(r.deny)
         if (r.isError) throw new Error(r.text ?? 'erro sem texto')
         vivas = lerVivas(r.text ?? '')
+        vivasLidas = true
       })
       .catch(err => void erros.push(`list_sessions: ${mensagem(err)}`)),
   ])
@@ -421,6 +397,7 @@ async function ler($: EngineInterface): Promise<void> {
     proprio = eu.sessionId
     vivas = [...vivas.filter(v => v.sessionId !== eu.sessionId), eu]
   } catch (err) {
+    proprio = undefined
     erros.push(`esta sessão (get_session): ${mensagem(err)}`)
   }
 
@@ -448,6 +425,7 @@ async function ler($: EngineInterface): Promise<void> {
       caso: texto(d.data.caso),
       recomendacao: texto(d.data.recomendacao),
       seNaoDecidir: texto(d.data.seNaoDecidir),
+      item: texto(d.data.item),
     }))
     .sort((a, b) => numero(a.id) - numero(b.id))
   const anteriores: PerguntaAnterior[] = docsPerguntas
@@ -465,12 +443,20 @@ async function ler($: EngineInterface): Promise<void> {
     }))
 
   const agora = await $.clock.now()
+  // Sem a lista ao vivo ou sem saber quem sou, o dono "sumido" pode ser só falha de leitura: nenhum item vira "sem ninguém".
+  const itens = montarItens(docsFila, temas, vivasLidas && proprio !== undefined ? vivas : null, proprio, perguntas, agora)
+  const porId = new Map(itens.map(i => [i.id, i]))
+  for (const q of perguntas) {
+    const dono = q.item ? porId.get(q.item) : undefined
+    if (dono) q.rotulo = `${dono.temaRotulo} · ${dono.titulo}`
+  }
   await update($, leitura, l => ({
     avisos: l.avisos ?? [],
     lidoEm: agora,
     lendo: false,
     erros,
-    sessoes: cruzar(docsSessoes, vivas, proprio),
+    itens,
+    temas,
     perguntas,
     anteriores,
   }))
@@ -523,7 +509,12 @@ export const register: Register = on => {
       erros: l.erros,
       avisos: l.avisos,
       perguntas: l.perguntas.map(q => q.id),
-      sessoes: porProjeto(l.sessoes).map(([p, g]) => [p, g.map(s => `${selo(s.estado)} ${s.titulo}${s.divergencia ? ` ≠ ${s.divergencia}` : ''}`)]),
+      itens: (() => {
+        const sec = secoes(l.itens, l.temas)
+        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}`
+
+        return { emSessao: [...sec.travados, ...sec.andando.flatMap(g => g.itens)].map(dizer), naFila: sec.fila.flatMap(g => g.itens).map(dizer), feitos: sec.feitos.map(dizer) }
+      })(),
     }
     const texto = JSON.stringify({ aberto, panes: await $.ui.panes(), desenhos, lido }, null, 2)
 
@@ -532,7 +523,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elementos = $.ui.resolve(e)
-    const { Box, Text, Button, Link } = elementos
+    const { Box, Text, Button } = elementos
     // Campo de texto só onde a superfície tem um; sem ele, a opção "outra" fica sem campo.
     const Input = 'Input' in elementos ? elementos.Input : undefined
     const agora = await $.clock.now()
@@ -540,21 +531,21 @@ export const register: Register = on => {
     const l = await read($, leitura)
     // O estado da sessão sobrevive ao reload: o de antes desta versão não tem `avisos`.
     const avisos = l.avisos ?? []
-    const grupos = porProjeto(l.sessoes)
-    const ocultas = l.sessoes.length - grupos.reduce((n, [, g]) => n + g.length, 0)
-
-    const ativas = grupos.flatMap(([, g]) => g)
-    const conta = (...estados: string[]) => ativas.filter(s => estados.includes(s.estado)).length
+    const sec = secoes(l.itens, l.temas)
+    const contar = (...sit: Situacao[]) => l.itens.filter(i => sit.includes(i.situacao)).length
+    // Quatro decisões, cada uma contada uma vez: travado e andando se excluem, e a soma dos dois é "Em sessão".
     const resumo = [
-      { n: conta('aguarda-voce', 'aguarda-validacao'), rotulo: 'esperam você', cor: 'warning' },
-      { n: conta('bloqueada'), rotulo: 'bloqueadas', cor: 'error' },
-      { n: conta('trabalhando', 'aguarda-subsessao'), rotulo: 'trabalhando', cor: 'suggestion' },
-      { n: conta('aguarda-merge', 'pr-aberto'), rotulo: 'para merge', cor: 'success' },
+      { n: l.perguntas.length, rotulo: 'Esperam você', cor: 'warning' },
+      { n: contar('travado'), rotulo: 'Travados', cor: 'error' },
+      { n: contar('andando'), rotulo: 'Andando', cor: 'suggestion' },
+      { n: contar('fila'), rotulo: 'Na fila', cor: 'suggestion', classe: 't' },
     ]
-    const resumo4 = resumo.map(r => ({ ...r, rotulo: r.rotulo.charAt(0).toUpperCase() + r.rotulo.slice(1), cor: COR_RESUMO[r.cor] ?? '#9a9a96' }))
+    const resumo4 = resumo.map(r => ({ ...r, cor: COR_RESUMO[r.cor] ?? '#9a9a96' }))
+    const lido = l.lidoEm !== null
 
     const aberta = await read($, respondendoEm)
     const verVelhas = await read($, verAnteriores)
+    const verFeitosAgora = await read($, verFeitos)
 
     // Os botões de uma pergunta: as opções dela (Q67) ou Sim/Não/Adiar/Responder, que vão à sessão que perguntou.
     const acoes = (q: PerguntaAberta) => {
@@ -619,19 +610,34 @@ export const register: Register = on => {
         </Button>
       ) : null
 
+    const botaoFeitos =
+      sec.feitos.length > 0 ? (
+        <Button key="feitos" plain dimColor onPress={() => void update($, verFeitos, v => !v)}>
+          {`${verFeitosAgora ? '▾' : '▸'} Feitos (24 h) · ${sec.feitos.length}`}
+        </Button>
+      ) : null
+
     if (e.surface === 'desktop' && 'Svg' in elementos) {
       const { Svg } = elementos
       const W = Math.max(240, Math.min(900, (e.props.bodyColumns || 40) * 8 - 8))
       const titulo = (t: string) => <Text bold>{t}</Text>
+      const cartaoResumo = resumoSvg(W, resumo4)
+      // O tema é cabeçalho discreto (dimColor, caixa alta curta); o título do bloco é o Text bold, os dois não pesam igual.
+      const cabecalho = (t: string) => <Text dimColor>{t.toUpperCase()}</Text>
+      const desenhar = (i: LinhaItem, noTravados = false) => {
+        const linha = itemSvg(W, i, agora, { noTravados })
+
+        return (
+          <Box key={`item:${i.id}`} flexDirection="column">
+            <Svg source={linha.source} alt={linha.alt} width={W} height={linha.height} />
+            {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
+          </Box>
+        )
+      }
 
       return (
         <Box flexDirection="column" gap={1}>
-          <Svg
-            source={resumoSvg(W, resumo4)}
-            alt={resumo4.map(r => `${r.n} ${r.rotulo}`).join(', ')}
-            width={W}
-            height={ALTURA_RESUMO}
-          />
+          <Svg source={cartaoResumo.source} alt={resumo4.map(r => `${r.n} ${r.rotulo}`).join(', ')} width={W} height={cartaoResumo.height} />
           <Box flexDirection="row" justifyContent="space-between" alignItems="center">
             <Text dimColor>
               {l.lendo ? 'lendo…' : l.lidoEm === null ? 'ainda não lido' : `lido às ${hora(l.lidoEm)} · a cada 60 s`}
@@ -659,7 +665,7 @@ export const register: Register = on => {
                     <Svg
                       key={`pergunta:${q.id}`}
                       source={card.source}
-                      alt={[`${q.id} · ${q.sessao} · ${q.titulo}`, q.caso, q.seNaoDecidir && `Se não decidir: ${q.seNaoDecidir}`, q.recomendacao && `Recomendo: ${q.recomendacao}`].filter(Boolean).join(' — ')}
+                      alt={[`${q.id} · ${q.rotulo ?? q.sessao} · ${q.titulo}`, q.caso, q.seNaoDecidir && `Se não decidir: ${q.seNaoDecidir}`, q.recomendacao && `Recomendo: ${q.recomendacao}`].filter(Boolean).join(' — ')}
                       width={W}
                       height={card.height}
                     />
@@ -670,6 +676,38 @@ export const register: Register = on => {
             </Box>
           )}
 
+          {lido && (
+            <Box flexDirection="column" gap={1}>
+              {titulo(`Em sessão · ${sec.emSessao}`)}
+              {sec.emSessao === 0 && <Text dimColor>Nada em sessão agora.</Text>}
+              {sec.travados.length > 0 && (
+                <Box flexDirection="column" gap={1}>
+                  {cabecalho('Travados')}
+                  {sec.travados.map(i => desenhar(i, true))}
+                </Box>
+              )}
+              {sec.andando.map(g => (
+                <Box key={`andando:${g.id}`} flexDirection="column" gap={1}>
+                  {cabecalho(g.rotulo)}
+                  {g.itens.map(i => desenhar(i))}
+                </Box>
+              ))}
+            </Box>
+          )}
+          {lido && (
+            <Box flexDirection="column" gap={1}>
+              {titulo(`Na fila · ${sec.naFila}`)}
+              {sec.naFila === 0 && <Text dimColor>Nada na fila.</Text>}
+              {sec.fila.map(g => (
+                <Box key={`fila:${g.id}`} flexDirection="column" gap={1}>
+                  {cabecalho(g.rotulo)}
+                  {g.itens.map(i => desenhar(i))}
+                </Box>
+              ))}
+            </Box>
+          )}
+          {botaoFeitos}
+          {verFeitosAgora && sec.feitos.map(i => desenhar(i))}
           {botaoAnteriores}
           {verVelhas &&
             l.anteriores.map(a => {
@@ -677,21 +715,33 @@ export const register: Register = on => {
 
               return <Svg key={`anterior:${a.id}`} source={linha.source} alt={linha.alt} width={W} height={linha.height} />
             })}
+        </Box>
+      )
+    }
 
-          {grupos.length === 0 && l.lidoEm !== null && (
-            <Text dimColor>Nenhuma sessão ativa no painel nem na lista ao vivo.</Text>
-          )}
-          {grupos.map(([projeto, linhas]) => (
-            <Box flexDirection="column" gap={1}>
-              {titulo(`${projeto.charAt(0).toUpperCase()}${projeto.slice(1)} · ${linhas.length}`)}
-              {linhas.map(s => {
-                const linha = sessaoSvg(W, s, agora)
+    // Cada item em duas linhas: título e "etapa · dono · #PR"; a trava e o aviso de contrato logo abaixo.
+    const linhaItem = (i: LinhaItem, noTravados = false) => {
+      const cor = i.situacao === 'travado' ? 'error' : i.situacao === 'fila' ? 'inactive' : (COR_ETAPA_TERMINAL[i.etapa] ?? 'inactive')
+      const etapa = ROTULO_ETAPA_TERMINAL[i.etapa] ?? i.etapa
+      const info = [
+        i.situacao === 'fila' ? `espera ${etapa}` : etapa,
+        noTravados ? i.temaRotulo : undefined,
+        i.perguntas[0] ? `aguarda você · ${i.perguntas[0]}` : undefined,
+        i.dono?.apelido,
+        i.prs.length > 0 ? `#${i.prs[i.prs.length - 1]}${i.prs.length > 1 ? ` +${i.prs.length - 1}` : ''}` : undefined,
+      ].filter(Boolean).join(' · ')
 
-                return <Svg key={`sessao:${s.id}`} source={linha.source} alt={linha.alt} width={W} height={linha.height} />
-              })}
-            </Box>
-          ))}
-          {ocultas > 0 && <Text dimColor>{`${ocultas} concluídas ou arquivadas ocultas`}</Text>}
+      return (
+        <Box key={`item:${i.id}`} flexDirection="row" columnGap={1}>
+          <Text color={cor}>●</Text>
+          <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+            <Text wrap="truncate-end">{i.titulo}</Text>
+            <Text dimColor wrap="wrap">{info}</Text>
+            {i.trava && <Text color="error" wrap="wrap">{`Trava (${i.trava.motivo}): ${i.trava.texto}`}</Text>}
+            {i.situacao === 'fila' && i.resumo && <Text dimColor wrap="wrap">{i.resumo}</Text>}
+            {i.situacao !== 'fila' && i.agora && <Text dimColor wrap="wrap">{i.agora}</Text>}
+            {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
+          </Box>
         </Box>
       )
     }
@@ -700,7 +750,7 @@ export const register: Register = on => {
       <Box flexDirection="column" gap={1} paddingX={1}>
         <Box flexDirection="row" justifyContent="space-between" alignItems="center">
           <Box flexDirection="row" columnGap={2} flexWrap="wrap">
-            {resumo.every(r => r.n === 0) && <Text dimColor>nada em andamento</Text>}
+            {resumo.every(r => r.n === 0) && <Text dimColor>{lido ? 'nada em andamento' : 'ainda não lido'}</Text>}
             {resumo.filter(r => r.n > 0).map(r => (
               <Text>
                 <Text color={r.cor}>●</Text> <Text bold>{String(r.n)}</Text>
@@ -744,7 +794,7 @@ export const register: Register = on => {
                   {q.titulo}
                 </Text>
                 <Text dimColor wrap="truncate-end">
-                  {q.sessao}
+                  {q.rotulo ?? q.sessao}
                 </Text>
                 {q.caso && <Text wrap="wrap">{q.caso}</Text>}
                 {q.seNaoDecidir && <Text dimColor wrap="wrap">{`Se não decidir: ${q.seNaoDecidir}`}</Text>}
@@ -755,6 +805,38 @@ export const register: Register = on => {
           </Box>
         )}
 
+        {lido && (
+          <Box flexDirection="column" gap={1}>
+            <Text bold>{`Em sessão · ${sec.emSessao}`}</Text>
+            {sec.emSessao === 0 && <Text dimColor>Nada em sessão agora.</Text>}
+            {sec.travados.length > 0 && (
+              <Box flexDirection="column">
+                <Text dimColor bold>TRAVADOS</Text>
+                {sec.travados.map(i => linhaItem(i, true))}
+              </Box>
+            )}
+            {sec.andando.map(g => (
+              <Box key={`andando:${g.id}`} flexDirection="column">
+                <Text dimColor bold>{g.rotulo.toUpperCase()}</Text>
+                {g.itens.map(i => linhaItem(i))}
+              </Box>
+            ))}
+          </Box>
+        )}
+        {lido && (
+          <Box flexDirection="column" gap={1}>
+            <Text bold>{`Na fila · ${sec.naFila}`}</Text>
+            {sec.naFila === 0 && <Text dimColor>Nada na fila.</Text>}
+            {sec.fila.map(g => (
+              <Box key={`fila:${g.id}`} flexDirection="column">
+                <Text dimColor bold>{g.rotulo.toUpperCase()}</Text>
+                {g.itens.map(i => linhaItem(i))}
+              </Box>
+            ))}
+          </Box>
+        )}
+        {botaoFeitos}
+        {verFeitosAgora && sec.feitos.map(i => linhaItem(i))}
         {botaoAnteriores}
         {verVelhas &&
           l.anteriores.map(a => (
@@ -767,53 +849,6 @@ export const register: Register = on => {
               <Text color="success" wrap="wrap">{`Resposta: ${a.resposta ?? a.estado}`}</Text>
             </Box>
           ))}
-
-        {grupos.length === 0 && l.lidoEm !== null && (
-          <Text dimColor>Nenhuma sessão ativa no painel nem na lista ao vivo.</Text>
-        )}
-        {grupos.map(([projeto, linhas]) => (
-          <Box flexDirection="column" gap={1}>
-            <Text dimColor bold>
-              {projeto.toUpperCase()} · {String(linhas.length)}
-            </Text>
-            {linhas.map(s => (
-              <Box key={`sessao:${s.id}`} flexDirection="row" columnGap={1}>
-                <Text color={COR[s.estado] ?? 'inactive'}>●</Text>
-                <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-                  <Box flexDirection="row" justifyContent="space-between" columnGap={1}>
-                    <Text wrap="truncate-end">
-                      {s.titulo}
-                    </Text>
-                    {s.pr && s.prUrl && <Link href={s.prUrl} label={`#${s.pr}`} />}
-                    {s.pr && !s.prUrl && <Text dimColor>{`#${s.pr}`}</Text>}
-                  </Box>
-                  <Text dimColor wrap="wrap">
-                    <Text color={COR[s.estado] ?? 'inactive'}>{ROTULO[s.estado] ?? s.estado}</Text>
-                    {s.etapa ? ` · ${s.etapa}` : ''}
-                  </Text>
-                  {(s.bloqueio || s.motivo) && (
-                    <Text
-                     
-                      color={s.estado === 'bloqueada' ? 'error' : undefined}
-                      dimColor={s.estado !== 'bloqueada'}
-                      wrap="wrap"
-                    >
-                      {`${s.estado === 'bloqueada' ? 'Trava' : 'Esperando'}${s.motivo ? ` (${s.motivo})` : ''}: ${s.bloqueio ?? ''}`}
-                    </Text>
-                  )}
-                  {s.divergencia && (
-                    <Text color="warning" wrap="wrap">{`≠ ${s.divergencia}`}</Text>
-                  )}
-                </Box>
-              </Box>
-            ))}
-          </Box>
-        ))}
-        {ocultas > 0 && (
-          <Text dimColor>
-            {ocultas} concluídas ou arquivadas ocultas
-          </Text>
-        )}
       </Box>
     )
   })

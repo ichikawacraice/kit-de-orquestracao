@@ -2,7 +2,7 @@
 // porque o desktop desenha SVG com a fonte do sistema e o tema claro/escuro.
 // Funções puras, sem `$`: recebem os dados e a largura, devolvem o markup.
 
-import type { LinhaSessao, Passo, PerguntaAberta, PerguntaAnterior } from '../types'
+import type { LinhaItem, PerguntaAberta, PerguntaAnterior } from '../types'
 
 const FONTE = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif"
 
@@ -13,34 +13,29 @@ const CSS = `<style>
 @media (prefers-reduced-motion: reduce){.vivo{animation:none}}
 </style>`
 
-export const COR_ESTADO: Record<string, string> = {
-  trabalhando: '#5b8def',
-  'aguarda-subsessao': '#8b8cf8',
-  'aguarda-voce': '#e2a94e',
-  'aguarda-validacao': '#e2a94e',
-  'aguarda-merge': '#4caf6e',
-  'pr-aberto': '#4caf6e',
-  esperando: '#e2a94e',
-  bloqueada: '#e0846b',
-}
-
 const NEUTRO = '#9a9a96'
 const AVISO = '#d9962b'
 const ERRO = '#d9674c'
 const OK = '#4caf6e'
 const ANDA = '#5b8def'
 
-export const ROTULO_ESTADO: Record<string, string> = {
-  trabalhando: 'trabalhando',
-  'aguarda-subsessao': 'espera subsessão',
-  'aguarda-voce': 'espera você',
-  'aguarda-validacao': 'espera validação',
-  'aguarda-merge': 'espera merge',
-  'pr-aberto': 'PR aberto',
-  esperando: 'esperando',
-  bloqueada: 'bloqueada',
-  parada: 'parada',
-  concluida: 'concluída',
+/** A cor da etapa: nenhuma nasce nova (§4.2). O âmbar fica só para o que espera o operador. */
+export const COR_ETAPA: Record<string, string> = {
+  planejamento: '#8b8cf8',
+  design: '#8b8cf8',
+  execucao: ANDA,
+  validacao: ANDA,
+  merge: OK,
+}
+
+export const ROTULO_ETAPA: Record<string, string> = {
+  planejamento: 'planejamento',
+  design: 'design',
+  execucao: 'execução',
+  validacao: 'validação',
+  merge: 'merge',
+  feito: 'feito',
+  descartado: 'descartado',
 }
 
 const xml = (s: string): string =>
@@ -87,25 +82,35 @@ const svg = (W: number, H: number, corpo: string): string =>
 const texto = (x: number, y: number, tam: number, classe: string, conteudo: string, extra = ''): string =>
   `<text class="${classe}" x="${x}" y="${y}" font-family="${FONTE}" font-size="${tam}"${extra}>${conteudo}</text>`
 
-export type Contagem = { rotulo: string; n: number; cor: string }
+/** `classe` pinta ponto e número com a cor do texto (`t`) no lugar de `cor`; o zero fica cinza de qualquer jeito. */
+export type Contagem = { rotulo: string; n: number; cor: string; classe?: string }
 
 export const ALTURA_RESUMO = 62
+const GAP_RESUMO = 6
+/** Abaixo disto os quatro blocos viram 2×2: lado a lado o rótulo "Esperam você" não cabe (§2.2). */
+export const LARGURA_DO_2X2 = 500
 
-/** Quatro blocos lado a lado: quanto espera você, quanto trava, quanto anda, quanto vai a merge. */
-export function resumoSvg(W: number, contagens: Contagem[]): string {
-  const gap = 6
-  const tw = (W - gap * (contagens.length - 1)) / contagens.length
+/** Esperam você · Travados / Andando · Na fila: lado a lado a partir de 500 px, em duas linhas de dois abaixo. */
+export function resumoSvg(W: number, contagens: Contagem[]): { source: string; height: number } {
+  const duas = W < LARGURA_DO_2X2
+  const porLinha = duas ? 2 : contagens.length
+  const tw = (W - GAP_RESUMO * (porLinha - 1)) / porLinha
+  const linhas = Math.ceil(contagens.length / porLinha)
   const blocos = contagens.map((c, i) => {
-    const x = i * (tw + gap)
-    const cor = c.n > 0 ? c.cor : NEUTRO
+    const x = (i % porLinha) * (tw + GAP_RESUMO)
+    const y = Math.floor(i / porLinha) * (ALTURA_RESUMO + GAP_RESUMO)
+    const viva = c.n > 0
+    const corPonto = viva && c.classe ? `class="${c.classe}"` : `fill="${viva ? c.cor : NEUTRO}"`
+    const corNumero = viva ? (c.classe ? ` class="${c.classe}"` : ` fill="${c.cor}"`) : ' class="m"'
 
-    return `<rect class="tile" x="${x}" y="0" width="${tw}" height="${ALTURA_RESUMO}" rx="10"/>
-<circle cx="${x + 15}" cy="19" r="4.5" fill="${cor}"${c.n > 0 ? '' : ' fill-opacity=".45"'}/>
-${texto(x + 26, 23.5, 13, 's', xml(caber(c.rotulo, 13, tw - 32)))}
-${texto(x + 13, 51, 24, c.n > 0 ? '' : 'm', String(c.n), ` font-weight="600" font-variant-numeric="tabular-nums"${c.n > 0 ? ` fill="${cor}"` : ''}`)}`
+    return `<rect class="tile" x="${x}" y="${y}" width="${tw}" height="${ALTURA_RESUMO}" rx="10"/>
+<circle ${corPonto} cx="${x + 15}" cy="${y + 19}" r="4.5"${viva ? '' : ' fill-opacity=".45"'}/>
+${texto(x + 26, y + 23.5, 13, 's', xml(caber(c.rotulo, 13, tw - 32)))}
+<text x="${x + 13}" y="${y + 51}" font-family="${FONTE}" font-size="24" font-weight="600" font-variant-numeric="tabular-nums"${corNumero}>${c.n}</text>`
   })
+  const height = linhas * ALTURA_RESUMO + (linhas - 1) * GAP_RESUMO
 
-  return svg(W, ALTURA_RESUMO, blocos.join(''))
+  return { height, source: svg(W, height, blocos.join('')) }
 }
 
 export function perguntaSvg(W: number, q: PerguntaAberta): { source: string; height: number } {
@@ -147,7 +152,7 @@ export function perguntaSvg(W: number, q: PerguntaAberta): { source: string; hei
 <rect x="0" y="0" width="4" height="${H}" rx="2" fill="${AVISO}"/>
 <rect x="16" y="14" width="${pilula}" height="24" rx="12" fill="${AVISO}"/>
 ${texto(16 + pilula / 2, 30.5, 13, '', xml(q.id), ` fill="#fff" text-anchor="middle" font-weight="700"`)}
-${texto(16 + pilula + 10, 30.5, 13, 's', xml(caber(q.sessao, 13, W - pilula - 42)))}
+${texto(16 + pilula + 10, 30.5, 13, 's', xml(caber(q.rotulo ?? q.sessao, 13, W - pilula - 42)))}
 ${partes.join('')}`,
     ),
   }
@@ -202,136 +207,130 @@ export function desde(iso: string | undefined, agora: number): string | undefine
   return h < 24 ? `há ${h} h` : `há ${Math.floor(h / 24)} d`
 }
 
-/** Até `max` passos em volta do que anda: o último feito, o atual e os próximos. */
-function janela(passos: Passo[], max: number): { antes: number; itens: Passo[]; depois: number } {
-  if (passos.length <= max) return { antes: 0, itens: passos, depois: 0 }
-  const atual = passos.findIndex(p => p.estado !== 'feito')
-  const foco = atual < 0 ? passos.length - 1 : atual
-  const ini = Math.max(0, Math.min(foco - 1, passos.length - max))
-
-  return { antes: ini, itens: passos.slice(ini, ini + max), depois: passos.length - ini - max }
-}
-
-const LINHA_PASSO = 22
-// O respiro de cima e de baixo de cada sessão, dentro do desenho.
 const TOPO = 16
-const BASE = 22
+const BASE = 16
 
-function iconePasso(x: number, y: number, estado: string): string {
-  if (estado === 'feito')
-    return `<circle cx="${x}" cy="${y}" r="5.5" fill="${OK}"/><path d="M${x - 2.6} ${y}l1.8 1.9 3.4-3.6" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`
-  if (estado === 'andamento')
-    return `<circle cx="${x}" cy="${y}" r="5" fill="none" stroke="${ANDA}" stroke-width="1.8"/><circle class="vivo" cx="${x}" cy="${y}" r="2.2" fill="${ANDA}"/>`
+/** O ponto do item (§4.1): anda, trava ou espera na fila; o feito leva o círculo cheio do OK. */
+function pontoDoItem(item: LinhaItem, cor: string): string {
+  const cy = TOPO + 11
+  if (item.situacao === 'travado')
+    return `<circle cx="12" cy="${cy}" r="6.5" fill="none" stroke="${ERRO}" stroke-width="2"/><path d="M12 ${cy - 3.2}v4" stroke="${ERRO}" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="${cy + 3.4}" r="1" fill="${ERRO}"/>`
+  if (item.situacao === 'fila')
+    return `<circle cx="12" cy="${cy}" r="5" fill="none" stroke="${NEUTRO}" stroke-width="1.3" stroke-dasharray="2 2"/>`
+  if (item.situacao === 'feito') return `<circle cx="12" cy="${cy}" r="6" fill="${OK}"/>`
 
-  return `<circle cx="${x}" cy="${y}" r="5" fill="none" stroke="${NEUTRO}" stroke-width="1.3" stroke-dasharray="2 2"/>`
+  return `<circle class="vivo" cx="12" cy="${cy}" r="6" fill="${cor}"/>`
 }
 
-/** A lista de passos a partir de (x, y), a coluna da direita do cartão. */
-function listaPassos(x: number, y: number, w: number, passos: Passo[], max: number): { svg: string; altura: number } {
-  const { antes, itens, depois } = janela(passos, max)
-  const partes: string[] = []
-  let cy = y
-  const nota = (t: string) => {
-    partes.push(texto(x + 18, cy + 4.5, 12, 'm', t))
-    cy += 18
+/** Quebra em até duas linhas: a primeira cabe em `max1` (divide a linha com o tempo), a segunda em `max2`. */
+function quebrarEmDuas(s: string, tam: number, max1: number, max2: number): string[] {
+  const palavras = s.split(/\s+/).filter(Boolean)
+  let primeira = ''
+  let i = 0
+  for (; i < palavras.length; i++) {
+    const tenta = primeira ? `${primeira} ${palavras[i]}` : (palavras[i] ?? '')
+    if (largura(tenta, tam) > max1 && primeira) break
+    primeira = tenta
   }
-  if (antes > 0) nota(`+ ${antes} ${antes === 1 ? 'feito' : 'feitos'} antes`)
-  for (const p of itens) {
-    const classe = p.estado === 'feito' ? 'm' : p.estado === 'andamento' ? 't' : 's'
-    const peso = p.estado === 'andamento' ? ' font-weight="600"' : ''
-    partes.push(iconePasso(x + 6, cy, p.estado) + texto(x + 18, cy + 4.5, 13, classe, xml(caber(p.texto, 13, w - 32)), peso))
-    cy += LINHA_PASSO
-  }
-  if (depois > 0) nota(`+ ${depois} ${depois === 1 ? 'pendente' : 'pendentes'}`)
+  const resto = palavras.slice(i).join(' ')
 
-  return { svg: partes.join(''), altura: cy - y }
+  return resto ? [caber(primeira, tam, max1), ...quebrar(resto, tam, max2, 1)] : [caber(primeira, tam, max1)]
+}
+
+type Trecho = { t: string; cor?: string; classe?: string; peso?: boolean }
+
+/** O TEMPO: em sessão, há quanto o dono agiu; na fila, há quanto está parado (§4.3). */
+function tempoDoItem(item: LinhaItem, agora: number): string | undefined {
+  if (item.situacao === 'feito') return desde(item.feitoEm, agora)
+  if (item.situacao === 'fila') {
+    const d = desde(item.paradoDesde ?? item.atualizadoEm, agora)
+
+    return d && `parado ${d}`
+  }
+
+  return desde(item.atualizadoEm, agora)
 }
 
 /**
- * Uma sessão: ponto do estado, título e há quanto tempo agiu, estado e etapa,
- * trava e divergência, a barra dos passos e a lista deles — à direita quando
- * cabe, embaixo quando o pane é estreito.
+ * Um item da fila (§4): ponto, título (até 2 linhas) e tempo; etapa, selo, dono e último PR; a trava;
+ * `agora` em sessão ou `resumo` na fila; e o que vem depois. `noTravados` põe o tema na linha 2.
  */
-export function sessaoSvg(W: number, s: LinhaSessao, agora: number): { source: string; height: number; alt: string } {
-  const cor = COR_ESTADO[s.estado] ?? NEUTRO
-  const rotulo = ROTULO_ESTADO[s.estado] ?? s.estado
-  const passos = s.passos ?? []
-  const largo = passos.length > 0 && W >= 640
-  const colW = largo ? Math.min(320, Math.round(W * 0.4)) : 0
-  const tw = W - 30 - (largo ? colW + 24 : 8)
-  const tempo = desde(s.ativaEm ?? s.atualizadoEm, agora)
-  const feitos = passos.filter(p => p.estado === 'feito').length
-  const trava =
-    s.bloqueio || s.motivo
-      ? `${s.estado === 'bloqueada' ? 'Trava' : 'Esperando'}${s.motivo ? ` (${s.motivo})` : ''}: ${s.bloqueio ?? ''}`
-      : ''
-  const extras = [
-    trava && { t: trava, cor: s.estado === 'bloqueada' ? ERRO : '', classe: s.estado === 'bloqueada' ? '' : 's' },
-    s.divergencia && { t: `≠ ${s.divergencia}`, cor: AVISO, classe: '' },
-  ].filter(Boolean) as Array<{ t: string; cor: string; classe: string }>
+export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noTravados?: boolean } = {}): { source: string; height: number; alt: string } {
+  const cor = COR_ETAPA[item.etapa] ?? NEUTRO
+  const rotulo = ROTULO_ETAPA[item.etapa] ?? item.etapa
+  const tw = W - 30 - 8
+  const tempo = tempoDoItem(item, agora)
+  const tempoW = tempo ? largura(tempo, 13) + 12 : 0
+  const partes: string[] = [pontoDoItem(item, cor)]
 
-  const partes: string[] = []
-  const ponto =
-    s.estado === 'bloqueada'
-      ? `<circle cx="12" cy="${TOPO + 11}" r="6.5" fill="none" stroke="${cor}" stroke-width="2"/><path d="M12 ${TOPO + 7.8}v4" stroke="${cor}" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="${TOPO + 14.4}" r="1" fill="${cor}"/>`
-      : `<circle${s.estado === 'trabalhando' || s.vivo?.isRunning ? ' class="vivo"' : ''} cx="12" cy="${TOPO + 11}" r="6" fill="${cor}"/>`
-  partes.push(ponto)
+  let y = TOPO + 16
+  const titulo = quebrarEmDuas(item.titulo, 16, tw - tempoW, tw)
+  titulo.forEach((l, k) => {
+    partes.push(texto(30, y + k * 20, 16, 't', xml(l), ' font-weight="600"'))
+  })
+  if (tempo) partes.push(texto(30 + tw, TOPO + 16, 13, 'm', xml(tempo), ' text-anchor="end" font-variant-numeric="tabular-nums"'))
+  y += (titulo.length - 1) * 20
 
-  // O PR mora à direita do título, antes do tempo: "#1060 · há 2 h".
-  const pr = s.pr ? `#${s.pr}` : ''
-  const direita = [pr, tempo].filter(Boolean).join(' · ')
-  const tempoW = direita ? largura(direita, 13) + 12 : 0
-  partes.push(texto(30, TOPO + 16, 16, 't', xml(caber(s.titulo, 16, tw - tempoW)), ' font-weight="600"'))
-  if (direita)
-    partes.push(
-      `<text x="${30 + tw}" y="${TOPO + 16}" font-family="${FONTE}" font-size="13" text-anchor="end" font-variant-numeric="tabular-nums">${pr ? `<tspan fill="${ANDA}" font-weight="600">${xml(pr)}</tspan>` : ''}<tspan class="m">${xml(pr && tempo ? ` · ${tempo}` : tempo ?? "")}</tspan></text>`,
-    )
-  const resto = s.etapa ? caber(` · ${s.etapa}`, 13, tw - largura(rotulo, 13)) : ''
-  let y = TOPO + 37
-  partes.push(
-    `<text x="30" y="${y}" font-family="${FONTE}" font-size="13"><tspan fill="${cor}" font-weight="600">${xml(rotulo)}</tspan><tspan class="s">${xml(resto)}</tspan></text>`,
-  )
-  for (const e of extras) {
-    y += 20
-    partes.push(texto(30, y, 13, e.classe, xml(caber(e.t, 13, tw)), e.cor ? ` fill="${e.cor}"` : ''))
+  // O que gera decisão (etapa, selo) vem antes do que só informa (dono, PR): o corte com reticências come o fim da linha.
+  const ultimoPr = item.prs.length > 0 ? `#${item.prs[item.prs.length - 1]}${item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''}` : ''
+  const trechos: Trecho[] = [
+    item.situacao === 'fila' ? { t: `espera ${rotulo}`, classe: 's', peso: true } : { t: rotulo, cor, peso: true },
+    ...(opcoes.noTravados ? [{ t: item.temaRotulo, classe: 's' }] : []),
+    ...(item.perguntas.length > 0 ? [{ t: `aguarda você · ${item.perguntas[0]}`, cor: AVISO, peso: true }] : []),
+    ...(item.dono ? [{ t: item.dono.apelido, classe: 's' }] : []),
+    ...(ultimoPr ? [{ t: ultimoPr, cor: ANDA, peso: true }] : []),
+  ]
+  const linha2: string[] = []
+  let usado = 0
+  const sep = ' · '
+  for (const [k, tr] of trechos.entries()) {
+    const antes = k === 0 ? '' : sep
+    const tam = 13.6
+    const sobra = tw - usado
+    const completo = antes + tr.t
+    const atrib = tr.cor ? ` fill="${tr.cor}"` : tr.classe ? ` class="${tr.classe}"` : ''
+    const peso = tr.peso ? ' font-weight="600"' : ''
+    if (largura(completo, tam) <= sobra) {
+      linha2.push(`<tspan${atrib}${peso}>${xml(completo)}</tspan>`)
+      usado += largura(completo, tam)
+      continue
+    }
+    linha2.push(`<tspan${atrib}${peso}>${xml(caber(completo, tam, sobra))}</tspan>`)
+    break
   }
+  y += 21
+  partes.push(`<text x="30" y="${y}" font-family="${FONTE}" font-size="13">${linha2.join('')}</text>`)
 
-  if (passos.length > 0) {
-    y += 16
-    const contagem = `${feitos}/${passos.length}`
-    const barW = tw - largura(contagem, 13) - 12
-    const cheio = Math.max(passos.length === feitos ? barW : 5, Math.round((barW * feitos) / passos.length))
-    partes.push(
-      `<rect class="k" x="30" y="${y}" width="${barW}" height="5" rx="2.5"/><rect x="30" y="${y}" width="${cheio}" height="5" rx="2.5" fill="${feitos === passos.length ? OK : cor}"/>`,
-      texto(30 + tw, y + 6, 13, 's', contagem, ' text-anchor="end" font-variant-numeric="tabular-nums"'),
-    )
-    y += 5
+  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? item.temaRotulo : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, item.dono?.apelido, ultimoPr].filter(Boolean).join(' · ')]
+  if (item.trava) {
+    const trava = quebrar(`Trava (${item.trava.motivo}): ${item.trava.texto}`, 13, tw, 2)
+    for (const l of trava) {
+      y += 19
+      partes.push(texto(30, y, 13, '', xml(l), ` fill="${ERRO}"`))
+    }
+    alt.push(`Trava (${item.trava.motivo}): ${item.trava.texto}`)
   }
-
-  let altura = y + BASE
-  if (passos.length > 0 && largo) {
-    const x = W - colW
-    const lista = listaPassos(x, TOPO + 11, colW, passos, 6)
-    altura = Math.max(altura, TOPO + lista.altura + BASE)
-    partes.push(`<line class="ln" x1="${x - 12}" y1="${TOPO}" x2="${x - 12}" y2="${altura - BASE + 4}"/>`, lista.svg)
-  } else if (passos.length > 0 && feitos < passos.length) {
-    const lista = listaPassos(30, y + 22, W - 38, passos, 4)
-    partes.push(lista.svg)
-    altura = y + 22 + lista.altura - 6 + BASE
+  if (item.situacao === 'fila' && item.resumo) {
+    for (const l of quebrar(item.resumo, 13, tw, 2)) {
+      y += 19
+      partes.push(texto(30, y, 13, 's', xml(l)))
+    }
+    alt.push(item.resumo)
+  } else if (item.situacao !== 'fila' && item.agora) {
+    y += 19
+    partes.push(texto(30, y, 13, 's', xml(caber(item.agora, 13, tw))))
+    alt.push(item.agora)
   }
+  if (item.depois.length > 0) {
+    const mais = item.depois.length > 1 ? ` (+${item.depois.length - 1})` : ''
+    const depois = `depois: ${item.depois[0]}${mais}`
+    y += 19
+    partes.push(texto(30, y, 13, 'm', xml(caber(depois, 13, tw))))
+    alt.push(depois)
+  }
+  if (tempo) alt.push(tempo)
+  const altura = y + BASE
   partes.push(`<line class="ln" x1="0" y1="${altura - 0.5}" x2="${W}" y2="${altura - 0.5}"/>`)
 
-  const atual = passos.find(p => p.estado === 'andamento')
-
-  return {
-    height: altura,
-    alt: [
-      s.titulo + (s.pr ? ` · PR #${s.pr}` : ''),
-      rotulo + (s.etapa ? ` · ${s.etapa}` : ''),
-      ...extras.map(e => e.t),
-      ...(passos.length > 0 ? [`${feitos}/${passos.length} passos${atual ? `, agora: ${atual.texto}` : ''}`] : []),
-      ...(tempo ? [tempo] : []),
-    ].join(' — '),
-    source: svg(W, altura, partes.join('')),
-  }
+  return { height: altura, alt: alt.join(' — '), source: svg(W, altura, partes.join('')) }
 }

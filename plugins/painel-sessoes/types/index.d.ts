@@ -1,27 +1,31 @@
-export type Passo = { texto: string; estado: string; detalhe?: string }
+export type Tema = { id: string; rotulo: string; projeto?: string }
 
-export type LinhaSessao = {
+/** Em que pé está o item: dono vivo sem trava, dono vivo com trava (ou sem ninguém), sem dono, ou feito nas últimas 24 h. */
+export type Situacao = 'andando' | 'travado' | 'fila' | 'feito'
+
+export type LinhaItem = {
   id: string
-  projeto: string
   titulo: string
-  estado: string
-  etapa?: string
-  pr?: string
-  prUrl?: string
-  bloqueio?: string
-  /** Por que trava (conflito, gate-vermelho, acesso, operador, outra), quando a linha traz. */
-  motivo?: string
+  resumo?: string
+  /** O id do tema, ou 'sem-tema' quando o item não cabe em `temas.json`. */
+  tema: string
+  temaRotulo: string
+  /** A etapa como veio no documento (pode estar fora da lista: aí `foraDoContrato` explica). */
+  etapa: string
+  situacao: Situacao
+  dono?: { apelido: string; localId: string }
+  prs: number[]
+  depois: string[]
+  agora?: string
+  /** `sem-ninguem` só o mod produz, ao desenhar. */
+  trava?: { motivo: string; texto: string }
+  /** As perguntas ABERTAS ligadas ao item (pelo item ou pela pergunta). */
   perguntas: string[]
   atualizadoEm?: string
-  /** As etapas que a sessão declarou no painel (a terceira coluna do artefato). */
-  passos?: Passo[]
-  /** A última atividade que o app registra para a sessão (ISO), do list_sessions. */
-  ativaEm?: string
-  /** O que o list_sessions diz agora; ausente quando a sessão não veio nele. */
-  vivo?: { isRunning: boolean; isArchived: boolean; prNumber?: number; prState?: string }
-  /** Linha do painel que contradiz o estado vivo, ou sessão viva sem linha. */
-  divergencia?: string
-  semLinha?: boolean
+  /** Desde quando está sem dono: a última entrada do histórico, ou a última gravação. */
+  paradoDesde?: string
+  feitoEm?: string
+  foraDoContrato?: string
 }
 
 export type PerguntaAberta = {
@@ -29,6 +33,10 @@ export type PerguntaAberta = {
   projeto: string
   sessao: string
   titulo: string
+  /** O item da fila a que a pergunta se liga (F<n>), quando ela traz. */
+  item?: string
+  /** `<tema> · <título do item>`, quando a pergunta tem item; senão vale `sessao`. */
+  rotulo?: string
   /** A versão lida, que a resposta usa como `if_version`. */
   versao?: number
   /** As escolhas da pergunta (Q67); a de id `outra` abre um campo de texto. */
@@ -60,7 +68,10 @@ export type Leitura = {
   erros: string[]
   /** Falhas de responder (gravar ou entregar à sessão): sobrevivem à releitura, até o botão de limpar. */
   avisos: string[]
-  sessoes: LinhaSessao[]
+  /** Todos os itens lidos: em sessão (andando e travado), na fila e feitos nas últimas 24 h. */
+  itens: LinhaItem[]
+  /** A lista fechada de temas, na ordem de `temas.json`. */
+  temas: Tema[]
   perguntas: PerguntaAberta[]
   /** As últimas respondidas e canceladas, da mais nova para a mais velha. */
   anteriores: PerguntaAnterior[]
@@ -73,6 +84,7 @@ declare module 'claude-code' {
       /** A pergunta com o campo de resposta aberto, ou nenhuma. */
       respondendoEm: string | null
       verAnteriores: boolean
+      verFeitos: boolean
     }
   }
 }

@@ -1,0 +1,110 @@
+// Itens de painel/fila/ lidos em 25/10 (F27, F13, F1, F23, F8, F17, F28, F4, F18), sem os campos que o pane não lê
+// (handoff, branch, plano…). Nada foi anonimizado: o conteúdo é o de produção, sem segredo.
+export const FILA_REAL: Record<string, Record<string, unknown>> = {
+  "F27": {
+    "titulo": "painel mostra a fila por tema, não as sessões",
+    "atualizadoEm": "2026-10-25T14:04:42.684Z",
+    "etapa": "execucao",
+    "tema": "orquestracao",
+    "donoApelido": "P7",
+    "donoLocalId": "local_112bbb1c-9e59-4f31-9f65-7c3a31f6160f",
+    "agora": "travas (E4) e desenho do painel (E1) em execução no kit",
+    "resumo": "O painel passa a mostrar a fila de pedidos por tema, com o que está em sessão e onde, em vez da lista de sessões.",
+    "depois": [
+      {
+        "texto": "validação das duas fatias"
+      },
+      {
+        "texto": "docs do contrato novo"
+      },
+      {
+        "texto": "limpeza das linhas de sessão"
+      }
+    ]
+  },
+  "F13": {
+    "titulo": "SPEC-155 fatia 2 (o container) e fatia 5 (o caminho do navegador e o canal)",
+    "tema": "editor",
+    "etapa": "execucao",
+    "prs": [
+      1129
+    ],
+    "donoApelido": "P2",
+    "donoLocalId": "local_d985d448-ecd4-40a1-b7ea-eb327779056b",
+    "resumo": "O container do editor e o caminho do navegador até a prévia da loja (SPEC-155, fatias 2 e 5).",
+    "atualizadoEm": "2026-10-25T13:34:28.409Z"
+  },
+  "F1": {
+    "titulo": "builder: fatias 1 a 8 do editor da loja, até os PRs validados",
+    "tema": "editor",
+    "etapa": "execucao",
+    "prs": [
+      1128
+    ],
+    "donoApelido": "P1",
+    "donoLocalId": "local_c19b5998-5821-4435-91f3-320eac727d3b",
+    "resumo": "As 8 melhorias de tela do editor da loja, fatia por fatia, cada uma até o PR validado.",
+    "atualizadoEm": "2026-10-25T13:34:28.409Z"
+  },
+  "F23": {
+    "titulo": "kit de orquestração: fase 1 (generalizar em ~/.claude) — fase 2 (pacote) em estudo na P6",
+    "atualizadoEm": "2026-10-25T14:03:47.713Z",
+    "etapa": "execucao",
+    "tema": "kit",
+    "donoLocalId": "local_7723bebb-d428-4bb6-ab63-37354ead5c78",
+    "donoApelido": "E8",
+    "agora": "K8 migrada; c14 com E8 (nomes orquestracao:<agente> nas travas e prompts + baixos c13); SessionStart/painel conferidos no proximo turno do operador",
+    "resumo": "O jeito de orquestrar sessões vira um kit que serve a qualquer projeto, não só ao Izanagi."
+  },
+  "F8": {
+    "titulo": "painel do componente da loja: mesmo padrão do DS, menos texto, IA com um ícone",
+    "atualizadoEm": "2026-10-25T13:50:15.651Z",
+    "etapa": "execucao",
+    "tema": "editor",
+    "agora": "plano pronto: A e B1 em paralelo; B2 e C depois de #1105/#1099; espera o número do ADR e duas executoras livres",
+    "resumo": "O painel do componente da loja passa a seguir o design system: menos texto e a IA reduzida a um ícone."
+  },
+  "F17": {
+    "titulo": "aviso de leitura falha fala de \"descarte\" que ninguém pediu",
+    "tema": "editor",
+    "etapa": "planejamento",
+    "resumo": "O aviso de leitura que falha fala em descartar alterações que ninguém pediu para descartar.",
+    "atualizadoEm": "2026-10-25T13:34:28.409Z"
+  },
+  "F28": {
+    "titulo": "executora que termina o turno dizendo \"volto a X\" sem fazer é cobrada",
+    "atualizadoEm": "2026-10-25T13:30:16.885Z",
+    "feitoEm": "2026-10-25T13:30:16.886Z",
+    "etapa": "feito",
+    "tema": "orquestracao",
+    "agora": "plano aprovado (387 fins de turno, 4 casos reais, 0 falsos positivos); E1 executa; piloto conferido em 01/11",
+    "resumo": "A executora que encerra o turno prometendo voltar a algo sem fazer passa a ser cobrada.",
+    "depois": [
+      {
+        "texto": "conferência do piloto em 01/11"
+      }
+    ]
+  },
+  "F4": {
+    "titulo": "builder fatia 1 (peças do kit): aplicar a crítica ao detalhe do designer",
+    "tema": "editor",
+    "etapa": "feito",
+    "feitoEm": "2026-10-24T16:41:32.109Z",
+    "atualizadoEm": "2026-10-25T13:34:28.410Z"
+  },
+  "F18": {
+    "titulo": "comCodigo sem teste de ligação",
+    "tema": "editor",
+    "etapa": "planejamento",
+    "resumo": "Falta um teste que prove que o código do componente chega ligado ao editor; conferir antes se ainda falta.",
+    "atualizadoEm": "2026-10-25T13:34:28.409Z"
+  }
+}
+
+export const TEMAS_REAIS = [
+  { id: 'editor', rotulo: 'Editor da loja', projeto: 'izanagi' },
+  { id: 'motor', rotulo: 'Motor dos jobs', projeto: 'izanagi' },
+  { id: 'gate', rotulo: 'Gate e testes', projeto: 'izanagi' },
+  { id: 'orquestracao', rotulo: 'Sessões e painel', projeto: 'izanagi' },
+  { id: 'kit', rotulo: 'Kit de orquestração', projeto: 'izanagi' },
+]
