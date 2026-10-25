@@ -719,5 +719,29 @@ caso('update com nota ou estado é recusado (apontam agora e etapa); null ainda 
   igual(painel('update', 'fila', 'F1', '{"nota":null,"estado":null}').exit, 0, 'null limpa');
 });
 
+caso('F29-a: título que cita item ou PR é recusado no set, no update e no batch (o F1 do disco fica intacto)', () => {
+  semear();
+  recusa(painel('set', 'fila', 'F1', '{"titulo":"F27 refaz","etapa":"design","tema":"editor"}'), 'o título não cita item nem PR ("F27")', 'set F27');
+  ok(!existsSync(join(base, 'painel', 'fila', 'F1.json')), 'o set recusado gravou mesmo assim');
+  painel('set', 'fila', 'F1', COM());
+  recusa(painel('update', 'fila', 'F1', '{"titulo":"conserta #1100"}'), 'o título não cita item nem PR ("#1100")', 'update #1100');
+  const b = painel('batch', JSON.stringify([{ op: 'update', colecao: 'fila', id: 'F1', data: { agora: 'x' } }, { op: 'update', colecao: 'fila', id: 'F1', data: { titulo: 'depois do F3' } }]));
+  igual(b.exit, 1, 'batch com título numerado');
+  const g = json(painel('get', 'fila', 'F1')).data;
+  igual(g.titulo, 'T', 'título intacto');
+  ok(g.agora === undefined, 'o batch recusado gravou a primeira op');
+});
+caso('F29-a: o limite da regra — "Fatia 1", "OF1" e "F5x" passam; título antigo numerado deixa o update de outro campo passar', () => {
+  semear();
+  for (const [i, t] of ['Fatia 1', 'OF1', 'F5x'].entries()) {
+    const r = painel('set', 'fila', `F${i + 3}`, `{"titulo":"${t}","etapa":"design","tema":"editor"}`);
+    igual(r.exit, 0, `set "${t}" (${r.err})`);
+  }
+  writeFileSync(join(base, 'painel', 'fila', 'F2.json'), JSON.stringify({ id: 'F2', version: 1, data: { titulo: 'vagas (F22)', etapa: 'design', tema: 'editor', historico: [] } }));
+  const r = painel('update', 'fila', 'F2', '{"agora":"seguindo"}');
+  igual(r.exit, 0, `update de agora (${r.err})`);
+  igual(json(painel('get', 'fila', 'F2')).data.titulo, 'vagas (F22)', 'título antigo preservado');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

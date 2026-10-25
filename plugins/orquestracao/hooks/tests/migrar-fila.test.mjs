@@ -36,7 +36,7 @@ function run(script, args, extra = {}) {
 }
 const migrar = (...a) => run('migrar-fila.mjs', a);
 const painel = (...a) => run('painel.mjs', a);
-const item = (id, data, version = 1) => writeFileSync(join(painelDir, 'fila', `${id}.json`), JSON.stringify({ id, version, data: { projeto: 'izanagi', titulo: `t ${id}`, atualizadoEm: '2026-10-20T10:00:00.000Z', ...data } }));
+const item = (id, data, version = 1) => writeFileSync(join(painelDir, 'fila', `${id}.json`), JSON.stringify({ id, version, data: { projeto: 'izanagi', titulo: `t ${id.toLowerCase()}`, atualizadoEm: '2026-10-20T10:00:00.000Z', ...data } }));
 const lido = (id) => JSON.parse(readFileSync(join(painelDir, 'fila', `${id}.json`), 'utf8'));
 const igual = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${m}: esperado ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
 const ok = (c, m) => { if (!c) throw new Error(m); };
