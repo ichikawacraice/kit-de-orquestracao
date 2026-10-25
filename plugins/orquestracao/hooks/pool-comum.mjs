@@ -295,14 +295,27 @@ export const painelLivre = (c) => {
   const n = separadoresDeAspasNeutros(semHeredoc(c));
   return INVOCACAO.test(n) && (!/painel(?:\.mjs)?["']?\s+batch\b/.test(n) || /painel(?:\.mjs)?["']?\s+batch\s[^\n]*sessoes/.test(n));
 };
+// Declaração sobre a PRÓPRIA linha de `sessoes` (F32): o `local_` ou o id do CLI da sessão, com `etapa` começando em "livre".
+// Gravar a linha de outra sessão, ou a palavra "livre" noutro campo, não conta (soltar o item é ação, não cobrança).
+const escapa = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export const painelLivrePropria = (c, ids) => {
+  const proprios = ids.filter(Boolean).map(escapa).join('|');
+  if (!proprios) return false;
+  const n = separadoresDeAspasNeutros(semHeredoc(c));
+  const unico = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:set|update)\s+sessoes\s+["']?(?:${proprios})["']?\s[^\n]*"etapa"\s*:\s*"livre\b`);
+  const lote = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+batch\s[^\n]*"colecao"\s*:\s*"sessoes"[^\n]*"id"\s*:\s*"(?:${proprios})"[^\n]*"etapa"\s*:\s*"livre\b`);
+  return unico.test(n) || lote.test(n);
+};
+
 
 
 const ehSelf = (id) => id === undefined || id === null || id === 'self';
 export const tituloLivre = (t) => /· livre\s*$/.test(String(t || ''));
 // Quem se declarou livre no turno que começou em `inicio` (ms): `{ como, tituloNovo }` ou null. `como` é 'título livre'
 // (set_session_title "self" com título terminando em "· livre"; vence) ou 'painel livre' (painel gravando em `sessoes` com "livre").
-export function declarouLivre(transcriptPath, inicio) {
-  let como = null; let tituloNovo = null;
+// `propria`: alguma dessas declarações é sobre a própria sessão (`ids` = local_ e id do CLI): o título "self" ou a linha dela.
+export function declarouLivre(transcriptPath, inicio, ids = []) {
+  let como = null; let tituloNovo = null; let propria = false;
   for (const l of readFileSync(transcriptPath, 'utf8').split('\n')) {
     if (!l) continue;
     let e; try { e = JSON.parse(l); } catch { continue; }
@@ -312,9 +325,17 @@ export function declarouLivre(transcriptPath, inicio) {
     for (const b of c) {
       if (b?.type !== 'tool_use') continue;
       const n = String(b.name || ''); const i = b.input || {};
-      if (n.endsWith('set_session_title') && ehSelf(i.session_id) && tituloLivre(i.title)) { como = 'título livre'; tituloNovo = i.title; }
-      else if (n === 'Bash' && painelLivre(String(i.command || ''))) como ||= 'painel livre';
+      if (n.endsWith('set_session_title') && ehSelf(i.session_id) && tituloLivre(i.title)) { como = 'título livre'; tituloNovo = i.title; propria = true; }
+      else if (n === 'Bash' && painelLivre(String(i.command || ''))) { como ||= 'painel livre'; if (painelLivrePropria(String(i.command || ''), ids)) propria = true; }
     }
   }
-  return como ? { como, tituloNovo } : null;
+  return como ? { como, tituloNovo, propria } : null;
+}
+// O hook de Stop vai soltar a sessão (`livre-se-limpa`)? Membro do pool, `local_` resolvido e declaração sobre si. UMA função, para
+// o `livre-se-limpa` agir e o `fila-do-item` deixar de cobrar exatamente nos mesmos casos. → a declaração, ou null.
+export function vaiSoltar(transcriptPath, inicio, { sessionId, localId, titulo }) {
+  if (!localId) return null;
+  const d = declarouLivre(transcriptPath, inicio, [localId, sessionId]);
+  if (!d?.propria) return null;
+  return membroDoPool(d.tituloNovo) || membroDoPool(titulo) ? d : null;
 }

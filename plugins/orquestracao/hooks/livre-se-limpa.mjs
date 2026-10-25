@@ -16,7 +16,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registrar, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { registroDaSessao, membroDoPool, inicioDoTurno, itensDaSessao, itensDonosDaSessao, declarouLivre, tituloLivre, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
+import { registroDaSessao, membroDoPool, inicioDoTurno, itensDaSessao, itensDonosDaSessao, declarouLivre, vaiSoltar, tituloLivre, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'livre-se-limpa';
 const ehSelf = (id) => id === undefined || id === null || id === 'self';
@@ -27,38 +27,47 @@ const COM_DEL_DE = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.r
 // O `local_` que o `com del` tira, ou null: sair do item é tirar a PRÓPRIA sessão; tirar a de outra (o dono tirando uma V) não cobra título.
 export const comDelDe = (c) => separadoresDeAspasNeutros(semHeredoc(c)).match(COM_DEL_DE)?.[1] ?? null;
 export const painelComDel = (c) => COM_DEL.test(separadoresDeAspasNeutros(semHeredoc(c)));
-// F32: o hook escreve pelo `painel.mjs` do próprio plugin (um caminho só para soltar), com prazo e SIGKILL. A pasta do painel segue
-// PAINEL_DIR; sem ela, a pasta pai de FILA_DIR (teste), senão o padrão do script.
+// F32: o hook escreve pelo `painel.mjs` do próprio plugin (um caminho só para soltar). O `hooks.json` dá 10 s ao hook: o orçamento
+// TOTAL é de 8 s e cada chamada tem no máximo 2,5 s (a trava do painel presa leva ~5 s para desistir). Estourado o orçamento, o que
+// falta não é escrito e entra em `falhou`: o hook bloqueia dizendo o que faltou, nunca morre calado pelo prazo.
+// A pasta do painel segue PAINEL_DIR/IZANAGI_PAINEL_DIR; sem elas, a pasta pai de FILA_DIR (teste), senão o padrão do script.
 const PAINEL_MJS = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'orquestradora', 'scripts', 'painel.mjs');
+const ORCAMENTO_MS = 8000; const POR_CHAMADA_MS = 2500;
+let prazoFinal = 0;
 function painelEnv() {
   const env = { ...process.env };
-  if (!env.PAINEL_DIR && env.FILA_DIR) env.PAINEL_DIR = dirname(env.FILA_DIR);
+  delete env.CLAUDE_CODE_SESSION_ID; // sem ela o painel.mjs não varre o registro do app (tempo) nem aplica a trava de linha alheia
+  if (!env.PAINEL_DIR && !env.IZANAGI_PAINEL_DIR && env.FILA_DIR) env.PAINEL_DIR = dirname(env.FILA_DIR);
   return env;
 }
 function painel(args) {
-  execFileSync('node', [PAINEL_MJS, ...args], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: painelEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
+  const resta = prazoFinal - Date.now();
+  if (resta <= 0) throw new Error(`orçamento de ${ORCAMENTO_MS / 1000} s esgotado`);
+  execFileSync('node', [PAINEL_MJS, ...args], { encoding: 'utf8', timeout: Math.min(POR_CHAMADA_MS, resta), killSignal: 'SIGKILL', env: painelEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
 }
-const msgDe = (e) => String(e?.stderr || e?.message || e).trim().split('\n')[0];
-// Tira a sessão de cada `com` (com `--fez` só para o papel E: quem sai sem entregar não ganha `fez`), solta os itens de que ela é dona
-// e põe a linha dela em `sessoes` como livre (só se a linha já existe). → { falhou: [F…], erros: [texto] }.
+const msgDe = (e) => String(e?.stderr || e?.message || e).trim().split('\n')[0] || (e?.signal ? `morto por ${e.signal}` : 'sem mensagem');
+const baseDoPainel = () => { const e = painelEnv(); return e.PAINEL_DIR || e.IZANAGI_PAINEL_DIR || join(process.env.HOME || '', '.claude', 'orquestracao', 'painel'); };
+// Tira a sessão de cada `com` (com `--fez` só para a E: quem sai sem entregar não ganha `fez`), solta SÓ O DONO dos itens de que ela é
+// dona (o `com` das outras sessões fica) e põe a linha dela em `sessoes` como livre (só se a linha já existe; falha ali só vai ao log).
+// → { falhou: [{F, tipo}], erros: [texto] }.
 function soltarDoItem(sessionId, reg, itens) {
   const falhou = []; const erros = [];
   const papel = membroDoPool(reg?.titulo)?.papel;
   const local = reg?.localId;
+  prazoFinal = Date.now() + ORCAMENTO_MS;
   for (const F of itens.com) {
     try { painel(['com', 'del', F, local, ...(papel === 'E' ? ['--fez'] : [])]); registrar(sessionId, HOOK, 'soltou-com', F); }
-    catch (e) { falhou.push(F); erros.push(`com del ${F}: ${msgDe(e)}`); }
+    catch (e) { falhou.push({ F, tipo: 'com' }); erros.push(`com del ${F}: ${msgDe(e)}`); }
   }
   for (const F of itensDonosDaSessao(local)) {
-    try { painel(['soltar', F, 'a dona se declarou livre sem soltar']); registrar(sessionId, HOOK, 'soltou-dono', F); }
-    catch (e) { falhou.push(F); erros.push(`soltar ${F}: ${msgDe(e)}`); }
+    try { painel(['soltar', F, 'a dona se declarou livre sem soltar', '--so-dono']); registrar(sessionId, HOOK, 'soltou-dono', F); }
+    catch (e) { falhou.push({ F, tipo: 'dono' }); erros.push(`soltar ${F}: ${msgDe(e)}`); }
   }
   if (!falhou.length) {
     for (const id of new Set([local, sessionId].filter(Boolean))) {
-      const f = join(painelEnv().PAINEL_DIR || join(process.env.HOME || '', '.claude', 'orquestracao', 'painel'), 'sessoes', `${id}.json`);
-      if (!existsSync(f)) continue;
+      if (!existsSync(join(baseDoPainel(), 'sessoes', `${id}.json`))) continue;
       try { painel(['update', 'sessoes', id, JSON.stringify({ estado: 'parada', etapa: 'livre' })]); }
-      catch (e) { erros.push(`sessoes ${id}: ${msgDe(e)}`); registrar(sessionId, HOOK, 'erro-ao-soltar', `sessoes ${id}: ${msgDe(e)}`); }
+      catch (e) { registrar(sessionId, HOOK, 'erro-sessoes', `${id}: ${msgDe(e)}`); }
     }
   }
   return { falhou, erros };
@@ -89,7 +98,8 @@ function main() {
       if (n === 'Bash') { const t = comDelDe(String(i.command || '')); if (t) tirados.push(t); }
     }
   }
-  const decl = declarouLivre(transcript_path, inicio);
+  const regAntes = registroDaSessao(session_id);
+  const decl = declarouLivre(transcript_path, inicio, [regAntes?.localId, session_id]);
   const declarou = decl?.como ?? null; const tituloNovo = decl?.tituloNovo ?? null;
   if (!declarou && trabalhou && !trocouTitulo) {
     const reg = registroDaSessao(session_id, { fresco: true });
@@ -127,19 +137,24 @@ function main() {
   if (!membroDoPool(tituloNovo) && !membroDoPool(regDecl?.titulo)) return;
   const itens = itensDaSessao(regDecl?.localId);
 
-  // F32: declarou-se livre e ainda consta como trabalhando num item, ou como dona de item vivo: o hook solta em vez de cobrar.
-  // Se a escrita falhar, volta a bloquear com a mensagem de antes (nunca passa calado).
-  const solto = soltarDoItem(session_id, regDecl, itens);
-  if (solto.falhou.length) {
-    const lista = solto.falhou.join(', ');
-    registrar(session_id, HOOK, 'erro-ao-soltar', solto.erros.join(' | '));
-    if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar-com', lista); return; }
-    registrar(session_id, HOOK, 'cobrou-com', lista);
-    process.stdout.write(JSON.stringify({
-      decision: 'block',
-      reason: `Você se declarou livre e ainda consta como trabalhando em ${lista}: \`painel com del <F> ${regDecl.localId} --fez\` (ou sem --fez, se não entregou) para cada um, e termine o turno.`,
-    }));
-    return;
+  // F32: declarou-se livre SOBRE SI e ainda consta como trabalhando num item ou como dona de item vivo: o hook solta em vez de
+  // cobrar (`vaiSoltar` é a mesma função que o `fila-do-item` usa para deixar de cobrar). Se a escrita falhar ou estourar o
+  // orçamento, volta a bloquear dizendo o que faltou (nunca passa calado). Declaração sobre a linha de OUTRA sessão não solta nada.
+  if (vaiSoltar(transcript_path, inicio, { sessionId: session_id, localId: regDecl?.localId, titulo: regDecl?.titulo })) {
+    const solto = soltarDoItem(session_id, regDecl, itens);
+    if (solto.falhou.length) {
+      const lista = solto.falhou.map((f) => f.F).join(', ');
+      registrar(session_id, HOOK, 'erro-ao-soltar', solto.erros.join(' | '));
+      if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar-com', lista); return; }
+      registrar(session_id, HOOK, 'cobrou-com', lista);
+      const doCom = solto.falhou.filter((f) => f.tipo === 'com').map((f) => f.F);
+      const doDono = solto.falhou.filter((f) => f.tipo === 'dono').map((f) => f.F);
+      const pedidos = [];
+      if (doCom.length) pedidos.push(`ainda consta como trabalhando em ${doCom.join(', ')}: \`painel com del <F> ${regDecl.localId} --fez\` (ou sem --fez, se não entregou) para cada um`);
+      if (doDono.length) pedidos.push(`ainda é dona de ${doDono.join(', ')}: \`painel soltar <F> "<motivo>"\` para cada um (ou grave a etapa seguinte com o dono em null)`);
+      process.stdout.write(JSON.stringify({ decision: 'block', reason: `Você se declarou livre e ${pedidos.join('; e ')}, e termine o turno.` }));
+      return;
+    }
   }
   const itensDepois = itensDaSessao(regDecl?.localId);
   if (limpou) return;

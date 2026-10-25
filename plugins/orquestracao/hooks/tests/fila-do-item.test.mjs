@@ -239,5 +239,28 @@ caso('F32: a dona que NÃO se declarou livre continua bloqueada, com o mesmo ite
   igual(desfechos().join(','), 'bloqueou', 'log');
 });
 
+const linhaDeOutra = (alvo) => [...turno(), { type: 'assistant', uuid: 'a3', timestamp: '2026-10-24T12:01:00.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Bash', input: { command: `node ~/.claude/skills/orquestradora/scripts/painel.mjs update sessoes ${alvo} '{"estado":"parada","etapa":"livre"}'` } }] } }];
+caso('F32 A1: a dona que grava a linha de OUTRA sessão como livre continua cobrada', () => {
+  item('F12', { etapa: 'planejamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  registroLocal(LOCAL, SID);
+  transcript(linhaDeOutra(OUTRO));
+  igual(rodar(stop())?.decision, 'block', 'decisão');
+  igual(desfechos().join(','), 'bloqueou', 'log');
+});
+caso('F32 M4: a dona fora do pool (orquestradora) que se declara livre continua cobrada: ninguém a solta', () => {
+  item('F12', { etapa: 'merge', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  writeFileSync(join(base, 'sessoes', 'conta', 'projeto', `${LOCAL}.json`), JSON.stringify({ sessionId: LOCAL, cliSessionId: SID, priorCliSessionIds: [], title: '🎛 orquestradora — x' }));
+  transcript(linhaDeOutra(LOCAL));
+  igual(rodar(stop())?.decision, 'block', 'decisão');
+  igual(desfechos().join(','), 'bloqueou', 'log');
+});
+caso('F32: a dona de título de pool que grava a PRÓPRIA linha como livre passa (a mesma decisão do livre-se-limpa)', () => {
+  item('F12', { etapa: 'planejamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  registroLocal(LOCAL, SID);
+  transcript(linhaDeOutra(LOCAL));
+  igual(rodar(stop()), null, 'saída');
+  igual(desfechos().join(','), 'livre-no-turno', 'log');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

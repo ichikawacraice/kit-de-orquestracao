@@ -890,5 +890,24 @@ caso('F32: vencidos recusa --min que não é inteiro positivo', () => {
   recusa(painel('list', 'fila', 'vencidos', '--min'), '--min pede um inteiro positivo', '--min sem valor');
 });
 
+caso('F32 M5: soltar --so-dono tira só o dono e deixa o com', () => {
+  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'execucao', ...dono })); comAdd('F1', LB, 'V1', 'valida');
+  igual(painel('soltar', 'F1', 'x', '--so-dono').exit, 0, 'exit');
+  const d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.donoLocalId, undefined, 'dono saiu'); igual(d.com.length, 1, 'com ficou');
+  igual(painel('soltar', 'F1', '--so-dono', 'y').exit, 0, 'a flag vale em qualquer posição');
+});
+caso('F32 B8: soltar recusa o item legado fechado pelo estado (sem etapa)', () => {
+  semear(); mkdirSync(join(base, 'painel', 'fila'), { recursive: true });
+  writeFileSync(join(base, 'painel', 'fila', 'F1.json'), JSON.stringify({ id: 'F1', version: 1, data: { titulo: 'T', tema: 'editor', estado: 'feito' } }));
+  recusa(painel('soltar', 'F1', 'x'), 'etapa final', 'legado feito');
+});
+caso('F32 B9: vencidos vale em qualquer posição; --min sem vencidos e flag desconhecida em list fila saem com exit 1', () => {
+  semear(); porCom('F1', { ...dono, atualizadoEm: agoraMenos(90) });
+  igual(ids(painel('list', 'fila', '--min', '1', 'vencidos')), 'F1', 'vencidos depois do --min');
+  recusa(painel('list', 'fila', '--min', '1'), '--min só vale com', '--min sem vencidos');
+  recusa(painel('list', 'fila', '--bobagem'), 'flag desconhecida', 'flag');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

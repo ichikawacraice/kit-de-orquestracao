@@ -13,7 +13,7 @@
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_> [--fez]   tira a sessão do `com`; --fez a registra em `fez` (quem executou)
-//   painel.mjs soltar <F> "<motivo>"   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo
+//   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs list fila vencidos [--min N]   itens vivos com dono ou `com`, sem `espera` nem `trava`, parados há mais de N min (padrão 30 ou PAINEL_PRAZO_MIN)
 //   (`com` e `fez` só mudam por `com add|del [--fez]`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
@@ -590,6 +590,8 @@ function comandoCom(args) {
 // `soltar <F> "<motivo>"`: o único caminho para devolver um item à fila sem dono (hook de Stop e ritual da orquestradora).
 // Grava pela via do `com` (zera o `com`) dentro da trava; não registra `fez`.
 function comandoSoltar(args) {
+  const iso = args.indexOf('--so-dono');
+  const soDono = iso >= 0 ? (args.splice(iso, 1), true) : false;
   const [F, motivo, ...sobra] = args;
   if (!ID.test(String(F))) throw new Error(`soltar: id de item inválido "${F}"`);
   if (sobra.length) throw new Error('uso: painel.mjs soltar <F> "<motivo>" (o motivo vai entre aspas)');
@@ -599,8 +601,11 @@ function comandoSoltar(args) {
   return comTrava(() => {
     const atual = ler('fila', F);
     if (!atual) throw new Error(`fila/${F} não existe`);
-    if (ETAPAS_FINAIS.has(atual.data?.etapa)) throw new Error(`soltar: ${F} está em etapa final (${atual.data.etapa}); não há o que soltar`);
-    const data = { donoLocalId: null, donoApelido: null, com: [], agora: motivo };
+    const d0 = atual.data ?? {};
+    // item legado, sem `etapa` válida, fecha pelo `estado` (o mesmo critério do `vencidos`)
+    const final = ETAPAS.includes(d0.etapa) ? ETAPAS_FINAIS.has(d0.etapa) : ['feito', 'descartado'].includes(d0.estado);
+    if (final) throw new Error(`soltar: ${F} está em etapa final (${d0.etapa ?? d0.estado}); não há o que soltar`);
+    const data = { donoLocalId: null, donoApelido: null, agora: motivo, ...(soDono ? {} : { com: [] }) };
     return efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
   });
 }
@@ -650,7 +655,14 @@ function main(argv) {
       const projeto = ip >= 0 ? String(resto.splice(ip, 2)[1] ?? '').toLowerCase() : null;
       if (ip >= 0 && !projeto) throw new Error('--projeto pede o nome do projeto');
       const it = resto.indexOf('--todos'); if (it >= 0) resto.splice(it, 1);
-      const prazoMin = a === 'fila' && resto[1] === 'vencidos' ? prazoEmMin(resto) : null;
+      let prazoMin = null;
+      if (a === 'fila') {
+        const iv = resto.indexOf('vencidos', 1);
+        if (iv >= 0) { resto.splice(iv, 1); prazoMin = prazoEmMin(resto); resto.splice(1, 0, 'vencidos'); }
+        else if (resto.includes('--min')) throw new Error('--min só vale com `list fila vencidos`');
+        const flag = resto.slice(1).find((x) => String(x).startsWith('--'));
+        if (flag) throw new Error(`list fila: flag desconhecida "${flag}"`);
+      }
       const b = resto[1];
       const dir = caminho(a);
       saida = existsSync(dir)

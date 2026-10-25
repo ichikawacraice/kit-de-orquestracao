@@ -2,6 +2,7 @@
 // Testes de hooks/livre-se-limpa.mjs: membro que se declara livre no turno se limpa no mesmo turno.
 // Rodar: node ~/.claude/hooks/tests/livre-se-limpa.test.mjs
 import { execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -29,10 +30,10 @@ function transcript(ferramentas, { limpezaNoTurnoAnterior = false } = {}) {
   ferramentas.forEach(([name, input], k) => L.push({ type: 'assistant', timestamp: new Date(t1 + 1000 + k).toISOString(), message: { content: [{ type: 'tool_use', name, input }] } }));
   const f = join(base, 't.jsonl'); writeFileSync(f, L.map((x) => JSON.stringify(x)).join('\n') + '\n'); return f;
 }
-function rodar(quem, f, extra = {}) {
+function rodar(quem, f, extra = {}, envExtra = {}) {
   const out = execFileSync('node', [HOOK], {
     input: JSON.stringify({ session_id: ID[quem], transcript_path: f, hook_event_name: 'Stop', ...extra }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
-    env: { ...process.env, HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'), FILA_DIR: join(base, 'fila') },
+    env: { ...process.env, HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'), FILA_DIR: join(base, 'fila'), ...envExtra },
   });
   return out ? JSON.parse(out) : null;
 }
@@ -282,6 +283,72 @@ caso('F32: escrita falhando (pasta da fila sem escrita) → bloqueia com a mensa
     ok(/erro-ao-soltar/.test(log()) && /cobrou-com/.test(log()), `log: ${log()}`);
   } finally { chmodSync(join(base, 'fila'), 0o755); }
   ok(real('F1').com.length === 1, 'o com não mudou');
+});
+
+// Conserto 1 (laudo V4).
+const ROW = (id, json) => ['Bash', { command: `node ~/.claude/skills/orquestradora/scripts/painel.mjs update sessoes ${id} '${json}'` }];
+caso('F32 A1: a dona que grava a linha de OUTRA sessão como livre não solta o item', () => {
+  pessoal(); item('F1', { etapa: 'planejamento', donoLocalId: UP5, donoApelido: 'P5', historico: [] });
+  rodar('P5', transcript([ROW(UE5, '{"estado":"parada","etapa":"livre"}')]));
+  const d = real('F1');
+  ok(d.donoLocalId === UP5 && d.agora === undefined, `o item devia ficar com a dona: ${JSON.stringify(d)}`);
+  ok(!/soltou-dono/.test(log()), 'log com soltou-dono');
+});
+caso('F32 A1: "livre" noutro campo, ou noutra palavra da etapa, da PRÓPRIA linha não solta; etapa "livre" da própria linha solta', () => {
+  pessoal(); item('F1', { etapa: 'planejamento', donoLocalId: UP5, donoApelido: 'P5', historico: [] });
+  rodar('P5', transcript([ROW(UP5, '{"etapa":"planejando; caminho livre para a E"}')]));
+  rodar('P5', transcript([ROW(UP5, '{"estado":"parada","bloqueio":"livre"}')]));
+  ok(real('F1').donoLocalId === UP5, 'a palavra solta não é declaração');
+  rodar('P5', transcript([ROW(UP5, '{"estado":"parada","etapa":"livre"}'), LIMPA]));
+  ok(real('F1').donoLocalId === undefined, `a própria linha livre devia soltar: ${JSON.stringify(real('F1'))}`);
+});
+caso('F32 M5: a dona que se declara livre solta só o dono; o com das outras sessões fica', () => {
+  pessoal(); item('F1', { etapa: 'execucao', donoLocalId: UP5, donoApelido: 'P5', historico: [], com: [...comDe(UV5, 'V5'), ...comDe(UE6, 'E6')] });
+  ok(rodar('P5', transcript([livre('P5'), LIMPA])) === null, 'esperava passar');
+  const d = real('F1');
+  ok(d.donoLocalId === undefined && d.com.length === 2, `só o dono devia sair: ${JSON.stringify(d)}`);
+});
+caso('F32 M6: falha ao gravar a linha de `sessoes` só vai ao log (erro-sessoes) e não bloqueia', () => {
+  pessoal(); item('F1', { etapa: 'execucao', com: comDe(UE5, 'E5') });
+  mkdirSync(join(base, 'sessoes'), { recursive: true });
+  writeFileSync(join(base, 'sessoes', `${UE5}.json`), '{ruim');
+  ok(rodar('E5', transcript([livre('E5'), LIMPA])) === null, 'não devia bloquear');
+  ok(real('F1').com.length === 0, 'o item foi solto');
+  ok(/erro-sessoes/.test(log()), `log sem erro-sessoes: ${log()}`);
+});
+caso('F32 B7: a dona que não consegue soltar é mandada a `painel soltar`, não a `com del`', () => {
+  pessoal(); item('F1', { etapa: 'planejamento', donoLocalId: UP5, donoApelido: 'P5', historico: [] });
+  chmodSync(join(base, 'fila'), 0o555);
+  try {
+    const r = rodar('P5', transcript([livre('P5'), LIMPA]));
+    ok(r?.decision === 'block' && /painel soltar <F>/.test(r.reason) && !/com del/.test(r.reason), `mensagem: ${JSON.stringify(r)}`);
+  } finally { chmodSync(join(base, 'fila'), 0o755); }
+});
+caso('F32 B10: o hook confere a linha de `sessoes` na pasta de IZANAGI_PAINEL_DIR, como o painel.mjs', () => {
+  pessoal();
+  const alt = join(base, 'alt'); mkdirSync(join(alt, 'sessoes'), { recursive: true });
+  writeFileSync(join(alt, 'sessoes', `${UP5}.json`), JSON.stringify({ id: UP5, version: 1, data: { estado: 'trabalhando', etapa: 'x' } }));
+  ok(rodar('P5', transcript([livre('P5'), LIMPA]), {}, { IZANAGI_PAINEL_DIR: alt }) === null, 'esperava passar');
+  const l = JSON.parse(readFileSync(join(alt, 'sessoes', `${UP5}.json`), 'utf8')).data;
+  ok(l.estado === 'parada' && l.etapa === 'livre', `linha: ${JSON.stringify(l)}`);
+});
+caso('F32 A2: com a trava do painel presa e três escritas, o hook bloqueia dentro do prazo de 10 s do hooks.json (não morre calado)', () => {
+  pessoal();
+  item('F1', { etapa: 'execucao', com: comDe(UE5, 'E5') }); item('F3', { etapa: 'execucao', com: comDe(UE5, 'E5') });
+  item('F2', { etapa: 'execucao', donoLocalId: UE5, donoApelido: 'E5', historico: [] });
+  const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts', 'painel.mjs');
+  const preso = spawn('node', [SCRIPT, 'update', 'fila', 'F2', '{"agora":"segura"}'], { env: { ...process.env, PAINEL_DIR: base, PAINEL_PAUSA_MS: '20000', CLAUDE_CODE_SESSION_ID: '' }, stdio: 'ignore' });
+  try {
+    execFileSync('sleep', ['0.7']); // o `preso` já tem a trava
+    ok(existsSync(join(base, '.trava')), 'precondição: a trava está presa');
+    const t0 = Date.now();
+    const r = rodar('E5', transcript([livre('E5'), LIMPA]));
+    const gasto = Date.now() - t0;
+    ok(gasto < 9500, `o hook levou ${gasto} ms: passaria dos 10 s do hooks.json`);
+    ok(r?.decision === 'block', `esperava block, veio ${JSON.stringify(r)}`);
+    ok(/erro-ao-soltar/.test(log()), 'log sem erro-ao-soltar');
+    ok(real('F1').com.length === 1 && real('F3').com.length === 1, 'nada foi gravado');
+  } finally { preso.kill('SIGKILL'); }
 });
 
 console.log(falhas ? `${falhas} falha(s)` : 'todos verdes');

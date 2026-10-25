@@ -13,7 +13,7 @@
 import { readFileSync, existsSync, appendFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { declarouLivre } from './pool-comum.mjs';
+import { vaiSoltar } from './pool-comum.mjs';
 
 // O aviso de injeção é opcional: se a varredura faltar ou falhar ao carregar, o hook segue sem ele.
 // Hoje ele não protege nada (a razão do bloqueio só cita ids de item); prepara o caso de o texto do painel entrar aqui.
@@ -64,7 +64,7 @@ function* arquivosLocal(dir) {
   }
 }
 
-// O `local_…` desta sessão. Lê como texto e só faz JSON.parse do que contém o session_id.
+// O `local_…` e o título desta sessão. Lê como texto e só faz JSON.parse do que contém o session_id.
 function resolverLocalId(sessionId) {
   for (const f of arquivosLocal(SESSOES_DIR)) {
     let texto;
@@ -73,7 +73,7 @@ function resolverLocalId(sessionId) {
     try {
       const r = JSON.parse(texto);
       if (r.cliSessionId === sessionId || (Array.isArray(r.priorCliSessionIds) && r.priorCliSessionIds.includes(sessionId))) {
-        return r.sessionId || null;
+        return { localId: r.sessionId || null, titulo: r.title || '' };
       }
     } catch { /* registro ilegível */ }
   }
@@ -113,7 +113,8 @@ function main() {
   const itens = itensComDono();
   if (itens.length === 0) return;
 
-  const local = resolverLocalId(sid);
+  const reg = resolverLocalId(sid);
+  const local = reg?.localId;
   if (!local) return registrar(sid, '', 'sem-local-id');
 
   const meus = itens.filter((i) => i.dono === local);
@@ -123,8 +124,8 @@ function main() {
   const inicio = inicioDoTurno(tp);
   if (inicio === null) return registrar(sid, local, 'sem-inicio');
 
-  // F32: quem se declarou livre neste turno é solta pelo `livre-se-limpa` (que roda no mesmo fim de turno): aqui não se cobra.
-  if (declarouLivre(tp, inicio)) return registrar(sid, local, 'livre-no-turno', meus.map((i) => i.id).join(','));
+  // F32: quem se declarou livre SOBRE SI neste turno e é membro do pool é solta pelo `livre-se-limpa` (mesmo fim de turno, mesma função `vaiSoltar`): aqui não se cobra.
+  if (vaiSoltar(tp, inicio, { sessionId: sid, localId: local, titulo: reg.titulo })) return registrar(sid, local, 'livre-no-turno', meus.map((i) => i.id).join(','));
 
   const pendentes = meus.filter((i) => {
     const t = Date.parse(i.atualizadoEm);
