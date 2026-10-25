@@ -1,10 +1,12 @@
 // `kit remover [--simular]`: tira blocos, chaves e arquivos cujo hash bate com o lock; o que foi mexido fica e é listado.
-import { readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, esqueletoDe, lerTexto, semBom, semOsBlocos, serializar } from './pacote.mjs';
+import { carregarConfig } from '../gate/config.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, desfazerOperador, esqueletoDe, fraseDoKit, gitDirComum, lerTexto, semBom, semOsBlocos, serializar } from './pacote.mjs';
 
+const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const vazio = (v) => (Array.isArray(v) ? v.length === 0 : ehObjeto(v) && Object.keys(v).length === 0);
 
@@ -33,7 +35,15 @@ export function remover({ destino, simular = false }) {
     if (claude === null) break;
     const atual = blocosDe(claude).find((b) => b.nome === nome);
     if (!atual) continue;
-    if (sha256(atual.conteudo) !== reg.sha256) { deixou(`bloco ${nome} (CLAUDE.md)`); continue; }
+    if (sha256(atual.conteudo) !== reg.sha256) {
+      if (nome === 'projeto') {
+        // o bloco `projeto` é para o usuário preencher: depois de preenchido o texto é dele; tira só as marcas
+        const inteiro = claude.match(/<!-- kit:projeto v\d+ -->[\s\S]*?<!-- \/kit:projeto -->/)[0];
+        claude = claude.replace(inteiro, () => inteiro.replace(/^<!-- kit:projeto v\d+ -->\r?\n?/, '').replace(/\r?\n?<!-- \/kit:projeto -->$/, ''));
+        linhas.push('desembrulhado: bloco projeto (CLAUDE.md): o texto que você preencheu fica, só tirei as marcas do kit');
+      } else deixou(`bloco ${nome} (CLAUDE.md)`);
+      continue;
+    }
     const inteiro = claude.match(new RegExp(`<!-- kit:${nome} v\\d+ -->[\\s\\S]*?<!-- /kit:${nome} -->`))[0];
     const i = claude.indexOf(inteiro);
     const antes = claude[i - 1] === '\n' ? (claude[i - 2] === '\r' ? 2 : 1) : 0;
@@ -42,8 +52,16 @@ export function remover({ destino, simular = false }) {
     tirou(`bloco ${nome} (CLAUDE.md)`);
   }
   if (lock.claudeSemEol && claude !== null && blocosDe(claude).length === 0) claude = claude.replace(/\r?\n$/, '');
-  if (lock.arquivos['CLAUDE.md'] !== undefined && claude !== null && esqueletoDe(destino) === semOsBlocos(claude)) { apagar.push('CLAUDE.md'); tirou('CLAUDE.md (só restava o esqueleto do modelo)'); }
-  else if (claude !== claudeOriginal) gravacoes.set('CLAUDE.md', claude);
+  if (lock.arquivos['CLAUDE.md'] !== undefined && claude !== null && blocosDe(claude).length === 0 && esqueletoDe(destino) === semOsBlocos(claude)) { apagar.push('CLAUDE.md'); tirou('CLAUDE.md (só restava o esqueleto do modelo)'); } // bloco mexido que ficou tem texto do usuário: o arquivo não é só o esqueleto
+  else {
+    // a frase de cabeçalho do kit só fica enquanto sobrar algum bloco `kit:`
+    const frase = fraseDoKit();
+    if (claude !== null && frase && blocosDe(claude).length === 0) {
+      const m = claude.match(new RegExp(`${escapar(frase)}(\\r?\\n){1,2}`));
+      if (m) { claude = claude.replace(m[0], ''); tirou('frase de cabeçalho do kit (CLAUDE.md)'); }
+    }
+    if (claude !== claudeOriginal) gravacoes.set('CLAUDE.md', claude);
+  }
 
   // JSON compartilhados: só as chaves que o kit registrou, se o valor ainda é o que ele pôs
   const editarJson = (rel, criado, fn, vazioAposRemover, original) => {
@@ -108,14 +126,22 @@ export function remover({ destino, simular = false }) {
     }
   }, [], ck.original);
 
+  // o verde guardado do gate mora no git dir do projeto (um para todo worktree)
+  let verde = null;
+  const comum = gitDirComum(destino);
+  if (comum) { let nome = 'kit-gate-verde'; try { nome = carregarConfig(destino).gate.verdeDir || nome; } catch { /* kit.json ilegível: o nome padrão */ } const d = join(comum, nome); if (existsSync(d)) verde = d; }
+  if (verde) tirou(`${verde.replace(comum, '.git')}/ (verde guardado do gate)`);
+
   if (ilegiveis.length) return { codigo: 1, saida: '', erro: `kit remover: ${ilegiveis.join('; ')} — nada foi removido` };
   if (!simular) {
     for (const rel of apagar) rmSync(join(destino, rel), { force: true });
     for (const [rel, texto] of gravacoes) writeFileSync(join(destino, rel), texto);
     rmSync(caminho, { force: true });
+    if (verde) rmSync(verde, { recursive: true, force: true });
     // só as pastas que o lock diz que o kit criou, da mais funda para a mais rasa, e só se ficaram vazias
     for (const dir of [...(lock.pastasCriadas ?? [])].sort((a, b) => b.split('/').length - a.split('/').length)) { try { if (!readdirSync(join(destino, dir)).length) rmdirSync(join(destino, dir)); } catch { /* não existe ou não está vazia */ } }
   }
+  linhas.push(...desfazerOperador(lock.operador, { simular }));
   if (lock.recuperado) linhas.push('aviso: instalação recuperada de uma interrompida — o texto original dos JSON não foi guardado (voltam sem as chaves do kit, no formato do JSON.stringify) e a suíte original foi deduzida de test:suite/test:projeto; confira com git status.');
   linhas.push(`kit remover${simular ? ' --simular' : ''}: ${simular ? 'nada foi gravado' : `lock ${LOCK} removido`}.`);
   return { codigo: 0, saida: `${linhas.join('\n')}\n`, erro: '' };

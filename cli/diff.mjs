@@ -25,6 +25,12 @@ export function diffTexto(antigo, novo, nome) {
     else if (j < b.length && (i === a.length || t[i][j + 1] >= t[i + 1][j])) { ops.push({ tipo: '+', linha: b[j], a: i, b: j }); j++; }
     else { ops.push({ tipo: '-', linha: a[i], a: i, b: j }); i++; }
   }
+  // dentro de cada trecho de mudança, as remoções vêm antes das adições (como o `git diff`): uma linha que só ganhou vírgula lê-se `-x` e logo `+x,`
+  for (let k = 0; k < ops.length;) {
+    if (ops[k].tipo === ' ') { k++; continue; }
+    let fim = k; while (fim < ops.length && ops[fim].tipo !== ' ') fim++;
+    const trecho = ops.slice(k, fim); ops.splice(k, fim - k, ...trecho.filter((o) => o.tipo === '-'), ...trecho.filter((o) => o.tipo === '+')); k = fim;
+  }
   const mudancas = ops.map((o, k) => (o.tipo === ' ' ? -1 : k)).filter((k) => k >= 0);
   if (!mudancas.length) return '';
   // agrupa as mudanças cujo contexto se encosta (distância <= 2 * CONTEXTO) no mesmo hunk
@@ -49,4 +55,18 @@ export function diffTexto(antigo, novo, nome) {
     }
   }
   return saida.join('\n');
+}
+
+/** Quantas linhas do antigo somem de verdade; as que reaparecem no novo só com a vírgula final diferente contam à parte (`soVirgula`). */
+export function linhasApagadas(antigo, novo) {
+  const sem = (l) => l.replace(/,$/, '');
+  const resto = linhasDe(novo).map((l) => l[0]);
+  let apagadas = 0; let soVirgula = 0;
+  for (const [l] of linhasDe(antigo)) {
+    const i = resto.indexOf(l);
+    if (i >= 0) { resto.splice(i, 1); continue; }
+    const j = resto.findIndex((x) => sem(x) === sem(l));
+    if (j >= 0) { resto.splice(j, 1); soVirgula++; } else apagadas++;
+  }
+  return { apagadas, soVirgula };
 }

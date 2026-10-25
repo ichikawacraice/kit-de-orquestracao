@@ -22,10 +22,10 @@ Lidos de `.claude/kit.json`:
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
 <!-- /kit:regras-de-operacao -->
 
-<!-- kit:regras-de-trabalho v1 -->
+<!-- kit:regras-de-trabalho v2 -->
 ## Regras de trabalho
 - Decisão que muda desenho vira ADR em `docs/adr/` (número pedido à orquestradora quando há uma).
-- Spec e roadmap são opcionais: use-os se o projeto já os tem.
+- Se o projeto exige spec ou roadmap antes do código, ele declara isso nas regras dele (acima ou abaixo deste bloco); o kit não exige nem dispensa.
 - Teste antes do código quando o comportamento muda.
 <!-- /kit:regras-de-trabalho -->
 

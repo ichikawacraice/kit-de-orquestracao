@@ -103,7 +103,7 @@ export function carregarConfig(raiz, kit = lerKitJson(raiz)) {
   validarGuarda(kit.guarda);
   validarExtras(kit.arvore?.extras);
   const base = perfil === "pnpm-workspace" ? mesclar(PADRAO, PERFIL_PNPM) : PADRAO;
-  return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: kit.guarda ?? {} });
+  return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: objeto(kit.guarda) ? kit.guarda : {} });
 }
 
 /**

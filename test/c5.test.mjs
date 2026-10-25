@@ -144,7 +144,7 @@ describe('R3 — o atualizar traz bloco novo e renomeado', () => {
       assert.equal(kit(d, ['adotar']).status, 0);
       const m = join(falso, 'modelos', 'CLAUDE.md');
       const antigo = readFileSync(m, 'utf8');
-      assert.match(antigo, /kit:regras-de-trabalho v1/);
+      assert.match(antigo, /kit:regras-de-trabalho v\d+/);
       writeFileSync(m, `${antigo.replaceAll('regras-de-trabalho', 'regras-do-trabalho')}\n<!-- kit:novo-bloco v1 -->\n## Novo\n- uma regra nova\n<!-- /kit:novo-bloco -->\n`);
       const r = kitDe(falso, d, ['atualizar']);
       assert.equal(r.status, 0, saida(r));
@@ -153,7 +153,7 @@ describe('R3 — o atualizar traz bloco novo e renomeado', () => {
       assert.match(r.stdout, /aviso: o bloco regras-de-trabalho saiu do kit/);
       const claude = ler(d, 'CLAUDE.md');
       assert.match(claude, /<!-- kit:novo-bloco v1 -->/);
-      assert.match(claude, /<!-- kit:regras-do-trabalho v1 -->/);
+      assert.match(claude, /<!-- kit:regras-do-trabalho v\d+ -->/);
       assert.ok(claude.startsWith('# Rascunho\n\nMeu texto.\n'));
       const lock = json(d, '.claude', 'kit.lock.json');
       assert.ok('novo-bloco' in lock.blocos && 'regras-do-trabalho' in lock.blocos);

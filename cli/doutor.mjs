@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { avisoDeLaco, carregarConfig } from '../gate/config.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, lerTexto } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
@@ -64,8 +64,9 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   for (const [nome, reg] of Object.entries(lock.blocos ?? {})) {
     const b = claude && blocosDe(claude).find((x) => x.nome === nome);
     if (!b) linhas.push(`aviso: bloco ${nome} ausente do CLAUDE.md`);
-    else if (sha256(b.conteudo) !== reg.sha256) linhas.push(`aviso: bloco ${nome} editado à mão (o \`kit atualizar\` não o troca)`);
+    else if (nome !== 'projeto' && sha256(b.conteudo) !== reg.sha256) linhas.push(`aviso: bloco ${nome} editado à mão (o \`kit atualizar\` não o troca)`);
   }
+  // o bloco `projeto` é para o usuário preencher: editá-lo não é desvio (nem aviso); só o placeholder que sobra é
   // o bloco `projeto` nasce com o texto de preencher; sem ele preenchido as sessões não sabem o que o projeto é
   const projeto = claude && blocosDe(claude).find((x) => x.nome === 'projeto');
   if (projeto && /<!--\s*preencher:/.test(projeto.conteudo)) linhas.push('aviso: o bloco projeto do CLAUDE.md ainda tem o texto de preencher; descreva o projeto nele (o que é, stack, pastas, idioma dos commits)');
@@ -77,6 +78,10 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   const pk = lerJson(join(destino, 'package.json'));
   for (const t of c.package?.trocados ?? []) if (pk?.scripts?.[t.nome] !== t.gate) linhas.push(`aviso: scripts.${t.nome} (package.json) não passa mais pelo gate`);
   for (const [nome, valor] of Object.entries(c.package?.scripts ?? {})) if (pk?.scripts?.[nome] !== valor) linhas.push(`aviso: scripts.${nome} (package.json) não está mais como o kit deixou`);
+  for (const f of lock.omitidos ?? []) linhas.push(`aviso: ${f} não foi copiado (o projeto tem a guarda ou o gate dele)`);
+  const trava = lock.operador?.trava;
+  const listaTrava = join(baseDaOrquestracao(), 'trava-edicao-repos.txt');
+  if (trava && existsSync(listaTrava) && !readFileSync(listaTrava, 'utf8').split('\n').map((l) => l.trim()).includes(trava.linha)) linhas.push(`aviso: ${trava.linha} saiu de trava-edicao-repos.txt; a orquestradora volta a editar este repositório sem perguntar`);
   for (const p of lock.pendente ?? []) linhas.push(`aviso: pendente da adoção: ${p}`);
   linhas.push(falhas ? `${falhas} falha(s)` : 'tudo em dia');
   return { codigo: falhas ? 1 : 0, saida: `${linhas.join('\n')}\n`, erro: '' };

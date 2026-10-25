@@ -1,5 +1,7 @@
 // O que o kit põe num projeto e como: o plano é calculado em memória (iniciar, adotar e --simular usam o mesmo) e só então gravado.
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
@@ -29,6 +31,8 @@ const eolDe = (t) => (t !== null && t.includes('\r\n') ? '\r\n' : '\n');
 export const semOsBlocos = (t) => t.replace(/<!-- kit:([a-z-]+) v\d+ -->[\s\S]*?<!-- \/kit:\1 -->/g, '').replace(/\s+/g, ' ').trim();
 /** O CLAUDE.md que o `iniciar` cria, sem os blocos: o que o `adotar` reconhece como "o iniciar morreu no meio". */
 export const esqueletoDe = (destino) => semOsBlocos(modeloClaude().replace('# <nome do projeto>', `# ${basename(destino)}`));
+/** A frase de cabeçalho do modelo de CLAUDE.md (o parágrafo que explica as marcas `kit:`). */
+export const fraseDoKit = () => modeloClaude().split(/\n\n/).find((par) => par.startsWith('As seções marcadas `kit:`'));
 /** Texto acrescentado ao fim do CLAUDE.md com o fim de linha que o arquivo já usa (CRLF continua CRLF). */
 export function acrescentar(claude, texto) {
   const add = `${claude.endsWith('\n') ? '' : '\n'}\n${texto}\n`;
@@ -61,6 +65,89 @@ function soDoKit(v) {
     && chaves(v.enabledPlugins).every((n) => [PLUGIN, `painel-sessoes@${MARKETPLACE}`].includes(n));
 }
 
+
+/** O git dir comum do projeto (o mesmo que o gate e a trava da orquestradora usam), ou null fora de um repositório. */
+export function gitDirComum(destino) {
+  const r = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: destino, encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : null;
+}
+
+/** O estado do operador (fora do projeto): onde as travas por hook leem as listas. */
+export const baseDaOrquestracao = () => process.env.HOOKS_CREWAI_BASE || join(homedir(), '.claude', 'orquestracao');
+const CABECALHO_SUBAGENTES = `# subagent_type que pode gravar arquivo do projeto mesmo como subagente (exceção ao Q154).
+# Lido por hooks/subagente-nao-edita.mjs. Um por linha; \`*\` no fim casa prefixo.
+# Vazio de propósito: o executor é sessão, não subagente (Q197); nenhuma lista o libera por padrão.
+`;
+const linhasDaLista = (texto) => texto.split('\n').map((l) => l.trim()).filter(Boolean);
+
+/**
+ * O que o `iniciar`/`adotar` põem fora do projeto: a linha do repo em `trava-edicao-repos.txt` (a trava da orquestradora só vale nos repos
+ * listados) e o `subagente-pode-escrever.txt` só com o cabeçalho. Nada é gravado aqui — `aplicarOperador` grava depois do plano gravado.
+ */
+export function planejarOperador(destino) {
+  const base = baseDaOrquestracao();
+  const operador = {};
+  const repo = gitDirComum(destino);
+  if (repo) {
+    const arq = join(base, 'trava-edicao-repos.txt');
+    const existe = existsSync(arq);
+    const jaTem = existe && linhasDaLista(readFileSync(arq, 'utf8')).includes(repo);
+    operador.trava = { linha: repo, adicionou: !jaTem, criouArquivo: !existe };
+  }
+  const sub = join(base, 'subagente-pode-escrever.txt');
+  if (!existsSync(sub)) operador.subagentes = { criou: true, sha256: sha256(CABECALHO_SUBAGENTES) };
+  return operador;
+}
+
+/** Grava o que `planejarOperador` decidiu. Devolve as linhas de aviso (falha de gravar não desfaz a instalação). */
+export function aplicarOperador(operador) {
+  const base = baseDaOrquestracao(); const avisos = [];
+  try {
+    mkdirSync(base, { recursive: true });
+    if (operador.trava?.adicionou) {
+      const arq = join(base, 'trava-edicao-repos.txt');
+      const atual = existsSync(arq) ? readFileSync(arq, 'utf8') : '';
+      writeFileSync(arq, `${atual}${atual === '' || atual.endsWith('\n') ? '' : '\n'}${operador.trava.linha}\n`);
+    }
+    if (operador.subagentes?.criou) writeFileSync(join(base, 'subagente-pode-escrever.txt'), CABECALHO_SUBAGENTES);
+  } catch (e) { avisos.push(`aviso: não consegui gravar em ${base} (${e.message}); a trava da orquestradora e a lista de subagentes ficam como estavam`); }
+  return avisos;
+}
+
+/** Desfaz o que `aplicarOperador` fez (só o que o lock diz que foi do kit). Devolve as linhas `removido:`/`deixado`. */
+export function desfazerOperador(operador, { simular = false } = {}) {
+  const base = baseDaOrquestracao(); const linhas = [];
+  const arq = join(base, 'trava-edicao-repos.txt');
+  if (operador?.trava?.adicionou && existsSync(arq)) {
+    const todas = readFileSync(arq, 'utf8').split('\n');
+    if (todas.some((l) => l.trim() === operador.trava.linha)) {
+      const resto = todas.filter((l) => l.trim() !== operador.trava.linha);
+      const vazio = linhasDaLista(resto.join('\n')).length === 0;
+      if (!simular) { if (vazio) rmSync(arq, { force: true }); else writeFileSync(arq, resto.join('\n')); } // lista vazia ≠ sem lista: com o arquivo presente a trava deixaria de cobrir qualquer repo
+      linhas.push(`removido: ${operador.trava.linha} de trava-edicao-repos.txt`);
+    }
+  }
+  const sub = join(base, 'subagente-pode-escrever.txt');
+  if (operador?.subagentes?.criou && existsSync(sub)) {
+    if (sha256(readFileSync(sub, 'utf8')) === operador.subagentes.sha256) { if (!simular) rmSync(sub, { force: true }); linhas.push('removido: subagente-pode-escrever.txt (só tinha o cabeçalho do kit)'); }
+    else linhas.push('deixado (mexido): subagente-pode-escrever.txt');
+  }
+  return linhas;
+}
+
+/** Há `pnpm-workspace.yaml` e o perfil não foi pedido: o `simples` roda só a suíte da raiz; sugere o perfil de workspace (não troca sozinho). */
+export function sugestaoDePerfil(destino, perfilPedido) {
+  if (perfilPedido !== undefined || !existsSync(join(destino, 'pnpm-workspace.yaml'))) return '';
+  return '\nsugestão: há pnpm-workspace.yaml aqui e o perfil simples roda só a suíte da raiz; para o gate cobrir os pacotes use `--perfil pnpm-workspace`.';
+}
+/** O projeto já tem um hook `PreToolUse` com matcher `Bash` que não é o do kit: a guarda dele já existe. */
+export function temGuardaDoProjeto(settings) {
+  return (settings?.hooks?.PreToolUse ?? []).some((g) => String(g?.matcher ?? '').split('|').map((m) => m.trim()).includes('Bash') && (g.hooks ?? []).some((h) => h.command !== HOOK_GUARDA));
+}
+const GATE_PROPRIO = /\bnode\s+(?:\.\/)?((?!scripts\/kit\/)\S*gate\S*\.m?js)/i;
+/** O comando é o script de gate do próprio projeto (existe no disco, fora de scripts/kit/): o do kit não o substitui. */
+export const ehGateProprio = (destino, comando) => { const m = typeof comando === 'string' && comando.match(GATE_PROPRIO); return Boolean(m) && existsSync(join(destino, m[1])); };
+
 /**
  * Calcula o que o kit grava. Devolve { erro } ou { mudancas:[{arquivo,antigo,novo}], conflitos, pendencias, lock }.
  * `lock` já traz arquivos/blocos/chaves, calculados sobre o conteúdo NOVO (hashes) — o chamador só acrescenta versão e perfil.
@@ -71,6 +158,15 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   const erros = [];
   const mudancas = []; const conflitos = []; const pendencias = [];
   const lock = { arquivos: {}, blocos: {}, chaves: { settings: {}, package: {}, kitJson: {} } };
+  const avisosDoProjeto = [];
+  // o projeto que já tem as suas regras: guarda de Bash própria e gate próprio não são duplicados nem trocados
+  const solto = (rel) => { try { return JSON.parse(semBom(lerTexto(destino, rel) ?? 'null')); } catch { return null; } };
+  const guardaPropria = temGuardaDoProjeto(solto('.claude/settings.json'));
+  const gatePropria = ehGateProprio(destino, solto('package.json')?.scripts?.test) || ehGateProprio(destino, solto('.claude/kit.json')?.gate?.comandoCompleto);
+  const omitidos = [];
+  if (guardaPropria) { omitidos.push('guarda-de-operacao.mjs'); avisosDoProjeto.push('guarda: o projeto já tem um hook PreToolUse de Bash próprio; não registrei a guarda do kit nem copiei o script dela (kit.json: guarda "do-projeto")'); }
+  if (gatePropria) { omitidos.push('a-vez-do-gate.mjs'); avisosDoProjeto.push('gate próprio: o gate do projeto é um script dele; não copiei scripts/kit/a-vez-do-gate.mjs nem troquei o `test`, e o kit.json não aponta o gate'); }
+  if (omitidos.length) lock.omitidos = omitidos.map((f) => `scripts/kit/${f}`);
 
   // CLAUDE.md: bloco que falta entra no fim; bloco com a marca já presente fica como está.
   const claudeAtual = lerTexto(destino, 'CLAUDE.md');
@@ -84,7 +180,9 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     lock.arquivos['CLAUDE.md'] = null;
   } else {
     for (const [nome, texto] of Object.entries(blocos)) {
-      if (new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude)) {
+      const jaTem = new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude);
+      if (nome === 'projeto' && !jaTem) continue; // num CLAUDE.md que já existe, o projeto já diz o que ele é
+      if (jaTem) {
         // instalação interrompida: o bloco que já está lá, igual ao do modelo, é do kit
         const inteiro = claude.match(new RegExp(`<!-- kit:${nome} v\\d+ -->[\\s\\S]*?<!-- /kit:${nome} -->`))?.[0];
         if (recuperando && inteiro?.replace(/\r\n/g, '\n') === texto) novosBlocos.push(nome);
@@ -101,6 +199,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
 
   // scripts/kit: cópia do gate/; arquivo igual já lá fica (não é nosso), diferente é conflito.
   for (const f of arquivosDoGate()) {
+    if (omitidos.includes(f)) continue;
     const rel = `scripts/kit/${f}`;
     const novo = readFileSync(join(RAIZ_DO_KIT, 'gate', f), 'utf8');
     const atual = lerTexto(destino, rel);
@@ -125,6 +224,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     for (const [nome, gate] of Object.entries(p.scripts)) {
       const guardado = nome === 'test' ? nomeScript : `${nome}:${sufixo}`;
       const atual = sc[nome];
+      if (gatePropria && gate.includes('a-vez-do-gate')) continue;
       if (recuperando && atual === gate) {
         // o processo morreu depois de trocar este script: a suíte do projeto é a que está guardada, nunca derivada do gate
         const origem = nome === 'test' ? [nomeScript, 'test:suite', 'test:projeto'].find((n) => sc[n] !== undefined) : (sc[guardado] !== undefined ? guardado : undefined);
@@ -157,7 +257,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
         ? `scripts.${nome} agora passa pelo gate; a suíte do projeto segue em ${guardado} (\`${sc[guardado]}\`).`
         : `scripts.${nome} agora passa pelo gate; o seu \`${atual}\` está em ${guardado}.`);
     }
-    const novo = serializar(pkg, pk.texto);
+    const novo = pk.texto !== null && isDeepStrictEqual(pkg, pk.valor) ? pk.texto : serializar(pkg, pk.texto); // sem mudança de valor, o texto do projeto fica como está (nada de reformatar)
     if (novo !== pk.texto) mudancas.push({ arquivo: 'package.json', antigo: pk.texto, novo });
     if (pk.texto === null) lock.arquivos['package.json'] = null; else if (!recuperando) cp.original = pk.texto;
   }
@@ -170,7 +270,8 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   if (s) {
     s.hooks = { ...(s.hooks ?? {}) };
     s.hooks.PreToolUse = [...(s.hooks.PreToolUse ?? [])];
-    if (!s.hooks.PreToolUse.some((g) => g.hooks?.some((h) => h.command === HOOK_GUARDA))) {
+    if (guardaPropria && !s.hooks.PreToolUse.some((g) => g.hooks?.some((h) => h.command === HOOK_GUARDA))) { /* a guarda é a do projeto */ }
+    else if (!s.hooks.PreToolUse.some((g) => g.hooks?.some((h) => h.command === HOOK_GUARDA))) {
       s.hooks.PreToolUse.push({ matcher: 'Bash', hooks: [{ type: 'command', command: HOOK_GUARDA }] });
       cs.hook = true;
     } else if (recuperando) cs.hook = true;
@@ -186,7 +287,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
       else if (recuperando) cs.plugins.push(nome);
     }
     if (recuperando && st.texto !== null) cs.criado = soDoKit(st.valor);
-    const novo = serializar(s, st.texto);
+    const novo = st.texto !== null && isDeepStrictEqual(s, st.valor) ? st.texto : serializar(s, st.texto); // sem mudança de valor, o texto do projeto fica como está (nada de reformatar)
     if (novo !== st.texto) mudancas.push({ arquivo: '.claude/settings.json', antigo: st.texto, novo });
     if (st.texto === null) lock.arquivos['.claude/settings.json'] = null; else if (!recuperando) cs.original = st.texto;
   }
@@ -199,6 +300,8 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   if (k) {
     const desejado = structuredClone(p.kit);
     if (desejado.gate?.comandoCompleto) desejado.gate.comandoCompleto = comandoSuite;
+    if (gatePropria) { delete desejado.gate?.comandoCompleto; if (desejado.gate && !Object.keys(desejado.gate).length) delete desejado.gate; }
+    if (guardaPropria && !('guarda' in k)) desejado.guarda = 'do-projeto';
     const mescla = (alvo, fonte, caminho) => {
       for (const [chave, valor] of Object.entries(fonte)) {
         const cam = caminho ? `${caminho}.${chave}` : chave;
@@ -210,9 +313,11 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     };
     mescla(k, desejado, '');
     if (recuperando && kj.texto !== null && isDeepStrictEqual(kj.valor, desejado)) ck.criado = true;
-    const novo = serializar(k, kj.texto);
-    if (novo !== kj.texto) mudancas.push({ arquivo: '.claude/kit.json', antigo: kj.texto, novo });
-    if (kj.texto === null) lock.arquivos['.claude/kit.json'] = null; else if (!recuperando) ck.original = kj.texto;
+    const vazioNovo = kj.texto === null && Object.keys(k).length === 0; // nada a dizer: não cria um kit.json de `{}`
+    const novo = kj.texto !== null && isDeepStrictEqual(k, kj.valor) ? kj.texto : serializar(k, kj.texto); // sem mudança de valor, o texto do projeto fica como está (nada de reformatar)
+    if (!vazioNovo && novo !== kj.texto) mudancas.push({ arquivo: '.claude/kit.json', antigo: kj.texto, novo });
+    if (vazioNovo) lock.chaves.kitJson = { criado: false, adicionadas: [] };
+    else if (kj.texto === null) lock.arquivos['.claude/kit.json'] = null; else if (!recuperando) ck.original = kj.texto;
   }
 
   if (erros.length) return { erro: erros.join('; ') };
@@ -222,7 +327,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     lock.pastasCriadas = ['.claude', 'scripts', 'scripts/kit'].filter((d) => existsSync(join(destino, d)));
     lock.recuperado = true;
   }
-  return { mudancas, conflitos, pendencias, avisos, lock };
+  return { mudancas, conflitos, pendencias, avisos, avisosProjeto: avisosDoProjeto, lock };
 }
 
 /**

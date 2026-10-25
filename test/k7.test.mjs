@@ -84,7 +84,8 @@ describe('kit adotar', () => {
       assert.equal(r.status, 0, saida(r));
       assert.deepEqual(foto(d), antes, 'o --simular gravou algo');
       assert.equal(existsSync(join(d, '.claude', 'kit.lock.json')), false);
-      for (const n of NOMES_DOS_BLOCOS) assert.match(r.stdout, new RegExp(`\\+<!-- kit:${n} v1 -->`), `o diff não mostra o bloco ${n}`);
+      for (const n of NOMES_DOS_BLOCOS.filter((x) => x !== 'projeto')) assert.match(r.stdout, new RegExp(`\\+<!-- kit:${n} v\\d+ -->`), `o diff não mostra o bloco ${n}`);
+      assert.doesNotMatch(r.stdout, /kit:projeto/, 'num CLAUDE.md que já existe o bloco projeto não é inserido (c18)');
       assert.match(r.stdout, /CLAUDE\.md/);
       assert.match(r.stdout, /settings\.json/);
       assert.doesNotMatch(r.stdout, /--- a\/package\.json/, 'sem --trocar-test o package.json não muda');
@@ -99,7 +100,8 @@ describe('kit adotar', () => {
       assert.equal(r.status, 0, saida(r));
       const claude = ler(d, 'CLAUDE.md');
       assert.ok(claude.startsWith(CLAUDE_PROPRIO), 'o texto próprio do CLAUDE.md mudou');
-      for (const n of NOMES_DOS_BLOCOS) assert.match(claude, new RegExp(`<!-- kit:${n} v1 -->`));
+      for (const n of NOMES_DOS_BLOCOS.filter((x) => x !== 'projeto')) assert.match(claude, new RegExp(`<!-- kit:${n} v\\d+ -->`));
+      assert.doesNotMatch(claude, /kit:projeto/);
       // settings: indentação de 4 preservada, tudo que era do projeto continua, hook próprio e hook da guarda convivem
       const sRaw = ler(d, '.claude', 'settings.json');
       assert.match(sRaw, /\n {4}"permissions"/, 'a indentação do settings.json mudou');
@@ -118,7 +120,7 @@ describe('kit adotar', () => {
       assert.match(r.stdout, /--trocar-test/, 'a saída não avisa do --trocar-test');
       assert.equal(ler(d, 'src', 'index.ts'), antes['src/index.ts']);
       const lock = json(d, '.claude', 'kit.lock.json');
-      assert.deepEqual(Object.keys(lock.blocos), NOMES_DOS_BLOCOS);
+      assert.deepEqual(Object.keys(lock.blocos), NOMES_DOS_BLOCOS.filter((x) => x !== 'projeto'));
       assert.ok(Object.keys(lock.arquivos).some((f) => f.startsWith('scripts/kit/')));
       assert.equal(lock.arquivos['CLAUDE.md'], undefined, 'o CLAUDE.md é do projeto: não entra como arquivo do kit');
       assert.equal(lock.arquivos['package.json'], undefined);
@@ -196,7 +198,7 @@ describe('kit adotar', () => {
       assert.equal(json(d, 'package.json').scripts.typecheck, 'tsc --noEmit -p .');
       assert.equal(json(d, '.claude', 'kit.json').gate.comandoCompleto, 'make test');
       assert.equal(json(d, '.claude', 'kit.json').gate.perfil, 'pnpm-workspace', 'a chave nova do perfil entra mesmo com conflito noutra');
-      assert.match(ler(d, 'CLAUDE.md'), /<!-- kit:projeto v1 -->/, 'o resto (blocos) não foi gravado');
+      assert.match(ler(d, 'CLAUDE.md'), /<!-- kit:comandos v1 -->/, 'o resto (blocos) não foi gravado');
       const lock = json(d, '.claude', 'kit.lock.json');
       assert.equal(lock.pendente.length, 4, JSON.stringify(lock.pendente));
       assert.ok(lock.pendente.some((p) => /scripts\.typecheck/.test(p)) && lock.pendente.some((p) => /extraKnownMarketplaces/.test(p)));

@@ -2,10 +2,11 @@
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { LOCK } from './lock.mjs';
-import { arquivosDoGate, gravar, lerModelo, planejar } from './pacote.mjs';
+import { aplicarOperador, arquivosDoGate, gravar, lerModelo, planejar, planejarOperador, sugestaoDePerfil } from './pacote.mjs';
 
 /** Devolve { codigo, mensagem } — nada é gravado antes de o plano ser calculado e validado. */
-export function iniciar({ destino, perfil = 'simples', versao }) {
+export function iniciar({ destino, perfil: perfilPedido, versao }) {
+  const perfil = perfilPedido ?? 'simples';
   if (!lerModelo().perfis[perfil]) return { codigo: 2, mensagem: `kit iniciar: perfil "${perfil}" desconhecido — use ${Object.keys(lerModelo().perfis).join(' ou ')}` };
   if (existsSync(join(destino, 'CLAUDE.md'))) return { codigo: 2, mensagem: 'kit iniciar: já existe CLAUDE.md aqui — o iniciar é só para projeto sem ele (para um projeto em andamento, use `kit adotar`)' };
   if (existsSync(join(destino, LOCK))) return { codigo: 2, mensagem: `kit iniciar: já existe ${LOCK} — o kit já foi posto aqui; use \`kit atualizar\` ou \`kit remover\`` };
@@ -16,8 +17,10 @@ export function iniciar({ destino, perfil = 'simples', versao }) {
   if (plano.erro) return { codigo: 2, mensagem: `kit iniciar: ${plano.erro}` };
   if (plano.conflitos.length) return { codigo: 1, mensagem: `kit iniciar: ${plano.conflitos.length} conflito(s); nada foi gravado.\n${plano.conflitos.map((c) => `conflito: ${c}`).join('\n')}` };
   for (const rel of orfaos) rmSync(join(destino, `${rel}.kit-tmp`), { force: true });
-  const g = gravar(destino, plano.mudancas, { versao, perfil, ...plano.lock });
+  const operador = planejarOperador(destino);
+  const g = gravar(destino, plano.mudancas, { versao, perfil, ...plano.lock, ...(Object.keys(operador).length ? { operador } : {}) });
   if (g.erro) return { codigo: 1, mensagem: `kit iniciar: ${g.erro}` };
+  const avisosOperador = aplicarOperador(operador);
   const aviso = existsSync(join(destino, '.git')) ? '' : '\naviso: esta pasta não é um repositório git; o gate mede o toplevel do git, então rode `git init` antes do primeiro `npm test`.';
-  return { codigo: 0, mensagem: `kit iniciar: projeto preparado (perfil ${perfil}, ${Object.keys(plano.lock.arquivos).length} arquivos, lock em ${LOCK}).${orfaos.length ? `\nrecuperado: ${orfaos.length} .kit-tmp órfão(s) de um iniciar interrompido apagado(s).` : ''}${plano.avisos.map((a) => `\ntrocado: ${a}`).join('')}${aviso}` };
+  return { codigo: 0, mensagem: `kit iniciar: projeto preparado (perfil ${perfil}, ${Object.keys(plano.lock.arquivos).length} arquivos, lock em ${LOCK}).${orfaos.length ? `\nrecuperado: ${orfaos.length} .kit-tmp órfão(s) de um iniciar interrompido apagado(s).` : ''}${plano.avisos.map((a) => `\ntrocado: ${a}`).join('')}${plano.avisosProjeto.map((a) => `\naviso: ${a}`).join('')}${aviso}${avisosOperador.map((a) => `\n${a}`).join('')}${sugestaoDePerfil(destino, perfilPedido)}` };
 }

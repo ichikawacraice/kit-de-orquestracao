@@ -15,6 +15,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
 
   for (const f of arquivosDoGate()) {
     const rel = `scripts/kit/${f}`;
+    if ((lock.omitidos ?? []).includes(rel)) continue; // o projeto tem o dele (guarda ou gate próprios)
     const novo = readFileSync(join(RAIZ_DO_KIT, 'gate', f), 'utf8');
     const atual = lerTexto(destino, rel);
     if (!(rel in lock.arquivos)) {
@@ -47,7 +48,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
   // bloco que o modelo tem e o projeto nunca recebeu (novo, ou o novo nome de um renomeado) entra no fim, como no adotar
   if (claude !== null) {
     for (const [nome, texto] of Object.entries(modelo)) {
-      if (nome in lock.blocos || new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude)) continue;
+      if (nome === 'projeto' || nome in lock.blocos || new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude)) continue;
       claude = acrescentar(claude, texto);
       const b = blocosDe(texto)[0];
       lock.blocos[nome] = { versao: b.versao, sha256: sha256(b.conteudo) };
