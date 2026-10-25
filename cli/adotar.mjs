@@ -3,7 +3,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffTexto, linhasApagadas } from './diff.mjs';
 import { LOCK } from './lock.mjs';
-import { aplicarOperador, arquivosDoGate, esqueletoDe, gravar, lerModelo, lerTexto, planejar, planejarOperador, semBom, semOsBlocos, sugestaoDePerfil } from './pacote.mjs';
+import { FRASE_TRAVA_COBRE, aplicarOperador, arquivosDoGate, esqueletoDe, gravar, lerModelo, lerTexto, planejar, planejarOperador, semBom, semOsBlocos, sugestaoDePerfil } from './pacote.mjs';
 
 /** Devolve { codigo, saida, erro }. */
 export function adotar({ destino, perfil: perfilPedido, versao, simular = false, trocarTest = false, parcial = false }) {
@@ -28,6 +28,7 @@ export function adotar({ destino, perfil: perfilPedido, versao, simular = false,
     for (const m of plano.mudancas) linhas.push(diffTexto(m.antigo, m.novo, m.arquivo));
     const tot = plano.mudancas.reduce((r, m) => { const x = linhasApagadas(m.antigo, m.novo); return { apagadas: r.apagadas + x.apagadas, soVirgula: r.soVirgula + x.soVirgula }; }, { apagadas: 0, soVirgula: 0 });
     const op = planejarOperador(destino);
+    if (op.trava?.cobreTudo) linhas.push(FRASE_TRAVA_COBRE);
     if (op.trava?.adicionou) linhas.push(`gravaria: ${op.trava.linha} em trava-edicao-repos.txt (a trava da orquestradora passa a valer neste repositório)`);
     linhas.push(`linhas apagadas de verdade: ${tot.apagadas}${tot.soVirgula ? ` (${tot.soVirgula} linha(s) com "-" reaparecem logo abaixo com "+" e só ganham a vírgula final)` : ''}`);
   }
@@ -38,6 +39,7 @@ export function adotar({ destino, perfil: perfilPedido, versao, simular = false,
     const g = gravar(destino, plano.mudancas, { versao, perfil, ...plano.lock, ...(pendente.length ? { pendente } : {}), ...(Object.keys(operador).length ? { operador } : {}) });
     if (g.erro) return { codigo: 1, saida: '', erro: `kit adotar: ${g.erro}` };
     linhas.push(...aplicarOperador(operador));
+    if (operador.trava?.cobreTudo) linhas.push(FRASE_TRAVA_COBRE);
   }
   for (const t of plano.avisos) linhas.push(`trocado: ${t}`);
   for (const a of plano.avisosProjeto) linhas.push(`aviso: ${a}`);

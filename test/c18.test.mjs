@@ -88,18 +88,18 @@ describe('c18.0 doutor e o bloco projeto', () => {
 
 // ---- 1: a trava da orquestradora num projeto novo
 describe('c18.1 trava-edicao-repos.txt', () => {
-  it('iniciar cria a lista com o repo; rodar de novo não duplica; remover tira a linha (e o arquivo que o kit criou)', (t) => {
+  it('com lista: iniciar acrescenta o repo; rodar de novo não duplica; remover tira só a linha (o arquivo nunca some); sem lista, nada é criado (c18b)', (t) => {
     const a = ambiente(t); const d = a.projeto('p2');
     assert.equal(a.lista('trava-edicao-repos.txt'), null, 'precondição: sem lista');
+    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n');
     const r = a.kit(d, 'iniciar'); assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.equal(a.lista('trava-edicao-repos.txt'), `${join(d, '.git')}\n`);
-    // segundo projeto: soma; o primeiro não se repete
+    assert.equal(a.lista('trava-edicao-repos.txt'), `/Users/x/Izanagi/.git\n${join(d, '.git')}\n`);
     const e = a.projeto('p3'); assert.equal(a.kit(e, 'iniciar').status, 0);
-    assert.deepEqual(a.lista('trava-edicao-repos.txt').split('\n').filter(Boolean), [join(d, '.git'), join(e, '.git')]);
+    assert.deepEqual(a.lista('trava-edicao-repos.txt').split('\n').filter(Boolean), ['/Users/x/Izanagi/.git', join(d, '.git'), join(e, '.git')]);
     assert.equal(a.kit(d, 'remover').status, 0);
-    assert.deepEqual(a.lista('trava-edicao-repos.txt').split('\n').filter(Boolean), [join(e, '.git')], 'só a linha do d saiu');
+    assert.deepEqual(a.lista('trava-edicao-repos.txt').split('\n').filter(Boolean), ['/Users/x/Izanagi/.git', join(e, '.git')], 'só a linha do d saiu');
     assert.equal(a.kit(e, 'remover').status, 0);
-    assert.equal(a.lista('trava-edicao-repos.txt'), null, 'o arquivo que o kit criou some quando fica vazio');
+    assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n');
   });
   it('adotar acrescenta sem duplicar; linha que já existia antes do kit não sai no remover', (t) => {
     const a = ambiente(t);
@@ -118,9 +118,9 @@ describe('c18.1 trava-edicao-repos.txt', () => {
   });
   it('--simular não grava a lista; a trava de verdade passa a perguntar no repo novo (hook com a lista)', (t) => {
     const a = ambiente(t); const d = a.projeto('p6', { 'CLAUDE.md': '# Meu\n' });
-    const s = a.kit(d, 'adotar', '--simular'); assert.match(s.stdout, /gravaria: .* em trava-edicao-repos\.txt/);
-    assert.equal(a.lista('trava-edicao-repos.txt'), null, 'o --simular não gravou');
     mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n');
+    const s = a.kit(d, 'adotar', '--simular'); assert.match(s.stdout, /gravaria: .* em trava-edicao-repos\.txt/);
+    assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n', 'o --simular não gravou');
     assert.equal(a.kit(d, 'adotar').status, 0);
     const hook = join(RAIZ, 'plugins', 'orquestracao', 'hooks', 'orquestradora-nao-edita.mjs');
     assert.ok(existsSync(hook), 'o hook existe');
@@ -245,7 +245,8 @@ describe('c18.6 adotar num projeto com guarda própria, gate próprio e CLAUDE.m
     assert.equal(existsSync(join(real, 'scripts', 'kit', 'a-vez-do-gate.mjs')), false, 'script órfão do gate');
     assert.equal(json(real, 'package.json').scripts.test, 'node scripts/a-vez-do-gate.mjs', 'o test do projeto ficou');
     assert.equal(json(real, '.claude/kit.json').gate, undefined, 'o kit.json não aponta o gate (era laço)');
-    assert.ok(existsSync(join(real, 'scripts', 'kit', 'o-verde-da-arvore.mjs')), 'o resto do gate foi copiado');
+    assert.equal(existsSync(join(real, 'scripts', 'kit', 'o-verde-da-arvore.mjs')), false, 'o que só o gate do kit usa também fica de fora (c18b)');
+    assert.ok(existsSync(join(real, 'scripts', 'kit', 'o-teto-de-workers.mjs')), 'a biblioteca do vitest.config segue sendo copiada');
     // CLAUDE.md: sem o bloco projeto e sem a frase "opcionais"
     const claude = ler(real, 'CLAUDE.md');
     assert.doesNotMatch(claude, /kit:projeto/, 'o projeto já se descreve'); assert.doesNotMatch(claude, /opcionais/i, 'sem bloco que contradiz o Spec-driven');

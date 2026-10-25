@@ -2,7 +2,7 @@
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { LOCK } from './lock.mjs';
-import { aplicarOperador, arquivosDoGate, gravar, lerModelo, planejar, planejarOperador, sugestaoDePerfil } from './pacote.mjs';
+import { FRASE_TRAVA_COBRE, aplicarOperador, arquivosDoGate, gravar, lerModelo, planejar, planejarOperador, sugestaoDePerfil } from './pacote.mjs';
 
 /** Devolve { codigo, mensagem } — nada é gravado antes de o plano ser calculado e validado. */
 export function iniciar({ destino, perfil: perfilPedido, versao }) {
@@ -22,5 +22,5 @@ export function iniciar({ destino, perfil: perfilPedido, versao }) {
   if (g.erro) return { codigo: 1, mensagem: `kit iniciar: ${g.erro}` };
   const avisosOperador = aplicarOperador(operador);
   const aviso = existsSync(join(destino, '.git')) ? '' : '\naviso: esta pasta não é um repositório git; o gate mede o toplevel do git, então rode `git init` antes do primeiro `npm test`.';
-  return { codigo: 0, mensagem: `kit iniciar: projeto preparado (perfil ${perfil}, ${Object.keys(plano.lock.arquivos).length} arquivos, lock em ${LOCK}).${orfaos.length ? `\nrecuperado: ${orfaos.length} .kit-tmp órfão(s) de um iniciar interrompido apagado(s).` : ''}${plano.avisos.map((a) => `\ntrocado: ${a}`).join('')}${plano.avisosProjeto.map((a) => `\naviso: ${a}`).join('')}${aviso}${avisosOperador.map((a) => `\n${a}`).join('')}${sugestaoDePerfil(destino, perfilPedido)}` };
+  return { codigo: 0, mensagem: `kit iniciar: projeto preparado (perfil ${perfil}, ${Object.keys(plano.lock.arquivos).length} arquivos, lock em ${LOCK}).${orfaos.length ? `\nrecuperado: ${orfaos.length} .kit-tmp órfão(s) de um iniciar interrompido apagado(s).` : ''}${plano.avisos.map((a) => `\ntrocado: ${a}`).join('')}${plano.avisosProjeto.map((a) => `\naviso: ${a}`).join('')}${aviso}${avisosOperador.map((a) => `\n${a}`).join('')}${operador.trava?.cobreTudo ? `\n${FRASE_TRAVA_COBRE}` : ''}${sugestaoDePerfil(destino, perfilPedido)}` };
 }

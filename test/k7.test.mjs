@@ -73,6 +73,8 @@ function contido(sub, todo, caminho = '') {
   } else assert.equal(todo, sub, `${caminho} mudou`);
 }
 const NOMES_DOS_BLOCOS = ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'convencoes-de-teste', 'orquestradora'];
+// num CLAUDE.md que já existe entram só os blocos de orquestração (c18b): `comandos` e `regras-de-operacao` podem contradizer as regras do projeto
+const NOMES_ADOTADOS = NOMES_DOS_BLOCOS.filter((x) => !['projeto', 'comandos', 'regras-de-operacao'].includes(x));
 
 describe('kit adotar', () => {
   it('--simular imprime o diff e não grava nada', () => {
@@ -84,8 +86,8 @@ describe('kit adotar', () => {
       assert.equal(r.status, 0, saida(r));
       assert.deepEqual(foto(d), antes, 'o --simular gravou algo');
       assert.equal(existsSync(join(d, '.claude', 'kit.lock.json')), false);
-      for (const n of NOMES_DOS_BLOCOS.filter((x) => x !== 'projeto')) assert.match(r.stdout, new RegExp(`\\+<!-- kit:${n} v\\d+ -->`), `o diff não mostra o bloco ${n}`);
-      assert.doesNotMatch(r.stdout, /kit:projeto/, 'num CLAUDE.md que já existe o bloco projeto não é inserido (c18)');
+      for (const n of NOMES_ADOTADOS) assert.match(r.stdout, new RegExp(`\\+<!-- kit:${n} v\\d+ -->`), `o diff não mostra o bloco ${n}`);
+      assert.doesNotMatch(r.stdout, /kit:projeto|kit:comandos|kit:regras-de-operacao/, 'num CLAUDE.md que já existe os blocos projeto, comandos e regras-de-operacao não são inseridos (c18, c18b)');
       assert.match(r.stdout, /CLAUDE\.md/);
       assert.match(r.stdout, /settings\.json/);
       assert.doesNotMatch(r.stdout, /--- a\/package\.json/, 'sem --trocar-test o package.json não muda');
@@ -100,7 +102,7 @@ describe('kit adotar', () => {
       assert.equal(r.status, 0, saida(r));
       const claude = ler(d, 'CLAUDE.md');
       assert.ok(claude.startsWith(CLAUDE_PROPRIO), 'o texto próprio do CLAUDE.md mudou');
-      for (const n of NOMES_DOS_BLOCOS.filter((x) => x !== 'projeto')) assert.match(claude, new RegExp(`<!-- kit:${n} v\\d+ -->`));
+      for (const n of NOMES_ADOTADOS) assert.match(claude, new RegExp(`<!-- kit:${n} v\\d+ -->`));
       assert.doesNotMatch(claude, /kit:projeto/);
       // settings: indentação de 4 preservada, tudo que era do projeto continua, hook próprio e hook da guarda convivem
       const sRaw = ler(d, '.claude', 'settings.json');
@@ -120,7 +122,7 @@ describe('kit adotar', () => {
       assert.match(r.stdout, /--trocar-test/, 'a saída não avisa do --trocar-test');
       assert.equal(ler(d, 'src', 'index.ts'), antes['src/index.ts']);
       const lock = json(d, '.claude', 'kit.lock.json');
-      assert.deepEqual(Object.keys(lock.blocos), NOMES_DOS_BLOCOS.filter((x) => x !== 'projeto'));
+      assert.deepEqual(Object.keys(lock.blocos), NOMES_ADOTADOS);
       assert.ok(Object.keys(lock.arquivos).some((f) => f.startsWith('scripts/kit/')));
       assert.equal(lock.arquivos['CLAUDE.md'], undefined, 'o CLAUDE.md é do projeto: não entra como arquivo do kit');
       assert.equal(lock.arquivos['package.json'], undefined);
@@ -198,7 +200,7 @@ describe('kit adotar', () => {
       assert.equal(json(d, 'package.json').scripts.typecheck, 'tsc --noEmit -p .');
       assert.equal(json(d, '.claude', 'kit.json').gate.comandoCompleto, 'make test');
       assert.equal(json(d, '.claude', 'kit.json').gate.perfil, 'pnpm-workspace', 'a chave nova do perfil entra mesmo com conflito noutra');
-      assert.match(ler(d, 'CLAUDE.md'), /<!-- kit:comandos v1 -->/, 'o resto (blocos) não foi gravado');
+      assert.match(ler(d, 'CLAUDE.md'), /<!-- kit:convencoes-de-teste v1 -->/, 'o resto (blocos) não foi gravado');
       const lock = json(d, '.claude', 'kit.lock.json');
       assert.equal(lock.pendente.length, 4, JSON.stringify(lock.pendente));
       assert.ok(lock.pendente.some((p) => /scripts\.typecheck/.test(p)) && lock.pendente.some((p) => /extraKnownMarketplaces/.test(p)));
@@ -238,10 +240,10 @@ describe('kit atualizar', () => {
       writeFileSync(join(d, alvo), '// versão antiga\n');
       lock.arquivos[alvo] = sha('// versão antiga\n');
       const claude = ler(d, 'CLAUDE.md');
-      const antigoBloco = '<!-- kit:comandos v0 -->\nantigo\n<!-- /kit:comandos -->';
-      const m = claude.match(/<!-- kit:comandos v1 -->[\s\S]*?<!-- \/kit:comandos -->/);
+      const antigoBloco = '<!-- kit:convencoes-de-teste v0 -->\nantigo\n<!-- /kit:convencoes-de-teste -->';
+      const m = claude.match(/<!-- kit:convencoes-de-teste v1 -->[\s\S]*?<!-- \/kit:convencoes-de-teste -->/);
       writeFileSync(join(d, 'CLAUDE.md'), claude.replace(m[0], antigoBloco));
-      lock.blocos.comandos = { versao: 0, sha256: sha('\nantigo\n') };
+      lock.blocos['convencoes-de-teste'] = { versao: 0, sha256: sha('\nantigo\n') };
       lock.versao = '0.0.1';
       writeFileSync(lockPath, JSON.stringify(lock, null, 2));
       const r = kit(d, ['atualizar']);
@@ -250,7 +252,7 @@ describe('kit atualizar', () => {
       assert.equal(ler(d, 'CLAUDE.md'), claude, 'o bloco não voltou para a versão atual');
       const novo = json(d, '.claude', 'kit.lock.json');
       assert.equal(novo.arquivos[alvo], sha(original));
-      assert.equal(novo.blocos.comandos.versao, 1);
+      assert.equal(novo.blocos['convencoes-de-teste'].versao, 1);
       assert.equal(novo.versao, json(RAIZ, 'package.json').version);
     } finally { limpar(d); }
   });
@@ -260,16 +262,16 @@ describe('kit atualizar', () => {
     try {
       const alvo = 'scripts/kit/o-teto-de-workers.mjs';
       writeFileSync(join(d, alvo), `${ler(d, alvo)}// meu ajuste\n`);
-      const claude = ler(d, 'CLAUDE.md').replace('## Comandos', '## Comandos (editado por mim)');
+      const claude = ler(d, 'CLAUDE.md').replace('## Convenções de teste', '## Convenções de teste (editado por mim)');
       writeFileSync(join(d, 'CLAUDE.md'), claude);
       const antes = foto(d);
       const lockAntes = ler(d, '.claude', 'kit.lock.json');
       const r = kit(d, ['atualizar']);
       assert.equal(r.status, 1, saida(r));
-      assert.match(r.stdout, /conflito.*bloco comandos/);
+      assert.match(r.stdout, /conflito.*bloco convencoes-de-teste/);
       assert.match(r.stdout, /conflito.*o-teto-de-workers\.mjs/);
       assert.match(r.stdout, /\+\/\/ meu ajuste|-\/\/ meu ajuste/, 'sem o diff do arquivo');
-      assert.match(r.stdout, /Comandos \(editado por mim\)/, 'sem o diff do bloco');
+      assert.match(r.stdout, /Convenções de teste \(editado por mim\)/, 'sem o diff do bloco');
       assert.deepEqual(foto(d), antes, 'o atualizar mexeu no que estava editado');
       assert.equal(ler(d, '.claude', 'kit.lock.json'), lockAntes);
     } finally { limpar(d); }
@@ -297,13 +299,13 @@ describe('kit remover', () => {
       assert.equal(kit(d, ['adotar']).status, 0);
       const alvo = 'scripts/kit/o-teto-de-workers.mjs';
       writeFileSync(join(d, alvo), `${ler(d, alvo)}// meu ajuste\n`);
-      writeFileSync(join(d, 'CLAUDE.md'), ler(d, 'CLAUDE.md').replace('## Comandos', '## Comandos (editado por mim)'));
+      writeFileSync(join(d, 'CLAUDE.md'), ler(d, 'CLAUDE.md').replace('## Convenções de teste', '## Convenções de teste (editado por mim)'));
       const r = kit(d, ['remover']);
       assert.equal(r.status, 0, saida(r));
       assert.match(r.stdout, /deixado.*o-teto-de-workers\.mjs/);
-      assert.match(r.stdout, /deixado.*bloco comandos/);
+      assert.match(r.stdout, /deixado.*bloco convencoes-de-teste/);
       assert.ok(ler(d, alvo).includes('// meu ajuste'), 'apagou arquivo editado');
-      assert.match(ler(d, 'CLAUDE.md'), /Comandos \(editado por mim\)/);
+      assert.match(ler(d, 'CLAUDE.md'), /Convenções de teste \(editado por mim\)/);
       assert.ok(!existsSync(join(d, 'scripts', 'kit', 'a-vez-do-gate.mjs')), 'arquivo intocado ficou');
       assert.ok(ler(d, 'CLAUDE.md').startsWith(CLAUDE_PROPRIO));
       assert.doesNotMatch(ler(d, 'CLAUDE.md'), /<!-- kit:projeto/, 'bloco intocado ficou');

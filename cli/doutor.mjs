@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { avisoDeLaco, carregarConfig } from '../gate/config.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
@@ -79,9 +79,10 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   for (const t of c.package?.trocados ?? []) if (pk?.scripts?.[t.nome] !== t.gate) linhas.push(`aviso: scripts.${t.nome} (package.json) não passa mais pelo gate`);
   for (const [nome, valor] of Object.entries(c.package?.scripts ?? {})) if (pk?.scripts?.[nome] !== valor) linhas.push(`aviso: scripts.${nome} (package.json) não está mais como o kit deixou`);
   for (const f of lock.omitidos ?? []) linhas.push(`aviso: ${f} não foi copiado (o projeto tem a guarda ou o gate dele)`);
-  const trava = lock.operador?.trava;
+  // a lista existe e não tem este repositório: a trava da orquestradora não vale aqui (sem lista ela valeria em todos). Vale também para quem adotou antes do c18 (sem `operador` no lock).
   const listaTrava = join(baseDaOrquestracao(), 'trava-edicao-repos.txt');
-  if (trava && existsSync(listaTrava) && !readFileSync(listaTrava, 'utf8').split('\n').map((l) => l.trim()).includes(trava.linha)) linhas.push(`aviso: ${trava.linha} saiu de trava-edicao-repos.txt; a orquestradora volta a editar este repositório sem perguntar`);
+  const repoDaTrava = gitDirComum(destino);
+  if (repoDaTrava && existsSync(listaTrava) && !readFileSync(listaTrava, 'utf8').split('\n').map((l) => l.trim()).includes(repoDaTrava)) linhas.push(`aviso: ${repoDaTrava} não está em trava-edicao-repos.txt; a orquestradora edita este repositório sem perguntar. Para acrescentá-lo: echo '${repoDaTrava}' >> ${listaTrava}`);
   for (const p of lock.pendente ?? []) linhas.push(`aviso: pendente da adoção: ${p}`);
   linhas.push(falhas ? `${falhas} falha(s)` : 'tudo em dia');
   return { codigo: falhas ? 1 : 0, saida: `${linhas.join('\n')}\n`, erro: '' };

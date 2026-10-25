@@ -178,10 +178,10 @@ describe('M3 — doutor diz o bloco, ignora o que é do projeto e confere só as
   it('byte editado dentro de um bloco: nomeia o BLOCO, e só ele', () => {
     const h = lar(); const d = adotado(h);
     try {
-      writeFileSync(join(d, 'CLAUDE.md'), ler(d, 'CLAUDE.md').replace('## Comandos', '## Comandos!'));
+      writeFileSync(join(d, 'CLAUDE.md'), ler(d, 'CLAUDE.md').replace('## Convenções de teste', '## Convenções de teste!'));
       const r = kit(d, ['doutor'], h);
-      assert.match(r.stdout, /aviso: bloco comandos editado à mão/);
-      assert.doesNotMatch(semPlaceholder(r.stdout), /bloco (projeto|regras|convencoes|orquestradora)/);
+      assert.match(r.stdout, /aviso: bloco convencoes-de-teste editado à mão/);
+      assert.doesNotMatch(semPlaceholder(r.stdout), /bloco (projeto|comandos|regras|orquestradora)/);
     } finally { limpar(d, h); }
   });
 
