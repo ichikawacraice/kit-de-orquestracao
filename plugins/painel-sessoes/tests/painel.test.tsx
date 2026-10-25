@@ -746,7 +746,7 @@ test('abrir: o botão só existe com dono vivo, e o endereço não aparece escri
   await ui.unmount()
 })
 
-test('abrir: dono morto, lista que falha e item sem dono não têm botão', async ($, on) => {
+test('abrir: dono fora da lista de sessões vivas não tem botão', async ($, on) => {
   const morto = await abrirDe({ vivas: vivasDe(P1) }, $, on)
   expect(await morto.ui.find({ key: `abrir:${P7}` }), 'dono fora da lista: sem botão').toBeUndefined()
   expect(await morto.ui.find({ key: `abrir:${P1}` })).toBeDefined()
