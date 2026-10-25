@@ -60,6 +60,7 @@ Decisão: [ADR 0001](../adr/0001-plugin-para-o-nucleo-cli-para-o-projeto.md). Es
 - **Pronto:** teste em pasta temporária com `git init`: depois do `iniciar`, `npm test` passa pelo gate e `kit doutor` (stub) lê o lock.
 
 - **Herdado da validação da K5 (R1):** um caso que roda o `main` de `gate/a-vez-do-gate.mjs` com `gate.prazos.ilegivelSeg: 1` e uma trava ilegível de 2 s, e afirma que ela é retomada — hoje tirar a ligação da linha 478 não deixa teste vermelho.
+- **Herdado da K3:** as skills e os agents do plugin ainda citam o Izanagi como exemplo na prosa; generalizar esses textos aqui, junto com os modelos.
 
 ### K7 — CLI: `adotar`, `atualizar`, `doutor`, `remover` · **Robusta**
 - `adotar [--simular]`: projeto com `CLAUDE.md`, `settings.json` e `package.json` próprios. **Nunca sobrescreve:** `CLAUDE.md` ganha só os blocos que faltam (no fim, ou onde já houver o marcador); JSON é mesclado (chave existente com valor diferente = conflito listado, não trocado); script `test` existente vira `test:projeto` só com `--trocar-test`. `--simular` imprime o diff e não grava.
