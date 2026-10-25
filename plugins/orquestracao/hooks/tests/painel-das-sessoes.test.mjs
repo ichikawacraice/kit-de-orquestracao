@@ -122,5 +122,22 @@ caso('(g) entrada isMeta com turnOrigin depois do início não move o início', 
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
 });
 
+
+// ---- F27 fatia 3: a mensagem manda gravar no item quando a sessão é dona de um ----
+const itemDoDono = (id, data) => { mkdirSync(dir('painel', 'fila'), { recursive: true }); writeFileSync(dir('painel', 'fila', `${id}.json`), JSON.stringify({ id, version: 1, data })); };
+caso('F27-3g: sessão dona de item vivo e com PR aberto sem gravar: a mensagem manda `update fila <F>` com etapa e agora', () => {
+  itemDoDono('F27', { etapa: 'execucao', donoLocalId: LOCAL });
+  const r = rodar(transcript('F27 para você', ['gh pr create --fill']));
+  ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
+  ok(r.reason.includes("painel update fila F27 '{\"etapa\":…,\"agora\":…}'"), `mensagem: ${r.reason}`);
+  ok(!r.reason.includes('update sessoes'), `não devia mandar a linha da sessão: ${r.reason}`);
+});
+caso('F27-3h: sessão sem item (ou com item feito / de outro dono): a mensagem de hoje, a da linha da sessão', () => {
+  itemDoDono('F1', { etapa: 'feito', donoLocalId: LOCAL });
+  itemDoDono('F2', { etapa: 'execucao', donoLocalId: 'local_OUTRA' });
+  const r = rodar(transcript('F7 para você', ['gh pr create --fill']));
+  ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
+  ok(r.reason.includes('painel update sessoes <sessionId>') && !r.reason.includes('update fila'), `mensagem: ${r.reason}`);
+});
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

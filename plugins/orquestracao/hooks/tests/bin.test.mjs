@@ -23,7 +23,7 @@ const rodar = (cmd, args = []) => spawnSync(join(BIN, cmd), args, {
 
 caso('painel (bin) grava e lista pela coleção fila, com PAINEL_DIR temporário', () => {
   mkdirSync(join(base, 'painel'), { recursive: true }); writeFileSync(join(base, 'painel', 'temas.json'), JSON.stringify([{ id: 'editor', rotulo: 'Editor', projeto: 'x' }])); // o contrato novo da fila exige tema cadastrado
-  const u = rodar('painel', ['update', 'fila', 'F1', '{"titulo":"t","etapa":"planejamento","tema":"editor","estado":"aberto","projeto":"x","papel":"E"}']);
+  const u = rodar('painel', ['update', 'fila', 'F1', '{"titulo":"t","etapa":"planejamento","tema":"editor","projeto":"x","papel":"E"}']);
   ok(u.status === 0, `update saiu ${u.status}: ${u.stderr}`);
   ok(existsSync(join(base, 'painel', 'fila', 'F1.json')), 'não gravou no PAINEL_DIR');
   const l = rodar('painel', ['list', 'fila']);

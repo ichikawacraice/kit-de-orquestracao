@@ -16,7 +16,7 @@ const painel = (dir, ...args) => spawnSync('node', [PAINEL, ...args], {
   encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL',
   env: { PATH: process.env.PATH, HOME: join(dir, 'home'), PAINEL_DIR: join(dir, 'painel') },
 });
-const ITEM = JSON.stringify({ titulo: 't', etapa: 'planejamento', tema: 'geral', estado: 'aberto' });
+const ITEM = JSON.stringify({ titulo: 't', etapa: 'planejamento', tema: 'geral' });
 
 describe('c13 — temas.json semeado pelo painel', () => {
   it('instalação nova: a primeira gravação cria temas.json com o tema geral, grava o item e avisa uma vez no stderr', () => {
@@ -42,7 +42,7 @@ describe('c13 — temas.json semeado pelo painel', () => {
       mkdirSync(join(d, 'painel'), { recursive: true });
       const meu = '[ { "id": "editor", "rotulo": "Editor" } ]\n';
       writeFileSync(join(d, 'painel', 'temas.json'), meu);
-      const r = painel(d, 'update', 'fila', 'F1', JSON.stringify({ titulo: 't', etapa: 'planejamento', tema: 'editor', estado: 'aberto' }));
+      const r = painel(d, 'update', 'fila', 'F1', JSON.stringify({ titulo: 't', etapa: 'planejamento', tema: 'editor' }));
       assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
       assert.equal(readFileSync(join(d, 'painel', 'temas.json'), 'utf8'), meu);
       assert.doesNotMatch(r.stderr, /temas\.json/);

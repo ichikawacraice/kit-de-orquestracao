@@ -68,7 +68,7 @@ caso('set fila F1 grava {id, version, data} com atualizadoEm', () => {
 });
 caso('update --se-versao 1 passa; de novo é recusado (exit 1, "versão" no stderr)', () => {
   painel('set', 'fila', 'F1', ITEM);
-  const a = painel('update', 'fila', 'F1', '{"estado":"em-andamento","donoLocalId":"local_00000000-0000-4000-8000-00000000000a","donoApelido":"E1"}', '--se-versao', '1');
+  const a = painel('update', 'fila', 'F1', '{"etapa":"execucao","donoLocalId":"local_00000000-0000-4000-8000-00000000000a","donoApelido":"E1"}', '--se-versao', '1');
   igual(a.exit, 0, `1º update (${a.err})`);
   igual(json(a).version, 2, 'version depois do 1º');
   const b = painel('update', 'fila', 'F1', '{"donoLocalId":"local_00000000-0000-4000-8000-00000000000b","donoApelido":"E2"}', '--se-versao', '1');
@@ -78,7 +78,7 @@ caso('update --se-versao 1 passa; de novo é recusado (exit 1, "versão" no stde
 });
 caso('batch com seVersao velho é recusado; com a versão certa passa', () => {
   painel('set', 'fila', 'F1', ITEM);
-  painel('update', 'fila', 'F1', '{"nota":"a"}');
+  painel('update', 'fila', 'F1', '{"agora":"a"}');
   const velho = painel('batch', JSON.stringify([{ op: 'update', colecao: 'fila', id: 'F1', data: { donoLocalId: 'local_00000000-0000-4000-8000-00000000000c', donoApelido: 'E3' }, seVersao: 1 }]));
   igual(velho.exit, 1, 'exit com versão velha');
   ok(velho.err.includes('versão'), `stderr sem "versão": ${velho.err}`);
@@ -121,10 +121,11 @@ caso('set em sessoes/perguntas sobre documento existente continua valendo (a tra
   igual(painel('set', 'perguntas', 'Q1', '{"texto":"a"}').exit, 0, '1º');
   igual(painel('set', 'perguntas', 'Q1', '{"texto":"b"}').exit, 0, '2º');
 });
-caso('list fila em-andamento filtra pelo estado', () => {
-  painel('set', 'fila', 'F1', '{"titulo":"t","etapa":"planejamento","tema":"editor","estado":"aberto"}');
-  painel('set', 'fila', 'F2', '{"titulo":"t","etapa":"planejamento","tema":"editor","estado":"em-andamento"}');
-  painel('set', 'fila', 'F3', '{"titulo":"t","etapa":"planejamento","tema":"editor","estado":"feito"}');
+caso('list fila em-andamento filtra por dono + etapa não final (B3)', () => {
+  const dono = ',"donoLocalId":"local_00000000-0000-4000-8000-00000000000a","donoApelido":"E1"';
+  painel('set', 'fila', 'F1', '{"titulo":"t","etapa":"planejamento","tema":"editor"}');
+  painel('set', 'fila', 'F2', '{"titulo":"t","etapa":"execucao","tema":"editor"' + dono + '}');
+  painel('set', 'fila', 'F3', '{"titulo":"t","etapa":"feito","tema":"editor"}');
   const todos = json(painel('list', 'fila'));
   igual(todos.length, 3, 'sem filtro');
   const so = json(painel('list', 'fila', 'em-andamento'));
@@ -183,15 +184,15 @@ const poolDir = () => join(base, 'home', '.claude', 'orquestracao', 'pool');
 caso('batch atômico: F1 com versão certa + F2 com versão velha = exit 1 e F1 não muda', () => {
   painel('set', 'fila', 'F1', ITEM);
   painel('set', 'fila', 'F2', ITEM);
-  painel('update', 'fila', 'F2', '{"nota":"a"}');
+  painel('update', 'fila', 'F2', '{"agora":"a"}');
   const r = painel('batch', JSON.stringify([
-    { op: 'update', colecao: 'fila', id: 'F1', data: { nota: 'x' }, seVersao: 1 },
-    { op: 'update', colecao: 'fila', id: 'F2', data: { nota: 'y' }, seVersao: 1 },
+    { op: 'update', colecao: 'fila', id: 'F1', data: { agora: 'x' }, seVersao: 1 },
+    { op: 'update', colecao: 'fila', id: 'F2', data: { agora: 'y' }, seVersao: 1 },
   ]));
   igual(r.exit, 1, 'exit');
   const f1 = json(painel('get', 'fila', 'F1'));
   igual(f1.version, 1, 'F1 foi gravado apesar da recusa de F2');
-  ok(f1.data.nota === undefined, 'F1 ganhou a nota');
+  ok(f1.data.agora === undefined, 'F1 ganhou a nota');
 });
 caso('batch com op desconhecida na 2ª posição não grava a 1ª', () => {
   const r = painel('batch', JSON.stringify([
@@ -601,8 +602,8 @@ caso('contrato 4: prs, depois e perguntas têm formato', () => {
 });
 caso('contrato 5: resumo/agora/nota são texto', () => {
   semear(); painel('set', 'fila', 'F1', COM());
-  recusa(painel('update', 'fila', 'F1', '{"nota":5}'), 'nota é texto', 'nota');
-  igual(painel('update', 'fila', 'F1', '{"nota":"ok","agora":"x","resumo":"y"}').exit, 0, 'textos');
+  recusa(painel('update', 'fila', 'F1', '{"agora":5}'), 'agora é texto', 'agora');
+  igual(painel('update', 'fila', 'F1', '{"agora":"x","resumo":"y"}').exit, 0, 'textos');
 });
 caso('contrato 6: campos de dono antigos são recusados; donoLocalId pede formato e donoApelido', () => {
   semear(); painel('set', 'fila', 'F1', COM());
@@ -611,12 +612,12 @@ caso('contrato 6: campos de dono antigos são recusados; donoLocalId pede format
   recusa(painel('update', 'fila', 'F1', JSON.stringify({ donoLocalId: UUID })), 'donoApelido', 'apelido');
   igual(painel('update', 'fila', 'F1', JSON.stringify({ donoLocalId: UUID, donoApelido: 'E1' })).exit, 0, 'dono válido');
 });
-caso('contrato 7: update de nota em documento antigo (estado: concluido) passa', () => {
+caso('contrato 7: update de agora em documento antigo (estado: concluido) passa', () => {
   semear(); mkdirSync(join(base, 'painel', 'fila'), { recursive: true });
   writeFileSync(join(base, 'painel', 'fila', 'F1.json'), JSON.stringify({ id: 'F1', version: 1, data: { titulo: 'velho', estado: 'concluido', projeto: 'izanagi', historico: [] } }));
-  const r = painel('update', 'fila', 'F1', '{"nota":"anotação"}');
+  const r = painel('update', 'fila', 'F1', '{"agora":"anotação"}');
   igual(r.exit, 0, `exit (${r.err})`);
-  igual(json(painel('get', 'fila', 'F1')).data.nota, 'anotação', 'nota');
+  igual(json(painel('get', 'fila', 'F1')).data.agora, 'anotação', 'agora');
 });
 caso('histórico automático: a criação e duas trocas de etapa viram três entradas {em, etapa, dono}', () => {
   semear(); painel('set', 'fila', 'F1', COM());
@@ -626,8 +627,8 @@ caso('histórico automático: a criação e duas trocas de etapa viram três ent
   igual(h.length, 3, `entradas: ${JSON.stringify(h)}`);
   igual(h[0].etapa, 'planejamento', 'criação'); igual(h[1].etapa, 'design', 'primeira'); igual(h[2].etapa, 'execucao', 'segunda');
   ok(typeof h[0].em === 'string' && h[0].em.length > 0, 'em preenchido'); ok('dono' in h[0], 'dono presente');
-  painel('update', 'fila', 'F1', '{"nota":"sem mudar etapa"}');
-  igual(json(painel('get', 'fila', 'F1')).data.historico.length, 3, 'nota não acrescenta');
+  painel('update', 'fila', 'F1', '{"agora":"sem mudar etapa"}');
+  igual(json(painel('get', 'fila', 'F1')).data.historico.length, 3, 'agora não acrescenta');
 });
 caso('feitoEm: entra em feito, sai ao reabrir', () => {
   semear(); painel('set', 'fila', 'F1', COM());
@@ -649,7 +650,7 @@ caso('set sem etapa/tema é recusado, e o item novo exige titulo, etapa e tema',
 });
 caso('M1: update de item que não existe vale como criação e exige o contrato', () => {
   semear();
-  recusa(painel('update', 'fila', 'F9', '{"nota":"solta"}'), 'o item novo exige titulo, etapa, tema', 'update sem contrato');
+  recusa(painel('update', 'fila', 'F9', '{"agora":"solta"}'), 'o item novo exige titulo, etapa, tema', 'update sem contrato');
   ok(!existsSync(join(base, 'painel', 'fila', 'F9.json')), 'não criou');
   igual(painel('update', 'fila', 'F9', COM()).exit, 0, 'update com contrato cria');
 });
@@ -669,6 +670,53 @@ caso('donoLocalId: formato local_<uuid>, e set com dono também exige apelido', 
   recusa(painel('set', 'fila', 'F1', COM({ donoLocalId: 'local_x', donoApelido: 'E1' })), 'local_<uuid>', 'set formato');
   recusa(painel('set', 'fila', 'F1', COM({ donoLocalId: UUID })), 'donoApelido', 'set sem apelido');
   igual(painel('set', 'fila', 'F1', COM({ donoLocalId: UUID, donoApelido: 'E1' })).exit, 0, 'set válido');
+});
+
+// ---- Fatia 3 (5): as ressalvas da V1 ----
+const DONO = { donoLocalId: UUID, donoApelido: 'E1' };
+caso('R1: tirar só o donoApelido de item com donoLocalId é recusado; os dois null juntos passam', () => {
+  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'execucao', ...DONO }));
+  recusa(painel('update', 'fila', 'F1', '{"donoApelido":null}'), 'donoLocalId exige donoApelido', 'só apelido null');
+  recusa(painel('update', 'fila', 'F1', '{"donoApelido":""}'), 'donoLocalId exige donoApelido', 'apelido vazio');
+  igual(json(painel('get', 'fila', 'F1')).data.donoApelido, 'E1', 'nada gravado');
+  igual(painel('update', 'fila', 'F1', '{"donoLocalId":null,"donoApelido":null}').exit, 0, 'os dois null');
+});
+caso('R2: titulo é texto não vazio depois do trim, no set e no update', () => {
+  semear();
+  for (const t of ['""', '"   "', '123']) {
+    recusa(painel('set', 'fila', 'F1', `{"titulo":${t},"etapa":"design","tema":"editor"}`), 'titulo é texto não vazio', `set ${t}`);
+  }
+  painel('set', 'fila', 'F1', COM());
+  for (const t of ['""', '"   "', '123']) {
+    recusa(painel('update', 'fila', 'F1', `{"titulo":${t}}`), 'titulo é texto não vazio', `update ${t}`);
+  }
+  igual(json(painel('get', 'fila', 'F1')).data.titulo, 'T', 'titulo intacto');
+});
+caso('B1: deixar a etapa em feito/descartado com dono é recusado; soltar o dono no mesmo update passa', () => {
+  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'execucao', ...DONO }));
+  recusa(painel('update', 'fila', 'F1', '{"etapa":"feito"}'), 'não tem dono', 'feito com dono');
+  recusa(painel('update', 'fila', 'F1', '{"etapa":"descartado"}'), 'não tem dono', 'descartado com dono');
+  igual(json(painel('get', 'fila', 'F1')).data.etapa, 'execucao', 'nada gravado');
+  igual(painel('update', 'fila', 'F1', '{"etapa":"feito","donoLocalId":null,"donoApelido":null}').exit, 0, 'fecha e solta');
+  recusa(painel('update', 'fila', 'F1', JSON.stringify(DONO)), 'não tem dono', 'dar dono a item feito');
+});
+caso('B3: list fila em-andamento = dono + etapa não final; item sem etapa válida cai no estado', () => {
+  semear(); mkdirSync(join(base, 'painel', 'fila'), { recursive: true });
+  painel('set', 'fila', 'F1', COM({ etapa: 'execucao', ...DONO }));
+  painel('set', 'fila', 'F2', COM({ etapa: 'execucao' }));
+  painel('set', 'fila', 'F3', COM({ etapa: 'feito' }));
+  writeFileSync(join(base, 'painel', 'fila', 'F4.json'), JSON.stringify({ id: 'F4', version: 1, data: { titulo: 'velho', estado: 'em-andamento', historico: [] } }));
+  writeFileSync(join(base, 'painel', 'fila', 'F5.json'), JSON.stringify({ id: 'F5', version: 1, data: { titulo: 'velho', estado: 'concluido', historico: [] } }));
+  const ids = (r) => json(r).map((d) => d.id).sort().join(',');
+  igual(ids(painel('list', 'fila', 'em-andamento')), 'F1,F4', 'em-andamento');
+  igual(ids(painel('list', 'fila', 'feito')), 'F3', 'por etapa');
+  igual(ids(painel('list', 'fila', 'concluido')), 'F5', 'por estado antigo');
+});
+caso('update com nota ou estado é recusado (apontam agora e etapa); null ainda limpa', () => {
+  semear(); painel('set', 'fila', 'F1', COM());
+  recusa(painel('update', 'fila', 'F1', '{"nota":"x"}'), 'use "agora"', 'nota');
+  recusa(painel('update', 'fila', 'F1', '{"estado":"aberto"}'), 'use "etapa"', 'estado');
+  igual(painel('update', 'fila', 'F1', '{"nota":null,"estado":null}').exit, 0, 'null limpa');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

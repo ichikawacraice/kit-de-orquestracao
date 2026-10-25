@@ -193,5 +193,35 @@ caso('9d item atualizado ENTRE o turno real (T1) e uma entrada isMeta (T3): pass
   igual(desfechos().join(','), 'passou', 'log');
 });
 
+
+// ---- F27 fatia 3: a trava cobra o ITEM (donoLocalId + etapa), não o estado antigo ----
+const bloqueia = (data, msg) => { item('F27', data); registroLocal(LOCAL, SID); transcript(turno()); return rodar(stop()); };
+caso('F27-3a: item com dono e etapa "execucao", sem gravação no turno: bloqueia e manda gravar `agora`', () => {
+  const r = bloqueia({ etapa: 'execucao', tema: 'editor', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  igual(r?.decision, 'block', 'decisão'); ok(r.reason.includes('F27'), `cita o ID: ${r.reason}`);
+  ok(r.reason.includes('"agora"') && !r.reason.includes('"nota"'), `a mensagem manda gravar agora, não nota: ${r.reason}`);
+});
+caso('F27-3b: etapa "feito" ou "descartado" com dono: passa', () => {
+  for (const etapa of ['feito', 'descartado']) {
+    const r = bloqueia({ etapa, donoLocalId: LOCAL, atualizadoEm: ANTES });
+    igual(r, null, `etapa ${etapa} devia passar`);
+  }
+});
+caso('F27-3c: documento antigo (estado em-andamento, sem etapa): bloqueia — compatibilidade', () => {
+  const r = bloqueia({ estado: 'em-andamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  igual(r?.decision, 'block', 'decisão');
+});
+caso('F27-3d: estado "em-execucao" sem etapa: PASSA (o limite que existiu e que a migração elimina)', () => {
+  igual(bloqueia({ estado: 'em-execucao', donoLocalId: LOCAL, atualizadoEm: ANTES }), null, 'passa');
+});
+caso('F27-3e: com etapa nova, o estado antigo que sobrou não decide (etapa feito + estado em-andamento passa; etapa execucao + estado feito bloqueia)', () => {
+  igual(bloqueia({ etapa: 'feito', estado: 'em-andamento', donoLocalId: LOCAL, atualizadoEm: ANTES }), null, 'feito vence');
+  rmSync(join(filaDir(), 'F27.json'));
+  igual(bloqueia({ etapa: 'execucao', estado: 'feito', donoLocalId: LOCAL, atualizadoEm: ANTES })?.decision, 'block', 'execucao vence');
+});
+caso('F27-3f: item com dono e etapa, gravado DEPOIS do início do turno: passa', () => {
+  igual(bloqueia({ etapa: 'validacao', donoLocalId: LOCAL, atualizadoEm: DEPOIS }), null, 'passa');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

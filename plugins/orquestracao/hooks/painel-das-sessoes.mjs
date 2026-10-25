@@ -55,6 +55,28 @@ function citaPerguntaDestaSessao(texto, sessionId) {
   });
 }
 
+const ETAPAS_FINAIS = ['feito', 'descartado'];
+const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'feito', 'descartado'];
+// Itens vivos da fila de que esta sessão é dona (mesma leitura do fila-do-item.mjs: donoLocalId + etapa fora de
+// feito/descartado; sem etapa, o critério antigo estado === 'em-andamento'). Só serve para escolher a mensagem.
+function itensDaSessao(sessionId) {
+  const local = registroDaSessao(sessionId)?.localId;
+  if (!local) return [];
+  const dir = join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(BASE, 'painel'), 'fila');
+  if (!existsSync(dir)) return [];
+  const ids = [];
+  for (const nome of readdirSync(dir)) {
+    if (!nome.endsWith('.json')) continue;
+    try {
+      const doc = JSON.parse(readFileSync(join(dir, nome), 'utf8'));
+      const d = doc?.data;
+      const vivo = ETAPAS.includes(d?.etapa) ? !ETAPAS_FINAIS.includes(d.etapa) : d?.estado === 'em-andamento';
+      if (vivo && d?.donoLocalId === local) ids.push(doc.id ?? nome.replace(/\.json$/, ''));
+    } catch { /* ilegível: ignora */ }
+  }
+  return ids;
+}
+
 function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id, transcript_path, stop_hook_active, cwd } = input;
@@ -113,12 +135,15 @@ function main() {
   }
   if (gravou || motivos.size === 0) return;
 
+  const itens = itensDaSessao(session_id);
+  const onde = itens.length
+    ? `Grave no item que você é dona: ${itens.map((f) => `\`painel update fila ${f} '{"etapa":…,"agora":…}'\``).join(' · ')} ` +
+      '(e, se houve pergunta ou resposta, `… perguntas <ID>`). Depois encerre o turno.'
+    : 'Grave no painel com `painel update sessoes <sessionId> \'{...}\'` ' +
+      '(estado, etapa, pr, passos) e, se houve pergunta ou resposta, `… perguntas <ID>`. Depois encerre o turno.';
   process.stdout.write(JSON.stringify({
     decision: 'block',
-    reason:
-      `Painel das sessões não atualizado neste turno, e a sessão mudou de estado (${[...motivos].join('; ')}). ` +
-      'Grave no painel com `painel update sessoes <sessionId> \'{...}\'` ' +
-      '(estado, etapa, pr, passos) e, se houve pergunta ou resposta, `… perguntas <ID>`. Depois encerre o turno.',
+    reason: `Painel das sessões não atualizado neste turno, e a sessão mudou de estado (${[...motivos].join('; ')}). ${onde}`,
   }));
 }
 

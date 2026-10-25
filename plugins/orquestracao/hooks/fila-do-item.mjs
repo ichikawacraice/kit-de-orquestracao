@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Stop hook da fila do pool (estudo de 24/10, passo 3): a sessão que é DONA de um item `em-andamento`
-// da fila (coleção `fila` do painel) não termina o turno sem ter gravado algo nele neste turno.
+// Stop hook da fila do pool (estudo de 24/10, passo 3): a sessão que é DONA de um item vivo da fila
+// (coleção `fila` do painel: `donoLocalId` e `etapa` fora de feito/descartado) não termina o turno sem ter
+// gravado algo nele neste turno. Item ainda sem `etapa` (documento não migrado) vale pelo critério antigo,
+// `estado === 'em-andamento'`; `estado: 'em-execucao'` sem `etapa` NÃO é visto (o limite que a migração eliminou).
 //
 // "Dona" = o `local_…` da sessão (registro do app, achado pelo cliSessionId ou pelos priorCliSessionIds)
 // é o `donoLocalId` do item. "Gravou neste turno" = `atualizadoEm` do item não é anterior ao início do
@@ -25,8 +27,11 @@ function registrar(sessionId, localId, desfecho, detalhe = '') {
   } catch { /* sem log */ }
 }
 
-// Itens da fila que estão em andamento e têm dono: [{ id, dono, atualizadoEm }].
-function itensEmAndamento() {
+const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'feito', 'descartado'];
+const ETAPAS_FINAIS = ['feito', 'descartado'];
+
+// Itens da fila que têm dono e estão vivos: [{ id, dono, atualizadoEm, etapa }].
+function itensComDono() {
   if (!existsSync(FILA_DIR)) return [];
   const itens = [];
   for (const nome of readdirSync(FILA_DIR)) {
@@ -34,8 +39,9 @@ function itensEmAndamento() {
     try {
       const doc = JSON.parse(readFileSync(join(FILA_DIR, nome), 'utf8'));
       const d = doc?.data;
-      if (d?.estado === 'em-andamento' && d?.donoLocalId) {
-        itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), dono: d.donoLocalId, atualizadoEm: d.atualizadoEm });
+      const vivo = ETAPAS.includes(d?.etapa) ? !ETAPAS_FINAIS.includes(d.etapa) : d?.estado === 'em-andamento';
+      if (vivo && d?.donoLocalId) {
+        itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), dono: d.donoLocalId, atualizadoEm: d.atualizadoEm, etapa: ETAPAS.includes(d.etapa) ? d.etapa : null });
       }
     } catch { /* arquivo parcial ou ilegível: ignora este item */ }
   }
@@ -97,8 +103,8 @@ function main() {
   if (ativo) return registrar(sid, '', 'repetido');
   if (!sid || !tp) return registrar(sid, '', 'sem-entrada');
 
-  // Sem item em andamento com dono em lugar nenhum da fila: nada a conferir (e nada a registrar).
-  const itens = itensEmAndamento();
+  // Sem item vivo com dono em lugar nenhum da fila: nada a conferir (e nada a registrar).
+  const itens = itensComDono();
   if (itens.length === 0) return;
 
   const local = resolverLocalId(sid);
@@ -119,7 +125,7 @@ function main() {
 
   const ids = pendentes.map((i) => i.id);
   const lista = ids.length === 1 ? `do item ${ids[0]} (em andamento)` : `dos itens ${ids.join(', ')} (em andamento)`;
-  const cmds = ids.map((id) => `\`painel update fila ${id} '{"nota":"…"}'\``).join(' · ');
+  const cmds = ids.map((id) => `\`painel update fila ${id} '{"agora":"…"}'\``).join(' · ');
   process.stdout.write(JSON.stringify({
     decision: 'block',
     reason:

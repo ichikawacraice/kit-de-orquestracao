@@ -171,6 +171,17 @@ function comandoTemas(args) {
 }
 const textoNaoVazio = (v) => typeof v === 'string' && v.trim() !== '';
 
+// `list <coleção> <filtro>`: na fila, `em-andamento` é ter dono e etapa não final (item antigo, sem etapa válida, cai no `estado`); os outros valores casam com a etapa ou o estado.
+function filtraPorEstado(colecao, d, filtro) {
+  if (colecao !== 'fila') return d?.estado === filtro;
+  const temEtapa = ETAPAS.includes(d?.etapa);
+  if (filtro === 'em-andamento') {
+    if (!temEtapa) return d?.estado === 'em-andamento';
+    return !ETAPAS_FINAIS.has(d.etapa) && (textoNaoVazio(d.donoLocalId) || textoNaoVazio(d.donoApelido));
+  }
+  return d?.etapa === filtro || d?.estado === filtro;
+}
+
 function validarItemDaFila(chave, novo, base, op, existia) {
   const tem = (k) => k in novo && novo[k] !== null;
   // apagar o contrato não é mesclar: `null` em update remove o campo, e titulo/etapa/tema são o que faz do documento um item
@@ -178,6 +189,15 @@ function validarItemDaFila(chave, novo, base, op, existia) {
     for (const k of ['titulo', 'etapa', 'tema']) {
       if (k in novo && novo[k] === null) throw new Error(`${chave}: ${k} não pode ser apagado (null) — o item perderia o contrato; troque o valor`);
     }
+  }
+  // `nota` e `estado` saíram do contrato (viraram `agora` e `etapa`): gravá-los de novo recria o formato antigo. `null` ainda passa, para limpar.
+  if (op === 'update') {
+    for (const [k, nova] of [['nota', 'agora'], ['estado', 'etapa']]) {
+      if (tem(k)) throw new Error(`${chave}: o campo "${k}" saiu do contrato; use "${nova}"`);
+    }
+  }
+  if ('titulo' in novo && !textoNaoVazio(novo.titulo)) {
+    throw new Error(`${chave}: titulo é texto não vazio (recusa "", "   " e número)`);
   }
   if (tem('etapa') && !ETAPAS.includes(novo.etapa)) {
     throw new Error(`${chave}: etapa "${novo.etapa}" fora da lista (${ETAPAS.join(' · ')})`);
@@ -210,9 +230,16 @@ function validarItemDaFila(chave, novo, base, op, existia) {
   for (const k of DONOS_ANTIGOS) {
     if (tem(k)) throw new Error(`${chave}: o campo "${k}" saiu do contrato; use donoLocalId e donoApelido`);
   }
-  if (tem('donoLocalId')) {
-    if (!/^local_[0-9a-f-]{36}$/.test(String(novo.donoLocalId))) throw new Error(`${chave}: donoLocalId "${novo.donoLocalId}" não é local_<uuid>`);
-    if (!textoNaoVazio(base.donoApelido)) throw new Error(`${chave}: donoLocalId exige donoApelido`);
+  if (tem('donoLocalId') && !/^local_[0-9a-f-]{36}$/.test(String(novo.donoLocalId))) {
+    throw new Error(`${chave}: donoLocalId "${novo.donoLocalId}" não é local_<uuid>`);
+  }
+  // os dois andam juntos: tirar o dono é os dois null no MESMO update (senão fica um id sem apelido)
+  if (textoNaoVazio(base.donoLocalId) && !textoNaoVazio(base.donoApelido)) {
+    throw new Error(`${chave}: donoLocalId exige donoApelido — para tirar o dono, mande os dois como null no mesmo update`);
+  }
+  // item feito/descartado não tem dono: quem fecha o item solta o dono no mesmo update
+  if ((tem('etapa') || tem('donoLocalId') || tem('donoApelido')) && ETAPAS_FINAIS.has(base.etapa) && (textoNaoVazio(base.donoLocalId) || textoNaoVazio(base.donoApelido))) {
+    throw new Error(`${chave}: etapa "${base.etapa}" não tem dono — mande donoLocalId e donoApelido como null no mesmo update`);
   }
   // set cria/substitui; update de item que não existe também cria — nos dois o item novo nasce com o contrato inteiro
   if (op === 'set' || (op === 'update' && !existia)) {
@@ -475,7 +502,7 @@ function main(argv) {
         ? readdirSync(dir)
             .filter((n) => n.endsWith('.json'))
             .map((n) => JSON.parse(readFileSync(join(dir, n), 'utf8')))
-            .filter((d) => !b || d.data?.estado === b)
+            .filter((d) => !b || filtraPorEstado(a, d.data, b))
             .filter((d) => !projeto || String(d.data?.projeto ?? '').toLowerCase() === projeto)
         : [];
       break;

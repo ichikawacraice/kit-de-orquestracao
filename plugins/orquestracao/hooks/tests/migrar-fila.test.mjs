@@ -134,7 +134,7 @@ caso('idempotente: segunda rodada não muda nada; regravar um item migrado passa
   igual(migrar('--gravar').exit, 0, 'primeira');
   const v = lido('F901').version; const r2 = migrar('--gravar'); igual(r2.exit, 0, r2.err);
   ok(/F901: já no contrato novo/.test(r2.out), 'pulou'); igual(lido('F901').version, v, 'versão igual');
-  const w = painel('update', 'fila', 'F901', '{"nota":"ok"}'); igual(w.exit, 0, `regravação: ${w.err}${w.out}`);
+  const w = painel('update', 'fila', 'F901', '{"agora":"ok"}'); igual(w.exit, 0, `regravação: ${w.err}${w.out}`);
 });
 caso('cópia do painel real (foto de 25/10): migra, 0 sem etapa/tema, 0 com campo antigo, e regravar cada um passa', () => {
   ok(existsSync(SNAPSHOT), `foto ausente: ${SNAPSHOT}`);
