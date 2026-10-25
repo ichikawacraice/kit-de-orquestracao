@@ -399,6 +399,8 @@ export async function esperarAVez(base, n, eu, opcoes = {}) {
   const naFila = fila === "gate" ? "" : ` (fila do ${fila})`;
   const inicio = agora();
   let ultimaChave = undefined;
+  let chaveDosAncestrais = undefined;
+  let acima = [];
   let ultimoAviso = 0;
   const quem = (r) => (r.donos.length === 0 ? "dono ilegível" : r.donos.map(descrever).join(" | "));
   for (;;) {
@@ -407,11 +409,19 @@ export async function esperarAVez(base, n, eu, opcoes = {}) {
       if (ultimaChave !== undefined) avisar(`[gate] a vez chegou depois de ${Math.round((agora() - inicio) / 1000)} s`);
       return r.vaga;
     }
-    // o dono "deste mesmo worktree" é ANCESTRAL deste processo: a suíte dele chamou este gate (mesmo com a env limpa) e esperar é para sempre
-    if (r.mesmoWorktree && ancestraisDe().includes(r.mesmoWorktree.pid)) {
-      throw Object.assign(new Error(MENSAGEM_DO_LACO(`o dono da vez, PID ${r.mesmoWorktree.pid}, é ancestral deste processo`)), { codigo: "LACO" });
-    }
     const chave = r.donos.map((d) => (d ? d.token : "?")).join(",");
+    // um dono é ANCESTRAL deste processo: a suíte dele chamou este gate (mesmo com a env limpa) e esperar é para sempre. Vale para o
+    // dono do mesmo worktree e, com todas as vagas ocupadas, para qualquer dono (um worktree irmão chamado de dentro da suíte, com 1 vaga).
+    // Os ancestrais se olham uma vez por dono (`chave`): cada `ps` custa até 3 s.
+    if (chave !== chaveDosAncestrais) {
+      acima = ancestraisDe();
+      chaveDosAncestrais = chave;
+    }
+    const ancestral = (r.mesmoWorktree ? [r.mesmoWorktree] : r.donos).find((d) => d && acima.includes(d.pid));
+    if (ancestral) {
+      const quemE = r.mesmoWorktree ? "o dono da vez" : `o dono de uma das vagas, de outro worktree (${ancestral.worktree}),`;
+      throw Object.assign(new Error(MENSAGEM_DO_LACO(`${quemE} PID ${ancestral.pid}, é ancestral deste processo`)), { codigo: "LACO" });
+    }
     if (chave !== ultimaChave) {
       avisar(
         r.mesmoWorktree
