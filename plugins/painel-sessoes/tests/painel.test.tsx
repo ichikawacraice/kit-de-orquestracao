@@ -1205,7 +1205,7 @@ test('F34-2: o cartão tem as linhas do desenho, na ordem, e o resto vai ao alt'
   expect(posicoes.every(n => n >= 0), `faltou: ${ordem.filter((_, k) => posicoes[k]! < 0).join(' | ')}`).toBe(true)
   expect(posicoes, 'a ordem das linhas').toEqual([...posicoes].sort((a, b) => a - b))
   expect(r.source.match(/<rect class="k" /g)?.length, 'no máximo 3 selos').toBe(3)
-  expect(r.alt).toMatch(/\+1/)
+  expect(r.alt, 'o +n das pessoas, não o (+1) do depois').toMatch(/ — \+1 — /)
   expect(r.alt).toMatch(/c20 saiu/)
 })
 
@@ -1242,7 +1242,7 @@ test('F34-2: o resumo compacto tem 36 px por bloco, número na linha do rótulo,
 })
 
 const CORES = (() => {
-  const css = cartaoSvg(300, itemCheio(), AGORA).source.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? ''
+  const css = cartaoSvg(300, itemCheio(), AGORA, { situacao: situacaoDoTeste }).source.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? ''
   const [claro = '', escuro = ''] = css.split('@media (prefers-color-scheme: dark)')
   const c = regras(claro)
 
@@ -1384,4 +1384,28 @@ test('F34-3: "Abrindo…" até o open_session_in voltar', async ($, on) => {
   expect(abertas.length, 'o segundo clique foi ignorado').toBe(1)
   expect(await lerSuperficie(ui)).not.toMatch(/Abrindo…/)
   await ui.unmount()
+})
+
+test('F34-2 R4: tirar as pessoas excedentes do alt é visto: o +1 é o das pessoas', () => {
+  const r = cartaoSvg(360, itemCheio({ depois: ['só um'] }), AGORA, { situacao: situacaoDoTeste })
+  expect(r.alt, 'com um só item em depois não há "(+1)" para confundir').not.toMatch(/\(\+1\)/)
+  expect(r.alt).toMatch(/ — \+1 — /)
+})
+
+test('F34-2 R5: sessão morta em com não vira selo; só o "saiu" a nomeia', () => {
+  const r = cartaoSvg(360, itemCheio({ com: [COM_VIVO, { ...COM_VIVO, apelido: 'c20', localId: 'local_c20', vivo: false }], trava: undefined }), AGORA, { situacao: situacaoDoTeste })
+  expect(r.alt).toMatch(/c20 saiu/)
+  expect(r.alt, 'sem linha "quem" para a morta').not.toMatch(/c20, /)
+  expect(r.source.match(/<rect class="k" /g)?.length, 'só o selo de E1, mais a pílula da etapa').toBe(1)
+  expect(r.source).not.toContain('sessão encerrada')
+})
+
+test('F34-2 R5: dono com trava sem ninguém não vira linha "quem"; sem a trava vira', () => {
+  const dono = { apelido: 'E8', localId: 'local_e8' }
+  const base = { com: [], dono, espera: undefined } as Partial<Linha>
+  const sem = cartaoSvg(360, itemCheio({ ...base, trava: { motivo: 'sem-ninguem', texto: 'E8 não está mais ativa' }, situacao: 'travado' }), AGORA, { situacao: situacaoDoTeste })
+  expect(sem.alt).toMatch(/Sem ninguém: E8 não está mais ativa/)
+  expect(sem.alt, 'o dono já está na trava').not.toMatch(/E8, /)
+  const com = cartaoSvg(360, itemCheio({ ...base, trava: undefined }), AGORA, { situacao: situacaoDoTeste })
+  expect(com.alt, 'sem a trava o dono é a linha "quem"').toMatch(/E8, executora, sessão encerrada/)
 })

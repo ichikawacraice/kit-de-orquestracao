@@ -522,7 +522,7 @@ export const MAX_LINHAS_QUEM = 3
 
 export type OpcoesDoCartao = {
   /** O que a sessão faz agora ("trabalhando agora", "parada há X", "sem leitura da sessão"); `undefined` é a sessão fora da lista. */
-  situacao?: (localId: string) => string | undefined
+  situacao: (localId: string) => string | undefined
 }
 
 /** A linha "quem": o selo do apelido (com o ponto vivo se trabalha agora), o papel por extenso e a situação da sessão. */
@@ -554,7 +554,7 @@ ${vivo ? `<circle class="vivo ${ANDA}" cx="${selo - 2}" cy="${y + 2}" r="3.5"/>`
  * O cartão do item em sessão (§1 do desenho): sobre (tema e tempo), título, chips, trava, espera, quem, agora e depois.
  * Sem fundo e sem filete: a moldura é o `Box round` da composição, com a borda na cor do tom, e os botões ficam dentro dela.
  */
-export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: OpcoesDoCartao = {}): { source: string; height: number; alt: string } {
+export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: OpcoesDoCartao): { source: string; height: number; alt: string } {
   const partes: string[] = []
   const tempo = tempoDoItem(item, agora)
   const tempoW = tempo ? largura(tempo, 12) + 10 : 0
@@ -612,7 +612,7 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   const mostradas = pessoas.slice(0, MAX_LINHAS_QUEM)
   for (const p of mostradas) {
     y += 8
-    const linha = linhaQuem(y, p, opcoes.situacao?.(p.localId), W)
+    const linha = linhaQuem(y, p, opcoes.situacao(p.localId), W)
     partes.push(linha.svg)
     alt.push(linha.alt)
     y += 22
