@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// CLI do kit: --version, ajuda, iniciar e doutor (K6); adotar, atualizar e remover chegam na K7.
+// CLI do kit: --version, ajuda, iniciar, adotar, atualizar, doutor e remover.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { adotar } from './adotar.mjs';
+import { atualizar } from './atualizar.mjs';
 import { doutor } from './doutor.mjs';
 import { iniciar } from './iniciar.mjs';
+import { remover } from './remover.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const versao = () => JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')).version;
@@ -16,9 +19,11 @@ uso:
   kit ajuda                                  mostra esta ajuda
   kit iniciar [--perfil simples|pnpm-workspace]
                                              prepara um projeto sem CLAUDE.md (gate, guarda, plugins, lock)
-  kit doutor                                 confere o disco com o .claude/kit.lock.json
-
-(adotar, atualizar e remover chegam na próxima fatia)
+  kit adotar [--simular] [--trocar-test] [--perfil …]
+                                             põe o kit num projeto em andamento, sem sobrescrever nada
+  kit atualizar [--simular]                  troca pela versão nova o que você não editou; o resto vira conflito
+  kit doutor                                 confere plugin, hooks, kit.json, versões e o disco com o lock
+  kit remover [--simular]                    tira o que o kit pôs (blocos, chaves e arquivos cujo hash bate)
 `;
 
 function main(argv) {
@@ -33,12 +38,17 @@ function main(argv) {
     (r.codigo === 0 ? process.stdout : process.stderr).write(`${r.mensagem}\n`);
     return r.codigo;
   }
-  if (cmd === 'doutor') {
-    const r = doutor({ destino: process.cwd() });
-    if (r.saida) process.stdout.write(r.saida);
-    if (r.erro) process.stderr.write(`${r.erro}\n`);
-    return r.codigo;
+  const flag = (n) => argv.includes(n);
+  const imprimir = (r) => { if (r.saida) process.stdout.write(r.saida); if (r.erro) process.stderr.write(`${r.erro}\n`); return r.codigo; };
+  const destino = process.cwd();
+  if (cmd === 'adotar') {
+    const i = argv.indexOf('--perfil');
+    if (i !== -1 && !argv[i + 1]) { process.stderr.write('kit adotar: --perfil pede um valor\n'); return 2; }
+    return imprimir(adotar({ destino, perfil: i === -1 ? undefined : argv[i + 1], versao: versao(), simular: flag('--simular'), trocarTest: flag('--trocar-test') }));
   }
+  if (cmd === 'atualizar') return imprimir(atualizar({ destino, versao: versao(), simular: flag('--simular') }));
+  if (cmd === 'remover') return imprimir(remover({ destino, simular: flag('--simular') }));
+  if (cmd === 'doutor') return imprimir(doutor({ destino, versao: versao() }));
   process.stderr.write(`kit: comando desconhecido: ${cmd}\n\n${AJUDA}`);
   return 2;
 }

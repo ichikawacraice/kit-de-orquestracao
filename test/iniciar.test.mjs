@@ -178,7 +178,7 @@ describe('kit iniciar — o que ele recusa e o que preserva', () => {
   });
 });
 
-describe('kit doutor (stub): lê o lock', () => {
+describe('kit doutor: lê o lock (o diagnóstico completo está em k7.test.mjs)', () => {
   it('sem lock: exit 1 e diz que não há .claude/kit.lock.json', () => {
     const d = pasta();
     try {
@@ -195,6 +195,9 @@ describe('kit doutor (stub): lê o lock', () => {
       const lock = json(d, '.claude/kit.lock.json');
       const n = Object.keys(lock.arquivos).length;
       assert.ok(n >= 10, `poucos arquivos no lock: ${n}`);
+      // o doutor completo exige o plugin instalado: planta o registro dele na casa temporária
+      mkdirSync(join(casa, '.claude', 'plugins'), { recursive: true });
+      writeFileSync(join(casa, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user' }] } }));
       const ok = kit(d, 'doutor');
       assert.equal(ok.status, 0, ok.stdout + ok.stderr);
       assert.ok(ok.stdout.includes(lock.versao) && ok.stdout.includes('simples') && ok.stdout.includes(String(n)), ok.stdout);
