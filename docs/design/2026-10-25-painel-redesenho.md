@@ -45,7 +45,7 @@ O que o pane mostra hoje, com o veredito. As linhas marcadas como **muda** e **n
 | "↻ Atualizar" | botão `plain dimColor`, que se lê como texto | reler agora | rara | **muda:** vira botão nativo `secondary`, que mostra "Lendo…" enquanto lê |
 | "Em sessão · 3" | `Text bold` | — | — | **sai:** dá lugar a duas seções, Travados e Executando |
 | Subgrupo "TRAVADOS" | dentro de "Em sessão" | destravar | quando há | **muda:** vira a **seção** Travados, que só aparece quando há travado |
-| Cabeçalho de tema ("SESSÕES E PAINEL") | `Text dimColor`, caixa alta, entre os itens | — (o tema não gera gesto) | toda olhada | **muda:** vira **etiqueta no topo do cartão** (Q-ID ao operador, na §Decisões). A ordem dos temas de `temas.json` continua sendo a ordem dos cartões |
+| Cabeçalho de tema ("SESSÕES E PAINEL") | `Text dimColor`, caixa alta, entre os itens | — (o tema não gera gesto) | toda olhada | **muda:** vira **etiqueta no topo do cartão** (Q238, decidida: sim). A ordem dos temas de `temas.json` continua sendo a ordem dos cartões |
 | Item andando: ponto, título, etapa, dono, PR, `agora`, `depois` | `itemSvg` solto, separado por filete | acompanhar | toda olhada | **muda:** vira **cartão** (§Regiões) |
 | **Quem executa** | só o apelido ("E2") no meio da linha 2 | abrir a sessão certa; ver se ela trabalha | toda olhada | **novo:** linha própria com o **selo** do apelido, o **papel** por extenso e a **situação da sessão**, que pode ser "trabalhando agora" ou "parada há 40 min" (§2) |
 | "abrir E2" | botão `plain dimColor`, que se lê como texto | abrir a sessão | frequente | **muda:** vira botão nativo **"Abrir E2"** (`secondary`), dentro do cartão e com estado (§4) |
@@ -289,6 +289,7 @@ O `Client` não resolve isso: ele também desenha com `Box` e `Text`, e não com
 ## Decisões ao operador
 
 **Q238 — O tema vira etiqueta no cartão, no lugar do cabeçalho de grupo?**
+- **Decidida em 25/10:** sim, segue a recomendação (resposta do operador pelo painel).
 - **O caso:** hoje, dentro de "Em sessão" e de "Na fila", cada tema abre um grupo com um título em caixa alta ("SESSÕES E PAINEL", "KIT DE ORQUESTRAÇÃO"). Com as seções novas, o pane teria três níveis de título: a seção, o tema e o item. Na captura de hoje, são dois cabeçalhos de tema para três itens. Isso muda o que o desenho do F27 decidiu.
 - **Se não decidir:** ficam os cabeçalhos de tema dentro de cada seção, e o pane fica com três níveis de título.
 - **Recomendo:** a etiqueta no topo do cartão, mantendo a ordem dos temas de `temas.json`. O tema não gera gesto, e a seção é a divisão que você pediu para ficar clara.
