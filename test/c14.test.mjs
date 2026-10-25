@@ -92,3 +92,15 @@ it('B1: o caso da foto real sem KIT_F27_FOTO sai como SKIP com motivo, e não co
   assert.match(linhaFoto, /# SKIP .*KIT_F27_FOTO/, `a foto não foi pulada com motivo: ${linhaFoto}`);
   assert.match(tap, /# skipped 1\b/);
 });
+
+// L1 (c15): na prosa das skills e dos papéis do pool o subagente do plugin é citado com o prefixo.
+it('L1: skills e pool não citam subagente do plugin sem o prefixo orquestracao:', () => {
+  const achar = (pasta) => execFileSync('find', [pasta, '-name', '*.md'], { encoding: 'utf8' }).split('\n').filter(Boolean);
+  const arquivos = [...achar(join(RAIZ, 'plugins', 'orquestracao', 'skills')), ...achar(join(RAIZ, 'plugins', 'orquestracao', 'pool'))];
+  assert.ok(arquivos.length >= 6, `poucos arquivos varridos: ${arquivos.length}`);
+  const solto = /(subagentes?|um|o|a) `(validador|explorador|planejador|executor)`/;
+  const achados = arquivos.flatMap((f) => readFileSync(f, 'utf8').split('\n').map((l, i) => [f, i + 1, l]).filter(([, , l]) => solto.test(l)).map(([a, n, l]) => `${a}:${n}: ${l.slice(0, 90)}`));
+  assert.deepEqual(achados, []);
+  // prova de que o detector pega: um texto com o nome solto é achado
+  assert.ok(solto.test('lança subagente `validador`'));
+});

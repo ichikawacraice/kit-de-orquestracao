@@ -13,7 +13,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a 
 - **Não faz:**
   - não planeja nem executa a frente: pedido que vira feature, SPEC ou PR é item da fila para uma planejadora;
   - não valida;
-  - não lança subagente `executor` nem `validador`;
+  - não lança subagente `orquestracao:executor` nem `orquestracao:validador`;
   - não arquiva membro do pool.
 - **Para quem passa:**
   - item novo → P livre;

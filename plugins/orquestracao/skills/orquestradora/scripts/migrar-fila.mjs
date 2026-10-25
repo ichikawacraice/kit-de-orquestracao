@@ -32,9 +32,11 @@ let projetoDerivado;
 function projetoDosItens() {
   if (process.env.KIT_PROJETO) return process.env.KIT_PROJETO;
   if (projetoDerivado === undefined) {
-    const g = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
-    projetoDerivado = g.status === 0 && g.stdout.trim() ? basename(g.stdout.trim()) : '';
-    if (projetoDerivado) console.error(`migrar-fila: KIT_PROJETO não definido; derivei o projeto "${projetoDerivado}" do git da pasta atual (${process.cwd()}). Defina KIT_PROJETO para outro nome.`);
+    // o git common dir (como projetoDoCwd do painel.mjs), não --show-toplevel: dentro de um worktree o nome é o do repositório principal
+    const g = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    const comum = g.status === 0 ? g.stdout.trim() : '';
+    projetoDerivado = comum ? basename(basename(comum) === '.git' ? dirname(comum) : comum).replace(/\.git$/, '').toLowerCase() : '';
+    if (projetoDerivado) console.error(`migrar-fila: KIT_PROJETO não definido; derivei o projeto "${projetoDerivado}" do git (repositório principal) da pasta atual (${process.cwd()}). Defina KIT_PROJETO para outro nome.`);
   }
   return projetoDerivado || undefined;
 }

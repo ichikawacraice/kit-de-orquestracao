@@ -12,7 +12,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - **Não faz:**
   - não conserta o que valida: não edita arquivo do projeto, porque a validação deixaria de ser independente;
   - não valida o que ela mesma executou;
-  - não lança subagente `executor`;
+  - não lança subagente `orquestracao:executor`;
   - não mergeia.
 - **Para quem passa:**
   - **aprovado:** `PR N validado, HEAD Y` a quem despachou, que repassa à orquestradora;

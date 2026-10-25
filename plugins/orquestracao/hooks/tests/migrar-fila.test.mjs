@@ -216,3 +216,26 @@ caso('projeto: fora de um repo git e sem KIT_PROJETO fica sem projeto, sem aviso
   ok(!('projeto' in lido('F1').data), 'sem projeto');
   ok(!/derivei/i.test(r.err), `avisou derivação sem ter derivado: ${JSON.stringify(r.err)}`);
 });
+
+// M1 (c15): dentro de um worktree o projeto é o do repositório principal (git common dir), não o nome da pasta do worktree.
+function repoComWorktree() {
+  const repo = join(raiz, 'izanagi'); mkdirSync(repo);
+  const git = (cwd, ...a) => { const r = spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { cwd, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }); ok(r.status === 0, `git ${a.join(' ')}: ${r.stderr}`); };
+  git(repo, 'init', '-q'); git(repo, 'commit', '-q', '--allow-empty', '-m', 'x');
+  const wt = join(raiz, 'trabalho-wt'); git(repo, 'worktree', 'add', '-q', '-b', 'wt', wt);
+  return wt;
+}
+caso('projeto: de dentro de um worktree dá o nome do repositório principal', () => {
+  writeFileSync(join(poolDir, 'F1.md'), '# F1 — builder: fatias\n- frente: builder\n');
+  const r = run('migrar-fila.mjs', ['--gravar'], { cwd: repoComWorktree() }); igual(r.exit, 0, r.err);
+  igual(lido('F1').data.projeto, 'izanagi', 'projeto do worktree');
+});
+caso('projeto: o mutante com --show-toplevel dá o nome do worktree (o teste acima o pega)', () => {
+  writeFileSync(join(poolDir, 'F1.md'), '# F1 — builder: fatias\n- frente: builder\n');
+  const mut = join(raiz, 'scripts-mut'); cpSync(SCRIPTS, mut, { recursive: true });
+  const f = join(mut, 'migrar-fila.mjs'); const fonte = readFileSync(f, 'utf8');
+  ok(fonte.includes("'--path-format=absolute', '--git-common-dir'"), 'a linha a mutar existe');
+  writeFileSync(f, fonte.replace("'--path-format=absolute', '--git-common-dir'", "'--show-toplevel'"));
+  const r = spawnSync('node', [f, '--gravar'], { cwd: repoComWorktree(), encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: env() }); igual(r.status, 0, r.stderr);
+  igual(lido('F1').data.projeto, 'trabalho-wt', 'o mutante enxerga o worktree');
+});

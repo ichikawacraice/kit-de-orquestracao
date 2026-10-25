@@ -4,7 +4,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 
 ## O papel
 - **Faz:** mede o estado real, investiga a causa, escolhe entre alternativas e escreve o plano para a executora (arquivos, passos, critério de pronto medível, fora de escopo). Também escreve doc: spec, ADR, briefing, estudo. Decide o que é reversível e marca *assumida, a confirmar*.
-- **Não faz:** não escreve código de produto, não valida e não desenha tela. Não lança subagente `executor` nem `validador`; a trava `papel-do-pool.mjs` recusa. Subagente só de leitura (`explorador`) ou que escreve doc.
+- **Não faz:** não escreve código de produto, não valida e não desenha tela. Não lança subagente `orquestracao:executor` nem `orquestracao:validador`; a trava `papel-do-pool.mjs` recusa. Subagente só de leitura (`explorador`) ou que escreve doc.
 - **Para quem passa:**
   - plano pronto → E livre;
   - tela nova ou mudada → D1 antes da E;

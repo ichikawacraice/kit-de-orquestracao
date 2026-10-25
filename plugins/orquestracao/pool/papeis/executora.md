@@ -12,7 +12,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - não decide desenho: dúvida que muda o plano volta à planejadora;
   - não redesenha tela: segue a revisão aprovada da D1 em `docs/design/revisoes/`;
   - não valida o que fez;
-  - não lança subagente `executor` nem `validador`;
+  - não lança subagente `orquestracao:executor` nem `orquestracao:validador`;
   - não mergeia.
 - **Para quem passa:**
   - execução pronta: o item vai com `proximoPapel: valida` a uma V livre, mais o relatório (arquivos e saídas reais do critério) a quem despachou;

@@ -11,11 +11,11 @@ O modelo é função do **papel**, não do gosto de quem abre a sessão. A pergu
 
 | Papel | Modelo | Esforço | Agente (`subagent_type` é `orquestracao:<nome>`) | Faz | Não faz |
 |---|---|---|---|---|---|
-| **Planejador / orquestrador** | Opus 5.5 | alto | `planejador` | spec, ADR, decisão, investigação de causa, plano com arquivos, passos e critério de pronto; distribui trabalho, mergeia, faz release | executar plano grande sozinho quando dá para delegar |
-| **Executor** | Sonnet 5.5 | médio | `executor` (em sessão `exec · …`) | cumpre um plano pronto: edita, testa, commita, abre PR | decidir o que o plano não decidiu; rodar como subagente |
-| **Validador** | Opus 5.5 | alto | `validador` | revisa o diff contra o plano, tenta derrubar cada afirmação, roda o teste, abre o artefato final | editar código (ele devolve achados) |
-| **Explorador** | Haiku 5.5 | baixo | `explorador` | busca e leitura: onde está X, quem chama Y, resumir um log ou uma página | escrever arquivo, concluir causa |
-| **Conferência mecânica** | Sonnet 5.5 | baixo | `executor` | rodar o gate, aplicar lista fechada de ajustes, preencher template (o que grava vai em sessão) | julgar se o resultado está bom |
+| **Planejador / orquestrador** | Opus 5.5 | alto | `orquestracao:planejador` | spec, ADR, decisão, investigação de causa, plano com arquivos, passos e critério de pronto; distribui trabalho, mergeia, faz release | executar plano grande sozinho quando dá para delegar |
+| **Executor** | Sonnet 5.5 | médio | `orquestracao:executor` (em sessão `exec · …`) | cumpre um plano pronto: edita, testa, commita, abre PR | decidir o que o plano não decidiu; rodar como subagente |
+| **Validador** | Opus 5.5 | alto | `orquestracao:validador` | revisa o diff contra o plano, tenta derrubar cada afirmação, roda o teste, abre o artefato final | editar código (ele devolve achados) |
+| **Explorador** | Haiku 5.5 | baixo | `orquestracao:explorador` | busca e leitura: onde está X, quem chama Y, resumir um log ou uma página | escrever arquivo, concluir causa |
+| **Conferência mecânica** | Sonnet 5.5 | baixo | `orquestracao:executor` | rodar o gate, aplicar lista fechada de ajustes, preencher template (o que grava vai em sessão) | julgar se o resultado está bom |
 
 Ids: Opus 5.5 `claude-opus-5-5` (alias `opus`), Sonnet 5.5 `claude-sonnet-5-5` (`sonnet`), Haiku 5.5 `claude-haiku-5-5` (`haiku`).
 
@@ -27,7 +27,7 @@ Ids: Opus 5.5 `claude-opus-5-5` (alias `opus`), Sonnet 5.5 `claude-sonnet-5-5` (
 <a id="quem-escreve-e-sessao"></a>
 ## Quem escreve é sessão (Q154, 23/10)
 
-> **No pool de sessões (operador, 24/10) vale mais forte:** cada papel na sua sessão — a planejadora não lança subagente `executor` nem `validador`; execução vai a uma sessão E, validação a uma sessão V (`${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`, "Cada papel na sua sessão"). Subagente só dentro da função de quem o lança. Trava: `${CLAUDE_PLUGIN_ROOT}/hooks/papel-do-pool.mjs` recusa (`deny`) subagente `executor`/`validador` lançado por planejadora, design ou orquestradora, e a executora lançar `validador`.
+> **No pool de sessões (operador, 24/10) vale mais forte:** cada papel na sua sessão — a planejadora não lança subagente `orquestracao:executor` nem `orquestracao:validador`; execução vai a uma sessão E, validação a uma sessão V (`${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`, "Cada papel na sua sessão"). Subagente só dentro da função de quem o lança. Trava: `${CLAUDE_PLUGIN_ROOT}/hooks/papel-do-pool.mjs` recusa (`deny`) subagente `orquestracao:executor`/`validador` lançado por planejadora, design ou orquestradora, e a executora lançar `validador`.
 
 > A exceção do executor (Q196) caiu em 2026-10-24 (F5): subagente executor não existe mais — trava em papel-do-pool.mjs e subagente-nao-edita.mjs.
 
@@ -37,7 +37,7 @@ Ids: Opus 5.5 `claude-opus-5-5` (alias `opus`), Sonnet 5.5 `claude-sonnet-5-5` (
 Decisão do operador em 2026-10-23: *"para ter mais controle e a orquestradora poder ver melhor"*. O subagente não aparece na lista de sessões nem no painel, não pode ser conduzido no meio e, quando morre, deixa mudança no disco sem dono (o caso do agente morto e o da orquestradora editando por subagente, 11–13/10). Os dois defeitos medidos eram de **escrita**; leitura por subagente não tem caso registrado. Por isso o corte é por *o que o trabalho faz no disco*, não por tamanho:
 
 - **Grava arquivo, commita ou abre PR → sessão** (`start_session`, título `exec · <tarefa>`, worktree próprio). Isso inclui a conferência mecânica que **aplica** ajustes e o conserto que a validação devolveu: ele vai à executora daquela frente por `SendMessage`, nunca a um subagente novo.
-- **Só lê, mede ou devolve achados → subagente** pode, com o resultado consumido no mesmo turno: `explorador`, a [pré-checagem do critério](#pre-checagem-do-criterio), a validação Leve e Padrão, o `planejador` que devolve o plano no relatório sem gravar arquivo, a conferência mecânica que só roda o gate.
+- **Só lê, mede ou devolve achados → subagente** pode, com o resultado consumido no mesmo turno: `orquestracao:explorador`, a [pré-checagem do critério](#pre-checagem-do-criterio), a validação Leve e Padrão, o `orquestracao:planejador` que devolve o plano no relatório sem gravar arquivo, a conferência mecânica que só roda o gate.
 - **A exceção é quem já está na conversa:** a edição de poucas linhas que a própria sessão faz (ver "Tarefa pequena não se divide") continua com ela. A regra proíbe delegar escrita a subagente, não proíbe a sessão de escrever.
 - **Briefing de subagente diz que ele não edita.** Quem lança escreve no prompt *"não grave arquivo; devolva no relatório"*. Se no meio aparecer a necessidade de gravar, ele para e devolve.
 - **A trava.** O hook `PreToolUse` `${CLAUDE_PLUGIN_ROOT}/hooks/subagente-nao-edita.mjs` **recusa** (`deny`, também em bypass) `Edit`/`Write`/`MultiEdit`/`NotebookEdit` de subagente (evento com `agent_id`) fora de `~/.claude/`, do rascunho (scratchpad, `/tmp`, `/var/folders`) e das notas entre sessões. Sessão aberta com `--agent executor` não tem `agent_id` e passa. Exceção por papel em `~/.claude/orquestracao/subagente-pode-escrever.txt` (um `subagent_type` por linha, `*` no fim casa prefixo). Bash fica de fora, como no `orquestradora-nao-edita`. Cada recusa vai para `~/.claude/orquestracao/hooks-crewai.log` (`recusou`, `liberado-por-tipo`, `erro`). Testes: casos 4.x de `node ~/.claude/hooks/tests/hooks-crewai.test.mjs`.
@@ -55,7 +55,7 @@ O executor só recebe trabalho quando o briefing tem **as cinco coisas**. Faltan
 Sinais de que **não** está pronto: o pedido usa *"investigue"*, *"descubra por quê"*, *"escolha"*, *"melhore"*; a causa do defeito não foi medida; há mais de um jeito razoável e o plano não escolheu; o trabalho cria ou muda contrato (spec, schema, API, migration).
 
 <a id="pre-checagem-do-criterio"></a>
-**Pré-checagem do critério, antes de abrir a executora (Q65, 23/10).** Vale para a frente que vai cair no nível **Robusta** da validação (tabela em "A validação"). Antes de abrir a executora, o planejador lança um subagente `validador` com `model: "sonnet"` e esforço baixo, que lê **só o critério de pronto** do plano, sem o resto e sem o código. Ele responde a três perguntas, uma linha cada:
+**Pré-checagem do critério, antes de abrir a executora (Q65, 23/10).** Vale para a frente que vai cair no nível **Robusta** da validação (tabela em "A validação"). Antes de abrir a executora, o planejador lança um subagente `orquestracao:validador` com `model: "sonnet"` e esforço baixo, que lê **só o critério de pronto** do plano, sem o resto e sem o código. Ele responde a três perguntas, uma linha cada:
 
 - **Dá para rodar?** É um comando ou teste que existe, ou um que o plano manda criar, com o caminho.
 - **A saída esperada está escrita?** Por exemplo: `exit=0`, ou "o teste X passa e o Y falha antes da mudança".
@@ -66,7 +66,7 @@ Qualquer "não" volta ao planejador, que completa o critério antes de abrir a e
 <a id="trava-do-executor"></a>
 ## A trava do executor: só termina com a saída real
 
-O critério de pronto não depende do relato (Q62, 23/10, ideia `Task.guardrail` da CrewAI). O hook `${CLAUDE_PLUGIN_ROOT}/hooks/executor-criterio.mjs` (em `Stop` e `SubagentStop`) **recusa o fim do turno** do executor — subagente `executor`, sessão aberta com `--agent executor` ou de título `exec · …` — quando o turno **editou arquivo** e o relatório não traz a saída real do comando de critério. Editar inclui o Bash que grava (`sed -i`, `perl -i`, `>`/`>>` para arquivo, `tee`, heredoc para `python`/`node`, `git apply`, `patch`): medido em 63 executores reais, 57% editavam só assim.
+O critério de pronto não depende do relato (Q62, 23/10, ideia `Task.guardrail` da CrewAI). O hook `${CLAUDE_PLUGIN_ROOT}/hooks/executor-criterio.mjs` (em `Stop` e `SubagentStop`) **recusa o fim do turno** do executor — subagente `orquestracao:executor`, sessão aberta com `--agent executor` ou de título `exec · …` — quando o turno **editou arquivo** e o relatório não traz a saída real do comando de critério. Editar inclui o Bash que grava (`sed -i`, `perl -i`, `>`/`>>` para arquivo, `tee`, heredoc para `python`/`node`, `git apply`, `patch`): medido em 63 executores reais, 57% editavam só assim.
 
 - **O que vale como saída real** — sempre conferido contra o que as ferramentas devolveram no turno (Bash, Monitor, `TaskOutput`, ou Read de um `.output`/`.log`):
   - um status (`exit=0`, `exit code 0`, `TEST_EXIT=0`, `test=0`, `Found 0 errors`) que **aparece na saída real** — status inventado no relatório não passa. O jeito seguro é terminar o comando de critério com `; echo "exit=$?"`;
@@ -97,8 +97,8 @@ A executora também não termina o turno **anunciando** o próximo passo (F28, 2
 
   | Nível | Quando (basta UM critério do nível de cima para subir) | Quem valida | O que faz |
   |---|---|---|---|
-  | **Leve** | Só texto, doc que não decide, CSS/estilo, teste novo sem mudar código, ou ≤ ~40 linhas em 1–2 arquivos de um pacote, sem gravar estado | subagente `validador` com `model: "sonnet"`, esforço médio | gate (ou o teste do pacote), lê o diff inteiro, abre o artefato se for visual |
-  | **Padrão** | Código de produto num pacote, gesto de tela, rota que lê | subagente `validador` (Opus), esforço médio | o de cima + tenta derrubar cada afirmação do relatório, caso de borda, a regra do projeto |
+  | **Leve** | Só texto, doc que não decide, CSS/estilo, teste novo sem mudar código, ou ≤ ~40 linhas em 1–2 arquivos de um pacote, sem gravar estado | subagente `orquestracao:validador` com `model: "sonnet"`, esforço médio | gate (ou o teste do pacote), lê o diff inteiro, abre o artefato se for visual |
+  | **Padrão** | Código de produto num pacote, gesto de tela, rota que lê | subagente `orquestracao:validador` (Opus), esforço médio | o de cima + tenta derrubar cada afirmação do relatório, caso de borda, a regra do projeto |
   | **Robusta** | Contrato (spec que decide, ADR, schema, migration, API entre pacotes), o que grava estado ou dispara trabalho, auth/segurança/segredo, produção ou deploy, mais de um pacote, ou trabalho que **já reprovou uma vez** | sessão `valida · <tarefa>` em Opus, esforço alto, contexto novo | o de cima + a prova no artefato real (tela clicada, banco lido) e a varredura do que precisava mudar junto |
 
 - **A revalidação mede o DELTA, não o PR de novo.** Depois de um conserto, a validação seguinte recebe os achados anteriores, o HEAD validado da vez anterior e `git diff <HEAD anterior>..<HEAD novo>`: confere que cada achado foi resolvido e que o conserto não quebrou o vizinho. Volta ao PR inteiro só se o conserto mudou o desenho (outro arquivo de contrato, outra abordagem). Contexto novo continua obrigatório: quem viu a rodada anterior já acredita na correção.
@@ -146,7 +146,7 @@ A executora também não termina o turno **anunciando** o próximo passo (F28, 2
 
 **Momento oportuno** (vale para todos): nenhum subagente seu rodando (a notificação se perderia), nenhum merge, release ou gate em andamento, nenhuma pergunta do operador sem resposta, e o estado escrito — o arquivo de estado ou registro de pedidos com o que está aberto e o **próximo passo exato**. Sem arquivo de estado, use a skill `handoff-de-sessao` antes.
 
-**O que não entra no contexto economiza mais que limpar:** saída de comando longo vai para arquivo e só o fim aparece; `grep -n` e `Read` com faixa em vez do arquivo inteiro; diff grande vai para o validador, não para a principal; varredura larga vai para o `explorador`.
+**O que não entra no contexto economiza mais que limpar:** saída de comando longo vai para arquivo e só o fim aparece; `grep -n` e `Read` com faixa em vez do arquivo inteiro; diff grande vai para o validador, não para a principal; varredura larga vai para o `orquestracao:explorador`.
 
 ## O que isto não muda
 
