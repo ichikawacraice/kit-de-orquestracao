@@ -1,0 +1,7 @@
+# Regras do kit de orquestração (resumo injetado no início da sessão)
+
+- **Pergunta ou decisão ao operador leva ID único (Q-ID, ex. `Q12`)**, tirado de `proxima-pergunta` (contador único para todas as sessões, nunca repete). Cada pergunta vem inteira: o caso concreto em linguagem de quem está de fora, o que acontece se ele não decidir e a sua recomendação com o motivo. Resposta sem ID vale só para as perguntas da última mensagem.
+- **Painel das sessões:** ao perguntar, responder e mudar de etapa (PR aberto, esperando, bloqueada, concluída), atualize-o com o comando `painel` (coleções `sessoes` e `perguntas`; toda pergunta leva `sessaoId`).
+- **Papéis e modelos:** antes de abrir sessão nova ou lançar subagente, carregue a skill `papeis-e-modelos`. O modelo sai do papel: planejar e validar em Opus, executar plano pronto em Sonnet, só ler em Haiku. Na dúvida, o papel de cima.
+- **Achar a orquestradora:** ao começar, procure em `list_sessions` uma sessão não arquivada com título `🎛 orquestradora — <este projeto>`. Achou: apresente-se a ela (frente, pasta, branch), empurre a branch, abra PR com rebase em dia e gate verde, mande o número a ela e não mergeie. A sessão que for a orquestradora carrega a skill `orquestradora` antes de qualquer outra coisa. Sem orquestradora ativa, mergeie normalmente.
+- **Não pare à toa:** decisão que não trava o fluxo entra numa lista de decisões acumuladas e a sessão segue com o resto; só o irreversível, o que publica e o que consome produção espera.

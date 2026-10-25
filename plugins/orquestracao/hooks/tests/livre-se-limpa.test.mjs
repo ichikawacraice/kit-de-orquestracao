@@ -1,0 +1,169 @@
+#!/usr/bin/env node
+// Testes de hooks/livre-se-limpa.mjs: membro que se declara livre no turno se limpa no mesmo turno.
+// Rodar: node ~/.claude/hooks/tests/livre-se-limpa.test.mjs
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HOOK = join(process.env.HOOKS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..'), 'livre-se-limpa.mjs');
+let base; let falhas = 0;
+const ok = (c, m) => { if (!c) throw new Error(m); };
+const ID = { E3: 'cli-e3', E4: 'cli-e4', AVULSA: 'cli-avulsa' };
+
+function novoBase() {
+  base = mkdtempSync(join(tmpdir(), 'livre-limpa-'));
+  mkdirSync(join(base, 'orq')); mkdirSync(join(base, 'app'));
+  writeFileSync(join(base, 'app', 'local_E3.json'), JSON.stringify({ sessionId: 'local_E3', cliSessionId: ID.E3, title: 'E3 · lançador', isArchived: false }));
+  writeFileSync(join(base, 'app', 'local_E4.json'), JSON.stringify({ sessionId: 'local_E4', cliSessionId: ID.E4, title: 'E4 · livre', isArchived: false }));
+  writeFileSync(join(base, 'app', 'local_AV.json'), JSON.stringify({ sessionId: 'local_AV', cliSessionId: ID.AVULSA, title: 'fix(web): algo', isArchived: false }));
+}
+
+// Transcript: um turno anterior (com limpeza velha) e o turno atual com as ferramentas dadas.
+function transcript(ferramentas, { limpezaNoTurnoAnterior = false } = {}) {
+  const t0 = Date.now() - 60_000; const t1 = Date.now() - 10_000;
+  const L = [{ type: 'user', origin: { kind: 'human' }, timestamp: new Date(t0).toISOString(), message: { content: 'antes' } }];
+  if (limpezaNoTurnoAnterior) L.push({ type: 'assistant', timestamp: new Date(t0 + 1000).toISOString(), message: { content: [{ type: 'tool_use', name: 'mcp__ccd_session_mgmt__clear_session', input: { session_id: 'self' } }] } });
+  L.push({ type: 'user', origin: { kind: 'human' }, timestamp: new Date(t1).toISOString(), message: { content: 'agora' } });
+  ferramentas.forEach(([name, input], k) => L.push({ type: 'assistant', timestamp: new Date(t1 + 1000 + k).toISOString(), message: { content: [{ type: 'tool_use', name, input }] } }));
+  const f = join(base, 't.jsonl'); writeFileSync(f, L.map((x) => JSON.stringify(x)).join('\n') + '\n'); return f;
+}
+function rodar(quem, f, extra = {}) {
+  const out = execFileSync('node', [HOOK], {
+    input: JSON.stringify({ session_id: ID[quem], transcript_path: f, hook_event_name: 'Stop', ...extra }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
+    env: { ...process.env, HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app') },
+  });
+  return out ? JSON.parse(out) : null;
+}
+const log = () => { const p = join(base, 'orq', 'hooks-crewai.log'); return existsSync(p) ? readFileSync(p, 'utf8') : ''; };
+const TITULO = ['mcp__ccd_session_mgmt__set_session_title', { session_id: 'self', title: 'E3 · livre' }];
+const LIMPA = ['mcp__ccd_session_mgmt__clear_session', { session_id: 'self' }];
+const PAINEL = ['Bash', { command: `node ~/.claude/skills/orquestradora/scripts/painel.mjs update sessoes local_E3 '{"estado":"parada","etapa":"livre"}'` }];
+
+function caso(nome, fn) {
+  novoBase();
+  try { fn(); console.log(`ok   ${nome}`); } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
+  rmSync(base, { recursive: true, force: true });
+}
+
+caso('título livre sem limpeza → block', () => {
+  const r = rodar('E3', transcript([TITULO]));
+  ok(r?.decision === 'block' && /clear_session/.test(r.reason), `esperava block, veio ${JSON.stringify(r)}`);
+  ok(/cobrou/.test(log()), 'log sem "cobrou"');
+});
+caso('painel livre sem limpeza → block', () => {
+  ok(rodar('E3', transcript([PAINEL]))?.decision === 'block', 'esperava block');
+});
+caso('título livre + clear_session self → passa', () => {
+  ok(rodar('E3', transcript([TITULO, LIMPA])) === null, 'esperava passar');
+});
+caso('limpeza só no turno anterior não vale', () => {
+  ok(rodar('E3', transcript([TITULO], { limpezaNoTurnoAnterior: true }))?.decision === 'block', 'esperava block');
+});
+caso('clear_session de OUTRA sessão não vale', () => {
+  ok(rodar('E3', transcript([TITULO, ['mcp__ccd_session_mgmt__clear_session', { session_id: 'local_X' }]]))?.decision === 'block', 'esperava block');
+});
+caso('turno sem declarar livre → passa', () => {
+  ok(rodar('E3', transcript([['Bash', { command: 'git status' }]])) === null, 'esperava passar');
+});
+caso('sessão fora do pool com painel livre → passa', () => {
+  ok(rodar('AVULSA', transcript([PAINEL])) === null, 'esperava passar');
+});
+caso('stop_hook_active → deixa passar e registra', () => {
+  ok(rodar('E3', transcript([TITULO]), { stop_hook_active: true }) === null, 'esperava passar');
+  ok(/deixou-passar/.test(log()), 'log sem "deixou-passar"');
+});
+
+const EDITA = ['Edit', { file_path: '/x/a.ts', old_string: 'a', new_string: 'b' }];
+caso('título livre + Edit sem trocar título → block de título', () => {
+  const r = rodar('E4', transcript([EDITA]));
+  ok(r?.decision === 'block' && /set_session_title/.test(r.reason), `esperava block de título, veio ${JSON.stringify(r)}`);
+  ok(/cobrou-titulo/.test(log()), 'log sem "cobrou-titulo"');
+});
+caso('título livre + git commit sem trocar título → block', () => {
+  ok(rodar('E4', transcript([['Bash', { command: 'git commit -m "x"' }]]))?.decision === 'block', 'esperava block');
+});
+caso('título livre + Edit + set_session_title self → passa', () => {
+  ok(rodar('E4', transcript([['mcp__ccd_session_mgmt__set_session_title', { session_id: 'self', title: 'E4 · conversa da loja' }], EDITA])) === null, 'esperava passar');
+});
+caso('título livre sem trabalho → passa', () => {
+  ok(rodar('E4', transcript([['Bash', { command: 'git status' }]])) === null, 'esperava passar');
+});
+caso('título de item + Edit → passa', () => {
+  ok(rodar('E3', transcript([EDITA])) === null, 'esperava passar');
+});
+caso('título livre + Edit com stop_hook_active → passa e registra', () => {
+  ok(rodar('E4', transcript([EDITA]), { stop_hook_active: true }) === null, 'esperava passar');
+  ok(/deixou-passar-titulo/.test(log()), 'log sem "deixou-passar-titulo"');
+});
+
+for (const c of ['npm test', 'pytest -q', 'go test ./...', 'yarn run lint', 'npx vitest run', 'cargo test', 'make check']) {
+  caso(`título livre + \`${c}\` sem trocar título → block`, () => {
+    ok(rodar('E4', transcript([['Bash', { command: c }]]))?.decision === 'block', 'esperava block');
+  });
+}
+caso('título livre + ls / git status → passa', () => {
+  ok(rodar('E4', transcript([['Bash', { command: 'ls -la && git status' }]])) === null, 'esperava passar');
+});
+caso('título livre + pnpm test continua cobrando', () => {
+  ok(rodar('E4', transcript([['Bash', { command: 'pnpm test' }]]))?.decision === 'block', 'esperava block');
+});
+caso('falso positivo: heredoc que só CITA painel.mjs, update, sessoes e livre não cobra', () => {
+  const cmd = "python3 - <<'EOF'\ns = open('plano.md').read()\n# o painel.mjs faz update em sessoes quando o membro fica livre\nopen('plano.md','w').write(s)\nEOF";
+  ok(rodar('E3', transcript([['Bash', { command: cmd }]])) === null, 'esperava passar');
+});
+caso('painel.mjs batch em sessoes com etapa livre → block; batch em fila com a palavra livre → passa', () => {
+  const b = `node ~/.claude/skills/orquestradora/scripts/painel.mjs batch '[{"op":"update","colecao":"sessoes","id":"local_E3","data":{"etapa":"livre"}}]'`;
+  ok(rodar('E3', transcript([['Bash', { command: b }]]))?.decision === 'block', 'batch sessoes livre devia cobrar');
+  const f = `node ~/.claude/skills/orquestradora/scripts/painel.mjs batch '[{"op":"update","colecao":"fila","id":"F1","data":{"nota":"membro livre"}}]'`;
+  ok(rodar('E3', transcript([['Bash', { command: f }]])) === null, 'batch em fila não é declarar livre');
+});
+caso('caminho do painel.mjs entre aspas → block (e batch entre aspas)', () => {
+  const q = `node "$HOME/.claude/skills/orquestradora/scripts/painel.mjs" update sessoes x '{"etapa":"livre"}'`;
+  ok(rodar('E3', transcript([['Bash', { command: q }]]))?.decision === 'block', 'update com aspas devia cobrar');
+  const b = `node '$HOME/.claude/skills/orquestradora/scripts/painel.mjs' batch '[{"op":"update","colecao":"sessoes","id":"x","data":{"etapa":"livre"}}]'`;
+  ok(rodar('E3', transcript([['Bash', { command: b }]]))?.decision === 'block', 'batch com aspas devia cobrar');
+});
+caso('painel.mjs só como invocação real: dentro de `node -e \'…\'` não cobra; depois de `cd x &&` cobra', () => {
+  const dentro = `node -e 'require("child_process").execSync("node ~/.claude/skills/orquestradora/scripts/painel.mjs update sessoes x {\\"etapa\\":\\"livre\\"}")'`;
+  ok(rodar('E3', transcript([['Bash', { command: dentro }]])) === null, 'string de outro comando não é invocação');
+  const real = `cd x && node "$HOME/.claude/skills/orquestradora/scripts/painel.mjs" update sessoes y '{"etapa":"livre"}'`;
+  ok(rodar('E3', transcript([['Bash', { command: real }]]))?.decision === 'block', 'cd && node painel.mjs devia cobrar');
+});
+
+// c2 (R1/R3 da V1): a invocação tem de ser REAL — heredoc, string e `node -e` que só a citam não cobram.
+const P = '$HOME/.claude/skills/orquestradora/scripts/painel.mjs';
+const LINHA = `cd x && node "${P}" update sessoes y '{"etapa":"livre"}'`;
+const cobra = (command) => rodar('E3', transcript([['Bash', { command }]]))?.decision === 'block';
+caso('R1: o comando que a skill manda continua cobrando (precondição dos casos que não cobram)', () => {
+  ok(cobra(`node "${P}" update sessoes y '{"etapa":"livre"}'`), 'sem cobrar, os casos abaixo não medem nada');
+  ok(cobra(LINHA), 'cd x && node … devia cobrar');
+  ok(cobra(`node "${P}" batch '[{"op":"update","colecao":"sessoes","id":"y","data":{"etapa":"livre"}}]'`), 'batch com sessoes devia cobrar');
+});
+caso('R1: heredoc que traz a linha de invocação no corpo não cobra', () => {
+  ok(!cobra(`cat > x.md <<'X'\n${LINHA}\nX`), 'corpo de heredoc não é invocação');
+  ok(!cobra(`cat > x.md <<-EOF\n\t${LINHA}\n\tEOF`), 'heredoc com <<- também');
+  ok(cobra(`cat <<'X' > x.md\ntexto\nX\n${LINHA}`), 'invocação DEPOIS do heredoc ainda cobra');
+});
+caso('R1: node -e com quebra de linha, node -e com ; e echo com && não cobram', () => {
+  ok(!cobra(`node -e "\n${LINHA}"`), 'quebra de linha dentro de aspas');
+  ok(!cobra(`node -e 'const a = 1; node ${P} update sessoes x {"etapa":"livre"}'`), '; dentro de aspas simples');
+  ok(!cobra(`echo "rode: cd x && node ${P} update sessoes y livre"`), '&& dentro de aspas duplas');
+  ok(!cobra(`echo "ok \\" && node ${P} update sessoes y livre"`), 'aspas escapadas não fecham a string');
+});
+caso('R3: (node …), VAR=x node …, nice node …, env node …, $(node …) e crase cobram', () => {
+  const inv = `node "${P}" update sessoes y '{"etapa":"livre"}'`;
+  for (const c of [`(${inv})`, `FOO=1 ${inv}`, `nice ${inv}`, `nice -n 5 ${inv}`, `env FOO=1 ${inv}`, `time ${inv}`, `x=$(${inv})`, `echo \`${inv}\``, `echo "$(${inv})"`]) ok(cobra(c), `devia cobrar: ${c}`);
+});
+caso('K2: o comando `painel` do plugin (bin) cobra como o `node …/painel.mjs`; citá-lo em echo ou heredoc não', () => {
+  ok(cobra(`painel update sessoes y '{"etapa":"livre"}'`), 'painel update sessoes … livre devia cobrar');
+  ok(cobra(`cd x && "\${CLAUDE_PLUGIN_ROOT}/bin/painel" update sessoes y '{"etapa":"livre"}'`), 'caminho do bin entre aspas devia cobrar');
+  ok(cobra(`painel batch '[{"op":"update","colecao":"sessoes","id":"y","data":{"etapa":"livre"}}]'`), 'batch com sessoes devia cobrar');
+  ok(!cobra(`painel batch '[{"op":"update","colecao":"fila","id":"F1","data":{"nota":"livre"}}]'`), 'batch só de fila não cobra');
+  ok(!cobra(`echo "painel update sessoes y livre"`), 'echo não é invocação');
+  ok(!cobra(`cat > x.md <<'X'\npainel update sessoes y livre\nX`), 'heredoc não é invocação');
+});
+
+console.log(falhas ? `${falhas} falha(s)` : 'todos verdes');
+process.exitCode = falhas ? 1 : 0;

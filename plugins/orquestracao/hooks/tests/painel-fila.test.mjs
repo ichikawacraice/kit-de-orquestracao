@@ -1,0 +1,515 @@
+#!/usr/bin/env node
+// Testes da coleção `fila` do painel (painel.mjs) e do contador proximo-item.sh.
+// Nunca toca o painel real: PAINEL_DIR e HOME são pastas temporárias.
+// Rodar: node ~/.claude/hooks/tests/painel-fila.test.mjs   (SCRIPTS_DIR troca a pasta dos scripts)
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, utimesSync, readFileSync, readdirSync } from 'node:fs';
+import { tmpdir, homedir } from 'node:os';
+import { join } from 'node:path';
+
+const SCRIPTS = process.env.SCRIPTS_DIR || join(homedir(), '.claude', 'skills', 'orquestradora', 'scripts');
+let base;
+let falhas = 0;
+
+function novoBase() {
+  base = mkdtempSync(join(tmpdir(), 'painel-fila-'));
+  mkdirSync(join(base, 'painel'));
+  mkdirSync(join(base, 'home'));
+}
+// `prazo`: o teste da trava presa espera o prazo do próprio comando (5 s de tentativas) e mede comportamento, não
+// velocidade; com a máquina em carga 27 os 30 s não bastaram, então esses casos passam um prazo largo.
+function run(cmd, args, extraEnv = {}, prazo = 30000) {
+  const r = spawnSync(cmd, args, {
+    encoding: 'utf8', timeout: prazo, killSignal: 'SIGKILL',
+    env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), ...extraEnv },
+  });
+  if (r.error) throw r.error;
+  return { exit: r.status, out: r.stdout, err: r.stderr };
+}
+const painel = (...args) => run('node', [join(SCRIPTS, 'painel.mjs'), ...args]);
+const json = (r) => JSON.parse(r.out);
+
+function caso(nome, fn) {
+  novoBase();
+  try { fn(); console.log(`ok   ${nome}`); } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
+  rmSync(base, { recursive: true, force: true });
+}
+function runAsync(cmd, args) {
+  return new Promise((resolve, reject) => {
+    const c = spawn(cmd, args, { env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home") } });
+    let out = ''; let err = '';
+    const t = setTimeout(() => c.kill('SIGKILL'), 20000);
+    c.stdout.on('data', (d) => { out += d; }); c.stderr.on('data', (d) => { err += d; });
+    c.on('error', reject);
+    c.on('close', (status) => { clearTimeout(t); resolve({ exit: status, out, err }); });
+  });
+}
+async function casoAsync(nome, fn) {
+  novoBase();
+  try { await fn(); console.log(`ok   ${nome}`); } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
+  rmSync(base, { recursive: true, force: true });
+}
+function igual(a, b, msg) { if (a !== b) throw new Error(`${msg}: esperado ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); }
+function ok(cond, msg) { if (!cond) throw new Error(msg); }
+
+const ITEM = '{"titulo":"Fatia 1","frente":"builder","estado":"aberto","proximoPapel":"exec","aplicaMigration":false,"historico":[]}';
+
+caso('set fila F1 grava {id, version, data} com atualizadoEm', () => {
+  const r = painel('set', 'fila', 'F1', ITEM);
+  igual(r.exit, 0, `exit (${r.err})`);
+  const g = json(painel('get', 'fila', 'F1'));
+  igual(g.id, 'F1', 'id');
+  igual(g.version, 1, 'version');
+  igual(g.data.estado, 'aberto', 'estado');
+  ok(typeof g.data.atualizadoEm === 'string' && g.data.atualizadoEm.length > 0, 'sem atualizadoEm');
+});
+caso('update --se-versao 1 passa; de novo é recusado (exit 1, "versão" no stderr)', () => {
+  painel('set', 'fila', 'F1', ITEM);
+  const a = painel('update', 'fila', 'F1', '{"estado":"em-andamento","donoLocalId":"local_x","donoApelido":"E1"}', '--se-versao', '1');
+  igual(a.exit, 0, `1º update (${a.err})`);
+  igual(json(a).version, 2, 'version depois do 1º');
+  const b = painel('update', 'fila', 'F1', '{"donoLocalId":"local_y","donoApelido":"E2"}', '--se-versao', '1');
+  igual(b.exit, 1, 'exit do 2º');
+  ok(b.err.includes('versão'), `stderr sem "versão": ${b.err}`);
+  igual(json(painel('get', 'fila', 'F1')).data.donoLocalId, 'local_x', 'o dono não pode ter mudado');
+});
+caso('batch com seVersao velho é recusado; com a versão certa passa', () => {
+  painel('set', 'fila', 'F1', ITEM);
+  painel('update', 'fila', 'F1', '{"nota":"a"}');
+  const velho = painel('batch', JSON.stringify([{ op: 'update', colecao: 'fila', id: 'F1', data: { donoLocalId: 'local_z' }, seVersao: 1 }]));
+  igual(velho.exit, 1, 'exit com versão velha');
+  ok(velho.err.includes('versão'), `stderr sem "versão": ${velho.err}`);
+  ok(json(painel('get', 'fila', 'F1')).data.donoLocalId === undefined, 'o batch recusado gravou mesmo assim');
+  const certo = painel('batch', JSON.stringify([{ op: 'update', colecao: 'fila', id: 'F1', data: { donoLocalId: 'local_z' }, seVersao: 2 }]));
+  igual(certo.exit, 0, `exit com a versão certa (${certo.err})`);
+  igual(json(painel('get', 'fila', 'F1')).data.donoLocalId, 'local_z', 'dono');
+});
+caso('batch sem seVersao continua valendo (compatível)', () => {
+  const r = painel('batch', JSON.stringify([{ op: 'set', colecao: 'fila', id: 'F1', data: { estado: 'aberto' } }, { op: 'set', colecao: 'fila', id: 'F2', data: { estado: 'feito' } }]));
+  igual(r.exit, 0, `exit (${r.err})`);
+  igual(json(r).length, 2, 'ops');
+});
+caso('list fila em-andamento filtra pelo estado', () => {
+  painel('set', 'fila', 'F1', '{"estado":"aberto"}');
+  painel('set', 'fila', 'F2', '{"estado":"em-andamento"}');
+  painel('set', 'fila', 'F3', '{"estado":"feito"}');
+  const todos = json(painel('list', 'fila'));
+  igual(todos.length, 3, 'sem filtro');
+  const so = json(painel('list', 'fila', 'em-andamento'));
+  igual(so.length, 1, 'com filtro');
+  igual(so[0].id, 'F2', 'qual');
+});
+caso('coleção desconhecida é recusada e a mensagem cita a fila', () => {
+  const r = painel('list', 'xpto');
+  igual(r.exit, 1, 'exit');
+  ok(r.err.includes('fila'), `mensagem: ${r.err}`);
+});
+caso('proximo-item.sh com HOME temporário e F7.json na fila: F8, depois F9', () => {
+  const fila = join(base, 'home', '.claude', 'orquestracao', 'painel', 'fila');
+  mkdirSync(fila, { recursive: true });
+  writeFileSync(join(fila, 'F7.json'), '{"id":"F7","version":1,"data":{}}\n');
+  const a = run('bash', [join(SCRIPTS, 'proximo-item.sh')]);
+  igual(a.exit, 0, `exit (${a.err})`);
+  igual(a.out.trim(), 'F8', '1ª');
+  igual(run('bash', [join(SCRIPTS, 'proximo-item.sh')]).out.trim(), 'F9', '2ª');
+});
+caso('proximo-item.sh considera também os itens antigos pool/itens/F<n>.md', () => {
+  const itens = join(base, 'home', '.claude', 'orquestracao', 'pool', 'itens');
+  mkdirSync(itens, { recursive: true });
+  for (const n of ['F1', 'F4', 'F3']) writeFileSync(join(itens, `${n}.md`), 'antigo\n');
+  igual(run('bash', [join(SCRIPTS, 'proximo-item.sh')]).out.trim(), 'F5', 'depois do maior antigo');
+});
+caso('proximo-item.sh sem nada: F1; trava presa é recusada com prazo (exit 1)', () => {
+  igual(run('bash', [join(SCRIPTS, 'proximo-item.sh')]).out.trim(), 'F1', 'primeiro');
+  mkdirSync(join(base, 'home', '.claude', 'orquestracao', 'pool', '.trava-itens'));
+  const r = run('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_TENTATIVAS: '5' }, 180000);
+  igual(r.exit, 1, 'exit com a trava ocupada');
+  ok(r.err.includes('trava'), `stderr: ${r.err}`);
+});
+
+const antigo = (dir) => { const t = new Date(Date.now() - 60_000); utimesSync(dir, t, t); };
+const poolDir = () => join(base, 'home', '.claude', 'orquestracao', 'pool');
+
+caso('batch atômico: F1 com versão certa + F2 com versão velha = exit 1 e F1 não muda', () => {
+  painel('set', 'fila', 'F1', ITEM);
+  painel('set', 'fila', 'F2', ITEM);
+  painel('update', 'fila', 'F2', '{"nota":"a"}');
+  const r = painel('batch', JSON.stringify([
+    { op: 'update', colecao: 'fila', id: 'F1', data: { nota: 'x' }, seVersao: 1 },
+    { op: 'update', colecao: 'fila', id: 'F2', data: { nota: 'y' }, seVersao: 1 },
+  ]));
+  igual(r.exit, 1, 'exit');
+  const f1 = json(painel('get', 'fila', 'F1'));
+  igual(f1.version, 1, 'F1 foi gravado apesar da recusa de F2');
+  ok(f1.data.nota === undefined, 'F1 ganhou a nota');
+});
+caso('batch com op desconhecida na 2ª posição não grava a 1ª', () => {
+  const r = painel('batch', JSON.stringify([
+    { op: 'set', colecao: 'fila', id: 'F1', data: { estado: 'aberto' } },
+    { op: 'xpto', colecao: 'fila', id: 'F2', data: {} },
+  ]));
+  igual(r.exit, 1, 'exit');
+  igual(painel('get', 'fila', 'F1').exit, 1, 'F1 existe');
+});
+caso('trava do painel recente e presa: exit 1 e a trava continua; trava de 60 s atrás é removida e grava', () => {
+  const trava = join(base, 'painel', '.trava');
+  mkdirSync(trava);
+  const r = run('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], {}, 180000);
+  igual(r.exit, 1, 'exit com trava recente');
+  ok(r.err.includes('trava'), `stderr: ${r.err}`);
+  ok(existsSync(trava), 'a trava alheia foi removida');
+  antigo(trava);
+  const r2 = painel('set', 'fila', 'F1', ITEM);
+  igual(r2.exit, 0, `exit com trava órfã (${r2.err})`);
+  ok(!existsSync(trava), 'a trava ficou depois do comando');
+  ok(r2.err.includes('órfã'), `sem aviso: ${r2.err}`);
+});
+caso('get e list não pegam trava', () => {
+  painel('set', 'fila', 'F1', ITEM);
+  mkdirSync(join(base, 'painel', '.trava'));
+  igual(painel('get', 'fila', 'F1').exit, 0, 'get');
+  igual(painel('list', 'fila').exit, 0, 'list');
+});
+caso('proximo-item.sh: contador vazio com F1–F4 em pool/itens dá F5', () => {
+  const itens = join(poolDir(), 'itens');
+  mkdirSync(itens, { recursive: true });
+  for (const n of ['F1', 'F2', 'F3', 'F4']) writeFileSync(join(itens, `${n}.md`), 'antigo\n');
+  writeFileSync(join(poolDir(), 'contador-de-itens'), '');
+  igual(run('bash', [join(SCRIPTS, 'proximo-item.sh')]).out.trim(), 'F5', 'vazio');
+  writeFileSync(join(poolDir(), 'contador-de-itens'), 'lixo\n');
+  igual(run('bash', [join(SCRIPTS, 'proximo-item.sh')]).out.trim(), 'F5', 'não numérico');
+  igual(run('bash', [join(SCRIPTS, 'proximo-item.sh')]).out.trim(), 'F6', 'seguinte');
+});
+caso('proximo-item.sh: trava recente presa = exit 1 e continua; trava de 60 s atrás = sucesso', () => {
+  mkdirSync(poolDir(), { recursive: true });
+  const trava = join(poolDir(), '.trava-itens');
+  mkdirSync(trava);
+  const r = run('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_TENTATIVAS: '5' }, 180000);
+  igual(r.exit, 1, 'exit com trava recente');
+  ok(existsSync(trava), 'a trava alheia foi removida');
+  antigo(trava);
+  const r2 = run('bash', [join(SCRIPTS, 'proximo-item.sh')]);
+  igual(r2.exit, 0, `exit com trava órfã (${r2.err})`);
+  igual(r2.out.trim(), 'F1', 'id');
+  ok(!existsSync(trava), 'a trava ficou');
+});
+
+caso('proximo-item.sh: trava recente com o dono de OUTRO token: exit 1 e a trava e o dono ficam como estavam', () => {
+  mkdirSync(poolDir(), { recursive: true });
+  const trava = join(poolDir(), '.trava-itens');
+  mkdirSync(trava); writeFileSync(join(trava, 'dono'), 'token-do-outro\n');
+  const r = run('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_TENTATIVAS: '5' });
+  igual(r.exit, 1, 'exit');
+  ok(existsSync(trava), 'a trava do outro foi removida');
+  igual(readFileSync(join(trava, 'dono'), 'utf8'), 'token-do-outro\n', 'dono mudou');
+});
+await casoAsync('proximo-item.sh: trava tomada por outro no meio do comando: o trap não apaga a do outro', async () => {
+  const trava = join(poolDir(), '.trava-itens');
+  const p = new Promise((resolve, reject) => {
+    const c = spawn('bash', [join(SCRIPTS, 'proximo-item.sh')], { env: { ...process.env, HOME: join(base, 'home'), PROXIMO_ITEM_PAUSA: '1.5' } });
+    let err = ''; c.stderr.on('data', (d) => { err += d; });
+    const t = setTimeout(() => c.kill('SIGKILL'), 20000);
+    c.on('error', reject); c.on('close', (exit) => { clearTimeout(t); resolve({ exit, err }); });
+  });
+  await new Promise((r) => setTimeout(r, 700));
+  ok(existsSync(join(trava, 'dono')), 'precondição: o script não pegou a trava com dono');
+  rmSync(trava, { recursive: true, force: true });
+  mkdirSync(trava); writeFileSync(join(trava, 'dono'), 'token-do-outro\n');
+  const r = await p;
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(existsSync(trava), 'o trap apagou a trava do outro');
+  igual(readFileSync(join(trava, 'dono'), 'utf8'), 'token-do-outro\n', 'dono');
+});
+
+await casoAsync('trava tomada por outra execução no meio do comando: a minha não apaga a do outro', async () => {
+  const trava = join(base, 'painel', '.trava');
+  const p = new Promise((resolve, reject) => {
+    const c = spawn('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], {
+      env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), PAINEL_PAUSA_MS: '1500' },
+    });
+    let err = ''; c.stderr.on('data', (d) => { err += d; });
+    const t = setTimeout(() => c.kill('SIGKILL'), 20000);
+    c.on('error', reject); c.on('close', (exit) => { clearTimeout(t); resolve({ exit, err }); });
+  });
+  await new Promise((r) => setTimeout(r, 600));
+  ok(existsSync(join(trava, 'dono')), 'precondição: a execução não pegou a trava com token');
+  rmSync(trava, { recursive: true, force: true }); // "órfã" removida por outra execução…
+  mkdirSync(trava); writeFileSync(join(trava, 'dono'), 'token-do-outro'); // …que logo tomou a trava
+  const r = await p;
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(existsSync(trava), 'a minha execução apagou a trava do outro');
+  igual(readFileSync(join(trava, 'dono'), 'utf8'), 'token-do-outro', 'token do outro');
+});
+caso('trava órfã com token: removida, grava, e a trava some no fim', () => {
+  const trava = join(base, 'painel', '.trava');
+  mkdirSync(trava); writeFileSync(join(trava, 'dono'), 'velho'); antigo(trava);
+  const r = painel('set', 'fila', 'F1', ITEM);
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(!existsSync(trava), 'a trava ficou');
+  ok(!readdirSync(join(base, 'painel')).some((n) => n.includes('.orfa.')), 'sobrou a órfã renomeada');
+});
+
+// B1/B2: a trava nasce completa (nunca vazia) e só se toma a de dono morto. Pid morto = de um filho que já saiu.
+const pidMorto = () => { const r = spawnSync('node', ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }); return Number(r.stdout); };
+caso('trava vazia recente bloqueia e não é tocada (exit 1, continua vazia)', () => {
+  const trava = join(base, 'painel', '.trava');
+  mkdirSync(trava);
+  const r = run('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], {}, 180000);
+  igual(r.exit, 1, 'exit');
+  ok(existsSync(trava) && readdirSync(trava).length === 0, 'a trava vazia foi engolida ou mudou');
+});
+caso('B1 painel: trava antiga com dono VIVO não é tomada; com dono morto é', () => {
+  const trava = join(base, 'painel', '.trava');
+  mkdirSync(trava); writeFileSync(join(trava, 'dono'), `${process.pid}-vivo`); antigo(trava);
+  const r = run('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], {}, 180000);
+  igual(r.exit, 1, `exit com dono vivo (${r.err})`);
+  igual(readFileSync(join(trava, 'dono'), 'utf8'), `${process.pid}-vivo`, 'dono mudou');
+  writeFileSync(join(trava, 'dono'), `${pidMorto()}-morto`); antigo(trava);
+  const r2 = painel('set', 'fila', 'F1', ITEM);
+  igual(r2.exit, 0, `exit com dono morto (${r2.err})`);
+  ok(r2.err.includes('órfã'), `sem aviso: ${r2.err}`);
+  ok(!existsSync(trava), 'a trava ficou');
+});
+caso('B1 painel: sobra nenhum diretório temporário da trava depois de um comando', () => {
+  igual(painel('set', 'fila', 'F1', ITEM).exit, 0, 'exit');
+  ok(!readdirSync(join(base, 'painel')).some((n) => n.startsWith('.trava')), `sobrou: ${readdirSync(join(base, 'painel'))}`);
+});
+caso('B2 proximo-item.sh: trava antiga com dono VIVO não é tomada; com dono morto é', () => {
+  mkdirSync(poolDir(), { recursive: true });
+  const trava = join(poolDir(), '.trava-itens');
+  mkdirSync(trava); writeFileSync(join(trava, 'dono'), `${process.pid}-vivo\n`); antigo(trava);
+  const r = run('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_TENTATIVAS: '5' }, 180000);
+  igual(r.exit, 1, `exit com dono vivo (${r.err})`);
+  igual(readFileSync(join(trava, 'dono'), 'utf8'), `${process.pid}-vivo\n`, 'dono mudou');
+  writeFileSync(join(trava, 'dono'), `${pidMorto()}-morto\n`); antigo(trava);
+  const r2 = run('bash', [join(SCRIPTS, 'proximo-item.sh')]);
+  igual(r2.exit, 0, `exit com dono morto (${r2.err})`);
+  igual(r2.out.trim(), 'F1', 'id');
+  ok(!existsSync(trava), 'a trava ficou');
+  ok(!readdirSync(poolDir()).some((n) => n.startsWith('.trava-itens')), `sobrou: ${readdirSync(poolDir())}`);
+});
+
+// C2: a trava nunca existe vazia nem no instante entre gravar o dono e publicar. O gancho segura a execução nesse instante;
+// a sonda olha `.trava` durante a pausa: ausente (ainda só o temporário, com dono) é o certo; existir vazia é o defeito.
+await casoAsync('C2 painel: durante a publicação a .trava não existe vazia (o temporário já tem o dono)', async () => {
+  const pdir = join(base, 'painel');
+  const c = spawn('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { env: { ...process.env, PAINEL_DIR: pdir, HOME: join(base, 'home'), PAINEL_PAUSA_PUBLICAR_MS: '1500' } });
+  const fim = new Promise((r) => c.on('close', r));
+  let temporarioComDono = false; let vazia = false;
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    const novos = readdirSync(pdir).filter((n) => n.startsWith('.trava.novo-'));
+    if (novos.some((n) => existsSync(join(pdir, n, 'dono')))) temporarioComDono = true;
+    if (existsSync(join(pdir, '.trava')) && !existsSync(join(pdir, '.trava', 'dono'))) vazia = true;
+  }
+  await fim;
+  ok(temporarioComDono, 'precondição: a pausa não segurou a execução com o temporário pronto (a sonda não mediu a janela)');
+  ok(!vazia, '.trava existiu vazia durante a publicação');
+  igual(json(painel('get', 'fila', 'F1')).id, 'F1', 'o comando não gravou');
+});
+// D1/C1: um roubador por vez remove a órfã. Dois processos julgam a mesma órfã (pid morto, 60 s atrás) com o gancho
+// de pausa entre o julgamento e o rename; exatamente um rouba, o outro não toca a trava (o dono final é o de quem tomou).
+const orfaSemeada = (trava, extra = '') => { mkdirSync(trava); writeFileSync(join(trava, 'dono'), `${pidMorto()}-morto${extra}`); antigo(trava); };
+const spawnComEnv = (cmd, args, env) => {
+  const c = spawn(cmd, args, { env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), ...env } });
+  const r = { out: '', err: '', exit: null, pid: c.pid }; c.stdout.on('data', (d) => { r.out += d; }); c.stderr.on('data', (d) => { r.err += d; });
+  r.fim = new Promise((res) => c.on('close', (code) => { r.exit = code; res(r); }));
+  return r;
+};
+await casoAsync('D1 painel: dois roubadores da mesma órfã — exatamente um remove, nenhum aviso de trava viva', async () => {
+  const trava = join(base, 'painel', '.trava');
+  orfaSemeada(trava);
+  const env = { PAINEL_PAUSA_ROUBO_MS: '600' };
+  const rs = [0, 1].map((i) => spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', `F${i + 1}`, ITEM], env));
+  await Promise.all(rs.map((r) => r.fim));
+  igual(rs.map((r) => r.exit).join(','), '0,0', `exits (${rs.map((r) => r.err)})`);
+  igual(rs.filter((r) => r.err.includes('órfã')).length, 1, `quem removeu a órfã (${rs.map((r) => r.err)})`);
+  ok(!rs.some((r) => r.err.includes('perdeu-trava-viva')), 'sobrou o aviso antigo');
+  ok(!readdirSync(join(base, 'painel')).some((n) => n.startsWith('.trava')), `sobrou: ${readdirSync(join(base, 'painel'))}`);
+});
+await casoAsync('D1 proximo-item.sh: dois roubadores da mesma órfã — exatamente um remove', async () => {
+  mkdirSync(poolDir(), { recursive: true });
+  const trava = join(poolDir(), '.trava-itens');
+  orfaSemeada(trava, '\n');
+  const rs = [0, 1].map(() => spawnComEnv('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_PAUSA_ROUBO: '1' }));
+  await Promise.all(rs.map((r) => r.fim));
+  igual(rs.map((r) => r.exit).join(','), '0,0', `exits (${rs.map((r) => r.err)})`);
+  igual(rs.filter((r) => r.err.includes('órfã')).length, 1, `quem removeu a órfã (${rs.map((r) => r.err)})`);
+  igual(rs.map((r) => r.out.trim()).sort().join(','), 'F1,F2', 'ids distintos');
+  ok(!readdirSync(poolDir()).some((n) => n.startsWith('.trava-itens')), `sobrou: ${readdirSync(poolDir())}`);
+});
+caso('D1 painel: roubo recente ocupado faz esperar sem roubar; roubo de mais de 60 s é limpo e a execução segue', () => {
+  const trava = join(base, 'painel', '.trava'); const roubo = `${trava}.roubo`;
+  orfaSemeada(trava); mkdirSync(roubo);
+  const r = run('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], {}, 180000);
+  igual(r.exit, 1, `exit com roubo ocupado (${r.err})`);
+  ok(existsSync(trava) && existsSync(roubo), 'mexeu na trava ou no roubo de outro');
+  const velho = new Date(Date.now() - 120_000); utimesSync(roubo, velho, velho);
+  const r2 = painel('set', 'fila', 'F1', ITEM);
+  igual(r2.exit, 0, `exit com roubo órfão (${r2.err})`);
+  ok(!existsSync(trava) && !existsSync(roubo), 'sobrou trava ou roubo');
+});
+caso('D1 proximo-item.sh: roubo recente ocupado faz esperar sem roubar; roubo de mais de 60 s é limpo', () => {
+  mkdirSync(poolDir(), { recursive: true });
+  const trava = join(poolDir(), '.trava-itens'); const roubo = `${trava}.roubo`;
+  orfaSemeada(trava, '\n'); mkdirSync(roubo);
+  const r = run('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_TENTATIVAS: '5' }, 180000);
+  igual(r.exit, 1, `exit com roubo ocupado (${r.err})`);
+  ok(existsSync(trava) && existsSync(roubo), 'mexeu na trava ou no roubo de outro');
+  const velho = new Date(Date.now() - 120_000); utimesSync(roubo, velho, velho);
+  const r2 = run('bash', [join(SCRIPTS, 'proximo-item.sh')]);
+  igual(r2.exit, 0, `exit com roubo órfão (${r2.err})`);
+  ok(!existsSync(trava) && !existsSync(roubo), 'sobrou trava ou roubo');
+});
+caso('D3 gancho de pausa com valor não numérico é ignorado (termina dentro de 5 s)', () => {
+  const t0 = Date.now();
+  const r = run('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { PAINEL_PAUSA_MS: 'abc', PAINEL_PAUSA_PUBLICAR_MS: '-5', PAINEL_PAUSA_ROUBO_MS: 'x' });
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(Date.now() - t0 < 5000, `demorou ${Date.now() - t0} ms`);
+  const t1 = Date.now();
+  const r2 = run('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_PAUSA: 'abc', PROXIMO_ITEM_PAUSA_ROUBO: 'x' });
+  igual(r2.exit, 0, `exit sh (${r2.err})`);
+  ok(Date.now() - t1 < 5000, `sh demorou ${Date.now() - t1} ms`);
+});
+
+// --- Fase 1 do kit (24/10): projeto por documento e PAINEL_DIR com fallback IZANAGI_PAINEL_DIR ---
+function repoGit(nome) {
+  const d = join(base, nome); mkdirSync(d);
+  for (const a of [['init', '-q'], ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'x']]) {
+    spawnSync('git', ['-C', d, ...a], { timeout: 15000, killSignal: 'SIGKILL', stdio: 'ignore' });
+  }
+  return d;
+}
+const painelEm = (cwd, ...args) => {
+  const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
+    cwd, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL',
+    env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home") },
+  });
+  return { exit: r.status, out: r.stdout, err: r.stderr };
+};
+caso('projeto automático: set fila sem `projeto`, rodado de dentro do repo alfa, grava projeto "alfa" (também em sessoes)', () => {
+  const A = repoGit('alfa');
+  igual(painelEm(A, 'set', 'fila', 'F1', ITEM).exit, 0, 'set fila');
+  igual(json(painelEm(A, 'get', 'fila', 'F1')).data.projeto, 'alfa', 'projeto da fila');
+  igual(painelEm(A, 'set', 'sessoes', 'local_x', '{"titulo":"E1 · x","estado":"parada"}').exit, 0, 'set sessoes');
+  igual(json(painelEm(A, 'get', 'sessoes', 'local_x')).data.projeto, 'alfa', 'projeto da sessão');
+});
+caso('projeto explícito não é sobrescrito; fora de git não inventa projeto', () => {
+  const A = repoGit('alfa'); const sem = join(base, 'semgit'); mkdirSync(sem);
+  painelEm(A, 'set', 'fila', 'F1', '{"titulo":"x","estado":"aberto","projeto":"izanagi"}');
+  igual(json(painelEm(A, 'get', 'fila', 'F1')).data.projeto, 'izanagi', 'explícito');
+  igual(painelEm(sem, 'set', 'fila', 'F2', ITEM).exit, 0, 'set fora de git');
+  ok(!('projeto' in json(painelEm(sem, 'get', 'fila', 'F2')).data), 'projeto inventado fora de git');
+});
+caso('criar documento sem projeto, fora de git: exit 0, grava, e avisa no stderr; com projeto ou em git não avisa', () => {
+  const A = repoGit('alfa'); const sem = join(base, 'semgit'); mkdirSync(sem);
+  const r = painelEm(sem, 'set', 'fila', 'F2', ITEM);
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(r.err.includes('aviso: fila/F2 sem projeto (cwd fora de git)'), `stderr sem o aviso: ${JSON.stringify(r.err)}`);
+  ok(json(painelEm(sem, 'get', 'fila', 'F2')).data.titulo, 'não gravou');
+  ok(!painelEm(A, 'set', 'fila', 'F3', ITEM).err.includes('aviso'), 'avisou dentro de git');
+  ok(!painelEm(sem, 'set', 'fila', 'F4', '{"titulo":"x","estado":"aberto","projeto":"izanagi"}').err.includes('aviso'), 'avisou com projeto explícito');
+});
+caso('list --projeto filtra; sem flag e com --todos trazem tudo', () => {
+  const A = repoGit('alfa'); const B = repoGit('beta');
+  painelEm(A, 'set', 'fila', 'F1', ITEM); painelEm(B, 'set', 'fila', 'F2', ITEM);
+  const ids = (r) => json(r).map((d) => d.id).sort().join(',');
+  igual(ids(painelEm(A, 'list', 'fila', '--projeto', 'alfa')), 'F1', '--projeto alfa');
+  igual(ids(painelEm(A, 'list', 'fila')), 'F1,F2', 'sem flag');
+  igual(ids(painelEm(A, 'list', 'fila', '--todos')), 'F1,F2', '--todos');
+  igual(ids(painelEm(A, 'list', 'fila', 'aberto', '--projeto', 'beta')), 'F2', 'estado + --projeto');
+});
+caso('PAINEL_DIR e IZANAGI_PAINEL_DIR funcionam; o novo vence se os dois existirem', () => {
+  const velho = join(base, 'velho'); const novo = join(base, 'novo'); mkdirSync(velho); mkdirSync(novo);
+  const r = (env) => spawnSync('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, PAINEL_DIR: '', IZANAGI_PAINEL_DIR: '', HOME: join(base, 'home'), ...env } });
+  igual(r({ IZANAGI_PAINEL_DIR: velho }).status, 0, 'nome antigo');
+  ok(existsSync(join(velho, 'fila', 'F1.json')), 'nome antigo não gravou em velho');
+  igual(r({ PAINEL_DIR: novo, IZANAGI_PAINEL_DIR: velho }).status, 0, 'os dois');
+  ok(existsSync(join(novo, 'fila', 'F1.json')), 'PAINEL_DIR não venceu');
+});
+
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+// E1: a soltura renomeia a trava (nunca a deixa vazia no lugar). B confere que a trava não existe, A publica, grava e solta
+// com pausa entre conferir o dono e o rename; o rename de B cai durante essa pausa e tem de falhar (a trava tem dono), sem
+// que A receba ENOTEMPTY ao soltar.
+await casoAsync('E1 painel: soltar não deixa a trava vazia no lugar — o rename de outro durante a soltura falha, e quem gravou sai com 0 e sem aviso', async () => {
+  const pdir = join(base, 'painel'); painel('set', 'fila', 'F1', ITEM); const antes = json(painel('get', 'fila', 'F1')).version;
+  const b = spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'update', 'fila', 'F1', '{"b":1}'], { PAINEL_PAUSA_PUBLICAR_MS: '1500', PAINEL_PAUSA_MS: '1500' }); // B segura a trava se a pegar: é o que faz a soltura de A falhar sem o rename
+  await esperar(500);
+  const a = spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'update', 'fila', 'F1', '{"a":1}'], { PAINEL_PAUSA_SOLTAR_MS: '1500' });
+  await Promise.all([a.fim, b.fim]);
+  igual(`${a.exit},${b.exit}`, '0,0', `exits (a: ${a.err} | b: ${b.err})`);
+  ok(!a.err.includes('não consegui soltar') && !b.err.includes('não consegui soltar') && !/ENOTEMPTY/.test(a.err + b.err), `avisos: ${a.err} | ${b.err}`);
+  const f = json(painel('get', 'fila', 'F1'));
+  igual(f.version, antes + 2, 'versão (as duas gravaram)');
+  ok(f.data.a === 1 && f.data.b === 1, 'campos das duas');
+  ok(!readdirSync(pdir).some((n) => n.startsWith('.trava')), `sobrou: ${readdirSync(pdir)}`);
+});
+await casoAsync('E1 proximo-item.sh: soltar com pausa — outro processo espera e pega outro id; trava some', async () => {
+  mkdirSync(poolDir(), { recursive: true });
+  const a = spawnComEnv('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_PAUSA_SOLTAR: '1.5' });
+  await esperar(500);
+  const b = spawnComEnv('bash', [join(SCRIPTS, 'proximo-item.sh')], {});
+  await Promise.all([a.fim, b.fim]);
+  igual(`${a.exit},${b.exit}`, '0,0', `exits (${a.err} | ${b.err})`);
+  igual([a.out.trim(), b.out.trim()].sort().join(','), 'F1,F2', 'ids distintos');
+  ok(!readdirSync(poolDir()).some((n) => n.startsWith('.trava-itens')), `sobrou: ${readdirSync(poolDir())}`);
+});
+
+// E3: o roubador morto no meio da pausa não prende os outros por 60 s: o roubo tem dono (pid morto) e sai na hora.
+await casoAsync('E3 painel: roubador morto (SIGKILL na pausa) — a gravação seguinte consegue a trava em menos de 3 s', async () => {
+  const trava = join(base, 'painel', '.trava'); orfaSemeada(trava);
+  const a = spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { PAINEL_PAUSA_ROUBO_MS: '20000' });
+  await esperar(800);
+  ok(existsSync(`${trava}.roubo`), 'o roubo de A deveria existir durante a pausa');
+  process.kill(a.pid, 'SIGKILL'); await a.fim;
+  const t0 = Date.now();
+  const r = painel('set', 'fila', 'F1', ITEM);
+  const gasto = Date.now() - t0;
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(gasto < 3000, `levou ${gasto} ms`);
+  ok(!readdirSync(join(base, 'painel')).some((n) => n.startsWith('.trava')), `sobrou: ${readdirSync(join(base, 'painel'))}`);
+});
+await casoAsync('E3 proximo-item.sh: roubador morto — o seguinte pega o id em menos de 3 s', async () => {
+  mkdirSync(poolDir(), { recursive: true });
+  const trava = join(poolDir(), '.trava-itens'); orfaSemeada(trava, '\n');
+  const a = spawnComEnv('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_PAUSA_ROUBO: '8' });
+  await esperar(1200);
+  ok(existsSync(`${trava}.roubo`), 'o roubo de A deveria existir durante a pausa');
+  process.kill(a.pid, 'SIGKILL'); await a.fim;
+  const t0 = Date.now();
+  const r = run('bash', [join(SCRIPTS, 'proximo-item.sh')]);
+  const gasto = Date.now() - t0;
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(gasto < 3000, `levou ${gasto} ms`);
+  ok(!readdirSync(poolDir()).some((n) => n.startsWith('.trava-itens')), `sobrou: ${readdirSync(poolDir())}`);
+});
+
+// E2 (caso3 da V2): A rouba com pausa 300 ms, B com 900 ms, e C entra aos 450 ms segurando a trava por 1500 ms. O real remove
+// só a órfã semeada (1); sem o roubo, B apagaria a trava nova de C (2).
+await casoAsync('E2 painel: três processos sobre uma órfã — exatamente 1 remoção, as três gravações entram', async () => {
+  const trava = join(base, 'painel', '.trava'); painel('set', 'fila', 'F1', ITEM); orfaSemeada(trava);
+  const antes = json(painel('get', 'fila', 'F1')).version;
+  const e = (ms) => ({ PAINEL_PAUSA_ROUBO_MS: String(ms) });
+  const a = spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'update', 'fila', 'F1', '{"a":1}'], e(300));
+  const b = spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'update', 'fila', 'F1', '{"b":1}'], e(900));
+  await esperar(450);
+  const c = spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'update', 'fila', 'F1', '{"c":1}'], { PAINEL_PAUSA_MS: '1500' });
+  await Promise.all([a.fim, b.fim, c.fim]);
+  igual([a, b, c].map((x) => x.exit).join(','), '0,0,0', `exits (${[a, b, c].map((x) => x.err)})`);
+  igual([a, b, c].filter((x) => x.err.includes('removida')).length, 1, `remoções (${[a, b, c].map((x) => x.err)})`);
+  const f = json(painel('get', 'fila', 'F1'));
+  igual(f.version, antes + 3, 'versão'); ok(f.data.a === 1 && f.data.b === 1 && f.data.c === 1, 'as três gravações');
+});
+
+for (let rodada = 1; rodada <= 3; rodada++) {
+  await casoAsync(`8 update --se-versao 1 simultâneos, rodada ${rodada}: exatamente 1 vence, versão final 2`, async () => {
+    painel('set', 'fila', 'F1', ITEM);
+    const rs = await Promise.all(Array.from({ length: 8 }, (_, i) => runAsync('node', [join(SCRIPTS, 'painel.mjs'), 'update', 'fila', 'F1', JSON.stringify({ donoApelido: `E${i}` }), '--se-versao', '1'])));
+    igual(rs.filter((r) => r.exit === 0).length, 1, `vencedores (exits: ${rs.map((r) => r.exit)})`);
+    igual(json(painel('get', 'fila', 'F1')).version, 2, 'versão final');
+  });
+}
+
+console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
+process.exitCode = falhas ? 1 : 0;
