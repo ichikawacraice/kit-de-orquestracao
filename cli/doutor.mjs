@@ -29,8 +29,10 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   // hook do kit duplicado no settings global
   const hooksJson = lerTexto(RAIZ_DO_KIT, 'plugins/orquestracao/hooks/hooks.json') ?? '';
   const nomes = [...new Set([...hooksJson.matchAll(/\/hooks\/([\w-]+\.mjs)/g)].map((m) => m[1]))];
-  const global = lerTexto(join(home, '.claude'), 'settings.json') ?? '';
-  const duplicados = nomes.filter((n) => global.includes(n));
+  // só conta quem está num `command` dentro de `hooks` (uma permissão que cita o script não dispara hook nenhum)
+  const global = lerJson(join(home, '.claude', 'settings.json'));
+  const comandos = Object.values(global?.hooks ?? {}).flat().flatMap((g) => g?.hooks ?? []).map((h) => String(h?.command ?? ''));
+  const duplicados = nomes.filter((n) => comandos.some((c) => c.includes(n)));
   if (!nomes.length) falha('não consegui listar os hooks do plugin (hooks.json do kit vazio)');
   else if (duplicados.length) for (const n of duplicados) falha(`hook do kit também em ~/.claude/settings.json: ${n} (dispararia duas vezes)`);
   else ok(`nenhum hook do kit também em ~/.claude/settings.json (${nomes.length} conferidos)`);
@@ -67,7 +69,7 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   const pk = lerJson(join(destino, 'package.json'));
   for (const t of c.package?.trocados ?? []) if (pk?.scripts?.[t.nome] !== t.gate) linhas.push(`aviso: scripts.${t.nome} (package.json) não passa mais pelo gate`);
   for (const [nome, valor] of Object.entries(c.package?.scripts ?? {})) if (pk?.scripts?.[nome] !== valor) linhas.push(`aviso: scripts.${nome} (package.json) não está mais como o kit deixou`);
-  for (const p of lock.pendente ?? []) linhas.push(`aviso: pendente da adoção parcial: ${p}`);
+  for (const p of lock.pendente ?? []) linhas.push(`aviso: pendente da adoção: ${p}`);
   linhas.push(falhas ? `${falhas} falha(s)` : 'tudo em dia');
   return { codigo: falhas ? 1 : 0, saida: `${linhas.join('\n')}\n`, erro: '' };
 }

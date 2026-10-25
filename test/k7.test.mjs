@@ -86,8 +86,8 @@ describe('kit adotar', () => {
       assert.equal(existsSync(join(d, '.claude', 'kit.lock.json')), false);
       for (const n of NOMES_DOS_BLOCOS) assert.match(r.stdout, new RegExp(`\\+<!-- kit:${n} v1 -->`), `o diff não mostra o bloco ${n}`);
       assert.match(r.stdout, /CLAUDE\.md/);
-      assert.match(r.stdout, /package\.json/);
       assert.match(r.stdout, /settings\.json/);
+      assert.doesNotMatch(r.stdout, /--- a\/package\.json/, 'sem --trocar-test o package.json não muda');
     } finally { limpar(d); }
   });
 
@@ -113,8 +113,8 @@ describe('kit adotar', () => {
       contido(JSON.parse(PACKAGE_PROPRIO), json(d, 'package.json'));
       const p = json(d, 'package.json');
       assert.equal(p.scripts.test, JSON.parse(PACKAGE_PROPRIO).scripts.test, 'o `test` do projeto foi trocado sem --trocar-test');
-      assert.equal(p.scripts['test:projeto'], JSON.parse(PACKAGE_PROPRIO).scripts.test);
-      assert.deepEqual(json(d, '.claude', 'kit.json'), { gate: { comandoCompleto: 'npm run test:projeto' } });
+      assert.equal(p.scripts['test:projeto'], undefined, 'sem --trocar-test não nasce test:projeto');
+      assert.deepEqual(json(d, '.claude', 'kit.json'), { gate: { comandoCompleto: JSON.parse(PACKAGE_PROPRIO).scripts.test } });
       assert.match(r.stdout, /--trocar-test/, 'a saída não avisa do --trocar-test');
       assert.equal(ler(d, 'src', 'index.ts'), antes['src/index.ts']);
       const lock = json(d, '.claude', 'kit.lock.json');
@@ -198,10 +198,10 @@ describe('kit adotar', () => {
       assert.equal(json(d, '.claude', 'kit.json').gate.perfil, 'pnpm-workspace', 'a chave nova do perfil entra mesmo com conflito noutra');
       assert.match(ler(d, 'CLAUDE.md'), /<!-- kit:projeto v1 -->/, 'o resto (blocos) não foi gravado');
       const lock = json(d, '.claude', 'kit.lock.json');
-      assert.equal(lock.pendente.length, 3, JSON.stringify(lock.pendente));
+      assert.equal(lock.pendente.length, 4, JSON.stringify(lock.pendente));
       assert.ok(lock.pendente.some((p) => /scripts\.typecheck/.test(p)) && lock.pendente.some((p) => /extraKnownMarketplaces/.test(p)));
       const dr = kit(d, ['doutor'], { home: h });
-      assert.match(dr.stdout, /pendente da adoção parcial:.*scripts\.typecheck/);
+      assert.match(dr.stdout, /pendente da adoção:.*scripts\.typecheck/);
     } finally { limpar(d, h); }
   });
 

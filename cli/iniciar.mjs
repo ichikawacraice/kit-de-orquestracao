@@ -2,7 +2,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { LOCK } from './lock.mjs';
-import { gravar, gravarLock, lerModelo, planejar } from './pacote.mjs';
+import { gravar, lerModelo, planejar } from './pacote.mjs';
 
 /** Devolve { codigo, mensagem } — nada é gravado antes de o plano ser calculado e validado. */
 export function iniciar({ destino, perfil = 'simples', versao }) {
@@ -12,8 +12,8 @@ export function iniciar({ destino, perfil = 'simples', versao }) {
   const plano = planejar({ destino, perfil, trocarTest: true, nomeScript: 'test:suite', criarClaude: true });
   if (plano.erro) return { codigo: 2, mensagem: `kit iniciar: ${plano.erro}` };
   if (plano.conflitos.length) return { codigo: 1, mensagem: `kit iniciar: ${plano.conflitos.length} conflito(s); nada foi gravado.\n${plano.conflitos.map((c) => `conflito: ${c}`).join('\n')}` };
-  gravar(destino, plano.mudancas);
-  gravarLock(destino, { versao, perfil, ...plano.lock });
+  const g = gravar(destino, plano.mudancas, { versao, perfil, ...plano.lock });
+  if (g.erro) return { codigo: 1, mensagem: `kit iniciar: ${g.erro}` };
   const aviso = existsSync(join(destino, '.git')) ? '' : '\naviso: esta pasta não é um repositório git; o gate mede o toplevel do git, então rode `git init` antes do primeiro `npm test`.';
   return { codigo: 0, mensagem: `kit iniciar: projeto preparado (perfil ${perfil}, ${Object.keys(plano.lock.arquivos).length} arquivos, lock em ${LOCK}).${plano.avisos.map((a) => `\ntrocado: ${a}`).join('')}${aviso}` };
 }

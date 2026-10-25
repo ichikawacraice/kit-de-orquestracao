@@ -42,7 +42,7 @@ const DECLARADAS = {
   'hooks/tests/painel-das-sessoes.test.mjs': { motivo: 'caminho (+ prefixo/painel nos testes de hooks)', hash: 'fdee3c233689f1d6' },
   'hooks/tests/painel-fila.test.mjs': { motivo: 'caminho', hash: 'cd0fcdd3e5547866' },
   'hooks/tests/painel-trava-concorrencia.mjs': { motivo: 'caminho', hash: '4c34c7bb2c844e28' },
-  'hooks/tests/painel-validacao.test.mjs': { motivo: 'caminho', hash: 'cd0fcdd3e5547866' },
+  'hooks/tests/painel-validacao.test.mjs': { motivo: 'caminho', hash: '60c5a9148c198697' },
   'hooks/tests/papel-do-pool.test.mjs': { motivo: 'prefixo + painel', hash: 'eb543714762a9d01' },
   'hooks/tests/pool-comum.test.mjs': { motivo: 'prefixo + painel', hash: '310b7f405b505ef0' },
   'hooks/tests/skills-do-papel.test.mjs': { motivo: 'caminho (+ prefixo/painel nos testes de hooks)', hash: 'cac249df72b44305' },

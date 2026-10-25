@@ -1,5 +1,5 @@
 // O que o kit põe num projeto e como: o plano é calculado em memória (iniciar, adotar e --simular usam o mesmo) e só então gravado.
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
@@ -82,6 +82,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   const cp = { criado: pk.texto === null, scripts: {}, trocados: [] };
   lock.chaves.package = cp;
   const avisos = [];
+  let comandoSuite = `npm run ${nomeScript}`; // o que o kit.json manda o gate rodar: o `test` próprio, quando ele não foi trocado
   if (pkg) {
     if (pk.texto === null) Object.assign(pkg, { name: basename(destino).toLowerCase().replace(/[^a-z0-9-_.]+/g, '-'), version: '0.1.0', private: true });
     pkg.scripts ??= {};
@@ -93,6 +94,12 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
       const atual = sc[nome];
       if (atual === gate || atual?.includes('scripts/kit/')) continue;
       const real = atual && !TESTE_PADRAO_DO_NPM.test(atual);
+      // sem troca (o `test` próprio, sem --trocar-test) nada é guardado: o script do projeto segue onde está e a pendência vai ao lock
+      if (real && !trocarTest) {
+        if (nome === 'test') { pendencias.push(`scripts.test (${JSON.stringify(atual)}) ficou como estava: rode com --trocar-test para o \`npm test\` passar pelo gate (o seu vira ${nomeScript}).`); comandoSuite = atual; }
+        else conflitos.push(`scripts.${nome} já existe (${JSON.stringify(atual)}) — rode com --trocar-test para guardá-lo em ${guardado} e pôr o do gate no lugar`);
+        continue;
+      }
       const padrao = nome === 'test' ? p.suitePadrao : undefined;
       // `test` que já chama o script guardado (ex.: "npm run test:suite") é só a porta de entrada: a suíte já mora lá, e guardá-lo de novo seria um laço
       const jaGuardado = real && sc[guardado] !== undefined && atual.includes(guardado);
@@ -101,16 +108,15 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
         if (sc[guardado] === undefined) { sc[guardado] = valor; cp.scripts[guardado] = valor; }
         else if (sc[guardado] !== valor) { conflitos.push(`scripts.${guardado} já existe com outro valor — o \`${nome}\` ficou como estava`); continue; }
       }
-      if (!real || trocarTest) {
-        sc[nome] = gate;
-        cp.trocados.push({ nome, original: atual ?? null, gate });
-        if (real) avisos.push(`scripts.${nome} agora passa pelo gate; o seu \`${atual}\` está em ${guardado}.`);
-      } else if (nome === 'test') pendencias.push(`scripts.test (${JSON.stringify(atual)}) ficou como estava: rode com --trocar-test para o \`npm test\` passar pelo gate (o seu vira ${nomeScript}).`);
-      else conflitos.push(`scripts.${nome} já existe (${JSON.stringify(atual)}) — rode com --trocar-test para guardá-lo em ${guardado} e pôr o do gate no lugar`);
+      sc[nome] = gate;
+      cp.trocados.push({ nome, original: atual ?? null, gate });
+      if (real) avisos.push(jaGuardado
+        ? `scripts.${nome} agora passa pelo gate; a suíte do projeto segue em ${guardado} (\`${sc[guardado]}\`).`
+        : `scripts.${nome} agora passa pelo gate; o seu \`${atual}\` está em ${guardado}.`);
     }
     const novo = serializar(pkg, pk.texto);
     if (novo !== pk.texto) mudancas.push({ arquivo: 'package.json', antigo: pk.texto, novo });
-    if (pk.texto === null) lock.arquivos['package.json'] = null;
+    if (pk.texto === null) lock.arquivos['package.json'] = null; else cp.original = pk.texto;
   }
 
   // .claude/settings.json
@@ -136,7 +142,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     }
     const novo = serializar(s, st.texto);
     if (novo !== st.texto) mudancas.push({ arquivo: '.claude/settings.json', antigo: st.texto, novo });
-    if (st.texto === null) lock.arquivos['.claude/settings.json'] = null;
+    if (st.texto === null) lock.arquivos['.claude/settings.json'] = null; else cs.original = st.texto;
   }
 
   // .claude/kit.json
@@ -146,7 +152,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   lock.chaves.kitJson = ck;
   if (k) {
     const desejado = structuredClone(p.kit);
-    if (desejado.gate?.comandoCompleto) desejado.gate.comandoCompleto = `npm run ${nomeScript}`;
+    if (desejado.gate?.comandoCompleto) desejado.gate.comandoCompleto = comandoSuite;
     const mescla = (alvo, fonte, caminho) => {
       for (const [chave, valor] of Object.entries(fonte)) {
         const cam = caminho ? `${caminho}.${chave}` : chave;
@@ -158,7 +164,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     mescla(k, desejado, '');
     const novo = serializar(k, kj.texto);
     if (novo !== kj.texto) mudancas.push({ arquivo: '.claude/kit.json', antigo: kj.texto, novo });
-    if (kj.texto === null) lock.arquivos['.claude/kit.json'] = null;
+    if (kj.texto === null) lock.arquivos['.claude/kit.json'] = null; else ck.original = kj.texto;
   }
 
   if (erros.length) return { erro: erros.join('; ') };
@@ -167,13 +173,49 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   return { mudancas, conflitos, pendencias, avisos, lock };
 }
 
-export function gravar(destino, mudancas) {
-  for (const m of mudancas) {
-    mkdirSync(dirname(join(destino, m.arquivo)), { recursive: true });
-    writeFileSync(join(destino, m.arquivo), m.novo);
+/**
+ * Grava tudo ou nada: cada arquivo vai primeiro para `<arquivo>.kit-tmp` e só depois que todos foram escritos é que são renomeados.
+ * Falha em qualquer ponto → apaga os temporários, restaura o que já foi renomeado (a partir de `antigo`) e some com as pastas que criou.
+ * O lock entra na mesma transação e registra as pastas que o kit criou (o `remover` só apaga essas). Devolve `{ erro }` (mensagem, sem stack) ou `{}`.
+ */
+export function gravar(destino, mudancas, lock) {
+  const itens = [...mudancas];
+  const aCriar = []; // pastas que ainda não existem, da mais rasa para a mais funda
+  const nova = (rel) => {
+    const partes = dirname(rel).split('/').filter((x) => x && x !== '.');
+    for (let i = 1; i <= partes.length; i++) { const d = partes.slice(0, i).join('/'); if (!existsSync(join(destino, d)) && !aCriar.includes(d)) aCriar.push(d); }
+  };
+  for (const m of itens) nova(m.arquivo);
+  if (lock) {
+    nova(LOCK);
+    lock.pastasCriadas = [...new Set([...(lock.pastasCriadas ?? []), ...aCriar])];
+    if (!lock.pastasCriadas.length) delete lock.pastasCriadas;
+    itens.push({ arquivo: LOCK, antigo: lerTexto(destino, LOCK), novo: `${JSON.stringify(lock, null, 2)}\n` });
   }
+  const criadas = []; const temporarios = []; const renomeados = [];
+  let onde = '';
+  try {
+    for (const d of aCriar) { onde = d; mkdirSync(join(destino, d)); criadas.push(d); }
+    for (const m of itens) {
+      onde = m.arquivo;
+      const t = `${join(destino, m.arquivo)}.kit-tmp`;
+      temporarios.push(t);
+      writeFileSync(t, m.novo);
+      if (m.antigo !== null) chmodSync(t, statSync(join(destino, m.arquivo)).mode & 0o7777);
+    }
+    for (const m of itens) { onde = m.arquivo; renomeado(m, destino, renomeados); }
+  } catch (e) {
+    const sobrou = [];
+    for (const t of temporarios) { try { rmSync(t, { force: true }); } catch { /* já não existe */ } }
+    for (const m of renomeados.reverse()) {
+      try { if (m.antigo === null) rmSync(join(destino, m.arquivo), { force: true }); else writeFileSync(join(destino, m.arquivo), m.antigo); } catch (e2) { sobrou.push(`${m.arquivo} (${e2.message})`); }
+    }
+    for (const d of criadas.reverse()) { try { rmdirSync(join(destino, d)); } catch { /* não está vazia ou já não existe */ } }
+    return { erro: `não consegui gravar ${onde}: ${e.message}. ${sobrou.length ? `Não consegui desfazer: ${sobrou.join('; ')} — confira com git status.` : 'Nada ficou gravado: o que já tinha sido escrito foi desfeito.'}` };
+  }
+  return {};
 }
-export function gravarLock(destino, lock) {
-  mkdirSync(join(destino, '.claude'), { recursive: true });
-  writeFileSync(join(destino, LOCK), `${JSON.stringify(lock, null, 2)}\n`);
+function renomeado(m, destino, lista) {
+  renameSync(`${join(destino, m.arquivo)}.kit-tmp`, join(destino, m.arquivo));
+  lista.push(m);
 }

@@ -45,7 +45,7 @@ export function remover({ destino, simular = false }) {
   else if (claude !== claudeOriginal) gravacoes.set('CLAUDE.md', claude);
 
   // JSON compartilhados: só as chaves que o kit registrou, se o valor ainda é o que ele pôs
-  const editarJson = (rel, criado, fn, vazioAposRemover) => {
+  const editarJson = (rel, criado, fn, vazioAposRemover, original) => {
     const texto = lerTexto(destino, rel);
     if (texto === null) return;
     let v;
@@ -53,6 +53,9 @@ export function remover({ destino, simular = false }) {
     fn(v);
     const restante = Object.keys(v).filter((k) => !(vazioAposRemover.includes(k)));
     if (criado && restante.length === 0) { apagar.push(rel); tirou(`${rel} (criado pelo kit, sem mais nada)`); return; }
+    // o que sobrou é o que o projeto tinha antes do kit: devolve os bytes dele, não os do JSON.stringify
+    let antes; try { antes = original ? JSON.parse(original) : undefined; } catch { antes = undefined; }
+    if (antes !== undefined && isDeepStrictEqual(v, antes)) { if (original !== texto) gravacoes.set(rel, original); return; }
     const novo = serializar(v, texto);
     if (novo !== texto) gravacoes.set(rel, novo);
   };
@@ -72,7 +75,7 @@ export function remover({ destino, simular = false }) {
       const alvo = pai ? s[pai] : s;
       if (alvo && vazio(alvo[filho])) delete alvo[filho];
     }
-  }, ['hooks', 'extraKnownMarketplaces', 'enabledPlugins']);
+  }, ['hooks', 'extraKnownMarketplaces', 'enabledPlugins'], cs.original);
 
   const cp = c.package ?? {};
   editarJson('package.json', cp.criado, (pkg) => {
@@ -87,7 +90,7 @@ export function remover({ destino, simular = false }) {
       if (sc[nome] === valor) { delete sc[nome]; tirou(`script ${nome} (package.json)`); } else if (nome in sc) deixou(`script ${nome} (package.json)`);
     }
     if (vazio(sc)) delete pkg.scripts;
-  }, ['name', 'version', 'private', 'scripts']);
+  }, ['name', 'version', 'private', 'scripts'], cp.original);
 
   const ck = c.kitJson ?? {};
   editarJson('.claude/kit.json', ck.criado, (k) => {
@@ -102,14 +105,15 @@ export function remover({ destino, simular = false }) {
         tirou(`kit.json: ${cam}`);
       } else if (ultimo in pais.at(-1)) deixou(`kit.json: ${cam}`);
     }
-  }, []);
+  }, [], ck.original);
 
   if (ilegiveis.length) return { codigo: 1, saida: '', erro: `kit remover: ${ilegiveis.join('; ')} — nada foi removido` };
   if (!simular) {
     for (const rel of apagar) rmSync(join(destino, rel), { force: true });
     for (const [rel, texto] of gravacoes) writeFileSync(join(destino, rel), texto);
     rmSync(caminho, { force: true });
-    for (const dir of ['scripts/kit', 'scripts', '.claude']) { try { if (!readdirSync(join(destino, dir)).length) rmdirSync(join(destino, dir)); } catch { /* não existe ou não está vazio */ } }
+    // só as pastas que o lock diz que o kit criou, da mais funda para a mais rasa, e só se ficaram vazias
+    for (const dir of [...(lock.pastasCriadas ?? [])].sort((a, b) => b.split('/').length - a.split('/').length)) { try { if (!readdirSync(join(destino, dir)).length) rmdirSync(join(destino, dir)); } catch { /* não existe ou não está vazia */ } }
   }
   linhas.push(`kit remover${simular ? ' --simular' : ''}: ${simular ? 'nada foi gravado' : `lock ${LOCK} removido`}.`);
   return { codigo: 0, saida: `${linhas.join('\n')}\n`, erro: '' };

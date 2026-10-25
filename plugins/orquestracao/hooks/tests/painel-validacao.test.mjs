@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
@@ -185,7 +185,8 @@ caso('c4 R3 (controle): com o pool-comum importável não há aviso de import', 
 });
 caso('c4 R1: o painel.mjs do plugin não cai para ~/.claude/hooks (só vale onde o script mora dentro do plugin)', () => {
   const fonte = readFileSync(join(SCRIPTS, 'painel.mjs'), 'utf8');
-  if (!fonte.includes("'..', '..', '..', 'hooks'")) return; // cópia viva de ~/.claude: o caminho dela é o próprio ~/.claude/hooks
+  // Decide pelo CAMINHO do script, não pelo texto dele (um fallback reescrito apagaria o texto e o caso sairia calado): no plugin roda sempre; a cópia viva de ~/.claude tem o próprio ~/.claude/hooks como caminho e pula, dizendo por quê.
+  if (!SCRIPTS.split(sep).join('/').includes('/plugins/orquestracao/')) { console.log('     (pulado: cópia viva fora de plugins/orquestracao — o caminho dela é o próprio ~/.claude/hooks)'); return; }
   const lar = join(base, 'lar'); mkdirSync(join(lar, '.claude', 'hooks'), { recursive: true });
   writeFileSync(join(lar, '.claude', 'hooks', 'pool-comum.mjs'), "export const registroDaSessao = () => ({ localId: 'local_SELF' });\n");
   const plugin = join(base, 'plugin'); mkdirSync(join(plugin, 'skills', 'orquestradora', 'scripts'), { recursive: true }); mkdirSync(join(plugin, 'hooks'));

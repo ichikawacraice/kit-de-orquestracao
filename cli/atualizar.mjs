@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffTexto } from './diff.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { RAIZ_DO_KIT, arquivosDoGate, blocosDoModelo, gravar, gravarLock, lerTexto } from './pacote.mjs';
+import { RAIZ_DO_KIT, arquivosDoGate, blocosDoModelo, gravar, lerTexto } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -42,10 +42,23 @@ export function atualizar({ destino, versao, simular = false }) {
     if (sha256(atual.conteudo) === reg.sha256) { claude = claude.replace(inteiroAtual, () => texto); lock.blocos[nome] = { versao: novo.versao, sha256: sha256(novo.conteudo) }; linhas.push(`atualizado: bloco ${nome}`); }
     else conflito(`bloco ${nome} editado à mão — não troquei`, diffTexto(inteiroAtual, texto, `CLAUDE.md#${nome}`));
   }
+  // bloco que o modelo tem e o projeto nunca recebeu (novo, ou o novo nome de um renomeado) entra no fim, como no adotar
+  if (claude !== null) {
+    for (const [nome, texto] of Object.entries(modelo)) {
+      if (nome in lock.blocos || new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude)) continue;
+      claude += `${claude.endsWith('\n') ? '' : '\n'}\n${texto}\n`;
+      const b = blocosDe(texto)[0];
+      lock.blocos[nome] = { versao: b.versao, sha256: sha256(b.conteudo) };
+      linhas.push(`novo: ${nome} (bloco acrescentado ao fim do CLAUDE.md)`);
+    }
+  }
   if (claude !== claudeAtual) mudancas.push({ arquivo: 'CLAUDE.md', antigo: claudeAtual, novo: claude });
 
   if (!conflitos) lock.versao = versao;
-  if (!simular) { gravar(destino, mudancas); gravarLock(destino, lock); }
+  if (!simular) {
+    const g = gravar(destino, mudancas, lock);
+    if (g.erro) return { codigo: 1, saida: '', erro: `kit atualizar: ${g.erro}` };
+  }
   linhas.push(conflitos
     ? `kit atualizar: ${conflitos} conflito(s); a versão do lock continua ${lock.versao}.`
     : `kit atualizar${simular ? ' --simular' : ''}: em dia com o kit ${versao} (${mudancas.length} arquivo(s) ${simular ? 'mudariam' : 'trocados'}).`);
