@@ -72,7 +72,9 @@ function main() {
 
   const inicio = inicioDoTurno(transcript) ?? 0;
   const { limpou, texto } = doTurno(transcript, inicio, e.last_assistant_message);
-  if (cobranca.esperando && !/\?|\bQ\d+\b/.test(texto.split(/\n\s*\n/).pop() || '')) return; // não termina esperando o operador
+  // O `?` de uma URL com query (`…/a?b=1`) não é pergunta (O3 do F35); o `?` solto, mesmo colado numa URL, continua valendo.
+  const ultimoParagrafo = (texto.split(/\n\s*\n/).pop() || '').replace(/https?:\/\/\S*\?\S+/g, '');
+  if (cobranca.esperando && !/\?|\bQ\d+\b/.test(ultimoParagrafo)) return; // não termina esperando o operador
   if (limpou) { registrar(sid, HOOK, 'limpou', det); return; }
   if (cobranca.parei && /^\s*Parei em:\s*\S/m.test(texto)) { registrar(sid, HOOK, 'satisfeito-parei', det); return; }
   if (cobranca.sigoVale && /^\s*Contexto:\s*sigo\s*—\s*\S.{8,}/m.test(texto)) { registrar(sid, HOOK, 'satisfeito-sigo', det); return; }

@@ -79,6 +79,7 @@ test('5. P com 250 mil que chamou clear_session "self" no turno: passa (limpou);
   assert.equal(rodar(b, 'P', transcript(b, { tokens: 250_000, ferramentas: [LIMPA] })), null);
   assert.match(log(b), /\tlimpou\t/);
   cobrou(rodar(b, 'P', transcript(b, { tokens: 250_000, anterior: [LIMPA] })), /250 mil/);
+  assert.match(log(b), /\tcobrou-200\t/); // O1: a segunda metade também deixa a linha de cobrança no log
 }));
 test('5b. clear_session de OUTRA sessão não vale', () => com((b) => {
   cobrou(rodar(b, 'P', transcript(b, { tokens: 250_000, ferramentas: [['mcp__ccd_session_mgmt__clear_session', { session_id: 'local_X' }]] })), /250 mil/);
@@ -137,4 +138,28 @@ test('14. os limites são inclusivos: 200.000 cobra e 199.999 não; 300.000 já 
   try { assert.equal(rodar(b2, 'P', transcript(b2, { tokens: 199_999 })), null); assert.equal(log(b2), ''); } finally { rmSync(b2, { recursive: true, force: true }); }
   cobrou(rodar(b, 'P', transcript(b, { tokens: 300_000, texto: 'Contexto: sigo — falta o passo 3 do plano' })), /Não pegue trabalho novo/);
   cobrou(rodar(b, 'E', transcript(b, { tokens: 150_000 })), /Parei em:/);
+}));
+
+// O2 (F35): a entrada sintética do assistant (`model: "<synthetic>"`, usage zerado) não vira a última leitura.
+const SINTETICA = { type: 'assistant', timestamp: new Date(T1 + 9000).toISOString(), message: { model: '<synthetic>', content: [{ type: 'text', text: 'No response requested.' }], usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 } } };
+test('O2. transcript que termina em "No response requested." (sintética, usage zerado): o hook ainda cobra pela leitura real', () => com((b) => {
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 210_000, extra: [SINTETICA] })), /210 mil/);
+  assert.match(log(b), /\tcobrou-200\tplanejadora 210 mil/);
+}));
+test('O2b. precondição: sem pular a sintética o hook leria 0 e calaria (a fixture tem a entrada zerada como ÚLTIMA)', () => com((b) => {
+  const f = transcript(b, { tokens: 210_000, extra: [SINTETICA] });
+  const ultima = JSON.parse(readFileSync(f, 'utf8').trim().split('\n').pop());
+  assert.equal(ultima.message.model, '<synthetic>'); assert.equal(ultima.message.usage.cache_read_input_tokens, 0);
+}));
+// O3 (F35): o `?` dentro de uma URL com query não conta como pergunta no último parágrafo.
+test('O3a. P com 160 mil e o último parágrafo com só uma URL com query: não dispara a regra dos 150 mil', () => com((b) => {
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'pronto\n\nveja https://exemplo.com/a?b=1&c=2 depois' })), null);
+  assert.doesNotMatch(log(b), /cobrou/);
+}));
+test('O3b. o mesmo parágrafo com uma pergunta de verdade ao lado da URL dispara', () => com((b) => {
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'pronto\n\nveja https://exemplo.com/a?b=1 — posso seguir?' })), /160 mil/);
+  assert.match(log(b), /\tcobrou-150-espera\t/);
+}));
+test('O3c. precondição: sem URL, o `?` sozinho dispara (o teste mede a URL, não um hook que nunca cobra)', () => com((b) => {
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'pronto\n\nposso seguir?' })), /160 mil/);
 }));

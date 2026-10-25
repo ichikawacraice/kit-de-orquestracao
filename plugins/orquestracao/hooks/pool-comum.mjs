@@ -351,7 +351,8 @@ export function contextoDoTranscript(caminho) {
     if (!linhas[i]) continue;
     let e; try { e = JSON.parse(linhas[i]); } catch { continue; }
     const u = e?.message?.usage;
-    if (e?.type !== 'assistant' || e?.isSidechain === true || !u) continue;
+    // Entrada sintética (`<synthetic>`, ex.: "No response requested.") traz `usage` zerado e não é leitura do contexto (O2 do F35).
+    if (e?.type !== 'assistant' || e?.isSidechain === true || e?.message?.model === '<synthetic>' || !u) continue;
     const tokens = [u.input_tokens, u.cache_creation_input_tokens, u.cache_read_input_tokens].reduce((s, x) => s + (Number.isFinite(x) ? x : 0), 0);
     return { tokens, em: e.timestamp ?? null };
   }
