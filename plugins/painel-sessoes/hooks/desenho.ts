@@ -210,6 +210,11 @@ export function desde(iso: string | undefined, agora: number): string | undefine
 const TOPO = 16
 const BASE = 16
 
+/** 'sem-ninguem' é rótulo interno do mod: a frase já diz tudo, sem o slug entre parênteses. */
+export function textoDaTrava(t: { motivo: string; texto: string }): string {
+  return t.motivo === 'sem-ninguem' ? t.texto : `Trava (${t.motivo}): ${t.texto}`
+}
+
 /** O ponto do item (§4.1): anda, trava ou espera na fila; o feito leva o círculo cheio do OK. */
 function pontoDoItem(item: LinhaItem, cor: string): string {
   const cy = TOPO + 11
@@ -303,12 +308,12 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
 
   const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? item.temaRotulo : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, item.dono?.apelido, ultimoPr].filter(Boolean).join(' · ')]
   if (item.trava) {
-    const trava = quebrar(`Trava (${item.trava.motivo}): ${item.trava.texto}`, 13, tw, 2)
+    const trava = quebrar(textoDaTrava(item.trava), 13, tw, 2)
     for (const l of trava) {
       y += 19
       partes.push(texto(30, y, 13, '', xml(l), ` fill="${ERRO}"`))
     }
-    alt.push(`Trava (${item.trava.motivo}): ${item.trava.texto}`)
+    alt.push(textoDaTrava(item.trava))
   }
   if (item.situacao === 'fila' && item.resumo) {
     for (const l of quebrar(item.resumo, 13, tw, 2)) {

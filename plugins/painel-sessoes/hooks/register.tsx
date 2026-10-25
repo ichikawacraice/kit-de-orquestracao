@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { anteriorSvg, itemSvg, perguntaSvg, resumoSvg } from './desenho'
+import { anteriorSvg, itemSvg, perguntaSvg, resumoSvg, textoDaTrava } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -737,7 +737,7 @@ export const register: Register = on => {
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">{i.titulo}</Text>
             <Text dimColor wrap="wrap">{info}</Text>
-            {i.trava && <Text color="error" wrap="wrap">{`Trava (${i.trava.motivo}): ${i.trava.texto}`}</Text>}
+            {i.trava && <Text color="error" wrap="wrap">{textoDaTrava(i.trava)}</Text>}
             {i.situacao === 'fila' && i.resumo && <Text dimColor wrap="wrap">{i.resumo}</Text>}
             {i.situacao !== 'fila' && i.agora && <Text dimColor wrap="wrap">{i.agora}</Text>}
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}

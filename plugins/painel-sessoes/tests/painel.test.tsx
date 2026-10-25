@@ -304,7 +304,8 @@ test('sem ninguém: dono que não está na lista vira trava, com a mesma contage
   const { lido } = await lerPane($, on, { fila: fila('F23', 'F13'), vivas: vivasDe(P2), perguntas: [] })
   for (const surface of ['terminal', 'desktop'] as const) {
     antes(lido[surface], /TRAVADOS/, /EDITOR DA LOJA/)
-    expect(lido[surface]).toMatch(/Trava \(sem-ninguem\): E8 não está mais ativa/)
+    expect(lido[surface]).toMatch(/E8 não está mais ativa/)
+    expect(lido[surface]).not.toMatch(/sem-ninguem/)
   }
   expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 1 Andando, 0 Na fila/)
 })
