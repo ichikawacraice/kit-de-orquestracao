@@ -66,6 +66,27 @@ function varrerRegistro(id) {
   return null;
 }
 
+// Itens vivos da fila em que a sessão aparece (F30): `com` = trabalhando agora; `fez` = executou parte e o item ainda espera
+// validação, conserto ou merge. Pasta: FILA_DIR, ou <PAINEL_DIR>/fila. Erro de leitura = lista vazia (o hook deixa passar).
+const ETAPAS_DO_FEZ = ['execucao', 'validacao', 'merge'];
+const filaDir = () => process.env.FILA_DIR || join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'fila');
+export function itensDaSessao(localId) {
+  const saida = { com: [], fez: [] };
+  if (!localId) return saida;
+  let nomes; try { nomes = readdirSync(filaDir()); } catch { return saida; }
+  for (const nome of nomes) {
+    if (!nome.endsWith('.json')) continue;
+    try {
+      const doc = JSON.parse(readFileSync(join(filaDir(), nome), 'utf8'));
+      const d = doc?.data; const id = doc?.id ?? nome.replace(/\.json$/, '');
+      if (!d || d.etapa === 'feito' || d.etapa === 'descartado') continue;
+      if (Array.isArray(d.com) && d.com.some((c) => c?.localId === localId)) saida.com.push(id);
+      if (ETAPAS_DO_FEZ.includes(d.etapa) && Array.isArray(d.fez) && d.fez.some((c) => c?.localId === localId)) saida.fez.push(id);
+    } catch { /* arquivo parcial: ignora este item */ }
+  }
+  return saida;
+}
+
 // Só o prefixo `<P|D|E|V><n> · ` do título vale: sem ele, não é membro (outro projeto, sessão avulsa).
 export function membroDoPool(titulo) {
   const m = /^(P|D|E|V)(\d+) · /.exec(titulo || '');

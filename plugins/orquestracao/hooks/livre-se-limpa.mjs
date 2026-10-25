@@ -7,10 +7,13 @@
 // Segunda regra (operador, 24/10: "executoras rodando trabalho com o nome de livre"): membro cujo título
 // ainda termina em "· livre" e que TRABALHOU no turno (Edit/Write, commit, push, PR, gate) sem chamar
 // set_session_title "self" é cobrado a pôr o título do item.
+// F30: quem está no `fez` de um item vivo (espera a validação ou o conserto) e fora de todo `com` fica livre SEM se limpar
+// (o contexto serve ao conserto). Quem se declara livre e ainda está no `com` de um item é cobrado a sair (`painel com del`).
+// Quem saiu do item no turno (`painel com del`) e ficou com o título dele é cobrado a pôr o título livre.
 // Fonte da regra: ~/.claude/orquestracao/pool/protocolo.md, "Ao terminar um item" e "Pegar".
 import { readFileSync } from 'node:fs';
 import { registrar, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { registroDaSessao, membroDoPool, inicioDoTurno } from './pool-comum.mjs';
+import { registroDaSessao, membroDoPool, inicioDoTurno, itensDaSessao } from './pool-comum.mjs';
 
 const HOOK = 'livre-se-limpa';
 const ehSelf = (id) => id === undefined || id === null || id === 'self';
@@ -49,6 +52,8 @@ export function separadoresDeAspasNeutros(c) {
   return o;
 }
 const INVOCACAO = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:(?:set|update)\s+sessoes\s+\S+|batch)\s[^\n]*\blivre\b`);
+const COM_DEL = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+com\s+del\b`);
+export const painelComDel = (c) => COM_DEL.test(separadoresDeAspasNeutros(semHeredoc(c)));
 export const painelLivre = (c) => {
   const n = separadoresDeAspasNeutros(semHeredoc(c));
   return INVOCACAO.test(n) && (!/painel(?:\.mjs)?["']?\s+batch\b/.test(n) || /painel(?:\.mjs)?["']?\s+batch\s[^\n]*sessoes/.test(n));
@@ -62,7 +67,7 @@ function main() {
   const inicio = inicioDoTurno(transcript_path);
   if (inicio === null) return;
 
-  let declarou = null; let limpou = false; let tituloNovo = null; let trocouTitulo = false; let trabalhou = null;
+  let declarou = null; let limpou = false; let saiuDoItem = false; let tituloNovo = null; let trocouTitulo = false; let trabalhou = null;
   for (const l of readFileSync(transcript_path, 'utf8').split('\n')) {
     if (!l) continue;
     let e; try { e = JSON.parse(l); } catch { continue; }
@@ -78,6 +83,7 @@ function main() {
       if (n.endsWith('clear_session') && ehSelf(i.session_id)) limpou = true;
       else if (n.endsWith('set_session_title') && ehSelf(i.session_id) && tituloLivre(i.title)) { declarou = 'título livre'; tituloNovo = i.title; }
       else if (n === 'Bash' && painelLivre(String(i.command || ''))) declarou ||= 'painel livre';
+      if (n === 'Bash' && painelComDel(String(i.command || ''))) saiuDoItem = true;
     }
   }
   if (!declarou && trabalhou && !trocouTitulo) {
@@ -95,10 +101,41 @@ function main() {
     }));
     return;
   }
-  if (!declarou || limpou) return;
+  // F30, regra 4: saiu do item neste turno e o título ainda é o dele.
+  if (saiuDoItem && !tituloLivre(tituloNovo)) {
+    const reg = registroDaSessao(session_id, { fresco: true });
+    const m = membroDoPool(reg?.titulo);
+    if (m && !tituloLivre(reg.titulo) && itensDaSessao(reg.localId).com.length === 0) {
+      if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar-titulo-velho', m.id); return; }
+      registrar(session_id, HOOK, 'cobrou-titulo-velho', m.id);
+      process.stdout.write(JSON.stringify({
+        decision: 'block',
+        reason: `Você saiu do item e o título ainda é o dele: chame set_session_title com session_id "self" e o título \`${m.id} · livre\`, e termine o turno.`,
+      }));
+      return;
+    }
+  }
+  if (!declarou) return;
 
   // Só membro do pool: pelo título que ele acabou de pôr ou pelo registro do app.
-  if (!membroDoPool(tituloNovo) && !membroDoPool(registroDaSessao(session_id)?.titulo)) return;
+  const regDecl = registroDaSessao(session_id);
+  if (!membroDoPool(tituloNovo) && !membroDoPool(regDecl?.titulo)) return;
+  const itens = itensDaSessao(regDecl?.localId);
+
+  // F30, regra 3: declarou-se livre e ainda consta como trabalhando num item.
+  if (itens.com.length) {
+    const lista = itens.com.join(', ');
+    if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar-com', lista); return; }
+    registrar(session_id, HOOK, 'cobrou-com', lista);
+    process.stdout.write(JSON.stringify({
+      decision: 'block',
+      reason: `Você se declarou livre e ainda consta como trabalhando em ${lista}: \`painel com del <F> ${regDecl.localId} --fez\` (ou sem --fez, se não entregou) para cada um, e termine o turno.`,
+    }));
+    return;
+  }
+  if (limpou) return;
+  // F30, regra 1 com exceção: no `fez` de item vivo e fora de todo `com`, o contexto serve ao conserto.
+  if (itens.fez.length) { registrar(session_id, HOOK, 'livre-com-contexto', itens.fez.join(',')); return; }
 
   if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar', declarou); return; }
   registrar(session_id, HOOK, 'cobrou', declarou);

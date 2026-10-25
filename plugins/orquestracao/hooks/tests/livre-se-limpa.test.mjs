@@ -32,7 +32,7 @@ function transcript(ferramentas, { limpezaNoTurnoAnterior = false } = {}) {
 function rodar(quem, f, extra = {}) {
   const out = execFileSync('node', [HOOK], {
     input: JSON.stringify({ session_id: ID[quem], transcript_path: f, hook_event_name: 'Stop', ...extra }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
-    env: { ...process.env, HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app') },
+    env: { ...process.env, HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'), FILA_DIR: join(base, 'fila') },
   });
   return out ? JSON.parse(out) : null;
 }
@@ -171,6 +171,47 @@ caso('K2: o comando `painel` do plugin (bin) cobra como o `node …/painel.mjs`;
   ok(!cobra(`painel batch '[{"op":"update","colecao":"fila","id":"F1","data":{"nota":"livre"}}]'`), 'batch só de fila não cobra');
   ok(!cobra(`echo "painel update sessoes y livre"`), 'echo não é invocação');
   ok(!cobra(`cat > x.md <<'X'\npainel update sessoes y livre\nX`), 'heredoc não é invocação');
+});
+
+// F30 fatia 2: o `fez` deixa a executora livre sem limpar; o `com` e o título velho ganham cobrança.
+const item = (id, data) => { mkdirSync(join(base, 'fila'), { recursive: true }); writeFileSync(join(base, 'fila', `${id}.json`), JSON.stringify({ id, version: 1, data: { titulo: 't', tema: 'x', ...data } })); };
+const QUEM = (apelido, localId) => ({ localId, apelido, oQue: 'parte', em: '2026-10-25T10:00:00.000Z' });
+const COM_DEL = (F, l, extra = '') => ['Bash', { command: `node ~/.claude/skills/orquestradora/scripts/painel.mjs com del ${F} ${l} ${extra}`.trim() }];
+caso('F30-2: livre no fez de um item em validação, sem limpar → passa (livre-com-contexto)', () => {
+  item('F1', { etapa: 'validacao', fez: [QUEM('E3', 'local_E3')], com: [] });
+  ok(rodar('E3', transcript([TITULO])) === null, 'esperava passar');
+  ok(/livre-com-contexto/.test(log()), 'log sem livre-com-contexto');
+});
+caso('F30-2: livre sem estar no fez de nenhum item e sem limpar → block (a regra 1 de hoje)', () => {
+  item('F1', { etapa: 'validacao', fez: [QUEM('E4', 'local_E4')], com: [] });
+  const r = rodar('E3', transcript([TITULO]));
+  ok(r?.decision === 'block' && /clear_session/.test(r.reason), `esperava block da regra 1, veio ${JSON.stringify(r)}`);
+});
+caso('F30-2: livre ainda no com de um item → block da regra 3, mesmo estando no fez de outro', () => {
+  item('F1', { etapa: 'execucao', com: [{ localId: 'local_E3', apelido: 'E3', oQue: 'parte' }] });
+  item('F2', { etapa: 'validacao', fez: [QUEM('E3', 'local_E3')], com: [] });
+  const r = rodar('E3', transcript([TITULO]));
+  ok(r?.decision === 'block' && /ainda consta como trabalhando em F1/.test(r.reason) && /com del <F> local_E3/.test(r.reason), `esperava a regra 3, veio ${JSON.stringify(r)}`);
+  ok(/cobrou-com/.test(log()), 'log sem cobrou-com');
+});
+caso('F30-2: com del com o título do item → block da regra 4; com del com título livre → passa', () => {
+  item('F1', { etapa: 'validacao', fez: [QUEM('E3', 'local_E3')], com: [] });
+  const r = rodar('E3', transcript([COM_DEL('F1', 'local_E3', '--fez')]));
+  ok(r?.decision === 'block' && /E3 · livre/.test(r.reason), `esperava a regra 4, veio ${JSON.stringify(r)}`);
+  ok(/cobrou-titulo-velho/.test(log()), 'log sem cobrou-titulo-velho');
+  ok(rodar('E4', transcript([COM_DEL('F1', 'local_E4')])) === null, 'título livre devia passar');
+});
+caso('F30-2: com del estando no com de outro item → passa', () => {
+  item('F1', { etapa: 'validacao', com: [] });
+  item('F2', { etapa: 'execucao', com: [{ localId: 'local_E3', apelido: 'E3', oQue: 'parte' }] });
+  ok(rodar('E3', transcript([COM_DEL('F1', 'local_E3')])) === null, 'esperava passar: ainda trabalha em F2');
+});
+caso('F30-2: as regras 3 e 4 cobram uma vez só (stop_hook_active solta) e fila ilegível deixa passar', () => {
+  item('F1', { etapa: 'execucao', com: [{ localId: 'local_E3', apelido: 'E3', oQue: 'parte' }] });
+  ok(rodar('E3', transcript([TITULO]), { stop_hook_active: true }) === null, 'a 3 devia soltar');
+  writeFileSync(join(base, 'fila', 'F1.json'), '{ruim');
+  ok(rodar('E3', transcript([COM_DEL('F1', 'local_E3')]))?.decision === 'block', 'fila ilegível: a regra 4 ainda vale (sem com legível)');
+  ok(rodar('E3', transcript([COM_DEL('F1', 'local_E3')]), { stop_hook_active: true }) === null, 'a 4 devia soltar');
 });
 
 console.log(falhas ? `${falhas} falha(s)` : 'todos verdes');
