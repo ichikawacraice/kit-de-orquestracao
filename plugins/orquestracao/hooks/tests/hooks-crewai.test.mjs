@@ -8,6 +8,7 @@ import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Atenção: HOME dentro de /tmp dá falso vermelho — as pastas livres da trava (caso 4.5) incluem /tmp, então o que devia ser negado passa.
 const HOOKS = process.env.HOOKS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..');
 let base;
 let falhas = 0;

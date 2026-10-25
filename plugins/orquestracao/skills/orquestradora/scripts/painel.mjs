@@ -31,25 +31,34 @@ const ID = /^[A-Za-z0-9_.-]{1,120}$/;
 
 // Mesmo cálculo de projetoDaSessao() em hooks/pool-comum.mjs (nome do projeto); mude nos dois.
 function projetoDoCwd(cwd = process.cwd()) {
+  const limiteMs = Number(process.env.KIT_GIT_TIMEOUT_MS) || 10000;
   try {
     const repo = execFileSync('git', ['-C', cwd, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
-      encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8', timeout: limiteMs, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
-    if (!repo) return null;
+    if (!repo) return { projeto: null, motivo: 'cwd fora de git' };
     const raiz = basename(repo) === '.git' ? dirname(repo) : repo;
-    return basename(raiz).replace(/\.git$/, '').toLowerCase() || null;
-  } catch { return null; }
+    return { projeto: basename(raiz).replace(/\.git$/, '').toLowerCase() || null, motivo: 'cwd fora de git' };
+  } catch (e) {
+    // git que não respondeu a tempo não quer dizer "fora de git": são avisos diferentes
+    if (e?.signal === 'SIGKILL' || e?.code === 'ETIMEDOUT') return { projeto: null, motivo: `git não respondeu em ${limiteMs / 1000} s` };
+    if (e?.code === 'ENOENT') return { projeto: null, motivo: 'git não encontrado no PATH' };
+    return { projeto: null, motivo: 'cwd fora de git' };
+  }
 }
 
 // Quem sou: CLAUDE_CODE_SESSION_ID (id do CLI, presente no Bash de toda sessão) → registro do app (hooks/pool-comum.mjs)
 // → local_… Sem a env (shell do operador, testes): sem trava. Env sem registro resolvido: avisa e deixa passar (errar para o
 // lado de não travar a escrita do painel).
 const MEU_CLI = process.env.CLAUDE_CODE_SESSION_ID || '';
-// No plugin, pool-comum.mjs mora em <plugin>/hooks (relativo a este script); KIT_HOOKS_DIR sobrepõe; sem nenhum dos dois, ~/.claude/hooks (cópia antiga, alias até a K7).
-const HOOKS_DO_PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'hooks');
-const HOOKS_DIR = process.env.KIT_HOOKS_DIR || (existsSync(join(HOOKS_DO_PLUGIN, 'pool-comum.mjs')) ? HOOKS_DO_PLUGIN : join(homedir(), '.claude', 'hooks'));
+// No plugin, pool-comum.mjs mora em <plugin>/hooks (relativo a este script); KIT_HOOKS_DIR sobrepõe. Sem fallback para ~/.claude/hooks.
+const HOOKS_DIR = process.env.KIT_HOOKS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'hooks');
+const POOL_COMUM = join(HOOKS_DIR, 'pool-comum.mjs');
 const pool = MEU_CLI
-  ? await import(pathToFileURL(join(HOOKS_DIR, 'pool-comum.mjs')).href).catch(() => null)
+  ? await import(pathToFileURL(POOL_COMUM).href).catch((e) => {
+    process.stderr.write(`painel.mjs: aviso: não consegui importar ${POOL_COMUM} (${e.message}); a proteção das linhas de outras sessões ficou desligada\n`);
+    return null;
+  })
   : null;
 let meusIds; // Set de ids que contam como "a própria sessão"; null = não resolvido
 function ehMinha(id) {
@@ -139,9 +148,9 @@ function planejar({ op, colecao, id, data, deOutra }, seVersao, vista) {
     else base[k] = v;
   }
   if ((colecao === 'sessoes' || colecao === 'fila') && !base.projeto && (op === 'set' || !atual)) {
-    const projeto = projetoDoCwd();
+    const { projeto, motivo } = projetoDoCwd();
     if (projeto) base.projeto = projeto;
-    else process.stderr.write(`aviso: ${colecao}/${id} sem projeto (cwd fora de git)\n`);
+    else process.stderr.write(`aviso: ${colecao}/${id} sem projeto (${motivo})\n`);
   }
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
   validarPadrao(colecao, id, novo, base, vista);

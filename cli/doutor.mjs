@@ -60,6 +60,7 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
     if (!b) linhas.push(`aviso: bloco ${nome} ausente do CLAUDE.md`);
     else if (sha256(b.conteudo) !== reg.sha256) linhas.push(`aviso: bloco ${nome} editado à mão (o \`kit atualizar\` não o troca)`);
   }
+  for (const p of lock.pendente ?? []) linhas.push(`aviso: pendente da adoção parcial: ${p}`);
   linhas.push(falhas ? `${falhas} falha(s)` : 'tudo em dia');
   return { codigo: falhas ? 1 : 0, saida: `${linhas.join('\n')}\n`, erro: '' };
 }

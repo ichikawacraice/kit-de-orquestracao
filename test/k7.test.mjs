@@ -144,21 +144,51 @@ describe('kit adotar', () => {
     } finally { limpar(d); }
   });
 
-  it('chave que já existe com valor diferente vira conflito listado, não é trocada', () => {
+  const comConflitos = (d) => {
+    const settings = JSON.parse(SETTINGS_PROPRIO);
+    settings.enabledPlugins['orquestracao@kit-de-orquestracao'] = false;
+    settings.extraKnownMarketplaces = { 'kit-de-orquestracao': { source: { source: 'github', repo: 'outro/fork' } } };
+    writeFileSync(join(d, '.claude', 'settings.json'), `${JSON.stringify(settings, null, 4)}\n`);
+    writeFileSync(join(d, '.claude', 'kit.json'), `${JSON.stringify({ gate: { comandoCompleto: 'make test' } }, null, 2)}\n`);
+    const pkg = JSON.parse(PACKAGE_PROPRIO);
+    pkg.scripts.typecheck = 'tsc --noEmit -p .';
+    writeFileSync(join(d, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
+  };
+
+  it('com conflito não grava NADA (atômico): lista os conflitos, sai 1, árvore idêntica; resolver e repetir adota', () => {
     const d = rascunho();
     try {
-      const settings = JSON.parse(SETTINGS_PROPRIO);
-      settings.enabledPlugins['orquestracao@kit-de-orquestracao'] = false;
-      settings.extraKnownMarketplaces = { 'kit-de-orquestracao': { source: { source: 'github', repo: 'outro/fork' } } };
-      writeFileSync(join(d, '.claude', 'settings.json'), `${JSON.stringify(settings, null, 4)}\n`);
-      writeFileSync(join(d, '.claude', 'kit.json'), `${JSON.stringify({ gate: { comandoCompleto: 'make test' } }, null, 2)}\n`);
-      const pkg = JSON.parse(PACKAGE_PROPRIO);
-      pkg.scripts.typecheck = 'tsc --noEmit -p .';
-      writeFileSync(join(d, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
+      comConflitos(d);
+      const antes = foto(d);
+      assert.ok(Object.keys(antes).length >= 4, 'insumo vazio: fixture sem arquivos');
+      const hashes = (m) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, sha(v)]));
       const r = kit(d, ['adotar', '--perfil', 'pnpm-workspace']);
       assert.equal(r.status, 1, saida(r));
       assert.match(r.stdout, /conflito.*orquestracao@kit-de-orquestracao/);
       assert.match(r.stdout, /conflito.*extraKnownMarketplaces/);
+      assert.match(r.stdout, /conflito.*scripts\.typecheck/);
+      assert.match(r.stdout, /nada foi gravado/);
+      assert.match(r.stdout, /--parcial/);
+      assert.deepEqual(hashes(foto(d)), hashes(antes), 'o adotar gravou algo apesar do conflito');
+      assert.equal(existsSync(join(d, '.claude', 'kit.lock.json')), false);
+      assert.equal(existsSync(join(d, 'scripts')), false);
+      const de = kit(d, ['adotar', '--perfil', 'pnpm-workspace']);
+      assert.equal(de.stdout, r.stdout, 'rodar de novo sem resolver deveria dar o mesmo resultado');
+      // resolvido o conflito, a mesma chamada adota
+      writeFileSync(join(d, '.claude', 'settings.json'), SETTINGS_PROPRIO);
+      writeFileSync(join(d, '.claude', 'kit.json'), '{}\n');
+      writeFileSync(join(d, 'package.json'), PACKAGE_PROPRIO);
+      assert.equal(kit(d, ['adotar', '--perfil', 'pnpm-workspace']).status, 0);
+    } finally { limpar(d); }
+  });
+
+  it('--parcial grava o resto, não troca o que conflita e o lock declara o pendente (o doutor o mostra)', () => {
+    const d = rascunho();
+    const h = realpathSync(mkdtempSync(join(tmpdir(), 'kit-k7-home-')));
+    try {
+      comConflitos(d);
+      const r = kit(d, ['adotar', '--perfil', 'pnpm-workspace', '--parcial']);
+      assert.equal(r.status, 1, saida(r));
       assert.match(r.stdout, /conflito.*scripts\.typecheck/);
       const s = json(d, '.claude', 'settings.json');
       assert.equal(s.enabledPlugins['orquestracao@kit-de-orquestracao'], false);
@@ -166,7 +196,13 @@ describe('kit adotar', () => {
       assert.equal(json(d, 'package.json').scripts.typecheck, 'tsc --noEmit -p .');
       assert.equal(json(d, '.claude', 'kit.json').gate.comandoCompleto, 'make test');
       assert.equal(json(d, '.claude', 'kit.json').gate.perfil, 'pnpm-workspace', 'a chave nova do perfil entra mesmo com conflito noutra');
-    } finally { limpar(d); }
+      assert.match(ler(d, 'CLAUDE.md'), /<!-- kit:projeto v1 -->/, 'o resto (blocos) não foi gravado');
+      const lock = json(d, '.claude', 'kit.lock.json');
+      assert.equal(lock.pendente.length, 3, JSON.stringify(lock.pendente));
+      assert.ok(lock.pendente.some((p) => /scripts\.typecheck/.test(p)) && lock.pendente.some((p) => /extraKnownMarketplaces/.test(p)));
+      const dr = kit(d, ['doutor'], { home: h });
+      assert.match(dr.stdout, /pendente da adoção parcial:.*scripts\.typecheck/);
+    } finally { limpar(d, h); }
   });
 
   it('recusa: projeto sem CLAUDE.md (aponta para iniciar) e projeto já adotado (aponta para atualizar)', () => {

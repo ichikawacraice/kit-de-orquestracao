@@ -160,5 +160,58 @@ caso('5b (h) sem CLAUDE_CODE_SESSION_ID → grava como hoje; env sem registro �
   ok(/não consegui|aviso/i.test(r.err), `sem aviso no stderr: ${r.err}`);
 });
 
+// c4 R1/R3/R2: o import do pool-comum que falha e o git que não responde avisam, nomeando o que aconteceu.
+function rodarPainel(env, cwd, ...args) {
+  const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
+    encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', cwd,
+    env: { ...process.env, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), KIT_HOOKS_DIR: '', ...env },
+  });
+  if (r.error) throw r.error;
+  return { exit: r.status, out: r.stdout, err: r.stderr };
+}
+caso('c4 R3: pool-comum que não importa → aviso nomeando o caminho tentado (e a proteção desligada), nunca calado', () => {
+  const vazio = join(base, 'sem-pool'); mkdirSync(vazio);
+  const r = rodarPainel({ CLAUDE_CODE_SESSION_ID: 'cli-self', KIT_HOOKS_DIR: vazio }, base, 'set', 'sessoes', 'local_OUTRA', '{"titulo":"x"}');
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(r.err.includes(join(vazio, 'pool-comum.mjs')), `o aviso não nomeia o caminho tentado: ${r.err}`);
+  ok(/proteção.*desligada/.test(r.err), `sem o comportamento declarado: ${r.err}`);
+});
+caso('c4 R3 (controle): com o pool-comum importável não há aviso de import', () => {
+  const pasta = join(base, 'com-pool'); mkdirSync(pasta);
+  writeFileSync(join(pasta, 'pool-comum.mjs'), "export const registroDaSessao = () => ({ localId: 'local_SELF' });\n");
+  const r = rodarPainel({ CLAUDE_CODE_SESSION_ID: 'cli-self', KIT_HOOKS_DIR: pasta }, base, 'set', 'sessoes', 'local_SELF', '{"titulo":"x"}');
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(!/não consegui importar/.test(r.err), `aviso de import com o módulo presente: ${r.err}`);
+});
+caso('c4 R1: o painel.mjs do plugin não cai para ~/.claude/hooks (só vale onde o script mora dentro do plugin)', () => {
+  const fonte = readFileSync(join(SCRIPTS, 'painel.mjs'), 'utf8');
+  if (!fonte.includes("'..', '..', '..', 'hooks'")) return; // cópia viva de ~/.claude: o caminho dela é o próprio ~/.claude/hooks
+  const lar = join(base, 'lar'); mkdirSync(join(lar, '.claude', 'hooks'), { recursive: true });
+  writeFileSync(join(lar, '.claude', 'hooks', 'pool-comum.mjs'), "export const registroDaSessao = () => ({ localId: 'local_SELF' });\n");
+  const plugin = join(base, 'plugin'); mkdirSync(join(plugin, 'skills', 'orquestradora', 'scripts'), { recursive: true }); mkdirSync(join(plugin, 'hooks'));
+  writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'painel.mjs'), fonte);
+  const r = spawnSync('node', [join(plugin, 'skills', 'orquestradora', 'scripts', 'painel.mjs'), 'set', 'sessoes', 'local_OUTRA', '{"titulo":"x"}'], {
+    encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', cwd: base,
+    env: { ...process.env, HOME: lar, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: 'cli-self', KIT_HOOKS_DIR: '' },
+  });
+  igual(r.status, 0, `exit (${r.stderr})`);
+  ok(r.stderr.includes(join(plugin, 'hooks', 'pool-comum.mjs')), `não tentou o caminho do plugin: ${r.stderr}`);
+});
+caso('c4 R2: git que não responde a tempo → "git não respondeu", e não "cwd fora de git"', () => {
+  const bin = join(base, 'bin'); mkdirSync(bin);
+  writeFileSync(join(bin, 'git'), '#!/bin/sh\nsleep 5\n', { mode: 0o755 });
+  const r = rodarPainel({ KIT_GIT_TIMEOUT_MS: '300', PATH: `${bin}:${process.env.PATH}` }, base, 'set', 'sessoes', 'local_X', '{"titulo":"x"}');
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(/git não respondeu em 0\.3 s/.test(r.err), `sem o aviso de timeout: ${r.err}`);
+  ok(!/cwd fora de git/.test(r.err), `confundiu timeout com fora de git: ${r.err}`);
+});
+caso('c4 R2: git respondeu que não é repositório → "cwd fora de git"', () => {
+  const fora = join(base, 'fora'); mkdirSync(fora);
+  const r = rodarPainel({ GIT_CEILING_DIRECTORIES: base }, fora, 'set', 'sessoes', 'local_X', '{"titulo":"x"}');
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(/sem projeto \(cwd fora de git\)/.test(r.err), `sem o aviso de fora de git: ${r.err}`);
+  ok(!/git não respondeu/.test(r.err), `confundiu fora de git com timeout: ${r.err}`);
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

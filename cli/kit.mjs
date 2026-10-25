@@ -19,8 +19,9 @@ uso:
   kit ajuda                                  mostra esta ajuda
   kit iniciar [--perfil simples|pnpm-workspace]
                                              prepara um projeto sem CLAUDE.md (gate, guarda, plugins, lock)
-  kit adotar [--simular] [--trocar-test] [--perfil …]
-                                             põe o kit num projeto em andamento, sem sobrescrever nada
+  kit adotar [--simular] [--trocar-test] [--parcial] [--perfil …]
+                                             põe o kit num projeto em andamento, sem sobrescrever nada;
+                                             com conflito não grava nada (--parcial grava o resto)
   kit atualizar [--simular]                  troca pela versão nova o que você não editou; o resto vira conflito
   kit doutor                                 confere plugin, hooks, kit.json, versões e o disco com o lock
   kit remover [--simular]                    tira o que o kit pôs (blocos, chaves e arquivos cujo hash bate)
@@ -44,7 +45,7 @@ function main(argv) {
   if (cmd === 'adotar') {
     const i = argv.indexOf('--perfil');
     if (i !== -1 && !argv[i + 1]) { process.stderr.write('kit adotar: --perfil pede um valor\n'); return 2; }
-    return imprimir(adotar({ destino, perfil: i === -1 ? undefined : argv[i + 1], versao: versao(), simular: flag('--simular'), trocarTest: flag('--trocar-test') }));
+    return imprimir(adotar({ destino, perfil: i === -1 ? undefined : argv[i + 1], versao: versao(), simular: flag('--simular'), trocarTest: flag('--trocar-test'), parcial: flag('--parcial') }));
   }
   if (cmd === 'atualizar') return imprimir(atualizar({ destino, versao: versao(), simular: flag('--simular') }));
   if (cmd === 'remover') return imprimir(remover({ destino, simular: flag('--simular') }));
