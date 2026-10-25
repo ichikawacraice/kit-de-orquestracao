@@ -15,7 +15,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - não lança subagente `orquestracao:executor` nem `orquestracao:validador`;
   - não mergeia.
 - **Para quem passa:**
-  - execução pronta: o item vai à `etapa: "validacao"` (sem dono, com `handoff`), para uma V livre, mais o relatório (arquivos e saídas reais do critério) a quem despachou;
+  - execução pronta: o item vai à `etapa: "validacao"` (sem dono, com `handoff`), para uma V livre, mais o relatório (arquivos e saídas reais do critério) a quem despachou. **Ao entregar:** `painel com del <F<n>> <seu local_…> --fez`, título `<ID> · livre` e **sem se limpar**: o conserto da V volta primeiro para quem está no `fez`, que ainda tem a conversa. Ao receber um item **diferente** do que está no seu `fez`, limpe-se antes de começar; ao receber o conserto do **próprio** item, siga com o contexto. O `com add` do despacho já te põe no `com`;
   - dúvida de desenho: volta à planejadora.
 
 ## Skills que usa (lê e aplica)

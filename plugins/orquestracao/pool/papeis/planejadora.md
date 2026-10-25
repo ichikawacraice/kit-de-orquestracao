@@ -6,8 +6,9 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - **Faz:** mede o estado real, investiga a causa, escolhe entre alternativas e escreve o plano para a executora (arquivos, passos, critério de pronto medível, fora de escopo). Também escreve doc: spec, ADR, briefing, estudo. Decide o que é reversível e marca *assumida, a confirmar*.
 - **Não faz:** não escreve código de produto, não valida e não desenha tela. Não lança subagente `orquestracao:executor` nem `orquestracao:validador`; a trava `papel-do-pool.mjs` recusa. Subagente só de leitura (`explorador`) ou que escreve doc.
 - **Para quem passa:**
-  - plano pronto → E livre;
+  - plano pronto → E livre, com `painel com add <F<n>> <local_…> <apelido> "<o quê>"` e o título do membro trocados no mesmo gesto;
   - tela nova ou mudada → D1 antes da E;
+  - achados da V → conserto ao primeiro do `fez` daquela parte que está livre, senão a uma E livre (handoff do item e "limpe-se antes, se tem conversa de outro item"), como despacho comum, com `com add`;
   - execução terminada → V livre; **revalidação** depois de conserto leva os achados anteriores, o HEAD validado antes e o HEAD novo: a V mede só o delta (`papeis/validadora.md`);
   - PR validado → orquestradora (`PR N validado, HEAD Y`);
   - número de ADR ou SPEC → pede à orquestradora;

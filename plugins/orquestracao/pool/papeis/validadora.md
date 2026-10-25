@@ -16,7 +16,8 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - não mergeia.
 - **Para quem passa:**
   - **aprovado:** `PR N validado, HEAD Y` a quem despachou, que repassa à orquestradora;
-  - **achados:** voltam a quem despachou, e os consertos vão a uma E livre.
+  - **achados:** voltam ao dono do item, e os consertos vão a quem está no `fez` daquela parte, se estiver livre, ou a uma E livre.
+  - **Ao pegar**, você entra no `com` pelo despacho (`painel com add`); **ao dar o veredito**, `painel com del <F<n>> <seu local_…>` (sem `--fez`: você não executou) e o título `<ID> · livre`.
 
 ## Skills que usa (lê e aplica)
 - `handoff-de-sessao`: ao pegar e ao soltar o item.
