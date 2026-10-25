@@ -4,7 +4,7 @@
 // Rodar: node --test hooks/tests/varredura-entre-sessoes.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync, copyFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -314,4 +314,43 @@ test('O1: chave=valor só aceita marcador INTEIRO ou referência; valor que apen
   assert.ok(recusados.length > 0 && aceitos.length > 0);
   for (const t of recusados) assert.ok(segredosEm(t).some((a) => a.padrao === 'chave-valor'), `aceito por engano: ${t.slice(0, 14)}`);
   for (const t of aceitos) assert.deepEqual(segredosEm(t), [], `falso positivo: ${t}`);
+});
+
+test('A1: a cauda do marcador não é exponencial (chave=valor, senha de URL e Bearer abaixo de 200 ms)', () => {
+  // Em processo filho com prazo: regex exponencial trava o laço de eventos, e o relógio do node:test não o alcançaria.
+  const codigo = `
+    import { segredosEm } from ${JSON.stringify(join(HOOKS, 'varredura-entre-sessoes.mjs'))};
+    const cauda = '_api'.repeat(5000) + '9';
+    const formas = { 'chave=valor': 'senha=seu_token' + cauda, 'senha de URL': 'postgres' + '://u:seu_token' + cauda + '@h/x', Bearer: 'Authorization: Bearer SEU_TOKEN' + cauda.toUpperCase() };
+    const r = {};
+    for (const [n, t] of Object.entries(formas)) { const t0 = performance.now(); const a = segredosEm(t); r[n] = { ms: performance.now() - t0, achados: a.length }; }
+    console.log(JSON.stringify(r));`;
+  const f = spawnSync('node', ['--input-type=module', '-e', codigo], { encoding: 'utf8', timeout: 8000, killSignal: 'SIGKILL' });
+  assert.equal(f.status, 0, `o filho não terminou no prazo (status ${f.status}, signal ${f.signal})`);
+  const medidas = JSON.parse(f.stdout);
+  assert.equal(Object.keys(medidas).length, 3);
+  for (const [nome, { ms, achados }] of Object.entries(medidas)) {
+    assert.ok(ms < 200, `${nome}: ${ms.toFixed(0)} ms`);
+    assert.ok(achados > 0, `${nome}: o valor com dígito no fim é segredo`);
+  }
+});
+
+test('A1 e2e: segredo-sai como processo recusa em menos de 2 s o texto que travava, citando o token do GitHub', () => {
+  const texto = 'senha=seu_token' + '_api'.repeat(28) + '9 e ' + SEGREDO['github-token']();
+  const t0 = performance.now();
+  const r = spawnSync('node', [join(HOOKS, 'segredo-sai.mjs')], {
+    input: JSON.stringify({ session_id: 's', tool_name: 'SendMessage', tool_input: { to: 'l', message: texto } }),
+    encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL', env: { ...process.env, HOOKS_CREWAI_BASE: mkdtempSync(join(tmpdir(), 'a1-')) },
+  });
+  assert.equal(r.status, 0, `status ${r.status} signal ${r.signal}`);
+  assert.ok(performance.now() - t0 < 2000, 'passou de 2 s');
+  const motivo = JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason;
+  assert.match(motivo, /github-token/);
+});
+
+test('B1: as quatro regras ancoradas voltaram ao chave=valor (URL sem credencial, arquivo relativo, caminho, ref de segredo)', () => {
+  const aceitos = ['token_url=https://auth.x.com/v2/token', 'senha=./config/db2.env', 'token: config.auth.token2', 'secret_ref=db-pass2:latest', 'secret: db-senha:3'];
+  assert.ok(aceitos.length === 5);
+  for (const t of aceitos) assert.deepEqual(segredosEm(t), [], `falso positivo: ${t}`);
+  for (const t of ['DB_SENHA=minha-senha-forte-7', 'password: "Example2024x"']) assert.ok(segredosEm(t).some((a) => a.padrao === 'chave-valor'), `O1 reaberto: ${t}`);
 });
