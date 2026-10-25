@@ -13,6 +13,7 @@
 import { readFileSync, existsSync, appendFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
+import { avisoDeInjecao } from './varredura-entre-sessoes.mjs';
 
 const FILA_DIR = process.env.FILA_DIR || join(homedir(), '.claude', 'orquestracao', 'painel', 'fila');
 const SESSOES_DIR = process.env.FILA_APP_SESSOES_DIR || join(homedir(), 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
@@ -126,9 +127,12 @@ function main() {
   const ids = pendentes.map((i) => i.id);
   const lista = ids.length === 1 ? `do item ${ids[0]} (em andamento)` : `dos itens ${ids.join(', ')} (em andamento)`;
   const cmds = ids.map((id) => `\`painel update fila ${id} '{"agora":"…"}'\``).join(' · ');
+  // O texto do painel (ids dos itens) é dado de outra sessão: com padrão de injeção, o aviso vai antes.
+  const aviso = avisoDeInjecao(ids.join('\n'));
   process.stdout.write(JSON.stringify({
     decision: 'block',
     reason:
+      (aviso ? `${aviso}\n` : '') +
       `Você é dona ${lista} e não o atualizou neste turno. Grave o estado antes de terminar: ${cmds}, ` +
       `ou solte o item (protocolo em ${PROTOCOLO}).`,
   }));

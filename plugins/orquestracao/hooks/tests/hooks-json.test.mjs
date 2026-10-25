@@ -26,10 +26,12 @@ const ESPERADO = [
   ['PreToolUse', PRE_EDICAO, 'subagente-nao-edita.mjs'],
   ['PreToolUse', `Agent|Task|Bash|${PRE_EDICAO}|mcp__ccd_session_mgmt__archive_session|mcp__ccd_session_mgmt__delete_session|mcp__ccd_session__start_session`, 'papel-do-pool.mjs'],
   ['PreToolUse', 'Skill', 'skill-do-papel.mjs'],
+  ['PreToolUse', 'SendMessage|mcp__ccd_session_mgmt__send_message|mcp__ccd_session__start_session|Write|Edit|MultiEdit|Bash', 'segredo-sai.mjs'],
   ['SubagentStop', null, 'executor-criterio.mjs'],
   ['PostToolUse', null, 'laco-de-comandos.mjs'],
   ['PostToolUseFailure', null, 'laco-de-comandos.mjs'],
   ['UserPromptSubmit', null, 'operador-ausente.mjs'],
+  ['UserPromptSubmit', null, 'injecao-entre-sessoes.mjs'],
   ['SessionStart', null, 'sessao-inicio.mjs'],
 ];
 const lerHooks = () => JSON.parse(readFileSync(join(HOOKS, 'hooks.json'), 'utf8')).hooks;
@@ -53,7 +55,7 @@ caso('hooks.json lista cada evento, matcher e script de hoje (e só eles), com $
 caso('todo script do hooks.json existe, e todo hook de hooks/ (fora os comuns) está no hooks.json', () => {
   const doJson = new Set(Object.values(lerHooks()).flatMap((gs) => gs.flatMap((g) => g.hooks.map((c) => /\/hooks\/([\w-]+\.mjs)"/.exec(c.command)[1]))));
   for (const s of doJson) ok(existsSync(join(HOOKS, s)), `${s} não existe`);
-  const comuns = new Set(['hooks-crewai-comum.mjs', 'pool-comum.mjs', 'executor-anuncia-regra.mjs']);
+  const comuns = new Set(['hooks-crewai-comum.mjs', 'pool-comum.mjs', 'executor-anuncia-regra.mjs', 'varredura-entre-sessoes.mjs']);
   const soltos = readdirSync(HOOKS).filter((f) => f.endsWith('.mjs') && !comuns.has(f) && !doJson.has(f));
   ok(soltos.length === 0, `hooks sem entrada no hooks.json: ${soltos.join(', ')}`);
 });

@@ -96,6 +96,16 @@
           }
         ],
         "matcher": "Skill"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/segredo-sai.mjs\"",
+            "timeout": 10
+          }
+        ],
+        "matcher": "SendMessage|mcp__ccd_session_mgmt__send_message|mcp__ccd_session__start_session|Write|Edit|MultiEdit|Bash"
       }
     ],
     "SubagentStop": [
@@ -137,6 +147,15 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/operador-ausente.mjs\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/injecao-entre-sessoes.mjs\"",
             "timeout": 10
           }
         ]

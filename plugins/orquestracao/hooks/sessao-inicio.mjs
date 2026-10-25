@@ -4,9 +4,11 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { avisoDeInjecao } from './varredura-entre-sessoes.mjs';
 
 try {
   const texto = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'regras-globais.md'), 'utf8').trim();
-  if (texto) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: texto } }));
+  const aviso = avisoDeInjecao(texto);
+  if (texto) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: aviso ? `${aviso}\n${texto}` : texto } }));
 } catch { /* sem regras: sessão segue */ }
 process.exitCode = 0;
