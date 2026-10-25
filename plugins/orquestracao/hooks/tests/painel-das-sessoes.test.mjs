@@ -3,7 +3,7 @@
 // (perguntas/<Qnn>.json com `sessaoId` igual ao local_… dela). HOME, painel e registro do app em pasta temporária.
 // Rodar: node ~/.claude/hooks/tests/painel-das-sessoes.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -62,6 +62,15 @@ caso('(b) resposta a Q12 desta sessão, sem gravar no painel: bloqueia', () => {
   const r = rodar(transcript('Q12 — resposta do operador pelo painel: sim'));
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
   ok(r.reason.includes('Qnn'), `motivo: ${r.reason}`);
+});
+caso('c3 R2: marcador sem transcript (projeto indeterminado, null) → passa, mesmo com a resposta do painel sem gravar', () => {
+  pergunta('Q12', LOCAL);
+  const msg = 'Q12 — resposta do operador pelo painel: sim';
+  ok(rodar(transcript(msg))?.decision === 'block', 'precondição: com o projeto medido, a mesma situação bloqueia');
+  rmSync(dir('home', '.claude', 'projects', 'proj', `${ORQ}.jsonl`));
+  ok(!existsSync(dir('home', '.claude', 'projects', 'proj', `${ORQ}.jsonl`)) && existsSync(dir('home', '.claude', 'orquestracao', 'ativas', ORQ)), 'precondição: marcador ficou, transcript saiu');
+  const r = rodar(transcript(msg));
+  ok(r === null, `esperava passar: ${JSON.stringify(r)}`);
 });
 caso('(b2) o nome antigo IZANAGI_PAINEL_DIR segue valendo (PAINEL_DIR vazio): bloqueia como (b)', () => {
   pergunta('Q12', LOCAL);

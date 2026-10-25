@@ -33,7 +33,7 @@ const ID = /^[A-Za-z0-9_.-]{1,120}$/;
 function projetoDoCwd(cwd = process.cwd()) {
   try {
     const repo = execFileSync('git', ['-C', cwd, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
-      encoding: 'utf8', timeout: 3000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
     if (!repo) return null;
     const raiz = basename(repo) === '.git' ? dirname(repo) : repo;

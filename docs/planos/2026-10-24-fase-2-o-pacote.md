@@ -35,6 +35,7 @@ Decisão: [ADR 0001](../adr/0001-plugin-para-o-nucleo-cli-para-o-projeto.md). Es
 - Textos passam a citar `painel` (comando do `bin/`) e `${CLAUDE_PLUGIN_ROOT}`, não `~/.claude/skills/…/painel.mjs`; manter o caminho antigo como alias até a K7.
 - **Medido na fase 1 (E8):** `~/.claude/skills/orquestradora` é symlink para `~/.skills-manager/…` (skills-manager) e por isso o `painel.mjs` importa o `pool-comum` por `~/.claude/hooks` (`KIT_HOOKS_DIR` sobrepõe), não por caminho relativo. No plugin, o import volta a ser relativo a `${CLAUDE_PLUGIN_ROOT}`; na K8, tirar as skills do kit do skills-manager também (senão ficam duas cópias: a do plugin, com prefixo, e a da biblioteca).
 - **Medir antes** (fato não documentado): com um hook de teste que grave o payload, se `tool_input.skill` chega com o prefixo `orquestracao:`. Ajustar `skill-do-papel` ao medido.
+  - **Medido (E8, c3, pelo transcript; `claude -p` estava com login expirado):** o `tool_use` `Skill` de skill de plugin traz o nome prefixado, literal `{"skill": "superpowers:brainstorming", "args": "…"}` (61 ocorrências em `~/.claude/projects/**/*.jsonl`; 2026-09-11 a mais recente conferida). O `tool_input` do hook é o mesmo objeto; `skill-do-papel` segue aceitando as duas formas.
 - **Pronto:** testes do painel (`painel-*.test.mjs`) verdes dentro do repo; `painel list fila` funciona pelo `bin/` com `PAINEL_DIR` temporário.
 
 ### K4 — plugin `painel-sessoes` (mod) · Simples

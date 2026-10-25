@@ -132,6 +132,14 @@ caso('painel.mjs só como invocação real: dentro de `node -e \'…\'` não cob
   ok(rodar('E3', transcript([['Bash', { command: real }]]))?.decision === 'block', 'cd && node painel.mjs devia cobrar');
 });
 
+caso('c3 R1: dois heredocs na mesma linha — o corpo do segundo com painel + livre não cobra; o corpo do primeiro também não', () => {
+  const corpo = "node ~/.claude/skills/orquestradora/scripts/painel.mjs update sessoes x '{\"etapa\":\"livre\"}'";
+  const cmd = `cat <<A > f; cat <<B > g\nlinha\nA\n${corpo}\nB`;
+  ok(corpo.includes('livre') && cmd.split('\n').length === 5, 'precondição: o corpo do segundo está no comando');
+  ok(rodar('E3', transcript([['Bash', { command: cmd }]])) === null, 'corpo do segundo heredoc cobrou');
+  const real = `cat <<A > f; cat <<B > g\nx\nA\ny\nB\n${corpo}`;
+  ok(rodar('E3', transcript([['Bash', { command: real }]]))?.decision === 'block', 'invocação real depois dos dois heredocs devia cobrar');
+});
 // c2 (R1/R3 da V1): a invocação tem de ser REAL — heredoc, string e `node -e` que só a citam não cobram.
 const P = '$HOME/.claude/skills/orquestradora/scripts/painel.mjs';
 const LINHA = `cd x && node "${P}" update sessoes y '{"etapa":"livre"}'`;

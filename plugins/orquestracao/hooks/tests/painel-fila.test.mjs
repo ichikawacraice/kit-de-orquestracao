@@ -204,6 +204,8 @@ caso('proximo-item.sh: trava recente com o dono de OUTRO token: exit 1 e a trava
   ok(existsSync(trava), 'a trava do outro foi removida');
   igual(readFileSync(join(trava, 'dono'), 'utf8'), 'token-do-outro\n', 'dono mudou');
 });
+// Espera pelo ESTADO (o script tomou a trava), não por tempo: sob carga o node/bash demora a subir.
+const aguardar = async (cond, ms = 20000) => { const fim = Date.now() + ms; while (!cond()) { if (Date.now() > fim) return false; await new Promise((r) => setTimeout(r, 25)); } return true; };
 await casoAsync('proximo-item.sh: trava tomada por outro no meio do comando: o trap não apaga a do outro', async () => {
   const trava = join(poolDir(), '.trava-itens');
   const p = new Promise((resolve, reject) => {
@@ -212,7 +214,7 @@ await casoAsync('proximo-item.sh: trava tomada por outro no meio do comando: o t
     const t = setTimeout(() => c.kill('SIGKILL'), 20000);
     c.on('error', reject); c.on('close', (exit) => { clearTimeout(t); resolve({ exit, err }); });
   });
-  await new Promise((r) => setTimeout(r, 700));
+  await aguardar(() => existsSync(join(trava, 'dono')));
   ok(existsSync(join(trava, 'dono')), 'precondição: o script não pegou a trava com dono');
   rmSync(trava, { recursive: true, force: true });
   mkdirSync(trava); writeFileSync(join(trava, 'dono'), 'token-do-outro\n');
@@ -232,7 +234,7 @@ await casoAsync('trava tomada por outra execução no meio do comando: a minha n
     const t = setTimeout(() => c.kill('SIGKILL'), 20000);
     c.on('error', reject); c.on('close', (exit) => { clearTimeout(t); resolve({ exit, err }); });
   });
-  await new Promise((r) => setTimeout(r, 600));
+  await aguardar(() => existsSync(join(trava, 'dono')));
   ok(existsSync(join(trava, 'dono')), 'precondição: a execução não pegou a trava com token');
   rmSync(trava, { recursive: true, force: true }); // "órfã" removida por outra execução…
   mkdirSync(trava); writeFileSync(join(trava, 'dono'), 'token-do-outro'); // …que logo tomou a trava
@@ -436,7 +438,7 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 await casoAsync('E1 painel: soltar não deixa a trava vazia no lugar — o rename de outro durante a soltura falha, e quem gravou sai com 0 e sem aviso', async () => {
   const pdir = join(base, 'painel'); painel('set', 'fila', 'F1', ITEM); const antes = json(painel('get', 'fila', 'F1')).version;
   const b = spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'update', 'fila', 'F1', '{"b":1}'], { PAINEL_PAUSA_PUBLICAR_MS: '1500', PAINEL_PAUSA_MS: '1500' }); // B segura a trava se a pegar: é o que faz a soltura de A falhar sem o rename
-  await esperar(500);
+  await aguardar(() => existsSync(join(pdir, '.trava', 'dono')));
   const a = spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'update', 'fila', 'F1', '{"a":1}'], { PAINEL_PAUSA_SOLTAR_MS: '1500' });
   await Promise.all([a.fim, b.fim]);
   igual(`${a.exit},${b.exit}`, '0,0', `exits (a: ${a.err} | b: ${b.err})`);
@@ -449,7 +451,7 @@ await casoAsync('E1 painel: soltar não deixa a trava vazia no lugar — o renam
 await casoAsync('E1 proximo-item.sh: soltar com pausa — outro processo espera e pega outro id; trava some', async () => {
   mkdirSync(poolDir(), { recursive: true });
   const a = spawnComEnv('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_PAUSA_SOLTAR: '1.5' });
-  await esperar(500);
+  await aguardar(() => existsSync(join(poolDir(), '.trava-itens', 'dono')));
   const b = spawnComEnv('bash', [join(SCRIPTS, 'proximo-item.sh')], {});
   await Promise.all([a.fim, b.fim]);
   igual(`${a.exit},${b.exit}`, '0,0', `exits (${a.err} | ${b.err})`);
@@ -461,7 +463,7 @@ await casoAsync('E1 proximo-item.sh: soltar com pausa — outro processo espera 
 await casoAsync('E3 painel: roubador morto (SIGKILL na pausa) — a gravação seguinte consegue a trava em menos de 3 s', async () => {
   const trava = join(base, 'painel', '.trava'); orfaSemeada(trava);
   const a = spawnComEnv('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { PAINEL_PAUSA_ROUBO_MS: '20000' });
-  await esperar(800);
+  await aguardar(() => existsSync(`${trava}.roubo`));
   ok(existsSync(`${trava}.roubo`), 'o roubo de A deveria existir durante a pausa');
   process.kill(a.pid, 'SIGKILL'); await a.fim;
   const t0 = Date.now();
@@ -475,7 +477,7 @@ await casoAsync('E3 proximo-item.sh: roubador morto — o seguinte pega o id em 
   mkdirSync(poolDir(), { recursive: true });
   const trava = join(poolDir(), '.trava-itens'); orfaSemeada(trava, '\n');
   const a = spawnComEnv('bash', [join(SCRIPTS, 'proximo-item.sh')], { PROXIMO_ITEM_PAUSA_ROUBO: '8' });
-  await esperar(1200);
+  await aguardar(() => existsSync(`${trava}.roubo`));
   ok(existsSync(`${trava}.roubo`), 'o roubo de A deveria existir durante a pausa');
   process.kill(a.pid, 'SIGKILL'); await a.fim;
   const t0 = Date.now();

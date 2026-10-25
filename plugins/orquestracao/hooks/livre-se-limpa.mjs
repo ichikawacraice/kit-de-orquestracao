@@ -24,12 +24,11 @@ const trabalhoBash = (c) => /\bgit\s+(commit|push)\b|\bgh\s+pr\s+(create|ready)\
 // Limite declarado: caminho montado por variável (`node "$P" …`); JSON multilinha fora de aspas; atribuição com valor entre aspas e
 // espaço (`FOO="a b" node …`); outros prefixos (`sudo`, `xargs`, `bash -c "…"`); heredoc dentro de string.
 export function semHeredoc(c) {
-  const linhas = String(c).split('\n'); const saida = []; let fim = null;
+  const linhas = String(c).split('\n'); const saida = []; const fila = []; // delimitadores pendentes, em ordem: `cat <<A; cat <<B`
   for (const l of linhas) {
-    if (fim !== null) { if (l.trim() === fim) fim = null; continue; }
+    if (fila.length) { if (l.trim() === fila[0]) fila.shift(); continue; }
     saida.push(l);
-    const m = /(?<!<)<<(?!<)-?\s*(['"]?)(\w+)\1/.exec(l);
-    if (m) fim = m[2];
+    for (const m of l.matchAll(/(?<!<)<<(?!<)-?\s*(['"]?)(\w+)\1/g)) fila.push(m[2]);
   }
   return saida.join('\n');
 }
