@@ -506,5 +506,31 @@ caso('2.29 estado malformado ({"x":null}) não derruba o hook e é limpo na grav
   igual(Object.keys(JSON.parse(readFileSync(arq, 'utf8'))).length, 1, 'só a chave desta sessão sobra');
 });
 
+caso('2.30 turno que edita arquivo de teste registra `editou teste: <caminhos>`; turno que só edita código não registra', () => {
+  const mexeu = (alvo, tid) => [abertura('Plano'), usa('Edit', { file_path: alvo, old_string: 'a', new_string: 'b' }, tid), resultado(tid, 'ok'),
+    usa('Bash', { command: 'npm test; echo exit=$?' }, `${tid}b`), resultado(`${tid}b`, SAIDA_VITEST + '\nexit=0')];
+  const comTeste = transcript(mexeu('/r/x.test.mjs', 'ta'));
+  // Precondição: a fixtura tem o `tool_use` que o hook lê; sem isto o "não registra" abaixo mediria um transcript vazio.
+  igual(readFileSync(comTeste, 'utf8').includes('"name":"Edit"'), true, 'fixtura sem o tool_use de Edit');
+  igual(rodar('executor-criterio.mjs', subStop(comTeste, 'Gate: exit=0')), null, 'não cobra nem bloqueia por isso');
+  const linhas = log().filter((l) => l[3] === 'editou-teste');
+  igual(linhas.length, 1, 'linhas de editou-teste');
+  igual(linhas[0][4], 'editou teste: /r/x.test.mjs', 'detalhe');
+  const soCodigo = transcript(mexeu('/r/src/a.mjs', 'tb'));
+  igual(readFileSync(soCodigo, 'utf8').includes('"name":"Edit"'), true, 'fixtura sem o tool_use de Edit');
+  rodar('executor-criterio.mjs', subStop(soCodigo, 'Gate: exit=0', { agent_id: 'a79' }));
+  igual(log().filter((l) => l[3] === 'editou-teste').length, 1, 'o turno só de código não registra');
+  const pasta = transcript(mexeu('/r/hooks/tests/helper.mjs', 'tc'));
+  rodar('executor-criterio.mjs', subStop(pasta, 'Gate: exit=0', { agent_id: 'a80' }));
+  igual(log().filter((l) => l[3] === 'editou-teste').length, 2, 'caminho em pasta tests/ conta');
+  const porBash = transcript([abertura('Plano'), usa('Bash', { command: "sed -i '' 's/a/b/' src/y.spec.ts && npm test; echo exit=$?" }, 'td'), resultado('td', SAIDA_VITEST + '\nexit=0')]);
+  rodar('executor-criterio.mjs', subStop(porBash, 'Gate: exit=0', { agent_id: 'a81' }));
+  igual(log().filter((l) => l[3] === 'editou-teste').length, 3, 'Bash que grava e cita o teste conta');
+  const soRodou = transcript([abertura('Plano'), usa('Edit', { file_path: '/r/src/a.mjs', old_string: 'a', new_string: 'b' }, 'te'), resultado('te', 'ok'),
+    usa('Bash', { command: 'npx vitest run src/z.test.ts; echo exit=$?' }, 'tf'), resultado('tf', SAIDA_VITEST + '\nexit=0')]);
+  rodar('executor-criterio.mjs', subStop(soRodou, 'Gate: exit=0', { agent_id: 'a82' }));
+  igual(log().filter((l) => l[3] === 'editou-teste').length, 3, 'rodar o teste não é editar o teste');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

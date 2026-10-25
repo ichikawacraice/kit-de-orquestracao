@@ -34,6 +34,10 @@ const BASH_GRAVA = [
   /\bgit\s+(apply|am)\b/,
   /\bpatch\b\s+-/,
 ];
+// Caminho de teste: pasta `test/`, `tests/` ou `__tests__/`, ou nome `*.test.*` / `*.spec.*`. O hook só REGISTRA
+// que o turno editou um (a validadora acha no log); não cobra nem bloqueia por isso (F36, Q233).
+const CAMINHO_DE_TESTE = [/(^|\/)(tests?|__tests__)\//, /\.(test|spec)\.[cm]?[jt]sx?$/];
+const ehTeste = (caminho) => CAMINHO_DE_TESTE.some((r) => r.test(caminho));
 const SAIDA_DE_TOOL = new Set(['Bash', 'Monitor', 'TaskOutput', 'BashOutput']);
 
 // Status de comando, normalizado para comparar com a saída real.
@@ -45,6 +49,7 @@ function turnoAtual(entradas) {
   const turno = entradas.slice(inicio + 1);
   const usos = new Map();
   let editou = false;
+  const testes = new Set();
   const fundo = new Set();
   let ultimoTexto = '';
   for (const e of turno) {
@@ -52,8 +57,17 @@ function turnoAtual(entradas) {
     for (const c of e.message.content) {
       if (c.type !== 'tool_use') continue;
       usos.set(c.id, c);
-      if (EDITA.has(c.name)) editou = true;
-      if (c.name === 'Bash' && BASH_GRAVA.some((r) => r.test(String(c.input?.command || '')))) editou = true;
+      if (EDITA.has(c.name)) {
+        editou = true;
+        const alvo = String(c.input?.file_path || c.input?.notebook_path || '');
+        if (ehTeste(alvo)) testes.add(alvo);
+      }
+      const comando = c.name === 'Bash' ? String(c.input?.command || '') : '';
+      if (BASH_GRAVA.some((r) => r.test(comando))) {
+        editou = true;
+        // Bash que grava e cita o caminho de um teste: rodar `vitest a.test.ts` não grava, então não entra.
+        for (const palavra of comando.split(/[\s'"`;|&<>()]+/)) if (palavra && ehTeste(palavra)) testes.add(palavra);
+      }
       if (c.name === 'Monitor' || c.input?.run_in_background === true) fundo.add(c.id);
     }
     const t = textoDe(e.message);
@@ -83,7 +97,7 @@ function turnoAtual(entradas) {
     rodou = true;
     for (const m of t.matchAll(/<tool-use-id>([^<]+)<\/tool-use-id>/g)) fundo.delete(m[1]);
   }
-  return { chave: abertura?.uuid || 'inicio', editou, esperaFundo: fundo.size > 0, rodou, saidas: saidas.join("\n"), lista: saidas, ultimoTexto };
+  return { chave: abertura?.uuid || 'inicio', editou, testes: [...testes], esperaFundo: fundo.size > 0, rodou, saidas: saidas.join("\n"), lista: saidas, ultimoTexto };
 }
 
 // Status do relatório ("exit=0", "Found 0 errors") que aparece igual numa saída do turno.
@@ -155,6 +169,12 @@ function main() {
   const pendente = `${sessao}:principal:pendente`;
   if (!sub && estado[pendente] && estado[pendente].em < Date.now() - 24 * 3600 * 1000) delete estado[pendente];
   if (!turno.editou && (sub || !estado[pendente])) return;
+  // Uma vez por turno, antes de qualquer adiamento: a validadora acha no log o teste que o executor mexeu.
+  const chaveDoTeste = `${sessao}:${sub ? e.agent_id : 'principal'}:${turno.chave}:teste`;
+  if (turno.testes.length && turno.editou && !estado[chaveDoTeste]) {
+    gravarEstadoDe(ESTADO, (s) => { s[chaveDoTeste] = { n: 1, em: Date.now() }; });
+    registrar(sessao, HOOK, 'editou-teste', `editou teste: ${turno.testes.join(', ')}`);
+  }
   if (!sub) {
     const esperando = Array.isArray(e.background_tasks) ? e.background_tasks.length > 0 : turno.esperaFundo;
     // Dev server ou Monitor que nunca termina deixaria o adiamento eterno: no 3º turno seguido
