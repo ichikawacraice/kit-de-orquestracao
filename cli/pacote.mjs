@@ -127,7 +127,10 @@ export function desfazerOperador(operador, { simular = false } = {}) {
     if (todas.some((l) => l.trim() === operador.trava.linha)) {
       const resto = todas.filter((l) => l.trim() !== operador.trava.linha);
       const vazio = linhasDaLista(resto.join('\n')).length === 0;
-      if (!simular) writeFileSync(arq, vazio ? '' : resto.join('\n')); // nunca apaga: lista vazia ≠ sem lista (a vazia não cobre repo nenhum; a ausente cobre todos), e quem a deixou vazia quis assim
+      // Só apaga o arquivo que o próprio kit criou (instalação do c18, `criouArquivo` no lock) e que ficou vazio: ausente a trava cobre todos os repos, vazia não cobre nenhum.
+      // Lista que já existia, ou que alguém deixou vazia de propósito, fica como está.
+      const apagar = vazio && operador.trava.criouArquivo === true;
+      if (!simular) { if (apagar) rmSync(arq, { force: true }); else writeFileSync(arq, vazio ? '' : resto.join('\n')); }
       linhas.push(`removido: ${operador.trava.linha} de trava-edicao-repos.txt`);
     }
   }
@@ -152,11 +155,20 @@ export function temGuardaDoProjeto(settings) {
 export const BLOCOS_DO_PROJETO = ['comandos', 'regras-de-operacao'];
 const GATE_PROPRIO = /\bnode\s+(?:\.\/)?((?!scripts\/kit\/)\S*gate\S*\.m?js)/i;
 /** O comando é o script de gate do próprio projeto (existe no disco, fora de scripts/kit/): o do kit não o substitui. */
+/** Algum `vitest.config*` do projeto (até 3 níveis, sem node_modules) cita o `o-teto-de-workers`. */
+function projetoImportaOTeto(destino, dir = destino, prof = 0) {
+  if (prof > 3) return false;
+  let entradas = [];
+  try { entradas = readdirSync(dir, { withFileTypes: true }); } catch { return false; }
+  return entradas.some((e) => e.name !== 'node_modules' && e.name !== '.git' && (e.isDirectory()
+    ? projetoImportaOTeto(destino, join(dir, e.name), prof + 1)
+    : /^vitest\.config\./.test(e.name) && readFileSync(join(dir, e.name), 'utf8').includes('o-teto-de-workers')));
+}
 /** Os scripts de gate/ que ninguém chamaria: raízes = o que hook, `test`/`typecheck` do perfil e o projeto (biblioteca do vitest) chamam, e o que elas importam. */
-export function scriptsSemUso({ guardaPropria, gatePropria, perfil }) {
+export function scriptsSemUso({ destino, guardaPropria, gatePropria, perfil }) {
   const todos = arquivosDoGate();
   if (!guardaPropria && !gatePropria) return [];
-  const raizes = ['o-teto-de-workers.mjs']; // biblioteca para o `vitest.config` do projeto importar
+  const raizes = projetoImportaOTeto(destino) ? ['o-teto-de-workers.mjs'] : []; // biblioteca: só conta quando um `vitest.config*` do projeto a importa
   if (!guardaPropria) raizes.push('guarda-de-operacao.mjs');
   if (!gatePropria) raizes.push('a-vez-do-gate.mjs');
   for (const gate of Object.values(perfil.scripts ?? {})) for (const f of todos) if (gate.includes(`scripts/kit/${f}`) && !(gatePropria && f === 'a-vez-do-gate.mjs')) raizes.push(f);
@@ -189,7 +201,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   const gatePropria = ehGateProprio(destino, solto('package.json')?.scripts?.test) || ehGateProprio(destino, solto('.claude/kit.json')?.gate?.comandoCompleto);
   const omitidos = [];
   // scripts/kit só guarda o que alguém chama: sem a guarda ou o gate do kit, os arquivos que só eles usam também ficam de fora
-  const sobram = scriptsSemUso({ guardaPropria, gatePropria, perfil: p });
+  const sobram = scriptsSemUso({ destino, guardaPropria, gatePropria, perfil: p });
   omitidos.push(...sobram);
   if (guardaPropria) { avisosDoProjeto.push('guarda: o projeto já tem um hook PreToolUse de Bash próprio; não registrei a guarda do kit nem copiei o script dela (kit.json: guarda "do-projeto")'); }
   if (gatePropria) { avisosDoProjeto.push('gate próprio: o gate do projeto é um script dele; não copiei scripts/kit/a-vez-do-gate.mjs nem os scripts que só o gate do kit usa, não troquei o `test`, e o kit.json não aponta o gate'); }

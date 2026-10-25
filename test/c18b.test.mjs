@@ -86,6 +86,29 @@ describe('c18b.1 lista da trava: ausente já cobre todos os repositórios', () =
   });
 });
 
+describe('c18c.1 remover e a lista que o kit (c18) criou', () => {
+  it('lock com criouArquivo e a lista fica vazia sem a linha do kit: o arquivo é apagado e a trava volta a cobrir todos os repos', (t) => {
+    const a = ambiente(t); const d = a.projeto('m1'); const outro = a.projeto('m1-outro');
+    assert.equal(a.kit(d, 'iniciar').status, 0);
+    // instalação feita com o c18: o kit criou a lista com a linha dele e gravou criouArquivo no lock
+    const lock = join(d, '.claude', 'kit.lock.json'); const l = JSON.parse(readFileSync(lock, 'utf8'));
+    l.operador = { trava: { linha: join(d, '.git'), adicionou: true, criouArquivo: true } }; writeFileSync(lock, `${JSON.stringify(l, null, 2)}\n`);
+    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), `${join(d, '.git')}\n`);
+    assert.equal(a.kit(d, 'remover').status, 0);
+    assert.equal(a.lista('trava-edicao-repos.txt'), null, 'o arquivo que o kit criou some quando fica vazio');
+    assert.match(hookDaTrava(a, 's-m1', outro, outro), PERGUNTA, 'a trava volta a cobrir os outros repositórios');
+  });
+  it('criouArquivo com a lista ainda com outras linhas: o arquivo fica; sem criouArquivo e vazia: o arquivo fica', (t) => {
+    const a = ambiente(t); const d = a.projeto('m1b');
+    assert.equal(a.kit(d, 'iniciar').status, 0);
+    const lock = join(d, '.claude', 'kit.lock.json'); const l = JSON.parse(readFileSync(lock, 'utf8'));
+    l.operador = { trava: { linha: join(d, '.git'), adicionou: true, criouArquivo: true } }; writeFileSync(lock, `${JSON.stringify(l, null, 2)}\n`);
+    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), `/Users/x/Izanagi/.git\n${join(d, '.git')}\n`);
+    assert.equal(a.kit(d, 'remover').status, 0);
+    assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n', 'sobrou outra linha: o arquivo fica');
+  });
+});
+
 describe('c18b.4 doutor: lista existe e não tem o repositório', () => {
   it('avisa e mostra o comando para acrescentar, com ou sem `operador` no lock; sem lista não avisa', (t) => {
     const a = ambiente(t); const d = a.projeto('p5');
@@ -117,8 +140,9 @@ const chamados = (d) => {
   const dir = join(d, 'scripts', 'kit'); if (!existsSync(dir)) return { todos: [], chamados: new Set() };
   const todos = readdirSync(dir).filter((f) => f.endsWith('.mjs'));
   const alvo = new Set(todos.filter((f) => textos.includes(`scripts/kit/${f}`)));
-  const biblioteca = new Set(['o-teto-de-workers.mjs']); // importada pelo vitest.config do projeto, não por comando do kit
-  for (const f of biblioteca) if (todos.includes(f)) alvo.add(f);
+  // o `o-teto-de-workers` é biblioteca de um `vitest.config*` do projeto: só conta quando algum desses arquivos o importa de verdade
+  const importadoPeloProjeto = (dir2 = d, prof = 0) => prof <= 3 && readdirSync(dir2, { withFileTypes: true }).some((e) => e.name !== 'node_modules' && e.name !== '.git' && (e.isDirectory() ? importadoPeloProjeto(join(dir2, e.name), prof + 1) : /^vitest\.config\./.test(e.name) && readFileSync(join(dir2, e.name), 'utf8').includes('o-teto-de-workers')));
+  if (todos.includes('o-teto-de-workers.mjs') && importadoPeloProjeto()) alvo.add('o-teto-de-workers.mjs');
   for (let mudou = true; mudou;) { mudou = false; for (const f of [...alvo]) for (const m of readFileSync(join(dir, f), 'utf8').matchAll(/from\s+["']\.\/([^"']+\.mjs)["']/g)) if (!alvo.has(m[1])) { alvo.add(m[1]); mudou = true; } }
   return { todos, chamados: alvo };
 };
@@ -135,6 +159,15 @@ describe('c18b.2 scripts que ficam sem uso', () => {
     assert.equal(a.kit(d, 'atualizar').status, 0);
     assert.deepEqual(chamados(d).todos.filter((f) => !chamados(d).chamados.has(f)), [], 'o atualizar não traz os órfãos de volta');
     assert.equal(a.kit(d, 'remover').status, 0);
+  });
+  it('o o-teto-de-workers só é copiado quando um vitest.config do projeto o importa', (t) => {
+    const a = ambiente(t);
+    const sem = projetoComRegras(a, 'p6c'); assert.equal(a.kit(sem, 'adotar').status, 0);
+    assert.equal(existsSync(join(sem, 'scripts', 'kit')), false, 'ninguém o chama: nem ele nem o config que só ele importa, e a pasta nem nasce');
+    const com = projetoComRegras(a, 'p6d', { 'vitest.config.ts': "import { tetoDeWorkers } from './scripts/kit/o-teto-de-workers.mjs';\nexport default { test: { maxWorkers: tetoDeWorkers() } };\n" });
+    assert.equal(a.kit(com, 'adotar').status, 0);
+    assert.deepEqual(readdirSync(join(com, 'scripts', 'kit')).sort(), ['config.mjs', 'o-teto-de-workers.mjs']);
+    const { todos, chamados: c } = chamados(com); assert.deepEqual(todos.filter((f) => !c.has(f)), []);
   });
   it('projeto novo (iniciar) continua com todos os scripts: o gate do kit os chama', (t) => {
     const a = ambiente(t); const d = a.projeto('p7');

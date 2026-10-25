@@ -246,7 +246,7 @@ describe('c18.6 adotar num projeto com guarda própria, gate próprio e CLAUDE.m
     assert.equal(json(real, 'package.json').scripts.test, 'node scripts/a-vez-do-gate.mjs', 'o test do projeto ficou');
     assert.equal(json(real, '.claude/kit.json').gate, undefined, 'o kit.json não aponta o gate (era laço)');
     assert.equal(existsSync(join(real, 'scripts', 'kit', 'o-verde-da-arvore.mjs')), false, 'o que só o gate do kit usa também fica de fora (c18b)');
-    assert.ok(existsSync(join(real, 'scripts', 'kit', 'o-teto-de-workers.mjs')), 'a biblioteca do vitest.config segue sendo copiada');
+    assert.equal(existsSync(join(real, 'scripts', 'kit', 'o-teto-de-workers.mjs')), false, 'ninguém o importa (c18c): não é copiado');
     // CLAUDE.md: sem o bloco projeto e sem a frase "opcionais"
     const claude = ler(real, 'CLAUDE.md');
     assert.doesNotMatch(claude, /kit:projeto/, 'o projeto já se descreve'); assert.doesNotMatch(claude, /opcionais/i, 'sem bloco que contradiz o Spec-driven');
