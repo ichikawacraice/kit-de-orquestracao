@@ -33,6 +33,7 @@ const SEGREDO = {
   'twilio-key': () => 'SK' + '0123456789abcdef0123456789abcdef',
   jwt: () => 'ey' + 'JhbGciOiJIUzI1NiJ9' + '.ey' + 'JzdWIiOiIxMjM0NTY3ODkwIn0' + '.abcDEF123456',
   'bearer-token': () => 'Authorization: Bear' + 'er ' + 'aB3dE5gH7jK9mN1pQ3sT5vX7z',
+  'chave-valor': () => 'DB_SEN' + 'HA=' + 'aB3dE5gH7jK9',
   'url-com-credencial': () => 'postgres' + '://admin:' + 's3cr3tPw0rd' + '@db.exemplo.com:5432/app',
 };
 const INJ = {
@@ -57,7 +58,7 @@ const LIMPOS = [
 ];
 
 test('a lista de padrões não está vazia e cada forma tem caso', () => {
-  assert.ok(SEGREDOS.length === 15, `esperava 15 formas de segredo, tem ${SEGREDOS.length}`);
+  assert.ok(SEGREDOS.length === 16, `esperava 16 formas de segredo, tem ${SEGREDOS.length}`);
   assert.ok(INJECAO.length === 7, `esperava 7 formas de injeção, tem ${INJECAO.length}`);
   assert.deepEqual(Object.keys(SEGREDO).sort(), SEGREDOS.map(([n]) => n).sort());
   assert.deepEqual(Object.keys(INJ).sort(), [...INJECAO.map(([n]) => n), 'caracteres-invisiveis'].sort());
@@ -276,4 +277,29 @@ test('conserto 2: o marcador em português só vale inteiro; valor que apenas o 
   for (const b of ['Authorization: Bearer minhasenhaForte9aB3dE5gH7jK9mN', 'Authorization: Bearer exemplo2024aB3dE5gH7jK9mN1pQ3sT']) {
     assert.ok(segredosEm(b).some((a) => a.padrao === 'bearer-token'), `Bearer aceito por engano: ${b}`);
   }
+});
+
+test('F39 marcadores: os marcadores ancorados em português passam; nada passa por CONTER o marcador', () => {
+  const url = (senha) => 'postgres' + `://admin:${senha}@db.exemplo.com:5432/app`;
+  const aceitos = ['seu_segredo', 'meu-segredo', 'segredo-do-banco', 'senha_aqui', 'sua_senha_aqui', 'SEU_TOKEN_AQUI', 'sua-chave-aqui'];
+  const recusados = ['minhasenhaforte9', 'exemplo2024', 'Troque!Ja', 'SuaSenha123', 'SENHA_FORTE_9', 'Usuário2024', 'seu_segredo9', 'meu-segredo-real-X7', 'senha_aqui2', 's3cr3tPw0rd', 'senha123', 'segredo-do-banco1', 'minhasenha_forte', 'sua_senha_aqui_9'];
+  assert.ok(aceitos.length > 0 && recusados.length > 0);
+  for (const s of aceitos) assert.deepEqual(segredosEm(url(s)), [], `marcador recusado: ${s}`);
+  for (const s of recusados) assert.ok(segredosEm(url(s)).some((a) => a.padrao === 'url-com-credencial'), `aceito por engano: ${s}`);
+  // Bearer: marcador inteiro passa; marcador no meio de um valor real é recusado; ghp_ com "senha" dentro é recusado.
+  assert.deepEqual(segredosEm('Authorization: Bearer SEU_TOKEN_AQUI'), []);
+  for (const b of ['Bearer minhasenhaForte9aB3dE5gH7jK9mN', 'Bearer exemplo2024aB3dE5gH7jK9mN1pQ3sT', 'Bearer ' + 'gh' + 'p_senha' + 'aB3dE5gH7jK9mN1pQ3sT5vX7']) {
+    assert.ok(segredosEm('Authorization: ' + b).length > 0, `aceito por engano: ${b}`);
+  }
+});
+
+test('F39 chave=valor: valor literal em atribuição de nome de segredo é recusado; referência e marcador passam', () => {
+  const real = 'aB3dE5gH7jK9';
+  const recusados = ['DB_SEN' + `HA=${real}`, 'password' + `: "${real}"`, 'api_key' + `='${real}'`, 'MY_SECRET_TOKEN' + `: ${real}`, 'senha' + `: ${real}`];
+  const aceitos = ['DB_SENHA=${DB_SENHA}', 'password: secret:DB', 'IZANAGI_SECRET_FOO=<sua-chave>', 'token: process.env.TOKEN', 'DB_SENHA=sua_senha', 'DB_SENHA=$DB_SENHA', 'password: SEU_SEGREDO_AQUI',
+    'password: secret:DB2', 'token: process.env.TOKEN_2', 'IZANAGI_SECRET_FOO=<sua-chave-1>', 'DB_SENHA=$DB_SENHA_2', 'senha: SEU_SEGREDO_AQUI',
+    'max_tokens: 4096', 'token: aprovado', 'o token expira em 24h', 'senha = getSecret("db")', 'const token = `${process.pid}-${randomBytes(6).toString("hex")}`;'];
+  assert.ok(recusados.length > 0 && aceitos.length > 0);
+  for (const t of recusados) assert.ok(segredosEm(t).some((a) => a.padrao === 'chave-valor'), `aceito por engano: ${t.slice(0, 12)}…`);
+  for (const t of aceitos) assert.deepEqual(segredosEm(t), [], `falso positivo: ${t}`);
 });

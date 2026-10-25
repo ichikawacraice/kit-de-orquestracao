@@ -43,7 +43,7 @@ const ehTeste = (caminho) => CAMINHO_DE_TESTE.some((r) => r.test(caminho));
 // o destino vai em `redirs`; `2>&1` não tem destino.
 export function segmentosDoComando(comando) {
   const segmentos = [];
-  let palavras = [], redirs = [], palavra = '', temPalavra = false, aspa = '', redirPendente = false;
+  let palavras = [], redirs = [], palavra = '', temPalavra = false, aspa = '', redirPendente = false, arit = 0;
   const heredocs = [];
   const fechaPalavra = () => {
     if (temPalavra) (redirPendente ? redirs : palavras).push(palavra);
@@ -61,7 +61,12 @@ export function segmentosDoComando(comando) {
       if (c === aspa) aspa = '';
       else if (c === '\\' && aspa === '"' && i + 1 < comando.length) palavra += comando[++i];
       else palavra += c;
-    } else if (c === "'" || c === '"') { aspa = c; temPalavra = true; }
+    } else if (arit > 0) {
+      // Dentro de `$(( … ))` o `<<` é deslocamento, não heredoc, e `;`/`|`/`&` não separam comando.
+      if (c === '(') arit++; else if (c === ')') arit--;
+      palavra += c; temPalavra = true;
+    } else if (c === '$' && comando[i + 1] === '(' && comando[i + 2] === '(') { arit = 2; palavra += '$(('; temPalavra = true; i += 2; }
+    else if (c === "'" || c === '"') { aspa = c; temPalavra = true; }
     else if (c === '\\' && i + 1 < comando.length) { palavra += comando[++i]; temPalavra = true; }
     else if (/\s/.test(c) && c !== '\n') fechaPalavra();
     else if (c === ';' || c === '|' || c === '&') {
@@ -80,7 +85,10 @@ export function segmentosDoComando(comando) {
         }
         i = fim - 1;
       }
-    } else if (c === '<' && comando[i + 1] === '<' && comando[i + 2] !== '<') {
+    } else if (c === '<' && comando[i + 1] === '<' && comando[i + 2] === '<') {
+      // here-string (`<<<`): não abre corpo de heredoc; os três caracteres saem e a palavra seguinte segue normal.
+      fechaPalavra(); i += 2;
+    } else if (c === '<' && comando[i + 1] === '<') {
       fechaPalavra();
       i += 2;
       const tabs = comando[i] === '-';

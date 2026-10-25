@@ -575,6 +575,10 @@ caso('2.31 registro de teste editado por Bash: conta o alvo da escrita', () => {
   igual(conta('cat > a.test.ts <<EOF\nx\nEOF'), 1, 'N1: destino do heredoc continua registrando');
   igual(conta('cat <<EOF\nx\nEOF\nrm tests/z.test.mjs'), 1, 'N1: comando depois do heredoc registra');
   igual(conta('git restore --staged src/m.test.ts'), 0, 'N2: git restore --staged não registra');
+  igual(conta("cat <<< 'aqui' > /tmp/x\nrm tests/a.test.mjs"), 1, 'A1: here-string <<< não abre heredoc, o rm seguinte registra');
+  igual(conta('echo $((1<<2))\nrm tests/a.test.mjs'), 1, 'A1: << dentro de $(( )) é deslocamento, o rm seguinte registra');
+  igual(conta('echo $(( (1<<2) + 1 ))\nrm tests/a.test.mjs'), 1, 'A1: parênteses aninhados na aritmética');
+  igual(conta('cat <<EOF\nrm tests/x.test.mjs\nEOF'), 0, 'A1: heredoc de verdade continua pulando o corpo');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

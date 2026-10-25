@@ -6,10 +6,10 @@
 //   Origem:  https://github.com/ruvnet/ruflo  (commit 264b34647)
 //   Licença: MIT, Copyright (c) 2024-2026 ruvnet — https://github.com/ruvnet/ruflo/blob/main/LICENSE
 // Diferença do original: `post` seguido de caminho (`POST /ambientes`) é o método HTTP, não o verbo (falso positivo medido em nota real).
-// Fica de fora a forma "key assignment" (chave com nome de segredo atribuída a um literal, julgada por entropia):
-// no original ela pesa ~80 linhas e seis auxiliares, e aqui a trava erra para o lado de deixar passar.
+// A forma "key assignment" entra numa versão simples (`chave-valor`): sem a entropia do original, o valor literal precisa ter
+// letra e dígito. Fica de fora o que não tem dígito (`senha=correctHorseBattery`): a trava erra para o lado de deixar passar.
 
-/** [nome, regex]: as 15 formas de segredo do screen.ts. */
+/** [nome, regex]: as 15 formas do screen.ts mais a chave=valor (`chave-valor`, versão simples da "key assignment") de segredo do screen.ts. */
 export const SEGREDOS = [
   ['chave-privada', /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
   ['aws-key', /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/],
@@ -25,6 +25,7 @@ export const SEGREDOS = [
   ['twilio-key', /\bSK[0-9a-f]{32}\b/],
   ['jwt', /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/],
   ['bearer-token', /\bBearer\s+([A-Za-z0-9._~+/=-]{24,})/],
+  ['chave-valor', /(?<![\w-])[A-Za-z0-9_.-]{0,40}(?:senha|password|passwd|secret|segredo|token|api[-_]?key)[A-Za-z0-9_.-]{0,40}["']?\s*[:=]\s*["']?([^\s"',;]{8,})/i],
   ['url-com-credencial', /\b[a-z][a-z0-9+.-]{1,20}:\/\/[^\s:@/]+:[^\s@/]{3,}@[^\s/]+/i],
 ];
 
@@ -62,7 +63,7 @@ export const limpo = (texto) => {
 
 // Um valor só é segredo quando não é referência: variável de ambiente, chamada, caminho, placeholder, gerenciador de segredos.
 const PLACEHOLDER = /placeholder|your[-_ ]|example|changeme|change[-_]?me|redacted|dummy|replace[-_]?me|insert[-_]|\*{3,}|x{5,}|\.{3}|^(?:none|null|undefined|true|false)$/i;
-const REFERENCIA = /^(?:\$(?:\{[^}]*\}|\(|[A-Za-z_]\w*$)|%[^%]*%$|<[^>]*>$|\{\{|process\.env|os\.environ|env[.[]|import\.meta|System\.getenv|secrets?\.|vault:|op:\/\/|ref\+|arn:|projects\/[^/]+\/secrets\/|gcp:|kms:|aws:|file:)/i;
+const REFERENCIA = /^(?:\$(?:\{[^}]*\}|\(|[A-Za-z_]\w*$)|%[^%]*%$|<[^>]*>$|\{\{|process\.env|os\.environ|env[.[]|import\.meta|System\.getenv|secrets?\.|vault:|op:\/\/|ref\+|arn:|projects\/[^/]+\/secrets\/|gcp:|kms:|aws:|file:|secrets?:)/i;
 const CHAMADA = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\(|^[A-Za-z_$][\w$]*\[/;
 const CAMINHO_DE_IDENTIFICADOR = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/;
 const URL_SEM_CREDENCIAL = /^[a-z][a-z0-9+.-]{1,20}:\/\/[^\s@]*$/i;
@@ -70,8 +71,12 @@ const NOME_COMPOSTO = /^[a-z][a-z0-9]*(?:[-_./][a-z0-9]+){2,}$/;
 const ARQUIVO_RELATIVO = /^(?:\.{1,2}|~)\/[A-Za-z0-9_./-]*\.[A-Za-z0-9]{1,8}$/;
 const REF_DE_SEGREDO = /^(?:[A-Za-z][A-Za-z0-9_-]*=)?(?:[A-Za-z][A-Za-z0-9]*(?:[_-][A-Za-z0-9]+)*:latest|[A-Za-z][A-Za-z0-9]*(?:[_-][A-Za-z0-9]+)+:\d{1,4})$/;
 
+// Marcador de exemplo valendo INTEIRO (`^…$`): em português ficam só aqui, nunca no PLACEHOLDER, que casa em qualquer ponto e
+// deixaria passar `minhasenhaforte9` e `exemplo2024`.
+const MARCADOR = /^(?:password|passwd|pass|pwd|secret|changeme|dbpassword|db_password|senha|segredo|usuario|usu[aá]rio|db[-_]?senha|exemplo|troque(?:[-_ ]?aqui)?|substitua|preencha|redigid[oa]|(?:sua|seu|minha|meu)[-_]?(?:senha|segredo|chave|token)(?:[-_]?aqui)?|senha[-_]?aqui|(?:senha|segredo)[-_]?(?:do[-_]?)?(?:banco|db)|\$\w*|<.*>|\{.*\}|\*+|x+)$/i;
+
 function ehReferencia(v) {
-  if (PLACEHOLDER.test(v) || REFERENCIA.test(v) || CHAMADA.test(v) || CAMINHO_DE_IDENTIFICADOR.test(v) || URL_SEM_CREDENCIAL.test(v) || ARQUIVO_RELATIVO.test(v) || REF_DE_SEGREDO.test(v)) return true;
+  if (MARCADOR.test(v) || PLACEHOLDER.test(v) || REFERENCIA.test(v) || CHAMADA.test(v) || CAMINHO_DE_IDENTIFICADOR.test(v) || URL_SEM_CREDENCIAL.test(v) || ARQUIVO_RELATIVO.test(v) || REF_DE_SEGREDO.test(v)) return true;
   return NOME_COMPOSTO.test(v) && v.replace(/\D/g, '').length / v.length < 0.15;
 }
 
@@ -79,11 +84,15 @@ function ehReferencia(v) {
 function senhaDeUrl(url) {
   const [, usuario, senha] = /^[^:]+:\/\/([^\s:@/]+):([^\s@/]+)@/.exec(url) ?? [];
   if (!senha || senha === usuario || /\$\{|\{\{|%\(|%s/.test(senha)) return false;
-  return !/^(?:password|passwd|pass|pwd|secret|changeme|dbpassword|db_password|senha|segredo|sua[-_]?senha|minha[-_]?senha|senha[-_]?(?:do[-_]?)?(?:banco|db)|db[-_]?senha|usuario|usu[aá]rio|exemplo|troque(?:[-_ ]?aqui)?|substitua|preencha|redigid[oa]|\$\w*|<.*>|\{.*\}|\*+|x+)$/i.test(senha) && !PLACEHOLDER.test(senha);
+  return !MARCADOR.test(senha) && !PLACEHOLDER.test(senha);
 }
 
 // Formas que só valem depois de um segundo juízo sobre o trecho que casou.
+// Valor literal de chave=valor: tem letra e dígito (descarta prosa e número puro) e não é referência, marcador, template (`` `${x}` ``) nem chamada.
+const valorLiteral = (v) => /[A-Za-z]/.test(v) && /\d/.test(v) && !/^`|\$\{|\(/.test(v) && !ehReferencia(v);
+
 const CONFERE = {
+  'chave-valor': (m) => valorLiteral(m[1] ?? ''),
   'bearer-token': (m) => !ehReferencia(m[1] ?? ''),
   'url-com-credencial': (m) => senhaDeUrl(m[0]),
 };
