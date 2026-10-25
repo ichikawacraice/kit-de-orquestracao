@@ -341,3 +341,19 @@ export function vaiSoltar(transcriptPath, inicio, { sessionId, localId, titulo }
   if (!d?.propria) return null;
   return membroDoPool(d.tituloNovo) || membroDoPool(titulo) ? d : null;
 }
+
+// Contexto da sessão (F35): a ÚLTIMA entrada `assistant` com `usage` que não seja de subagente (`isSidechain`). Entrada de subagente
+// carrega o contexto dele, e depois de compactar a última já vem menor, por isso vale só a última leitura (nada se soma).
+// → `{ tokens, em }` (`em` = timestamp da entrada), ou null se não há nenhum `usage`. Transcript ilegível LANÇA: quem chama registra `erro`.
+export function contextoDoTranscript(caminho) {
+  const linhas = readFileSync(caminho, 'utf8').split('\n');
+  for (let i = linhas.length - 1; i >= 0; i--) {
+    if (!linhas[i]) continue;
+    let e; try { e = JSON.parse(linhas[i]); } catch { continue; }
+    const u = e?.message?.usage;
+    if (e?.type !== 'assistant' || e?.isSidechain === true || !u) continue;
+    const tokens = [u.input_tokens, u.cache_creation_input_tokens, u.cache_read_input_tokens].reduce((s, x) => s + (Number.isFinite(x) ? x : 0), 0);
+    return { tokens, em: e.timestamp ?? null };
+  }
+  return null;
+}

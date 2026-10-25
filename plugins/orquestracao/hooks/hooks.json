@@ -54,6 +54,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/contexto-do-papel.mjs\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PreToolUse": [
