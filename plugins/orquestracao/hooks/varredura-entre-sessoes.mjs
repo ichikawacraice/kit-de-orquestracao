@@ -73,7 +73,7 @@ const REF_DE_SEGREDO = /^(?:[A-Za-z][A-Za-z0-9_-]*=)?(?:[A-Za-z][A-Za-z0-9]*(?:[
 
 // Marcador de exemplo valendo INTEIRO (`^…$`): em português ficam só aqui, nunca no PLACEHOLDER, que casa em qualquer ponto e
 // deixaria passar `minhasenhaforte9` e `exemplo2024`.
-const MARCADOR = /^(?:password|passwd|pass|pwd|secret|changeme|dbpassword|db_password|senha|segredo|usuario|usu[aá]rio|db[-_]?senha|exemplo|troque(?:[-_ ]?aqui)?|substitua|preencha|redigid[oa]|(?:sua|seu|minha|meu)[-_]?(?:senha|segredo|chave|token)(?:[-_]?aqui)?|senha[-_]?aqui|(?:senha|segredo)[-_]?(?:do[-_]?)?(?:banco|db)|\$\w*|<.*>|\{.*\}|\*+|x+)$/i;
+const MARCADOR = /^(?:password|passwd|pass|pwd|secret|changeme|dbpassword|db_password|senha|segredo|usuario|usu[aá]rio|db[-_]?senha|exemplo|troque(?:[-_ ]?aqui)?|substitua|preencha|redigid[oa]|(?:sua|seu|minha|meu)[-_]?(?:senha|segredo|chave|token)(?:[-_]?(?:de|da|do)?[-_]?(?:acesso|api|servico|aqui))*|senha[-_]?aqui|(?:senha|segredo)[-_]?(?:do[-_]?)?(?:banco|db)|\$\w*|<.*>|\{.*\}|\*+|x+)$/i;
 
 function ehReferencia(v) {
   if (MARCADOR.test(v) || PLACEHOLDER.test(v) || REFERENCIA.test(v) || CHAMADA.test(v) || CAMINHO_DE_IDENTIFICADOR.test(v) || URL_SEM_CREDENCIAL.test(v) || ARQUIVO_RELATIVO.test(v) || REF_DE_SEGREDO.test(v)) return true;
@@ -87,9 +87,11 @@ function senhaDeUrl(url) {
   return !MARCADOR.test(senha) && !PLACEHOLDER.test(senha);
 }
 
+// Observações da V4 que não mudam código: `Senha@2024` com `@` sem codificar na URL parte a URL no primeiro `@` (resíduo do parse);
+// valor de chave=valor sem dígito passa (sem a entropia do ruflo); e `chave-valor` lê só texto, nunca blob binário.
 // Formas que só valem depois de um segundo juízo sobre o trecho que casou.
-// Valor literal de chave=valor: tem letra e dígito (descarta prosa e número puro) e não é referência, marcador, template (`` `${x}` ``) nem chamada.
-const valorLiteral = (v) => /[A-Za-z]/.test(v) && /\d/.test(v) && !/^`|\$\{|\(/.test(v) && !ehReferencia(v);
+// Valor literal de chave=valor: tem letra e dígito (descarta prosa e número puro) e não é um marcador INTEIRO nem uma referência (só o `MARCADOR` ancorado e a `REFERENCIA`: o `PLACEHOLDER` e o nome composto casam em qualquer ponto e deixariam passar `minha-senha-forte-7`), template (`` `${x}` ``) nem chamada.
+const valorLiteral = (v) => /[A-Za-z]/.test(v) && /\d/.test(v) && !/^`|\$\{|\(/.test(v) && !MARCADOR.test(v) && !REFERENCIA.test(v);
 
 const CONFERE = {
   'chave-valor': (m) => valorLiteral(m[1] ?? ''),
