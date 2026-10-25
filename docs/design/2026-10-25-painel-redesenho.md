@@ -246,7 +246,7 @@ Os blocos de SVG carregam o mesmo `CSS` de hoje (as classes `t s m av er an ok l
 
 - o título "Em sessão · n", que vira as seções Travados e Executando;
 - o rótulo "Andando", que vira "Executando";
-- os cabeçalhos de tema entre os itens, que viram etiqueta no cartão (Q-ID na §Decisões);
+- os cabeçalhos de tema entre os itens, que viram etiqueta no cartão (decidido: Q238);
 - o ponto colorido pulsante à esquerda de cada item em sessão, cujo pulso passa para o selo de quem executa;
 - os segundos em "lido às 18:22:15";
 - todo `Button plain dimColor`;
