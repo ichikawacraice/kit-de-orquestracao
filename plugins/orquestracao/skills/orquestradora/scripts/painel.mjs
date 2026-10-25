@@ -9,6 +9,8 @@
 //   painel.mjs update <colecao> <id> '<json>' [--se-versao N]   mescla os campos (null apaga)
 //   painel.mjs batch  '[{"op":"set|update|delete","colecao":"…","id":"…","data":{…},"seVersao":N}]'   (seVersao opcional por op)
 //   painel.mjs delete <colecao> <id>
+//   painel.mjs temas list [--projeto <nome>]   os temas do projeto (o da pasta atual); cada tema vale só no projeto dele
+//   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
 //   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
 //   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
@@ -111,25 +113,61 @@ const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
 const MOTIVOS_DA_TRAVA = new Set([...MOTIVOS]);
 const DONOS_ANTIGOS = ['dono', 'dona', 'membro', 'executora'];
 const ARQUIVO_DE_TEMAS = () => join(BASE, 'temas.json');
-// Instalação nova não tem temas.json: a primeira gravação o cria (flag `wx`: atômico, nunca sobrescreve) com o tema `geral` e avisa uma vez.
-function semearTemas(caminho) {
-  try {
-    mkdirSync(dirname(caminho), { recursive: true });
-    writeFileSync(caminho, `${JSON.stringify([{ id: 'geral', rotulo: 'Geral' }], null, 2)}\n`, { flag: 'wx' });
-    process.stderr.write(`painel.mjs: ${caminho} não existia; criei com o tema "geral". Cadastre os temas do seu projeto nele.\n`);
-  } catch (e) { if (e?.code !== 'EEXIST') throw e; }
+// temas.json: lista de { id, rotulo, projeto? }. Tema com `projeto` vale só nele; sem `projeto` (instalação antiga) vale para todos.
+const doProjeto = (t, projeto) => !projeto || !t?.projeto || String(t.projeto).toLowerCase() === projeto;
+function lerTemas(caminho) {
+  if (!existsSync(caminho)) return [];
+  const lista = JSON.parse(readFileSync(caminho, 'utf8'));
+  if (!Array.isArray(lista)) throw new Error('não é uma lista');
+  return lista;
 }
-function temasValidos(chave) {
+function gravarTemas(caminho, lista) {
+  mkdirSync(dirname(caminho), { recursive: true });
+  const tmp = `${caminho}.${process.pid}-${randomBytes(4).toString('hex')}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(lista, null, 2)}\n`);
+  renameSync(tmp, caminho);
+}
+const idsDe = (lista, projeto) => lista.filter((t) => doProjeto(t, projeto)).map((t) => t?.id).filter((x) => typeof x === 'string' && x);
+// Projeto sem nenhum tema visível ganha o `geral` na primeira gravação em `fila` (a escrita está sob a trava do painel).
+function temasValidos(chave, projeto) {
   const caminho = ARQUIVO_DE_TEMAS();
-  if (!existsSync(caminho)) semearTemas(caminho);
   try {
-    const lista = JSON.parse(readFileSync(caminho, 'utf8'));
-    const ids = Array.isArray(lista) ? lista.map((t) => t?.id).filter((x) => typeof x === 'string' && x) : [];
-    if (ids.length === 0) throw new Error('lista vazia ou sem ids');
-    return { ids, caminho };
+    let lista = lerTemas(caminho);
+    if (projeto && idsDe(lista, projeto).length === 0) {
+      lista = [...lista, { id: 'geral', rotulo: 'Geral', projeto }];
+      gravarTemas(caminho, lista);
+      process.stderr.write(`painel.mjs: o projeto "${projeto}" não tinha tema; cadastrei "geral" em ${caminho}. Crie os seus com: painel.mjs temas add <id> "<rótulo>"\n`);
+    } else if (!projeto && idsDe(lista, projeto).length === 0) {
+      lista = [{ id: 'geral', rotulo: 'Geral' }];
+      gravarTemas(caminho, lista);
+      process.stderr.write(`painel.mjs: ${caminho} não tinha temas; criei com o tema "geral".\n`);
+    }
+    return { ids: idsDe(lista, projeto), caminho };
   } catch (e) {
     throw new Error(`${chave}: não consegui ler os temas em ${caminho} (${e.message})`);
   }
+}
+// `painel.mjs temas list|add`: o jeito de cadastrar tema sem editar o JSON. O projeto é o da pasta atual ou `--projeto`.
+function comandoTemas(args) {
+  const ip = args.indexOf('--projeto');
+  const projeto = ip >= 0 ? String(args.splice(ip, 2)[1] ?? '').toLowerCase() : (projetoDoCwd().projeto ?? null);
+  const [sub, id, ...rotulo] = args;
+  const caminho = ARQUIVO_DE_TEMAS();
+  if (sub === 'list') return lerTemas(caminho).filter((t) => doProjeto(t, projeto));
+  if (sub === 'add') {
+    if (!projeto) throw new Error('temas add: não achei o projeto (rode dentro do repositório git ou passe --projeto <nome>)');
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(id ?? '')) throw new Error('temas add: o id é minúsculo, com letras, números e hífen (ex.: loja)');
+    const nome = rotulo.join(' ').trim();
+    if (!nome) throw new Error('temas add: falta o rótulo (ex.: painel.mjs temas add loja "Loja e checkout")');
+    return comTrava(() => {
+      const lista = lerTemas(caminho);
+      if (idsDe(lista, projeto).includes(id)) throw new Error(`temas add: o tema "${id}" já existe no projeto "${projeto}"`);
+      const novo = { id, rotulo: nome, projeto };
+      gravarTemas(caminho, [...lista, novo]);
+      return novo;
+    });
+  }
+  throw new Error('uso: painel.mjs temas list [--projeto <nome>] | temas add <id> "<rótulo>" [--projeto <nome>]');
 }
 const textoNaoVazio = (v) => typeof v === 'string' && v.trim() !== '';
 
@@ -145,8 +183,9 @@ function validarItemDaFila(chave, novo, base, op, existia) {
     throw new Error(`${chave}: etapa "${novo.etapa}" fora da lista (${ETAPAS.join(' · ')})`);
   }
   if (tem('tema')) {
-    const { ids, caminho } = temasValidos(chave);
-    if (!ids.includes(novo.tema)) throw new Error(`${chave}: tema "${novo.tema}" fora da lista (${ids.join(' · ')}); a lista está em ${caminho}`);
+    const projeto = base?.projeto ? String(base.projeto).toLowerCase() : null;
+    const { ids, caminho } = temasValidos(chave, projeto);
+    if (!ids.includes(novo.tema)) throw new Error(`${chave}: tema "${novo.tema}" fora da lista${projeto ? ` do projeto "${projeto}"` : ''} (${ids.join(' · ')}); para criar: painel.mjs temas add <id> "<rótulo>" (lista em ${caminho})`);
   }
   if (tem('trava')) {
     const t = novo.trava;
@@ -446,6 +485,9 @@ function main(argv) {
     case 'delete':
       saida = aplicarLote([[{ op: cmd, colecao: a, id: b, data: c, deOutra }, seVersao]])[0];
       break;
+    case 'temas':
+      saida = comandoTemas(resto);
+      break;
     case 'batch': {
       const ops = JSON.parse(a);
       if (!Array.isArray(ops)) throw new Error('batch: esperava uma lista');
@@ -453,7 +495,7 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
   return 0;
