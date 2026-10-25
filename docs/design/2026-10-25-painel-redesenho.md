@@ -298,6 +298,7 @@ O `Client` não resolve isso: ele também desenha com `Box` e `Text`, e não com
 - **O caso:** a fila hoje não tem gesto nenhum no pane. Quem inicia uma sessão para o item é a orquestradora. Um botão mandaria a ela "iniciar <item>". É um gesto novo: manda mensagem entre sessões, e precisa de um destino conhecido.
 - **Se não decidir:** a fila fica só de leitura, como hoje, e você pede o início no chat da orquestradora.
 - **Recomendo:** **não agora.** Primeiro o redesenho; o botão entra depois, como item próprio, se a fila parada virar dor. Pela regra de não mostrar ação que a tela não tem, ele exige o fluxo de destino pronto antes.
+- **Decidida em 25/10:** segue a recomendação: a fila fica sem botão neste redesenho (resposta do operador pelo painel).
 
 **Assumidas, a confirmar** (reversíveis, a execução segue com elas):
 - "Andando" vira "Executando" no contador e na seção.
