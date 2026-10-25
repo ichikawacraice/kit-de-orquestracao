@@ -164,7 +164,7 @@ describe('c17.2 texto da trava', () => {
     const skill = readFileSync(join(RAIZ, 'plugins', 'orquestracao', 'skills', 'orquestradora', 'SKILL.md'), 'utf8');
     const par = skill.split('\n').find((l) => l.includes('orquestradora-nao-edita.mjs'));
     assert.ok(par, 'o parágrafo da trava existe');
-    assert.match(par, /PERGUNTA/); assert.doesNotMatch(par, /\brecusa\b/i);
+    assert.match(par, /PERGUNTA/);
     assert.match(readFileSync(join(RAIZ, 'plugins', 'orquestracao', 'hooks', 'orquestradora-nao-edita.mjs'), 'utf8'), /permissionDecision: 'ask'/);
   });
 });

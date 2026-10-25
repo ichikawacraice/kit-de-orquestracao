@@ -153,6 +153,8 @@ describe('M3 — doutor diz o bloco, ignora o que é do projeto e confere só as
     writeFileSync(join(h, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { [NOME]: [{ scope: 'user' }] } }));
     return h;
   };
+  // o aviso do placeholder do bloco projeto (c17.4) é esperado num CLAUDE.md recém-adotado; os testes abaixo medem outra coisa
+  const semPlaceholder = (t) => t.split('\n').filter((l) => !/ainda tem o texto de preencher/.test(l)).join('\n');
   const adotado = (h) => {
     const d = pasta({ 'CLAUDE.md': '# meu\n', 'package.json': { name: 'x', version: '1.0.0', scripts: { test: 'vitest run' } } });
     assert.equal(kit(d, ['adotar', '--trocar-test'], h).status, 0);
@@ -169,7 +171,7 @@ describe('M3 — doutor diz o bloco, ignora o que é do projeto e confere só as
       const s = json(d, '.claude', 'settings.json'); s.model = 'opus'; writeFileSync(join(d, '.claude', 'settings.json'), `${JSON.stringify(s, null, 2)}\n`);
       const r = kit(d, ['doutor'], h);
       assert.equal(r.status, 0, saida(r));
-      assert.doesNotMatch(r.stdout, /aviso|falha/);
+      assert.doesNotMatch(semPlaceholder(r.stdout), /aviso|falha/);
     } finally { limpar(d, h); }
   });
 
@@ -179,7 +181,7 @@ describe('M3 — doutor diz o bloco, ignora o que é do projeto e confere só as
       writeFileSync(join(d, 'CLAUDE.md'), ler(d, 'CLAUDE.md').replace('## Comandos', '## Comandos!'));
       const r = kit(d, ['doutor'], h);
       assert.match(r.stdout, /aviso: bloco comandos editado à mão/);
-      assert.doesNotMatch(r.stdout, /bloco (projeto|regras|convencoes|orquestradora)/);
+      assert.doesNotMatch(semPlaceholder(r.stdout), /bloco (projeto|regras|convencoes|orquestradora)/);
     } finally { limpar(d, h); }
   });
 
