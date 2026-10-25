@@ -98,9 +98,10 @@ it('L1: skills e pool não citam subagente do plugin sem o prefixo orquestracao:
   const achar = (pasta) => execFileSync('find', [pasta, '-name', '*.md'], { encoding: 'utf8' }).split('\n').filter(Boolean);
   const arquivos = [...achar(join(RAIZ, 'plugins', 'orquestracao', 'skills')), ...achar(join(RAIZ, 'plugins', 'orquestracao', 'pool'))];
   assert.ok(arquivos.length >= 6, `poucos arquivos varridos: ${arquivos.length}`);
-  const solto = /(subagentes?|um|o|a) `(validador|explorador|planejador|executor)`/;
+  const solto = /(\b(sub)?agentes?\s+`?|\b(um|o|a)\s+`)(validador|explorador|planejador|executor)(?![\w:-])/;
   const achados = arquivos.flatMap((f) => readFileSync(f, 'utf8').split('\n').map((l, i) => [f, i + 1, l]).filter(([, , l]) => solto.test(l)).map(([a, n, l]) => `${a}:${n}: ${l.slice(0, 90)}`));
   assert.deepEqual(achados, []);
   // prova de que o detector pega: um texto com o nome solto é achado
-  assert.ok(solto.test('lança subagente `validador`'));
+  for (const caso of ['lança subagente `validador`', 'use o agente `validador`', 'o subagente validador revisa', 'um agente explorador', 'chame o `planejador`']) assert.ok(solto.test(caso), `o detector não pegou: ${caso}`);
+  for (const caso of ['o agente `orquestracao:validador`', 'subagente orquestracao:executor', 'a skill `papeis-e-modelos`', 'o validador do pool']) assert.ok(!solto.test(caso), `o detector pegou sem dever: ${caso}`);
 });

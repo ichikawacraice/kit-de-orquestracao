@@ -219,7 +219,7 @@ caso('projeto: fora de um repo git e sem KIT_PROJETO fica sem projeto, sem aviso
 
 // M1 (c15): dentro de um worktree o projeto é o do repositório principal (git common dir), não o nome da pasta do worktree.
 function repoComWorktree() {
-  const repo = join(raiz, 'izanagi'); mkdirSync(repo);
+  const repo = join(raiz, 'Izanagi'); mkdirSync(repo); // maiúscula de propósito: o nome do projeto sai em minúsculas (mutante sem toLowerCase morre)
   const git = (cwd, ...a) => { const r = spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { cwd, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' }); ok(r.status === 0, `git ${a.join(' ')}: ${r.stderr}`); };
   git(repo, 'init', '-q'); git(repo, 'commit', '-q', '--allow-empty', '-m', 'x');
   const wt = join(raiz, 'trabalho-wt'); git(repo, 'worktree', 'add', '-q', '-b', 'wt', wt);
