@@ -53,6 +53,9 @@ export function separadoresDeAspasNeutros(c) {
 }
 const INVOCACAO = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:(?:set|update)\s+sessoes\s+\S+|batch)\s[^\n]*\blivre\b`);
 const COM_DEL = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+com\s+del\b`);
+const COM_DEL_DE = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+com\s+del\s+\S+\s+["']?(local_[\w-]+)`);
+// O `local_` que o `com del` tira, ou null: sair do item é tirar a PRÓPRIA sessão; tirar a de outra (o dono tirando uma V) não cobra título.
+export const comDelDe = (c) => separadoresDeAspasNeutros(semHeredoc(c)).match(COM_DEL_DE)?.[1] ?? null;
 export const painelComDel = (c) => COM_DEL.test(separadoresDeAspasNeutros(semHeredoc(c)));
 export const painelLivre = (c) => {
   const n = separadoresDeAspasNeutros(semHeredoc(c));
@@ -67,7 +70,7 @@ function main() {
   const inicio = inicioDoTurno(transcript_path);
   if (inicio === null) return;
 
-  let declarou = null; let limpou = false; let saiuDoItem = false; let tituloNovo = null; let trocouTitulo = false; let trabalhou = null;
+  let declarou = null; let limpou = false; const tirados = []; let tituloNovo = null; let trocouTitulo = false; let trabalhou = null;
   for (const l of readFileSync(transcript_path, 'utf8').split('\n')) {
     if (!l) continue;
     let e; try { e = JSON.parse(l); } catch { continue; }
@@ -83,7 +86,7 @@ function main() {
       if (n.endsWith('clear_session') && ehSelf(i.session_id)) limpou = true;
       else if (n.endsWith('set_session_title') && ehSelf(i.session_id) && tituloLivre(i.title)) { declarou = 'título livre'; tituloNovo = i.title; }
       else if (n === 'Bash' && painelLivre(String(i.command || ''))) declarou ||= 'painel livre';
-      if (n === 'Bash' && painelComDel(String(i.command || ''))) saiuDoItem = true;
+      if (n === 'Bash') { const t = comDelDe(String(i.command || '')); if (t) tirados.push(t); }
     }
   }
   if (!declarou && trabalhou && !trocouTitulo) {
@@ -102,10 +105,10 @@ function main() {
     return;
   }
   // F30, regra 4: saiu do item neste turno e o título ainda é o dele.
-  if (saiuDoItem && !tituloLivre(tituloNovo)) {
+  if (tirados.length && !tituloLivre(tituloNovo)) {
     const reg = registroDaSessao(session_id, { fresco: true });
     const m = membroDoPool(reg?.titulo);
-    if (m && !tituloLivre(reg.titulo) && itensDaSessao(reg.localId).com.length === 0) {
+    if (m && tirados.includes(reg.localId) && !tituloLivre(reg.titulo) && itensDaSessao(reg.localId).com.length === 0) {
       if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar-titulo-velho', m.id); return; }
       registrar(session_id, HOOK, 'cobrou-titulo-velho', m.id);
       process.stdout.write(JSON.stringify({

@@ -201,6 +201,10 @@ caso('F30-2: com del com o título do item → block da regra 4; com del com tí
   ok(/cobrou-titulo-velho/.test(log()), 'log sem cobrou-titulo-velho');
   ok(rodar('E4', transcript([COM_DEL('F1', 'local_E4')])) === null, 'título livre devia passar');
 });
+caso('F30-2: com del do local_ de OUTRA sessão não cobra o título de quem tirou', () => {
+  item('F1', { etapa: 'validacao', com: [{ localId: 'local_V4', apelido: 'V4', oQue: 'valida' }] });
+  ok(rodar('E3', transcript([COM_DEL('F1', 'local_V4')])) === null, 'tirar a V4 não é sair do item');
+});
 caso('F30-2: com del estando no com de outro item → passa', () => {
   item('F1', { etapa: 'validacao', com: [] });
   item('F2', { etapa: 'execucao', com: [{ localId: 'local_E3', apelido: 'E3', oQue: 'parte' }] });
