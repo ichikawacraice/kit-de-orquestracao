@@ -101,6 +101,8 @@ type Opcoes = {
   euFalha?: boolean
   /** open_session_in: o texto de erro que ele devolve, ou 'deny' para recusa. */
   abrirFalha?: string
+  /** ui.copy: não copiou (o que o app faz sem área de transferência). */
+  copiaFalha?: boolean
   semTemas?: boolean
 }
 
@@ -128,7 +130,7 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   })
   on('ui.copy', (_, e) => {
     copiadas.push({ text: String((e as unknown as { text: string }).text), surface: String((e as unknown as { surface: string }).surface) })
-    return { value: undefined }
+    return { value: opc.copiaFalha ? { isCopied: false as const, reason: 'no-clipboard' as const } : { isCopied: true as const } }
   })
   const relogio = mock.clock(on, { now: opc.agora ?? Date.UTC(2026, 9, 23, 12) })
   mock.env(on, { HOME: '/home/teste' })
@@ -774,3 +776,22 @@ const copiaAoFalhar = (abrirFalha: string) => async ($: Parameters<TestBody>[0],
 
 test('abrir: recusa da tool copia o endereço e diz o que houve', copiaAoFalhar('deny'))
 test('abrir: erro da tool copia o endereço e diz o que houve', copiaAoFalhar('sessão não achada'))
+
+test('abrir: copia que não pegou não diz "copiado" e mostra o endereço', async ($, on) => {
+  const { ui, copiadas, toasts } = await abrirDe({ abrirFalha: 'deny', copiaFalha: true }, $, on)
+  await ui.press({ key: `abrir:${P7}` })
+  expect(copiadas.length, 'tentou copiar').toBe(1)
+  const t = toasts.join('\n')
+  expect(t.length, 'houve aviso').toBeGreaterThan(0)
+  expect(t).not.toMatch(/copiado/)
+  expect(t).toMatch(/nem copiar/)
+  expect(t).toContain(`claude://claude.ai/epitaxy/${P7}`)
+  await ui.unmount()
+})
+
+test('abrir: com o list_sessions falho nenhum botão aparece', async ($, on) => {
+  const { ui } = await abrirDe({ listaFalha: true }, $, on)
+  expect(await ui.find({ key: `abrir:${P7}` }), 'sem a lista, sem botão').toBeUndefined()
+  expect(await ui.find({ key: `abrir:${P1}` })).toBeUndefined()
+  await ui.unmount()
+})

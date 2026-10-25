@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
 import { anteriorSvg, itemSvg, perguntaSvg, resumoSvg, textoDaTrava } from './desenho'
@@ -330,11 +330,12 @@ function entregar($: EngineInterface, q: PerguntaAberta, resposta: string): void
  * "abrir <apelido>": o app põe a sessão em foco (só aceita as que esta sessão iniciou). Recusa ou erro viram o
  * endereço copiado e um aviso que diz o que houve; nunca fica calado.
  */
-async function abrirSessao($: EngineInterface, dono: NonNullable<LinhaItem['dono']>, surface: string): Promise<void> {
+async function abrirSessao($: EngineInterface, dono: NonNullable<LinhaItem['dono']>, surface: RenderSurface): Promise<void> {
   const naoDeu = async (porque: string) => {
     try {
-      if (dono.link) await $.ui.copy({ text: dono.link, surface })
-      $.ui.toast(`não deu para abrir daqui (${porque}): endereço de ${dono.apelido} copiado`)
+      const c = dono.link ? await $.ui.copy({ text: dono.link, surface }) : undefined
+      if (c?.isCopied) $.ui.toast(`não deu para abrir daqui (${porque}): endereço de ${dono.apelido} copiado`)
+      else $.ui.toast(`não deu para abrir ${dono.apelido} nem copiar o endereço (${porque})${dono.link ? `: ${dono.link}` : ''}`)
     } catch (err) {
       $.ui.toast(`não deu para abrir ${dono.apelido} nem copiar o endereço: ${mensagem(err)}`)
     }
