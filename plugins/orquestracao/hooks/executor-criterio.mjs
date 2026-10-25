@@ -44,6 +44,7 @@ const ehTeste = (caminho) => CAMINHO_DE_TESTE.some((r) => r.test(caminho));
 export function segmentosDoComando(comando) {
   const segmentos = [];
   let palavras = [], redirs = [], palavra = '', temPalavra = false, aspa = '', redirPendente = false;
+  const heredocs = [];
   const fechaPalavra = () => {
     if (temPalavra) (redirPendente ? redirs : palavras).push(palavra);
     if (temPalavra) redirPendente = false;
@@ -62,10 +63,39 @@ export function segmentosDoComando(comando) {
       else palavra += c;
     } else if (c === "'" || c === '"') { aspa = c; temPalavra = true; }
     else if (c === '\\' && i + 1 < comando.length) { palavra += comando[++i]; temPalavra = true; }
-    else if (/\s/.test(c)) fechaPalavra();
+    else if (/\s/.test(c) && c !== '\n') fechaPalavra();
     else if (c === ';' || c === '|' || c === '&') {
       if (c === '&' && /^\d*$/.test(palavra) && comando[i - 1] === '>') continue;
       fechaSegmento();
+    } else if (c === '\n') {
+      fechaSegmento();
+      // O corpo de um heredoc pendente não é comando: pula as linhas até o delimitador.
+      for (const { delim, tabs } of heredocs.splice(0)) {
+        let fim = i + 1;
+        while (fim <= comando.length) {
+          const quebra = comando.indexOf('\n', fim);
+          const linha = comando.slice(fim, quebra < 0 ? comando.length : quebra);
+          fim = quebra < 0 ? comando.length + 1 : quebra + 1;
+          if ((tabs ? linha.replace(/^\t+/, '') : linha) === delim) break;
+        }
+        i = fim - 1;
+      }
+    } else if (c === '<' && comando[i + 1] === '<' && comando[i + 2] !== '<') {
+      fechaPalavra();
+      i += 2;
+      const tabs = comando[i] === '-';
+      if (tabs) i++;
+      while (comando[i] === ' ' || comando[i] === '\t') i++;
+      let delim = '', q = '';
+      for (; i < comando.length; i++) {
+        const d = comando[i];
+        if (q) { if (d === q) q = ''; else delim += d; }
+        else if (d === "'" || d === '"') q = d;
+        else if (/[\s;|&<>()]/.test(d)) break;
+        else delim += d;
+      }
+      i--;
+      heredocs.push({ delim, tabs });
     } else if (c === '>') {
       if (temPalavra && /^\d+$/.test(palavra)) { palavra = ''; temPalavra = false; } else fechaPalavra();
       while (comando[i + 1] === '>') i++;
@@ -95,7 +125,7 @@ export function testesEscritosPor(comando) {
     else if ((nome === 'sed' || nome === 'perl') && args.some((a) => /^-[a-zA-Z]*i/.test(a))) posicionais.forEach(add);
     else if (nome === 'cp' || nome === 'mv') add(posicionais[posicionais.length - 1]);
     else if (nome === 'rm') posicionais.forEach(add);
-    else if (nome === 'git' && args[0] === 'restore') posicionais.slice(1).forEach(add);
+    else if (nome === 'git' && args[0] === 'restore' && (!args.some((a) => a === '--staged' || a === '-S') || args.some((a) => a === '--worktree' || a === '-W'))) posicionais.slice(1).forEach(add);
     else if (nome === 'git' && args[0] === 'checkout' && args.includes('--')) args.slice(args.indexOf('--') + 1).forEach(add);
   }
   return [...achados];

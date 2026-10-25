@@ -567,6 +567,14 @@ caso('2.31 registro de teste editado por Bash: conta o alvo da escrita', () => {
   igual(conta('git switch test/foo'), 0, 'R2: git switch não registra');
   igual(conta('git checkout test/foo'), 0, 'R2: git checkout <branch> não registra');
   igual(conta('echo "a > b.test.ts"'), 0, 'R2: > dentro de aspas não é redireção');
+  igual(conta('npm test\nrm tests/a.test.mjs'), 1, 'N1: \\n separa comandos (rm depois de npm test)');
+  igual(conta("cd /r\nsed -i 's/a/b/' a.test.ts"), 1, 'N1: \\n separa comandos (sed -i depois de cd)');
+  igual(conta('cat > notas.md <<EOF\nrm tests/x.test.mjs\nEOF\nnpm test'), 0, 'N1: corpo de heredoc não vira comando');
+  igual(conta("cat > notas.md <<'EOF'\nrm tests/x.test.mjs\nEOF"), 0, "N1: heredoc com <<'EOF' não vira comando");
+  igual(conta('cat <<-EOF\n\trm tests/x.test.mjs\n\tEOF'), 0, 'N1: heredoc <<-EOF não vira comando');
+  igual(conta('cat > a.test.ts <<EOF\nx\nEOF'), 1, 'N1: destino do heredoc continua registrando');
+  igual(conta('cat <<EOF\nx\nEOF\nrm tests/z.test.mjs'), 1, 'N1: comando depois do heredoc registra');
+  igual(conta('git restore --staged src/m.test.ts'), 0, 'N2: git restore --staged não registra');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
