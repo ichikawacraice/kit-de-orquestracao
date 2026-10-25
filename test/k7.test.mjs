@@ -354,7 +354,7 @@ describe('kit doutor (completo)', () => {
       assert.equal(kit(d, ['adotar'], { home: h }).status, 0);
       const r = kit(d, ['doutor'], { home: h });
       assert.equal(r.status, 0, saida(r));
-      for (const re of [/ok:.*plugin orquestracao instalado/, /ok:.*habilitado/, /ok:.*nenhum hook do kit/, /ok:.*kit\.json/, /ok:.*versão/, /ok:.*node/i, /ok:.*git/]) assert.match(r.stdout, re);
+      for (const re of [/ok:.*plugin instalado na máquina: sim/, /ok:.*plugin habilitado no projeto: sim/, /ok:.*nenhum hook do kit/, /ok:.*kit\.json/, /ok:.*versão/, /ok:.*node/i, /ok:.*git/]) assert.match(r.stdout, re);
       assert.doesNotMatch(r.stdout, /falha:/);
     } finally { limpar(d, h); }
   });
@@ -366,14 +366,14 @@ describe('kit doutor (completo)', () => {
       assert.equal(kit(d, ['adotar'], { home: h }).status, 0);
       const r = kit(d, ['doutor'], { home: h });
       assert.equal(r.status, 1);
-      assert.match(r.stdout, /falha:.*plugin orquestracao não instalado/);
+      assert.match(r.stdout, /falha:.*plugin instalado na máquina: não/);
       const h2 = lar();
       const s = json(d, '.claude', 'settings.json');
       s.enabledPlugins[NOME] = false;
       writeFileSync(join(d, '.claude', 'settings.json'), JSON.stringify(s));
       const r2 = kit(d, ['doutor'], { home: h2 });
       assert.equal(r2.status, 1);
-      assert.match(r2.stdout, /falha:.*plugin orquestracao não habilitado/);
+      assert.match(r2.stdout, /falha:.*plugin habilitado no projeto: não/);
       limpar(h2);
     } finally { limpar(d, h); }
   });

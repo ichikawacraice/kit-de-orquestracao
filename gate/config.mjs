@@ -102,17 +102,20 @@ export function carregarConfig(raiz, kit = lerKitJson(raiz)) {
   }
   validarGuarda(kit.guarda);
   validarExtras(kit.arvore?.extras);
-  validarSuite(kit.gate?.comandoCompleto);
   const base = perfil === "pnpm-workspace" ? mesclar(PADRAO, PERFIL_PNPM) : PADRAO;
   return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: kit.guarda ?? {} });
 }
 
-/** `npm test`, `npm run test`, `pnpm test`, `yarn test`: o `test` do projeto é o gate, e o gate chamando o `test` espera a própria vez para sempre. */
+/**
+ * Aviso (não recusa) do `kit doutor`: o `comandoCompleto` parece chamar o `test` do projeto, que é o próprio gate.
+ * A defesa de verdade é o gate detectar o laço pelo comportamento (`KIT_GATE_DENTRO`); o texto só avisa cedo e pode errar.
+ */
 const CHAMA_O_TEST = /(^|[\s;&|(])(npm|pnpm|yarn)\s+(run\s+)?test(?![\w:-])/;
-function validarSuite(comando) {
+export function avisoDeLaco(comando) {
   if (typeof comando === "string" && CHAMA_O_TEST.test(comando)) {
-    throw new Error(`gate.comandoCompleto ${JSON.stringify(comando)} chama o \`test\` do projeto, que é o próprio gate (laço) — aponte para o script da suíte, ex.: "npm run test:suite"`);
+    return `gate.comandoCompleto ${JSON.stringify(comando)} parece chamar o \`test\` do projeto, que é o próprio gate (laço) — o gate recusa se for; aponte para o script da suíte, ex.: "npm run test:suite"`;
   }
+  return null;
 }
 
 /** `guarda.regras`: lista de regras conhecidas. Um typo desligaria a regra calado, e uma string viraria um conjunto de letras. */

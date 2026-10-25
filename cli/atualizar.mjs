@@ -80,10 +80,11 @@ function trocarOTest({ destino, lock, mudancas, linhas, conflito }) {
   const atual = sc.test;
   if (!gate || atual === undefined || atual === gate) { linhas.push('aviso: --trocar-test: o `test` já é o gate ou não existe; nada a trocar'); return; }
   if (sc['test:projeto'] !== undefined && sc['test:projeto'] !== atual) { conflito('scripts.test:projeto já existe com outro valor — não troquei o `test`'); return; }
+  const jaExistia = sc['test:projeto'] !== undefined; // já era do projeto (igual ao `test`): o remover não o apaga
   sc['test:projeto'] = atual; sc.test = gate; pkg.scripts = sc;
   mudancas.push({ arquivo: 'package.json', antigo: texto, novo: serializar(pkg, texto) });
   const cp = lock.chaves.package;
-  cp.scripts['test:projeto'] = atual;
+  if (!jaExistia) cp.scripts['test:projeto'] = atual;
   cp.trocados.push({ nome: 'test', original: atual, gate });
   const kj = lerTexto(destino, '.claude/kit.json');
   if (kj !== null) {

@@ -116,6 +116,9 @@ export function pacoteDoArgv(argv = [], raiz = RAIZ, cfg = carregarConfig(raiz))
 /** A fila do argv: sem pacote, a do gate completo; com pacote, a do conserto. */
 export const filaDoArgv = (argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) => (pacoteDoArgv(argv, raiz, cfg) === null ? "gate" : "conserto");
 
+/** A variável que o gate põe no ambiente da suíte: o laço (suíte → `npm test` → gate) é detectado por ela, não pelo texto do comando. */
+export const DENTRO = "KIT_GATE_DENTRO";
+
 /**
  * O ambiente do filho que roda a suíte. O conserto leva `KIT_TESTE_WORKERS`
  * (e o legado `IZANAGI_TESTE_WORKERS`, que o `vitest.teto.mjs` de quem migra
@@ -124,7 +127,8 @@ export const filaDoArgv = (argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) =
  * do projeto.
  */
 export function ambienteDoFilho(env = process.env, argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) {
-  const filho = { ...env };
+  // `KIT_GATE_DENTRO`: o filho sabe que nasceu de um gate; um gate que nasce com ela recusa (o `comandoCompleto` chamou o próprio gate)
+  const filho = { ...env, [DENTRO]: String(process.pid) };
   if (filaDoArgv(argv, raiz, cfg) !== "conserto") return filho;
   const pedido = envKit(env, "CONSERTO_WORKERS");
   let n = cfg.gate.workersConserto;
@@ -436,13 +440,17 @@ function rodarASuite({ cmd, args }, prazoMs, env = process.env, raiz = RAIZ) {
 
 /** O gate inteiro. Devolve o código de saída. */
 export async function main(env = process.env, argv = process.argv.slice(2), raiz = RAIZ, cfg = carregarConfig(raiz)) {
+  if (env[DENTRO]) {
+    console.error(`[gate] o gate (pid ${env[DENTRO]}) chamou a suíte e a suíte chamou o gate de novo: o gate.comandoCompleto chama o próprio gate (laço) — recusado, sem tomar a trava. Aponte o comando para o script da suíte do projeto.`);
+    return 2;
+  }
   const comando = comandoDaSuite(env, argv, raiz, cfg);
   const pacote = pacoteDoArgv(argv, raiz, cfg);
   const prazoMs = cfg.gate.prazos.vezMin * 60_000;
   if (env["CI"]) {
     console.error("[gate] CI: sem fila e sem teto de pacotes — o comportamento de antes");
     const codigo = constroi(raiz, env, cfg);
-    return codigo !== 0 ? codigo : rodarASuite(comando, prazoMs, env, raiz);
+    return codigo !== 0 ? codigo : rodarASuite(comando, prazoMs, { ...env, [DENTRO]: String(process.pid) }, raiz);
   }
 
   // A instalação se confere ANTES da fila: esperar a vez por minutos para morrer

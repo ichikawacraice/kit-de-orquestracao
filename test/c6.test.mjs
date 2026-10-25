@@ -138,14 +138,13 @@ describe('M2 — toda recusa sai com código ≠ 0 (as de uso, 2)', () => {
 });
 
 describe('Laço — o gate não pode chamar o `test` que é ele mesmo', () => {
-  it('carregarConfig recusa comandoCompleto que invoca o test, nomeando o campo', async () => {
-    const { carregarConfig } = await import('../gate/config.mjs');
+  it('carregarConfig não recusa pelo texto (o gate detecta o laço pelo comportamento); avisoDeLaco continua apontando', async () => {
+    const { carregarConfig, avisoDeLaco } = await import('../gate/config.mjs');
     for (const c of ['npm test', 'npm run test', 'pnpm test', 'yarn test', 'cd x && npm test -- --run', 'npm run test --silent']) {
-      assert.throws(() => carregarConfig('/x', { gate: { comandoCompleto: c } }), /gate\.comandoCompleto/, c);
-    }
-    for (const c of ['npm run test:suite', 'node --test', 'yarn test:unit', 'pnpm run testar', 'npm run suite']) {
       assert.doesNotThrow(() => carregarConfig('/x', { gate: { comandoCompleto: c } }), c);
+      assert.match(avisoDeLaco(c) ?? '', /gate\.comandoCompleto/, c);
     }
+    for (const c of ['npm run test:suite', 'node --test', 'yarn test:unit', 'pnpm run testar', 'npm run suite']) assert.equal(avisoDeLaco(c), null, c);
   });
 });
 

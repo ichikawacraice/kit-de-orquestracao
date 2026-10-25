@@ -41,6 +41,7 @@ export function remover({ destino, simular = false }) {
     claude = claude.slice(0, i - antes) + claude.slice(i + inteiro.length + depois);
     tirou(`bloco ${nome} (CLAUDE.md)`);
   }
+  if (lock.claudeSemEol && claude !== null && blocosDe(claude).length === 0) claude = claude.replace(/\r?\n$/, '');
   if (lock.arquivos['CLAUDE.md'] !== undefined && claude !== null && esqueletoDe(destino) === semOsBlocos(claude)) { apagar.push('CLAUDE.md'); tirou('CLAUDE.md (só restava o esqueleto do modelo)'); }
   else if (claude !== claudeOriginal) gravacoes.set('CLAUDE.md', claude);
 

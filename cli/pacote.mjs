@@ -90,6 +90,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
         if (recuperando && inteiro?.replace(/\r\n/g, '\n') === texto) novosBlocos.push(nome);
         continue;
       }
+      if (claudeAtual !== '' && !claudeAtual.endsWith('\n')) lock.claudeSemEol = true; // o remover devolve o arquivo sem o `\n` final
       claude = acrescentar(claude, texto);
       novosBlocos.push(nome);
     }

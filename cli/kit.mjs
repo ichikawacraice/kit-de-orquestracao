@@ -27,10 +27,24 @@ uso:
   kit remover [--simular]                    tira o que o kit pôs (blocos, chaves e arquivos cujo hash bate)
 `;
 
+const FLAGS = { iniciar: ['--perfil'], adotar: ['--simular', '--trocar-test', '--parcial', '--perfil'], atualizar: ['--simular', '--trocar-test'], remover: ['--simular'], doutor: [] };
+
+/** Flag que o subcomando não conhece → mensagem com a lista das válidas (uma flag errada não pode virar adoção calada). */
+function flagDesconhecida(cmd, argv) {
+  const validas = FLAGS[cmd];
+  if (!validas) return null;
+  const rest = argv.slice(1);
+  const ruins = rest.filter((a, i) => a.startsWith('-') && !validas.includes(a) && !(rest[i - 1] === '--perfil' && validas.includes('--perfil')));
+  if (!ruins.length) return null;
+  return `kit ${cmd}: flag desconhecida ${ruins.join(', ')} — válidas: ${validas.length ? validas.join(', ') : '(nenhuma)'}\n`;
+}
+
 function main(argv) {
   const [cmd] = argv;
   if (cmd === '--version' || cmd === '-v') { process.stdout.write(`${versao()}\n`); return 0; }
   if (cmd === undefined || cmd === 'ajuda' || cmd === '--help' || cmd === '-h') { process.stdout.write(AJUDA); return 0; }
+  const ruim = flagDesconhecida(cmd, argv);
+  if (ruim) { process.stderr.write(ruim); return 2; }
   if (cmd === 'iniciar') {
     const i = argv.indexOf('--perfil');
     const perfil = i === -1 ? undefined : argv[i + 1];

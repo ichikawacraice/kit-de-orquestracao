@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { carregarConfig } from '../gate/config.mjs';
+import { avisoDeLaco, carregarConfig } from '../gate/config.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, lerTexto } from './pacote.mjs';
 
@@ -19,12 +19,12 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
 
   // plugin instalado e habilitado
   const instalados = lerJson(join(home, '.claude', 'plugins', 'installed_plugins.json'))?.plugins ?? {};
-  if (instalados[PLUGIN]?.length) ok('plugin orquestracao instalado');
-  else falha(`plugin orquestracao não instalado — rode \`claude plugin install ${PLUGIN}\``);
+  if (instalados[PLUGIN]?.length) ok('plugin instalado na máquina: sim (orquestracao)');
+  else falha(`plugin instalado na máquina: não (orquestracao) — rode \`claude plugin install ${PLUGIN}\``);
   const configs = [join(home, '.claude', 'settings.json'), join(destino, '.claude', 'settings.json'), join(destino, '.claude', 'settings.local.json')].map(lerJson);
   const flags = configs.map((s) => s?.enabledPlugins?.[PLUGIN]).filter((v) => v !== undefined);
-  if (flags.length && flags.every((v) => v === true) || (flags.includes(true) && !flags.includes(false))) ok('plugin orquestracao habilitado');
-  else falha('plugin orquestracao não habilitado — `enabledPlugins` do settings.json precisa trazer true');
+  if (flags.length && flags.every((v) => v === true) || (flags.includes(true) && !flags.includes(false))) ok('plugin habilitado no projeto: sim (orquestracao)');
+  else falha('plugin habilitado no projeto: não (orquestracao) — `enabledPlugins` do settings.json precisa trazer true');
 
   // hook do kit duplicado no settings global
   const hooksJson = lerTexto(RAIZ_DO_KIT, 'plugins/orquestracao/hooks/hooks.json') ?? '';
@@ -38,7 +38,7 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   else ok(`nenhum hook do kit também em ~/.claude/settings.json (${nomes.length} conferidos)`);
 
   // kit.json
-  try { carregarConfig(destino); ok('.claude/kit.json válido'); } catch (e) { falha(`.claude/kit.json: ${e.message}`); }
+  try { const cfg = carregarConfig(destino); ok('.claude/kit.json válido'); const laco = avisoDeLaco(cfg.gate?.comandoCompleto); if (laco) linhas.push(`aviso: ${laco}`); } catch (e) { falha(`.claude/kit.json: ${e.message}`); }
 
   // versões, Node e git
   if (lock.versao === versao) ok(`versão do lock (${lock.versao}) igual à do CLI`);
