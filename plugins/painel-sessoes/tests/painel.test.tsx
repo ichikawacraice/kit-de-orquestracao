@@ -99,6 +99,8 @@ type Opcoes = {
   vivas?: string
   listaFalha?: boolean
   euFalha?: boolean
+  /** open_session_in: o texto de erro que ele devolve, ou 'deny' para recusa. */
+  abrirFalha?: string
   semTemas?: boolean
 }
 
@@ -117,7 +119,17 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
     aberto = false
     return { value: undefined }
   })
-  on('ui.toast', () => ({ value: undefined }))
+  const toasts: string[] = []
+  const copiadas: Array<{ text: string; surface: string }> = []
+  const abertas: Escrita[] = []
+  on('ui.toast', (_, e) => {
+    toasts.push(String((e as unknown as { message?: string; text?: string }).message ?? (e as unknown as { text?: string }).text))
+    return { value: undefined }
+  })
+  on('ui.copy', (_, e) => {
+    copiadas.push({ text: String((e as unknown as { text: string }).text), surface: String((e as unknown as { surface: string }).surface) })
+    return { value: undefined }
+  })
   const relogio = mock.clock(on, { now: opc.agora ?? Date.UTC(2026, 9, 23, 12) })
   mock.env(on, { HOME: '/home/teste' })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -164,13 +176,19 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
       enviadas.push(input)
       return { result: {}, text: 'sent' }
     }
+    if (e.tool === 'mcp__ccd_window__open_session_in') {
+      abertas.push(input)
+      if (opc.abrirFalha === 'deny') return { deny: 'a sessão não é desta' }
+      if (opc.abrirFalha) return { result: {}, text: opc.abrirFalha, isError: true }
+      return { result: {}, text: 'focused' }
+    }
     if (e.tool === 'mcp__ccd_session_mgmt__get_session') return opc.euFalha ? { result: {}, text: 'sessão não achada', isError: true } : { result: {}, text: EU }
     contagem.vivas++
     if (opc.listaFalha) return { result: {}, text: 'app fora do ar', isError: true }
     return { result: {}, text: opc.vivas ?? VIVAS }
   })
 
-  return { relogio, escritas, contagem, enviadas, prompts }
+  return { relogio, escritas, contagem, enviadas, prompts, toasts, copiadas, abertas }
 }
 
 const lerSuperficie = async (ui: { findAll: (q: object) => Promise<Array<{ text: string; props: Record<string, unknown> }>> }) =>
@@ -709,3 +727,50 @@ test('com um só projeto, o rótulo do tema não ganha sufixo; item sem projeto 
   expect(itens[0]!.tema).toBe('geral')
   expect(porTema(itens, temas, () => 0).map(g => g.rotulo)).toEqual(['Geral'])
 })
+
+const abrirDe = async (opc: Opcoes, $: Parameters<TestBody>[0], on: On) => {
+  const motor = engine(on, false, {}, { agora: AGORA, fila: fila('F27', 'F1'), vivas: vivasDe(P7, P1), perguntas: [], ...opc })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(ABRIR)
+  await motor.relogio.settle()
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+
+  return { ...motor, ui }
+}
+
+test('abrir: o botão só existe com dono vivo, e o endereço não aparece escrito', async ($, on) => {
+  const { ui } = await abrirDe({}, $, on)
+  expect(await ui.find({ key: `abrir:${P7}` }), 'dono vivo tem botão').toBeDefined()
+  expect(await ui.find({ key: `abrir:${P1}` })).toBeDefined()
+  expect(await lerSuperficie(ui)).not.toMatch(/claude:\/\//)
+  await ui.unmount()
+})
+
+test('abrir: dono morto, lista que falha e item sem dono não têm botão', async ($, on) => {
+  const morto = await abrirDe({ vivas: vivasDe(P1) }, $, on)
+  expect(await morto.ui.find({ key: `abrir:${P7}` }), 'dono fora da lista: sem botão').toBeUndefined()
+  expect(await morto.ui.find({ key: `abrir:${P1}` })).toBeDefined()
+  await morto.ui.unmount()
+})
+
+test('abrir: o clique pede open_session_in com o localId e foco, e não copia nada quando abre', async ($, on) => {
+  const { ui, abertas, copiadas, toasts } = await abrirDe({}, $, on)
+  await ui.press({ key: `abrir:${P7}` })
+  expect(abertas.length, 'o clique chamou a tool').toBe(1)
+  expect([abertas[0]?.session_id, abertas[0]?.target]).toEqual([P7, 'focus'])
+  expect(copiadas).toEqual([])
+  expect(toasts).toEqual([])
+  await ui.unmount()
+})
+
+const copiaAoFalhar = (abrirFalha: string) => async ($: Parameters<TestBody>[0], on: On) => {
+  const { ui, copiadas, toasts } = await abrirDe({ abrirFalha }, $, on)
+  await ui.press({ key: `abrir:${P7}` })
+  expect(copiadas.length, `${abrirFalha}: copiou`).toBe(1)
+  expect(copiadas[0]?.text).toBe(`claude://claude.ai/epitaxy/${P7}`)
+  expect(toasts.join('\n')).toMatch(/não deu para abrir daqui .*endereço de P7 copiado/)
+  await ui.unmount()
+}
+
+test('abrir: recusa da tool copia o endereço e diz o que houve', copiaAoFalhar('deny'))
+test('abrir: erro da tool copia o endereço e diz o que houve', copiaAoFalhar('sessão não achada'))

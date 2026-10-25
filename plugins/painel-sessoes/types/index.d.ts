@@ -15,7 +15,8 @@ export type LinhaItem = {
   /** A etapa como veio no documento (pode estar fora da lista: aí `foraDoContrato` explica). */
   etapa: string
   situacao: Situacao
-  dono?: { apelido: string; localId: string }
+  /** `link` só quando a sessão dona está viva: o endereço que abre a sessão no app. */
+  dono?: { apelido: string; localId: string; link?: string }
   prs: number[]
   depois: string[]
   agora?: string

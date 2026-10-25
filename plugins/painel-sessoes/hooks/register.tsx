@@ -122,7 +122,8 @@ export function montarItens(
     const final = etapaCrua === 'feito' || etapaCrua === 'descartado'
     let situacao: Situacao
     let trava: LinhaItem['trava']
-    const dono = donoLocalId && apelido ? { apelido, localId: donoLocalId } : undefined
+    const donoVivo = donoLocalId !== undefined && vivos !== null && vivos.has(donoLocalId)
+    const dono = donoLocalId && apelido ? { apelido, localId: donoLocalId, link: donoVivo ? linkDe(donoLocalId, vivas ?? []) : undefined } : undefined
     const t = d.data.trava as Record<string, unknown> | null | undefined
     const travaGravada = t && texto(t.motivo) && texto(t.texto) ? { motivo: texto(t.motivo) as string, texto: texto(t.texto) as string } : undefined
     if (final) {
@@ -323,6 +324,27 @@ function entregar($: EngineInterface, q: PerguntaAberta, resposta: string): void
       err => naoChegou($, q, mensagem(err)),
     )
     .catch(() => {})
+}
+
+/**
+ * "abrir <apelido>": o app põe a sessão em foco (só aceita as que esta sessão iniciou). Recusa ou erro viram o
+ * endereço copiado e um aviso que diz o que houve; nunca fica calado.
+ */
+async function abrirSessao($: EngineInterface, dono: NonNullable<LinhaItem['dono']>, surface: string): Promise<void> {
+  const naoDeu = async (porque: string) => {
+    try {
+      if (dono.link) await $.ui.copy({ text: dono.link, surface })
+      $.ui.toast(`não deu para abrir daqui (${porque}): endereço de ${dono.apelido} copiado`)
+    } catch (err) {
+      $.ui.toast(`não deu para abrir ${dono.apelido} nem copiar o endereço: ${mensagem(err)}`)
+    }
+  }
+  try {
+    const r = await $.tool.call({ tool: 'mcp__ccd_window__open_session_in', session_id: dono.localId, target: 'focus' })
+    if (r.deny !== undefined || r.isError) await naoDeu(r.deny || r.text || 'erro sem texto')
+  } catch (err) {
+    await naoDeu(mensagem(err))
+  }
 }
 
 // O último lugar onde uma superfície desenhou o pane: o que a tool de diagnóstico relata.
@@ -542,6 +564,12 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elementos = $.ui.resolve(e)
     const { Box, Text, Button } = elementos
+    // "abrir P2": pede ao app que ponha a sessão em foco; o que ele recusar, o botão devolve como endereço copiado.
+    const abrir = (dono: NonNullable<LinhaItem['dono']>) => (
+      <Button key={`abrir:${dono.localId}`} plain dimColor onPress={() => void abrirSessao($, dono, e.surface)}>
+        {`abrir ${dono.apelido}`}
+      </Button>
+    )
     // Campo de texto só onde a superfície tem um; sem ele, a opção "outra" fica sem campo.
     const Input = 'Input' in elementos ? elementos.Input : undefined
     const agora = await $.clock.now()
@@ -648,6 +676,7 @@ export const register: Register = on => {
         return (
           <Box key={`item:${i.id}`} flexDirection="column">
             <Svg source={linha.source} alt={linha.alt} width={W} height={linha.height} />
+            {i.dono?.link && abrir(i.dono)}
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
           </Box>
         )
@@ -687,6 +716,7 @@ export const register: Register = on => {
                       width={W}
                       height={card.height}
                     />
+                    {q.sessaoId && q.link && abrir({ apelido: q.sessao, localId: q.sessaoId, link: q.link })}
                     {acoes(q)}
                   </Box>
                 )
@@ -755,6 +785,7 @@ export const register: Register = on => {
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">{i.titulo}</Text>
             <Text dimColor wrap="wrap">{info}</Text>
+            {i.dono?.link && abrir(i.dono)}
             {i.trava && <Text color="error" wrap="wrap">{textoDaTrava(i.trava)}</Text>}
             {i.situacao === 'fila' && i.resumo && <Text dimColor wrap="wrap">{i.resumo}</Text>}
             {i.situacao !== 'fila' && i.agora && <Text dimColor wrap="wrap">{i.agora}</Text>}
