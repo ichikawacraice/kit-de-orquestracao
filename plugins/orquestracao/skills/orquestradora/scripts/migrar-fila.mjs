@@ -298,7 +298,7 @@ for (const op of ops) {
     titulosMudados.push(`${op.id}: "${op.data.titulo}" → "${limpo.titulo}"`);
     op.data.titulo = limpo.titulo;
     const depois = Array.isArray(op.data.depois) ? [...op.data.depois] : [];
-    for (const item of limpo.itens) if (!depois.some((d) => d?.item === item)) depois.push({ texto: 'citado no título', item });
+    for (const item of limpo.itens) if (item !== op.id && !depois.some((d) => d?.item === item)) depois.push({ texto: 'citado no título', item });
     if (depois.length) op.data.depois = depois;
     if (limpo.prs.length) op.data.prs = [...new Set([...(Array.isArray(op.data.prs) ? op.data.prs : []), ...limpo.prs])];
   } else if (ehTexto(op.data.titulo) && /\bF\d+\b|#\d+/.test(op.data.titulo)) conferir.push(`${op.id}: o título só tem o número citado; não foi limpo`);

@@ -187,7 +187,7 @@ caso('ajustes: o documento vivo vence quando trouxe etapa nova depois do ensaio;
   igual(r.exit, 0, `exit (${r.err}${r.out.slice(-300)})`);
   const d = lido('F1002').data;
   igual([d.etapa, d.feitoEm, 'donoApelido' in d, 'proximo' in d, d.resumo], ['feito', '2026-10-25T13:30:00.000Z', false, false, 'R'], 'vivo vence');
-  igual(d.depois, [{ texto: 'conferir o piloto em 01/11' }, { texto: 'citado no título', item: 'F1002' }], 'depois (o campo solto, e o número que saiu do título)');
+  igual(d.depois, [{ texto: 'conferir o piloto em 01/11' }], 'depois (o item não se cita no próprio depois: o número só sai do título)');
 });
 caso('ajustes: o ajuste vence quando o vivo não mudou desde o ensaio', () => {
   const antes = { frente: 'builder', estado: 'concluida', etapa: 'aguarda', membro: 'E4' };
