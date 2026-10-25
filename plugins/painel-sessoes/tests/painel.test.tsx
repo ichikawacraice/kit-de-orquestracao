@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { itemSvg, perguntaSvg, resumoSvg } from '../hooks/desenho.js'
-import { contarSecoes, leituraParada, montarItens, papelDe, porTema, secoes, situacaoDe } from '../hooks/register.js'
+import { cartaoSvg, faixaSvg, filaSvg, itemSvg, largura, perguntaSvg, resumoSvg, secaoSvg } from '../hooks/desenho.js'
+import { contarSecoes, esperaOperadorSemPergunta, leituraParada, montarItens, papelDe, porTema, secoes, situacaoDe } from '../hooks/register.js'
 import { FILA_REAL, TEMAS_REAIS } from './fixtura-fila.js'
 
 const PANE = {
@@ -254,7 +254,7 @@ test('vazio: os dois blocos dizem que leram e não acharam, e os contadores fica
     expect(lido[surface]).toMatch(/Na fila · 0/)
     expect(lido[surface]).toMatch(/Nada na fila\./)
   }
-  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 0 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 0 Executando, 0 Na fila/)
 })
 
 test('só fila: Em sessão vazio, a fila por tema, o mais antigo primeiro', async ($, on) => {
@@ -286,7 +286,7 @@ test('andando: temas na ordem de temas.json, com etapa, dono, PR e o que vem dep
     expect(lido[surface]).not.toMatch(/TRAVADOS/)
   }
   expect(lido.desktop).toMatch(/depois: validação das duas fatias \(\+2\)/)
-  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 4 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 4 Executando, 0 Na fila/)
 })
 
 test('travado: abre Em sessão, com o tema na linha 2 e a trava inteira', async ($, on) => {
@@ -299,7 +299,7 @@ test('travado: abre Em sessão, com o tema na linha 2 e a trava inteira', async 
     expect(lido[surface]).toMatch(/Trava \(gate-vermelho\): três casos do diálogo falham/)
   }
   expect(lido.desktop).toMatch(/execução · Editor da loja · P2 · #1129/)
-  expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 2 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 2 Executando, 0 Na fila/)
 })
 
 test('item com pergunta: o selo vem do item e da pergunta, e só de pergunta aberta', async ($, on) => {
@@ -320,7 +320,7 @@ test('item com pergunta: o selo vem do item e da pergunta, e só de pergunta abe
   // O cartão da pergunta com item leva o tema e o título do item no lugar da sessão.
   expect(lido.desktop).toMatch(/Q8 · Editor da loja · builder: fatias 1 a 8/)
   expect(lido.desktop).toMatch(/Q7 · P2 · qual caminho/)
-  expect(lido.desktop).toMatch(/2 Esperam você, 0 Travados, 3 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/2 Esperam você, 0 Travados, 3 Executando, 0 Na fila/)
 })
 
 test('sem ninguém: dono que não está na lista vira trava, com a mesma contagem', async ($, on) => {
@@ -330,14 +330,14 @@ test('sem ninguém: dono que não está na lista vira trava, com a mesma contage
     expect(lido[surface]).toMatch(/Trava \(sem ninguém\): E8 não está mais ativa/)
     expect(lido[surface]).not.toMatch(/sem-ninguem/)
   }
-  expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 1 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 1 Executando, 0 Na fila/)
 })
 
 test('o dono vivo é a sessão que olha o painel, mesmo fora do list_sessions', async ($, on) => {
   // O list_sessions exclui quem chama: a sessão própria vem do get_session (local_eu).
   const meu = { ...FILA_REAL.F27, donoLocalId: 'local_eu', donoApelido: 'EU' }
   const { lido } = await lerPane($, on, { fila: { F27: meu }, vivas: vivasDe(), perguntas: [] })
-  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 1 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 1 Executando, 0 Na fila/)
   expect(lido.desktop).not.toMatch(/sem-ninguem/)
 })
 
@@ -347,14 +347,14 @@ test('list_sessions que falha: o erro aparece e nenhum item vira "sem ninguém"'
     expect(lido[surface]).toMatch(/list_sessions: app fora do ar/)
     expect(lido[surface]).not.toMatch(/sem-ninguem|TRAVADOS/)
   }
-  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 2 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 2 Executando, 0 Na fila/)
 })
 
 test('get_session que falha: a sessão própria é desconhecida, e nenhum item vira "sem ninguém"', async ($, on) => {
   const { lido } = await lerPane($, on, { fila: fila('F23', 'F13'), vivas: vivasDe(P2), euFalha: true, perguntas: [] })
   expect(lido.desktop).toMatch(/esta sessão \(get_session\): sessão não achada/)
   expect(lido.desktop).not.toMatch(/sem-ninguem/)
-  expect(lido.desktop).toMatch(/0 Travados, 2 Andando/)
+  expect(lido.desktop).toMatch(/0 Travados, 2 Executando/)
 })
 
 test('fora do contrato: o item aparece em "Sem tema", no fim, com o motivo, e fora da lista de erros', async ($, on) => {
@@ -403,14 +403,14 @@ test('a 300 px os quatro rótulos do resumo cabem inteiros, em 2×2', () => {
   const contagens = [
     { rotulo: 'Esperam você', n: 2, cor: 'av' },
     { rotulo: 'Travados', n: 1, cor: 'er' },
-    { rotulo: 'Andando', n: 5, cor: 'an' },
+    { rotulo: 'Executando', n: 5, cor: 'an' },
     { rotulo: 'Na fila', n: 4, cor: 'an', classe: 't' },
   ]
   for (const W of [300, 420, 480]) {
     const r = resumoSvg(W, contagens)
     expect(r.source, 'o desenho não pode vir vazio').toBeTruthy()
-    expect(r.height).toBe(130)
-    for (const rotulo of ['Esperam você', 'Travados', 'Andando', 'Na fila']) expect(r.source).toContain(`>${rotulo}<`)
+    expect(r.height, W < 360 ? 'compacto: dois blocos de 36 px e o vão' : '2×2').toBe(W < 360 ? 78 : 130)
+    for (const rotulo of ['Esperam você', 'Travados', 'Executando', 'Na fila']) expect(r.source).toContain(`>${rotulo}<`)
     expect(r.source).not.toContain('…')
   }
   const largo = resumoSvg(640, contagens)
@@ -868,7 +868,7 @@ test('espera do operador: selo "espera você" e entra na contagem "Esperam você
     expect(lido[surface]).toMatch(/decidir o nome do botão/)
     expect(lido[surface], 'a espera não é trava').not.toMatch(/Trava \(/)
   }
-  expect(lido.desktop).toMatch(/1 Esperam você, 0 Travados, 1 Andando, 0 Na fila/)
+  expect(lido.desktop, 'o item que espera sem pergunta conta uma vez só: em Esperam você, e não em Executando').toMatch(/1 Esperam você, 0 Travados, 0 Executando, 0 Na fila/)
 })
 
 test('espera do gate: selo "espera o gate" e nenhuma contagem', async ($, on) => {
@@ -876,13 +876,13 @@ test('espera do gate: selo "espera o gate" e nenhuma contagem', async ($, on) =>
   const { lido } = await lerPane($, on, { fila, perguntas: [], vivas: vivasDe(P2) })
   expect(lido.desktop).toMatch(/espera o gate/)
   expect(lido.desktop).toMatch(/gate do lote na develop/)
-  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 1 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 1 Executando, 0 Na fila/)
 })
 
 test('espera do operador no item que também tem pergunta aberta conta uma vez só', async ($, on) => {
   const fila = { F13: { ...FILA_REAL.F13, perguntas: ['Q7'], espera: ESPERA('operador', 'a pergunta Q7') } }
   const { lido } = await lerPane($, on, { fila, perguntas: [PERGUNTAS[0]!], vivas: vivasDe(P2) })
-  expect(lido.desktop).toMatch(/1 Esperam você, 0 Travados, 1 Andando, 0 Na fila/)
+  expect(lido.desktop).toMatch(/1 Esperam você, 0 Travados, 1 Executando, 0 Na fila/)
   expect(lido.desktop).toMatch(/aguarda você · Q7/)
   expect(lido.desktop, 'um selo só diz que espera você').not.toMatch(/espera você/)
 })
@@ -1071,4 +1071,217 @@ test('F34-1: a leitura em 179 s não está parada, e em 181 s está', () => {
   expect(leituraParada(AGORA - 179_000, AGORA)).toBe(false)
   expect(leituraParada(AGORA - 181_000, AGORA)).toBe(true)
   expect(leituraParada(null, AGORA), 'sem leitura ainda está começando').toBe(false)
+})
+
+test('F34-2: esperaOperadorSemPergunta exclui o feito, o travado, a pergunta aberta e a espera do gate', () => {
+  const casos: Array<[string, Linha, boolean]> = [
+    ['andando que espera o operador', linha('F1', { espera: ESPERA_OP }), true],
+    ['na fila que espera o operador', linha('F2', { situacao: 'fila', espera: ESPERA_OP }), true],
+    ['feito', linha('F3', { situacao: 'feito', espera: ESPERA_OP }), false],
+    ['travado: o erro vem antes, fica só em Travados', linha('F4', { situacao: 'travado', espera: ESPERA_OP, trava: { motivo: 'conflito', texto: 't' } }), false],
+    ['com pergunta aberta: a pergunta já conta', linha('F5', { espera: ESPERA_OP, perguntas: ['Q1'] }), false],
+    ['espera do gate', linha('F6', { espera: { motivo: 'gate', texto: 'g' } }), false],
+    ['sem espera', linha('F7'), false],
+  ]
+  expect(casos.length, 'há o que examinar').toBeGreaterThan(0)
+  for (const [nome, item, esperado] of casos) expect(esperaOperadorSemPergunta(item), nome).toBe(esperado)
+  const travado = linha('F4', { situacao: 'travado', espera: ESPERA_OP, trava: { motivo: 'conflito', texto: 't' } })
+  expect(contarSecoes([travado], []), 'o travado conta em Travados e em mais nenhuma seção').toEqual({ esperam: 0, travados: 1, executando: 0, fila: 0 })
+})
+
+test('F34-2: o item feito não entra em Esperam você, nem na contagem', () => {
+  const feito = linha('F1', { situacao: 'feito', espera: ESPERA_OP })
+  expect(feito.espera, 'o feito tem espera gravada').toBeDefined()
+  expect(contarSecoes([feito], [])).toEqual({ esperam: 0, travados: 0, executando: 0, fila: 0 })
+  expect(secoes([feito], TEMAS_S).esperam).toEqual([])
+})
+
+// F34 fatia 2: o desenho em cartões. O texto de linha única é medido com o mesmo `largura` que o desenho usa para cortar.
+const LARGURA_PANE = 292
+const textosDe = (source: string) =>
+  [...source.matchAll(/<text\b([^>]*)>([\s\S]*?)<\/text>/g)].map(m => {
+    const a = m[1]!
+    const num = (n: string) => Number(a.match(new RegExp(`\\b${n}="([\\d.]+)"`))?.[1])
+    const conteudo = m[2]!.replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+
+    return { x: num('x'), tam: num('font-size'), ancora: a.match(/text-anchor="(\w+)"/)?.[1] ?? 'start', conteudo }
+  })
+const sobraDe = (source: string, W: number) => {
+  const textos = textosDe(source)
+  expect(textos.length, 'o desenho tem texto').toBeGreaterThan(0)
+
+  return textos.filter(t => {
+    const w = largura(t.conteudo, t.tam)
+    const [de, ate] = t.ancora === 'end' ? [t.x - w, t.x] : t.ancora === 'middle' ? [t.x - w / 2, t.x + w / 2] : [t.x, t.x + w]
+
+    return de < -0.01 || ate > W + 0.01
+  }).map(t => t.conteudo)
+}
+
+const LONGO = 'Canvas com 60% da largura e o caminho do navegador (SPEC-155) sem espaço-nenhum-que-quebre-a-palavra-comprida'
+const COM_VIVO = { apelido: 'E1', localId: 'local_e1', oQue: 'x', vivo: true }
+const COM_VIVO2 = { apelido: 'V1', localId: 'local_v1', oQue: 'x', vivo: true }
+const itemCheio = (extra: Partial<Linha> = {}): Linha =>
+  linha('F34', {
+    titulo: LONGO,
+    prs: [1128, 1129, 1130],
+    perguntas: ['Q225'],
+    depois: ['validação das duas fatias com o painel real', 'merge'],
+    agora: 'travas (E4) e desenho do painel (E1) em execução no kit, com a leitura de cada sessão conferida',
+    atualizadoEm: new Date(AGORA - 5 * 3600e3).toISOString(),
+    com: [COM_VIVO, COM_VIVO2, { ...COM_VIVO, apelido: 'E22', localId: 'local_e22' }, { ...COM_VIVO, apelido: 'P7', localId: 'local_p7' }, { ...COM_VIVO, apelido: 'c20', localId: 'local_c20', vivo: false }],
+    espera: { motivo: 'operador', texto: 'decidir o nome do botão e se o rótulo muda no terminal também, sem pressa nenhuma' },
+    ...extra,
+  })
+const SITUACOES: Record<string, string | undefined> = { local_e1: 'trabalhando agora', local_v1: 'parada há 40 min', local_e22: 'sem leitura da sessão' }
+const situacaoDoTeste = (id: string) => SITUACOES[id]
+
+test('F34-2: todo texto de linha única dos desenhos novos cabe em W=292', () => {
+  const trava = { motivo: 'gate-vermelho', texto: 'três casos do diálogo falham no gate do lote e ninguém olhou ainda por falta de gente' }
+  const itens = [
+    itemCheio(),
+    itemCheio({ situacao: 'travado', espera: undefined, trava, perguntas: [] }),
+    itemCheio({ trava: { motivo: 'sem-ninguem', texto: 'E8 não está mais ativa' }, situacao: 'travado', com: [], dono: { apelido: 'E8', localId: 'local_e8' } }),
+    itemCheio({ situacao: 'fila', com: [], resumo: LONGO, paradoDesde: new Date(AGORA - 3 * 86400e3).toISOString() }),
+  ]
+  expect(itens.length).toBeGreaterThan(0)
+  const desenhos = [
+    ...itens.map(i => ['cartão', cartaoSvg(LARGURA_PANE, i, AGORA, { situacao: situacaoDoTeste }).source] as const),
+    ...itens.map(i => ['fila', filaSvg(LARGURA_PANE, i, AGORA).source] as const),
+    ['seção', secaoSvg(LARGURA_PANE, { titulo: 'Esperam você', n: 12, tom: 'av', legenda: 'pedem alguém agir' }).source] as const,
+    ['seção na fila', secaoSvg(LARGURA_PANE, { titulo: 'Na fila', n: 1, tom: 'm', legenda: 'não começaram', tracejado: true }).source] as const,
+    ['faixa', faixaSvg(LARGURA_PANE, { titulo: 'Não consegui ler o painel', detalhe: LONGO, tom: 'er' }).source] as const,
+  ]
+  for (const [nome, source] of desenhos) expect(sobraDe(source, LARGURA_PANE), `${nome}: texto que passa de ${LARGURA_PANE} px`).toEqual([])
+  for (const W of [300, 360]) {
+    const r = resumoSvg(W, [{ rotulo: 'Esperam você', n: 12, cor: 'av' }, { rotulo: 'Travados', n: 1, cor: 'er' }, { rotulo: 'Executando', n: 5, cor: 'an' }, { rotulo: 'Na fila', n: 4, cor: 'an', classe: 't' }])
+    expect(sobraDe(r.source, W), `resumo a ${W}`).toEqual([])
+  }
+})
+
+test('F34-2: a medida pega o que passa: o mesmo teste reprova um texto largo demais', () => {
+  const fora = `<svg><text x="200" y="10" font-size="13">${'x'.repeat(30)}</text></svg>`
+  expect(sobraDe(fora, LARGURA_PANE)).toEqual(['x'.repeat(30)])
+})
+
+test('F34-2: a legenda da faixa de seção some quando título, pílula e legenda passam de W', () => {
+  const f = { titulo: 'Esperam você', n: 3, tom: 'av', legenda: 'pedem alguém agir' }
+  const larga = secaoSvg(380, f)
+  const estreita = secaoSvg(200, f)
+  expect(larga.source, 'a 380 px a legenda cabe').toContain('pedem alguém agir')
+  expect(estreita.source, 'a 200 px não cabe e some').not.toContain('pedem alguém agir')
+  expect(estreita.source, 'o título e a contagem ficam').toContain('>Esperam você<')
+  expect(larga.height).toBe(28)
+  expect(secaoSvg(380, { ...f, tracejado: true }).source, 'Na fila leva o filete tracejado').toContain('stroke-dasharray')
+  expect(larga.source).not.toContain('stroke-dasharray')
+})
+
+test('F34-2: o cartão diz "sessão encerrada" para a sessão fora da lista e põe o ponto vivo só em quem trabalha', () => {
+  const item = itemCheio({ com: [COM_VIVO, { ...COM_VIVO, apelido: 'E9', localId: 'local_fora' }, COM_VIVO2], trava: undefined })
+  const r = cartaoSvg(360, item, AGORA, { situacao: situacaoDoTeste })
+  expect(r.source, 'o desenho não pode vir vazio').toBeTruthy()
+  expect(r.source).toContain('sessão encerrada')
+  expect(r.source).toMatch(/>executora<\/tspan><tspan class="s"> · trabalhando agora</)
+  expect(r.source).toContain('validadora')
+  expect(r.source).toContain(' · parada há 40 min')
+  expect(r.source.match(/class="vivo /g)?.length, 'um ponto só, o de quem trabalha agora').toBe(1)
+  expect(r.alt).toMatch(/E9, executora, sessão encerrada/)
+  const sem = cartaoSvg(360, itemCheio({ com: [COM_VIVO2], trava: undefined }), AGORA, { situacao: situacaoDoTeste })
+  expect(sem.source, 'sessão parada vai sem ponto').not.toContain('class="vivo ')
+})
+
+test('F34-2: o cartão tem as linhas do desenho, na ordem, e o resto vai ao alt', () => {
+  const r = cartaoSvg(360, itemCheio({ trava: { motivo: 'sem-ninguem', texto: 'E8 não está mais ativa' }, situacao: 'travado', espera: undefined }), AGORA, { situacao: situacaoDoTeste })
+  expect(r.source).toContain('EDITOR DA LOJA')
+  const ordem = ['EDITOR DA LOJA', 'Canvas', '>execução<', 'aguarda você · Q225', '#1130 +2', 'Sem ninguém:', 'Peça outra sessão à orquestradora.', '>E1<', 'travas (E4)', 'depois: validação']
+  const posicoes = ordem.map(t => r.source.indexOf(t))
+  expect(posicoes.every(n => n >= 0), `faltou: ${ordem.filter((_, k) => posicoes[k]! < 0).join(' | ')}`).toBe(true)
+  expect(posicoes, 'a ordem das linhas').toEqual([...posicoes].sort((a, b) => a - b))
+  expect(r.source.match(/<rect class="k" /g)?.length, 'no máximo 3 selos').toBe(3)
+  expect(r.alt).toMatch(/\+1/)
+  expect(r.alt).toMatch(/c20 saiu/)
+})
+
+test('F34-2: sem moldura B o cartão não desenha fundo de tela, nem filete', () => {
+  const r = cartaoSvg(360, itemCheio({ trava: undefined, espera: undefined }), AGORA, { situacao: situacaoDoTeste })
+  expect(r.source).toBeTruthy()
+  expect(r.source, 'sem filete').not.toContain('class="ln"')
+  expect(r.source, 'nenhum retângulo da largura toda').not.toMatch(/<rect[^>]*width="360"/)
+  const fila = filaSvg(360, itemCheio({ situacao: 'fila', com: [] }), AGORA)
+  expect(fila.source, 'a fila leva o anel tracejado, o "espera" tracejado e o filete').toContain('stroke-dasharray="2 2"')
+  expect(fila.source).toContain('espera execução')
+  expect(fila.source).toContain('class="ln"')
+  expect(fila.source, 'a fila não tem botão nem selo de sessão').not.toContain('class="k"')
+})
+
+test('F34-2: a faixa tinge de erro com o texto inteiro, nos dois tons', () => {
+  const detalhe = 'list_sessions: o app não respondeu a tempo e a última leitura boa ficou na tela, então o que aparece pode estar velho'
+  const erro = faixaSvg(300, { titulo: 'Não li o painel', detalhe, tom: 'er' })
+  expect(erro.source).toContain('class="et"')
+  expect(erro.source, 'o fim do texto está lá, sem reticências').toContain('pode estar velho')
+  expect(erro.source).not.toContain('…')
+  expect(erro.height).toBeGreaterThan(40)
+  expect(faixaSvg(300, { titulo: 'Aviso', tom: 'av' }).source).toContain('class="card"')
+})
+
+test('F34-2: o resumo compacto tem 36 px por bloco, número na linha do rótulo, e abaixo de 360 px', () => {
+  const contagens = [{ rotulo: 'Esperam você', n: 12, cor: 'av' }, { rotulo: 'Travados', n: 0, cor: 'er' }, { rotulo: 'Executando', n: 5, cor: 'an' }, { rotulo: 'Na fila', n: 4, cor: 'an', classe: 't' }]
+  const compacto = resumoSvg(359, contagens)
+  expect(compacto.height).toBe(78)
+  expect(compacto.source).toContain('font-size="17"')
+  expect(compacto.source).not.toContain('font-size="24"')
+  expect(compacto.source, 'o rótulo novo').toContain('>Executando<')
+  expect(resumoSvg(360, contagens).height, 'a 360 já é o 2×2 cheio').toBe(130)
+})
+
+const CORES = (() => {
+  const css = cartaoSvg(300, itemCheio(), AGORA).source.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? ''
+  const [claro = '', escuro = ''] = css.split('@media (prefers-color-scheme: dark)')
+  const c = regras(claro)
+
+  return { claro: c, escuro: { ...c, ...regras(escuro) } }
+})()
+
+const FUNDO_CARD = { claro: '#fbf6ec', escuro: '#2a251b' }
+
+test('F34-2: o texto er sobre o fundo et e o texto pt sobre cada pílula chegam a 4,5:1 nos dois temas', () => {
+  expect(Object.keys(CORES.claro).length, 'o CSS foi lido').toBeGreaterThan(8)
+  for (const [tema, c] of [['claro', CORES.claro], ['escuro', CORES.escuro]] as const) {
+    expect(razao(c.er!, c.et!), `er sobre et, ${tema}`).toBeGreaterThanOrEqual(4.5)
+    for (const pilula of ['av', 'an', 'er', 'ok', 'li', 'm']) expect(razao(c.pt!, c[pilula]!), `pt sobre ${pilula}, ${tema}`).toBeGreaterThanOrEqual(4.5)
+    for (const etapa of ['li', 'an', 'ok']) expect(razao(c[etapa]!, c.tile!), `${etapa} sobre a pílula da etapa (tile), ${tema}`).toBeGreaterThanOrEqual(4.5)
+    expect(razao(c.av!, FUNDO_CARD[tema]), `av sobre card, ${tema}`).toBeGreaterThanOrEqual(4.5)
+  }
+  expect(razao('#ffffff', '#ffffff'), 'a medida enxerga 1:1').toBe(1)
+})
+
+test('F34-2: nenhuma pílula leva #fff fixo: o texto delas é a classe pt, que troca no tema escuro', () => {
+  const todos = [
+    cartaoSvg(300, itemCheio(), AGORA, { situacao: situacaoDoTeste }).source,
+    filaSvg(300, itemCheio({ situacao: 'fila' }), AGORA).source,
+    secaoSvg(300, { titulo: 'Executando', n: 2, tom: 'an' }).source,
+    resumoSvg(300, [{ rotulo: 'A', n: 1, cor: 'av' }]).source,
+  ]
+  expect(todos.every(s => s.length > 0)).toBe(true)
+  for (const s of todos) expect(s.replace(/<style>[\s\S]*?<\/style>/, ''), 'fora do CSS não sobra branco fixo').not.toMatch(/#fff/i)
+  expect(CORES.escuro.pt, 'no escuro o pt é escuro').not.toBe(CORES.claro.pt)
+})
+
+test('F34-2: o source de cada desenho fica abaixo de 131 072 caracteres, no cenário mais cheio', () => {
+  const itens = Array.from({ length: 40 }, (_, k) => itemCheio({ id: `F${k}`, situacao: k % 4 === 3 ? 'fila' : 'andando' }))
+  const fontes = [
+    resumoSvg(292, [{ rotulo: 'A', n: 1, cor: 'av' }]).source,
+    ...(['Esperam você', 'Travados', 'Executando', 'Na fila'] as const).map(t => secaoSvg(292, { titulo: t, n: 9, tom: 'an', legenda: 'x' }).source),
+    ...itens.map(i => (i.situacao === 'fila' ? filaSvg(292, i, AGORA).source : cartaoSvg(292, i, AGORA, { situacao: situacaoDoTeste }).source)),
+  ]
+  expect(fontes.length).toBeGreaterThan(40)
+  expect(Math.max(...fontes.map(s => s.length)), 'o maior desenho sozinho').toBeLessThan(131_072)
+  // O cenário da fixtura (o mais cheio que ela tem: oito itens e duas perguntas), todos os desenhos de uma vez.
+  const c = CENARIOS.misto
+  const todos = [
+    ...c.itens.map(i => (i.situacao === 'fila' ? filaSvg(292, i, AGORA).source : cartaoSvg(292, i, AGORA, { situacao: situacaoDoTeste }).source)),
+    ...c.perguntas.map(q => perguntaSvg(292, q as never).source),
+  ]
+  expect(todos.length, 'há o que somar').toBeGreaterThan(8)
+  expect(todos.reduce((n, x) => n + x.length, 0), 'tudo junto').toBeLessThan(131_072)
 })

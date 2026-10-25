@@ -7,8 +7,8 @@ import type { LinhaItem, PerguntaAberta, PerguntaAnterior } from '../types'
 const FONTE = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif"
 
 const CSS = `<style>
-.t{fill:#1f1f1f}.s{fill:#6b6b68}.m{fill:#6f6f6b}.av{fill:#9a6210}.er{fill:#b8452c}.an{fill:#3a68c8}.ok{fill:#2e7d4a}.li{fill:#5b5cd6}.pt{fill:#ffffff}.es{stroke:#b8452c}.oks{stroke:#2e7d4a}.ms{stroke:#6f6f6b}.ln{stroke:#e8e7e3}.tile{fill:#f4f3f0}.k{fill:#ecebe8}.card{fill:#fbf6ec;stroke:#efdcb6}
-@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}.m{fill:#93938f}.av{fill:#d9962b}.er{fill:#e0846b}.an{fill:#5b8def}.ok{fill:#4caf6e}.li{fill:#8b8cf8}.pt{fill:#1f1f1f}.es{stroke:#e0846b}.oks{stroke:#4caf6e}.ms{stroke:#93938f}.ln{stroke:#2f2f2d}.tile{fill:#262625}.k{fill:#2c2c2b}.card{fill:#2a251b;stroke:#4a3d22}}
+.t{fill:#1f1f1f}.s{fill:#6b6b68}.m{fill:#6f6f6b}.av{fill:#9a6210}.er{fill:#b8452c}.an{fill:#3a68c8}.ok{fill:#2e7d4a}.li{fill:#5b5cd6}.pt{fill:#ffffff}.es{stroke:#b8452c}.oks{stroke:#2e7d4a}.ms{stroke:#6f6f6b}.ln{stroke:#e8e7e3}.tile{fill:#f4f3f0}.k{fill:#ecebe8}.card{fill:#fbf6ec;stroke:#efdcb6}.et{fill:#fdf0ed}.avs{stroke:#9a6210}.ans{stroke:#3a68c8}
+@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}.m{fill:#93938f}.av{fill:#d9962b}.er{fill:#e0846b}.an{fill:#5b8def}.ok{fill:#4caf6e}.li{fill:#8b8cf8}.pt{fill:#1f1f1f}.es{stroke:#e0846b}.oks{stroke:#4caf6e}.ms{stroke:#93938f}.ln{stroke:#2f2f2d}.tile{fill:#262625}.k{fill:#2c2c2b}.card{fill:#2a251b;stroke:#4a3d22}.et{fill:#3a2320}.avs{stroke:#d9962b}.ans{stroke:#5b8def}}
 .vivo{animation:p 1.6s ease-in-out infinite}@keyframes p{50%{opacity:.35}}
 @media (prefers-reduced-motion: reduce){.vivo{animation:none}}
 </style>`
@@ -48,7 +48,7 @@ const LARGO = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿＀-｠\u{1F300}-\u{1FAFF}]/u
 const em = (ch: string): number =>
   LARGO.test(ch) ? 1 : ch === ' ' ? 0.28 : /[ilj.,:;'|!]/.test(ch) ? 0.28 : /[A-Z0-9#mwMW@%]/.test(ch) ? 0.66 : 0.54
 
-const largura = (s: string, tam: number): number => [...s].reduce((w, ch) => w + em(ch) * tam, 0)
+export const largura = (s: string, tam: number): number => [...s].reduce((w, ch) => w + em(ch) * tam, 0)
 
 const caber = (s: string, tam: number, max: number): string => {
   if (largura(s, tam) <= max) return s
@@ -101,29 +101,43 @@ const texto = (x: number, y: number, tam: number, classe: string, conteudo: stri
 export type Contagem = { rotulo: string; n: number; cor: string; classe?: string }
 
 export const ALTURA_RESUMO = 62
+/** Abaixo disto o resumo fica compacto: o bloco de 36 px leva o número na linha do rótulo. */
+export const LARGURA_DO_COMPACTO = 360
+export const ALTURA_RESUMO_COMPACTO = 36
 const GAP_RESUMO = 6
 /** Abaixo disto os quatro blocos viram 2×2: lado a lado o rótulo "Esperam você" não cabe (§2.2). */
 export const LARGURA_DO_2X2 = 500
 
-/** Esperam você · Travados / Andando · Na fila: lado a lado a partir de 500 px, em duas linhas de dois abaixo. */
+/** Esperam você · Travados / Executando · Na fila: lado a lado a partir de 500 px, em 2×2 abaixo, e compacto abaixo de 360. */
 export function resumoSvg(W: number, contagens: Contagem[]): { source: string; height: number } {
   const duas = W < LARGURA_DO_2X2
+  const compacto = W < LARGURA_DO_COMPACTO
+  const alturaBloco = compacto ? ALTURA_RESUMO_COMPACTO : ALTURA_RESUMO
   const porLinha = duas ? 2 : contagens.length
   const tw = (W - GAP_RESUMO * (porLinha - 1)) / porLinha
   const linhas = Math.ceil(contagens.length / porLinha)
   const blocos = contagens.map((c, i) => {
     const x = (i % porLinha) * (tw + GAP_RESUMO)
-    const y = Math.floor(i / porLinha) * (ALTURA_RESUMO + GAP_RESUMO)
+    const y = Math.floor(i / porLinha) * (alturaBloco + GAP_RESUMO)
     const viva = c.n > 0
-    const corPonto = viva ? `class="${c.classe ?? c.cor}"` : `fill="${NEUTRO}"`
     const corNumero = viva ? ` class="${c.classe ?? c.cor}"` : ' class="m"'
+    if (compacto) {
+      const corPonto = viva ? `class="${c.classe ?? c.cor}"` : `fill="${NEUTRO}"`
+      const reservaNumero = largura(String(c.n), 17) + 8
 
-    return `<rect class="tile" x="${x}" y="${y}" width="${tw}" height="${ALTURA_RESUMO}" rx="10"/>
+      return `<rect class="tile" x="${x}" y="${y}" width="${tw}" height="${alturaBloco}" rx="10"/>
+<circle ${corPonto} cx="${x + 13}" cy="${y + 18}" r="4"${viva ? '' : ' fill-opacity=".45"'}/>
+${texto(x + 23, y + 22.5, 12.5, 's', xml(caber(c.rotulo, 12.5, tw - 23 - 12 - reservaNumero)))}
+<text x="${x + tw - 12}" y="${y + 24}" text-anchor="end" font-family="${FONTE}" font-size="17" font-weight="600" font-variant-numeric="tabular-nums"${corNumero}>${c.n}</text>`
+    }
+    const corPonto = viva ? `class="${c.classe ?? c.cor}"` : `fill="${NEUTRO}"`
+
+    return `<rect class="tile" x="${x}" y="${y}" width="${tw}" height="${alturaBloco}" rx="10"/>
 <circle ${corPonto} cx="${x + 15}" cy="${y + 19}" r="4.5"${viva ? '' : ' fill-opacity=".45"'}/>
 ${texto(x + 26, y + 23.5, 13, 's', xml(caber(c.rotulo, 13, tw - 32)))}
 <text x="${x + 13}" y="${y + 51}" font-family="${FONTE}" font-size="24" font-weight="600" font-variant-numeric="tabular-nums"${corNumero}>${c.n}</text>`
   })
-  const height = linhas * ALTURA_RESUMO + (linhas - 1) * GAP_RESUMO
+  const height = linhas * alturaBloco + (linhas - 1) * GAP_RESUMO
 
   return { height, source: svg(W, height, blocos.join('')) }
 }
@@ -414,4 +428,286 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
 /** O filete que fecha o item, para quando os botões "abrir" vêm depois do desenho e ficam dentro dele. */
 export function fileteSvg(W: number): { source: string; height: number } {
   return { height: 1, source: svg(W, 1, '<line class="ln" x1="0" y1="0.5" x2="' + W + '" y2="0.5"/>') }
+}
+
+/** O papel pela 1ª letra do apelido (P1, E3, V4, D1, O…): qualquer outra letra não diz papel. */
+export function papelDe(apelido: string): 'planejadora' | 'executora' | 'validadora' | 'designer' | 'orquestradora' | undefined {
+  const letra = apelido.trim().charAt(0).toUpperCase()
+
+  return ({ P: 'planejadora', E: 'executora', V: 'validadora', D: 'designer', O: 'orquestradora' } as const)[letra as 'P']
+}
+
+// ---- F34: o desenho em cartões (a moldura é o `Box` da composição; aqui só o conteúdo) ----
+
+/** A cor do traço para cada classe de cor de texto: o filete tracejado e o contorno do chip precisam de `stroke`. */
+const TRACO: Record<string, string> = { av: 'avs', an: 'ans', er: 'es', ok: 'oks', m: 'ms' }
+
+export type FaixaDeSecao = { titulo: string; n: number; tom: string; legenda?: string; tracejado?: boolean }
+export const ALTURA_SECAO = 28
+
+/** A faixa que abre cada seção: filete na cor, título, contagem em pílula e uma legenda curta que some quando não cabe. */
+export function secaoSvg(W: number, f: FaixaDeSecao): { source: string; height: number; alt: string } {
+  const pilula = largura(String(f.n), 12) + 14
+  const xPilula = 14 + largura(f.titulo, 15) + 8
+  const fim = xPilula + pilula
+  const legenda = f.legenda && fim + 12 + largura(f.legenda, 12) <= W ? f.legenda : undefined
+  const filete = f.tracejado
+    ? `<line class="${TRACO[f.tom] ?? 'ms'}" x1="1.5" y1="4" x2="1.5" y2="24" stroke-width="3" stroke-dasharray="3 3"/>`
+    : `<rect class="${f.tom}" x="0" y="4" width="3" height="20" rx="1.5"/>`
+
+  return {
+    height: ALTURA_SECAO,
+    alt: [f.titulo, String(f.n), legenda].filter(Boolean).join(' · '),
+    source: svg(
+      W,
+      ALTURA_SECAO,
+      `${filete}
+${texto(14, 19.5, 15, 't', xml(f.titulo), ' font-weight="600"')}
+<rect class="${f.tom}" x="${xPilula}" y="5" width="${pilula}" height="18" rx="9"/>
+${texto(xPilula + pilula / 2, 18, 12, 'pt', String(f.n), ' text-anchor="middle" font-weight="700" font-variant-numeric="tabular-nums"')}
+${legenda ? texto(W, 18.5, 12, 'm', xml(legenda), ' text-anchor="end"') : ''}`,
+    ),
+  }
+}
+
+const ALTURA_CHIP = 20
+const GAP_CHIP = 6
+type Chip = { t: string; texto: string; fundo?: string; traco?: string; tracejado?: boolean; peso?: boolean }
+
+/** Os chips em linha, de `x0`; o que não cabe quebra para a linha de baixo, e um chip sozinho maior que a linha é cortado. */
+function chipsSvg(x0: number, y0: number, larguraLinha: number, chips: Chip[]): { partes: string[]; altura: number } {
+  const partes: string[] = []
+  let x = x0
+  let y = y0
+  for (const c of chips) {
+    const texto12 = caber(c.t, 12, larguraLinha - 16)
+    const w = largura(texto12, 12) + 16
+    if (x > x0 && x + w > x0 + larguraLinha) {
+      x = x0
+      y += ALTURA_CHIP + GAP_CHIP
+    }
+    const aparencia = c.fundo
+      ? ` class="${c.fundo}"`
+      : ` fill="none" class="${c.traco ?? 'ms'}" stroke-width="1.2"${c.tracejado ? ' stroke-dasharray="3 2"' : ''}`
+    partes.push(`<rect${aparencia} x="${x + 0.6}" y="${y + 0.6}" width="${w - 1.2}" height="${ALTURA_CHIP - 1.2}" rx="${ALTURA_CHIP / 2 - 0.6}"/>`)
+    partes.push(texto(x + w / 2, y + 14, 12, c.texto, xml(texto12), ` text-anchor="middle"${c.peso === false ? '' : ' font-weight="600"'}`))
+    x += w + GAP_CHIP
+  }
+
+  return { partes, altura: chips.length > 0 ? y - y0 + ALTURA_CHIP : 0 }
+}
+
+const chipDoPr = (item: LinhaItem): Chip[] => {
+  if (item.prs.length === 0) return []
+  const ultimo = item.prs[item.prs.length - 1]
+
+  return [{ t: `#${ultimo}${item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''}`, texto: ANDA, traco: 'ans' }]
+}
+
+/** O `Chip` tem a classe do texto em `texto`; a pílula da etapa leva o fundo `tile`, onde as quatro cores de etapa passam de 4,5:1. */
+const chipDaEtapa = (item: LinhaItem): Chip => ({ t: ROTULO_ETAPA[item.etapa] ?? item.etapa, texto: COR_ETAPA[item.etapa] ?? 's', fundo: 'tile' })
+
+const upper = (s: string): string => s.toLocaleUpperCase('pt-BR')
+
+type Pessoa = { apelido: string; localId: string }
+/** As sessões que trabalham no item e seguem vivas; sem `com`, o dono, que sem ninguém já está na trava. */
+function pessoasDoItem(item: LinhaItem): Pessoa[] {
+  const vivos = (item.com ?? []).filter(c => c.vivo !== false)
+  if (vivos.length > 0) return vivos.map(c => ({ apelido: c.apelido, localId: c.localId }))
+
+  return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ apelido: item.dono.apelido, localId: item.dono.localId }] : []
+}
+
+export const MAX_LINHAS_QUEM = 3
+
+export type OpcoesDoCartao = {
+  /** O que a sessão faz agora ("trabalhando agora", "parada há X", "sem leitura da sessão"); `undefined` é a sessão fora da lista. */
+  situacao?: (localId: string) => string | undefined
+}
+
+/** A linha "quem": o selo do apelido (com o ponto vivo se trabalha agora), o papel por extenso e a situação da sessão. */
+function linhaQuem(y: number, p: Pessoa, situacao: string | undefined, W: number): { svg: string; alt: string } {
+  const apelido = p.apelido
+  const selo = largura(apelido, 11.5) + 18
+  const encerrada = situacao === undefined
+  const papel = papelDe(apelido)
+  const vivo = situacao === 'trabalhando agora'
+  const dito = encerrada ? 'sessão encerrada' : situacao
+  const xTexto = selo + 8
+  const disponivel = W - xTexto
+  const cabeca = papel ? `${papel} · ${dito}` : dito
+  const corte = caber(cabeca, 12.5, disponivel)
+  const corpo = papel && corte === cabeca
+    ? `<tspan class="t" font-weight="600">${xml(papel)}</tspan><tspan class="${encerrada ? 'm' : 's'}">${xml(` · ${dito}`)}</tspan>`
+    : `<tspan class="${encerrada ? 'm' : 's'}">${xml(corte)}</tspan>`
+
+  return {
+    alt: `${apelido}${papel ? `, ${papel}` : ''}, ${dito}`,
+    svg: `<rect class="k" x="0" y="${y}" width="${selo}" height="22" rx="6"/>
+${texto(selo / 2, y + 15, 11.5, 't', xml(apelido), ' text-anchor="middle" font-weight="700"')}
+${vivo ? `<circle class="vivo ${ANDA}" cx="${selo - 2}" cy="${y + 2}" r="3.5"/>` : ''}
+<text x="${xTexto}" y="${y + 15}" font-family="${FONTE}" font-size="12.5">${corpo}</text>`,
+  }
+}
+
+/**
+ * O cartão do item em sessão (§1 do desenho): sobre (tema e tempo), título, chips, trava, espera, quem, agora e depois.
+ * Sem fundo e sem filete: a moldura é o `Box round` da composição, com a borda na cor do tom, e os botões ficam dentro dela.
+ */
+export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: OpcoesDoCartao = {}): { source: string; height: number; alt: string } {
+  const partes: string[] = []
+  const tempo = tempoDoItem(item, agora)
+  const tempoW = tempo ? largura(tempo, 12) + 10 : 0
+  partes.push(texto(0, 11, 11, 'm', xml(caber(upper(item.temaRotulo), 11, W - tempoW)), ' font-weight="600"'))
+  if (tempo) partes.push(texto(W, 11.5, 12, 'm', xml(tempo), ' text-anchor="end" font-variant-numeric="tabular-nums"'))
+
+  let y = 11
+  const titulo = quebrarEmDuas(item.titulo, 15, W, W)
+  for (const l of titulo) {
+    y += 20
+    partes.push(texto(0, y, 15, 't', xml(l), ' font-weight="600"'))
+  }
+
+  const chips: Chip[] = [chipDaEtapa(item)]
+  if (item.perguntas.length > 0) chips.push({ t: `aguarda você · ${item.perguntas[0]}`, texto: 'pt', fundo: AVISO })
+  const selo = seloDaEspera(item)
+  if (selo && item.espera?.motivo === 'gate') chips.push({ t: selo, texto: 's', traco: 'ms' })
+  chips.push(...chipDoPr(item))
+  const linhaDeChips = chipsSvg(0, y + 9, W, chips)
+  partes.push(...linhaDeChips.partes)
+  y += 9 + linhaDeChips.altura
+
+  const alt = [item.titulo, chips.map(c => c.t).join(' · ')]
+
+  if (item.trava) {
+    const sem = item.trava.motivo === 'sem-ninguem'
+    const rotulo = sem ? 'Sem ninguém' : item.trava.motivo.charAt(0).toUpperCase() + item.trava.motivo.slice(1)
+    const linhas = quebrar(`${rotulo}: ${item.trava.texto}`, 12.5, W - 20, 3)
+    const extra = sem ? ['Peça outra sessão à orquestradora.'] : []
+    const todas = [...linhas, ...extra]
+    const alturaBloco = 16 + todas.length * 17 - 3
+    const topo = y + 9
+    partes.push(`<rect class="et" x="0" y="${topo}" width="${W}" height="${alturaBloco}" rx="8"/>`)
+    todas.forEach((l, k) => {
+      const base = topo + 8 + 13 + k * 17
+      if (k === 0 && l.startsWith(`${rotulo}:`)) {
+        partes.push(`<text x="10" y="${base}" font-family="${FONTE}" font-size="12.5"><tspan class="${ERRO}" font-weight="700">${xml(`${rotulo}:`)}</tspan><tspan class="${ERRO}">${xml(l.slice(rotulo.length + 1))}</tspan></text>`)
+      } else partes.push(texto(10, base, 12.5, ERRO, xml(l)))
+    })
+    y = topo + alturaBloco
+    alt.push(`${rotulo}: ${item.trava.texto}${extra.length > 0 ? ` ${extra[0]}` : ''}`)
+  }
+
+  if (item.espera && item.situacao !== 'travado') {
+    const classe = item.espera.motivo === 'operador' ? AVISO : 's'
+    y += 6
+    for (const l of quebrar(item.espera.texto, 12.5, W, 2)) {
+      y += 17
+      partes.push(texto(0, y, 12.5, classe, xml(l)))
+    }
+    alt.push(textoDaEspera(item.espera))
+  }
+
+  const pessoas = pessoasDoItem(item)
+  const mostradas = pessoas.slice(0, MAX_LINHAS_QUEM)
+  for (const p of mostradas) {
+    y += 8
+    const linha = linhaQuem(y, p, opcoes.situacao?.(p.localId), W)
+    partes.push(linha.svg)
+    alt.push(linha.alt)
+    y += 22
+  }
+  if (pessoas.length > mostradas.length) {
+    y += 15
+    partes.push(texto(0, y, 12, 'm', `+${pessoas.length - mostradas.length}`))
+    alt.push(`+${pessoas.length - mostradas.length}`)
+  }
+  const saiu = quemSaiu(item).map(q => q.t)
+  if (saiu.length > 0) {
+    y += 16
+    partes.push(texto(0, y, 12, 'm', xml(caber(saiu.join(', '), 12, W))))
+    alt.push(...saiu)
+  }
+
+  if (item.agora) {
+    y += 6
+    for (const l of quebrar(item.agora, 12.5, W, 2)) {
+      y += 17
+      partes.push(texto(0, y, 12.5, 's', xml(l)))
+    }
+    alt.push(item.agora)
+  }
+  if (item.depois.length > 0) {
+    const mais = item.depois.length > 1 ? ` (+${item.depois.length - 1})` : ''
+    const depois = `depois: ${item.depois[0]}${mais}`
+    y += 17
+    partes.push(texto(0, y, 12, 'm', xml(caber(depois, 12, W))))
+    alt.push(depois)
+  }
+  if (tempo) alt.push(tempo)
+  const altura = y + 6
+
+  return { height: altura, alt: alt.join(' — '), source: svg(W, altura, partes.join('')) }
+}
+
+const X_FILA = 22
+
+/** A linha da fila (§3): anel tracejado, tema e "parado há", título, resumo, chips; sem botão, porque não há sessão. */
+export function filaSvg(W: number, item: LinhaItem, agora: number): { source: string; height: number; alt: string } {
+  const tw = W - X_FILA
+  const tempo = tempoDoItem(item, agora)
+  const tempoW = tempo ? largura(tempo, 12) + 10 : 0
+  const partes: string[] = [
+    `<circle cx="9" cy="9" r="5" fill="none" stroke="${NEUTRO}" stroke-width="1.3" stroke-dasharray="2 2"/>`,
+    texto(X_FILA, 11, 11, 'm', xml(caber(upper(item.temaRotulo), 11, tw - tempoW)), ' font-weight="600"'),
+  ]
+  if (tempo) partes.push(texto(W, 11.5, 12, 'm', xml(tempo), ' text-anchor="end" font-variant-numeric="tabular-nums"'))
+
+  let y = 11
+  const titulo = quebrarEmDuas(item.titulo, 14, tw, tw)
+  for (const l of titulo) {
+    y += 19
+    partes.push(texto(X_FILA, y, 14, 't', xml(l), ' font-weight="600"'))
+  }
+  const alt = [item.titulo]
+  if (item.resumo) {
+    y += 3
+    for (const l of quebrar(item.resumo, 12.5, tw, 2)) {
+      y += 17
+      partes.push(texto(X_FILA, y, 12.5, 's', xml(l)))
+    }
+    alt.push(item.resumo)
+  }
+  const chips: Chip[] = [{ t: `espera ${ROTULO_ETAPA[item.etapa] ?? item.etapa}`, texto: 's', traco: 'ms', tracejado: true }, ...chipDoPr(item)]
+  const linhaDeChips = chipsSvg(X_FILA, y + 8, tw, chips)
+  partes.push(...linhaDeChips.partes)
+  y += 8 + linhaDeChips.altura
+  alt.push(chips.map(c => c.t).join(' · '))
+  if (tempo) alt.push(tempo)
+  const altura = y + 10
+  partes.push(`<line class="ln" x1="0" y1="${altura - 0.5}" x2="${W}" y2="${altura - 0.5}"/>`)
+
+  return { height: altura, alt: alt.join(' — '), source: svg(W, altura, partes.join('')) }
+}
+
+export type Faixa = { titulo: string; detalhe?: string; tom: 'er' | 'av' }
+
+/** A faixa tingida (erro de leitura, aviso de resposta não entregue): o texto inteiro, porque o botão vem logo abaixo, fora dela. */
+export function faixaSvg(W: number, f: Faixa): { source: string; height: number; alt: string } {
+  const erro = f.tom === 'er'
+  const cor = erro ? ERRO : AVISO
+  const linhas = f.detalhe ? quebrar(f.detalhe, 12.5, W - 24, Infinity) : []
+  const partes: string[] = [texto(12, 24, 13, cor, xml(caber(f.titulo, 13, W - 24)), ' font-weight="700"')]
+  let y = 24
+  for (const l of linhas) {
+    y += 17
+    partes.push(texto(12, y, 12.5, cor, xml(l)))
+  }
+  const altura = y + 12
+
+  return {
+    height: altura,
+    alt: [f.titulo, f.detalhe].filter(Boolean).join(' — '),
+    source: svg(W, altura, `<rect class="${erro ? 'et' : 'card'}" x=".5" y=".5" width="${W - 1}" height="${altura - 1}" rx="8"/>${partes.join('')}`),
+  }
 }

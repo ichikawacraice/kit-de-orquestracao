@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { anteriorSvg, desde, fileteSvg, itemSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, seloDaEspera, textoDaTrava } from './desenho'
+import { papelDe as papelDeDesenho, anteriorSvg, desde, fileteSvg, itemSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, seloDaEspera, textoDaTrava } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -209,8 +209,8 @@ const pelaOrdemDoId = (a: LinhaItem, b: LinhaItem) => numero(a.id) - numero(b.id
 const maisAntigoPrimeiro = (a: LinhaItem, b: LinhaItem) =>
   (Date.parse(a.paradoDesde ?? '') || Infinity) - (Date.parse(b.paradoDesde ?? '') || Infinity) || pelaOrdemDoId(a, b)
 
-/** O item espera o operador sem uma pergunta aberta que já diga isso: ele vai a "Esperam você", e sai de Executando e de Na fila. */
-const esperaOperadorSemPergunta = (i: LinhaItem) => i.situacao !== 'feito' && i.espera?.motivo === 'operador' && i.perguntas.length === 0
+/** O item espera o operador sem uma pergunta aberta que já diga isso: ele vai a "Esperam você", e sai de Executando e de Na fila. O travado fica só em Travados: o erro vem antes (assumido, a confirmar). */
+export const esperaOperadorSemPergunta = (i: LinhaItem) => i.situacao !== 'feito' && i.situacao !== 'travado' && i.espera?.motivo === 'operador' && i.perguntas.length === 0
 
 /**
  * A única conta das quatro seções; o contador e a pílula leem daqui. Esperam você = as perguntas abertas mais os itens que
@@ -253,12 +253,7 @@ export function secoes(itens: LinhaItem[], temas: Tema[]) {
   }
 }
 
-/** O papel pela 1ª letra do apelido (P1, E3, V4, D1, O…): qualquer outra letra não diz papel. */
-export function papelDe(apelido: string): 'planejadora' | 'executora' | 'validadora' | 'designer' | 'orquestradora' | undefined {
-  const letra = apelido.trim().charAt(0).toUpperCase()
-
-  return ({ P: 'planejadora', E: 'executora', V: 'validadora', D: 'designer', O: 'orquestradora' } as const)[letra as 'P']
-}
+export const papelDe = papelDeDesenho
 
 /**
  * O que a sessão faz agora, do `list_sessions`: "trabalhando agora" (isRunning), "parada há X" (da última atividade) ou
@@ -669,13 +664,12 @@ export const register: Register = on => {
     const avisos = l.avisos ?? []
     const sec = secoes(l.itens, l.temas)
     const contagem = contarSecoes(l.itens, l.perguntas)
-    const contar = (...sit: Situacao[]) => l.itens.filter(i => sit.includes(i.situacao)).length
-    // Quatro decisões, cada uma contada uma vez: travado e andando se excluem, e a soma dos dois é "Em sessão".
+    // Quatro seções, cada item contado uma vez: o contador e a pílula leem de `contarSecoes`.
     const resumo = [
       { n: contagem.esperam, rotulo: 'Esperam você', cor: 'warning' },
       { n: contagem.travados, rotulo: 'Travados', cor: 'error' },
-      { n: contar('andando'), rotulo: 'Andando', cor: 'suggestion' },
-      { n: contar('fila'), rotulo: 'Na fila', cor: 'suggestion', classe: 't' },
+      { n: contagem.executando, rotulo: 'Executando', cor: 'suggestion' },
+      { n: contagem.fila, rotulo: 'Na fila', cor: 'suggestion', classe: 't' },
     ]
     const resumo4 = resumo.map(r => ({ ...r, cor: COR_RESUMO[r.cor] ?? 'm' }))
     const lido = l.lidoEm !== null
