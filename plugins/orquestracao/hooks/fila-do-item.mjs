@@ -13,6 +13,7 @@
 import { readFileSync, existsSync, appendFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
+import { declarouLivre } from './pool-comum.mjs';
 
 // O aviso de injeção é opcional: se a varredura faltar ou falhar ao carregar, o hook segue sem ele.
 // Hoje ele não protege nada (a razão do bloqueio só cita ids de item); prepara o caso de o texto do painel entrar aqui.
@@ -121,6 +122,9 @@ function main() {
   if (!existsSync(tp)) return registrar(sid, local, 'sem-inicio', 'transcript inexistente');
   const inicio = inicioDoTurno(tp);
   if (inicio === null) return registrar(sid, local, 'sem-inicio');
+
+  // F32: quem se declarou livre neste turno é solta pelo `livre-se-limpa` (que roda no mesmo fim de turno): aqui não se cobra.
+  if (declarouLivre(tp, inicio)) return registrar(sid, local, 'livre-no-turno', meus.map((i) => i.id).join(','));
 
   const pendentes = meus.filter((i) => {
     const t = Date.parse(i.atualizadoEm);

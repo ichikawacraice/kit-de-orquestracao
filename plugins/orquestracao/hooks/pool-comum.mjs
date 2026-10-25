@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, statS
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join, basename, dirname } from 'node:path';
-import { BASE, tituloRapido, semPrefixoDoPlugin } from './hooks-crewai-comum.mjs';
+import { BASE, tituloRapido, semPrefixoDoPlugin, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
 
 export { BASE };
 const H = homedir();
@@ -82,6 +82,23 @@ export function itensDaSessao(localId) {
       if (!d || d.etapa === 'feito' || d.etapa === 'descartado') continue;
       if (Array.isArray(d.com) && d.com.some((c) => c?.localId === localId)) saida.com.push(id);
       if (ETAPAS_DO_FEZ.includes(d.etapa) && Array.isArray(d.fez) && d.fez.some((c) => c?.localId === localId)) saida.fez.push(id);
+    } catch { /* arquivo parcial: ignora este item */ }
+  }
+  return saida;
+}
+
+// Itens vivos de que a sessão é DONA (`donoLocalId`): os que o `livre-se-limpa` solta quando ela se declara livre.
+export function itensDonosDaSessao(localId) {
+  const saida = [];
+  if (!localId) return saida;
+  let nomes; try { nomes = readdirSync(filaDir()); } catch { return saida; }
+  for (const nome of nomes) {
+    if (!nome.endsWith('.json')) continue;
+    try {
+      const doc = JSON.parse(readFileSync(join(filaDir(), nome), 'utf8'));
+      const d = doc?.data;
+      if (!d || d.etapa === 'feito' || d.etapa === 'descartado') continue;
+      if (d.donoLocalId === localId) saida.push(doc?.id ?? nome.replace(/\.json$/, ''));
     } catch { /* arquivo parcial: ignora este item */ }
   }
   return saida;
@@ -238,4 +255,66 @@ export function ehExecutora(e, transcript) {
   return semPrefixoDoPlugin(e.agent_type) === 'executor' || // `orquestracao:executor` vale `executor`
     /^exec\s*·/.test(tituloRapido(transcript))
     || membroDoPool(registroDaSessao(e.session_id)?.titulo)?.papel === 'E';
+}
+
+// --- Declarar-se livre no turno (F32): a detecção mora aqui para o `livre-se-limpa` (que solta) e o `fila-do-item` (que deixa de cobrar) ---
+// Só vale a INVOCAÇÃO de `node …/painel.mjs` na mesma linha: `set|update sessoes <id> '…livre…'` ou `batch '…sessoes…livre…'`.
+// Casar o comando inteiro cobrava heredoc que apenas citava essas palavras (falso positivo medido em 24/10 e de novo em 25/10),
+// então o comando é normalizado antes: o corpo dos heredocs sai, e os separadores (`; & | ( `` \n`) DENTRO de aspas viram `_`
+// (o tamanho não muda; `$(` e crase dentro de aspas duplas executam de verdade e ficam). A regex acha a invocação no normalizado.
+// Início de comando e invocação do painel (`node …/painel.mjs` ou o `painel` do bin/ do plugin): hooks-crewai-comum.mjs.
+// Limite declarado: caminho montado por variável (`node "$P" …`); JSON multilinha fora de aspas; atribuição com valor entre aspas e
+// espaço (`FOO="a b" node …`); outros prefixos (`sudo`, `xargs`, `bash -c "…"`); heredoc dentro de string.
+export function semHeredoc(c) {
+  const linhas = String(c).split('\n'); const saida = []; const fila = []; // delimitadores pendentes, em ordem: `cat <<A; cat <<B`
+  for (const l of linhas) {
+    if (fila.length) { if (l.trim() === fila[0]) fila.shift(); continue; }
+    saida.push(l);
+    for (const m of l.matchAll(/(?<!<)<<(?!<)-?\s*(['"]?)(\w+)\1/g)) fila.push(m[2]);
+  }
+  return saida.join('\n');
+}
+export function separadoresDeAspasNeutros(c) {
+  let aspa = null; let o = '';
+  for (let k = 0; k < c.length; k++) {
+    const ch = c[k];
+    if (aspa === null) {
+      if (ch === '\\') { o += ch + (c[k + 1] ?? ''); k++; continue; }
+      if (ch === "'" || ch === '"') aspa = ch;
+      o += ch; continue;
+    }
+    if (ch === aspa) { aspa = null; o += ch; continue; }
+    if (aspa === '"' && ch === '\\') { o += ch + (c[k + 1] ?? ''); k++; continue; }
+    const executa = aspa === '"' && (ch === '`' || (ch === '(' && c[k - 1] === '$'));
+    o += !executa && /[;&|(\n`]/.test(ch) ? '_' : ch;
+  }
+  return o;
+}
+const INVOCACAO = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:(?:set|update)\s+sessoes\s+\S+|batch)\s[^\n]*\blivre\b`);
+export const painelLivre = (c) => {
+  const n = separadoresDeAspasNeutros(semHeredoc(c));
+  return INVOCACAO.test(n) && (!/painel(?:\.mjs)?["']?\s+batch\b/.test(n) || /painel(?:\.mjs)?["']?\s+batch\s[^\n]*sessoes/.test(n));
+};
+
+
+const ehSelf = (id) => id === undefined || id === null || id === 'self';
+export const tituloLivre = (t) => /· livre\s*$/.test(String(t || ''));
+// Quem se declarou livre no turno que começou em `inicio` (ms): `{ como, tituloNovo }` ou null. `como` é 'título livre'
+// (set_session_title "self" com título terminando em "· livre"; vence) ou 'painel livre' (painel gravando em `sessoes` com "livre").
+export function declarouLivre(transcriptPath, inicio) {
+  let como = null; let tituloNovo = null;
+  for (const l of readFileSync(transcriptPath, 'utf8').split('\n')) {
+    if (!l) continue;
+    let e; try { e = JSON.parse(l); } catch { continue; }
+    if (e.type !== 'assistant' || Date.parse(e.timestamp) < inicio) continue;
+    const c = e.message?.content;
+    if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (b?.type !== 'tool_use') continue;
+      const n = String(b.name || ''); const i = b.input || {};
+      if (n.endsWith('set_session_title') && ehSelf(i.session_id) && tituloLivre(i.title)) { como = 'título livre'; tituloNovo = i.title; }
+      else if (n === 'Bash' && painelLivre(String(i.command || ''))) como ||= 'painel livre';
+    }
+  }
+  return como ? { como, tituloNovo } : null;
 }

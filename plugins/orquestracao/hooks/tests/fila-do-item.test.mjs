@@ -223,5 +223,21 @@ caso('F27-3f: item com dono e etapa, gravado DEPOIS do início do turno: passa',
   igual(bloqueia({ etapa: 'validacao', donoLocalId: LOCAL, atualizadoEm: DEPOIS }), null, 'passa');
 });
 
+const livreNoTurno = () => [...turno(), { type: 'assistant', uuid: 'a2', timestamp: '2026-10-24T12:01:00.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'mcp__ccd_session_mgmt__set_session_title', input: { session_id: 'self', title: 'P1 · livre' } }] } }];
+caso('F32: a dona que se declarou livre no turno passa (livre-no-turno): o livre-se-limpa a solta', () => {
+  item('F12', { etapa: 'planejamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  registroLocal(LOCAL, SID);
+  transcript(livreNoTurno());
+  igual(rodar(stop()), null, 'saída');
+  igual(desfechos().join(','), 'livre-no-turno', 'log');
+});
+caso('F32: a dona que NÃO se declarou livre continua bloqueada, com o mesmo item e o mesmo transcript sem o título livre', () => {
+  item('F12', { etapa: 'planejamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  registroLocal(LOCAL, SID);
+  transcript(turno());
+  igual(rodar(stop())?.decision, 'block', 'decisão');
+  igual(desfechos().join(','), 'bloqueou', 'log');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

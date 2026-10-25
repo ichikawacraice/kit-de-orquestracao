@@ -2,7 +2,7 @@
 // Testes de hooks/livre-se-limpa.mjs: membro que se declara livre no turno se limpa no mesmo turno.
 // Rodar: node ~/.claude/hooks/tests/livre-se-limpa.test.mjs
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -216,6 +216,72 @@ caso('F30-2: as regras 3 e 4 cobram uma vez só (stop_hook_active solta) e fila 
   writeFileSync(join(base, 'fila', 'F1.json'), '{ruim');
   ok(rodar('E3', transcript([COM_DEL('F1', 'local_E3')]))?.decision === 'block', 'fila ilegível: a regra 4 ainda vale (sem com legível)');
   ok(rodar('E3', transcript([COM_DEL('F1', 'local_E3')]), { stop_hook_active: true }) === null, 'a 4 devia soltar');
+});
+
+// F32: o hook solta em vez de cobrar. Ids no formato de verdade (o `painel` recusa `local_E3`); a pasta do painel é `base` (pai de FILA_DIR).
+const UE5 = 'local_00000000-0000-4000-8000-0000000000e5'; const UV5 = 'local_00000000-0000-4000-8000-0000000000f5';
+const UP5 = 'local_00000000-0000-4000-8000-0000000000a5'; const UE6 = 'local_00000000-0000-4000-8000-0000000000e6';
+function pessoal() {
+  ID.E5 = 'cli-e5'; ID.V5 = 'cli-v5'; ID.P5 = 'cli-p5'; ID.E6 = 'cli-e6';
+  for (const [l, c, t] of [[UE5, ID.E5, 'E5 · lançador'], [UV5, ID.V5, 'V5 · valida'], [UP5, ID.P5, 'P5 · planeja'], [UE6, ID.E6, 'E6 · outra']]) {
+    writeFileSync(join(base, 'app', `${l}.json`), JSON.stringify({ sessionId: l, cliSessionId: c, title: t, isArchived: false }));
+  }
+  writeFileSync(join(base, 'temas.json'), JSON.stringify([{ id: 'x', rotulo: 'X' }]));
+}
+const real = (id) => JSON.parse(readFileSync(join(base, 'fila', `${id}.json`), 'utf8')).data;
+const livre = (n) => ['mcp__ccd_session_mgmt__set_session_title', { session_id: 'self', title: `${n} · livre` }];
+const comDe = (l, ap) => [{ localId: l, apelido: ap, oQue: 'parte' }];
+caso('F32: E livre no com → o hook tira com `fez`, não bloqueia, e o item fica sem a sessão', () => {
+  pessoal(); item('F1', { etapa: 'execucao', com: comDe(UE5, 'E5') });
+  const r = rodar('E5', transcript([livre('E5'), LIMPA]));
+  ok(r === null, `esperava passar, veio ${JSON.stringify(r)}`);
+  const d = real('F1');
+  ok(Array.isArray(d.com) && d.com.length === 0, `com devia ficar vazio: ${JSON.stringify(d.com)}`);
+  ok(d.fez?.length === 1 && d.fez[0].localId === UE5, `a E devia ficar no fez: ${JSON.stringify(d.fez)}`);
+  ok(/soltou-com/.test(log()), 'log sem soltou-com');
+});
+caso('F32: V livre no com → tira sem `fez`', () => {
+  pessoal(); item('F1', { etapa: 'validacao', com: comDe(UV5, 'V5') });
+  ok(rodar('V5', transcript([livre('V5'), LIMPA])) === null, 'esperava passar');
+  const d = real('F1');
+  ok(d.com.length === 0 && d.fez === undefined, `V não entrega: ${JSON.stringify(d)}`);
+});
+caso('F32: P livre e dona → o item fica sem dono, o historico ganha a entrada e o agora é o motivo', () => {
+  pessoal(); item('F1', { etapa: 'planejamento', donoLocalId: UP5, donoApelido: 'P5', historico: [] });
+  ok(rodar('P5', transcript([livre('P5'), LIMPA])) === null, 'esperava passar');
+  const d = real('F1');
+  ok(d.donoLocalId === undefined && d.donoApelido === undefined, `dono devia sair: ${JSON.stringify(d)}`);
+  ok(d.agora === 'a dona se declarou livre sem soltar', `agora: ${d.agora}`);
+  ok(d.historico.length === 1 && d.historico[0].dono === null, `historico: ${JSON.stringify(d.historico)}`);
+  ok(/soltou-dono/.test(log()), 'log sem soltou-dono');
+});
+caso('F32: item de OUTRA dona e com de outra sessão ficam como estão', () => {
+  pessoal(); item('F1', { etapa: 'execucao', donoLocalId: UE6, donoApelido: 'E6', com: comDe(UE6, 'E6') });
+  ok(rodar('E5', transcript([livre('E5'), LIMPA])) === null, 'esperava passar');
+  const d = real('F1');
+  ok(d.donoLocalId === UE6 && d.com.length === 1 && d.com[0].localId === UE6, `intacto: ${JSON.stringify(d)}`);
+});
+caso('F32: a linha de `sessoes` que já existe vira parada/livre; sessão sem linha não ganha uma', () => {
+  pessoal(); item('F1', { etapa: 'execucao', com: comDe(UE5, 'E5') });
+  mkdirSync(join(base, 'sessoes'), { recursive: true });
+  writeFileSync(join(base, 'sessoes', `${UE5}.json`), JSON.stringify({ id: UE5, version: 1, data: { estado: 'trabalhando', etapa: 'x' } }));
+  ok(rodar('E5', transcript([livre('E5'), LIMPA])) === null, 'esperava passar');
+  const l = JSON.parse(readFileSync(join(base, 'sessoes', `${UE5}.json`), 'utf8')).data;
+  ok(l.estado === 'parada' && l.etapa === 'livre', `linha: ${JSON.stringify(l)}`);
+  item('F2', { etapa: 'execucao', com: comDe(UV5, 'V5') });
+  ok(rodar('V5', transcript([livre('V5'), LIMPA])) === null, 'esperava passar');
+  ok(!existsSync(join(base, 'sessoes', `${UV5}.json`)), 'o hook não cria linha');
+});
+caso('F32: escrita falhando (pasta da fila sem escrita) → bloqueia com a mensagem antiga e registra erro-ao-soltar', () => {
+  pessoal(); item('F1', { etapa: 'execucao', com: comDe(UE5, 'E5') });
+  chmodSync(join(base, 'fila'), 0o555);
+  try {
+    ok(!existsSync(join(base, 'fila', 'F1.json.teste')) && (() => { try { writeFileSync(join(base, 'fila', 'F1.json.teste'), 'x'); return false; } catch { return true; } })(), 'precondição: a pasta devia recusar escrita (rodando como root?)');
+    const r = rodar('E5', transcript([livre('E5'), LIMPA]));
+    ok(r?.decision === 'block' && /ainda consta como trabalhando em F1/.test(r.reason) && new RegExp(`com del <F> ${UE5}`).test(r.reason), `esperava a mensagem antiga, veio ${JSON.stringify(r)}`);
+    ok(/erro-ao-soltar/.test(log()) && /cobrou-com/.test(log()), `log: ${log()}`);
+  } finally { chmodSync(join(base, 'fila'), 0o755); }
+  ok(real('F1').com.length === 1, 'o com não mudou');
 });
 
 console.log(falhas ? `${falhas} falha(s)` : 'todos verdes');

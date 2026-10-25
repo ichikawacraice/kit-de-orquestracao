@@ -11,56 +11,58 @@
 // (o contexto serve ao conserto). Quem se declara livre e ainda está no `com` de um item é cobrado a sair (`painel com del`).
 // Quem saiu do item no turno (`painel com del`) e ficou com o título dele é cobrado a pôr o título livre.
 // Fonte da regra: ~/.claude/orquestracao/pool/protocolo.md, "Ao terminar um item" e "Pegar".
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { registrar, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { registroDaSessao, membroDoPool, inicioDoTurno, itensDaSessao } from './pool-comum.mjs';
+import { registroDaSessao, membroDoPool, inicioDoTurno, itensDaSessao, itensDonosDaSessao, declarouLivre, tituloLivre, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'livre-se-limpa';
 const ehSelf = (id) => id === undefined || id === null || id === 'self';
-const tituloLivre = (t) => /· livre\s*$/.test(String(t || ''));
 const trabalhoBash = (c) => /\bgit\s+(commit|push)\b|\bgh\s+pr\s+(create|ready)\b|\b(pnpm|npm|yarn|bun)(\s+run)?\s+(test|typecheck|check|lint)\b|\bnpx\s+(vitest|jest|tsc)\b|(^|[\s;&|(])(pytest|go\s+test|cargo\s+test|make\s+(test|check))\b/.test(c);
-// Só vale a INVOCAÇÃO de `node …/painel.mjs` na mesma linha: `set|update sessoes <id> '…livre…'` ou `batch '…sessoes…livre…'`.
-// Casar o comando inteiro cobrava heredoc que apenas citava essas palavras (falso positivo medido em 24/10 e de novo em 25/10),
-// então o comando é normalizado antes: o corpo dos heredocs sai, e os separadores (`; & | ( `` \n`) DENTRO de aspas viram `_`
-// (o tamanho não muda; `$(` e crase dentro de aspas duplas executam de verdade e ficam). A regex acha a invocação no normalizado.
-// Início de comando e invocação do painel (`node …/painel.mjs` ou o `painel` do bin/ do plugin): hooks-crewai-comum.mjs.
-// Limite declarado: caminho montado por variável (`node "$P" …`); JSON multilinha fora de aspas; atribuição com valor entre aspas e
-// espaço (`FOO="a b" node …`); outros prefixos (`sudo`, `xargs`, `bash -c "…"`); heredoc dentro de string.
-export function semHeredoc(c) {
-  const linhas = String(c).split('\n'); const saida = []; const fila = []; // delimitadores pendentes, em ordem: `cat <<A; cat <<B`
-  for (const l of linhas) {
-    if (fila.length) { if (l.trim() === fila[0]) fila.shift(); continue; }
-    saida.push(l);
-    for (const m of l.matchAll(/(?<!<)<<(?!<)-?\s*(['"]?)(\w+)\1/g)) fila.push(m[2]);
-  }
-  return saida.join('\n');
-}
-export function separadoresDeAspasNeutros(c) {
-  let aspa = null; let o = '';
-  for (let k = 0; k < c.length; k++) {
-    const ch = c[k];
-    if (aspa === null) {
-      if (ch === '\\') { o += ch + (c[k + 1] ?? ''); k++; continue; }
-      if (ch === "'" || ch === '"') aspa = ch;
-      o += ch; continue;
-    }
-    if (ch === aspa) { aspa = null; o += ch; continue; }
-    if (aspa === '"' && ch === '\\') { o += ch + (c[k + 1] ?? ''); k++; continue; }
-    const executa = aspa === '"' && (ch === '`' || (ch === '(' && c[k - 1] === '$'));
-    o += !executa && /[;&|(\n`]/.test(ch) ? '_' : ch;
-  }
-  return o;
-}
-const INVOCACAO = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:(?:set|update)\s+sessoes\s+\S+|batch)\s[^\n]*\blivre\b`);
+// A detecção de "declarar livre" (`declarouLivre`) mora em pool-comum.mjs, junto com a normalização do comando.
 const COM_DEL = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+com\s+del\b`);
 const COM_DEL_DE = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+com\s+del\s+\S+\s+["']?(local_[\w-]+)`);
 // O `local_` que o `com del` tira, ou null: sair do item é tirar a PRÓPRIA sessão; tirar a de outra (o dono tirando uma V) não cobra título.
 export const comDelDe = (c) => separadoresDeAspasNeutros(semHeredoc(c)).match(COM_DEL_DE)?.[1] ?? null;
 export const painelComDel = (c) => COM_DEL.test(separadoresDeAspasNeutros(semHeredoc(c)));
-export const painelLivre = (c) => {
-  const n = separadoresDeAspasNeutros(semHeredoc(c));
-  return INVOCACAO.test(n) && (!/painel(?:\.mjs)?["']?\s+batch\b/.test(n) || /painel(?:\.mjs)?["']?\s+batch\s[^\n]*sessoes/.test(n));
-};
+// F32: o hook escreve pelo `painel.mjs` do próprio plugin (um caminho só para soltar), com prazo e SIGKILL. A pasta do painel segue
+// PAINEL_DIR; sem ela, a pasta pai de FILA_DIR (teste), senão o padrão do script.
+const PAINEL_MJS = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'orquestradora', 'scripts', 'painel.mjs');
+function painelEnv() {
+  const env = { ...process.env };
+  if (!env.PAINEL_DIR && env.FILA_DIR) env.PAINEL_DIR = dirname(env.FILA_DIR);
+  return env;
+}
+function painel(args) {
+  execFileSync('node', [PAINEL_MJS, ...args], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: painelEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
+}
+const msgDe = (e) => String(e?.stderr || e?.message || e).trim().split('\n')[0];
+// Tira a sessão de cada `com` (com `--fez` só para o papel E: quem sai sem entregar não ganha `fez`), solta os itens de que ela é dona
+// e põe a linha dela em `sessoes` como livre (só se a linha já existe). → { falhou: [F…], erros: [texto] }.
+function soltarDoItem(sessionId, reg, itens) {
+  const falhou = []; const erros = [];
+  const papel = membroDoPool(reg?.titulo)?.papel;
+  const local = reg?.localId;
+  for (const F of itens.com) {
+    try { painel(['com', 'del', F, local, ...(papel === 'E' ? ['--fez'] : [])]); registrar(sessionId, HOOK, 'soltou-com', F); }
+    catch (e) { falhou.push(F); erros.push(`com del ${F}: ${msgDe(e)}`); }
+  }
+  for (const F of itensDonosDaSessao(local)) {
+    try { painel(['soltar', F, 'a dona se declarou livre sem soltar']); registrar(sessionId, HOOK, 'soltou-dono', F); }
+    catch (e) { falhou.push(F); erros.push(`soltar ${F}: ${msgDe(e)}`); }
+  }
+  if (!falhou.length) {
+    for (const id of new Set([local, sessionId].filter(Boolean))) {
+      const f = join(painelEnv().PAINEL_DIR || join(process.env.HOME || '', '.claude', 'orquestracao', 'painel'), 'sessoes', `${id}.json`);
+      if (!existsSync(f)) continue;
+      try { painel(['update', 'sessoes', id, JSON.stringify({ estado: 'parada', etapa: 'livre' })]); }
+      catch (e) { erros.push(`sessoes ${id}: ${msgDe(e)}`); registrar(sessionId, HOOK, 'erro-ao-soltar', `sessoes ${id}: ${msgDe(e)}`); }
+    }
+  }
+  return { falhou, erros };
+}
 
 function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
@@ -70,7 +72,7 @@ function main() {
   const inicio = inicioDoTurno(transcript_path);
   if (inicio === null) return;
 
-  let declarou = null; let limpou = false; const tirados = []; let tituloNovo = null; let trocouTitulo = false; let trabalhou = null;
+  let limpou = false; const tirados = []; let trocouTitulo = false; let trabalhou = null;
   for (const l of readFileSync(transcript_path, 'utf8').split('\n')) {
     if (!l) continue;
     let e; try { e = JSON.parse(l); } catch { continue; }
@@ -84,11 +86,11 @@ function main() {
       if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(n)) trabalhou ||= n;
       else if (n === 'Bash' && trabalhoBash(String(i.command || ''))) trabalhou ||= 'git/gate';
       if (n.endsWith('clear_session') && ehSelf(i.session_id)) limpou = true;
-      else if (n.endsWith('set_session_title') && ehSelf(i.session_id) && tituloLivre(i.title)) { declarou = 'título livre'; tituloNovo = i.title; }
-      else if (n === 'Bash' && painelLivre(String(i.command || ''))) declarou ||= 'painel livre';
       if (n === 'Bash') { const t = comDelDe(String(i.command || '')); if (t) tirados.push(t); }
     }
   }
+  const decl = declarouLivre(transcript_path, inicio);
+  const declarou = decl?.como ?? null; const tituloNovo = decl?.tituloNovo ?? null;
   if (!declarou && trabalhou && !trocouTitulo) {
     const reg = registroDaSessao(session_id, { fresco: true });
     const m = membroDoPool(reg?.titulo);
@@ -125,9 +127,12 @@ function main() {
   if (!membroDoPool(tituloNovo) && !membroDoPool(regDecl?.titulo)) return;
   const itens = itensDaSessao(regDecl?.localId);
 
-  // F30, regra 3: declarou-se livre e ainda consta como trabalhando num item.
-  if (itens.com.length) {
-    const lista = itens.com.join(', ');
+  // F32: declarou-se livre e ainda consta como trabalhando num item, ou como dona de item vivo: o hook solta em vez de cobrar.
+  // Se a escrita falhar, volta a bloquear com a mensagem de antes (nunca passa calado).
+  const solto = soltarDoItem(session_id, regDecl, itens);
+  if (solto.falhou.length) {
+    const lista = solto.falhou.join(', ');
+    registrar(session_id, HOOK, 'erro-ao-soltar', solto.erros.join(' | '));
     if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar-com', lista); return; }
     registrar(session_id, HOOK, 'cobrou-com', lista);
     process.stdout.write(JSON.stringify({
@@ -136,9 +141,10 @@ function main() {
     }));
     return;
   }
+  const itensDepois = itensDaSessao(regDecl?.localId);
   if (limpou) return;
   // F30, regra 1 com exceção: no `fez` de item vivo e fora de todo `com`, o contexto serve ao conserto.
-  if (itens.fez.length) { registrar(session_id, HOOK, 'livre-com-contexto', itens.fez.join(',')); return; }
+  if (itensDepois.fez.length) { registrar(session_id, HOOK, 'livre-com-contexto', itensDepois.fez.join(',')); return; }
 
   if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar', declarou); return; }
   registrar(session_id, HOOK, 'cobrou', declarou);

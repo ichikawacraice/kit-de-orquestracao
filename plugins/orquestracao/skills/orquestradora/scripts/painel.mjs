@@ -13,6 +13,8 @@
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_> [--fez]   tira a sessão do `com`; --fez a registra em `fez` (quem executou)
+//   painel.mjs soltar <F> "<motivo>"   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo
+//   painel.mjs list fila vencidos [--min N]   itens vivos com dono ou `com`, sem `espera` nem `trava`, parados há mais de N min (padrão 30 ou PAINEL_PRAZO_MIN)
 //   (`com` e `fez` só mudam por `com add|del [--fez]`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
 //   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
@@ -585,6 +587,42 @@ function comandoCom(args) {
   });
 }
 
+// `soltar <F> "<motivo>"`: o único caminho para devolver um item à fila sem dono (hook de Stop e ritual da orquestradora).
+// Grava pela via do `com` (zera o `com`) dentro da trava; não registra `fez`.
+function comandoSoltar(args) {
+  const [F, motivo, ...sobra] = args;
+  if (!ID.test(String(F))) throw new Error(`soltar: id de item inválido "${F}"`);
+  if (sobra.length) throw new Error('uso: painel.mjs soltar <F> "<motivo>" (o motivo vai entre aspas)');
+  if (!textoNaoVazio(motivo)) throw new Error('soltar: falta o "<motivo>" (vira o `agora` do item)');
+  const citado = motivo.match(CITA_NUMERO);
+  if (citado) throw new Error(`soltar: o motivo não cita item nem PR ("${citado[0]}"); o pane já mostra o número`);
+  return comTrava(() => {
+    const atual = ler('fila', F);
+    if (!atual) throw new Error(`fila/${F} não existe`);
+    if (ETAPAS_FINAIS.has(atual.data?.etapa)) throw new Error(`soltar: ${F} está em etapa final (${atual.data.etapa}); não há o que soltar`);
+    const data = { donoLocalId: null, donoApelido: null, com: [], agora: motivo };
+    return efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
+  });
+}
+
+// `list fila vencidos`: vivo, com dono ou `com`, sem `espera` nem `trava` (quem espera o operador ou o gate está parado de propósito)
+// e com `atualizadoEm` mais velho que o prazo. Sem `atualizadoEm` legível vale como vencido: não há prova de que alguém gravou.
+function ehVencido(d, limiteMs, agora) {
+  const vivo = ETAPAS.includes(d?.etapa) ? !ETAPAS_FINAIS.has(d.etapa) : d?.estado === 'em-andamento';
+  if (!vivo) return false;
+  const comDono = textoNaoVazio(d.donoLocalId) || textoNaoVazio(d.donoApelido) || (Array.isArray(d.com) && d.com.length > 0);
+  if (!comDono || d.espera || d.trava) return false;
+  const t = Date.parse(d.atualizadoEm);
+  return Number.isNaN(t) || agora - t > limiteMs;
+}
+function prazoEmMin(resto) {
+  const i = resto.indexOf('--min');
+  const bruto = i >= 0 ? String(resto.splice(i, 2)[1] ?? '') : process.env.PAINEL_PRAZO_MIN;
+  if (i < 0 && (bruto === undefined || bruto === '')) return 30;
+  if (!/^[1-9]\d*$/.test(String(bruto))) throw new Error(`--min pede um inteiro positivo (recebi "${bruto}")`);
+  return Number(bruto);
+}
+
 // Todas as ops são validadas (coleção, op, versão) antes de gravar qualquer uma; uma recusada = nada gravado.
 function aplicarLote(ops) {
   return comTrava(() => {
@@ -612,13 +650,14 @@ function main(argv) {
       const projeto = ip >= 0 ? String(resto.splice(ip, 2)[1] ?? '').toLowerCase() : null;
       if (ip >= 0 && !projeto) throw new Error('--projeto pede o nome do projeto');
       const it = resto.indexOf('--todos'); if (it >= 0) resto.splice(it, 1);
+      const prazoMin = a === 'fila' && resto[1] === 'vencidos' ? prazoEmMin(resto) : null;
       const b = resto[1];
       const dir = caminho(a);
       saida = existsSync(dir)
         ? readdirSync(dir)
             .filter((n) => n.endsWith('.json'))
             .map((n) => JSON.parse(readFileSync(join(dir, n), 'utf8')))
-            .filter((d) => !b || filtraPorEstado(a, d.data, b))
+            .filter((d) => (prazoMin !== null ? ehVencido(d.data, prazoMin * 60_000, Date.now()) : !b || filtraPorEstado(a, d.data, b)))
             .filter((d) => !projeto || String(d.data?.projeto ?? '').toLowerCase() === projeto)
         : [];
       break;
@@ -634,6 +673,9 @@ function main(argv) {
     case 'com':
       saida = comandoCom(resto);
       break;
+    case 'soltar':
+      saida = comandoSoltar(resto);
+      break;
     case 'batch': {
       const ops = JSON.parse(a);
       if (!Array.isArray(ops)) throw new Error('batch: esperava uma lista');
@@ -641,7 +683,7 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
   return 0;

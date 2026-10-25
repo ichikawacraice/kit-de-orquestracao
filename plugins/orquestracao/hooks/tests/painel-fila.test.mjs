@@ -839,5 +839,56 @@ caso('F30-1: espera e com validam o formato (motivo fora da lista, oQue com núm
   recusa(painel('update', 'fila', 'F1', JSON.stringify({ fez: [{ localId: LA, apelido: 'E1', oQue: 'a', em: 'ontem' }] })), 'não é data ISO', 'fez.em');
 });
 
+// F32: `soltar` e `list fila vencidos`.
+const agoraMenos = (min) => new Date(Date.now() - min * 60_000).toISOString();
+const dono = { donoLocalId: LA, donoApelido: 'P1' };
+const porCom = (F, extra) => painel('set', 'fila', F, COM({ etapa: 'execucao', ...extra }));
+const ids = (r) => json(r).map((d) => d.id).sort().join(',');
+caso('F32: soltar zera dono e com, grava o agora igual ao motivo, deixa o historico e não cria fez', () => {
+  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'execucao', ...dono }));
+  comAdd('F1', LA, 'E1', 'parte'); comAdd('F1', LB, 'V1', 'valida');
+  const r = painel('soltar', 'F1', 'a dona se declarou livre sem soltar');
+  igual(r.exit, 0, `soltar: exit (${r.err})`);
+  const d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.donoLocalId, undefined, 'donoLocalId'); igual(d.donoApelido, undefined, 'donoApelido');
+  igual(JSON.stringify(d.com), '[]', 'com'); igual(d.fez, undefined, 'sem fez');
+  igual(d.agora, 'a dona se declarou livre sem soltar', 'agora');
+  const ultimo = d.historico[d.historico.length - 1];
+  igual(ultimo.dono, null, 'historico: dono null'); igual(ultimo.etapa, 'execucao', 'historico: etapa');
+});
+caso('F32: soltar recusa item que não existe, etapa final, motivo vazio e motivo com número de item ou PR', () => {
+  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'execucao' })); painel('set', 'fila', 'F2', COM({ etapa: 'feito' }));
+  recusa(painel('soltar', 'F9', 'x'), 'não existe', 'inexistente');
+  recusa(painel('soltar', 'F2', 'x'), 'etapa final', 'feito');
+  recusa(painel('soltar', 'F1', ' '), 'falta o "<motivo>"', 'motivo vazio');
+  recusa(painel('soltar', 'F1'), 'falta o "<motivo>"', 'sem motivo');
+  recusa(painel('soltar', 'F1', 'solta o F12'), 'não cita item nem PR ("F12")', 'F12');
+  recusa(painel('soltar', 'F1', 'por causa do #44'), 'não cita item nem PR ("#44")', 'PR');
+  igual(json(painel('get', 'fila', 'F1')).version, 1, 'nada gravado nas recusas');
+});
+caso('F32: vencidos devolve o parado com dono ou com, e deixa de fora o recente, o com espera, o com trava e o sem ninguém', () => {
+  semear();
+  porCom('F1', { ...dono, atualizadoEm: agoraMenos(90) });                                                     // vencido, dono
+  porCom('F2', { atualizadoEm: agoraMenos(90), com: [] });                                                      // sem dono e com vazio
+  painel('set', 'fila', 'F3', COM({ etapa: 'execucao', ...dono, atualizadoEm: agoraMenos(2) }));               // recente
+  painel('set', 'fila', 'F4', COM({ etapa: 'execucao', ...dono, atualizadoEm: agoraMenos(90), espera: { motivo: 'operador', texto: 'decidir' } }));
+  painel('set', 'fila', 'F5', COM({ etapa: 'execucao', ...dono, atualizadoEm: agoraMenos(90), trava: { motivo: 'outra', texto: 't' } }));
+  painel('set', 'fila', 'F6', COM({ etapa: 'execucao', atualizadoEm: agoraMenos(90) }));                        // vencido, só com
+  comAdd('F6', LB, 'E2', 'parte');
+  painel('update', 'fila', 'F6', JSON.stringify({ atualizadoEm: agoraMenos(90) }));
+  painel('set', 'fila', 'F7', COM({ etapa: 'feito', atualizadoEm: agoraMenos(90) }));                           // final
+  const r = painel('list', 'fila', 'vencidos');
+  igual(r.exit, 0, `exit (${r.err})`);
+  igual(ids(r), 'F1,F6', 'vencidos');
+  igual(ids(painel('list', 'fila', 'vencidos', '--min', '1')), 'F1,F3,F6', 'com --min 1 o recente também vence');
+  igual(ids(painel('list', 'fila', 'vencidos', '--min', '200')), '', '--min 200 não acha nada');
+  igual(ids(run('node', [join(SCRIPTS, 'painel.mjs'), 'list', 'fila', 'vencidos'], { PAINEL_PRAZO_MIN: '1' })), 'F1,F3,F6', 'PAINEL_PRAZO_MIN vale');
+});
+caso('F32: vencidos recusa --min que não é inteiro positivo', () => {
+  semear();
+  for (const v of ['0', '-3', 'x', '1.5', '']) recusa(painel('list', 'fila', 'vencidos', '--min', v), '--min pede um inteiro positivo', `--min ${v}`);
+  recusa(painel('list', 'fila', 'vencidos', '--min'), '--min pede um inteiro positivo', '--min sem valor');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;
