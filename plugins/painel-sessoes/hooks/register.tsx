@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { papelDe as papelDeDesenho, anteriorSvg, desde, fileteSvg, itemSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, seloDaEspera, textoDaTrava } from './desenho'
+import { papelDe as papelDeDesenho, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, secaoSvg, seloDaEspera, textoDaTrava } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -227,29 +227,18 @@ export function contarSecoes(itens: LinhaItem[], perguntas: PerguntaAberta[]): {
 
 /**
  * As quatro listas, nesta ordem: esperam, travados, executando e fila (o tema vai como campo do item, não como grupo; a
- * ordem dos temas segue `temas.json`). `andando`, `filaPorTema`, `emSessao` e `naFila` são o formato de antes, que o
- * desenho atual ainda lê; saem quando o desenho passar às quatro listas.
+ * ordem dos temas segue `temas.json`), mais os feitos nas últimas 24 h.
  */
 export function secoes(itens: LinhaItem[], temas: Tema[]) {
   const planas = (lista: LinhaItem[], ordenar: (a: LinhaItem, b: LinhaItem) => number) => porTema(lista, temas, ordenar).flatMap(g => g.itens)
-  const esperam = planas(itens.filter(esperaOperadorSemPergunta), maisAntigoPrimeiro)
-  const travados = planas(itens.filter(i => i.situacao === 'travado'), pelaOrdemDoId)
-  const executando = planas(itens.filter(i => i.situacao === 'andando' && !esperaOperadorSemPergunta(i)), pelaOrdemDoId)
-  const naFilaPlana = planas(itens.filter(i => i.situacao === 'fila' && !esperaOperadorSemPergunta(i)), maisAntigoPrimeiro)
-  const andando = porTema(itens.filter(i => i.situacao === 'andando'), temas, pelaOrdemDoId)
-  const filaPorTema = porTema(itens.filter(i => i.situacao === 'fila'), temas, maisAntigoPrimeiro)
   const feitos = itens.filter(i => i.situacao === 'feito').sort((a, b) => (Date.parse(b.feitoEm ?? '') || 0) - (Date.parse(a.feitoEm ?? '') || 0))
 
   return {
-    esperam,
-    travados,
-    executando,
-    fila: naFilaPlana,
+    esperam: planas(itens.filter(esperaOperadorSemPergunta), maisAntigoPrimeiro),
+    travados: planas(itens.filter(i => i.situacao === 'travado'), pelaOrdemDoId),
+    executando: planas(itens.filter(i => i.situacao === 'andando' && !esperaOperadorSemPergunta(i)), pelaOrdemDoId),
+    fila: planas(itens.filter(i => i.situacao === 'fila' && !esperaOperadorSemPergunta(i)), maisAntigoPrimeiro),
     feitos,
-    andando,
-    filaPorTema,
-    emSessao: travados.length + andando.reduce((n, g) => n + g.itens.length, 0),
-    naFila: filaPorTema.reduce((n, g) => n + g.itens.length, 0),
   }
 }
 
@@ -269,6 +258,14 @@ export function situacaoDe(localId: string, vivas: Vivo[], self: Vivo | undefine
   if (!quanto) return undefined
 
   return quanto === 'agora' ? 'parada há menos de 1 min' : `parada ${quanto}`
+}
+
+/** As sessões vivas do item (as de `com` que seguem na lista; sem elas, o dono que não está sem ninguém). */
+const pessoasVivas = (i: LinhaItem): Array<{ localId: string }> => {
+  const vivos = (i.com ?? []).filter(c => c.vivo !== false)
+  if (vivos.length > 0) return vivos
+
+  return i.dono && i.trava?.motivo !== 'sem-ninguem' ? [i.dono] : []
 }
 
 /** A leitura parou de renovar: a última tem mais de 180 s. Sem leitura nenhuma ainda, não está parada, está começando. */
@@ -334,9 +331,10 @@ const respondendo = new Set<string>()
  * Responde uma pergunta pelo painel (Q67): grava `resposta` e `estado:
  * respondida`, presa à versão lida, para não sobrescrever quem respondeu antes.
  */
-async function responder($: EngineInterface, q: PerguntaAberta, resposta: string): Promise<void> {
+async function responder($: EngineInterface, q: PerguntaAberta, resposta: string, opcao: string): Promise<void> {
   if (respondendo.has(q.id) || !resposta.trim()) return
   respondendo.add(q.id)
+  await update($, enviando, () => ({ q: q.id, opcao }))
   try {
     const agora = new Date(await $.clock.now()).toISOString()
     if (!pastaLida) throw new Error('a pasta do painel ainda não foi lida')
@@ -349,11 +347,13 @@ async function responder($: EngineInterface, q: PerguntaAberta, resposta: string
     const data = { ...atual.data, estado: 'respondida', resposta: resposta.trim(), atualizadoEm: agora }
     await $.fs.write(arquivo, `${JSON.stringify({ id: q.id, version: (atual.version ?? 0) + 1, data }, null, 2)}\n`)
     await update($, respondendoEm, atual => (atual === q.id ? null : atual))
-    entregar($, q, resposta.trim())
+    // "Enviando…" dura até a sessão de fora responder ao send_message; o prompt da própria sessão não se espera.
+    await entregar($, q, resposta.trim())
   } catch (err) {
     await avisar($, `${q.id} não gravada: ${mensagem(err)}`)
   } finally {
     respondendo.delete(q.id)
+    await update($, enviando, atual => (atual?.q === q.id ? null : atual))
   }
   await atualizar($)
 }
@@ -369,14 +369,14 @@ const naoChegou = ($: EngineInterface, q: PerguntaAberta, motivo: string) =>
 /**
  * Leva a resposta ao modelo da sessão dona. Outra sessão: send_message. A
  * própria (o painel aberto nela): um prompt desta sessão, que entra quando ela
- * fica livre — por isso não se espera por ele. Falha vira erro no pane.
+ * fica livre — por isso não se espera por ele. Falha vira erro no pane. O que se espera (send_message) a devolução cobre.
  */
-function entregar($: EngineInterface, q: PerguntaAberta, resposta: string): void {
+function entregar($: EngineInterface, q: PerguntaAberta, resposta: string): Promise<void> {
   const texto = `${q.id} — resposta do operador pelo painel: ${resposta}. A pergunta já está como respondida no painel.`
   if (!q.sessaoId) {
     void naoChegou($, q, 'a pergunta não tem sessaoId')
 
-    return
+    return Promise.resolve()
   }
   if (q.propria) {
     void $.prompt.submit({ text: texto }).then(
@@ -387,9 +387,10 @@ function entregar($: EngineInterface, q: PerguntaAberta, resposta: string): void
       err => naoChegou($, q, mensagem(err)),
     ).catch(() => {})
 
-    return
+    return Promise.resolve()
   }
-  void $.tool
+
+  return $.tool
     .call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: q.sessaoId, message: texto })
     .then(
       envio => {
@@ -398,6 +399,7 @@ function entregar($: EngineInterface, q: PerguntaAberta, resposta: string): void
       },
       err => naoChegou($, q, mensagem(err)),
     )
+    .then(() => undefined)
     .catch(() => {})
 }
 
@@ -415,11 +417,14 @@ async function abrirSessao($: EngineInterface, dono: NonNullable<LinhaItem['dono
       $.ui.toast(`não deu para abrir ${dono.apelido} nem copiar o endereço: ${mensagem(err)}`)
     }
   }
+  await update($, abrindo, () => dono.localId)
   try {
     const r = await $.tool.call({ tool: 'mcp__ccd_window__open_session_in', session_id: dono.localId, target: 'focus' })
     if (r.deny !== undefined || r.isError) await naoDeu(r.deny || r.text || 'erro sem texto')
   } catch (err) {
     await naoDeu(mensagem(err))
+  } finally {
+    await update($, abrindo, atual => (atual === dono.localId ? null : atual))
   }
 }
 
@@ -575,6 +580,8 @@ async function ler($: EngineInterface): Promise<void> {
     temas,
     perguntas,
     anteriores,
+    sessoes: vivas.map(({ sessionId, isRunning, lastActivityAt }) => ({ sessionId, isRunning, lastActivityAt })),
+    semLista: !(vivasLidas && proprio !== undefined),
   }))
 }
 
@@ -629,7 +636,7 @@ export const register: Register = on => {
         const sec = secoes(l.itens, l.temas)
         const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.apelido).join(', ')}` : ''}`
 
-        return { emSessao: [...sec.travados, ...sec.andando.flatMap(g => g.itens)].map(dizer), naFila: sec.filaPorTema.flatMap(g => g.itens).map(dizer), feitos: sec.feitos.map(dizer) }
+        return { esperam: sec.esperam.map(dizer), travados: sec.travados.map(dizer), executando: sec.executando.map(dizer), fila: sec.fila.map(dizer), feitos: sec.feitos.map(dizer) }
       })(),
     }
     const texto = JSON.stringify({ aberto, panes: await $.ui.panes(), desenhos, lido }, null, 2)
@@ -640,31 +647,39 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elementos = $.ui.resolve(e)
     const { Box, Text, Button } = elementos
-    // "abrir P2": pede ao app que ponha a sessão em foco; o que ele recusar, o botão devolve como endereço copiado.
+    const enviandoAgora = await read($, enviando)
+    const abrindoAgora = await read($, abrindo)
+    // "Abrir P2": pede ao app que ponha a sessão em foco; o que ele recusar, o botão devolve como endereço copiado.
+    // O `Button` não tem `disabled`: enquanto abre, o rótulo vira "Abrindo…" e o clique é ignorado.
     const abrir = (dono: NonNullable<LinhaItem['dono']>) => (
-      <Button key={`abrir:${dono.localId}`} plain dimColor onPress={() => void abrirSessao($, dono, e.surface)}>
-        {`abrir ${dono.apelido}`}
+      <Button
+        key={`abrir:${dono.localId}`}
+        variant="secondary"
+        onPress={() => {
+          if (abrindoAgora !== dono.localId) void abrirSessao($, dono, e.surface)
+        }}
+      >
+        {abrindoAgora === dono.localId ? 'Abrindo…' : `Abrir ${dono.apelido}`}
       </Button>
     )
-    // Um botão por sessão viva do item: as de `com` e o dono, sem repetir quem está nas duas listas.
+    // Um botão por sessão viva do item: as de `com` e o dono, sem repetir quem está nas duas listas; no máximo 3.
     const botoesAbrir = (i: LinhaItem) => {
+      if (i.situacao === 'feito') return []
       const vistos = new Set<string>()
       const quem = [...(i.com ?? []).map(c => ({ apelido: c.apelido, localId: c.localId, link: c.link })), ...(i.dono ? [i.dono] : [])]
 
-      const botoes = quem.flatMap(q => (q.link && !vistos.has(q.localId) ? (vistos.add(q.localId), [abrir(q)]) : []))
-
-      return botoes
+      return quem.flatMap(q => (q.link && !vistos.has(q.localId) ? (vistos.add(q.localId), [abrir(q)]) : [])).slice(0, 3)
     }
     // Campo de texto só onde a superfície tem um; sem ele, a opção "outra" fica sem campo.
     const Input = 'Input' in elementos ? elementos.Input : undefined
     const agora = await $.clock.now()
     desenhos[e.surface] = { placement: e.props.placement, bodyColumns: e.props.bodyColumns, em: hora(agora) }
     const l = await read($, leitura)
-    // O estado da sessão sobrevive ao reload: o de antes desta versão não tem `avisos`.
+    // O estado da sessão sobrevive ao reload: o de antes desta versão não tem `avisos`, `sessoes` nem `semLista`.
     const avisos = l.avisos ?? []
     const sec = secoes(l.itens, l.temas)
     const contagem = contarSecoes(l.itens, l.perguntas)
-    // Quatro seções, cada item contado uma vez: o contador e a pílula leem de `contarSecoes`.
+    // Quatro seções, cada item contado uma vez: o contador, a pílula e a lista leem das mesmas quatro contas.
     const resumo = [
       { n: contagem.esperam, rotulo: 'Esperam você', cor: 'warning' },
       { n: contagem.travados, rotulo: 'Travados', cor: 'error' },
@@ -673,45 +688,43 @@ export const register: Register = on => {
     ]
     const resumo4 = resumo.map(r => ({ ...r, cor: COR_RESUMO[r.cor] ?? 'm' }))
     const lido = l.lidoEm !== null
+    const parada = leituraParada(l.lidoEm, agora)
+    const situacao = (localId: string) => situacaoDe(localId, l.sessoes ?? [], undefined, l.semLista ?? false, agora)
+    const trabalhando = sec.executando.filter(i => pessoasVivas(i).some(p => situacao(p.localId) === 'trabalhando agora')).length
 
     const aberta = await read($, respondendoEm)
     const verVelhas = await read($, verAnteriores)
     const verFeitosAgora = await read($, verFeitos)
 
     // Os botões de uma pergunta: as opções dela (Q67) ou Sim/Não/Adiar/Responder, que vão à sessão que perguntou.
+    // Só o botão pressionado vira "Enviando…"; enquanto a resposta da pergunta está em curso, os irmãos ignoram o clique.
     const acoes = (q: PerguntaAberta) => {
       const proprias = q.opcoes.filter(o => o.id !== 'outra')
       const comCampo = q.opcoes.length === 0 || q.opcoes.some(o => o.id === 'outra')
+      const emCurso = enviandoAgora?.q === q.id
+      const botao = (id: string, label: string, resposta: string, k: number) => (
+        <Button
+          key={`${q.id}:${id}`}
+          variant={k === 0 ? 'primary' : 'secondary'}
+          onPress={() => {
+            if (!emCurso) void responder($, q, resposta, id)
+          }}
+        >
+          {emCurso && enviandoAgora?.opcao === id ? 'Enviando…' : label}
+        </Button>
+      )
 
       return (
         <Box flexDirection="column" gap={1}>
           <Box flexDirection="row" flexWrap="wrap" columnGap={1} alignItems="center">
-            {proprias.length > 0
-              ? proprias.map((o, i) => (
-                  <Button
-                    key={`${q.id}:${o.id}`}
-                    variant={i === 0 ? 'primary' : 'secondary'}
-                    onPress={() => void responder($, q, o.id)}
-                  >
-                    {o.label}
-                  </Button>
-                ))
-              : RAPIDAS.map((r, i) => (
-                  <Button
-                    key={`${q.id}:${r.id}`}
-                    variant={i === 0 ? 'primary' : 'secondary'}
-                    onPress={() => void responder($, q, r.resposta)}
-                  >
-                    {r.label}
-                  </Button>
-                ))}
+            {proprias.length > 0 ? proprias.map((o, k) => botao(o.id, o.label, o.id, k)) : RAPIDAS.map((r, k) => botao(r.id, r.label, r.resposta, k))}
             {Input && comCampo && (
               <Button
                 key={`${q.id}:responder`}
                 variant="secondary"
                 onPress={() => void update($, respondendoEm, atual => (atual === q.id ? null : q.id))}
               >
-                {aberta === q.id ? 'Fechar' : 'Responder'}
+                {aberta === q.id ? 'Fechar' : 'Responder…'}
               </Button>
             )}
           </Box>
@@ -719,137 +732,165 @@ export const register: Register = on => {
             <Input
               key={`${q.id}:outra`}
               placeholder={q.propria ? 'sua resposta, vai para esta sessão…' : 'sua resposta, vai direto para a sessão…'}
-              submitLabel="Enviar"
-              onSubmit={(valor: string) => void responder($, q, valor)}
+              submitLabel={emCurso && enviandoAgora?.opcao === 'outra' ? 'Enviando…' : 'Enviar'}
+              onSubmit={(valor: string) => {
+                if (!emCurso) void responder($, q, valor, 'outra')
+              }}
             />
           )}
         </Box>
       )
     }
 
+    const botaoAtualizar = (rotulo: string, key: string) => (
+      <Button
+        key={key}
+        variant="secondary"
+        onPress={() => {
+          if (!l.lendo) void atualizar($)
+        }}
+      >
+        {l.lendo ? 'Lendo…' : rotulo}
+      </Button>
+    )
     const limparAvisos =
       avisos.length > 0 ? (
-        <Button key="avisos:limpar" plain dimColor onPress={() => void update($, leitura, v => ({ ...v, avisos: [] }))}>
-          ✕ limpar avisos
+        <Button key="avisos:limpar" variant="secondary" onPress={() => void update($, leitura, v => ({ ...v, avisos: [] }))}>
+          Limpar avisos
         </Button>
       ) : null
 
     const botaoAnteriores =
       l.anteriores.length > 0 ? (
-        <Button key="anteriores" plain dimColor onPress={() => void update($, verAnteriores, v => !v)}>
-          {`${verVelhas ? '▾' : '▸'} Perguntas anteriores · ${l.anteriores.length}`}
+        <Button key="anteriores" variant="secondary" onPress={() => void update($, verAnteriores, v => !v)}>
+          {`${verVelhas ? '▾' : '▸'} Perguntas respondidas · ${l.anteriores.length}`}
         </Button>
       ) : null
 
     const botaoFeitos =
       sec.feitos.length > 0 ? (
-        <Button key="feitos" plain dimColor onPress={() => void update($, verFeitos, v => !v)}>
-          {`${verFeitosAgora ? '▾' : '▸'} Feitos (24 h) · ${sec.feitos.length}`}
+        <Button key="feitos" variant="secondary" onPress={() => void update($, verFeitos, v => !v)}>
+          {`${verFeitosAgora ? '▾' : '▸'} Feitos hoje · ${sec.feitos.length}`}
         </Button>
       ) : null
 
     if (e.surface === 'desktop' && 'Svg' in elementos) {
       const { Svg } = elementos
       const W = Math.max(240, Math.min(900, (e.props.bodyColumns || 40) * 8 - 8))
-      const titulo = (t: string) => <Text bold>{t}</Text>
+      // Dentro do `Box round` a borda e o respiro comem 4 colunas (32 px): o desenho do cartão leva essa largura.
+      const Wc = Math.max(200, W - 32)
       const cartaoResumo = resumoSvg(W, resumo4)
-      // O tema é cabeçalho discreto (dimColor, caixa alta curta); o título do bloco é o Text bold, os dois não pesam igual.
-      const cabecalho = (t: string) => <Text dimColor>{t.toUpperCase()}</Text>
-      const desenhar = (i: LinhaItem, noTravados = false) => {
+      const faixa = (f: { titulo: string; n: number; tom: string; legenda?: string; tracejado?: boolean }) => {
+        const r = secaoSvg(W, f)
+
+        return <Svg key={`secao:${f.titulo}`} source={r.source} alt={r.alt} width={W} height={r.height} />
+      }
+      // A moldura é do `Box round`, na cor do tom; o desenho e os botões ficam dentro dela.
+      const cartao = (i: LinhaItem, tom: 'subtle' | 'error' | 'warning') => {
+        const r = cartaoSvg(Wc, i, agora, { situacao })
         const botoes = botoesAbrir(i)
-        // Com botões, o filete que fecha o item vem depois deles: sem isso eles caem na faixa do item seguinte.
-        const linha = itemSvg(W, i, agora, { noTravados, filete: botoes.length === 0 })
-        const filete = fileteSvg(W)
 
         return (
-          <Box key={`item:${i.id}`} flexDirection="column">
-            <Svg source={linha.source} alt={linha.alt} width={W} height={linha.height} />
+          <Box key={`item:${i.id}`} flexDirection="column" borderStyle="round" borderColor={tom} paddingX={1}>
+            <Svg source={r.source} alt={`${i.temaRotulo} — ${r.alt}`} width={Wc} height={r.height} />
             {botoes.length > 0 && (
               <Box flexDirection="row" columnGap={1} flexWrap="wrap">
                 {botoes}
               </Box>
             )}
-            {botoes.length > 0 && <Svg source={filete.source} alt="" width={W} height={filete.height} />}
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
           </Box>
         )
       }
+      const linhaDaFila = (i: LinhaItem) => {
+        const r = filaSvg(W, i, agora)
+
+        return (
+          <Box key={`item:${i.id}`} flexDirection="column">
+            <Svg source={r.source} alt={`${i.temaRotulo} — ${r.alt}`} width={W} height={r.height} />
+            {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
+          </Box>
+        )
+      }
+      const erroLido = l.erros.length > 0 ? faixaSvg(W, { titulo: 'Não consegui ler tudo', detalhe: l.erros.join(' · '), tom: 'er' }) : undefined
+      const avisoLido = avisos.length > 0 ? faixaSvg(W, { titulo: 'Resposta não entregue', detalhe: avisos.join(' · '), tom: 'er' }) : undefined
+      const rodape = fileteSvg(W)
 
       return (
         <Box flexDirection="column" gap={1}>
-          <Svg source={cartaoResumo.source} alt={resumo4.map(r => `${r.n} ${r.rotulo}`).join(', ')} width={W} height={cartaoResumo.height} />
           <Box flexDirection="row" justifyContent="space-between" alignItems="center">
-            <Text dimColor>
-              {l.lendo ? 'lendo…' : l.lidoEm === null ? 'ainda não lido' : `lido às ${hora(l.lidoEm)} · a cada 60 s`}
+            <Text color={parada ? 'error' : undefined} dimColor={!parada}>
+              {l.lendo && !lido ? 'Lendo…' : !lido ? 'ainda não lido' : parada ? `⚠ Parou ${desde(new Date(l.lidoEm as number).toISOString(), agora) ?? 'há pouco'}` : `Atualizado ${hora(l.lidoEm as number).slice(0, 5)}`}
             </Text>
-            <Button key="atualizar" plain dimColor onPress={() => void atualizar($)}>
-              ↻ Atualizar
-            </Button>
+            {botaoAtualizar('↻ Atualizar', 'atualizar')}
           </Box>
+          <Svg source={cartaoResumo.source} alt={resumo4.map(r => `${r.n} ${r.rotulo}`).join(', ')} width={W} height={cartaoResumo.height} />
 
-          {[...avisos, ...l.erros].map(err => (
-            <Text color="error" wrap="wrap">
-              ⚠ {err}
-            </Text>
-          ))}
-          {limparAvisos}
-
-          {l.perguntas.length > 0 && (
+          {erroLido && (
             <Box flexDirection="column" gap={1}>
-              {titulo(`Perguntas abertas · ${l.perguntas.length}`)}
+              <Svg source={erroLido.source} alt={erroLido.alt} width={W} height={erroLido.height} />
+              {botaoAtualizar('Tentar de novo', 'tentar')}
+            </Box>
+          )}
+          {avisoLido && (
+            <Box flexDirection="column" gap={1}>
+              <Svg source={avisoLido.source} alt={avisoLido.alt} width={W} height={avisoLido.height} />
+              {limparAvisos}
+            </Box>
+          )}
+
+          {contagem.esperam > 0 && (
+            <Box flexDirection="column" gap={1}>
+              {faixa({ titulo: 'Esperam você', n: contagem.esperam, tom: 'av', legenda: 'responda aqui' })}
               {l.perguntas.map(q => {
                 const card = perguntaSvg(W, q)
 
                 return (
-                  <Box flexDirection="column" gap={1} paddingBottom={1}>
+                  <Box key={`pergunta:${q.id}`} flexDirection="column" gap={1} paddingBottom={1}>
                     <Svg
-                      key={`pergunta:${q.id}`}
                       source={card.source}
                       alt={[`${q.id} · ${q.rotulo ?? q.sessao} · ${q.titulo}`, q.caso, q.seNaoDecidir && `Se não decidir: ${q.seNaoDecidir}`, q.recomendacao && `Recomendo: ${q.recomendacao}`].filter(Boolean).join(' — ')}
                       width={W}
                       height={card.height}
                     />
-                    {q.sessaoId && q.link && abrir({ apelido: q.sessao, localId: q.sessaoId, link: q.link })}
+                    {q.sessaoId && q.link && <Box flexDirection="row">{abrir({ apelido: q.sessao, localId: q.sessaoId, link: q.link })}</Box>}
                     {acoes(q)}
                   </Box>
                 )
               })}
+              {sec.esperam.map(i => cartao(i, 'warning'))}
             </Box>
           )}
-
-          {lido && (
+          {lido && sec.travados.length > 0 && (
             <Box flexDirection="column" gap={1}>
-              {titulo(`Em sessão · ${sec.emSessao}`)}
-              {sec.emSessao === 0 && <Text dimColor>Nada em sessão agora.</Text>}
-              {sec.travados.length > 0 && (
-                <Box flexDirection="column" gap={1}>
-                  {cabecalho('Travados')}
-                  {sec.travados.map(i => desenhar(i, true))}
-                </Box>
-              )}
-              {sec.andando.map(g => (
-                <Box key={`andando:${g.id}`} flexDirection="column" gap={1}>
-                  {cabecalho(g.rotulo)}
-                  {g.itens.map(i => desenhar(i))}
-                </Box>
-              ))}
+              {faixa({ titulo: 'Travados', n: contagem.travados, tom: 'er', legenda: 'pedem alguém agir' })}
+              {sec.travados.map(i => cartao(i, 'error'))}
             </Box>
           )}
           {lido && (
             <Box flexDirection="column" gap={1}>
-              {titulo(`Na fila · ${sec.naFila}`)}
-              {sec.naFila === 0 && <Text dimColor>Nada na fila.</Text>}
-              {sec.filaPorTema.map(g => (
-                <Box key={`fila:${g.id}`} flexDirection="column" gap={1}>
-                  {cabecalho(g.rotulo)}
-                  {g.itens.map(i => desenhar(i))}
-                </Box>
-              ))}
+              {faixa({ titulo: 'Executando', n: contagem.executando, tom: 'an', legenda: trabalhando > 0 ? `${trabalhando} trabalhando` : undefined })}
+              {contagem.executando === 0 && <Text dimColor>Nada executando agora.</Text>}
+              {sec.executando.map(i => cartao(i, 'subtle'))}
             </Box>
           )}
-          {botaoFeitos}
-          {verFeitosAgora && sec.feitos.map(i => desenhar(i))}
-          {botaoAnteriores}
+          {lido && (
+            <Box flexDirection="column" gap={1}>
+              {faixa({ titulo: 'Na fila', n: contagem.fila, tom: 'm', legenda: 'não começaram', tracejado: true })}
+              {contagem.fila === 0 && <Text dimColor>Nada na fila.</Text>}
+              {sec.fila.map(i => linhaDaFila(i))}
+            </Box>
+          )}
+          {(botaoFeitos || botaoAnteriores) && (
+            <Box flexDirection="column" gap={1}>
+              <Svg source={rodape.source} alt="" width={W} height={rodape.height} />
+              <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+                {botaoFeitos}
+                {botaoAnteriores}
+              </Box>
+            </Box>
+          )}
+          {verFeitosAgora && sec.feitos.map(i => cartao(i, 'subtle'))}
           {verVelhas &&
             l.anteriores.map(a => {
               const linha = anteriorSvg(W, a, agora)
@@ -860,13 +901,13 @@ export const register: Register = on => {
       )
     }
 
-    // Cada item em duas linhas: título e "etapa · dono · #PR"; a trava e o aviso de contrato logo abaixo.
-    const linhaItem = (i: LinhaItem, noTravados = false) => {
+    // Cada item em duas linhas: título e "etapa · tema · dono · #PR"; a trava e o aviso de contrato logo abaixo.
+    const linhaItem = (i: LinhaItem) => {
       const cor = i.situacao === 'travado' ? 'error' : i.situacao === 'fila' ? 'inactive' : (COR_ETAPA_TERMINAL[i.etapa] ?? 'inactive')
       const etapa = ROTULO_ETAPA_TERMINAL[i.etapa] ?? i.etapa
       const info = [
         i.situacao === 'fila' ? `espera ${etapa}` : etapa,
-        noTravados ? i.temaRotulo : undefined,
+        i.temaRotulo,
         i.perguntas[0] ? `aguarda você · ${i.perguntas[0]}` : undefined,
         seloDaEspera(i),
         ...quemDoItem(i).map(q => q.t),
@@ -890,6 +931,7 @@ export const register: Register = on => {
         </Box>
       )
     }
+    const tituloDaSecao = (t: string, n: number, cor: string) => <Text bold color={cor}>{`${t} · ${n}`}</Text>
 
     return (
       <Box flexDirection="column" gap={1} paddingX={1}>
@@ -903,9 +945,7 @@ export const register: Register = on => {
               </Text>
             ))}
           </Box>
-          <Button key="atualizar" plain dimColor onPress={() => void atualizar($)}>
-            {l.lendo ? 'lendo…' : l.lidoEm === null ? '↻ ler' : `↻ ${hora(l.lidoEm)}`}
-          </Button>
+          {botaoAtualizar(parada ? '⚠ ler' : l.lidoEm === null ? '↻ ler' : `↻ ${hora(l.lidoEm)}`, 'atualizar')}
         </Box>
 
         {avisos.length + l.erros.length > 0 && (
@@ -915,15 +955,16 @@ export const register: Register = on => {
                 ⚠ {err}
               </Text>
             ))}
-            {limparAvisos}
+            <Box flexDirection="row" columnGap={1}>
+              {l.erros.length > 0 && botaoAtualizar('Tentar de novo', 'tentar')}
+              {limparAvisos}
+            </Box>
           </Box>
         )}
 
-        {l.perguntas.length > 0 && (
+        {contagem.esperam > 0 && (
           <Box flexDirection="column" gap={1}>
-            <Text dimColor bold>
-              PERGUNTAS · {String(l.perguntas.length)}
-            </Text>
+            {tituloDaSecao('Esperam você', contagem.esperam, 'warning')}
             {l.perguntas.map(q => (
               <Box
                 key={`pergunta:${q.id}`}
@@ -947,42 +988,36 @@ export const register: Register = on => {
                 {acoes(q)}
               </Box>
             ))}
+            {sec.esperam.map(i => linhaItem(i))}
           </Box>
         )}
-
-        {lido && (
+        {lido && sec.travados.length > 0 && (
           <Box flexDirection="column" gap={1}>
-            <Text bold>{`Em sessão · ${sec.emSessao}`}</Text>
-            {sec.emSessao === 0 && <Text dimColor>Nada em sessão agora.</Text>}
-            {sec.travados.length > 0 && (
-              <Box flexDirection="column">
-                <Text dimColor bold>TRAVADOS</Text>
-                {sec.travados.map(i => linhaItem(i, true))}
-              </Box>
-            )}
-            {sec.andando.map(g => (
-              <Box key={`andando:${g.id}`} flexDirection="column">
-                <Text dimColor bold>{g.rotulo.toUpperCase()}</Text>
-                {g.itens.map(i => linhaItem(i))}
-              </Box>
-            ))}
+            {tituloDaSecao('Travados', contagem.travados, 'error')}
+            {sec.travados.map(i => linhaItem(i))}
           </Box>
         )}
         {lido && (
           <Box flexDirection="column" gap={1}>
-            <Text bold>{`Na fila · ${sec.naFila}`}</Text>
-            {sec.naFila === 0 && <Text dimColor>Nada na fila.</Text>}
-            {sec.filaPorTema.map(g => (
-              <Box key={`fila:${g.id}`} flexDirection="column">
-                <Text dimColor bold>{g.rotulo.toUpperCase()}</Text>
-                {g.itens.map(i => linhaItem(i))}
-              </Box>
-            ))}
+            {tituloDaSecao('Executando', contagem.executando, 'suggestion')}
+            {contagem.executando === 0 && <Text dimColor>Nada executando agora.</Text>}
+            {sec.executando.map(i => linhaItem(i))}
           </Box>
         )}
-        {botaoFeitos}
+        {lido && (
+          <Box flexDirection="column" gap={1}>
+            {tituloDaSecao('Na fila', contagem.fila, 'inactive')}
+            {contagem.fila === 0 && <Text dimColor>Nada na fila.</Text>}
+            {sec.fila.map(i => linhaItem(i))}
+          </Box>
+        )}
+        {(botaoFeitos || botaoAnteriores) && (
+          <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+            {botaoFeitos}
+            {botaoAnteriores}
+          </Box>
+        )}
         {verFeitosAgora && sec.feitos.map(i => linhaItem(i))}
-        {botaoAnteriores}
         {verVelhas &&
           l.anteriores.map(a => (
             <Box flexDirection="column">

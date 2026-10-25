@@ -104,6 +104,10 @@ type Opcoes = {
   /** ui.copy: não copiou (o que o app faz sem área de transferência). */
   copiaFalha?: boolean
   semTemas?: boolean
+  /** A pasta deixa de responder (a leitura fica pendurada) quando `.on` vira true: a leitura que não renova. */
+  parar?: { on: boolean }
+  /** send_message e open_session_in só voltam quando esta promessa se resolve: o gesto em curso. */
+  segurar?: Promise<void>
 }
 
 function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {}) {
@@ -142,8 +146,9 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, { projeto: 'izanagi', ...data })))
   if (!opc.semTemas) arquivos.set(`${PASTA}/temas.json`, JSON.stringify(TEMAS_REAIS))
   const escritas: Escrita[] = []
-  on('fs.list', (_, e) => {
+  on('fs.list', async (_, e) => {
     if (falhaPasta) return { deny: 'sem acesso à pasta do painel' }
+    if (opc.parar?.on) await new Promise(() => undefined)
     const prefixo = `${e.path}/`
     const value = [...arquivos.keys()]
       .filter(k => k.startsWith(prefixo))
@@ -172,8 +177,9 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
     prompts.push(e.text)
     return { text: e.text }
   })
-  on('tool.call', (_, e) => {
+  on('tool.call', async (_, e) => {
     const input = e as unknown as Escrita
+    if (opc.segurar && (e.tool === 'mcp__ccd_session_mgmt__send_message' || e.tool === 'mcp__ccd_window__open_session_in')) await opc.segurar
     if (e.tool === 'mcp__ccd_session_mgmt__send_message') {
       if (falhas.envio) return { result: {}, text: falhas.envio, isError: true }
       enviadas.push(input)
@@ -241,7 +247,7 @@ test('ainda não lido: contadores sem bloco nenhum', async ($, on) => {
     const ui = await $.ui.mount({ ...PANE, surface })
     const lido = await lerSuperficie(ui)
     expect(lido).toMatch(/ainda não lido/)
-    expect(lido).not.toMatch(/Em sessão|Na fila · /)
+    expect(lido).not.toMatch(/Executando · |Na fila · /)
     await ui.unmount()
   }
 })
@@ -249,21 +255,21 @@ test('ainda não lido: contadores sem bloco nenhum', async ($, on) => {
 test('vazio: os dois blocos dizem que leram e não acharam, e os contadores ficam em zero', async ($, on) => {
   const { lido } = await lerPane($, on, { fila: {}, perguntas: [] })
   for (const surface of ['terminal', 'desktop'] as const) {
-    expect(lido[surface]).toMatch(/Em sessão · 0/)
-    expect(lido[surface]).toMatch(/Nada em sessão agora\./)
+    expect(lido[surface]).toMatch(/Executando · 0/)
+    expect(lido[surface]).toMatch(/Nada executando agora\./)
     expect(lido[surface]).toMatch(/Na fila · 0/)
     expect(lido[surface]).toMatch(/Nada na fila\./)
   }
   expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 0 Executando, 0 Na fila/)
 })
 
-test('só fila: Em sessão vazio, a fila por tema, o mais antigo primeiro', async ($, on) => {
+test('só fila: Executando vazio, a fila por tema, o mais antigo primeiro', async ($, on) => {
   const { lido, escritas } = await lerPane($, on, { fila: fila('F8', 'F17', 'F18'), vivas: vivasDe() })
   for (const surface of ['terminal', 'desktop'] as const) {
-    expect(lido[surface]).toMatch(/Em sessão · 0/)
-    expect(lido[surface]).toMatch(/Nada em sessão agora\./)
+    expect(lido[surface]).toMatch(/Executando · 0/)
+    expect(lido[surface]).toMatch(/Nada executando agora\./)
     expect(lido[surface]).toMatch(/Na fila · 3/)
-    expect(lido[surface]).toMatch(/EDITOR DA LOJA/)
+    expect(lido[surface]).toMatch(/Editor da loja/)
     antes(lido[surface], /aviso de leitura/, /comCodigo/)
     antes(lido[surface], /comCodigo/, /painel do componente da loja/)
   }
@@ -278,27 +284,27 @@ test('só fila: Em sessão vazio, a fila por tema, o mais antigo primeiro', asyn
 test('andando: temas na ordem de temas.json, com etapa, dono, PR e o que vem depois', async ($, on) => {
   const { lido } = await lerPane($, on, { fila: fila('F27', 'F13', 'F1', 'F23'), vivas: vivasDe(P7, P2, P1, E8), perguntas: [] })
   for (const surface of ['terminal', 'desktop'] as const) {
-    expect(lido[surface]).toMatch(/Em sessão · 4/)
+    expect(lido[surface]).toMatch(/Executando · 4/)
     expect(lido[surface]).toMatch(/Na fila · 0/)
-    antes(lido[surface], /EDITOR DA LOJA/, /SESSÕES E PAINEL/)
-    antes(lido[surface], /SESSÕES E PAINEL/, /KIT DE ORQUESTRAÇÃO/)
-    expect(lido[surface]).toMatch(/execução · P2 · #1129/)
-    expect(lido[surface]).not.toMatch(/TRAVADOS/)
+    antes(lido[surface], /Editor da loja/, /Sessões e painel/)
+    antes(lido[surface], /Sessões e painel/, /Kit de orquestração/)
+    expect(lido[surface]).toMatch(/execução · .*#1129/)
+    expect(lido[surface]).not.toMatch(/Travados · /)
   }
   expect(lido.desktop).toMatch(/depois: validação das duas fatias \(\+2\)/)
   expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 4 Executando, 0 Na fila/)
 })
 
-test('travado: abre Em sessão, com o tema na linha 2 e a trava inteira', async ($, on) => {
+test('travado: vai para Travados, com o tema na linha 2 e a trava inteira', async ($, on) => {
   const travada = { ...FILA_REAL.F13, trava: { motivo: 'gate-vermelho', texto: 'três casos do diálogo falham' } }
   const { lido } = await lerPane($, on, { fila: { ...fila('F1', 'F27'), F13: travada }, vivas: vivasDe(P7, P2, P1), perguntas: [] })
   for (const surface of ['terminal', 'desktop'] as const) {
-    expect(lido[surface]).toMatch(/Em sessão · 3/)
-    antes(lido[surface], /TRAVADOS/, /SPEC-155 fatia 2/)
-    antes(lido[surface], /SPEC-155 fatia 2/, /EDITOR DA LOJA/)
-    expect(lido[surface]).toMatch(/Trava \(gate-vermelho\): três casos do diálogo falham/)
+    expect(lido[surface]).toMatch(/Executando · 2/)
+    antes(lido[surface], /Travados · 1/, /SPEC-155 fatia 2/)
+    expect(lido[surface]).toMatch(/Editor da loja/)
+    expect(lido[surface]).toMatch(/(Trava \()?[Gg]ate-vermelho\)?: três casos do diálogo falham/)
   }
-  expect(lido.desktop).toMatch(/execução · Editor da loja · P2 · #1129/)
+  expect(lido.desktop).toMatch(/Editor da loja — SPEC-155.*execução · #1129/)
   expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 2 Executando, 0 Na fila/)
 })
 
@@ -326,8 +332,8 @@ test('item com pergunta: o selo vem do item e da pergunta, e só de pergunta abe
 test('sem ninguém: dono que não está na lista vira trava, com a mesma contagem', async ($, on) => {
   const { lido } = await lerPane($, on, { fila: fila('F23', 'F13'), vivas: vivasDe(P2), perguntas: [] })
   for (const surface of ['terminal', 'desktop'] as const) {
-    antes(lido[surface], /TRAVADOS/, /EDITOR DA LOJA/)
-    expect(lido[surface]).toMatch(/Trava \(sem ninguém\): E8 não está mais ativa/)
+    antes(lido[surface], /Travados · 1/, /Editor da loja/)
+    expect(lido[surface]).toMatch(/(Trava \()?[Ss]em ninguém\)?: E8 não está mais ativa/)
     expect(lido[surface]).not.toMatch(/sem-ninguem/)
   }
   expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 1 Executando, 0 Na fila/)
@@ -345,7 +351,7 @@ test('list_sessions que falha: o erro aparece e nenhum item vira "sem ninguém"'
   const { lido } = await lerPane($, on, { fila: fila('F23', 'F13'), listaFalha: true, perguntas: [] })
   for (const surface of ['terminal', 'desktop'] as const) {
     expect(lido[surface]).toMatch(/list_sessions: app fora do ar/)
-    expect(lido[surface]).not.toMatch(/sem-ninguem|TRAVADOS/)
+    expect(lido[surface]).not.toMatch(/sem-ninguem|Travados · /)
   }
   expect(lido.desktop).toMatch(/0 Esperam você, 0 Travados, 2 Executando, 0 Na fila/)
 })
@@ -363,8 +369,8 @@ test('fora do contrato: o item aparece em "Sem tema", no fim, com o motivo, e fo
   const { lido } = await lerPane($, on, { fila: { F18: etapaVelha, F17: temaVelho, F8: FILA_REAL.F8 as Record<string, unknown> }, vivas: vivasDe(), perguntas: [] })
   for (const surface of ['terminal', 'desktop'] as const) {
     expect(lido[surface]).toMatch(/Na fila · 3/)
-    expect(lido[surface]).toMatch(/SEM TEMA/)
-    antes(lido[surface], /EDITOR DA LOJA/, /SEM TEMA/)
+    expect(lido[surface]).toMatch(/Sem tema/)
+    antes(lido[surface], /Editor da loja/, /Sem tema/)
     expect(lido[surface]).toMatch(/⚠ fora do contrato: etapa 'andando' fora da lista/)
     expect(lido[surface]).toMatch(/⚠ fora do contrato: tema 'inexistente' fora da lista/)
     // Aviso de gravação não vai para a lista vermelha do topo, que é de erro de leitura.
@@ -374,8 +380,8 @@ test('fora do contrato: o item aparece em "Sem tema", no fim, com o motivo, e fo
 
 test('sem temas.json: o erro aparece e os itens caem em "Sem tema"', async ($, on) => {
   const { lido } = await lerPane($, on, { fila: fila('F8'), vivas: vivasDe(), perguntas: [], semTemas: true })
-  expect(lido.desktop).toMatch(/⚠ temas do painel: /)
-  expect(lido.desktop).toMatch(/SEM TEMA/)
+  expect(lido.desktop).toMatch(/temas do painel: /)
+  expect(lido.desktop).toMatch(/Sem tema/)
   expect(lido.desktop).toMatch(/fora do contrato: tema 'editor' fora da lista/)
 })
 
@@ -388,7 +394,7 @@ test('feitos: só nas últimas 24 h, recolhidos, e o botão abre', async ($, on)
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     const fechado = await lerSuperficie(ui)
-    expect(fechado).toMatch(/Feitos \(24 h\) · 1/)
+    expect(fechado).toMatch(/Feitos hoje · 1/)
     expect(fechado).not.toMatch(/executora que termina o turno/)
     await ui.press({ key: 'feitos' })
     const aberto = await lerSuperficie(ui)
@@ -449,7 +455,7 @@ test('o botão da opção grava a resposta presa à versão lida', async ($, on)
   expect(primeira.data).toMatchObject({ estado: 'respondida', resposta: 'b', atualizadoEm: '2026-10-23T12:00:00.000Z', titulo: 'qual caminho' })
   // Respondida, ela sai das abertas e entra nas anteriores.
   const lido = (await ui.findAll({})).map(el => String(el.props.alt ?? el.text)).join('\n')
-  expect(lido).toMatch(/Perguntas anteriores · 2/)
+  expect(lido).toMatch(/Perguntas respondidas · 2/)
   expect(await ui.find({ key: 'Q7:b' })).toBeUndefined()
   await ui.unmount()
 })
@@ -461,7 +467,7 @@ test('erro de leitura aparece no pane, nunca lista vazia calada', async ($, on) 
   await relogio.settle()
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /sessoes do painel/ }))?.text).toContain('sem acesso à pasta do painel')
+  expect(await lerSuperficie(ui)).toContain('sem acesso à pasta do painel')
   await ui.unmount()
 })
 
@@ -832,7 +838,7 @@ test('com: duas sessões vivas aparecem na linha 2 e cada uma ganha o seu "abrir
   for (const id of [P2, E8, P7]) expect(await ui.find({ key: `abrir:${id}` }), `botão de ${id}`).toBeDefined()
   expect(await ui.findAll({ key: `abrir:${P2}` }), 'um botão só por sessão').toHaveLength(1)
   const texto = await lerSuperficie(ui)
-  expect(texto).toMatch(/P2 · E8/)
+  expect(texto).toMatch(/P2, planejadora, trabalhando agora — E8, executora, trabalhando agora/)
   expect(texto, 'com `com` o dono deixa a linha 2').not.toMatch(/execução · P7/)
   await ui.unmount()
 })
@@ -842,7 +848,7 @@ test('com: quem saiu da lista vem cinza com "saiu" depois do PR, sem botão e se
   expect(await ui.find({ key: `abrir:${E8}` }), 'sem botão para quem saiu').toBeUndefined()
   expect(await ui.find({ key: `abrir:${P2}` })).toBeDefined()
   const texto = await lerSuperficie(ui)
-  expect(texto).toMatch(/execução · P2 · E8 saiu/)
+  expect(texto).toMatch(/P2, planejadora, trabalhando agora — E8 saiu/)
   expect(texto, 'sem o ponto do meio, "saiu" não vira um terceiro nome').not.toMatch(/ · saiu/)
   expect(texto).not.toMatch(/Trava \(/)
   await ui.unmount()
@@ -864,7 +870,7 @@ test('espera do operador: selo "espera você" e entra na contagem "Esperam você
   const fila = { F13: { ...FILA_REAL.F13, espera: ESPERA('operador', 'decidir o nome do botão') } }
   const { lido } = await lerPane($, on, { fila, perguntas: [], vivas: vivasDe(P2) })
   for (const surface of ['terminal', 'desktop'] as const) {
-    expect(lido[surface]).toMatch(/espera você/)
+    expect(lido[surface]).toMatch(/espera você/i)
     expect(lido[surface]).toMatch(/decidir o nome do botão/)
     expect(lido[surface], 'a espera não é trava').not.toMatch(/Trava \(/)
   }
@@ -884,7 +890,8 @@ test('espera do operador no item que também tem pergunta aberta conta uma vez s
   const { lido } = await lerPane($, on, { fila, perguntas: [PERGUNTAS[0]!], vivas: vivasDe(P2) })
   expect(lido.desktop).toMatch(/1 Esperam você, 0 Travados, 1 Executando, 0 Na fila/)
   expect(lido.desktop).toMatch(/aguarda você · Q7/)
-  expect(lido.desktop, 'um selo só diz que espera você').not.toMatch(/espera você/)
+  expect(lido.desktop, 'o selo "espera você" não repete o "aguarda você" da pergunta').not.toMatch(/ · espera você/)
+  expect(lido.desktop.match(/Espera você:/g) ?? [], 'o rótulo da espera aparece uma vez só, no texto').toHaveLength(1)
 })
 
 test('o item com espera fica no bloco do tema, não em "Travados"', async ($, on) => {
@@ -1284,4 +1291,97 @@ test('F34-2: o source de cada desenho fica abaixo de 131 072 caracteres, no cen�
   ]
   expect(todos.length, 'há o que somar').toBeGreaterThan(8)
   expect(todos.reduce((n, x) => n + x.length, 0), 'tudo junto').toBeLessThan(131_072)
+})
+
+// F34 fatia 3: a montagem do pane — as quatro seções, o estado dos botões e o que a leitura parada diz.
+test('F34-3: resumo e lista concordam: cada número do resumo é o da seção de mesmo nome', async ($, on) => {
+  const travada = { ...FILA_REAL.F13, trava: { motivo: 'gate-vermelho', texto: 'três casos falham' } }
+  const { lido } = await lerPane($, on, { fila: { ...Object.fromEntries(Object.entries(FILA_REAL).filter(([id]) => id !== 'F8')), F13: travada } as never, vivas: vivasDe(P7, P2, P1, E8) })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const texto = lido[surface]
+    const conta = (rotulo: string) => {
+      const todas = [...texto.matchAll(new RegExp(`${rotulo} · (\\d+)`, 'g'))]
+
+      return todas.length > 0 ? Number(todas[todas.length - 1]![1]) : 0
+    }
+    const secoesN = [conta('Esperam você'), conta('Travados'), conta('Executando'), conta('Na fila')]
+    expect(secoesN.reduce((a, b) => a + b, 0), `${surface}: há o que somar`).toBeGreaterThan(3)
+    expect(secoesN[1], `${surface}: o travado existe`).toBeGreaterThan(0)
+    expect(secoesN[2], `${surface}: Executando e Na fila diferem, para o resumo não trocar um pelo outro`).not.toBe(secoesN[3])
+    if (surface === 'desktop') {
+      const resumo = texto.match(/(\d+) Esperam você, (\d+) Travados, (\d+) Executando, (\d+) Na fila/)
+      expect(resumo, 'o resumo existe').not.toBeNull()
+      expect(resumo!.slice(1).map(Number)).toEqual(secoesN)
+    }
+  }
+})
+
+test('F34-3: item sem ninguém não tem linha "quem" nem botão, e o erro de leitura não cria nenhum', async ($, on) => {
+  const { ui } = await abrirDe({ fila: fila('F23'), vivas: vivasDe(P2) }, $, on)
+  expect(await ui.find({ key: `abrir:${E8}` }), 'sem botão').toBeUndefined()
+  const texto = await lerSuperficie(ui)
+  expect(texto).toMatch(/Sem ninguém: E8 não está mais ativa/)
+  expect(texto, 'sem linha de quem trabalha').not.toMatch(/E8, executora/)
+  await ui.unmount()
+})
+
+test('F34-3: erro de leitura da lista de sessões não cria item "sem ninguém"', async ($, on) => {
+  const { ui } = await abrirDe({ fila: fila('F23'), listaFalha: true }, $, on)
+  const texto = await lerSuperficie(ui)
+  expect(texto, 'o item está lá').toMatch(/kit de orquestração/)
+  expect(texto).not.toMatch(/Sem ninguém/)
+  await ui.unmount()
+})
+
+test('F34-3: leitura parada: depois de 3 minutos sem renovar o pane diz "Parou"', async ($, on) => {
+  const parar = { on: false }
+  const { ui, relogio } = await abrirDe({ parar }, $, on)
+  expect(await lerSuperficie(ui)).toMatch(/Atualizado /)
+  parar.on = true
+  await relogio.advance(181_000)
+  // A tela só recalcula o "há quanto" quando redesenha: o pane de novo é o redesenho.
+  await ui.unmount()
+  const outro = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const texto = await lerSuperficie(outro)
+  expect(texto).toMatch(/⚠ Parou /)
+  expect(texto).not.toMatch(/Atualizado /)
+  await outro.unmount()
+})
+
+test('F34-3: botão em curso: só o pressionado vira "Enviando…" e os irmãos ignoram o clique', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurar = new Promise<void>(res => {
+    soltar = res
+  })
+  const { ui, enviadas, relogio } = await abrirDe({ segurar, fila: {}, vivas: vivasDe(P2), perguntas: PERGUNTAS }, $, on)
+  await ui.press({ key: 'Q8:sim' })
+  await relogio.settle()
+  expect((await ui.findAll({ type: 'Button', text: /Enviando…/ })).map(b => b.props.key ?? b.text), 'um botão só em curso').toHaveLength(1)
+  expect((await ui.find({ key: 'Q8:sim' }))?.text, 'e é o pressionado').toBe('Enviando…')
+  expect(await ui.find({ key: 'Q8:nao' }), 'o irmão segue lá').toBeDefined()
+  await ui.press({ key: 'Q8:nao' })
+  soltar()
+  await relogio.settle()
+  expect(enviadas.map(x => x.message), 'só a primeira resposta saiu').toEqual([expect.stringMatching(/Q8 .*sim/)])
+  expect(await lerSuperficie(ui), 'terminado, o rótulo volta').not.toMatch(/Enviando…/)
+  await ui.unmount()
+})
+
+test('F34-3: "Abrindo…" até o open_session_in voltar', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurar = new Promise<void>(res => {
+    soltar = res
+  })
+  const { ui, abertas, relogio } = await abrirDe({ segurar }, $, on)
+  await ui.press({ key: `abrir:${P7}` })
+  await relogio.settle()
+  const durante = await lerSuperficie(ui)
+  expect(durante).toMatch(/Abrindo…/)
+  expect(durante, 'os outros botões seguem com o nome').toMatch(/Abrir P1/)
+  await ui.press({ key: `abrir:${P7}` })
+  soltar()
+  await relogio.settle()
+  expect(abertas.length, 'o segundo clique foi ignorado').toBe(1)
+  expect(await lerSuperficie(ui)).not.toMatch(/Abrindo…/)
+  await ui.unmount()
 })

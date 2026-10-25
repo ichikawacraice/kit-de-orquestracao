@@ -69,6 +69,9 @@ export type PerguntaAnterior = {
   quando?: string
 }
 
+/** O que o `list_sessions` diz de uma sessão: o bastante para "trabalhando agora" e "parada há X". */
+export type SessaoViva = { sessionId: string; isRunning?: boolean; lastActivityAt?: string }
+
 export type Leitura = {
   lidoEm: number | null
   lendo: boolean
@@ -82,6 +85,10 @@ export type Leitura = {
   perguntas: PerguntaAberta[]
   /** As últimas respondidas e canceladas, da mais nova para a mais velha. */
   anteriores: PerguntaAnterior[]
+  /** As sessões vivas da última leitura (a do próprio pane inclusive). Ausente no estado de antes desta versão. */
+  sessoes?: SessaoViva[]
+  /** A lista de sessões, ou a própria sessão, não veio: a situação de cada sessão é "sem leitura da sessão". */
+  semLista?: boolean
 }
 
 declare module 'claude-code' {
