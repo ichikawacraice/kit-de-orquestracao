@@ -256,3 +256,12 @@ test('V4-5 baixa: o caminho das notas casa sem diferença de maiúscula (macOS)'
   assert.match(decidir('Write', { file_path: '/Users/x/Library/Application Support/Claude/Side-Session-Notes/local_a/n.md', content: conteudo }) ?? '', /github-token/);
   assert.equal(decidir('Write', { file_path: '/Users/x/Developer/proj/side-notes/a.md', content: conteudo }), null);
 });
+
+test('marcadores de exemplo em português não viram segredo (URL com SENHA no lugar da senha)', () => {
+  const urls = ['SENHA', 'senha', 'segredo', 'SUA_SENHA', 'minha-senha', 'senha_do_banco', 'db_senha', 'exemplo', 'troque-aqui', 'substitua', 'preencha'];
+  assert.ok(urls.length > 0);
+  for (const senha of urls) assert.deepEqual(segredosEm('postgres' + `://admin:${senha}@db.exemplo.com:5432/app`), [], `marcador tratado como segredo: ${senha}`);
+  assert.deepEqual(segredosEm('Authorization: Bearer sua_chave_de_acesso_aqui_agora_mesmo'), []);
+  // o que não é marcador continua recusado
+  assert.ok(segredosEm('postgres' + '://admin:s3cr3tPw0rd@db.exemplo.com/app').some((a) => a.padrao === 'url-com-credencial'));
+});
