@@ -376,6 +376,9 @@ function planejar(o, seVersao, vista) {
     if (v === null && op === 'update') delete base[k];
     else base[k] = v;
   }
+  // `set` monta o documento do zero, mas `com` não é de quem o substitui: o gravado fica (só `com add|del` o muda),
+  // e a trava de fechamento abaixo o lê. Sem isto, `set --se-versao` sem o campo apagaria quem trabalha no item.
+  if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.com) && atual.data.com.length) base.com = atual.data.com;
   if ((colecao === 'sessoes' || colecao === 'fila') && !base.projeto && (op === 'set' || !atual)) {
     const { projeto, motivo } = projetoDoCwd();
     if (projeto) base.projeto = projeto;

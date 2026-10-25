@@ -789,6 +789,16 @@ caso('F30-1: fechar o item com com não vazio é recusado; sem com, fecha e apag
   igual(painel('update', 'fila', 'F1', '{"etapa":"feito"}').exit, 0, 'fecha sem com');
   ok(json(painel('get', 'fila', 'F1')).data.espera === undefined, 'a espera foi apagada ao fechar');
 });
+caso('F30-1: set --se-versao sem o campo com preserva o com gravado; fechar por set com com é recusado', () => {
+  semear(); painel('set', 'fila', 'F1', COM()); comAdd('F1', LA, 'E1', 'título'); comAdd('F1', LB, 'V4', 'valida');
+  const v = () => json(painel('get', 'fila', 'F1')).version;
+  igual(painel('set', 'fila', 'F1', COM({ agora: 'x' }), '--se-versao', String(v())).exit, 0, 'set viva passa');
+  const d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.com.length, 2, 'com preservado no set'); igual(d.agora, 'x', 'o set gravou o resto');
+  recusa(painel('set', 'fila', 'F1', COM({ etapa: 'feito' }), '--se-versao', String(v())), 'fecha com sessões trabalhando nele (com: E1', 'set feito com com gravado');
+  const f = json(painel('get', 'fila', 'F1')).data;
+  igual(f.etapa, 'planejamento', 'etapa intacta'); igual(f.com.length, 2, 'com intacto');
+});
 caso('F30-1: espera e com validam o formato (motivo fora da lista, oQue com número, localId repetido, fez.em ruim)', () => {
   semear(); painel('set', 'fila', 'F1', COM());
   recusa(painel('update', 'fila', 'F1', '{"espera":{"motivo":"x","texto":"t"}}'), 'espera.motivo "x" fora da lista', 'motivo x');
