@@ -4,6 +4,7 @@
 //   node scripts/k8/migrar.mjs --home <HOME> --restaurar <pasta-do-backup> [--ensaio]
 // `--ensaio`: HOME de mentira; o skills-manager real não é tocado (o link vira unlink e o undeploy só roda com `--dry-run`).
 // Qualquer etapa que falhe restaura do backup e sai 1. Nada aqui apaga estado do operador (`orquestracao/{painel,fila,…}`).
+// A paridade (primeiro passo) compara o plugin com o `~/.claude` REAL (`KIT_HOME_REAL`, senão o HOME), também no ensaio — não com o `--home` ensaiado.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';

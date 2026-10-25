@@ -120,7 +120,7 @@ export const filaDoArgv = (argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) =
 export const DENTRO = "KIT_GATE_DENTRO";
 
 /** O erro de quem espera a vez de um gate que é seu próprio ancestral: esperar seria para sempre. */
-export const MENSAGEM_DO_LACO = (detalhe) => `[gate] a suíte chama o gate deste mesmo worktree (laço: o gate.comandoCompleto chama o próprio gate${detalhe ? `; ${detalhe}` : ""}) — recusado, sem esperar. Aponte o comando para o script da suíte do projeto.`;
+export const MENSAGEM_DO_LACO = (detalhe, irmao = false) => `[gate] a suíte chama o gate ${irmao ? "de um worktree irmão que espera por ela" : "deste mesmo worktree"} (laço: ${irmao ? "o gate dela ocupa as vagas todas" : "o gate.comandoCompleto chama o próprio gate"}${detalhe ? `; ${detalhe}` : ""}) — recusado, sem esperar. Aponte o comando para o script da suíte do projeto.`;
 
 /**
  * O ambiente do filho que roda a suíte. O conserto leva `KIT_TESTE_WORKERS`
@@ -417,10 +417,16 @@ export async function esperarAVez(base, n, eu, opcoes = {}) {
       acima = ancestraisDe();
       chaveDosAncestrais = chave;
     }
-    const ancestral = (r.mesmoWorktree ? [r.mesmoWorktree] : r.donos).find((d) => d && acima.includes(d.pid));
+    // mesmo worktree: basta o dono ser ancestral. Outro worktree: só quando TODAS as vagas são de ancestrais (se uma é de quem sai logo, esperar basta).
+    const ehAncestral = (d) => d && acima.includes(d.pid);
+    const ancestral = r.mesmoWorktree
+      ? (ehAncestral(r.mesmoWorktree) ? r.mesmoWorktree : undefined)
+      : (r.donos.length > 0 && r.donos.every(ehAncestral) ? r.donos[0] : undefined);
     if (ancestral) {
-      const quemE = r.mesmoWorktree ? "o dono da vez" : `o dono de uma das vagas, de outro worktree (${ancestral.worktree}),`;
-      throw Object.assign(new Error(MENSAGEM_DO_LACO(`${quemE} PID ${ancestral.pid}, é ancestral deste processo`)), { codigo: "LACO" });
+      const detalhe = r.mesmoWorktree
+        ? `o dono da vez, PID ${ancestral.pid}, é ancestral deste processo`
+        : `${r.donos.length === 1 ? "o dono da vaga" : `os donos das ${r.donos.length} vagas`}, de outro worktree (${r.donos.map((d) => d.worktree).join(", ")}), ${r.donos.length === 1 ? "é ancestral" : "são ancestrais"} deste processo`;
+      throw Object.assign(new Error(MENSAGEM_DO_LACO(detalhe, !r.mesmoWorktree)), { codigo: "LACO" });
     }
     if (chave !== ultimaChave) {
       avisar(

@@ -78,16 +78,19 @@ const adotado = (scripts, extras = {}) => {
   return d;
 };
 
-// `d` adotado cuja suíte chama o gate de `irma`, worktree irmão; na `irma` a suíte só imprime.
-async function irmaos() {
-  const irma = join(casa, `irma-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
-  const suite = `echo $$ > suite.pid; case "$PWD" in *irma-*) echo suite-irma;; *) cd "${irma}" && npm test;; esac`;
+// `d` adotado cuja suíte chama o gate de `irma`, worktree irmão; na última irmã a suíte só imprime. Com `cadeia` > 1, cada irmã chama a próxima.
+async function irmaos(cadeia = 1) {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const irmas = Array.from({ length: cadeia }, (_, i) => join(casa, `irma-${id}-${i}`));
+  const ramos = irmas.map((p, i) => (i === cadeia - 1 ? `"${p}") echo suite-irma;;` : `"${p}") cd "${irmas[i + 1]}" && npm test;;`)).join(' ');
+  const suite = `echo $$ > suite.pid; case "$PWD" in ${ramos} *) cd "${irmas[0]}" && npm test;; esac`;
   const d = repo({ 'CLAUDE.md': '# x\n', 'package.json': PACOTE({ test: 'node -e 1', suite }) });
   assert.equal(kit(d, ['adotar', '--trocar-test']).status, 0);
   const kj = json(d, '.claude', 'kit.json'); kj.gate.comandoCompleto = 'npm run suite';
   writeFileSync(join(d, '.claude', 'kit.json'), JSON.stringify(kj, null, 2));
-  git(d, 'add', '-A'); git(d, 'commit', '-qm', 'kit'); git(d, 'worktree', 'add', '-q', irma, '-b', 'irma');
-  return { d, irma };
+  git(d, 'add', '-A'); git(d, 'commit', '-qm', 'kit');
+  irmas.forEach((p, i) => git(d, 'worktree', 'add', '-q', p, '-b', `irma-${i}`));
+  return { d, irma: irmas[0], irmas };
 }
 
 describe('R1 — KIT_GATE_DENTRO leva a raiz do worktree', () => {
@@ -100,12 +103,12 @@ describe('R1 — KIT_GATE_DENTRO leva a raiz do worktree', () => {
     } finally { limpar(a, b); }
   });
   it('N1: gate de worktree irmão, chamado de dentro de uma suíte de verdade (chamada aninhada), roda normal', async () => {
-    const { d, irma } = await irmaos({ KIT_GATE_VAGAS: '2' });
+    const { d, irmas } = await irmaos();
     try {
       const r = await npmTest(d, { KIT_GATE_VAGAS: '2' }, 60000);
       assert.equal(r.status, 0, r.saida);
       assert.match(r.saida, /suite-irma/);
-    } finally { limpar(d, irma); }
+    } finally { limpar(d, ...irmas); }
   });
   it('o mesmo worktree recusa, com a causa real na mensagem', async () => {
     const d = adotado({ test: 'node -e 1' });
@@ -151,7 +154,7 @@ describe('R3/B1 — o teste do laço não deixa órfãos, e a guarda tem sujeito
   it('com a matança do órfão desligada, o órfão EXISTE (a guarda enxerga o que procura)', async () => {
     const d = await adotadoComSuiteQueDorme();
     try {
-      const r = await npmTest(d, undefined, 6000, { matarOrfao: false });
+      const r = await npmTest(d, undefined, 4500, { matarOrfao: false });
       assert.equal(r.signal, 'SIGKILL', `insumo: devia ter sido morto pelo prazo (${r.saida})`);
       const pid = pidDaSuite(d);
       assert.ok(pid > 1, `a suíte não gravou o próprio PID (${r.saida})`);
@@ -163,7 +166,7 @@ describe('R3/B1 — o teste do laço não deixa órfãos, e a guarda tem sujeito
   it('no caminho normal, o órfão morre com o teste', async () => {
     const d = await adotadoComSuiteQueDorme();
     try {
-      const r = await npmTest(d, undefined, 6000);
+      const r = await npmTest(d, undefined, 4500);
       assert.equal(r.signal, 'SIGKILL', `insumo: devia ter sido morto pelo prazo (${r.saida})`);
       const pid = pidDaSuite(d);
       assert.ok(pid > 1, `a suíte não gravou o próprio PID (${r.saida})`);
@@ -174,7 +177,7 @@ describe('R3/B1 — o teste do laço não deixa órfãos, e a guarda tem sujeito
 
 describe('B2 — todas as vagas ocupadas por um ancestral de outro worktree: recusa', () => {
   it('V5b: 1 vaga, gate de worktree irmão chamado de dentro da suíte: exit 2 em menos de 10 s, citando outro worktree', async () => {
-    const { d, irma } = await irmaos();
+    const { d, irmas } = await irmaos();
     try {
       const t0 = Date.now();
       const r = await npmTest(d, { KIT_GATE_VAGAS: '1' }, 30000);
@@ -182,8 +185,10 @@ describe('B2 — todas as vagas ocupadas por um ancestral de outro worktree: rec
       assert.notEqual(r.signal, 'SIGKILL', `travou (${ms} ms): ${r.saida}`);
       assert.equal(r.status, 2, r.saida);
       assert.match(r.saida, /outro worktree/);
+      assert.match(r.saida, /a suíte chama o gate de um worktree irmão que espera por ela/, 'N5: título próprio');
+      assert.doesNotMatch(r.saida, /a suíte chama o gate deste mesmo worktree/, 'N5: a mensagem se contradiz');
       assert.ok(ms < 10000, `${ms} ms`);
-    } finally { limpar(d, irma); }
+    } finally { limpar(d, ...irmas); }
   });
   it('esperarAVez: dono de outro worktree, ancestral, com todas as vagas ocupadas', async () => {
     const trava = join(casa, `b2-${Date.now()}.trava`);
@@ -193,6 +198,52 @@ describe('B2 — todas as vagas ocupadas por um ancestral de outro worktree: rec
       esperarAVez(trava, 1, eu, { avisar() {}, dormir: async () => { if (++voltas > 5) throw new Error('não recusou: continua esperando'); }, ancestraisDe: () => [process.pid] }),
       (e) => e.codigo === 'LACO' && /outro worktree/.test(e.message),
     );
+  });
+});
+
+describe('R1 — com várias vagas, recusa só quando TODAS são de ancestrais', () => {
+  it('2 vagas, uma de ancestral e outra de um processo comum que sai em 3 s: o irmão espera e roda', async () => {
+    const { d, irmas } = await irmaos();
+    const z = spawn('sleep', ['3'], { stdio: 'ignore' });
+    const trava = join(casa, `r1-${Date.now()}.trava`);
+    try {
+      const eu = quemSouEu(RAIZ);
+      writeFileSync(trava, JSON.stringify({ ...eu, pid: z.pid, token: 'z', worktree: '/x/z', venceEm: new Date(Date.now() + 3600000).toISOString() }));
+      const t0 = Date.now();
+      const r = await npmTest(d, { KIT_GATE_VAGAS: '2', KIT_GATE_TRAVA: trava }, 60000);
+      assert.equal(r.status, 0, `${Date.now() - t0} ms: ${r.saida}`);
+      assert.match(r.saida, /suite-irma/);
+      assert.doesNotMatch(r.saida, /recusado/);
+    } finally { z.kill('SIGKILL'); limpar(d, ...irmas); }
+  });
+  it('2 vagas, as duas de ancestrais (cadeia de 2 irmãs): exit 2 em menos de 10 s', async () => {
+    const { d, irmas } = await irmaos(2);
+    try {
+      const t0 = Date.now();
+      const r = await npmTest(d, { KIT_GATE_VAGAS: '2' }, 30000);
+      const ms = Date.now() - t0;
+      assert.notEqual(r.signal, 'SIGKILL', `travou (${ms} ms): ${r.saida}`);
+      assert.equal(r.status, 2, r.saida);
+      assert.match(r.saida, /outro worktree/);
+      assert.ok(ms < 15000, `${ms} ms`);
+    } finally { limpar(d, ...irmas); }
+  });
+  it('esperarAVez: um dono ancestral e outro não → espera; os dois ancestrais → recusa', async () => {
+    const eu = quemSouEu(RAIZ);
+    const vivo2 = spawn('sleep', ['60'], { stdio: 'ignore' });
+    try {
+      const base = join(casa, `r1u-${Date.now()}.trava`);
+      const dono = (pid, token) => JSON.stringify({ ...eu, pid, token, worktree: `/x/${token}`, venceEm: new Date(Date.now() + 3600000).toISOString() });
+      writeFileSync(base, dono(process.pid, 'a')); writeFileSync(`${base}.2`, dono(vivo2.pid, 'b'));
+      let voltas = 0;
+      const vaga = await esperarAVez(base, 2, eu, { avisar() {}, dormir: async () => { if (++voltas === 2) rmSync(`${base}.2`); }, ancestraisDe: () => [process.pid] });
+      assert.equal(vaga, 2); assert.ok(voltas >= 2, `insumo: ${voltas} voltas`);
+      writeFileSync(`${base}.2`, dono(vivo2.pid, 'b'));
+      await assert.rejects(
+        esperarAVez(base, 2, eu, { avisar() {}, dormir: async () => { if (++voltas > 40) throw new Error('não recusou'); }, ancestraisDe: () => [process.pid, vivo2.pid] }),
+        (e) => e.codigo === 'LACO' && /outro worktree/.test(e.message),
+      );
+    } finally { vivo2.kill('SIGKILL'); }
   });
 });
 
