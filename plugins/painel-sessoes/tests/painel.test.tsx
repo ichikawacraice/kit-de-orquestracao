@@ -670,3 +670,14 @@ test('dono em sessão arquivada não conta como vivo', () => {
   const viva = monta([docF('F1', dono)], [{ sessionId: 'local_arq', isArchived: false }])
   expect(viva[0]!.situacao).toBe('andando')
 })
+
+test('palavra comprida na 1ª linha do título quebra depois do hífen, não no meio da letra', () => {
+  const titulo = 'Reconciliação-automática-de-migrations-pendentes em produção'
+  for (const W of [300, 360, 420]) {
+    const r = itemSvg(W, { ...itemBase, titulo, atualizadoEm: new Date(AGORA - 5 * 3600e3).toISOString() }, AGORA)
+    const linhas = [...r.source.matchAll(/font-size="16"[^>]*>([^<]*)</g)].map(m => m[1]!)
+    expect(linhas.length, `o título tem duas linhas a ${W} px`).toBe(2)
+    expect(linhas[0]!.endsWith('-'), `a 1ª linha a ${W} px termina em hífen: "${linhas[0]}"`).toBe(true)
+    expect(titulo.replace(/\s/g, '').startsWith(linhas.join('').replace(/…$/, '').replace(/\s/g, '')), 'nenhuma letra some nem muda').toBe(true)
+  }
+})

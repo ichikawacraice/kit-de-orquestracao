@@ -244,15 +244,20 @@ function pontoDoItem(item: LinhaItem, cor: string): string {
 
 /** Quebra em até duas linhas: a primeira cabe em `max1` (divide a linha com o tempo), a segunda em `max2`. */
 function quebrarEmDuas(s: string, tam: number, max1: number, max2: number): string[] {
-  const palavras = s.split(/\s+/).filter(Boolean)
+  // Palavra que sozinha passa da 1ª linha (sigla, nome com hífen) quebra depois do hífen ou da barra, em vez de no meio da letra.
+  const pecas = s
+    .split(/\s+/)
+    .filter(Boolean)
+    .flatMap(w => (largura(w, tam) > max1 ? w.split(/(?<=[-/_])/).map((t, i) => ({ t, colado: i > 0 })) : [{ t: w, colado: false }]))
   let primeira = ''
   let i = 0
-  for (; i < palavras.length; i++) {
-    const tenta = primeira ? `${primeira} ${palavras[i]}` : (palavras[i] ?? '')
+  for (; i < pecas.length; i++) {
+    const { t, colado } = pecas[i]!
+    const tenta = primeira ? `${primeira}${colado ? '' : ' '}${t}` : t
     if (largura(tenta, tam) > max1 && primeira) break
     primeira = tenta
   }
-  const resto = palavras.slice(i).join(' ')
+  const resto = pecas.slice(i).reduce((acc, { t, colado }) => (acc ? `${acc}${colado ? '' : ' '}${t}` : t), '')
 
   return resto ? [caber(primeira, tam, max1), ...quebrar(resto, tam, max2, 1)] : [caber(primeira, tam, max1)]
 }
