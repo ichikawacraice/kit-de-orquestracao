@@ -137,3 +137,34 @@ describe('c17.3 diff unificado', () => {
     assert.equal(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), '# Meu projeto\n\nTexto meu.\n', 'a simulação não gravou');
   });
 });
+
+// ---- c17.4: o doutor avisa (não falha) quando o bloco `projeto` do CLAUDE.md ainda tem o texto de preencher ----
+describe('c17.4 doutor e o placeholder do bloco projeto', () => {
+  const kit = (cwd, home, ...args) => spawnSync('node', [KIT, ...args], { cwd, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: { ...process.env, HOME: home, PAINEL_DIR: join(home, 'painel') } });
+  it('placeholder presente: linha `aviso:` e exit 0; preenchido: sem o aviso', (t) => {
+    const raiz = realpathSync(mkdtempSync(join(tmpdir(), 'kit-c17q-'))); t.after(() => rmSync(raiz, { recursive: true, force: true }));
+    const home = join(raiz, 'home'); mkdirSync(join(home, '.claude', 'plugins'), { recursive: true });
+    writeFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user', installPath: '/x', version: '0.1.0' }] } }));
+    const proj = join(raiz, 'p'); mkdirSync(proj); git(proj, 'init', '-q');
+    assert.equal(kit(proj, home, 'iniciar').status, 0);
+    const antes = kit(proj, home, 'doutor');
+    assert.match(antes.stdout, /^aviso: .*bloco projeto.*preencher/m, antes.stdout);
+    assert.doesNotMatch(antes.stdout, /^falha:/m, 'aviso não é falha'); assert.equal(antes.status, 0, antes.stdout);
+    const f = join(proj, 'CLAUDE.md'); const texto = readFileSync(f, 'utf8');
+    assert.match(texto, /<!-- preencher: /, 'o placeholder existe antes de editar');
+    writeFileSync(f, texto.replace(/<!-- preencher:[^\n]*-->/, 'Loja de teste em Node, commits convencionais em PT-BR.'));
+    const depois = kit(proj, home, 'doutor');
+    assert.doesNotMatch(depois.stdout, /bloco projeto.*preencher/, depois.stdout);
+  });
+});
+
+// ---- c17.2: a doc diz que a trava "orquestradora não edita" PERGUNTA (Q62), nunca que recusa ----
+describe('c17.2 texto da trava', () => {
+  it('a skill da orquestradora e o hook concordam: ask / PERGUNTA', () => {
+    const skill = readFileSync(join(RAIZ, 'plugins', 'orquestracao', 'skills', 'orquestradora', 'SKILL.md'), 'utf8');
+    const par = skill.split('\n').find((l) => l.includes('orquestradora-nao-edita.mjs'));
+    assert.ok(par, 'o parágrafo da trava existe');
+    assert.match(par, /PERGUNTA/); assert.doesNotMatch(par, /\brecusa\b/i);
+    assert.match(readFileSync(join(RAIZ, 'plugins', 'orquestracao', 'hooks', 'orquestradora-nao-edita.mjs'), 'utf8'), /permissionDecision: 'ask'/);
+  });
+});

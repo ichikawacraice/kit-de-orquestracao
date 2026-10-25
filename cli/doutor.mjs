@@ -66,6 +66,9 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
     if (!b) linhas.push(`aviso: bloco ${nome} ausente do CLAUDE.md`);
     else if (sha256(b.conteudo) !== reg.sha256) linhas.push(`aviso: bloco ${nome} editado à mão (o \`kit atualizar\` não o troca)`);
   }
+  // o bloco `projeto` nasce com o texto de preencher; sem ele preenchido as sessões não sabem o que o projeto é
+  const projeto = claude && blocosDe(claude).find((x) => x.nome === 'projeto');
+  if (projeto && /<!--\s*preencher:/.test(projeto.conteudo)) linhas.push('aviso: o bloco projeto do CLAUDE.md ainda tem o texto de preencher; descreva o projeto nele (o que é, stack, pastas, idioma dos commits)');
   // as chaves que o kit escreveu em settings.json e package.json (o resto desses arquivos é do projeto)
   const c = lock.chaves ?? {};
   const st = lerJson(join(destino, '.claude', 'settings.json'));
