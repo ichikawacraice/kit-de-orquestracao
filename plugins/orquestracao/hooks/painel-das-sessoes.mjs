@@ -77,9 +77,10 @@ function itensDaSessao(sessionId) {
   return ids;
 }
 
-// Abertura do turno pela mesma regra do pool-comum e do fila-do-item (F41): a linha `user` com origem abre o turno, meta ou
-// não (mensagem entre sessões é gravada com `isMeta: true` e `origin`); a meta SEM origem e o `tool_result` não. Devolve o
-// índice da entrada (-1 se nenhuma tem `origin` ou `turnOrigin`). Cópia local porque o hook roda `main` ao carregar; o teste
+// Abertura do turno pela mesma regra do pool-comum e do fila-do-item (F41): a linha `user` com `origin` ou `turnOrigin` abre o
+// turno, meta ou não (mensagem entre sessões é `isMeta: true` + `origin`; o aviso do sistema é `isMeta: true` + `turnOrigin`); o
+// `tool_result` não. Devolve o índice
+// da entrada (-1 se nenhuma tem `origin` ou `turnOrigin`). Cópia local porque o hook roda `main` ao carregar; o teste
 // de concordância extrai esta função do texto.
 function inicioDoTurno(entradas) {
   for (let i = entradas.length - 1; i >= 0; i--) {
@@ -87,7 +88,6 @@ function inicioDoTurno(entradas) {
     const c = e.message?.content;
     const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
     if (e.type !== 'user' || ehResultado) continue;
-    if (e.isMeta && !e.origin?.kind) continue;
     if (e.origin?.kind || e.turnOrigin) return i;
   }
   return -1;

@@ -74,6 +74,7 @@ const fixturesDeTurno = () => {
     'plugin sem meta': { linhas: [h, U(2000, { origin: { kind: 'plugin' } })], inicio: 2000, origem: 'plugin' },
     'notificação sem meta': { linhas: [h, U(2000, { origin: { kind: 'task-notification' } })], inicio: 2000, origem: 'task-notification' },
     'turnOrigin sdk': { linhas: [h, U(2000, { turnOrigin: 'sdk' })], inicio: 2000, origem: 'sdk' },
+    'system meta com turnOrigin e sem origin (forma real das 41 linhas)': { linhas: [h, U(2000, { isMeta: true, turnOrigin: 'system' })], inicio: 2000, origem: 'system' },
     'meta SEM origem não abre turno': { linhas: [h, U(2000, { isMeta: true })], inicio: 1000, origem: 'human' },
     'tool_result com origem não abre turno': { linhas: [h, { ...U(2000, { origin: { kind: 'peer' } }), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: 'ok' }] } }], inicio: 1000, origem: 'human' },
   };
@@ -84,7 +85,7 @@ const casoR1 = async () => {
     const duas = await inicioDoFila();
     const tres = await inicioDoPainel();
     const fx = fixturesDeTurno();
-    ok(Object.keys(fx).length >= 8, 'R1: fixtures vazias');
+    ok(Object.keys(fx).length >= 9, 'R1: fixtures vazias');
     for (const [k, { linhas, inicio, origem }] of Object.entries(fx)) {
       const f = join(base, 'r1.jsonl'); writeFileSync(f, linhas.map((l) => JSON.stringify(l)).join('\n') + '\n');
       const a = inicioDoTurno(f), b = duas(f);

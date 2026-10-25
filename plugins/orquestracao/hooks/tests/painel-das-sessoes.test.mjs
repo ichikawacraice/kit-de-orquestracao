@@ -109,17 +109,17 @@ caso('(f) turno aberto por turnOrigin "sdk" sem origin, com PR aberto e sem grav
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
   ok(r.reason.includes('abriu PR'), `motivo: ${r.reason}`);
 });
-caso('(g) entrada isMeta com turnOrigin depois do início não move o início', () => {
-  // O turno real (sdk) abriu o PR; a entrada isMeta depois dele, se contasse, esconderia o `gh pr create`.
+caso('(g) F41 A1: entrada isMeta com turnOrigin (aviso do sistema, sem origin) abre o turno seguinte: o PR do turno anterior não conta', () => {
+  // Forma real das 41 linhas: `isMeta: true`, `turnOrigin: 'system'`, sem `origin`. Abre turno como nas outras duas cópias.
   const f = dir('t.jsonl');
   const linhas = [
     { type: 'user', timestamp: '2026-10-24T12:00:00.000Z', turnOrigin: 'sdk', message: { role: 'user', content: 'F7 para você' } },
     { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Bash', input: { command: 'gh pr create --fill' } }] } },
-    { type: 'user', isMeta: true, timestamp: '2026-10-24T12:00:09.000Z', turnOrigin: 'sdk', message: { role: 'user', content: 'lembrete do sistema' } },
+    { type: 'user', isMeta: true, timestamp: '2026-10-24T12:00:09.000Z', turnOrigin: 'system', message: { role: 'user', content: '[Cross-session delivery notice]' } },
   ];
   writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
   const r = rodar(f);
-  ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
+  ok(r === null || r?.decision !== 'block', `o PR é do turno anterior, não devia bloquear: ${JSON.stringify(r)}`);
 });
 
 
