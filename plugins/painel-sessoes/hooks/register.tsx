@@ -59,6 +59,8 @@ export function lerVivas(texto: string): Vivo[] {
 
 export function projetoDe(cwd: string | undefined): string {
   if (!cwd) return '?'
+  // Limite (V1, R4): vale a raiz do repositório quando o `cwd` é a raiz ou um worktree; sessão aberta numa SUBPASTA do repo
+  // (`…/izanagi/apps/web` → `web`) e repositório `x.git` divergem do hook e do painel.mjs, que usam o git common dir.
   // Worktree do app (`<repo>/.claude/worktrees/<x>`) e `<repo>/worktrees/<x>` valem o repositório, não o worktree.
   const raiz = cwd.replace(/\/\.claude\/worktrees(\/.*)?$/, '').replace(/\/worktrees\/[^/]+\/?$/, '')
   const nome = raiz.split('/').filter(Boolean).pop() ?? '?'
