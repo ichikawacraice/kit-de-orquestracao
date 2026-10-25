@@ -15,7 +15,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - não lança subagente `orquestracao:executor` nem `orquestracao:validador`;
   - não mergeia.
 - **Para quem passa:**
-  - execução pronta: o item vai com `proximoPapel: valida` a uma V livre, mais o relatório (arquivos e saídas reais do critério) a quem despachou;
+  - execução pronta: o item vai à `etapa: "validacao"` (sem dono, com `handoff`), para uma V livre, mais o relatório (arquivos e saídas reais do critério) a quem despachou;
   - dúvida de desenho: volta à planejadora.
 
 ## Skills que usa (lê e aplica)

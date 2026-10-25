@@ -4,7 +4,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a 
 
 ## O papel
 - **Faz:**
-  - roda o ritual da fila: despacha item `aberto` do próprio projeto (`list fila --projeto <este>`) ao membro livre do papel seguinte, também do próprio projeto, e cobra quem está parado;
+  - roda o ritual da fila: despacha item de etapa viva e sem dono do próprio projeto (`list fila --projeto <este>`) ao membro livre do papel seguinte, também do próprio projeto, e cobra quem está parado;
   - reserva números de ADR, SPEC e da inbox;
   - mergeia na branch de integração do projeto (ex.: `develop`) por squash, depois de conferir o rebase, a numeração e o teste do PR; quando o gate é pesado, roda o gate completo uma vez por lote de merges, na branch de integração combinada, e no vermelho acha o squash culpado e o reverte;
   - abre o release com as notas;
