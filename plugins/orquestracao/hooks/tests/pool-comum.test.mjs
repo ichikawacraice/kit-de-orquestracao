@@ -23,7 +23,7 @@ git(A, 'worktree', 'add', '-q', join(base, 'alfa-wt'), '-b', 'wt');
 const SEM = join(base, 'semgit'); mkdirSync(SEM);
 
 process.env.HOME = join(base, 'home'); mkdirSync(join(base, 'home', '.claude', 'projects', 'p'), { recursive: true });
-const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
+const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
 function reg(k, campos) {
   writeFileSync(join(base, 'app', 'conta', `local_${k}.json`), JSON.stringify({ sessionId: `local_${k}`, cliSessionId: `cli-${k}`, title: `E1 · x`, ...campos }));
   return registroDaSessao(`cli-${k}`, { fresco: true });
@@ -44,6 +44,49 @@ function caso_repoDoMarcador() {
 }
 function caso(nome, fn) { try { fn(); console.log(`ok   ${nome}`); } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); } }
 const ok = (c, m) => { if (!c) throw new Error(m); };
+
+// R1 (F41): o início do turno do pool-comum e a cópia local do fila-do-item concordam, e seguem a regra da origem: a linha
+// `user` com origem abre o turno, meta ou não; a meta SEM origem e o `tool_result` não. A cópia do fila-do-item não é
+// importável (o hook roda `main` ao carregar), então a função é extraída do texto do arquivo e carregada à parte.
+async function inicioDoFila(arquivo = join(HOOKS, 'fila-do-item.mjs')) {
+  const fonte = readFileSync(arquivo, 'utf8');
+  const m = fonte.match(/function inicioDoTurno\(transcriptPath\) \{[\s\S]*?\n\}\n/);
+  ok(m && m[0].length > 100, 'R1: não achei a função inicioDoTurno no fila-do-item.mjs');
+  const f = join(base, `inicio-fila-${Math.random().toString(36).slice(2)}.mjs`);
+  writeFileSync(f, `import { readFileSync } from 'node:fs';\nexport ${m[0]}`);
+  return (await import(pathToFileURL(f).href)).inicioDoTurno;
+}
+const U = (t, extra) => ({ type: 'user', timestamp: new Date(t).toISOString(), message: { role: 'user', content: 'x' }, ...extra });
+const fixturesDeTurno = () => {
+  const h = U(1000, { origin: { kind: 'human' } });
+  return {
+    'humano': { linhas: [h], inicio: 1000, origem: 'human' },
+    'peer meta com origem depois de humano': { linhas: [h, U(2000, { isMeta: true, origin: { kind: 'peer' } })], inicio: 2000, origem: 'peer' },
+    'system meta com origem': { linhas: [h, U(2000, { isMeta: true, origin: { kind: 'system' } })], inicio: 2000, origem: 'system' },
+    'plugin sem meta': { linhas: [h, U(2000, { origin: { kind: 'plugin' } })], inicio: 2000, origem: 'plugin' },
+    'notificação sem meta': { linhas: [h, U(2000, { origin: { kind: 'task-notification' } })], inicio: 2000, origem: 'task-notification' },
+    'turnOrigin sdk': { linhas: [h, U(2000, { turnOrigin: 'sdk' })], inicio: 2000, origem: 'sdk' },
+    'meta SEM origem não abre turno': { linhas: [h, U(2000, { isMeta: true })], inicio: 1000, origem: 'human' },
+    'tool_result com origem não abre turno': { linhas: [h, { ...U(2000, { origin: { kind: 'peer' } }), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: 'ok' }] } }], inicio: 1000, origem: 'human' },
+  };
+};
+const casoR1 = async () => {
+  const nome = 'R1: início do turno e origem seguem a mesma regra, e o pool-comum e o fila-do-item concordam em cada transcript';
+  try {
+    const duas = await inicioDoFila();
+    const fx = fixturesDeTurno();
+    ok(Object.keys(fx).length >= 8, 'R1: fixtures vazias');
+    for (const [k, { linhas, inicio, origem }] of Object.entries(fx)) {
+      const f = join(base, 'r1.jsonl'); writeFileSync(f, linhas.map((l) => JSON.stringify(l)).join('\n') + '\n');
+      const a = inicioDoTurno(f), b = duas(f);
+      if (a !== inicio) throw new Error(`pool-comum, "${k}": início esperado ${inicio}, veio ${a}`);
+      if (b !== inicio) throw new Error(`fila-do-item, "${k}": início esperado ${inicio}, veio ${b}`);
+      if (origemDoTurno(f) !== origem) throw new Error(`origemDoTurno, "${k}": esperado ${origem}, veio ${origemDoTurno(f)}`);
+    }
+    console.log(`ok   ${nome}`);
+  } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
+};
+await casoR1();
 
 caso('dois repositórios → repos diferentes, nomes alfa e beta', () => {
   const a = projetoDaSessao(reg('a', { originCwd: A, cwd: A })); const b = projetoDaSessao(reg('b', { originCwd: B, cwd: B }));

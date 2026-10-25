@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Paridade plugin × ~/.claude até a K8: cada arquivo de plugins/orquestracao/ que tem par em ~/.claude deve diferir DO MESMO
+// Aposentado depois da K8 (25/10); fica para a migração de outra máquina. Paridade plugin × ~/.claude até a K8: cada arquivo de plugins/orquestracao/ que tem par em ~/.claude deve diferir DO MESMO
 // JEITO declarado abaixo (o hash do `diff` do par). Conserto copiado igual nos dois lados não muda o diff e passa; conserto
 // só de um lado muda o diff e falha. Não é teste da suíte: lê o HOME real. Rodar antes de commit que toque hooks/scripts/skills.
 //   node scripts/paridade.mjs              confere (exit 1 se algo não declarado)

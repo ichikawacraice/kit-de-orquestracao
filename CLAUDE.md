@@ -29,7 +29,7 @@ Lidos de `.claude/kit.json`:
 - Rebase em vez de merge commit; PR sempre com o rebase em dia sobre a branch de integração do projeto.
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
 - Commit em português, no formato convencional (`feat(escopo): …`).
-- Até a K8, rode `node scripts/paridade.mjs` (exit 0) antes de commit que toque `plugins/orquestracao/{hooks,skills,agents,pool}`: conserto tem de existir nos dois lados (plugin e `~/.claude`). Lê o HOME real; não é da suíte.
+- A paridade plugin × `~/.claude` deixou de ser exigida: a K8 rodou em 2026-10-25T14:01 (backup `~/.claude/orquestracao/backups/K8-2026-10-25T14-01-55-715Z`), o `~/.claude/settings.json` não registra mais nenhum hook e o plugin é a cópia viva — conserto entra só nele. `scripts/paridade.mjs` e `scripts/k8/sincronizar.mjs` ficam para a migração de outra máquina.
 <!-- /kit:regras-de-operacao -->
 
 <!-- kit:regras-de-trabalho v1 -->

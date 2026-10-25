@@ -108,7 +108,8 @@ function main() {
   let inicio = -1;
   for (let i = entradas.length - 1; i >= 0; i--) {
     const e = entradas[i];
-    // Mesmo critério do fila-do-item.mjs (inicioDoTurno): turnos abertos por mensagem entre sessões ou pelo
+    // Critério ANTIGO do fila-do-item.mjs (inicioDoTurno), que desde o F41 não pula mais a meta com origem; esta cópia
+    // ainda pula toda `isMeta` (fora do F41, plano de 25/10): turnos abertos por mensagem entre sessões ou pelo
     // prompt do pool têm `turnOrigin` e não têm `origin`; `isMeta` e `tool_result` não abrem turno.
     const c = e.message?.content;
     const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');

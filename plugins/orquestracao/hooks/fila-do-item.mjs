@@ -18,7 +18,11 @@ import { join, dirname } from 'node:path';
 // Hoje ele não protege nada (a razão do bloqueio só cita ids de item); prepara o caso de o texto do painel entrar aqui.
 // Idem o pool-comum: sem ele não há como saber quem vai se soltar, e o hook cobra como sempre.
 let vaiSoltar = () => false;
-try { ({ vaiSoltar } = await import('./pool-comum.mjs')); } catch { /* sem a soltura */ }
+try {
+  // Versão velha do pool-comum no cache pode carregar sem a função (B11): só adota o que é função.
+  const m = await import('./pool-comum.mjs');
+  if (typeof m.vaiSoltar === 'function') vaiSoltar = m.vaiSoltar;
+} catch { /* sem a soltura */ }
 
 let avisoDeInjecao = () => '';
 try { ({ avisoDeInjecao } = await import('./varredura-entre-sessoes.mjs')); } catch { /* sem aviso */ }
@@ -83,7 +87,8 @@ function resolverLocalId(sessionId) {
   return null;
 }
 
-// Timestamp (ms) do início do turno: última entrada `user` que abre turno — não `isMeta` e com
+// Timestamp (ms) do início do turno: última entrada `user` que abre turno — com `tool_result` fora, e meta ou não (R1: a
+// mensagem entre sessões é gravada com `isMeta: true` E origem; a meta SEM origem não tem como abrir turno) — e com
 // `origin.kind` (mensagem humana/peer) OU `turnOrigin` (human, peer, system, task_notification e `sdk`,
 // o dos turnos abertos por mensagem entre sessões e pelo prompt inicial, que não têm `origin`).
 // Medido: linhas `user` com tool_result não carregam `turnOrigin`; o filtro de tool_result é só reforço.
@@ -95,7 +100,7 @@ function inicioDoTurno(transcriptPath) {
     try { e = JSON.parse(linhas[i]); } catch { continue; }
     const c = e.message?.content;
     const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
-    if (e.type === 'user' && !e.isMeta && !ehResultado && (e.origin?.kind || e.turnOrigin)) {
+    if (e.type === 'user' && !ehResultado && (e.origin?.kind || e.turnOrigin)) {
       const t = Date.parse(e.timestamp);
       return Number.isNaN(t) ? null : t;
     }
@@ -128,7 +133,9 @@ function main() {
   if (inicio === null) return registrar(sid, local, 'sem-inicio');
 
   // F32: quem se declarou livre SOBRE SI neste turno e é membro do pool é solta pelo `livre-se-limpa` (mesmo fim de turno, mesma função `vaiSoltar`): aqui não se cobra.
-  if (vaiSoltar(tp, inicio, { sessionId: sid, localId: local, titulo: reg.titulo })) return registrar(sid, local, 'livre-no-turno', meus.map((i) => i.id).join(','));
+  let solta = false;
+  try { solta = Boolean(vaiSoltar(tp, inicio, { sessionId: sid, localId: local, titulo: reg.titulo })); } catch { /* segue cobrando */ }
+  if (solta) return registrar(sid, local, 'livre-no-turno', meus.map((i) => i.id).join(','));
 
   const pendentes = meus.filter((i) => {
     const t = Date.parse(i.atualizadoEm);

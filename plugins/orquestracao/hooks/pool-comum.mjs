@@ -124,7 +124,6 @@ export function ehOrquestradora(sessionId, titulo) {
   return Boolean(sessionId && existsSync(join(BASE, 'ativas', sessionId))) || (titulo || '').startsWith('🎛 orquestradora');
 }
 
-// Início do turno (ms): última entrada `user` que abre turno (mesmo critério do fila-do-item.mjs).
 // A origem do turno atual ('human', 'peer', 'task-notification'…), pela última mensagem de usuário com origem.
 export function origemDoTurno(transcriptPath) {
   const linhas = readFileSync(transcriptPath, 'utf8').split('\n');
@@ -134,13 +133,14 @@ export function origemDoTurno(transcriptPath) {
     try { e = JSON.parse(linhas[i]); } catch { continue; }
     const c = e.message?.content;
     const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
-    // A mensagem entre sessões é gravada com `isMeta: true` E origem (peer, plugin, notificação…): a meta que TEM origem
-    // abre o turno (B1, V3 de 25/10: 26 de 180 turnos); a meta sem origem não tem o que devolver e cai fora aqui.
+    // A meta que TEM origem abre o turno (B1, V3 de 25/10). Medido em 25/10 nos transcripts deste projeto: 2.082 linhas
+    // `isMeta`, 1.579 com origem (1.538 `peer`, 41 `system`); a meta sem origem não tem o que devolver e cai fora aqui.
     if (e.type === 'user' && !ehResultado && (e.origin?.kind || e.turnOrigin)) return String(e.origin?.kind || e.turnOrigin);
   }
   return null;
 }
 
+// Início do turno (ms): a mesma entrada que a origem acima (e a cópia local do fila-do-item.mjs, que um teste compara).
 export function inicioDoTurno(transcriptPath) {
   const linhas = readFileSync(transcriptPath, 'utf8').split('\n');
   for (let i = linhas.length - 1; i >= 0; i--) {
@@ -149,7 +149,7 @@ export function inicioDoTurno(transcriptPath) {
     try { e = JSON.parse(linhas[i]); } catch { continue; }
     const c = e.message?.content;
     const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
-    if (e.type === 'user' && !e.isMeta && !ehResultado && (e.origin?.kind || e.turnOrigin)) {
+    if (e.type === 'user' && !ehResultado && (e.origin?.kind || e.turnOrigin)) {
       const t = Date.parse(e.timestamp);
       return Number.isNaN(t) ? null : t;
     }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Aposentado depois da K8 (25/10); fica para a migração de outra máquina.
 // Porte deliberado da instalação viva (~/.claude) para o plugin, um item por vez — o porte NÃO é contínuo.
 //   node scripts/k8/sincronizar.mjs --listar                      diferenças de paridade e a quem cada uma pertence (declarada ou não)
 //   node scripts/k8/sincronizar.mjs <rótulo> <arquivo>... [--base <arquivo-ou-pasta>] [--forcar] [--sem-commit]

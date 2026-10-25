@@ -46,9 +46,9 @@ const turno = () => [
   { type: 'user', uuid: 'u1', timestamp: INICIO, origin: { kind: 'peer' }, message: { role: 'user', content: 'F12 para você: painel fila/F12' } },
   { type: 'assistant', uuid: 'a1', timestamp: '2026-10-24T12:00:05.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'feito' }] } },
 ];
-function rodar(evento, sessoes = join(base, 'sessoes')) {
+function rodar(evento, sessoes = join(base, 'sessoes'), hooksDir = HOOKS) {
   const entrada = typeof evento === 'string' ? evento : JSON.stringify(evento);
-  const out = execFileSync('node', [join(HOOKS, 'fila-do-item.mjs')], {
+  const out = execFileSync('node', [join(hooksDir, 'fila-do-item.mjs')], {
     input: entrada, encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL',
     env: { ...process.env, FILA_DIR: filaDir(), FILA_APP_SESSOES_DIR: sessoes, FILA_LOG: logArq() },
   });
@@ -180,14 +180,14 @@ caso('9c item em-andamento do dono SEM atualizadoEm: bloqueia', () => {
   igual(rodar(stop())?.decision, 'block', 'decisão');
 });
 
-caso('9d item atualizado ENTRE o turno real (T1) e uma entrada isMeta (T3): passa; se o isMeta virasse início (T3) bloquearia', () => {
+caso('9d item atualizado ENTRE o turno real (T1) e uma entrada isMeta SEM origem (T3): passa; se ela virasse início (T3) bloquearia', () => {
   // O briefing da F7 esperava "bloqueia" aqui, mas com início T1 e item em T2 ≥ T1 o hook PASSA; é o isMeta contado
   // como início (T3 > T2) que bloquearia. O caso discrimina pela direção que o código realmente toma.
   item('F12', { estado: 'em-andamento', donoLocalId: LOCAL, atualizadoEm: '2026-10-24T12:25:00.000Z' });
   registroLocal(LOCAL, SID);
   transcript([
     { type: 'user', uuid: 'u1', timestamp: '2026-10-24T12:20:00.000Z', turnOrigin: 'sdk', message: { role: 'user', content: 'F12 para você' } },
-    { type: 'user', uuid: 'u2', isMeta: true, timestamp: '2026-10-24T12:30:00.000Z', turnOrigin: 'sdk', message: { role: 'user', content: 'lembrete' } },
+    { type: 'user', uuid: 'u2', isMeta: true, timestamp: '2026-10-24T12:30:00.000Z', message: { role: 'user', content: 'lembrete' } },
   ]);
   igual(rodar(stop()), null, 'saída');
   igual(desfechos().join(','), 'passou', 'log');
@@ -260,6 +260,57 @@ caso('F32: a dona de título de pool que grava a PRÓPRIA linha como livre passa
   transcript(linhaDeOutra(LOCAL));
   igual(rodar(stop()), null, 'saída');
   igual(desfechos().join(','), 'livre-no-turno', 'log');
+});
+
+// B11: o `vaiSoltar` do pool-comum pode faltar (versão velha no cache) ou lançar; nos dois o hook segue e cobra como antes.
+function hooksComPool(corpo) {
+  const d = join(base, 'hooks-b11'); mkdirSync(d);
+  writeFileSync(join(d, 'fila-do-item.mjs'), readFileSync(join(HOOKS, 'fila-do-item.mjs'), 'utf8'));
+  writeFileSync(join(d, 'pool-comum.mjs'), corpo);
+  return d;
+}
+caso('B11a: pool-comum carregado SEM a função vaiSoltar → o hook não derruba e cobra como antes', () => {
+  const d = hooksComPool('export const outraCoisa = 1;\n');
+  item('F12', { estado: 'em-andamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  registroLocal(LOCAL, SID); transcript(turno());
+  const r = rodar(stop(), join(base, 'sessoes'), d);
+  ok(r?.decision === 'block' && /F12/.test(r.reason), `esperava block citando F12, veio ${JSON.stringify(r)}`);
+  igual(desfechos().includes('erro') || desfechos().includes('erro-interno'), false, 'o hook não deve registrar erro');
+});
+caso('B11b: vaiSoltar que LANÇA → o hook não derruba e cobra como antes', () => {
+  const d = hooksComPool("export function vaiSoltar() { throw new Error('quebrou'); }\n");
+  item('F12', { estado: 'em-andamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  registroLocal(LOCAL, SID); transcript(turno());
+  const r = rodar(stop(), join(base, 'sessoes'), d);
+  ok(r?.decision === 'block' && /F12/.test(r.reason), `esperava block citando F12, veio ${JSON.stringify(r)}`);
+});
+caso('B11c: precondição — com o vaiSoltar verdadeiro o hook solta (não é só um "sempre cobra")', () => {
+  const d = hooksComPool('export function vaiSoltar() { return true; }\n');
+  item('F12', { estado: 'em-andamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  registroLocal(LOCAL, SID); transcript(turno());
+  igual(rodar(stop(), join(base, 'sessoes'), d), null, 'saída');
+  igual(desfechos().join(','), 'livre-no-turno', 'log');
+});
+
+// R1: o início do turno é o do turno aberto por outra sessão (meta com origem), não o do turno humano anterior.
+caso('R1: item gravado ANTES de um turno aberto por peer (meta com origem), depois de um humano → bloqueia (o turno atual não o gravou)', () => {
+  item('F12', { estado: 'em-andamento', donoLocalId: LOCAL, atualizadoEm: '2026-10-24T12:20:00.000Z' });
+  registroLocal(LOCAL, SID);
+  transcript([
+    { type: 'user', uuid: 'u1', timestamp: '2026-10-24T12:10:00.000Z', origin: { kind: 'human' }, message: { role: 'user', content: 'F12 para você' } },
+    { type: 'user', uuid: 'u2', isMeta: true, timestamp: '2026-10-24T12:30:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: '<cross-session-message>valide</cross-session-message>' } },
+  ]);
+  const r = rodar(stop());
+  ok(r?.decision === 'block' && /F12/.test(r.reason), `esperava block citando F12, veio ${JSON.stringify(r)}`);
+});
+caso('R1: o mesmo item gravado DEPOIS do turno aberto por peer → passa', () => {
+  item('F12', { estado: 'em-andamento', donoLocalId: LOCAL, atualizadoEm: '2026-10-24T12:40:00.000Z' });
+  registroLocal(LOCAL, SID);
+  transcript([
+    { type: 'user', uuid: 'u1', timestamp: '2026-10-24T12:10:00.000Z', origin: { kind: 'human' }, message: { role: 'user', content: 'F12 para você' } },
+    { type: 'user', uuid: 'u2', isMeta: true, timestamp: '2026-10-24T12:30:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'valide' } },
+  ]);
+  igual(rodar(stop()), null, 'saída');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

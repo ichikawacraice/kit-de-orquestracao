@@ -351,5 +351,30 @@ caso('F32 A2: com a trava do painel presa e três escritas, o hook bloqueia dent
   } finally { preso.kill('SIGKILL'); }
 });
 
+// R1 (F41): o turno atual foi aberto por outra sessão (meta com origem) logo depois de um turno humano em que a E4 editou:
+// o início é o do peer, então o Edit do turno anterior não conta como trabalho deste turno.
+function transcriptComPeer(ferramentasAntes) {
+  const t0 = Date.now() - 60_000; const t1 = Date.now() - 10_000;
+  const L = [{ type: 'user', origin: { kind: 'human' }, timestamp: new Date(t0).toISOString(), message: { content: 'antes' } }];
+  ferramentasAntes.forEach(([name, input], k) => L.push({ type: 'assistant', timestamp: new Date(t0 + 1000 + k).toISOString(), message: { content: [{ type: 'tool_use', name, input }] } }));
+  L.push({ type: 'user', isMeta: true, origin: { kind: 'peer' }, timestamp: new Date(t1).toISOString(), message: { content: '<cross-session-message>outro item</cross-session-message>' } });
+  const f = join(base, 't.jsonl'); writeFileSync(f, L.map((x) => JSON.stringify(x)).join('\n') + '\n'); return f;
+}
+const EDIT = ['Edit', { file_path: '/r/a.ts', old_string: 'a', new_string: 'b' }];
+caso('R1: E4 livre que editou num turno humano e agora tem um turno aberto por peer → não cobra o título (o trabalho é do turno anterior)', () => {
+  const r = rodar('E4', transcriptComPeer([EDIT]));
+  ok(r === null, `esperava passar, veio ${JSON.stringify(r)}`);
+});
+caso('R1: precondição — a mesma edição no turno ATUAL aberto por peer continua cobrando', () => {
+  const t0 = Date.now() - 60_000; const t1 = Date.now() - 10_000;
+  const L = [
+    { type: 'user', origin: { kind: 'human' }, timestamp: new Date(t0).toISOString(), message: { content: 'antes' } },
+    { type: 'user', isMeta: true, origin: { kind: 'peer' }, timestamp: new Date(t1).toISOString(), message: { content: 'item' } },
+    { type: 'assistant', timestamp: new Date(t1 + 1000).toISOString(), message: { content: [{ type: 'tool_use', name: EDIT[0], input: EDIT[1] }] } },
+  ];
+  const f = join(base, 't.jsonl'); writeFileSync(f, L.map((x) => JSON.stringify(x)).join('\n') + '\n');
+  const r = rodar('E4', f);
+  ok(r?.decision === 'block', `esperava block, veio ${JSON.stringify(r)}`);
+});
 console.log(falhas ? `${falhas} falha(s)` : 'todos verdes');
 process.exitCode = falhas ? 1 : 0;
