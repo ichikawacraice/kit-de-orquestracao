@@ -23,6 +23,6 @@ function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { main(); } catch (err) { registrar('-', HOOK, 'erro', err?.stack || err); }
+  try { main(); } catch (err) { registrar('-', HOOK, 'erro', `${err?.name ?? 'Error'} (sem detalhe: a entrada pode ter segredo)`); }
   process.exitCode = 0;
 }

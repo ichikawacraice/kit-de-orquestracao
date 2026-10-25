@@ -11,15 +11,36 @@ import { segredosEm, nomesDe } from './varredura-entre-sessoes.mjs';
 const HOOK = 'segredo-sai';
 const MENSAGEM = new Set(['SendMessage', 'mcp__ccd_session_mgmt__send_message']);
 const ESCRITA = new Set(['Write', 'Edit', 'MultiEdit']);
-const ABRE_SESSAO = 'mcp__ccd_session__start_session';
+// Tools que levam texto a outra sessão: TODO valor de texto da entrada é varrido (o laudo da V4 mediu `background`, `title`
+// e `remaining_plan` passando quando só `prompt` e `brief` eram lidos).
+const COM_TEXTO = new Set(['mcp__ccd_session__start_session', 'mcp__ccd_session__hand_off_to_session']);
 const VERBO_DE_ESCRITA = String.raw`\s+(?:set|update|batch|com)\b`;
 
 const strings = (obj, chaves) => chaves.map((k) => obj?.[k]).filter((v) => typeof v === 'string');
 
+/** Todo valor de texto de um objeto ou lista, em qualquer profundidade. */
+function todosOsTextos(v, acc = [], fundo = 0) {
+  if (typeof v === 'string') acc.push(v);
+  else if (fundo < 8 && v && typeof v === 'object') for (const x of Object.values(v)) todosOsTextos(x, acc, fundo + 1);
+  return acc;
+}
+
+// Bash que grava (as regras BASH_GRAVA do executor-criterio, copiadas): redirecionamento, tee, sed -i, heredoc de interpretador.
+const BASH_GRAVA = [
+  /\b(sed|perl)\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*i/,
+  /(^|[^<>&0-9=-])>>?\s*(?!\/dev\/null\b|&)["']?[\w~./$-]/,
+  /\btee\b/,
+  /\b(python3?|node|ruby)\b[^|;&]*<<-?\s*['"]?\w/,
+];
+const CITA_PASTA_DE_SAIDA = /side-session-notes\/|\.claude\/orquestracao\//i;
+
 const naPastaDeSaida = (caminho) => {
   if (typeof caminho !== 'string' || caminho === '') return false;
   const abs = resolve(caminho);
-  return abs.includes('/side-session-notes/') || abs === BASE || abs.startsWith(`${BASE}/`);
+  // O macOS não distingue maiúscula de minúscula no caminho: a comparação também não.
+  const a = abs.toLowerCase();
+  const base = BASE.toLowerCase();
+  return a.includes('/side-session-notes/') || a === base || a.startsWith(`${base}/`);
 };
 
 function chamaPainelEscrevendo(comando) {
@@ -31,12 +52,16 @@ function chamaPainelEscrevendo(comando) {
 /** Os textos que a chamada manda para fora; [] quando a tool não é um caminho de saída. */
 export function textosDeSaida(tool, input) {
   if (MENSAGEM.has(tool)) return strings(input, ['message']);
-  if (tool === ABRE_SESSAO) return strings(input, ['prompt', 'brief']);
+  if (COM_TEXTO.has(tool)) return todosOsTextos(input);
   if (ESCRITA.has(tool) && naPastaDeSaida(input?.file_path)) {
     const edicoes = Array.isArray(input?.edits) ? input.edits.flatMap((e) => strings(e, ['new_string'])) : [];
     return [...strings(input, ['content', 'new_string']), ...edicoes];
   }
-  if (tool === 'Bash' && chamaPainelEscrevendo(input?.command)) return strings(input, ['command']);
+  if (tool === 'Bash') {
+    const c = input?.command;
+    const grava = typeof c === 'string' && BASH_GRAVA.some((r) => r.test(c)) && CITA_PASTA_DE_SAIDA.test(c);
+    if (grava || chamaPainelEscrevendo(c)) return strings(input, ['command']);
+  }
   return [];
 }
 
@@ -57,6 +82,7 @@ function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { main(); } catch (err) { registrar('-', HOOK, 'erro', err?.stack || err); }
+  // O log leva só o tipo do erro: a mensagem do JSON.parse cita um trecho da entrada, e a entrada pode ter o segredo.
+  try { main(); } catch (err) { registrar('-', HOOK, 'erro', `${err?.name ?? 'Error'} (sem detalhe: a entrada pode ter segredo)`); }
   process.exitCode = 0;
 }

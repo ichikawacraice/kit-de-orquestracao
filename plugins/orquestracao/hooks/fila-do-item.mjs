@@ -13,7 +13,11 @@
 import { readFileSync, existsSync, appendFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { avisoDeInjecao } from './varredura-entre-sessoes.mjs';
+
+// O aviso de injeção é opcional: se a varredura faltar ou falhar ao carregar, o hook segue sem ele.
+// Hoje ele não protege nada (a razão do bloqueio só cita ids de item); prepara o caso de o texto do painel entrar aqui.
+let avisoDeInjecao = () => '';
+try { ({ avisoDeInjecao } = await import('./varredura-entre-sessoes.mjs')); } catch { /* sem aviso */ }
 
 const FILA_DIR = process.env.FILA_DIR || join(homedir(), '.claude', 'orquestracao', 'painel', 'fila');
 const SESSOES_DIR = process.env.FILA_APP_SESSOES_DIR || join(homedir(), 'Library', 'Application Support', 'Claude', 'claude-code-sessions');

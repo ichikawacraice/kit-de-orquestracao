@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync, copyFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -192,4 +192,67 @@ test('sessao-inicio: o resumo das regras não dispara o próprio aviso', () => {
   const t = JSON.parse(out).hookSpecificOutput.additionalContext;
   assert.ok(t.length > 200);
   assert.ok(!t.startsWith('⚠'), 'as regras do kit casaram com injeção');
+});
+
+// ---- Conserto 1 (laudo da V4) ----
+const GH = () => SEGREDO['github-token']();
+
+test('V4-1 alta: start_session e hand_off_to_session leem todo campo de texto (background, title, remaining_plan)', () => {
+  const casos = [
+    ['mcp__ccd_session__start_session', { title: `t ${GH()}` }],
+    ['mcp__ccd_session__start_session', { prompt: 'ok', background: `ctx ${GH()}` }],
+    ['mcp__ccd_session__start_session', { prompt: 'ok', aninhado: { lista: [{ x: `a ${GH()}` }] } }],
+    ['mcp__ccd_session__hand_off_to_session', { title: 'ok', remaining_plan: `falta ${GH()}` }],
+    ['mcp__ccd_session__hand_off_to_session', { title: `t ${GH()}`, remaining_plan: 'ok' }],
+  ];
+  for (const [tool, input] of casos) {
+    const motivo = decidir(tool, input);
+    assert.match(motivo ?? '', /github-token/, `${tool} ${JSON.stringify(Object.keys(input))}`);
+    assert.ok(!motivo.includes(GH()));
+  }
+  assert.equal(decidir('mcp__ccd_session__hand_off_to_session', { title: 'ok', remaining_plan: 'sha 04c6b40e7' }), null);
+});
+
+test('V4-2 média: Bash que grava nas notas ou no painel (cat heredoc, echo >>) tem o comando varrido', () => {
+  const notas = '"/Users/x/Library/Application Support/Claude/side-session-notes/local_a/x.md"';
+  const casos = [
+    `cat > ${notas} <<EOF\ntoken ${GH()}\nEOF`,
+    `echo "token ${GH()}" >> ${notas}`,
+    `echo ${GH()} | tee ~/.claude/orquestracao/pool/n.md`,
+    `sed -i '' 's/a/${GH()}/' ~/.claude/orquestracao/pool/n.md`,
+  ];
+  for (const command of casos) assert.match(decidir('Bash', { command }) ?? '', /github-token/, command);
+  assert.equal(decidir('Bash', { command: `echo ${GH()} > /tmp/x.txt` }), null, 'grava fora das pastas');
+  assert.equal(decidir('Bash', { command: `cat ${notas}` }), null, 'só lê as notas');
+  assert.equal(decidir('Bash', { command: `echo "sha 04c6b40e7" >> ${notas}` }), null, 'grava limpo');
+});
+
+test('V4-3 baixa: entrada que não é JSON e traz token não deixa nenhum caractere do token no log', () => {
+  const base = mkdtempSync(join(tmpdir(), 'varredura-log-'));
+  try {
+    const token = GH();
+    for (const hook of ['segredo-sai.mjs', 'injecao-entre-sessoes.mjs']) {
+      execFileSync('node', [join(HOOKS, hook)], { input: `${token} isto não é json`, encoding: 'utf8', env: { ...process.env, HOOKS_CREWAI_BASE: base }, timeout: 10000, killSignal: 'SIGKILL' });
+    }
+    const log = readFileSync(join(base, 'hooks-crewai.log'), 'utf8');
+    assert.ok(log.includes('erro'), 'o erro foi registrado');
+    for (let i = 0; i + 6 <= token.length; i++) assert.ok(!log.includes(token.slice(i, i + 6)), `pedaço do token no log: posição ${i}`);
+  } finally { rmSync(base, { recursive: true, force: true }); }
+});
+
+test('V4-4 baixa: sem o módulo de varredura, sessao-inicio e fila-do-item seguem sem o aviso', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'varredura-falta-'));
+  try {
+    for (const f of ['sessao-inicio.mjs', 'fila-do-item.mjs', 'regras-globais.md']) copyFileSync(join(HOOKS, f), join(dir, f));
+    const inicio = execFileSync('node', [join(dir, 'sessao-inicio.mjs')], { input: '{}', encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    assert.ok(JSON.parse(inicio).hookSpecificOutput.additionalContext.includes('Q-ID'), 'as regras saem sem o módulo');
+    const fila = execFileSync('node', [join(dir, 'fila-do-item.mjs')], { input: '{}', encoding: 'utf8', env: { ...process.env, FILA_LOG: join(dir, 'fila.log') }, timeout: 10000, killSignal: 'SIGKILL' });
+    assert.equal(fila, '');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('V4-5 baixa: o caminho das notas casa sem diferença de maiúscula (macOS)', () => {
+  const conteudo = `t ${GH()}`;
+  assert.match(decidir('Write', { file_path: '/Users/x/Library/Application Support/Claude/Side-Session-Notes/local_a/n.md', content: conteudo }) ?? '', /github-token/);
+  assert.equal(decidir('Write', { file_path: '/Users/x/Developer/proj/side-notes/a.md', content: conteudo }), null);
 });

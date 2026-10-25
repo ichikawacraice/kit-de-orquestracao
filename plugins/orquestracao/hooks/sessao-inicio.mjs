@@ -4,7 +4,11 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { avisoDeInjecao } from './varredura-entre-sessoes.mjs';
+
+// O aviso de injeção é opcional: se a varredura faltar ou falhar ao carregar, a sessão começa sem ele.
+// Hoje ele não protege nada (o texto injetado é o das regras do próprio kit); prepara o caso de o texto do painel entrar aqui.
+let avisoDeInjecao = () => '';
+try { ({ avisoDeInjecao } = await import('./varredura-entre-sessoes.mjs')); } catch { /* sem aviso */ }
 
 try {
   const texto = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'regras-globais.md'), 'utf8').trim();
