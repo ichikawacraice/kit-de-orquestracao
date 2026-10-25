@@ -9,6 +9,8 @@ export type LinhaItem = {
   resumo?: string
   /** O id do tema, ou 'sem-tema' quando o item não cabe em `temas.json`. */
   tema: string
+  /** O projeto do tema que casou (ausente em tema global e em 'sem-tema'): o grupo é (projeto, id). */
+  temaProjeto?: string
   temaRotulo: string
   /** A etapa como veio no documento (pode estar fora da lista: aí `foraDoContrato` explica). */
   etapa: string

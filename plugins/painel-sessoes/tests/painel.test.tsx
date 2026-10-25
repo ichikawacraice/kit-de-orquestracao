@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { itemSvg, perguntaSvg, resumoSvg } from '../hooks/desenho.js'
-import { montarItens } from '../hooks/register.js'
+import { montarItens, porTema } from '../hooks/register.js'
 import { FILA_REAL, TEMAS_REAIS } from './fixtura-fila.js'
 
 const PANE = {
@@ -680,4 +680,32 @@ test('palavra comprida na 1ª linha do título quebra depois do hífen, não no 
     expect(linhas[0]!.endsWith('-'), `a 1ª linha a ${W} px termina em hífen: "${linhas[0]}"`).toBe(true)
     expect(titulo.replace(/\s/g, '').startsWith(linhas.join('').replace(/…$/, '').replace(/\s/g, '')), 'nenhuma letra some nem muda').toBe(true)
   }
+})
+
+test('dois projetos com o tema "geral" são dois grupos, cada item uma vez, e o rótulo repetido ganha o projeto (V3)', () => {
+  const temas = [
+    { id: 'geral', rotulo: 'Geral', projeto: 'novo' },
+    { id: 'geral', rotulo: 'Geral', projeto: 'izanagi' },
+    { id: 'kit', rotulo: 'Kit', projeto: 'izanagi' },
+  ]
+  const docs = [
+    { id: 'F1', data: { titulo: 'F1', tema: 'geral', projeto: 'novo', etapa: 'planejamento' } },
+    { id: 'F2', data: { titulo: 'F2', tema: 'geral', projeto: 'izanagi', etapa: 'planejamento' } },
+    { id: 'F3', data: { titulo: 'F3', tema: 'kit', projeto: 'izanagi', etapa: 'planejamento' } },
+  ]
+  const itens = montarItens(docs, temas, [], undefined, [], AGORA)
+  expect(itens.length, 'a montagem não pode vir vazia').toBe(3)
+  expect(itens.map(i => i.foraDoContrato).filter(Boolean), 'nenhum item sai do contrato').toEqual([])
+  const grupos = porTema(itens, temas, (a, b) => a.id.localeCompare(b.id))
+  expect(grupos.length, 'um grupo por (projeto, id)').toBe(3)
+  expect(grupos.map(g => g.itens.map(i => i.id).join())).toEqual(['F1', 'F2', 'F3'])
+  expect(grupos.map(g => g.rotulo)).toEqual(['Geral · novo', 'Geral · izanagi', 'Kit'])
+})
+
+test('com um só projeto, o rótulo do tema não ganha sufixo; item sem projeto casa com o primeiro de mesmo id', () => {
+  const temas = [{ id: 'geral', rotulo: 'Geral', projeto: 'izanagi' }]
+  const itens = montarItens([{ id: 'F1', data: { titulo: 'F1', tema: 'geral', etapa: 'planejamento' } }], temas, [], undefined, [], AGORA)
+  expect(itens.length).toBe(1)
+  expect(itens[0]!.tema).toBe('geral')
+  expect(porTema(itens, temas, () => 0).map(g => g.rotulo)).toEqual(['Geral'])
 })

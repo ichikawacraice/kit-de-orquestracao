@@ -102,7 +102,12 @@ export function montarItens(
     const etapaCrua = texto(d.data.etapa)
     const etapaOk = etapaCrua !== undefined && ETAPAS.includes(etapaCrua)
     const temaId = texto(d.data.tema)
-    const tema = temas.find(t => t.id === temaId)
+    const projetoDoItem = texto(d.data.projeto)?.toLowerCase()
+    const mesmoId = temas.filter(t => t.id === temaId)
+    // O tema é o de mesmo id e do projeto do item; sem projeto no tema, vale para todos; item legado (sem projeto) casa com o primeiro de mesmo id.
+    const tema = projetoDoItem
+      ? mesmoId.find(t => t.projeto?.toLowerCase() === projetoDoItem) ?? mesmoId.find(t => !t.projeto)
+      : mesmoId[0]
     const motivos: string[] = []
     if (etapaCrua === undefined) motivos.push('sem etapa')
     else if (!etapaOk) motivos.push(`etapa '${etapaCrua}' fora da lista`)
@@ -139,6 +144,7 @@ export function montarItens(
       resumo: texto(d.data.resumo),
       // Qualquer descumprimento do contrato (etapa, tema, dono) manda o item para "Sem tema", com o motivo.
       tema: tema && motivos.length === 0 ? tema.id : SEM_TEMA,
+      temaProjeto: tema && motivos.length === 0 ? tema.projeto?.toLowerCase() : undefined,
       temaRotulo: tema && motivos.length === 0 ? tema.rotulo : 'Sem tema',
       etapa: etapaCrua ?? '?',
       situacao,
@@ -163,15 +169,20 @@ export function montarItens(
   return itens
 }
 
-/** Os temas, na ordem de `temas.json`, com "Sem tema" no fim; só os que têm item. Dentro, a ordem de `ordenar`. */
-export function porTema(itens: LinhaItem[], temas: Tema[], ordenar: (a: LinhaItem, b: LinhaItem) => number): Array<{ id: string; rotulo: string; itens: LinhaItem[] }> {
-  const ordem = [...temas.map(t => ({ id: t.id, rotulo: t.rotulo })), { id: SEM_TEMA, rotulo: 'Sem tema' }]
-
-  return ordem.flatMap(t => {
-    const meus = itens.filter(i => i.tema === t.id).sort(ordenar)
+/**
+ * Os temas, na ordem de `temas.json`, com "Sem tema" no fim; só os que têm item. Dentro, a ordem de `ordenar`.
+ * Um grupo por (projeto, id): dois projetos com o tema `geral` são dois grupos, e quando os visíveis repetem o rótulo
+ * o título vira `Rótulo · projeto`.
+ */
+export function porTema(itens: LinhaItem[], temas: Tema[], ordenar: (a: LinhaItem, b: LinhaItem) => number): Array<{ id: string; rotulo: string; projeto?: string; itens: LinhaItem[] }> {
+  const ordem = [...temas.map(t => ({ id: t.id, rotulo: t.rotulo, projeto: t.projeto?.toLowerCase() })), { id: SEM_TEMA, rotulo: 'Sem tema', projeto: undefined }]
+  const grupos = ordem.flatMap(t => {
+    const meus = itens.filter(i => i.tema === t.id && i.temaProjeto === t.projeto).sort(ordenar)
 
     return meus.length > 0 ? [{ ...t, itens: meus }] : []
   })
+
+  return grupos.map(g => (g.projeto && grupos.some(o => o !== g && o.rotulo === g.rotulo) ? { ...g, rotulo: `${g.rotulo} · ${g.projeto}` } : g))
 }
 
 const pelaOrdemDoId = (a: LinhaItem, b: LinhaItem) => numero(a.id) - numero(b.id)
