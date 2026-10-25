@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { anteriorSvg, fileteSvg, itemSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, seloDaEspera, textoDaTrava } from './desenho'
+import { anteriorSvg, desde, fileteSvg, itemSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, seloDaEspera, textoDaTrava } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -20,6 +20,9 @@ const leitura = atom({ plugin: 'painel-sessoes', key: 'leitura' } as const, VAZI
 const respondendoEm = atom({ plugin: 'painel-sessoes', key: 'respondendoEm' } as const, null as string | null)
 const verAnteriores = atom({ plugin: 'painel-sessoes', key: 'verAnteriores' } as const, false)
 const verFeitos = atom({ plugin: 'painel-sessoes', key: 'verFeitos' } as const, false)
+// A resposta em curso (a pergunta e a opção pressionada) e a sessão que o botão "abrir" está abrindo; null = nenhuma.
+const enviando = atom({ plugin: 'painel-sessoes', key: 'enviando' } as const, null as { q: string; opcao: string } | null)
+const abrindo = atom({ plugin: 'painel-sessoes', key: 'abrindo' } as const, null as string | null)
 
 // As respostas rápidas das perguntas sem opções próprias: o texto vai ao banco e à sessão.
 const RAPIDAS = [
@@ -206,14 +209,76 @@ const pelaOrdemDoId = (a: LinhaItem, b: LinhaItem) => numero(a.id) - numero(b.id
 const maisAntigoPrimeiro = (a: LinhaItem, b: LinhaItem) =>
   (Date.parse(a.paradoDesde ?? '') || Infinity) - (Date.parse(b.paradoDesde ?? '') || Infinity) || pelaOrdemDoId(a, b)
 
-/** Os blocos da tela: travados abrem "Em sessão", depois o que anda por tema; a fila por tema; e os feitos. */
+/** O item espera o operador sem uma pergunta aberta que já diga isso: ele vai a "Esperam você", e sai de Executando e de Na fila. */
+const esperaOperadorSemPergunta = (i: LinhaItem) => i.situacao !== 'feito' && i.espera?.motivo === 'operador' && i.perguntas.length === 0
+
+/**
+ * A única conta das quatro seções; o contador e a pílula leem daqui. Esperam você = as perguntas abertas mais os itens que
+ * esperam o operador sem pergunta aberta (em sessão ou na fila); o item com pergunta aberta não conta de novo.
+ */
+export function contarSecoes(itens: LinhaItem[], perguntas: PerguntaAberta[]): { esperam: number; travados: number; executando: number; fila: number } {
+  return {
+    esperam: perguntas.length + itens.filter(esperaOperadorSemPergunta).length,
+    travados: itens.filter(i => i.situacao === 'travado').length,
+    executando: itens.filter(i => i.situacao === 'andando' && !esperaOperadorSemPergunta(i)).length,
+    fila: itens.filter(i => i.situacao === 'fila' && !esperaOperadorSemPergunta(i)).length,
+  }
+}
+
+/**
+ * As quatro listas, nesta ordem: esperam, travados, executando e fila (o tema vai como campo do item, não como grupo; a
+ * ordem dos temas segue `temas.json`). `andando`, `filaPorTema`, `emSessao` e `naFila` são o formato de antes, que o
+ * desenho atual ainda lê; saem quando o desenho passar às quatro listas.
+ */
 export function secoes(itens: LinhaItem[], temas: Tema[]) {
-  const travados = porTema(itens.filter(i => i.situacao === 'travado'), temas, pelaOrdemDoId).flatMap(g => g.itens)
+  const planas = (lista: LinhaItem[], ordenar: (a: LinhaItem, b: LinhaItem) => number) => porTema(lista, temas, ordenar).flatMap(g => g.itens)
+  const esperam = planas(itens.filter(esperaOperadorSemPergunta), maisAntigoPrimeiro)
+  const travados = planas(itens.filter(i => i.situacao === 'travado'), pelaOrdemDoId)
+  const executando = planas(itens.filter(i => i.situacao === 'andando' && !esperaOperadorSemPergunta(i)), pelaOrdemDoId)
+  const naFilaPlana = planas(itens.filter(i => i.situacao === 'fila' && !esperaOperadorSemPergunta(i)), maisAntigoPrimeiro)
   const andando = porTema(itens.filter(i => i.situacao === 'andando'), temas, pelaOrdemDoId)
-  const fila = porTema(itens.filter(i => i.situacao === 'fila'), temas, maisAntigoPrimeiro)
+  const filaPorTema = porTema(itens.filter(i => i.situacao === 'fila'), temas, maisAntigoPrimeiro)
   const feitos = itens.filter(i => i.situacao === 'feito').sort((a, b) => (Date.parse(b.feitoEm ?? '') || 0) - (Date.parse(a.feitoEm ?? '') || 0))
 
-  return { travados, andando, fila, feitos, emSessao: travados.length + andando.reduce((n, g) => n + g.itens.length, 0), naFila: fila.reduce((n, g) => n + g.itens.length, 0) }
+  return {
+    esperam,
+    travados,
+    executando,
+    fila: naFilaPlana,
+    feitos,
+    andando,
+    filaPorTema,
+    emSessao: travados.length + andando.reduce((n, g) => n + g.itens.length, 0),
+    naFila: filaPorTema.reduce((n, g) => n + g.itens.length, 0),
+  }
+}
+
+/** O papel pela 1ª letra do apelido (P1, E3, V4, D1, O…): qualquer outra letra não diz papel. */
+export function papelDe(apelido: string): 'planejadora' | 'executora' | 'validadora' | 'designer' | 'orquestradora' | undefined {
+  const letra = apelido.trim().charAt(0).toUpperCase()
+
+  return ({ P: 'planejadora', E: 'executora', V: 'validadora', D: 'designer', O: 'orquestradora' } as const)[letra as 'P']
+}
+
+/**
+ * O que a sessão faz agora, do `list_sessions`: "trabalhando agora" (isRunning), "parada há X" (da última atividade) ou
+ * "sem leitura da sessão" quando a lista falhou. A sessão do próprio pane vem em `self` (o list_sessions não a traz).
+ * Sessão que não está na lista, e a sem última atividade, não têm o que dizer: devolve undefined.
+ */
+export function situacaoDe(localId: string, vivas: Vivo[], self: Vivo | undefined, erroDeLeitura: boolean, agora: number): string | undefined {
+  if (erroDeLeitura) return 'sem leitura da sessão'
+  const v = self?.sessionId === localId ? self : vivas.find(x => x.sessionId === localId)
+  if (!v) return undefined
+  if (v.isRunning) return 'trabalhando agora'
+  const quanto = desde(v.lastActivityAt, agora)
+  if (!quanto) return undefined
+
+  return quanto === 'agora' ? 'parada há menos de 1 min' : `parada ${quanto}`
+}
+
+/** A leitura parou de renovar: a última tem mais de 180 s. Sem leitura nenhuma ainda, não está parada, está começando. */
+export function leituraParada(ultimaLeitura: number | null, agora: number): boolean {
+  return ultimaLeitura !== null && agora - ultimaLeitura > 180_000
 }
 
 const numero = (id: string) => Number(id.replace(/\D/g, '')) || 0
@@ -569,7 +634,7 @@ export const register: Register = on => {
         const sec = secoes(l.itens, l.temas)
         const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.apelido).join(', ')}` : ''}`
 
-        return { emSessao: [...sec.travados, ...sec.andando.flatMap(g => g.itens)].map(dizer), naFila: sec.fila.flatMap(g => g.itens).map(dizer), feitos: sec.feitos.map(dizer) }
+        return { emSessao: [...sec.travados, ...sec.andando.flatMap(g => g.itens)].map(dizer), naFila: sec.filaPorTema.flatMap(g => g.itens).map(dizer), feitos: sec.feitos.map(dizer) }
       })(),
     }
     const texto = JSON.stringify({ aberto, panes: await $.ui.panes(), desenhos, lido }, null, 2)
@@ -603,11 +668,12 @@ export const register: Register = on => {
     // O estado da sessão sobrevive ao reload: o de antes desta versão não tem `avisos`.
     const avisos = l.avisos ?? []
     const sec = secoes(l.itens, l.temas)
+    const contagem = contarSecoes(l.itens, l.perguntas)
     const contar = (...sit: Situacao[]) => l.itens.filter(i => sit.includes(i.situacao)).length
     // Quatro decisões, cada uma contada uma vez: travado e andando se excluem, e a soma dos dois é "Em sessão".
     const resumo = [
-      { n: l.perguntas.length + l.itens.filter(i => i.espera?.motivo === 'operador' && i.perguntas.length === 0).length, rotulo: 'Esperam você', cor: 'warning' },
-      { n: contar('travado'), rotulo: 'Travados', cor: 'error' },
+      { n: contagem.esperam, rotulo: 'Esperam você', cor: 'warning' },
+      { n: contagem.travados, rotulo: 'Travados', cor: 'error' },
       { n: contar('andando'), rotulo: 'Andando', cor: 'suggestion' },
       { n: contar('fila'), rotulo: 'Na fila', cor: 'suggestion', classe: 't' },
     ]
@@ -779,7 +845,7 @@ export const register: Register = on => {
             <Box flexDirection="column" gap={1}>
               {titulo(`Na fila · ${sec.naFila}`)}
               {sec.naFila === 0 && <Text dimColor>Nada na fila.</Text>}
-              {sec.fila.map(g => (
+              {sec.filaPorTema.map(g => (
                 <Box key={`fila:${g.id}`} flexDirection="column" gap={1}>
                   {cabecalho(g.rotulo)}
                   {g.itens.map(i => desenhar(i))}
@@ -912,7 +978,7 @@ export const register: Register = on => {
           <Box flexDirection="column" gap={1}>
             <Text bold>{`Na fila · ${sec.naFila}`}</Text>
             {sec.naFila === 0 && <Text dimColor>Nada na fila.</Text>}
-            {sec.fila.map(g => (
+            {sec.filaPorTema.map(g => (
               <Box key={`fila:${g.id}`} flexDirection="column">
                 <Text dimColor bold>{g.rotulo.toUpperCase()}</Text>
                 {g.itens.map(i => linhaItem(i))}

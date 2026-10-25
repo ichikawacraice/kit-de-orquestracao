@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { itemSvg, perguntaSvg, resumoSvg } from '../hooks/desenho.js'
-import { montarItens, porTema } from '../hooks/register.js'
+import { contarSecoes, leituraParada, montarItens, papelDe, porTema, secoes, situacaoDe } from '../hooks/register.js'
 import { FILA_REAL, TEMAS_REAIS } from './fixtura-fila.js'
 
 const PANE = {
@@ -986,4 +986,89 @@ test('com botões, o filete do item vem depois deles', () => {
   const com = itemSvg(360, { ...itemBase, com: [] }, AGORA)
   expect(com.source).toContain('class="ln"')
   expect(sem.source).not.toContain('class="ln"')
+})
+
+// F34 fatia 1: as quatro seções, o papel, a situação da sessão e a leitura parada.
+type Linha = Parameters<typeof contarSecoes>[0][number]
+const linha = (id: string, extra: Partial<Linha> = {}): Linha => ({ id, titulo: id, tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'execucao', situacao: 'andando', prs: [], depois: [], com: [], perguntas: [], ...extra })
+const perguntaAberta = (id: string, item?: string) => ({ id, projeto: 'izanagi', sessao: 's', titulo: id, item, opcoes: [] })
+const TEMAS_S = [{ id: 'editor', rotulo: 'Editor da loja' }]
+const ESPERA_OP = { motivo: 'operador' as const, texto: 'decidir' }
+const CENARIOS = {
+  vazio: { itens: [] as Linha[], perguntas: [] as ReturnType<typeof perguntaAberta>[] },
+  misto: {
+    itens: [
+      linha('F1'),
+      linha('F2', { espera: ESPERA_OP }),
+      linha('F3', { espera: ESPERA_OP, perguntas: ['Q1'] }),
+      linha('F4', { situacao: 'fila' }),
+      linha('F5', { situacao: 'fila', espera: ESPERA_OP }),
+      linha('F6', { situacao: 'travado', trava: { motivo: 'conflito', texto: 't' } }),
+      linha('F7', { situacao: 'feito' }),
+      linha('F8', { espera: { motivo: 'gate' as const, texto: 'gate' } }),
+    ],
+    perguntas: [perguntaAberta('Q1', 'F3'), perguntaAberta('Q2')],
+  },
+}
+
+test('F34-1: contarSecoes é igual às listas de secoes em todo cenário, e o cenário não é vazio', () => {
+  expect(CENARIOS.misto.itens.length, 'o cenário tem itens').toBeGreaterThan(0)
+  for (const [nome, c] of Object.entries(CENARIOS)) {
+    const n = contarSecoes(c.itens, c.perguntas)
+    const sec = secoes(c.itens, TEMAS_S)
+    expect([n.travados, n.executando, n.fila], nome).toEqual([sec.travados.length, sec.executando.length, sec.fila.length])
+    expect(n.esperam, nome).toBe(c.perguntas.length + sec.esperam.length)
+  }
+  expect(contarSecoes(CENARIOS.misto.itens, CENARIOS.misto.perguntas)).toEqual({ esperam: 4, travados: 1, executando: 3, fila: 1 })
+})
+
+test('F34-1: o item que espera o operador sem pergunta aparece em esperam, e não em executando', () => {
+  const sec = secoes(CENARIOS.misto.itens, TEMAS_S)
+  expect(sec.esperam.map(i => i.id), 'esperam traz o item da sessão e o da fila').toEqual(['F2', 'F5'])
+  expect(sec.executando.map(i => i.id)).not.toContain('F2')
+  expect(sec.fila.map(i => i.id)).not.toContain('F5')
+  expect(sec.executando.map(i => i.id), 'espera de gate continua executando').toContain('F8')
+})
+
+test('F34-1: o item que espera o operador e tem pergunta aberta é contado uma vez só', () => {
+  const c = CENARIOS.misto
+  const sec = secoes(c.itens, TEMAS_S)
+  expect(sec.esperam.map(i => i.id), 'F3 não vai à lista, a pergunta dele já está').not.toContain('F3')
+  expect(sec.executando.map(i => i.id), 'F3 segue executando').toContain('F3')
+  expect(contarSecoes(c.itens, c.perguntas).esperam, '2 perguntas + F2 + F5, e F3 só na pergunta Q1').toBe(4)
+})
+
+test('F34-1: as quatro listas vêm na ordem dos temas de temas.json, com o tema como campo', () => {
+  const temas = [{ id: 'motor', rotulo: 'Motor' }, { id: 'editor', rotulo: 'Editor' }]
+  const itens = [linha('F1', { tema: 'editor' }), linha('F2', { tema: 'motor' }), linha('F3', { tema: 'editor' })]
+  const sec = secoes(itens, temas)
+  expect(sec.executando.length, 'há o que examinar').toBe(3)
+  expect(sec.executando.map(i => i.id)).toEqual(['F2', 'F1', 'F3'])
+  expect(sec.executando.map(i => i.tema)).toEqual(['motor', 'editor', 'editor'])
+})
+
+test('F34-1: papelDe lê a 1ª letra e devolve undefined para qualquer outra', () => {
+  expect([papelDe('P1'), papelDe('E3'), papelDe('V4'), papelDe('D1'), papelDe('O')]).toEqual(['planejadora', 'executora', 'validadora', 'designer', 'orquestradora'])
+  expect(papelDe('c20')).toBeUndefined()
+  expect(papelDe('')).toBeUndefined()
+})
+
+test('F34-1: situacaoDe diz trabalhando agora, parada há X e sem leitura da sessão', () => {
+  const agora = AGORA
+  const vivas = [
+    { sessionId: 'local_a', isRunning: true, lastActivityAt: new Date(agora - 60_000).toISOString() },
+    { sessionId: 'local_b', isRunning: false, lastActivityAt: new Date(agora - 12 * 60_000).toISOString() },
+  ]
+  expect(vivas.length).toBeGreaterThan(0)
+  expect(situacaoDe('local_a', vivas, undefined, false, agora)).toBe('trabalhando agora')
+  expect(situacaoDe('local_b', vivas, undefined, false, agora)).toBe('parada há 12 min')
+  expect(situacaoDe('local_a', vivas, undefined, true, agora), 'a leitura falhou').toBe('sem leitura da sessão')
+  expect(situacaoDe('local_eu', vivas, { sessionId: 'local_eu', isRunning: true }, false, agora), 'a própria sessão vem do self').toBe('trabalhando agora')
+  expect(situacaoDe('local_x', vivas, undefined, false, agora), 'fora da lista não inventa situação').toBeUndefined()
+})
+
+test('F34-1: a leitura em 179 s não está parada, e em 181 s está', () => {
+  expect(leituraParada(AGORA - 179_000, AGORA)).toBe(false)
+  expect(leituraParada(AGORA - 181_000, AGORA)).toBe(true)
+  expect(leituraParada(null, AGORA), 'sem leitura ainda está começando').toBe(false)
 })

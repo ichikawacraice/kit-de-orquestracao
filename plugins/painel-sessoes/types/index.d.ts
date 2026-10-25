@@ -92,6 +92,10 @@ declare module 'claude-code' {
       respondendoEm: string | null
       verAnteriores: boolean
       verFeitos: boolean
+      /** A resposta em curso: a pergunta e a opção pressionada; null quando nenhuma. */
+      enviando: { q: string; opcao: string } | null
+      /** O localId da sessão que o botão "abrir" está abrindo; null quando nenhuma. */
+      abrindo: string | null
     }
   }
 }
