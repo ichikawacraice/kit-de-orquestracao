@@ -15,6 +15,7 @@ let falhas = 0;
 function novoBase() {
   base = mkdtempSync(join(tmpdir(), 'painel-val-'));
   mkdirSync(join(base, 'painel'));
+  writeFileSync(join(base, 'painel', 'temas.json'), JSON.stringify([{ id: 'editor', rotulo: 'Editor', projeto: 'izanagi' }]));
   mkdirSync(join(base, 'app')); mkdirSync(join(base, 'orq'));
   // Sessão sintética "própria": registro do app com local_SELF / cli-self (usada nos casos de CLAUDE_CODE_SESSION_ID).
   writeFileSync(join(base, 'app', 'local_SELF.json'), JSON.stringify({ sessionId: 'local_SELF', cliSessionId: 'cli-self', title: 'E1 · x', isArchived: false }));
@@ -142,7 +143,7 @@ caso('5b (e) delete de outra sem flag → recusa; com --de-outra apaga', () => {
 });
 caso('5b (f) batch com set em linha de outra sem deOutra → recusa o lote inteiro; com deOutra grava', () => {
   const antes = semear();
-  const ops = (extra) => JSON.stringify([{ op: 'set', colecao: 'fila', id: 'F9', data: { titulo: 'f' } }, { op: 'set', colecao: 'sessoes', id: 'local_OUTRA', data: { titulo: 'z' }, ...extra }]);
+  const ops = (extra) => JSON.stringify([{ op: 'set', colecao: 'fila', id: 'F9', data: { titulo: 'f', etapa: 'planejamento', tema: 'editor' } }, { op: 'set', colecao: 'sessoes', id: 'local_OUTRA', data: { titulo: 'z' }, ...extra }]);
   const r = painelComo(EU, 'batch', ops({}));
   recusouOutra(r, antes);
   ok(!existsSync(arq('fila', 'F9')), 'F9 gravado apesar da recusa do lote');

@@ -3,7 +3,7 @@
 // Nada aqui toca ~/.claude: HOME e PAINEL_DIR são pastas temporárias.
 // Rodar: node hooks/tests/bin.test.mjs
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,7 +22,8 @@ const rodar = (cmd, args = []) => spawnSync(join(BIN, cmd), args, {
 });
 
 caso('painel (bin) grava e lista pela coleção fila, com PAINEL_DIR temporário', () => {
-  const u = rodar('painel', ['update', 'fila', 'F1', '{"estado":"aberto","projeto":"x","papel":"E"}']);
+  mkdirSync(join(base, 'painel'), { recursive: true }); writeFileSync(join(base, 'painel', 'temas.json'), JSON.stringify([{ id: 'editor', rotulo: 'Editor', projeto: 'x' }])); // o contrato novo da fila exige tema cadastrado
+  const u = rodar('painel', ['update', 'fila', 'F1', '{"titulo":"t","etapa":"planejamento","tema":"editor","estado":"aberto","projeto":"x","papel":"E"}']);
   ok(u.status === 0, `update saiu ${u.status}: ${u.stderr}`);
   ok(existsSync(join(base, 'painel', 'fila', 'F1.json')), 'não gravou no PAINEL_DIR');
   const l = rodar('painel', ['list', 'fila']);

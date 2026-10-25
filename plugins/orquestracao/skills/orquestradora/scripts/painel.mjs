@@ -110,8 +110,6 @@ const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'fei
 const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
 const MOTIVOS_DA_TRAVA = new Set([...MOTIVOS]);
 const DONOS_ANTIGOS = ['dono', 'dona', 'membro', 'executora'];
-// Até a migração (fatia 2) um `set` no contrato antigo (sem etapa nem tema) ainda passa; a fatia 2 põe `false`.
-const SET_LEGADO_TOLERADO = true;
 const ARQUIVO_DE_TEMAS = () => join(BASE, 'temas.json');
 function temasValidos(chave) {
   const caminho = ARQUIVO_DE_TEMAS();
@@ -126,8 +124,14 @@ function temasValidos(chave) {
 }
 const textoNaoVazio = (v) => typeof v === 'string' && v.trim() !== '';
 
-function validarItemDaFila(chave, novo, base, op) {
+function validarItemDaFila(chave, novo, base, op, existia) {
   const tem = (k) => k in novo && novo[k] !== null;
+  // apagar o contrato não é mesclar: `null` em update remove o campo, e titulo/etapa/tema são o que faz do documento um item
+  if (op === 'update') {
+    for (const k of ['titulo', 'etapa', 'tema']) {
+      if (k in novo && novo[k] === null) throw new Error(`${chave}: ${k} não pode ser apagado (null) — o item perderia o contrato; troque o valor`);
+    }
+  }
   if (tem('etapa') && !ETAPAS.includes(novo.etapa)) {
     throw new Error(`${chave}: etapa "${novo.etapa}" fora da lista (${ETAPAS.join(' · ')})`);
   }
@@ -162,15 +166,16 @@ function validarItemDaFila(chave, novo, base, op) {
     if (!/^local_[0-9a-f-]{36}$/.test(String(novo.donoLocalId))) throw new Error(`${chave}: donoLocalId "${novo.donoLocalId}" não é local_<uuid>`);
     if (!textoNaoVazio(base.donoApelido)) throw new Error(`${chave}: donoLocalId exige donoApelido`);
   }
-  if (op === 'set' && (!SET_LEGADO_TOLERADO || tem('etapa') || tem('tema'))) {
+  // set cria/substitui; update de item que não existe também cria — nos dois o item novo nasce com o contrato inteiro
+  if (op === 'set' || (op === 'update' && !existia)) {
     const falta = ['titulo', 'etapa', 'tema'].filter((k) => !textoNaoVazio(base[k]));
     if (falta.length) throw new Error(`${chave}: o item novo exige ${falta.join(', ')}`);
   }
 }
 
-function validarPadrao(colecao, id, novo, base, vista, op) {
+function validarPadrao(colecao, id, novo, base, vista, op, existia) {
   const chave = `${colecao}/${id}`;
-  if (colecao === 'fila') validarItemDaFila(chave, novo, base, op);
+  if (colecao === 'fila') validarItemDaFila(chave, novo, base, op, existia);
   if (colecao === 'perguntas' && base.estado === 'aberta' && !base.sessaoId) {
     throw new Error(`${chave}: pergunta aberta sem sessaoId — a resposta do painel não teria para onde voltar`);
   }
@@ -239,7 +244,7 @@ function planejar({ op, colecao, id, data, deOutra }, seVersao, vista) {
     else process.stderr.write(`aviso: ${colecao}/${id} sem projeto (${motivo})\n`);
   }
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
-  validarPadrao(colecao, id, novo, base, vista, op);
+  validarPadrao(colecao, id, novo, base, vista, op, !!atual);
   if (colecao === 'fila') automaticosDaFila(base, novo, atual?.data);
   const version = (atual?.version ?? 0) + 1;
   vista.set(chave, { id, version, data: base });
