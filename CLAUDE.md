@@ -19,7 +19,8 @@ Regras do código (valem para toda fatia):
 Lidos de `.claude/kit.json`:
 - **Gate:** `npm test` (= `node --test`).
 - Sem typecheck neste repo.
-- Validar manifestos: `claude plugin validate .`
+- Validar manifestos: `claude plugin validate .` (e `claude plugin validate plugins/<nome> --strict`)
+- Testes do mod: `claude plugin test plugins/painel-sessoes` (o `node --test` da raiz não os pega: são `.tsx`).
 <!-- /kit:comandos -->
 
 <!-- kit:regras-de-operacao v1 -->
