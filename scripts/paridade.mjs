@@ -12,7 +12,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PLUGIN = join(RAIZ, 'plugins', 'orquestracao');
+const PLUGIN = process.env.KIT_PARIDADE_PLUGIN || join(RAIZ, 'plugins', 'orquestracao'); // o override é do teste do sincronizar
 const CLAUDE = process.env.KIT_PARIDADE_HOME || join(homedir(), '.claude');
 
 // Onde cada pasta do plugin mora em ~/.claude (bin/ e .claude-plugin/ só existem no plugin).
