@@ -77,3 +77,63 @@ describe('c17.1 tema por projeto', () => {
     assert.equal(r.status, 0, `o mutante devia aceitar o tema alheio: ${r.stderr}`);
   });
 });
+
+// ---- c17.3: o diff do `adotar --simular` é unificado de verdade (hunks @@ + 3 linhas de contexto) e `git apply` o aplica ----
+import { diffTexto } from '../cli/diff.mjs';
+const KIT = join(RAIZ, 'cli', 'kit.mjs');
+const git = (cwd, ...a) => spawnSync('git', a, { cwd, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+const nLinhas = (n, f = (i) => `linha ${i}`) => Array.from({ length: n }, (_, i) => f(i + 1)).join('\n') + '\n';
+
+describe('c17.3 diff unificado', () => {
+  const aplica = (t, antigo, novo, diff) => {
+    const d = realpathSync(mkdtempSync(join(tmpdir(), 'kit-c17d-'))); t.after(() => rmSync(d, { recursive: true, force: true }));
+    if (antigo !== null) writeFileSync(join(d, 'f.txt'), antigo);
+    writeFileSync(join(d, 'p.diff'), `${diff}\n`);
+    const chk = git(d, 'apply', '--check', 'p.diff'); assert.equal(chk.status, 0, `git apply --check: ${chk.stderr}\n${diff}`);
+    const ap = git(d, 'apply', 'p.diff'); assert.equal(ap.status, 0, ap.stderr);
+    assert.equal(readFileSync(join(d, 'f.txt'), 'utf8'), novo);
+  };
+  it('uma mudança no meio: cabeçalho @@ e 3 linhas de contexto de cada lado', (t) => {
+    const antigo = nLinhas(20); const novo = antigo.replace('linha 10\n', 'DEZ\n');
+    const diff = diffTexto(antigo, novo, 'f.txt');
+    assert.ok(diff.length > 0, 'diff não vazio');
+    assert.match(diff, /^@@ -7,7 \+7,7 @@$/m);
+    assert.equal(diff.split('\n').filter((l) => l.startsWith(' ')).length, 6, 'seis linhas de contexto');
+    aplica(t, antigo, novo, diff);
+  });
+  it('duas mudanças distantes viram dois hunks; vizinhas viram um', (t) => {
+    const antigo = nLinhas(40); const longe = antigo.replace('linha 3\n', 'A\n').replace('linha 35\n', 'B\n');
+    assert.equal((diffTexto(antigo, longe, 'f.txt').match(/^@@/gm) || []).length, 2);
+    aplica(t, antigo, longe, diffTexto(antigo, longe, 'f.txt'));
+    const perto = antigo.replace('linha 10\n', 'A\n').replace('linha 14\n', 'B\n');
+    assert.equal((diffTexto(antigo, perto, 'f.txt').match(/^@@/gm) || []).length, 1);
+    aplica(t, antigo, perto, diffTexto(antigo, perto, 'f.txt'));
+  });
+  it('arquivo novo (--- /dev/null, @@ -0,0), arquivo sem newline final e começo/fim do arquivo', (t) => {
+    const novo = nLinhas(5); const diff = diffTexto(null, novo, 'f.txt');
+    assert.match(diff, /^--- \/dev\/null$/m); assert.match(diff, /^@@ -0,0 \+1,5 @@$/m);
+    aplica(t, null, novo, diff);
+    const a = 'um\ndois\ntres'; const b = 'um\ndois\nquatro';
+    aplica(t, a, b, diffTexto(a, b, 'f.txt'));
+    const c = nLinhas(10); const d = c.replace('linha 1\n', 'PRIMEIRA\n').replace('linha 10\n', 'ULTIMA\n');
+    aplica(t, c, d, diffTexto(c, d, 'f.txt'));
+    assert.equal(diffTexto(c, c, 'f.txt'), '', 'sem mudança, diff vazio');
+  });
+  it('`kit adotar --simular` num projeto em andamento: a saída inteira aplica com git apply --check numa cópia', (t) => {
+    const proj = realpathSync(mkdtempSync(join(tmpdir(), 'kit-c17p-'))); t.after(() => rmSync(proj, { recursive: true, force: true }));
+    git(proj, 'init', '-q');
+    writeFileSync(join(proj, 'CLAUDE.md'), '# Meu projeto\n\nTexto meu.\n');
+    writeFileSync(join(proj, 'package.json'), '{\n  "name": "meu",\n  "private": true,\n  "scripts": { "test": "node --test" }\n}\n');
+    mkdirSync(join(proj, '.claude')); writeFileSync(join(proj, '.claude', 'settings.json'), '{\n  "enabledPlugins": {\n    "outro@x": true\n  }\n}\n');
+    const r = spawnSync('node', [KIT, 'adotar', '--simular'], { cwd: proj, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+    assert.equal(r.status, 0, r.stderr);
+    const corpo = r.stdout.split('\n'); const ini = corpo.findIndex((l) => l.startsWith('--- '));
+    assert.ok(ini >= 0, `sem diff na saída:\n${r.stdout.slice(0, 300)}`);
+    const diff = corpo.slice(ini).filter((l) => /^([ +\-@\\]|$)/.test(l)).join('\n');
+    assert.match(diff, /^@@ -/m);
+    assert.match(r.stdout, /^--- \/dev\/null\n\+\+\+ b\/\.claude\/kit\.json\n@@ -0,0 \+1,\d+ @@$/m, 'arquivo novo sai com o conteúdo, não com um resumo');
+    writeFileSync(join(proj, 'p.diff'), `${diff}\n`);
+    const chk = git(proj, 'apply', '--check', 'p.diff'); assert.equal(chk.status, 0, `${chk.stderr}\n${diff.slice(0, 600)}`);
+    assert.equal(readFileSync(join(proj, 'CLAUDE.md'), 'utf8'), '# Meu projeto\n\nTexto meu.\n', 'a simulação não gravou');
+  });
+});

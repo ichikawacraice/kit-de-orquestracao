@@ -23,7 +23,7 @@ export function adotar({ destino, perfil = 'simples', versao, simular = false, t
   const linhas = [];
   if (recuperando) linhas.push(`recuperado: instalação interrompida${orfaos.length ? ` (${orfaos.length} .kit-tmp órfão(s) ${simular ? 'seriam apagados' : 'apagados'})` : ''}; o que já estava lá foi reconhecido e o resto é concluído.`);
   const barrado = plano.conflitos.length > 0 && !parcial; // atômico: com conflito não grava nada, a menos que --parcial
-  if (simular) for (const m of plano.mudancas) linhas.push(m.antigo === null ? `+++ b/${m.arquivo} (arquivo novo, ${m.novo.split('\n').length - 1} linhas)` : diffTexto(m.antigo, m.novo, m.arquivo));
+  if (simular) for (const m of plano.mudancas) linhas.push(diffTexto(m.antigo, m.novo, m.arquivo));
   else if (!barrado) {
     for (const rel of orfaos) rmSync(join(destino, `${rel}.kit-tmp`), { force: true });
     const pendente = [...plano.conflitos, ...plano.pendencias];
