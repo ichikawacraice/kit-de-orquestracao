@@ -59,6 +59,8 @@ Decisão: [ADR 0001](../adr/0001-plugin-para-o-nucleo-cli-para-o-projeto.md). Es
 - `kit iniciar [--perfil simples|pnpm-workspace]`: em pasta vazia ou repo sem `CLAUDE.md`, grava `CLAUDE.md`, `.claude/kit.json`, `scripts/kit/` (cópia do `gate/`), `package.json` (`test`/`typecheck` → gate) e `.claude/settings.json` (o hook da guarda do projeto + `extraKnownMarketplaces`/`enabledPlugins` do kit), e o `.claude/kit.lock.json` (versão + sha256 de cada arquivo e bloco).
 - **Pronto:** teste em pasta temporária com `git init`: depois do `iniciar`, `npm test` passa pelo gate e `kit doutor` (stub) lê o lock.
 
+- **Herdado da validação da K5 (R1):** um caso que roda o `main` de `gate/a-vez-do-gate.mjs` com `gate.prazos.ilegivelSeg: 1` e uma trava ilegível de 2 s, e afirma que ela é retomada — hoje tirar a ligação da linha 478 não deixa teste vermelho.
+
 ### K7 — CLI: `adotar`, `atualizar`, `doutor`, `remover` · **Robusta**
 - `adotar [--simular]`: projeto com `CLAUDE.md`, `settings.json` e `package.json` próprios. **Nunca sobrescreve:** `CLAUDE.md` ganha só os blocos que faltam (no fim, ou onde já houver o marcador); JSON é mesclado (chave existente com valor diferente = conflito listado, não trocado); script `test` existente vira `test:projeto` só com `--trocar-test`. `--simular` imprime o diff e não grava.
 - `atualizar`: para cada item do lock, hash atual = hash gravado → troca pela versão nova; diferente → conflito listado com o diff. Bloco de `CLAUDE.md` idem.
