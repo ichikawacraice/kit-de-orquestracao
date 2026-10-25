@@ -36,13 +36,14 @@ describe('c13 — temas.json semeado pelo painel', () => {
       assert.doesNotMatch(r2.stderr, /temas\.json/, 'avisou de novo');
     } finally { rmSync(d, { recursive: true, force: true }); }
   });
-  it('temas.json existente fica intocado, byte a byte, e não avisa', () => {
+  it('temas.json existente com tema do projeto fica intocado, byte a byte, e não avisa', () => {
     const d = novo();
     try {
       mkdirSync(join(d, 'painel'), { recursive: true });
-      const meu = '[ { "id": "editor", "rotulo": "Editor" } ]\n';
+      const meu = '[ { "id": "editor", "rotulo": "Editor", "projeto": "proj" } ]\n'; // c19: só tema do próprio projeto dispensa a semente; o global não
       writeFileSync(join(d, 'painel', 'temas.json'), meu);
-      const r = painel(d, 'update', 'fila', 'F1', JSON.stringify({ titulo: 't', etapa: 'planejamento', tema: 'editor' }));
+      const repo = join(d, 'proj'); mkdirSync(repo); execFileSync('git', ['init', '-q', repo], { timeout: 10000, killSignal: 'SIGKILL' });
+      const r = spawnSync('node', [PAINEL, 'update', 'fila', 'F1', JSON.stringify({ titulo: 't', etapa: 'planejamento', tema: 'editor' })], { cwd: repo, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { PATH: process.env.PATH, HOME: join(d, 'home'), PAINEL_DIR: join(d, 'painel') } });
       assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
       assert.equal(readFileSync(join(d, 'painel', 'temas.json'), 'utf8'), meu);
       assert.doesNotMatch(r.stderr, /temas\.json/);

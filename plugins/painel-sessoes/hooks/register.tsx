@@ -104,14 +104,15 @@ export function montarItens(
     const temaId = texto(d.data.tema)
     const projetoDoItem = texto(d.data.projeto)?.toLowerCase()
     const mesmoId = temas.filter(t => t.id === temaId)
-    // O tema é o de mesmo id e do projeto do item; sem projeto no tema, vale para todos; item legado (sem projeto) casa com o primeiro de mesmo id.
+    // O tema é o de mesmo id e do projeto do item; sem projeto no tema, vale para todos. Item legado (sem projeto) só casa com tema global:
+    // adivinhar o projeto pela ordem do arquivo atribuiria o item a um projeto que ninguém escolheu.
     const tema = projetoDoItem
       ? mesmoId.find(t => t.projeto?.toLowerCase() === projetoDoItem) ?? mesmoId.find(t => !t.projeto)
-      : mesmoId[0]
+      : mesmoId.find(t => !t.projeto)
     const motivos: string[] = []
     if (etapaCrua === undefined) motivos.push('sem etapa')
     else if (!etapaOk) motivos.push(`etapa '${etapaCrua}' fora da lista`)
-    if (!tema) motivos.push(temaId ? `tema '${temaId}' fora da lista` : 'sem tema')
+    if (!tema) motivos.push(!temaId ? 'sem tema' : mesmoId.length > 0 ? `${projetoDoItem ? '' : 'item sem projeto: '}tema de outro projeto ('${temaId}')` : `tema '${temaId}' fora da lista`)
     const donoLocalId = texto(d.data.donoLocalId)
     const apelido = texto(d.data.donoApelido)
     // Dono pela metade não é fila: o item acusa o que falta, em vez de parecer livre.

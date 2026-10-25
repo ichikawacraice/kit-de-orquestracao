@@ -138,7 +138,8 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   // A pasta do painel em memória: um arquivo por documento.
   const arquivos = new Map<string, string>()
   for (const d of opc.perguntas ?? PERGUNTAS) arquivos.set(`${PASTA}/perguntas/${d.id}.json`, JSON.stringify(d))
-  for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, data)))
+  // a foto da fila não traz o `projeto`, mas os 29 itens reais têm `izanagi`: sem ele o item legado cai em "Sem tema" (c19)
+  for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, { projeto: 'izanagi', ...data })))
   if (!opc.semTemas) arquivos.set(`${PASTA}/temas.json`, JSON.stringify(TEMAS_REAIS))
   const escritas: Escrita[] = []
   on('fs.list', (_, e) => {
@@ -722,12 +723,38 @@ test('dois projetos com o tema "geral" são dois grupos, cada item uma vez, e o 
   expect(grupos.map(g => g.rotulo)).toEqual(['Geral · novo', 'Geral · izanagi', 'Kit'])
 })
 
-test('com um só projeto, o rótulo do tema não ganha sufixo; item sem projeto casa com o primeiro de mesmo id', () => {
+test('com um só projeto, o rótulo do tema não ganha sufixo', () => {
   const temas = [{ id: 'geral', rotulo: 'Geral', projeto: 'izanagi' }]
-  const itens = montarItens([{ id: 'F1', data: { titulo: 'F1', tema: 'geral', etapa: 'planejamento' } }], temas, [], undefined, [], AGORA)
+  const itens = montarItens([{ id: 'F1', data: { titulo: 'F1', tema: 'geral', projeto: 'izanagi', etapa: 'planejamento' } }], temas, [], undefined, [], AGORA)
   expect(itens.length).toBe(1)
   expect(itens[0]!.tema).toBe('geral')
   expect(porTema(itens, temas, () => 0).map(g => g.rotulo)).toEqual(['Geral'])
+})
+
+test('c19: item legado sem projeto não vai para o geral do primeiro projeto: cai em "Sem tema" com o motivo; tema global ainda casa', () => {
+  const temas = [{ id: 'geral', rotulo: 'Geral', projeto: 'izanagi' }, { id: 'glob', rotulo: 'Global' }]
+  const itens = montarItens([
+    { id: 'F1', data: { titulo: 'F1', tema: 'geral', etapa: 'planejamento' } },
+    { id: 'F2', data: { titulo: 'F2', tema: 'glob', etapa: 'planejamento' } },
+  ], temas, [], undefined, [], AGORA)
+  expect(itens.length, 'a montagem não pode vir vazia').toBe(2)
+  const por = Object.fromEntries(itens.map(i => [i.id, i]))
+  expect(por.F2!.tema, 'o tema global casa (prova que a montagem acha tema)').toBe('glob')
+  expect(por.F1!.tema).toBe('sem-tema')
+  expect(por.F1!.foraDoContrato).toMatch(/item sem projeto: tema de outro projeto \('geral'\)/)
+})
+
+test('c19: tema que existe, mas é de outro projeto, diz "tema de outro projeto" e não "fora da lista"', () => {
+  const temas = [{ id: 'kit', rotulo: 'Kit', projeto: 'izanagi' }]
+  const itens = montarItens([
+    { id: 'F1', data: { titulo: 'F1', tema: 'kit', projeto: 'novo', etapa: 'planejamento' } },
+    { id: 'F2', data: { titulo: 'F2', tema: 'nada', projeto: 'novo', etapa: 'planejamento' } },
+  ], temas, [], undefined, [], AGORA)
+  expect(itens.length).toBe(2)
+  const por = Object.fromEntries(itens.map(i => [i.id, i]))
+  expect(por.F1!.foraDoContrato).toMatch(/tema de outro projeto \('kit'\)/)
+  expect(por.F1!.foraDoContrato).not.toMatch(/fora da lista/)
+  expect(por.F2!.foraDoContrato, 'tema que não existe em lugar nenhum continua "fora da lista"').toMatch(/tema 'nada' fora da lista/)
 })
 
 const abrirDe = async (opc: Opcoes, $: Parameters<TestBody>[0], on: On) => {

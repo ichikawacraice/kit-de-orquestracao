@@ -114,7 +114,10 @@ const MOTIVOS_DA_TRAVA = new Set([...MOTIVOS]);
 const DONOS_ANTIGOS = ['dono', 'dona', 'membro', 'executora'];
 const ARQUIVO_DE_TEMAS = () => join(BASE, 'temas.json');
 // temas.json: lista de { id, rotulo, projeto? }. Tema com `projeto` vale só nele; sem `projeto` (instalação antiga) vale para todos.
+// Sem `projeto` no pedido (list fora de git), enxerga tudo; quem VALIDA item passa por `temasDoItem`, que não deixa o item sem projeto usar tema alheio.
 const doProjeto = (t, projeto) => !projeto || !t?.projeto || String(t.projeto).toLowerCase() === projeto;
+const global = (t) => !t?.projeto;
+const temasDoItem = (lista, projeto) => lista.filter((t) => (projeto ? doProjeto(t, projeto) : global(t)));
 function lerTemas(caminho) {
   if (!existsSync(caminho)) return [];
   const lista = JSON.parse(readFileSync(caminho, 'utf8'));
@@ -128,24 +131,32 @@ function gravarTemas(caminho, lista) {
   renameSync(tmp, caminho);
 }
 const idsDe = (lista, projeto) => lista.filter((t) => doProjeto(t, projeto)).map((t) => t?.id).filter((x) => typeof x === 'string' && x);
-// Projeto sem nenhum tema visível ganha o `geral` na primeira gravação em `fila` (a escrita está sob a trava do painel).
+// Projeto sem tema PRÓPRIO ganha o `geral` (um tema global não conta: ele não desliga a semente). A semente volta em `semente` e só é gravada quando a escrita do item é aceita (`efetivar`).
 function temasValidos(chave, projeto) {
   const caminho = ARQUIVO_DE_TEMAS();
   try {
-    let lista = lerTemas(caminho);
-    if (projeto && idsDe(lista, projeto).length === 0) {
-      lista = [...lista, { id: 'geral', rotulo: 'Geral', projeto }];
-      gravarTemas(caminho, lista);
-      process.stderr.write(`painel.mjs: o projeto "${projeto}" não tinha tema; cadastrei "geral" em ${caminho}. Crie os seus com: painel.mjs temas add <id> "<rótulo>"\n`);
-    } else if (!projeto && idsDe(lista, projeto).length === 0) {
-      lista = [{ id: 'geral', rotulo: 'Geral' }];
-      gravarTemas(caminho, lista);
-      process.stderr.write(`painel.mjs: ${caminho} não tinha temas; criei com o tema "geral".\n`);
+    const lista = lerTemas(caminho);
+    let semente = null;
+    if (projeto) {
+      const proprio = lista.some((t) => t?.projeto && String(t.projeto).toLowerCase() === projeto);
+      if (!proprio && !idsDe(lista, projeto).includes('geral')) semente = { id: 'geral', rotulo: 'Geral', projeto };
+    } else if (lista.length === 0) {
+      semente = { id: 'geral', rotulo: 'Geral' };
     }
-    return { ids: idsDe(lista, projeto), caminho };
+    const ids = temasDoItem(semente ? [...lista, semente] : lista, projeto).map((t) => t?.id).filter((x) => typeof x === 'string' && x);
+    return { ids, caminho, semente };
   } catch (e) {
     throw new Error(`${chave}: não consegui ler os temas em ${caminho} (${e.message})`);
   }
+}
+function semearTema(semente) {
+  if (!semente) return;
+  const caminho = ARQUIVO_DE_TEMAS();
+  const lista = lerTemas(caminho);
+  const igual = (t) => t?.id === semente.id && String(t?.projeto ?? '') === String(semente.projeto ?? '');
+  if (lista.some(igual)) return;
+  gravarTemas(caminho, [...lista, semente]);
+  process.stderr.write(semente.projeto ? `painel.mjs: o projeto "${semente.projeto}" não tinha tema; cadastrei "geral" em ${caminho}. Crie os seus com: painel.mjs temas add <id> "<rótulo>"\n` : `painel.mjs: ${caminho} não tinha temas; criei com o tema "geral".\n`);
 }
 // `painel.mjs temas list|add`: o jeito de cadastrar tema sem editar o JSON. O projeto é o da pasta atual ou `--projeto`.
 function comandoTemas(args) {
@@ -182,7 +193,9 @@ function filtraPorEstado(colecao, d, filtro) {
   return d?.etapa === filtro || d?.estado === filtro;
 }
 
+let sementePendente = null; // a semente do tema da última validação; quem chama a leva até `efetivar`
 function validarItemDaFila(chave, novo, base, op, existia) {
+  sementePendente = null;
   const tem = (k) => k in novo && novo[k] !== null;
   // apagar o contrato não é mesclar: `null` em update remove o campo, e titulo/etapa/tema são o que faz do documento um item
   if (op === 'update') {
@@ -210,7 +223,8 @@ function validarItemDaFila(chave, novo, base, op, existia) {
   }
   if (tem('tema')) {
     const projeto = base?.projeto ? String(base.projeto).toLowerCase() : null;
-    const { ids, caminho } = temasValidos(chave, projeto);
+    const { ids, caminho, semente } = temasValidos(chave, projeto);
+    sementePendente = semente;
     if (!ids.includes(novo.tema)) throw new Error(`${chave}: tema "${novo.tema}" fora da lista${projeto ? ` do projeto "${projeto}"` : ''} (${ids.join(' · ')}); para criar: painel.mjs temas add <id> "<rótulo>" (lista em ${caminho})`);
   }
   if (tem('trava')) {
@@ -326,10 +340,11 @@ function planejar({ op, colecao, id, data, deOutra }, seVersao, vista) {
   }
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
   validarPadrao(colecao, id, novo, base, vista, op, !!atual);
+  const semente = colecao === 'fila' ? sementePendente : null;
   if (colecao === 'fila') automaticosDaFila(base, novo, atual?.data);
   const version = (atual?.version ?? 0) + 1;
   vista.set(chave, { id, version, data: base });
-  return { colecao, id, data: base, version };
+  return { colecao, id, data: base, version, semente };
 }
 
 function efetivar(p) {
@@ -337,6 +352,7 @@ function efetivar(p) {
     rmSync(caminho(p.colecao, p.id), { force: true });
     return { id: p.id, deleted: true };
   }
+  semearTema(p.semente);
   return gravar(p.colecao, p.id, p.data, p.version);
 }
 

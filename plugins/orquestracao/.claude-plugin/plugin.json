@@ -1,6 +1,6 @@
 {
   "name": "orquestracao",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Pool de sessões do Claude Code: hooks e travas, skills, agents e scripts do painel.",
   "author": {
     "name": "ichikawacraice"

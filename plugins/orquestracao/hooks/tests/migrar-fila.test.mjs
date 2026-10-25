@@ -216,7 +216,7 @@ caso('projeto: sem KIT_PROJETO deriva do git da pasta atual e avisa no stderr (u
   const r = run('migrar-fila.mjs', ['--gravar'], { cwd: repoGit() }); igual(r.exit, 0, r.err);
   igual(lido('F1').data.projeto, 'meu-projeto', 'projeto derivado do git');
   ok(/projeto.*meu-projeto.*git/i.test(r.err), `stderr sem o aviso: ${JSON.stringify(r.err)}`);
-  igual(r.err.split('\n').filter((l) => /meu-projeto/.test(l)).length, 1, 'avisa uma vez só');
+  igual(r.err.split('\n').filter((l) => /derivei o projeto "meu-projeto"/.test(l)).length, 1, 'avisa uma vez só'); // o aviso da semente do tema (c19) também cita o projeto, e não é este
 });
 caso('projeto: com KIT_PROJETO definido usa ele e não avisa', () => {
   writeFileSync(join(poolDir, 'F1.md'), '# F1 — builder: fatias\n- frente: builder\n');
