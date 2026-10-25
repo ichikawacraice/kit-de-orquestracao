@@ -3,7 +3,7 @@ import { readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, lerTexto, modeloClaude, serializar } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, esqueletoDe, lerTexto, semBom, semOsBlocos, serializar } from './pacote.mjs';
 
 const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const vazio = (v) => (Array.isArray(v) ? v.length === 0 : ehObjeto(v) && Object.keys(v).length === 0);
@@ -36,12 +36,12 @@ export function remover({ destino, simular = false }) {
     if (sha256(atual.conteudo) !== reg.sha256) { deixou(`bloco ${nome} (CLAUDE.md)`); continue; }
     const inteiro = claude.match(new RegExp(`<!-- kit:${nome} v\\d+ -->[\\s\\S]*?<!-- /kit:${nome} -->`))[0];
     const i = claude.indexOf(inteiro);
-    const antes = claude[i - 1] === '\n' ? 1 : 0;
-    const depois = claude[i + inteiro.length] === '\n' ? 1 : 0;
+    const antes = claude[i - 1] === '\n' ? (claude[i - 2] === '\r' ? 2 : 1) : 0;
+    const depois = claude.startsWith('\r\n', i + inteiro.length) ? 2 : claude[i + inteiro.length] === '\n' ? 1 : 0;
     claude = claude.slice(0, i - antes) + claude.slice(i + inteiro.length + depois);
     tirou(`bloco ${nome} (CLAUDE.md)`);
   }
-  if (lock.arquivos['CLAUDE.md'] !== undefined && claude !== null && semOsBlocos(modeloClaude().replace('# <nome do projeto>', `# ${basenameDe(destino)}`)) === semOsBlocos(claude)) { apagar.push('CLAUDE.md'); tirou('CLAUDE.md (só restava o esqueleto do modelo)'); }
+  if (lock.arquivos['CLAUDE.md'] !== undefined && claude !== null && esqueletoDe(destino) === semOsBlocos(claude)) { apagar.push('CLAUDE.md'); tirou('CLAUDE.md (só restava o esqueleto do modelo)'); }
   else if (claude !== claudeOriginal) gravacoes.set('CLAUDE.md', claude);
 
   // JSON compartilhados: só as chaves que o kit registrou, se o valor ainda é o que ele pôs
@@ -49,12 +49,12 @@ export function remover({ destino, simular = false }) {
     const texto = lerTexto(destino, rel);
     if (texto === null) return;
     let v;
-    try { v = JSON.parse(texto); } catch (e) { ilegiveis.push(`${rel} ilegível: ${e.message}`); return; }
+    try { v = JSON.parse(semBom(texto)); } catch (e) { ilegiveis.push(`${rel} ilegível: ${e.message}`); return; }
     fn(v);
     const restante = Object.keys(v).filter((k) => !(vazioAposRemover.includes(k)));
     if (criado && restante.length === 0) { apagar.push(rel); tirou(`${rel} (criado pelo kit, sem mais nada)`); return; }
     // o que sobrou é o que o projeto tinha antes do kit: devolve os bytes dele, não os do JSON.stringify
-    let antes; try { antes = original ? JSON.parse(original) : undefined; } catch { antes = undefined; }
+    let antes; try { antes = original ? JSON.parse(semBom(original)) : undefined; } catch { antes = undefined; }
     if (antes !== undefined && isDeepStrictEqual(v, antes)) { if (original !== texto) gravacoes.set(rel, original); return; }
     const novo = serializar(v, texto);
     if (novo !== texto) gravacoes.set(rel, novo);
@@ -115,9 +115,8 @@ export function remover({ destino, simular = false }) {
     // só as pastas que o lock diz que o kit criou, da mais funda para a mais rasa, e só se ficaram vazias
     for (const dir of [...(lock.pastasCriadas ?? [])].sort((a, b) => b.split('/').length - a.split('/').length)) { try { if (!readdirSync(join(destino, dir)).length) rmdirSync(join(destino, dir)); } catch { /* não existe ou não está vazia */ } }
   }
+  if (lock.recuperado) linhas.push('aviso: instalação recuperada de uma interrompida — o texto original dos JSON não foi guardado (voltam sem as chaves do kit, no formato do JSON.stringify) e a suíte original foi deduzida de test:suite/test:projeto; confira com git status.');
   linhas.push(`kit remover${simular ? ' --simular' : ''}: ${simular ? 'nada foi gravado' : `lock ${LOCK} removido`}.`);
   return { codigo: 0, saida: `${linhas.join('\n')}\n`, erro: '' };
 }
 
-const semOsBlocos = (t) => t.replace(/<!-- kit:([a-z-]+) v\d+ -->[\s\S]*?<!-- \/kit:\1 -->/g, '').replace(/\s+/g, ' ').trim();
-function basenameDe(d) { return d.split('/').filter(Boolean).at(-1); }

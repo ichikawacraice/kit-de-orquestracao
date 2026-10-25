@@ -7,7 +7,7 @@ import { carregarConfig } from '../gate/config.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, lerTexto } from './pacote.mjs';
 
-const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8')); } catch { return null; } };
+const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
 export function doutor({ destino, versao, home = process.env.HOME || homedir() }) {
   const { lock, erro } = lerLock(destino);

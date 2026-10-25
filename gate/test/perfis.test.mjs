@@ -50,8 +50,8 @@ describe("(a) projeto npm simples, só com kit.json mínimo", () => {
 
   it("roda o comando uma vez com a trava tomada, solta a trava, e o verde da mesma árvore pula a segunda", async () => {
     const raiz = repo({
-      "package.json": { name: "simples", version: "1.0.0", scripts: { test: scriptDoTeste } },
-      ".claude/kit.json": { gate: { comandoCompleto: "npm test" } },
+      "package.json": { name: "simples", version: "1.0.0", scripts: { suite: scriptDoTeste } },
+      ".claude/kit.json": { gate: { comandoCompleto: "npm run suite" } },
     });
     const base = mkdtempSync(join(tmpdir(), "kit-perfil-base-"));
     const env = ambiente(base);
@@ -80,8 +80,8 @@ describe("(a) projeto npm simples, só com kit.json mínimo", () => {
 
   it("comando vermelho devolve o código dele, não guarda verde e solta a trava", async () => {
     const raiz = repo({
-      "package.json": { name: "vermelho", version: "1.0.0", scripts: { test: 'node -e "process.exit(3)"' } },
-      ".claude/kit.json": { gate: { comandoCompleto: "npm test" } },
+      "package.json": { name: "vermelho", version: "1.0.0", scripts: { suite: 'node -e "process.exit(3)"' } },
+      ".claude/kit.json": { gate: { comandoCompleto: "npm run suite" } },
     });
     const base = mkdtempSync(join(tmpdir(), "kit-perfil-base-"));
     const env = ambiente(base);
@@ -105,9 +105,9 @@ describe("(a) projeto npm simples, só com kit.json mínimo", () => {
   });
 
   it("pacote só com comandoPorPacote declarado; sem ele, recusa alto", () => {
-    const comPorPacote = carregarConfig("/x", { gate: { comandoCompleto: "npm test", pacotes: ["a", "b"], comandoPorPacote: "npm test --workspace {pacote}" } });
+    const comPorPacote = carregarConfig("/x", { gate: { comandoCompleto: "node --test", pacotes: ["a", "b"], comandoPorPacote: "npm test --workspace {pacote}" } });
     expect(comandoDaSuite({}, ["b", "-t", "x"], "/x", comPorPacote)).toEqual({ cmd: "npm", args: ["test", "--workspace", "b", "-t", "x"] });
-    const semPorPacote = carregarConfig("/x", { gate: { comandoCompleto: "npm test", pacotes: ["a"] } });
+    const semPorPacote = carregarConfig("/x", { gate: { comandoCompleto: "node --test", pacotes: ["a"] } });
     expect(() => comandoDaSuite({}, ["a"], "/x", semPorPacote)).toThrow(/comandoPorPacote/);
   });
 });

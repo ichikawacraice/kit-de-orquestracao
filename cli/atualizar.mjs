@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffTexto } from './diff.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { RAIZ_DO_KIT, arquivosDoGate, blocosDoModelo, gravar, lerTexto } from './pacote.mjs';
+import { RAIZ_DO_KIT, acrescentar, arquivosDoGate, blocosDoModelo, gravar, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function atualizar({ destino, versao, simular = false }) {
+export function atualizar({ destino, versao, simular = false, trocarTest = false }) {
   const { lock, erro } = lerLock(destino);
   if (erro) return { codigo: 1, saida: '', erro: `kit atualizar: ${erro}` };
   const mudancas = []; const linhas = []; let conflitos = 0;
@@ -38,21 +38,25 @@ export function atualizar({ destino, versao, simular = false }) {
     if (!atual) { conflito(`bloco ${nome} ausente do CLAUDE.md — não recriei`); continue; }
     const novo = blocosDe(texto)[0];
     const inteiroAtual = claudeAtual.match(new RegExp(`<!-- kit:${nome} v\\d+ -->[\\s\\S]*?<!-- /kit:${nome} -->`))[0];
-    if (inteiroAtual === texto) { lock.blocos[nome] = { versao: novo.versao, sha256: sha256(novo.conteudo) }; continue; }
-    if (sha256(atual.conteudo) === reg.sha256) { claude = claude.replace(inteiroAtual, () => texto); lock.blocos[nome] = { versao: novo.versao, sha256: sha256(novo.conteudo) }; linhas.push(`atualizado: bloco ${nome}`); }
+    const eol = claudeAtual.includes('\r\n') ? '\r\n' : '\n';
+    const nosso = eol === '\n' ? texto : texto.replace(/\n/g, eol);
+    if (inteiroAtual === nosso) { lock.blocos[nome] = { versao: novo.versao, sha256: sha256(blocosDe(nosso)[0].conteudo) }; continue; }
+    if (sha256(atual.conteudo) === reg.sha256) { claude = claude.replace(inteiroAtual, () => nosso); lock.blocos[nome] = { versao: novo.versao, sha256: sha256(blocosDe(nosso)[0].conteudo) }; linhas.push(`atualizado: bloco ${nome}`); }
     else conflito(`bloco ${nome} editado à mão — não troquei`, diffTexto(inteiroAtual, texto, `CLAUDE.md#${nome}`));
   }
   // bloco que o modelo tem e o projeto nunca recebeu (novo, ou o novo nome de um renomeado) entra no fim, como no adotar
   if (claude !== null) {
     for (const [nome, texto] of Object.entries(modelo)) {
       if (nome in lock.blocos || new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude)) continue;
-      claude += `${claude.endsWith('\n') ? '' : '\n'}\n${texto}\n`;
+      claude = acrescentar(claude, texto);
       const b = blocosDe(texto)[0];
       lock.blocos[nome] = { versao: b.versao, sha256: sha256(b.conteudo) };
       linhas.push(`novo: ${nome} (bloco acrescentado ao fim do CLAUDE.md)`);
     }
   }
   if (claude !== claudeAtual) mudancas.push({ arquivo: 'CLAUDE.md', antigo: claudeAtual, novo: claude });
+
+  if (trocarTest) trocarOTest({ destino, lock, mudancas, linhas, conflito });
 
   if (!conflitos) lock.versao = versao;
   if (!simular) {
@@ -63,4 +67,38 @@ export function atualizar({ destino, versao, simular = false }) {
     ? `kit atualizar: ${conflitos} conflito(s); a versão do lock continua ${lock.versao}.`
     : `kit atualizar${simular ? ' --simular' : ''}: em dia com o kit ${versao} (${mudancas.length} arquivo(s) ${simular ? 'mudariam' : 'trocados'}).`);
   return { codigo: conflitos ? 1 : 0, saida: `${linhas.join('\n')}\n`, erro: '' };
+}
+
+/** `--trocar-test`: o `npm test` passa a ser o gate e o `test` do projeto vai para `test:projeto` (o que a adoção deixou pendente). */
+function trocarOTest({ destino, lock, mudancas, linhas, conflito }) {
+  const pend = (lock.pendente ?? []).filter((p) => p.startsWith('scripts.test '));
+  const texto = lerTexto(destino, 'package.json');
+  if (!pend.length || texto === null) { linhas.push('aviso: --trocar-test: não há nada pendente do `test` neste projeto'); return; }
+  let pkg; try { pkg = JSON.parse(semBom(texto)); } catch (e) { conflito(`package.json ilegível: ${e.message}`); return; }
+  const gate = lerModelo().perfis[lock.perfil]?.scripts?.test;
+  const sc = pkg.scripts ?? {};
+  const atual = sc.test;
+  if (!gate || atual === undefined || atual === gate) { linhas.push('aviso: --trocar-test: o `test` já é o gate ou não existe; nada a trocar'); return; }
+  if (sc['test:projeto'] !== undefined && sc['test:projeto'] !== atual) { conflito('scripts.test:projeto já existe com outro valor — não troquei o `test`'); return; }
+  sc['test:projeto'] = atual; sc.test = gate; pkg.scripts = sc;
+  mudancas.push({ arquivo: 'package.json', antigo: texto, novo: serializar(pkg, texto) });
+  const cp = lock.chaves.package;
+  cp.scripts['test:projeto'] = atual;
+  cp.trocados.push({ nome: 'test', original: atual, gate });
+  const kj = lerTexto(destino, '.claude/kit.json');
+  if (kj !== null) {
+    const k = JSON.parse(semBom(kj));
+    if (k.gate?.comandoCompleto === atual) {
+      k.gate.comandoCompleto = 'npm run test:projeto';
+      mudancas.push({ arquivo: '.claude/kit.json', antigo: kj, novo: serializar(k, kj) });
+      // o lock registra o que o kit pôs (a folha `gate.comandoCompleto` ou o objeto `gate` inteiro): acompanha o valor novo, senão o remover o tomaria por mexido
+      for (const a of lock.chaves.kitJson.adicionadas ?? []) {
+        if (a.caminho === 'gate.comandoCompleto') a.valor = 'npm run test:projeto';
+        else if (a.caminho === 'gate' && a.valor?.comandoCompleto === atual) a.valor = { ...a.valor, comandoCompleto: 'npm run test:projeto' };
+      }
+    }
+  }
+  lock.pendente = lock.pendente.filter((p) => !pend.includes(p));
+  if (!lock.pendente.length) delete lock.pendente;
+  linhas.push(`trocado: scripts.test agora passa pelo gate; o seu \`${atual}\` está em test:projeto.`);
 }

@@ -22,7 +22,7 @@ uso:
   kit adotar [--simular] [--trocar-test] [--parcial] [--perfil …]
                                              põe o kit num projeto em andamento, sem sobrescrever nada;
                                              com conflito não grava nada (--parcial grava o resto)
-  kit atualizar [--simular]                  troca pela versão nova o que você não editou; o resto vira conflito
+  kit atualizar [--simular] [--trocar-test]  troca pela versão nova o que você não editou; o resto vira conflito
   kit doutor                                 confere plugin, hooks, kit.json, versões e o disco com o lock
   kit remover [--simular]                    tira o que o kit pôs (blocos, chaves e arquivos cujo hash bate)
 `;
@@ -47,7 +47,7 @@ function main(argv) {
     if (i !== -1 && !argv[i + 1]) { process.stderr.write('kit adotar: --perfil pede um valor\n'); return 2; }
     return imprimir(adotar({ destino, perfil: i === -1 ? undefined : argv[i + 1], versao: versao(), simular: flag('--simular'), trocarTest: flag('--trocar-test'), parcial: flag('--parcial') }));
   }
-  if (cmd === 'atualizar') return imprimir(atualizar({ destino, versao: versao(), simular: flag('--simular') }));
+  if (cmd === 'atualizar') return imprimir(atualizar({ destino, versao: versao(), simular: flag('--simular'), trocarTest: flag('--trocar-test') }));
   if (cmd === 'remover') return imprimir(remover({ destino, simular: flag('--simular') }));
   if (cmd === 'doutor') return imprimir(doutor({ destino, versao: versao() }));
   process.stderr.write(`kit: comando desconhecido: ${cmd}\n\n${AJUDA}`);

@@ -1,20 +1,31 @@
 // `kit adotar [--simular] [--trocar-test] [--perfil …]`: põe o kit num projeto em andamento sem sobrescrever nada do que já é dele.
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffTexto } from './diff.mjs';
 import { LOCK } from './lock.mjs';
-import { gravar, planejar } from './pacote.mjs';
+import { arquivosDoGate, esqueletoDe, gravar, lerModelo, lerTexto, planejar, semBom, semOsBlocos } from './pacote.mjs';
 
 /** Devolve { codigo, saida, erro }. */
 export function adotar({ destino, perfil = 'simples', versao, simular = false, trocarTest = false, parcial = false }) {
   if (!existsSync(join(destino, 'CLAUDE.md'))) return { codigo: 2, saida: '', erro: 'kit adotar: não há CLAUDE.md aqui — para um projeto novo, use `kit iniciar`' };
   if (existsSync(join(destino, LOCK))) return { codigo: 2, saida: '', erro: `kit adotar: já existe ${LOCK} — o kit já foi adotado; para trazer a versão nova use \`kit atualizar\`` };
-  const plano = planejar({ destino, perfil, trocarTest, nomeScript: 'test:projeto' });
+  // Instalação interrompida (processo morto no meio): `.kit-tmp` órfão ou `test` que já é o gate, sem lock. O `adotar` reconhece, conclui e grava o lock.
+  const candidatos = ['CLAUDE.md', 'package.json', '.claude/settings.json', '.claude/kit.json', LOCK, ...arquivosDoGate().map((f) => `scripts/kit/${f}`)];
+  const orfaos = candidatos.filter((rel) => existsSync(join(destino, `${rel}.kit-tmp`)));
+  let testJaEhGate = false;
+  try { testJaEhGate = JSON.parse(semBom(lerTexto(destino, 'package.json') ?? '{}')).scripts?.test === lerModelo().perfis[perfil]?.scripts?.test; } catch { /* JSON ilegível: o planejador recusa abaixo */ }
+  const recuperando = orfaos.length > 0 || testJaEhGate;
+  // o esqueleto do iniciar no CLAUDE.md diz que quem morreu foi o `iniciar`, que troca o `test` e guarda a suíte em test:suite
+  const claudeAtual = lerTexto(destino, 'CLAUDE.md');
+  const viaIniciar = recuperando && claudeAtual !== null && semOsBlocos(claudeAtual) === esqueletoDe(destino);
+  const plano = planejar({ destino, perfil, trocarTest: trocarTest || viaIniciar, nomeScript: viaIniciar ? 'test:suite' : 'test:projeto', recuperando });
   if (plano.erro) return { codigo: 2, saida: '', erro: `kit adotar: ${plano.erro}` };
   const linhas = [];
+  if (recuperando) linhas.push(`recuperado: instalação interrompida${orfaos.length ? ` (${orfaos.length} .kit-tmp órfão(s) ${simular ? 'seriam apagados' : 'apagados'})` : ''}; o que já estava lá foi reconhecido e o resto é concluído.`);
   const barrado = plano.conflitos.length > 0 && !parcial; // atômico: com conflito não grava nada, a menos que --parcial
   if (simular) for (const m of plano.mudancas) linhas.push(m.antigo === null ? `+++ b/${m.arquivo} (arquivo novo, ${m.novo.split('\n').length - 1} linhas)` : diffTexto(m.antigo, m.novo, m.arquivo));
   else if (!barrado) {
+    for (const rel of orfaos) rmSync(join(destino, `${rel}.kit-tmp`), { force: true });
     const pendente = [...plano.conflitos, ...plano.pendencias];
     const g = gravar(destino, plano.mudancas, { versao, perfil, ...plano.lock, ...(pendente.length ? { pendente } : {}) });
     if (g.erro) return { codigo: 1, saida: '', erro: `kit adotar: ${g.erro}` };

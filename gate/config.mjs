@@ -86,7 +86,7 @@ export function lerKitJson(raiz) {
   const caminho = join(raiz, ".claude", "kit.json");
   if (!existsSync(caminho)) return {};
   try {
-    const lido = JSON.parse(readFileSync(caminho, "utf-8"));
+    const lido = JSON.parse(readFileSync(caminho, "utf-8").replace(/^\uFEFF/, ""));
     if (!objeto(lido)) throw new Error("o conteúdo não é um objeto");
     return lido;
   } catch (e) {
@@ -102,8 +102,17 @@ export function carregarConfig(raiz, kit = lerKitJson(raiz)) {
   }
   validarGuarda(kit.guarda);
   validarExtras(kit.arvore?.extras);
+  validarSuite(kit.gate?.comandoCompleto);
   const base = perfil === "pnpm-workspace" ? mesclar(PADRAO, PERFIL_PNPM) : PADRAO;
   return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: kit.guarda ?? {} });
+}
+
+/** `npm test`, `npm run test`, `pnpm test`, `yarn test`: o `test` do projeto é o gate, e o gate chamando o `test` espera a própria vez para sempre. */
+const CHAMA_O_TEST = /(^|[\s;&|(])(npm|pnpm|yarn)\s+(run\s+)?test(?![\w:-])/;
+function validarSuite(comando) {
+  if (typeof comando === "string" && CHAMA_O_TEST.test(comando)) {
+    throw new Error(`gate.comandoCompleto ${JSON.stringify(comando)} chama o \`test\` do projeto, que é o próprio gate (laço) — aponte para o script da suíte, ex.: "npm run test:suite"`);
+  }
 }
 
 /** `guarda.regras`: lista de regras conhecidas. Um typo desligaria a regra calado, e uma string viraria um conjunto de letras. */

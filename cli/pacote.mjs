@@ -23,24 +23,49 @@ export function blocosDoModelo() {
 }
 export const arquivosDoGate = () => readdirSync(join(RAIZ_DO_KIT, 'gate')).filter((n) => n.endsWith('.mjs')).sort();
 
-/** JSON de volta ao texto com a indentação e o fim de linha do original (sem original: 2 espaços e quebra final). */
+const BOM = '\uFEFF';
+export const semBom = (t) => (t.startsWith(BOM) ? t.slice(1) : t);
+const eolDe = (t) => (t !== null && t.includes('\r\n') ? '\r\n' : '\n');
+export const semOsBlocos = (t) => t.replace(/<!-- kit:([a-z-]+) v\d+ -->[\s\S]*?<!-- \/kit:\1 -->/g, '').replace(/\s+/g, ' ').trim();
+/** O CLAUDE.md que o `iniciar` cria, sem os blocos: o que o `adotar` reconhece como "o iniciar morreu no meio". */
+export const esqueletoDe = (destino) => semOsBlocos(modeloClaude().replace('# <nome do projeto>', `# ${basename(destino)}`));
+/** Texto acrescentado ao fim do CLAUDE.md com o fim de linha que o arquivo já usa (CRLF continua CRLF). */
+export function acrescentar(claude, texto) {
+  const add = `${claude.endsWith('\n') ? '' : '\n'}\n${texto}\n`;
+  return claude + (eolDe(claude) === '\n' ? add : add.replace(/\n/g, '\r\n'));
+}
+
+/** JSON de volta ao texto com a indentação, o fim de linha (LF/CRLF) e o BOM do original (sem original: 2 espaços e quebra final). */
 export function serializar(valor, original) {
-  const recuo = original === null ? '  ' : (original.match(/^([ \t]+)"/m)?.[1] ?? '  ');
-  return JSON.stringify(valor, null, recuo) + (original === null || original.endsWith('\n') ? '\n' : '');
+  const base = original === null ? null : semBom(original);
+  const recuo = base === null ? '  ' : (base.match(/^([ \t]+)"/m)?.[1] ?? '  ');
+  const eol = eolDe(base);
+  const corpo = JSON.stringify(valor, null, recuo).replace(/\n/g, eol);
+  return (original?.startsWith(BOM) ? BOM : '') + corpo + (base === null || base.endsWith('\n') ? eol : '');
 }
 const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 function lerJsonOuErro(destino, rel, erros) {
   const t = lerTexto(destino, rel);
   if (t === null) return { texto: null, valor: {} };
-  try { return { texto: t, valor: JSON.parse(t) }; } catch (e) { erros.push(`${rel} ilegível: ${e.message}`); return { texto: t, valor: null }; }
+  try { return { texto: t, valor: JSON.parse(semBom(t)) }; } catch (e) { erros.push(`${rel} ilegível: ${e.message}`); return { texto: t, valor: null }; }
+}
+
+/** O settings.json só tem o que o kit põe (nada do projeto): numa recuperação, é o que diz que o arquivo foi criado por ele. */
+function soDoKit(v) {
+  const chaves = (o) => Object.keys(o ?? {});
+  const pre = v?.hooks?.PreToolUse;
+  return chaves(v).every((k) => ['hooks', 'extraKnownMarketplaces', 'enabledPlugins'].includes(k))
+    && (v.hooks === undefined || (chaves(v.hooks).join() === 'PreToolUse' && pre.length === 1 && pre[0].hooks?.length === 1 && pre[0].hooks[0].command === HOOK_GUARDA))
+    && (v.extraKnownMarketplaces === undefined || chaves(v.extraKnownMarketplaces).join() === MARKETPLACE)
+    && chaves(v.enabledPlugins).every((n) => [PLUGIN, `painel-sessoes@${MARKETPLACE}`].includes(n));
 }
 
 /**
  * Calcula o que o kit grava. Devolve { erro } ou { mudancas:[{arquivo,antigo,novo}], conflitos, pendencias, lock }.
  * `lock` já traz arquivos/blocos/chaves, calculados sobre o conteúdo NOVO (hashes) — o chamador só acrescenta versão e perfil.
  */
-export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'test:projeto', criarClaude = false }) {
+export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'test:projeto', criarClaude = false, recuperando = false }) {
   const p = lerModelo().perfis[perfil];
   if (!p) return { erro: `perfil "${perfil}" desconhecido — use ${Object.keys(lerModelo().perfis).join(' ou ')}` };
   const erros = [];
@@ -59,12 +84,18 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     lock.arquivos['CLAUDE.md'] = null;
   } else {
     for (const [nome, texto] of Object.entries(blocos)) {
-      if (new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude)) continue;
-      claude += `${claude.endsWith('\n') ? '' : '\n'}\n${texto}\n`;
+      if (new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude)) {
+        // instalação interrompida: o bloco que já está lá, igual ao do modelo, é do kit
+        const inteiro = claude.match(new RegExp(`<!-- kit:${nome} v\\d+ -->[\\s\\S]*?<!-- /kit:${nome} -->`))?.[0];
+        if (recuperando && inteiro?.replace(/\r\n/g, '\n') === texto) novosBlocos.push(nome);
+        continue;
+      }
+      claude = acrescentar(claude, texto);
       novosBlocos.push(nome);
     }
   }
   if (claude !== claudeAtual) mudancas.push({ arquivo: 'CLAUDE.md', antigo: claudeAtual, novo: claude });
+  if (recuperando && claudeAtual !== null && semOsBlocos(claudeAtual) === esqueletoDe(destino)) lock.arquivos['CLAUDE.md'] = sha256(claude); // o CLAUDE.md é o esqueleto do `iniciar` que morreu: o remover o apaga
   for (const b of blocosDe(claude)) if (novosBlocos.includes(b.nome)) lock.blocos[b.nome] = { versao: b.versao, sha256: sha256(b.conteudo) };
 
   // scripts/kit: cópia do gate/; arquivo igual já lá fica (não é nosso), diferente é conflito.
@@ -74,6 +105,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     const atual = lerTexto(destino, rel);
     if (atual === null) { mudancas.push({ arquivo: rel, antigo: null, novo }); lock.arquivos[rel] = sha256(novo); }
     else if (atual !== novo) conflitos.push(`${rel} já existe diferente do kit — não sobrescrevi`);
+    else if (recuperando) lock.arquivos[rel] = sha256(novo); // cópia idêntica que o processo morto deixou
   }
 
   // package.json
@@ -92,11 +124,21 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     for (const [nome, gate] of Object.entries(p.scripts)) {
       const guardado = nome === 'test' ? nomeScript : `${nome}:${sufixo}`;
       const atual = sc[nome];
+      if (recuperando && atual === gate) {
+        // o processo morreu depois de trocar este script: a suíte do projeto é a que está guardada, nunca derivada do gate
+        const origem = nome === 'test' ? [nomeScript, 'test:suite', 'test:projeto'].find((n) => sc[n] !== undefined) : (sc[guardado] !== undefined ? guardado : undefined);
+        if (nome === 'test' && !origem) { erros.push('scripts.test já é o gate, mas não achei test:suite nem test:projeto — não sei qual era a suíte do projeto. Restaure o `test` original do package.json (ex.: `git checkout package.json`) e rode `kit adotar` de novo'); continue; }
+        if (origem) cp.scripts[origem] = sc[origem];
+        cp.trocados.push({ nome, original: origem ? sc[origem] : null, gate });
+        if (nome === 'test') comandoSuite = `npm run ${origem}`;
+        avisos.push(`recuperado: scripts.${nome} já passava pelo gate (instalação interrompida)${origem ? `; a suíte do projeto está em ${origem}` : ''}.`);
+        continue;
+      }
       if (atual === gate || atual?.includes('scripts/kit/')) continue;
       const real = atual && !TESTE_PADRAO_DO_NPM.test(atual);
       // sem troca (o `test` próprio, sem --trocar-test) nada é guardado: o script do projeto segue onde está e a pendência vai ao lock
       if (real && !trocarTest) {
-        if (nome === 'test') { pendencias.push(`scripts.test (${JSON.stringify(atual)}) ficou como estava: rode com --trocar-test para o \`npm test\` passar pelo gate (o seu vira ${nomeScript}).`); comandoSuite = atual; }
+        if (nome === 'test') { pendencias.push(`scripts.test (${JSON.stringify(atual)}) ficou como estava e o \`npm test\` não passa pelo gate. Para trocar: \`kit atualizar --trocar-test\` (o seu vira ${nomeScript}).`); comandoSuite = atual; }
         else conflitos.push(`scripts.${nome} já existe (${JSON.stringify(atual)}) — rode com --trocar-test para guardá-lo em ${guardado} e pôr o do gate no lugar`);
         continue;
       }
@@ -116,7 +158,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     }
     const novo = serializar(pkg, pk.texto);
     if (novo !== pk.texto) mudancas.push({ arquivo: 'package.json', antigo: pk.texto, novo });
-    if (pk.texto === null) lock.arquivos['package.json'] = null; else cp.original = pk.texto;
+    if (pk.texto === null) lock.arquivos['package.json'] = null; else if (!recuperando) cp.original = pk.texto;
   }
 
   // .claude/settings.json
@@ -130,19 +172,22 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     if (!s.hooks.PreToolUse.some((g) => g.hooks?.some((h) => h.command === HOOK_GUARDA))) {
       s.hooks.PreToolUse.push({ matcher: 'Bash', hooks: [{ type: 'command', command: HOOK_GUARDA }] });
       cs.hook = true;
-    }
+    } else if (recuperando) cs.hook = true;
     const mkt = { source: { source: 'github', repo: REPO_DO_KIT } };
     s.extraKnownMarketplaces = { ...(s.extraKnownMarketplaces ?? {}) };
     if (!(MARKETPLACE in s.extraKnownMarketplaces)) { s.extraKnownMarketplaces[MARKETPLACE] = mkt; cs.marketplace = true; }
     else if (!isDeepStrictEqual(s.extraKnownMarketplaces[MARKETPLACE], mkt)) conflitos.push(`extraKnownMarketplaces.${MARKETPLACE} já aponta para outra origem — não troquei`);
+    else if (recuperando) cs.marketplace = true;
     s.enabledPlugins = { ...(s.enabledPlugins ?? {}) };
     for (const nome of [PLUGIN, `painel-sessoes@${MARKETPLACE}`]) {
       if (!(nome in s.enabledPlugins)) { s.enabledPlugins[nome] = true; cs.plugins.push(nome); }
       else if (s.enabledPlugins[nome] !== true) conflitos.push(`enabledPlugins.${nome} já é ${JSON.stringify(s.enabledPlugins[nome])} — não troquei`);
+      else if (recuperando) cs.plugins.push(nome);
     }
+    if (recuperando && st.texto !== null) cs.criado = soDoKit(st.valor);
     const novo = serializar(s, st.texto);
     if (novo !== st.texto) mudancas.push({ arquivo: '.claude/settings.json', antigo: st.texto, novo });
-    if (st.texto === null) lock.arquivos['.claude/settings.json'] = null; else cs.original = st.texto;
+    if (st.texto === null) lock.arquivos['.claude/settings.json'] = null; else if (!recuperando) cs.original = st.texto;
   }
 
   // .claude/kit.json
@@ -159,17 +204,23 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
         if (!(chave in alvo)) { alvo[chave] = valor; ck.adicionadas.push({ caminho: cam, valor }); }
         else if (ehObjeto(alvo[chave]) && ehObjeto(valor)) mescla(alvo[chave], valor, cam);
         else if (!isDeepStrictEqual(alvo[chave], valor)) conflitos.push(`.claude/kit.json: ${cam} já é ${JSON.stringify(alvo[chave])} — não troquei`);
+        else if (recuperando) ck.adicionadas.push({ caminho: cam, valor });
       }
     };
     mescla(k, desejado, '');
+    if (recuperando && kj.texto !== null && isDeepStrictEqual(kj.valor, desejado)) ck.criado = true;
     const novo = serializar(k, kj.texto);
     if (novo !== kj.texto) mudancas.push({ arquivo: '.claude/kit.json', antigo: kj.texto, novo });
-    if (kj.texto === null) lock.arquivos['.claude/kit.json'] = null; else ck.original = kj.texto;
+    if (kj.texto === null) lock.arquivos['.claude/kit.json'] = null; else if (!recuperando) ck.original = kj.texto;
   }
 
   if (erros.length) return { erro: erros.join('; ') };
   // hashes dos arquivos que o kit criou inteiros (o conteúdo novo)
   for (const rel of Object.keys(lock.arquivos)) if (lock.arquivos[rel] === null) lock.arquivos[rel] = sha256(mudancas.find((m) => m.arquivo === rel).novo);
+  if (recuperando) {
+    lock.pastasCriadas = ['.claude', 'scripts', 'scripts/kit'].filter((d) => existsSync(join(destino, d)));
+    lock.recuperado = true;
+  }
   return { mudancas, conflitos, pendencias, avisos, lock };
 }
 
