@@ -76,6 +76,9 @@ Decisão: [ADR 0001](../adr/0001-plugin-para-o-nucleo-cli-para-o-projeto.md). Es
 - Momento: sem gate rodando e com a orquestradora de acordo (ela escolhe; *assumida, a confirmar*).
 - **Pronto:** `kit doutor` sem achado; uma sessão nova recebe o contexto do `SessionStart`; `tail ~/.claude/orquestracao/hooks-crewai.log` mostra cada trava disparando **uma** vez num teste sintético; restauração ensaiada (copiar o backup de volta) documentada no relatório.
 
+- **Caminhos antigos continuam respondendo:** o `CLAUDE.md` global, memórias e briefings citam `~/.claude/skills/orquestradora/scripts/painel.mjs` e `proxima-pergunta.sh`. A K8 deixa nesses caminhos um repasse de uma linha para o `bin/` do plugin (nunca uma cópia), e o `kit doutor` lista o repasse como esperado. Trocar as citações vem depois, sem pressa.
+- **Skills vindas do skills-manager:** onde a skill é symlink para `~/.skills-manager`, a K8 tira o deploy pelo `skills-manager-cli` (undeploy), não apagando o link à mão, e registra no relatório; o commit no `~/.skills-manager` continua do operador.
+
 ### K9 — prova em projeto do zero · Média
 - `kit iniciar` num repositório novo de rascunho (`~/Developer/Projects/kit-prova-zero`, privado ou só local — *assumida: só local*), abrir uma orquestradora e um pool mínimo (P, E, V) e levar um item trivial até o merge.
 - `kit adotar --simular` no Izanagi **só imprimindo o diff** (nenhuma escrita lá) — o diff vira o insumo do item seguinte.
