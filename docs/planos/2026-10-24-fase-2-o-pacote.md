@@ -33,6 +33,7 @@ Decisão: [ADR 0001](../adr/0001-plugin-para-o-nucleo-cli-para-o-projeto.md). Es
 ### K3 — plugin `orquestracao`: skills, agents, scripts · Média
 - `skills/` (`orquestradora`, `papeis-e-modelos`, `ausente`, `handoff-de-sessao`, `notas-de-release`, `orquestrar-com-subagentes`), `agents/` (`executor`, `explorador`, `planejador`, `validador`), `bin/` com `painel`, `proxima-pergunta`, `proximo-item` (wrappers dos scripts), e `pool/` (protocolo, papéis, `skills-por-papel.json` com apelidos prefixados).
 - Textos passam a citar `painel` (comando do `bin/`) e `${CLAUDE_PLUGIN_ROOT}`, não `~/.claude/skills/…/painel.mjs`; manter o caminho antigo como alias até a K7.
+- **Medido na fase 1 (E8):** `~/.claude/skills/orquestradora` é symlink para `~/.skills-manager/…` (skills-manager) e por isso o `painel.mjs` importa o `pool-comum` por `~/.claude/hooks` (`KIT_HOOKS_DIR` sobrepõe), não por caminho relativo. No plugin, o import volta a ser relativo a `${CLAUDE_PLUGIN_ROOT}`; na K8, tirar as skills do kit do skills-manager também (senão ficam duas cópias: a do plugin, com prefixo, e a da biblioteca).
 - **Medir antes** (fato não documentado): com um hook de teste que grave o payload, se `tool_input.skill` chega com o prefixo `orquestracao:`. Ajustar `skill-do-papel` ao medido.
 - **Pronto:** testes do painel (`painel-*.test.mjs`) verdes dentro do repo; `painel list fila` funciona pelo `bin/` com `PAINEL_DIR` temporário.
 
