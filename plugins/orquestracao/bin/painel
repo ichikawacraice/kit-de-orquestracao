@@ -1,0 +1,3 @@
+#!/bin/bash
+# Wrapper do plugin: `painel …` = painel.mjs (o plugin põe bin/ no PATH).
+exec node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/skills/orquestradora/scripts/painel.mjs" "$@"

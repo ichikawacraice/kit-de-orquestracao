@@ -10,7 +10,8 @@ import { fileURLToPath } from 'node:url';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const HOOKS = process.env.HOOKS_DIR || join(AQUI, '..');
-const POOL = join(homedir(), '.claude', 'orquestracao', 'pool');
+const PLUGIN = join(AQUI, '..', '..');
+const POOL = join(PLUGIN, 'pool');
 const APLICAR = process.env.APLICAR || join(POOL, 'aplicar-skills-do-papel.mjs');
 const MAPA_REAL = join(POOL, 'skills-por-papel.json');
 let base; let falhas = 0;
@@ -132,16 +133,17 @@ caso('7b: apelidos do mapa real apontam para chave de skills e não colidem com 
     ok(!(a in m.skills), `apelido ${a} também é chave de skills`);
   }
 });
-caso('8: o mapa cobre toda skill real (pelo name: do SKILL.md)', () => {
-  const mapa = JSON.parse(readFileSync(MAPA_REAL, 'utf8')).skills;
-  const lista = (raiz) => readdirSync(raiz).filter((d) => d !== 'synced' && existsSync(join(raiz, d, 'SKILL.md')))
+caso('8: o mapa cobre toda skill do plugin (pelo name: do SKILL.md), e o apelido prefixado existe para cada uma', () => {
+  const m = JSON.parse(readFileSync(MAPA_REAL, 'utf8'));
+  const raiz = join(PLUGIN, 'skills');
+  const doPlugin = readdirSync(raiz).filter((d) => existsSync(join(raiz, d, 'SKILL.md')))
     .map((d) => /^name:\s*(\S+)/m.exec(readFileSync(join(raiz, d, 'SKILL.md'), 'utf8'))?.[1].replace(/['"]/g, ''));
-  const global = lista(join(homedir(), '.claude', 'skills'));
-  const projeto = lista('/Users/ichikawacraice/Developer/Projects/Izanagi/.claude/skills');
-  ok(global.length >= 5 && projeto.length >= 5, `insumo vazio: global=${global.length} projeto=${projeto.length}`);
-  ok(global.every(Boolean) && projeto.every(Boolean), 'SKILL.md sem name:');
-  const faltam = [...global, ...projeto].filter((n) => !(n in mapa));
-  ok(!faltam.length, `skills fora do mapa: ${[...new Set(faltam)].join(', ')}`);
+  ok(doPlugin.length >= 6, `insumo vazio: ${doPlugin.length}`);
+  ok(doPlugin.every(Boolean), 'SKILL.md sem name:');
+  const faltam = doPlugin.filter((n) => !(n in m.skills));
+  ok(!faltam.length, `skills fora do mapa: ${faltam.join(', ')}`);
+  const semApelido = doPlugin.filter((n) => m.apelidos[`orquestracao:${n}`] !== n);
+  ok(!semApelido.length, `sem apelido orquestracao:<nome>: ${semApelido.join(', ')}`);
 });
 caso('10: todo nome do JSON aparece no skills-por-papel.md', () => {
   const nomes = Object.keys(JSON.parse(readFileSync(MAPA_REAL, 'utf8')).skills);

@@ -9,7 +9,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
-const SCRIPTS = process.env.SCRIPTS_DIR || join(homedir(), '.claude/skills/orquestradora/scripts');
+const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 const RODADAS = Number(process.env.RODADAS || 80), N = Number(process.env.PROCESSOS || 20);
 const base = mkdtempSync(join(tmpdir(), 'painel-conc-'));
 const dir = join(base, 'painel'); mkdirSync(dir, { recursive: true }); mkdirSync(join(base, 'home'), { recursive: true });
