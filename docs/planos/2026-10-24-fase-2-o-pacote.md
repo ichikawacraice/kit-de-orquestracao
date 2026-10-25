@@ -28,7 +28,7 @@ Decisão: [ADR 0001](../adr/0001-plugin-para-o-nucleo-cli-para-o-projeto.md). Es
 - `BASE` default continua `~/.claude/orquestracao` (env sobrepõe).
 - Travas que casam por nome aceitam o prefixo do plugin: `subagent_type` `executor` **ou** `orquestracao:executor` (idem `validador`), skill `x` **ou** `orquestracao:x`. Caso de teste para cada.
 - Hook `SessionStart` novo: injeta (`additionalContext`) o resumo das regras globais que hoje moram no `~/.claude/CLAUDE.md` (Q-ID, papéis e modelos, achar a orquestradora) — texto curto, fonte única num `.md` do plugin.
-- **Pronto:** a suíte dos hooks roda de dentro do repo (`node --test plugins/orquestracao`) e passa; diff entre os `.mjs` do plugin e os de `~/.claude/hooks/` = só os prefixos e o `SessionStart`; validate sem erro.
+- **Pronto:** a suíte dos hooks roda de dentro do repo (`node --test "plugins/orquestracao/**/*.test.mjs"` — o Node 24 não aceita diretório em `node --test`) e passa; diff entre os `.mjs` do plugin e os de `~/.claude/hooks/` = só os prefixos e o `SessionStart`; validate sem erro.
 
 ### K3 — plugin `orquestracao`: skills, agents, scripts · Média
 - `skills/` (`orquestradora`, `papeis-e-modelos`, `ausente`, `handoff-de-sessao`, `notas-de-release`, `orquestrar-com-subagentes`), `agents/` (`executor`, `explorador`, `planejador`, `validador`), `bin/` com `painel`, `proxima-pergunta`, `proximo-item` (wrappers dos scripts), e `pool/` (protocolo, papéis, `skills-por-papel.json` com apelidos prefixados).
@@ -51,7 +51,7 @@ Decisão: [ADR 0001](../adr/0001-plugin-para-o-nucleo-cli-para-o-projeto.md). Es
   - `guarda.regras`: liga/desliga cada regra (`build-com-dev-no-ar`, `migration-fora-do-tronco`, `psql-f`, `merge-commit`, `stash-sem-u`, `staging-amplo`, `kill-por-nome`, `destrutivos`), com os caminhos (`apps/web`, `supabase/migrations`) e o tronco (`develop`) vindos do `kit.json`.
 - Variáveis `IZANAGI_GATE_*`/`IZANAGI_TESTE_WORKERS` → `KIT_GATE_*`/`KIT_TESTE_WORKERS`, lendo o nome antigo como fallback.
 - Portar os três testes (`packages/shared/test/{a-vez-do-gate,o-verde-da-arvore,guarda-de-operacao}.test.ts`) para `node:test`, mais: (a) projeto `npm` simples de um pacote, `kit.json` mínimo `{ "gate": { "comandoCompleto": "npm test" } }` — trava, verde por árvore e pulo funcionam; (b) perfil `pnpm-workspace` reproduz a lista de pacotes do Izanagi; (c) a guarda com uma regra desligada não pergunta.
-- **Pronto:** `node --test gate` verde; um caso mutado por regra (cópia, nunca `git checkout`) fica vermelho na linha certa.
+- **Pronto:** `node --test "gate/test/*.test.mjs"` verde (glob: diretório não funciona no Node 24); um caso mutado por regra (cópia, nunca `git checkout`) fica vermelho na linha certa.
 
 ### K6 — CLI: `iniciar` e os modelos · Média
 - `modelos/CLAUDE.md` com blocos marcados `<!-- kit:<secao> v1 -->…<!-- /kit:<secao> -->`: `projeto` (o que é, a preencher), `comandos` (gate, teste parcial — lidos do `kit.json`), `regras-de-operacao` (um gate por vez, verde da árvore, rebase, tronco, migration só se `guarda` tiver), `regras-de-trabalho` (spec-driven opcional, ADR, roadmap opcional), `convencoes-de-teste` (as genéricas do Izanagi: insumo vazio, teste que mede ausência, filho síncrono, duas coisas que concordam, laudo só afirma o que mediu, o defeito não falha como o que é), `orquestradora` (o que o pool lê: quem mergeia, numeração).
