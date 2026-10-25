@@ -799,6 +799,19 @@ caso('F30-1: set --se-versao sem o campo com preserva o com gravado; fechar por 
   const f = json(painel('get', 'fila', 'F1')).data;
   igual(f.etapa, 'planejamento', 'etapa intacta'); igual(f.com.length, 2, 'com intacto');
 });
+caso('F30-1: o fez é campo de máquina: o set o preserva, e set/update/batch que o mudam são recusados', () => {
+  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'validacao' })); comAdd('F1', LA, 'E1', 'título'); comAdd('F1', LB, 'V4', 'valida');
+  painel('com', 'del', 'F1', LA, '--fez');
+  const v = () => json(painel('get', 'fila', 'F1')).version;
+  igual(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', espera: { motivo: 'operador', texto: 'decidir' } }), '--se-versao', String(v())).exit, 0, 'set sem fez passa');
+  const d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.fez.length, 1, 'fez preservado no set'); igual(d.fez[0].apelido, 'E1', 'ainda a E1'); igual(d.com.length, 1, 'com preservado');
+  recusa(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', fez: [] }), '--se-versao', String(v())), 'só muda por `painel com del --fez`', 'set com fez []');
+  recusa(painel('update', 'fila', 'F1', '{"fez":[]}'), 'só muda por `painel com del --fez`', 'update com fez');
+  recusa(painel('batch', JSON.stringify([{ op: 'update', colecao: 'fila', id: 'F1', data: { fez: [] } }])), 'só muda por `painel com del --fez`', 'batch com fez');
+  recusa(painel('set', 'fila', 'F9', COM({ fez: [{ localId: LA, apelido: 'E1', oQue: 'a', em: '2026-10-25T10:00:00.000Z' }] })), 'só muda por `painel com del --fez`', 'set novo com fez');
+  igual(json(painel('get', 'fila', 'F1')).data.fez.length, 1, 'fez intacto');
+});
 caso('F30-1: espera e com validam o formato (motivo fora da lista, oQue com número, localId repetido, fez.em ruim)', () => {
   semear(); painel('set', 'fila', 'F1', COM());
   recusa(painel('update', 'fila', 'F1', '{"espera":{"motivo":"x","texto":"t"}}'), 'espera.motivo "x" fora da lista', 'motivo x');

@@ -13,7 +13,7 @@
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_> [--fez]   tira a sessão do `com`; --fez a registra em `fez` (quem executou)
-//   (`com` só muda por `com add|del`: set, update e batch o recusam; `fez` e `espera` se gravam pelo update comum)
+//   (`com` e `fez` só mudam por `com add|del [--fez]`: o set preserva os gravados, o update e o batch os recusam; `espera` se grava pelo update comum)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
 //   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
 //   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
@@ -202,7 +202,7 @@ function filtraPorEstado(colecao, d, filtro) {
 }
 
 let sementePendente = null; // a semente do tema da última validação; quem chama a leva até `efetivar`
-function validarItemDaFila(chave, novo, base, op, existia, viaCom) {
+function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   sementePendente = null;
   const tem = (k) => k in novo && novo[k] !== null;
   // apagar o contrato não é mesclar: `null` em update remove o campo, e titulo/etapa/tema são o que faz do documento um item
@@ -265,6 +265,9 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom) {
   lista('fez', ['localId', 'apelido', 'oQue', 'em'], (e) => {
     if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: fez.em "${e.em}" não é data ISO`);
   });
+  if (!viaCom && 'fez' in novo && (op === 'update' || JSON.stringify(novo.fez) !== JSON.stringify(antes?.fez ?? []))) {
+    throw new Error(`${chave}: o campo "fez" só muda por \`painel com del --fez\` (o ${op} apagaria ou forjaria quem executou)`);
+  }
   if (tem('espera')) {
     const e = novo.espera;
     if (typeof e !== 'object' || Array.isArray(e)) throw new Error(`${chave}: espera é null ou {motivo, texto}`);
@@ -308,9 +311,9 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom) {
   }
 }
 
-function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom) {
+function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom, antes) {
   const chave = `${colecao}/${id}`;
-  if (colecao === 'fila') validarItemDaFila(chave, novo, base, op, existia, viaCom);
+  if (colecao === 'fila') validarItemDaFila(chave, novo, base, op, existia, viaCom, antes);
   if (colecao === 'perguntas' && base.estado === 'aberta' && !base.sessaoId) {
     throw new Error(`${chave}: pergunta aberta sem sessaoId — a resposta do painel não teria para onde voltar`);
   }
@@ -379,13 +382,14 @@ function planejar(o, seVersao, vista) {
   // `set` monta o documento do zero, mas `com` não é de quem o substitui: o gravado fica (só `com add|del` o muda),
   // e a trava de fechamento abaixo o lê. Sem isto, `set --se-versao` sem o campo apagaria quem trabalha no item.
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.com) && atual.data.com.length) base.com = atual.data.com;
+  if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.fez) && !('fez' in novo)) base.fez = atual.data.fez;
   if ((colecao === 'sessoes' || colecao === 'fila') && !base.projeto && (op === 'set' || !atual)) {
     const { projeto, motivo } = projetoDoCwd();
     if (projeto) base.projeto = projeto;
     else process.stderr.write(`aviso: ${colecao}/${id} sem projeto (${motivo})\n`);
   }
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
-  validarPadrao(colecao, id, novo, base, vista, op, !!atual, viaCom);
+  validarPadrao(colecao, id, novo, base, vista, op, !!atual, viaCom, atual?.data);
   const semente = colecao === 'fila' ? sementePendente : null;
   if (colecao === 'fila') automaticosDaFila(base, novo, atual?.data);
   const version = (atual?.version ?? 0) + 1;
