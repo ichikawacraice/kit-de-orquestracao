@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { after } from 'node:test';
-import { homedir, tmpdir } from 'node:os';
+import { homedir, tmpdir, userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,10 +13,22 @@ const HOOKS = join(RAIZ, 'plugins', 'orquestracao', 'hooks');
 const SKILL_PAPEIS = join(RAIZ, 'plugins', 'orquestracao', 'skills', 'papeis-e-modelos', 'SKILL.md');
 const NOMES = ['executor', 'orquestracao:executor', 'outro:executor'];
 // HOME próprio, fora de tmpdir (as pastas livres da trava incluem tmpdir: um HOME ali faria o que deve ser negado passar). Os casos medem `~/Developer/...`.
-const HOME_DO_TESTE = mkdtempSync(join(RAIZ, 'test', '.home-c14-'));
+// Mesma regra de LIVRES das travas (`/tmp`, `/var/folders` e tmpdir): HOME nesses caminhos faz passar o que deve ser negado.
+const CAI_NOS_LIVRES = (p) => /^\/(private\/)?tmp\//.test(`${p}/`) || `${p}/`.startsWith('/var/folders/') || `${p}/`.startsWith('/private/var/folders/') || `${p}/`.startsWith(`${realpathSync(tmpdir())}/`);
+// Procura onde criar o HOME fora dos LIVRES: primeiro ao lado do teste, depois no HOME do usuário (checkout sob /tmp).
+function criarHomeDoTeste(candidatas, prefixo) {
+  for (const base of candidatas) {
+    if (CAI_NOS_LIVRES(realpathSync(base))) continue;
+    const h = mkdtempSync(join(base, prefixo));
+    if (!CAI_NOS_LIVRES(realpathSync(h))) return h;
+    rmSync(h, { recursive: true, force: true });
+  }
+  throw new Error(`precondição: não achei pasta fora das livres da trava (/tmp, /var/folders, ${realpathSync(tmpdir())}) para o HOME do teste; as candidatas foram ${candidatas.join(', ')}`);
+}
+const HOME_DO_TESTE = criarHomeDoTeste([join(RAIZ, 'test'), userInfo().homedir], '.home-c14-');
 after(() => rmSync(HOME_DO_TESTE, { recursive: true, force: true }));
 process.env.HOME = HOME_DO_TESTE;
-assert.ok(!realpathSync(HOME_DO_TESTE).startsWith(`${realpathSync(tmpdir())}/`), 'precondição: o HOME do teste está fora de tmpdir');
+assert.ok(!CAI_NOS_LIVRES(realpathSync(HOME_DO_TESTE)), 'precondição: o HOME do teste está fora das livres da trava');
 
 /** Mesma entrada sintética, três nomes, três travas. Devolve { nome: { nao_edita, criterio, anuncia } }. */
 function matriz(pastaHooks) {

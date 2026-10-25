@@ -4,16 +4,28 @@
 // Rodar: node ~/.claude/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync } from 'node:fs';
-import { tmpdir, homedir } from 'node:os';
+import { tmpdir, homedir, userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // HOME próprio: os casos medem caminhos sob `~/Developer/...` que a trava nega, e não dependem do HOME de quem roda. Ele fica FORA de tmpdir:
 // as pastas livres da trava (caso 4.5) incluem /tmp, então um HOME ali dá falso vermelho (o que devia ser negado passa).
-const HOME_DO_TESTE = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '.home-'));
+// Mesma regra de LIVRES das travas (`/tmp`, `/var/folders` e tmpdir): HOME nesses caminhos faz passar o que deve ser negado.
+const CAI_NOS_LIVRES = (p) => /^\/(private\/)?tmp\//.test(`${p}/`) || `${p}/`.startsWith('/var/folders/') || `${p}/`.startsWith('/private/var/folders/') || `${p}/`.startsWith(`${realpathSync(tmpdir())}/`);
+// Procura onde criar o HOME fora dos LIVRES: primeiro ao lado do teste, depois no HOME do usuário (checkout sob /tmp).
+function criarHomeDoTeste(candidatas, prefixo) {
+  for (const base of candidatas) {
+    if (CAI_NOS_LIVRES(realpathSync(base))) continue;
+    const h = mkdtempSync(join(base, prefixo));
+    if (!CAI_NOS_LIVRES(realpathSync(h))) return h;
+    rmSync(h, { recursive: true, force: true });
+  }
+  throw new Error(`precondição: não achei pasta fora das livres da trava (/tmp, /var/folders, ${realpathSync(tmpdir())}) para o HOME do teste; as candidatas foram ${candidatas.join(', ')}`);
+}
+const HOME_DO_TESTE = criarHomeDoTeste([dirname(fileURLToPath(import.meta.url)), userInfo().homedir], '.home-');
 process.on('exit', () => rmSync(HOME_DO_TESTE, { recursive: true, force: true }));
 process.env.HOME = HOME_DO_TESTE;
-{ const t = realpathSync(tmpdir()); const h = realpathSync(HOME_DO_TESTE); if (h === t || h.startsWith(`${t}/`)) throw new Error(`precondição: o HOME do teste (${h}) está dentro de tmpdir (${t}); rode o teste de uma pasta fora dele`); }
+if (CAI_NOS_LIVRES(realpathSync(HOME_DO_TESTE))) throw new Error('precondição: o HOME do teste está nas livres da trava');
 const HOOKS = process.env.HOOKS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..');
 let base;
 let falhas = 0;
