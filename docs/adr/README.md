@@ -1,0 +1,27 @@
+# ADRs do kit
+
+Uma decisão por arquivo, `NNNN-título-em-minúsculas.md`, numeração sequencial deste repositório.
+
+## Modelo
+```markdown
+# ADR NNNN — <decisão em uma frase>
+
+- Data: AAAA-MM-DD
+- Status: Proposto | Aceito | Substituído por NNNN
+- Autor:
+- Relacionados:
+
+## Contexto
+O caso concreto e o que força a decisão.
+
+## Decisão
+O que ficou decidido, numerado.
+
+## Consequências
+O que muda para quem usa; o que fica mais difícil.
+```
+
+## Índice
+| Nº | Decisão | Status |
+|---|---|---|
+| [0001](0001-plugin-para-o-nucleo-cli-para-o-projeto.md) | Plugin para o núcleo, CLI para o projeto | Aceito |

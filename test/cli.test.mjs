@@ -1,0 +1,69 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
+const kit = (...args) => spawnSync('node', [join(RAIZ, 'cli', 'kit.mjs'), ...args], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
+const json = (...p) => JSON.parse(readFileSync(join(RAIZ, ...p), 'utf8'));
+
+test('--version imprime a versão do package.json', () => {
+  const versao = json('package.json').version;
+  assert.match(versao, /^\d+\.\d+\.\d+$/);
+  const r = kit('--version');
+  assert.equal(r.status, 0);
+  assert.equal(r.stdout.trim(), versao);
+});
+
+test('ajuda e sem argumento listam o uso; comando desconhecido sai 2', () => {
+  for (const args of [['ajuda'], []]) {
+    const r = kit(...args);
+    assert.equal(r.status, 0);
+    assert.ok(r.stdout.length > 0, 'ajuda vazia');
+    assert.match(r.stdout, /kit --version/);
+    assert.match(r.stdout, /kit ajuda/);
+  }
+  const r = kit('xyz');
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /xyz/);
+});
+
+test('package.json: bin, engines, test e type module', () => {
+  const p = json('package.json');
+  assert.equal(p.type, 'module');
+  assert.equal(p.bin.kit, 'cli/kit.mjs');
+  assert.equal(p.engines.node, '>=20');
+  assert.equal(p.scripts.test, 'node --test');
+  assert.ok(existsSync(join(RAIZ, p.bin.kit)));
+  assert.equal(p.dependencies, undefined, 'o kit não traz dependência npm');
+});
+
+test('marketplace.json lista os dois plugins, cada um com plugin.json 0.1.0', () => {
+  const m = json('.claude-plugin', 'marketplace.json');
+  const nomes = m.plugins.map((p) => p.name).sort();
+  assert.deepEqual(nomes, ['orquestracao', 'painel-sessoes']);
+  for (const pl of m.plugins) {
+    const pj = json(pl.source, '.claude-plugin', 'plugin.json');
+    assert.equal(pj.name, pl.name);
+    assert.equal(pj.version, '0.1.0');
+  }
+});
+
+const BLOCOS = ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'convencoes-de-teste', 'orquestradora'];
+const blocos = (texto) => [...texto.matchAll(/<!-- kit:([a-z-]+) v(\d+) -->([\s\S]*?)<!-- \/kit:\1 -->/g)].map((m) => ({ nome: m[1], conteudo: m[3] }));
+
+test('modelos/CLAUDE.md tem os seis blocos marcados, abertos e fechados, não vazios', () => {
+  const t = readFileSync(join(RAIZ, 'modelos', 'CLAUDE.md'), 'utf8');
+  const b = blocos(t);
+  assert.deepEqual(b.map((x) => x.nome), BLOCOS);
+  for (const x of b) assert.ok(x.conteudo.trim().length > 20, `bloco ${x.nome} vazio`);
+  assert.equal((t.match(/<!-- kit:/g) || []).length, (t.match(/<!-- \/kit:/g) || []).length);
+});
+
+test('CLAUDE.md do repo traz todos os blocos do modelo (escrito a partir dele)', () => {
+  const modelo = blocos(readFileSync(join(RAIZ, 'modelos', 'CLAUDE.md'), 'utf8'));
+  const meu = blocos(readFileSync(join(RAIZ, 'CLAUDE.md'), 'utf8'));
+  assert.deepEqual(meu.map((x) => x.nome), modelo.map((x) => x.nome));
+});

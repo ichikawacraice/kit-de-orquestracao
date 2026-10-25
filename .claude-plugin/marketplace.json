@@ -1,0 +1,19 @@
+{
+  "name": "kit-de-orquestracao",
+  "owner": {
+    "name": "ichikawacraice"
+  },
+  "plugins": [
+    {
+      "name": "orquestracao",
+      "source": "./plugins/orquestracao",
+      "description": "Pool de sessões: hooks e travas, skills, agents e scripts do painel."
+    },
+    {
+      "name": "painel-sessoes",
+      "source": "./plugins/painel-sessoes",
+      "description": "Mod /painel: as sessões do pool, as perguntas com Q-ID e a fila."
+    }
+  ],
+  "description": "Kit de orquestração de sessões do Claude Code (marketplace privado)."
+}
