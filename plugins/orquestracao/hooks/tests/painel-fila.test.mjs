@@ -812,6 +812,20 @@ caso('F30-1: o fez é campo de máquina: o set o preserva, e set/update/batch qu
   recusa(painel('set', 'fila', 'F9', COM({ fez: [{ localId: LA, apelido: 'E1', oQue: 'a', em: '2026-10-25T10:00:00.000Z' }] })), 'só muda por `painel com del --fez`', 'set novo com fez');
   igual(json(painel('get', 'fila', 'F1')).data.fez.length, 1, 'fez intacto');
 });
+caso('F30-1: o set compara com e fez em JSON canônico: igual ao gravado passa (chaves em outra ordem também), diferente é recusado, [] inclusive', () => {
+  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'validacao' })); comAdd('F1', LA, 'E1', 'título'); comAdd('F1', LB, 'V4', 'valida');
+  painel('com', 'del', 'F1', LA, '--fez');
+  const v = () => json(painel('get', 'fila', 'F1')).version;
+  const g = () => json(painel('get', 'fila', 'F1')).data;
+  const inverte = (l) => l.map((e) => Object.fromEntries(Object.entries(e).reverse()));
+  const com0 = g().com; const fez0 = g().fez;
+  igual(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', com: inverte(com0), fez: inverte(fez0) }), '--se-versao', String(v())).exit, 0, 'igual com chaves invertidas passa');
+  igual(JSON.stringify(g().com), JSON.stringify(com0), 'com intacto'); igual(JSON.stringify(g().fez), JSON.stringify(fez0), 'fez intacto');
+  recusa(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', com: [] }), '--se-versao', String(v())), 'painel com add|del', 'set com com []');
+  recusa(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', com: [{ localId: LA, apelido: 'E1', oQue: 'x' }] }), '--se-versao', String(v())), 'painel com add|del', 'set com com diferente');
+  igual(painel('set', 'fila', 'F2', COM({ com: [] })).exit, 0, 'item novo com com [] passa');
+  igual(g().com.length, 1, 'com do F1 intacto');
+});
 caso('F30-1: espera e com validam o formato (motivo fora da lista, oQue com número, localId repetido, fez.em ruim)', () => {
   semear(); painel('set', 'fila', 'F1', COM());
   recusa(painel('update', 'fila', 'F1', '{"espera":{"motivo":"x","texto":"t"}}'), 'espera.motivo "x" fora da lista', 'motivo x');

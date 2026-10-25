@@ -13,7 +13,7 @@
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_> [--fez]   tira a sessão do `com`; --fez a registra em `fez` (quem executou)
-//   (`com` e `fez` só mudam por `com add|del [--fez]`: o set preserva os gravados, o update e o batch os recusam; `espera` se grava pelo update comum)
+//   (`com` e `fez` só mudam por `com add|del [--fez]`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
 //   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
 //   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
@@ -202,6 +202,12 @@ function filtraPorEstado(colecao, d, filtro) {
 }
 
 let sementePendente = null; // a semente do tema da última validação; quem chama a leva até `efetivar`
+// JSON com as chaves ordenadas: a mesma lista com as chaves em outra ordem é a mesma lista, não uma forja.
+function canonico(v) {
+  if (Array.isArray(v)) return `[${v.map(canonico).join(',')}]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonico(v[k])}`).join(',')}}`;
+  return JSON.stringify(v) ?? 'null';
+}
 function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   sementePendente = null;
   const tem = (k) => k in novo && novo[k] !== null;
@@ -242,7 +248,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     if (!MOTIVOS_DA_TRAVA.has(t.motivo)) throw new Error(`${chave}: trava.motivo "${t.motivo}" fora da lista (${[...MOTIVOS_DA_TRAVA].join(' · ')})`);
     if (!textoNaoVazio(t.texto)) throw new Error(`${chave}: trava.texto não pode ser vazio`);
   }
-  if (!viaCom && (op === 'update' ? 'com' in novo : Array.isArray(novo.com) && novo.com.length > 0)) {
+  if (!viaCom && (op === 'update' ? 'com' in novo : 'com' in novo && canonico(novo.com) !== canonico(antes?.com ?? []))) {
     throw new Error(`${chave}: o campo "com" não se grava por ${op} (a lista mesclada perderia quem gravou ao mesmo tempo); use \`painel com add|del\``);
   }
   const lista = (k, campos, extra) => {
@@ -265,7 +271,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   lista('fez', ['localId', 'apelido', 'oQue', 'em'], (e) => {
     if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: fez.em "${e.em}" não é data ISO`);
   });
-  if (!viaCom && 'fez' in novo && (op === 'update' || JSON.stringify(novo.fez) !== JSON.stringify(antes?.fez ?? []))) {
+  if (!viaCom && 'fez' in novo && (op === 'update' || canonico(novo.fez) !== canonico(antes?.fez ?? []))) {
     throw new Error(`${chave}: o campo "fez" só muda por \`painel com del --fez\` (o ${op} apagaria ou forjaria quem executou)`);
   }
   if (tem('espera')) {
@@ -382,7 +388,7 @@ function planejar(o, seVersao, vista) {
   // `set` monta o documento do zero, mas `com` não é de quem o substitui: o gravado fica (só `com add|del` o muda),
   // e a trava de fechamento abaixo o lê. Sem isto, `set --se-versao` sem o campo apagaria quem trabalha no item.
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.com) && atual.data.com.length) base.com = atual.data.com;
-  if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.fez) && !('fez' in novo)) base.fez = atual.data.fez;
+  if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.fez)) base.fez = atual.data.fez;
   if ((colecao === 'sessoes' || colecao === 'fila') && !base.projeto && (op === 'set' || !atual)) {
     const { projeto, motivo } = projetoDoCwd();
     if (projeto) base.projeto = projeto;
