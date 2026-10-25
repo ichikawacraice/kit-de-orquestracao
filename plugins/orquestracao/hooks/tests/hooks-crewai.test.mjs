@@ -555,6 +555,18 @@ caso('2.31 registro de teste editado por Bash: conta o alvo da escrita', () => {
   igual(conta('sed -i "" s/a/b/ src/y.ts && npx vitest run a.test.ts'), 0, 'laudo: sed -i em não teste encadeado com a execução');
   igual(conta('cp src/j.test.ts /tmp/backup'), 0, 'cp com teste só na origem');
   igual(conta('cat src/k.test.ts | grep x'), 0, 'cat de teste');
+  // Conserto 2: R1 (não cobra o que não escreve teste) e R2 (aspas, branch com nome de teste).
+  const cobra = (cmd, id) => rodar('executor-criterio.mjs', subStop(transcript([abertura('Plano'), usa('Bash', { command: cmd }, id)]), 'feito', { agent_id: id }));
+  igual(cobra('git checkout develop', 'r1a')?.decision ?? null, null, 'R1: git checkout develop não cobra');
+  igual(cobra('rm -rf /tmp/x', 'r1b')?.decision ?? null, null, 'R1: rm -rf /tmp/x não cobra');
+  igual(cobra('cp a /tmp/b', 'r1c')?.decision ?? null, null, 'R1: cp a /tmp/b não cobra');
+  igual(cobra('rm tests/a.test.mjs', 'r1d')?.decision, 'block', 'R1: rm de teste cobra');
+  igual(log().some((l) => l[3] === 'editou-teste' && l[4].includes('tests/a.test.mjs')), true, 'R1: rm de teste registra');
+  igual(conta("sed -i 's/x/y/; s/z/w/' a.test.ts"), 1, 'R2: ; dentro de aspas não corta, registra');
+  igual(conta('git checkout -b test/foo'), 0, 'R2: git checkout -b test/foo não registra');
+  igual(conta('git switch test/foo'), 0, 'R2: git switch não registra');
+  igual(conta('git checkout test/foo'), 0, 'R2: git checkout <branch> não registra');
+  igual(conta('echo "a > b.test.ts"'), 0, 'R2: > dentro de aspas não é redireção');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

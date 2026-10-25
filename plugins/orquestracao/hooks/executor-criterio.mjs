@@ -33,35 +33,70 @@ const BASH_GRAVA = [
   /\b(python3?|node|ruby)\b[^|;&]*<<-?\s*['"]?\w/,
   /\bgit\s+(apply|am)\b/,
   /\bpatch\b\s+-/,
-  /(^|[;&|]\s*)(cp|mv|rm)\s/,
-  /\bgit\s+(checkout|restore)\b/,
 ];
 // Caminho de teste: pasta `test/`, `tests/` ou `__tests__/`, ou nome `*.test.*` / `*.spec.*`. O hook só REGISTRA
 // que o turno editou um (a validadora acha no log); não cobra nem bloqueia por isso (F36, Q233).
 const CAMINHO_DE_TESTE = [/(^|\/)(tests?|__tests__)\//, /\.(test|spec)\.[cm]?[jt]sx?$/];
 const ehTeste = (caminho) => CAMINHO_DE_TESTE.some((r) => r.test(caminho));
-// Testes que um comando Bash ESCREVE: conta o alvo da escrita, não o caminho citado em qualquer lugar. O comando
-// se parte em `;`, `&&`, `||` e `|`, e cada parte é julgada sozinha (`vitest a.test.ts > log` e
-// `sed -i x src/a.ts && vitest a.test.ts` não editam teste; `echo x > a.test.ts`, `tee`, `sed -i`, `cp`/`mv`
-// para um teste, `rm` e `git checkout -- ` / `git restore` de um teste, sim).
-const aspas = (p) => p.replace(/^['"]|['"]$/g, '');
+// Parte o comando em segmentos (`;`, `&&`, `||`, `|`, `&`) e em palavras, respeitando aspas simples e duplas
+// (`sed -i 's/x/y/; s/z/w/' a.test.ts` é um comando só). Redireção (`>`, `>>`, `1>`, `2>`) sai das palavras:
+// o destino vai em `redirs`; `2>&1` não tem destino.
+export function segmentosDoComando(comando) {
+  const segmentos = [];
+  let palavras = [], redirs = [], palavra = '', temPalavra = false, aspa = '', redirPendente = false;
+  const fechaPalavra = () => {
+    if (temPalavra) (redirPendente ? redirs : palavras).push(palavra);
+    if (temPalavra) redirPendente = false;
+    palavra = ''; temPalavra = false;
+  };
+  const fechaSegmento = () => {
+    fechaPalavra(); redirPendente = false;
+    if (palavras.length || redirs.length) segmentos.push({ palavras, redirs });
+    palavras = []; redirs = [];
+  };
+  for (let i = 0; i < comando.length; i++) {
+    const c = comando[i];
+    if (aspa) {
+      if (c === aspa) aspa = '';
+      else if (c === '\\' && aspa === '"' && i + 1 < comando.length) palavra += comando[++i];
+      else palavra += c;
+    } else if (c === "'" || c === '"') { aspa = c; temPalavra = true; }
+    else if (c === '\\' && i + 1 < comando.length) { palavra += comando[++i]; temPalavra = true; }
+    else if (/\s/.test(c)) fechaPalavra();
+    else if (c === ';' || c === '|' || c === '&') {
+      if (c === '&' && /^\d*$/.test(palavra) && comando[i - 1] === '>') continue;
+      fechaSegmento();
+    } else if (c === '>') {
+      if (temPalavra && /^\d+$/.test(palavra)) { palavra = ''; temPalavra = false; } else fechaPalavra();
+      while (comando[i + 1] === '>') i++;
+      if (comando[i + 1] === '&') { i++; redirPendente = false; while (/\d|-/.test(comando[i + 1] || '')) i++; }
+      else redirPendente = true;
+    } else { palavra += c; temPalavra = true; }
+  }
+  fechaSegmento();
+  return segmentos;
+}
+
+// Testes que um comando Bash ESCREVE: conta o alvo da escrita, não o caminho citado em qualquer lugar.
+// `vitest a.test.ts > log` e `sed -i x src/a.ts && vitest a.test.ts` não editam teste; `echo x > a.test.ts`, `tee`,
+// `sed -i`/`perl -i`, `cp`/`mv` para um teste, `rm`, `git checkout -- <teste>` e `git restore <teste>`, sim.
+// `git checkout <branch>` / `-b test/foo` e `git switch` não escrevem nada num teste.
 export function testesEscritosPor(comando) {
   const achados = new Set();
-  const add = (p) => { const c = aspas(p || ''); if (c && ehTeste(c)) achados.add(c); };
-  for (const parte of comando.split(/;|&&|\|\||\|/)) {
-    const palavras = parte.trim().split(/\s+/).filter(Boolean);
+  const add = (p) => { if (p && ehTeste(p)) achados.add(p); };
+  for (const { palavras, redirs } of segmentosDoComando(comando)) {
+    redirs.forEach(add);
     const cmd = palavras.findIndex((w) => !/^[A-Za-z_]\w*=/.test(w));
     if (cmd < 0) continue;
     const nome = palavras[cmd].replace(/^.*\//, '');
     const args = palavras.slice(cmd + 1);
     const posicionais = args.filter((a) => !a.startsWith('-'));
-    // Redireção `>`, `>>`, `1>`, `2>`: o destino é a palavra depois do operador (ou colada nele).
-    for (const m of parte.matchAll(/(?:^|[^>&\d])\d?>>?\s*([^\s<>&|;()]+)/g)) add(m[1]);
     if (nome === 'tee') posicionais.forEach(add);
     else if ((nome === 'sed' || nome === 'perl') && args.some((a) => /^-[a-zA-Z]*i/.test(a))) posicionais.forEach(add);
     else if (nome === 'cp' || nome === 'mv') add(posicionais[posicionais.length - 1]);
     else if (nome === 'rm') posicionais.forEach(add);
-    else if (nome === 'git' && (args[0] === 'restore' || args[0] === 'checkout')) posicionais.forEach(add);
+    else if (nome === 'git' && args[0] === 'restore') posicionais.slice(1).forEach(add);
+    else if (nome === 'git' && args[0] === 'checkout' && args.includes('--')) args.slice(args.indexOf('--') + 1).forEach(add);
   }
   return [...achados];
 }
@@ -90,10 +125,9 @@ function turnoAtual(entradas) {
         if (ehTeste(alvo)) testes.add(alvo);
       }
       const comando = c.name === 'Bash' ? String(c.input?.command || '') : '';
-      if (BASH_GRAVA.some((r) => r.test(comando))) {
-        editou = true;
-        for (const alvo of testesEscritosPor(comando)) testes.add(alvo);
-      }
+      const escritos = comando ? testesEscritosPor(comando) : [];
+      if (BASH_GRAVA.some((r) => r.test(comando)) || escritos.length) editou = true;
+      for (const alvo of escritos) testes.add(alvo);
       if (c.name === 'Monitor' || c.input?.run_in_background === true) fundo.add(c.id);
     }
     const t = textoDe(e.message);
