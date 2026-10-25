@@ -33,11 +33,38 @@ const BASH_GRAVA = [
   /\b(python3?|node|ruby)\b[^|;&]*<<-?\s*['"]?\w/,
   /\bgit\s+(apply|am)\b/,
   /\bpatch\b\s+-/,
+  /(^|[;&|]\s*)(cp|mv|rm)\s/,
+  /\bgit\s+(checkout|restore)\b/,
 ];
 // Caminho de teste: pasta `test/`, `tests/` ou `__tests__/`, ou nome `*.test.*` / `*.spec.*`. O hook só REGISTRA
 // que o turno editou um (a validadora acha no log); não cobra nem bloqueia por isso (F36, Q233).
 const CAMINHO_DE_TESTE = [/(^|\/)(tests?|__tests__)\//, /\.(test|spec)\.[cm]?[jt]sx?$/];
 const ehTeste = (caminho) => CAMINHO_DE_TESTE.some((r) => r.test(caminho));
+// Testes que um comando Bash ESCREVE: conta o alvo da escrita, não o caminho citado em qualquer lugar. O comando
+// se parte em `;`, `&&`, `||` e `|`, e cada parte é julgada sozinha (`vitest a.test.ts > log` e
+// `sed -i x src/a.ts && vitest a.test.ts` não editam teste; `echo x > a.test.ts`, `tee`, `sed -i`, `cp`/`mv`
+// para um teste, `rm` e `git checkout -- ` / `git restore` de um teste, sim).
+const aspas = (p) => p.replace(/^['"]|['"]$/g, '');
+export function testesEscritosPor(comando) {
+  const achados = new Set();
+  const add = (p) => { const c = aspas(p || ''); if (c && ehTeste(c)) achados.add(c); };
+  for (const parte of comando.split(/;|&&|\|\||\|/)) {
+    const palavras = parte.trim().split(/\s+/).filter(Boolean);
+    const cmd = palavras.findIndex((w) => !/^[A-Za-z_]\w*=/.test(w));
+    if (cmd < 0) continue;
+    const nome = palavras[cmd].replace(/^.*\//, '');
+    const args = palavras.slice(cmd + 1);
+    const posicionais = args.filter((a) => !a.startsWith('-'));
+    // Redireção `>`, `>>`, `1>`, `2>`: o destino é a palavra depois do operador (ou colada nele).
+    for (const m of parte.matchAll(/(?:^|[^>&\d])\d?>>?\s*([^\s<>&|;()]+)/g)) add(m[1]);
+    if (nome === 'tee') posicionais.forEach(add);
+    else if ((nome === 'sed' || nome === 'perl') && args.some((a) => /^-[a-zA-Z]*i/.test(a))) posicionais.forEach(add);
+    else if (nome === 'cp' || nome === 'mv') add(posicionais[posicionais.length - 1]);
+    else if (nome === 'rm') posicionais.forEach(add);
+    else if (nome === 'git' && (args[0] === 'restore' || args[0] === 'checkout')) posicionais.forEach(add);
+  }
+  return [...achados];
+}
 const SAIDA_DE_TOOL = new Set(['Bash', 'Monitor', 'TaskOutput', 'BashOutput']);
 
 // Status de comando, normalizado para comparar com a saída real.
@@ -65,8 +92,7 @@ function turnoAtual(entradas) {
       const comando = c.name === 'Bash' ? String(c.input?.command || '') : '';
       if (BASH_GRAVA.some((r) => r.test(comando))) {
         editou = true;
-        // Bash que grava e cita o caminho de um teste: rodar `vitest a.test.ts` não grava, então não entra.
-        for (const palavra of comando.split(/[\s'"`;|&<>()]+/)) if (palavra && ehTeste(palavra)) testes.add(palavra);
+        for (const alvo of testesEscritosPor(comando)) testes.add(alvo);
       }
       if (c.name === 'Monitor' || c.input?.run_in_background === true) fundo.add(c.id);
     }

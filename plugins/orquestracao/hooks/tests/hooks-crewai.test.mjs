@@ -532,5 +532,30 @@ caso('2.30 turno que edita arquivo de teste registra `editou teste: <caminhos>`;
   igual(log().filter((l) => l[3] === 'editou-teste').length, 3, 'rodar o teste não é editar o teste');
 });
 
+caso('2.31 registro de teste editado por Bash: conta o alvo da escrita', () => {
+  let n = 0;
+  const conta = (cmd) => {
+    n += 1;
+    const t = transcript([abertura('Plano'), usa('Bash', { command: cmd }, `bz${n}`), resultado(`bz${n}`, SAIDA_VITEST + '\nexit=0')]);
+    const antes = log().filter((l) => l[3] === 'editou-teste').length;
+    rodar('executor-criterio.mjs', subStop(t, 'Gate: exit=0', { agent_id: `bz${n}` }));
+    return log().filter((l) => l[3] === 'editou-teste').length - antes;
+  };
+  igual(conta('echo x > src/a.test.ts'), 1, 'redireção para teste');
+  igual(conta('echo x >> tests/h.mjs'), 1, 'redireção anexa para teste');
+  igual(conta('echo x | tee src/b.spec.ts'), 1, 'tee em teste');
+  igual(conta('sed -i "" s/a/b/ src/c.test.ts'), 1, 'sed -i em teste');
+  igual(conta('perl -pi -e s/a/b/ src/d.test.ts'), 1, 'perl -i em teste');
+  igual(conta('cp /tmp/x src/e.test.ts'), 1, 'cp com teste por último');
+  igual(conta('mv /tmp/x src/f.test.ts'), 1, 'mv com teste por último');
+  igual(conta('rm src/g.test.ts'), 1, 'rm de teste');
+  igual(conta('git checkout -- src/h.test.ts'), 1, 'git checkout -- teste');
+  igual(conta('git restore src/i.test.ts'), 1, 'git restore teste');
+  igual(conta('npx vitest run a.test.ts > /tmp/log; echo exit=$?'), 0, 'laudo: vitest com saída para log');
+  igual(conta('sed -i "" s/a/b/ src/y.ts && npx vitest run a.test.ts'), 0, 'laudo: sed -i em não teste encadeado com a execução');
+  igual(conta('cp src/j.test.ts /tmp/backup'), 0, 'cp com teste só na origem');
+  igual(conta('cat src/k.test.ts | grep x'), 0, 'cat de teste');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;
