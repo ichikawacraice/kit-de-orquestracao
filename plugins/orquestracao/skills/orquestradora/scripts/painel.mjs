@@ -199,10 +199,11 @@ function validarItemDaFila(chave, novo, base, op, existia) {
   if ('titulo' in novo && !textoNaoVazio(novo.titulo)) {
     throw new Error(`${chave}: titulo é texto não vazio (recusa "", "   " e número)`);
   }
+  // Limite conhecido: a regex também recusa "F5" (a tecla) e "F12" (o DevTools); descreva a tecla por extenso (ex.: "a tecla de recarregar").
   // O pane já mostra o número do item e os PRs: um número no título envelhece (o PR fecha, o item muda de nome) e repete o que está ao lado.
   if (typeof novo.titulo === 'string') {
     const citado = novo.titulo.match(/\bF\d+\b/) || novo.titulo.match(/#\d+/);
-    if (citado) throw new Error(`${chave}: o título não cita item nem PR ("${citado[0]}") — o pane já mostra o número do item e os PRs; use \`depois\`/\`prs\``);
+    if (citado) throw new Error(`${chave}: o título não cita item nem PR ("${citado[0]}") — o pane já mostra o número do item e os PRs; use \`depois\`/\`prs\` (a regra recusa também a tecla "F5": descreva-a por extenso)`);
   }
   if (tem('etapa') && !ETAPAS.includes(novo.etapa)) {
     throw new Error(`${chave}: etapa "${novo.etapa}" fora da lista (${ETAPAS.join(' · ')})`);

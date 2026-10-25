@@ -210,6 +210,27 @@ function importar(id, cfg, conferir) {
   return novo;
 }
 
+// O título não cita item nem PR (a regra do painel.mjs): o número sai do título, junto com o parêntese em volta quando só ele estava lá;
+// F<n> vai para `depois` e #<n> para `prs`, sem duplicar. Sem sobra de título, devolve null e o item vai para "conferir à mão".
+const CITA = /\bF\d+\b|#\d+/g;
+const SEPARADORES = /^[\s,;:·—–-]+|[\s,;:·—–-]+$/g;
+function limparTitulo(titulo) {
+  if (!ehTexto(titulo) || !/\bF\d+\b|#\d+/.test(titulo)) return null;
+  const itens = []; const prs = [];
+  const anota = (m) => { if (m[0] === '#') prs.push(Number(m.slice(1))); else itens.push(m); };
+  let t = titulo.replace(/\s*\(([^()]*)\)/g, (todo, dentro) => {
+    const achou = dentro.match(CITA);
+    if (!achou) return todo;
+    achou.forEach(anota);
+    const resto = dentro.replace(CITA, '').replace(/\s*[,;·]\s*[,;·]\s*/g, ', ').replace(SEPARADORES, '').trim();
+    return resto ? ` (${resto})` : '';
+  });
+  t = t.replace(CITA, (m) => { anota(m); return ''; });
+  t = t.replace(/\s{2,}/g, ' ').replace(SEPARADORES, '').replace(/\s+([,;:])/g, '$1').trim();
+  if (!t) return null;
+  return { titulo: t, itens: [...new Set(itens)], prs: [...new Set(prs)] };
+}
+
 // ---------- plano ----------
 const conferir = [];
 const ops = [];
@@ -241,6 +262,7 @@ for (const [id, cfg] of Object.entries(IMPORTADOS)) {
 // ---------- ajustes à mão (por cima do mapeamento) ----------
 const ajustes = ARQ_AJUSTES ? lerJson(ARQ_AJUSTES) : {};
 const falhasEstritas = [];
+const titulosMudados = [];
 const fotoDo = (id) => {
   if (!DIR_ENSAIO) return null;
   const f = join(DIR_ENSAIO, `${id}.json`);
@@ -270,6 +292,16 @@ for (const op of ops) {
       conferir.push(`${op.id}: campo solto "${k}" (gravado depois do ensaio) virou depois:[{texto}]`);
     }
   }
+  // título sem número citado: o número vai para depois/prs
+  const limpo = limparTitulo(op.data.titulo);
+  if (limpo) {
+    titulosMudados.push(`${op.id}: "${op.data.titulo}" → "${limpo.titulo}"`);
+    op.data.titulo = limpo.titulo;
+    const depois = Array.isArray(op.data.depois) ? [...op.data.depois] : [];
+    for (const item of limpo.itens) if (!depois.some((d) => d?.item === item)) depois.push({ texto: 'citado no título', item });
+    if (depois.length) op.data.depois = depois;
+    if (limpo.prs.length) op.data.prs = [...new Set([...(Array.isArray(op.data.prs) ? op.data.prs : []), ...limpo.prs])];
+  } else if (ehTexto(op.data.titulo) && /\bF\d+\b|#\d+/.test(op.data.titulo)) conferir.push(`${op.id}: o título só tem o número citado; não foi limpo`);
   if (op.data.etapa === 'feito') {
     for (const k of DONO_NOVO) delete op.data[k];
     if (!op.data.feitoEm && ehTexto(op.data.atualizadoEm)) op.data.feitoEm = op.data.atualizadoEm;
@@ -296,6 +328,8 @@ for (const op of ops) {
 }
 const antigosRestantes = ops.flatMap((op) => Object.keys(op.data).filter((k) => CAMPOS_ANTIGOS.includes(k)).map((k) => `${op.id}.${k}`));
 console.log(`\n== ${ops.length} itens (${ops.filter((o) => !antes.has(o.id)).length} importados) · campos antigos restantes: ${antigosRestantes.length}${antigosRestantes.length ? ` (${antigosRestantes.join(', ')})` : ''}`);
+console.log(`\n== títulos que mudaram (${titulosMudados.length})`);
+for (const c of titulosMudados) console.log(`- ${c}`);
 console.log(`\n== conferir à mão (${conferir.length})`);
 for (const c of conferir) console.log(`- ${c}`);
 

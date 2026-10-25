@@ -36,7 +36,7 @@ function run(script, args, extra = {}) {
 }
 const migrar = (...a) => run('migrar-fila.mjs', a);
 const painel = (...a) => run('painel.mjs', a);
-const item = (id, data, version = 1) => writeFileSync(join(painelDir, 'fila', `${id}.json`), JSON.stringify({ id, version, data: { projeto: 'izanagi', titulo: `t ${id.toLowerCase()}`, atualizadoEm: '2026-10-20T10:00:00.000Z', ...data } }));
+const item = (id, data, version = 1) => writeFileSync(join(painelDir, 'fila', `${id}.json`), JSON.stringify({ id, version, data: { projeto: 'izanagi', titulo: `t ${id}`, atualizadoEm: '2026-10-20T10:00:00.000Z', ...data } }));
 const lido = (id) => JSON.parse(readFileSync(join(painelDir, 'fila', `${id}.json`), 'utf8'));
 const igual = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${m}: esperado ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
 const ok = (c, m) => { if (!c) throw new Error(m); };
@@ -114,6 +114,21 @@ caso('handoff vazio recebe o .md de pool/itens (inclusive F12-notas-baixas.md); 
   const r = migrar('--gravar'); igual(r.exit, 0, r.err);
   igual(lido('F12').data.handoff, join(poolDir, 'F12-notas-baixas.md'), 'F12'); igual(lido('F14').data.handoff, '/ja/tem.md', 'F14 intacto');
 });
+caso('o título perde o número citado: F<n> vai para depois, #<n> para prs, sem duplicar; o --seco lista o que mudou', () => {
+  item('F801', { frente: 'builder', estado: 'feito', titulo: 'motor (F27) refaz o aviso #1100', prs: [1100], depois: [{ texto: 'x', item: 'F27' }] });
+  item('F802', { frente: 'builder', estado: 'feito', titulo: 'vagas (F22, #1101) e fila' });
+  item('F803', { frente: 'builder', estado: 'feito', titulo: 'F803' });
+  const seco = migrar();
+  ok(seco.out.includes('== títulos que mudaram (2)'), 'lista os 2 títulos que mudaram');
+  ok(seco.out.includes('F801: "motor (F27) refaz o aviso #1100" → "motor refaz o aviso"'), 'mostra F801 antes → depois');
+  ok(/F803: o título só tem o número citado/.test(seco.out), 'F803 sem sobra vai para conferir à mão');
+  ok(lido('F801').data.titulo === 'motor (F27) refaz o aviso #1100', 'o seco não grava');
+  const r = migrar('--gravar'); ok(/titulo é texto|F803/.test(r.err + r.out), 'F803 segue com número e o lote é recusado'); ok(r.exit !== 0, 'lote recusado por causa do F803');
+  rmSync(join(painelDir, 'fila', 'F803.json'));
+  const g = migrar('--gravar'); igual(g.exit, 0, g.err + g.out.slice(-300));
+  const a = lido('F801').data; igual([a.titulo, a.prs, a.depois], ['motor refaz o aviso', [1100], [{ texto: 'x', item: 'F27' }]], 'F801');
+  const b = lido('F802').data; igual([b.titulo, b.prs, b.depois], ['vagas e fila', [1101], [{ texto: 'citado no título', item: 'F22' }]], 'F802');
+});
 caso('--seco (e sem flag) não grava nada e mostra antes → depois, 0 campo antigo e a lista', () => {
   item('F701', { frente: 'builder', estado: 'em-andamento', proximoPapel: 'exec', nota: 'n' });
   const antes = readFileSync(join(painelDir, 'fila', 'F701.json'), 'utf8');
@@ -172,7 +187,7 @@ caso('ajustes: o documento vivo vence quando trouxe etapa nova depois do ensaio;
   igual(r.exit, 0, `exit (${r.err}${r.out.slice(-300)})`);
   const d = lido('F1002').data;
   igual([d.etapa, d.feitoEm, 'donoApelido' in d, 'proximo' in d, d.resumo], ['feito', '2026-10-25T13:30:00.000Z', false, false, 'R'], 'vivo vence');
-  igual(d.depois, [{ texto: 'conferir o piloto em 01/11' }], 'depois');
+  igual(d.depois, [{ texto: 'conferir o piloto em 01/11' }, { texto: 'citado no título', item: 'F1002' }], 'depois (o campo solto, e o número que saiu do título)');
 });
 caso('ajustes: o ajuste vence quando o vivo não mudou desde o ensaio', () => {
   const antes = { frente: 'builder', estado: 'concluida', etapa: 'aguarda', membro: 'E4' };
