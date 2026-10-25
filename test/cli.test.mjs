@@ -47,7 +47,7 @@ test('marketplace.json lista os dois plugins, cada um com a versão esperada no 
   for (const pl of m.plugins) {
     const pj = json(pl.source, '.claude-plugin', 'plugin.json');
     assert.equal(pj.name, pl.name);
-    assert.match(pj.version, /^\d+\.\d+\.\d+$/); if (pl.name === 'orquestracao') assert.equal(pj.version, '0.1.15'); // o cache do plugin só se renova quando a versão muda
+    assert.match(pj.version, /^\d+\.\d+\.\d+$/); if (pl.name === 'orquestracao') assert.equal(pj.version, '0.1.16'); // o cache do plugin só se renova quando a versão muda
   }
 });
 
