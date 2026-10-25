@@ -1,6 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
+import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { itemSvg, perguntaSvg, resumoSvg } from '../hooks/desenho.js'
+import { montarItens } from '../hooks/register.js'
 import { FILA_REAL, TEMAS_REAIS } from './fixtura-fila.js'
 
 const PANE = {
@@ -175,7 +177,7 @@ const lerSuperficie = async (ui: { findAll: (q: object) => Promise<Array<{ text:
   (await ui.findAll({})).map(el => `${el.text} ${typeof el.props.alt === 'string' ? el.props.alt : ''}`).join('\n')
 
 /** Abre o pane, deixa a leitura acontecer e devolve o que a pessoa lê em cada superfície. */
-async function lerPane($: Parameters<Parameters<typeof test>[1]>[0], on: On, opc: Opcoes = {}, falhaPasta = false) {
+async function lerPane($: Parameters<TestBody>[0], on: On, opc: Opcoes = {}, falhaPasta = false) {
   const motor = engine(on, falhaPasta, {}, { agora: AGORA, ...opc })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.command.run(ABRIR)
@@ -633,4 +635,38 @@ test('o título que não cabe em duas linhas corta em palavra inteira, em qualqu
     expect(palavras.has(sobra), `a ${W} px "${sobra}" é palavra do título`).toBe(true)
   }
   expect(cortados, 'ao menos uma largura corta o título').toBeGreaterThan(0)
+})
+
+const TEMAS_T = [{ id: 'editor', rotulo: 'Editor da loja' }]
+const docF = (id: string, data: Record<string, unknown>) => ({ id, data: { titulo: id, tema: 'editor', ...data } })
+const monta = (docs: ReturnType<typeof docF>[], vivas: Array<{ sessionId: string; isArchived?: boolean }> | null = []) =>
+  montarItens(docs, TEMAS_T, vivas as never, undefined, [], AGORA)
+
+test('etapa fora da lista, ou sem etapa, manda o item para "Sem tema" mesmo com tema válido', () => {
+  const itens = monta([docF('F1', { etapa: 'andando' }), docF('F2', {}), docF('F3', { etapa: 'planejamento' })])
+  expect(itens.length, 'a montagem não pode vir vazia').toBe(3)
+  const por = Object.fromEntries(itens.map(i => [i.id, i]))
+  expect(por.F1!.tema).toBe('sem-tema')
+  expect(por.F1!.foraDoContrato).toMatch(/etapa 'andando' fora da lista/)
+  expect(por.F2!.tema).toBe('sem-tema')
+  expect(por.F2!.foraDoContrato).toMatch(/sem etapa/)
+  expect(por.F3!.tema, 'o item em ordem fica no tema').toBe('editor')
+  expect(por.F3!.foraDoContrato).toBeUndefined()
+})
+
+test('dono pela metade não vira "Na fila" calado: sai fora do contrato, em "Sem tema"', () => {
+  const itens = monta([docF('F1', { etapa: 'execucao', donoApelido: 'E9' }), docF('F2', { etapa: 'execucao', donoLocalId: 'local_x' })])
+  expect(itens.length).toBe(2)
+  expect(itens[0]!.foraDoContrato).toMatch(/dono 'E9' sem donoLocalId/)
+  expect(itens[1]!.foraDoContrato).toMatch(/donoLocalId sem donoApelido/)
+  for (const i of itens) expect(i.tema).toBe('sem-tema')
+})
+
+test('dono em sessão arquivada não conta como vivo', () => {
+  const dono = { etapa: 'execucao', donoApelido: 'E1', donoLocalId: 'local_arq' }
+  const arquivada = monta([docF('F1', dono)], [{ sessionId: 'local_arq', isArchived: true }])
+  expect(arquivada[0]!.situacao).toBe('travado')
+  expect(arquivada[0]!.trava?.motivo).toBe('sem-ninguem')
+  const viva = monta([docF('F1', dono)], [{ sessionId: 'local_arq', isArchived: false }])
+  expect(viva[0]!.situacao).toBe('andando')
 })

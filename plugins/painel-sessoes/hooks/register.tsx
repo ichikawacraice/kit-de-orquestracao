@@ -107,13 +107,16 @@ export function montarItens(
     if (etapaCrua === undefined) motivos.push('sem etapa')
     else if (!etapaOk) motivos.push(`etapa '${etapaCrua}' fora da lista`)
     if (!tema) motivos.push(temaId ? `tema '${temaId}' fora da lista` : 'sem tema')
+    const donoLocalId = texto(d.data.donoLocalId)
+    const apelido = texto(d.data.donoApelido)
+    // Dono pela metade não é fila: o item acusa o que falta, em vez de parecer livre.
+    if (apelido && !donoLocalId) motivos.push(`dono '${apelido}' sem donoLocalId`)
+    else if (donoLocalId && !apelido) motivos.push('donoLocalId sem donoApelido')
     const historico = Array.isArray(d.data.historico) ? (d.data.historico as Array<Record<string, unknown>>) : []
     const feitoEm = texto(d.data.feitoEm)
     const final = etapaCrua === 'feito' || etapaCrua === 'descartado'
     let situacao: Situacao
     let trava: LinhaItem['trava']
-    const donoLocalId = texto(d.data.donoLocalId)
-    const apelido = texto(d.data.donoApelido)
     const dono = donoLocalId && apelido ? { apelido, localId: donoLocalId } : undefined
     const t = d.data.trava as Record<string, unknown> | null | undefined
     const travaGravada = t && texto(t.motivo) && texto(t.texto) ? { motivo: texto(t.motivo) as string, texto: texto(t.texto) as string } : undefined
@@ -134,8 +137,9 @@ export function montarItens(
       id: d.id,
       titulo: texto(d.data.titulo) ?? d.id,
       resumo: texto(d.data.resumo),
-      tema: tema?.id ?? SEM_TEMA,
-      temaRotulo: tema?.rotulo ?? 'Sem tema',
+      // Qualquer descumprimento do contrato (etapa, tema, dono) manda o item para "Sem tema", com o motivo.
+      tema: tema && motivos.length === 0 ? tema.id : SEM_TEMA,
+      temaRotulo: tema && motivos.length === 0 ? tema.rotulo : 'Sem tema',
       etapa: etapaCrua ?? '?',
       situacao,
       dono,
@@ -378,6 +382,8 @@ async function ler($: EngineInterface): Promise<void> {
         tool: 'mcp__ccd_session_mgmt__list_sessions',
         linked: false,
         include_archived: false,
+        // Teto da lista: com mais de 100 sessões não arquivadas, o dono que ficar fora do corte aparece como "sem ninguém"
+        // (hoje são ~17). Se um dia chegar perto, o `⚠` precisa avisar do corte.
         limit: 100,
       })
       .then(r => {
