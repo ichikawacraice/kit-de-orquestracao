@@ -103,6 +103,8 @@ declare module 'claude-code' {
       enviando: { q: string; opcao: string } | null
       /** O localId da sessão que o botão "abrir" está abrindo; null quando nenhuma. */
       abrindo: string | null
+      /** A hora do último tique do relógio que achou a leitura em curso: faz a tela redesenhar enquanto ela pendura. */
+      tique: number
     }
   }
 }

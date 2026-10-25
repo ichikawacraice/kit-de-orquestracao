@@ -1333,19 +1333,25 @@ test('F34-3: erro de leitura da lista de sessões não cria item "sem ninguém"'
   await ui.unmount()
 })
 
-test('F34-3: leitura parada: depois de 3 minutos sem renovar o pane diz "Parou"', async ($, on) => {
+test('F34-3 R8: leitura pendurada: o "Parou" aparece sozinho, sem remontar, e o botão solta a leitura', async ($, on) => {
   const parar = { on: false }
   const { ui, relogio } = await abrirDe({ parar }, $, on)
   expect(await lerSuperficie(ui)).toMatch(/Atualizado /)
   parar.on = true
-  await relogio.advance(181_000)
-  // A tela só recalcula o "há quanto" quando redesenha: o pane de novo é o redesenho.
-  await ui.unmount()
-  const outro = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  const texto = await lerSuperficie(outro)
-  expect(texto).toMatch(/⚠ Parou /)
+  await relogio.advance(60_000)
+  expect(await lerSuperficie(ui), 'a leitura pendurada começou: ainda não passou de 3 min').toMatch(/Atualizado /)
+  await relogio.advance(200_000)
+  const texto = await lerSuperficie(ui)
+  expect(texto, 'o tique redesenhou a tela e ela diz que parou').toMatch(/⚠ Parou /)
   expect(texto).not.toMatch(/Atualizado /)
-  await outro.unmount()
+  expect((await ui.find({ key: 'atualizar' }))?.text, 'parada, o botão não fica em "Lendo…"').toBe('↻ Atualizar')
+  parar.on = false
+  await ui.press({ key: 'atualizar' })
+  await relogio.settle()
+  const depois = await lerSuperficie(ui)
+  expect(depois, 'o botão soltou a pendurada e leu de novo').toMatch(/Atualizado /)
+  expect(depois).not.toMatch(/⚠ Parou /)
+  await ui.unmount()
 })
 
 test('F34-3: botão em curso: só o pressionado vira "Enviando…" e os irmãos ignoram o clique', async ($, on) => {
@@ -1396,7 +1402,7 @@ test('F34-2 R5: sessão morta em com não vira selo; só o "saiu" a nomeia', () 
   const r = cartaoSvg(360, itemCheio({ com: [COM_VIVO, { ...COM_VIVO, apelido: 'c20', localId: 'local_c20', vivo: false }], trava: undefined }), AGORA, { situacao: situacaoDoTeste })
   expect(r.alt).toMatch(/c20 saiu/)
   expect(r.alt, 'sem linha "quem" para a morta').not.toMatch(/c20, /)
-  expect(r.source.match(/<rect class="k" /g)?.length, 'só o selo de E1, mais a pílula da etapa').toBe(1)
+  expect(r.source.match(/<rect class="k" /g)?.length, 'só o selo de E1 (rect class="k"): a morta não ganha selo').toBe(1)
   expect(r.source).not.toContain('sessão encerrada')
 })
 
@@ -1408,4 +1414,89 @@ test('F34-2 R5: dono com trava sem ninguém não vira linha "quem"; sem a trava 
   expect(sem.alt, 'o dono já está na trava').not.toMatch(/E8, /)
   const com = cartaoSvg(360, itemCheio({ ...base, trava: undefined }), AGORA, { situacao: situacaoDoTeste })
   expect(com.alt, 'sem a trava o dono é a linha "quem"').toMatch(/E8, executora, sessão encerrada/)
+})
+
+// F34 fatia 3, conserto: o resumo concorda com a LISTA (as chaves desenhadas), a moldura, o primary e o teto de "Abrir".
+type ElPane = { type: string; text: string; props: Record<string, unknown> }
+const chaveDe = (el: ElPane) => String(el.props.key ?? '')
+const SECAO = /^(Esperam você|Travados|Executando|Na fila) · (\d+)/
+
+/** Percorre o pane na ordem em que ele desenha e conta, por seção, os cartões (`item:`) e as perguntas (`pergunta:`). */
+const contarDesenhado = async (ui: { findAll: (q: object) => Promise<ElPane[]> }) => {
+  const certo: Record<string, number> = {}
+  const contado: Record<string, number> = {}
+  let atual = ''
+  for (const el of await ui.findAll({})) {
+    const rotulo = el.type === 'Svg' ? String(el.props.alt ?? '') : el.type === 'Text' ? el.text : ''
+    const cab = SECAO.exec(rotulo)
+    if (cab) {
+      atual = cab[1]!
+      certo[atual] = Number(cab[2])
+      contado[atual] = 0
+    } else if (atual && (chaveDe(el).startsWith('item:') || chaveDe(el).startsWith('pergunta:'))) contado[atual] = (contado[atual] ?? 0) + 1
+  }
+
+  return { certo, contado }
+}
+
+const travadaF13 = { ...FILA_REAL.F13, trava: { motivo: 'gate-vermelho', texto: 'três casos falham' } }
+const CENARIOS_PANE: Record<string, Opcoes> = {
+  vazio: { fila: {}, perguntas: [], vivas: vivasDe() },
+  'só fila, ninguém vivo': { fila: fila('F8', 'F17', 'F18'), perguntas: [], vivas: vivasDe() },
+  'tudo, com um travado': { fila: { ...Object.fromEntries(Object.entries(FILA_REAL).filter(([id]) => id !== 'F8')), F13: travadaF13 } as never, vivas: vivasDe(P7, P2, P1, E8) },
+  'espera do operador sem pergunta': { fila: { F13: { ...FILA_REAL.F13, espera: { motivo: 'operador', texto: 'decidir' } }, F27: FILA_REAL.F27 } as never, perguntas: [], vivas: vivasDe(P2, P7) },
+}
+for (const [nome, opc] of Object.entries(CENARIOS_PANE)) {
+  test(`F34-3 R7: o que se desenha em cada seção é o que o cabeçalho conta — ${nome}`, async ($, on) => {
+    const motor = engine(on, false, {}, { agora: AGORA, ...opc })
+    await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+    await $.command.run(ABRIR)
+    await motor.relogio.settle()
+    let total = 0
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const ui = await $.ui.mount({ ...PANE, surface })
+      const { certo, contado } = await contarDesenhado(ui)
+      for (const nomeSecao of ['Esperam você', 'Travados', 'Executando', 'Na fila']) {
+        // Esperam e Travados somem quando zerados: o que não tem cabeçalho não tem cartão.
+        expect(contado[nomeSecao] ?? 0, `${surface}: ${nomeSecao}`).toBe(certo[nomeSecao] ?? 0)
+        total += contado[nomeSecao] ?? 0
+      }
+      await ui.unmount()
+    }
+    if (nome !== 'vazio') expect(total, 'o cenário desenha cartões').toBeGreaterThan(0)
+  })
+}
+
+test('F34-3 R9: cada cartão em sessão tem moldura round na cor do tom da seção', async ($, on) => {
+  const fila3 = {
+    F13: travadaF13,
+    F27: FILA_REAL.F27,
+    F1: { ...FILA_REAL.F1, espera: { motivo: 'operador', texto: 'decidir' } },
+  } as never
+  const { ui } = await abrirDe({ fila: fila3, vivas: vivasDe(P2, P7, P1), perguntas: [] }, $, on)
+  for (const [id, tom] of [['F13', 'error'], ['F27', 'subtle'], ['F1', 'warning']] as const) {
+    const el = await ui.find({ key: `item:${id}` })
+    expect(el, `${id} existe`).toBeDefined()
+    expect([el?.props.borderStyle, el?.props.borderColor], id).toEqual(['round', tom])
+  }
+  await ui.unmount()
+})
+
+test('F34-3 R10: um primary só por pergunta, na 1ª opção, e nenhum plain', async ($, on) => {
+  const { ui } = await abrirDe({ fila: {}, perguntas: PERGUNTAS, vivas: vivasDe() }, $, on)
+  const botoes = (await ui.findAll({ type: 'Button' })) as ElPane[]
+  expect(botoes.length, 'há botões').toBeGreaterThan(5)
+  expect(botoes.filter(b => b.props.variant === 'plain'), 'nenhum plain').toHaveLength(0)
+  const primarios = botoes.filter(b => b.props.variant === 'primary').map(chaveDe)
+  expect(primarios.sort(), 'uma por pergunta aberta, a 1ª opção').toEqual(['Q7:a', 'Q8:sim', 'Q9:sim'])
+  await ui.unmount()
+})
+
+test('F34-3 R10: no máximo 3 "Abrir" por cartão', async ($, on) => {
+  const quatro = ['local_a1', 'local_a2', 'local_a3', 'local_a4', 'local_a5']
+  const com = quatro.map((id, k) => ({ apelido: `X${k + 1}`, localId: id, oQue: 'x' }))
+  const { ui } = await abrirDe({ fila: { F27: { ...FILA_REAL.F27, com } } as never, vivas: vivasDe(P7, ...quatro), perguntas: [] }, $, on)
+  const abrir = (await ui.findAll({ type: 'Button' })).map(chaveDe).filter(k => k.startsWith('abrir:'))
+  expect(abrir.length, 'cinco vivas, e o cartão mostra o teto').toBe(3)
+  await ui.unmount()
 })

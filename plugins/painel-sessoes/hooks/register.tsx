@@ -23,6 +23,8 @@ const verFeitos = atom({ plugin: 'painel-sessoes', key: 'verFeitos' } as const, 
 // A resposta em curso (a pergunta e a opção pressionada) e a sessão que o botão "abrir" está abrindo; null = nenhuma.
 const enviando = atom({ plugin: 'painel-sessoes', key: 'enviando' } as const, null as { q: string; opcao: string } | null)
 const abrindo = atom({ plugin: 'painel-sessoes', key: 'abrindo' } as const, null as string | null)
+// O relógio da leitura pendurada: cada tique que encontra a leitura em curso grava a hora, para a tela redesenhar e dizer "Parou".
+const tique = atom({ plugin: 'painel-sessoes', key: 'tique' } as const, 0)
 
 // As respostas rápidas das perguntas sem opções próprias: o texto vai ao banco e à sessão.
 const RAPIDAS = [
@@ -303,7 +305,10 @@ let timer: { cancel: () => void } | undefined
 /** Lê agora e a cada 60 s, enquanto o pane estiver aberto. */
 function ligar($: EngineInterface): void {
   timer?.cancel()
-  timer = $.clock.every(INTERVALO_MS, () => void atualizar($))
+  timer = $.clock.every(INTERVALO_MS, () => {
+    if (emCurso) void $.clock.now().then(agora => update($, tique, () => agora)).catch(() => {})
+    else void atualizar($)
+  })
   void atualizar($)
 }
 
@@ -433,15 +438,18 @@ const desenhos: Record<string, { placement: string; bodyColumns: number; em: str
 
 
 // Uma leitura por vez; a falha que escapa vira erro visível, nunca rejeição solta.
-async function atualizar($: EngineInterface): Promise<void> {
-  if (emCurso) return
+// `forcar` solta a leitura pendurada e começa outra; a velha, se um dia voltar, não derruba o `emCurso` da nova.
+let rodada = 0
+async function atualizar($: EngineInterface, forcar = false): Promise<void> {
+  if (emCurso && !forcar) return
   emCurso = true
+  const minha = ++rodada
   try {
     await ler($)
   } catch (err) {
     await update($, leitura, l => ({ ...l, lendo: false, erros: [...l.erros, `leitura: ${mensagem(err)}`] })).catch(() => {})
   } finally {
-    emCurso = false
+    if (minha === rodada) emCurso = false
   }
 }
 
@@ -649,6 +657,7 @@ export const register: Register = on => {
     const { Box, Text, Button } = elementos
     const enviandoAgora = await read($, enviando)
     const abrindoAgora = await read($, abrindo)
+    await read($, tique)
     // "Abrir P2": pede ao app que ponha a sessão em foco; o que ele recusar, o botão devolve como endereço copiado.
     // O `Button` não tem `disabled`: enquanto abre, o rótulo vira "Abrindo…" e o clique é ignorado.
     const abrir = (dono: NonNullable<LinhaItem['dono']>) => (
@@ -747,10 +756,11 @@ export const register: Register = on => {
         key={key}
         variant="secondary"
         onPress={() => {
-          if (!l.lendo) void atualizar($)
+          // Leitura que parou de renovar não trava o botão: ele solta a pendurada e lê de novo.
+          if (!l.lendo || parada) void atualizar($, true)
         }}
       >
-        {l.lendo ? 'Lendo…' : rotulo}
+        {l.lendo && !parada ? 'Lendo…' : rotulo}
       </Button>
     )
     const limparAvisos =
