@@ -1,6 +1,6 @@
-import { describe, it } from 'node:test';
+import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
@@ -15,7 +15,7 @@ const ler = (d, ...p) => readFileSync(join(d, ...p), 'utf8');
 const json = (d, ...p) => JSON.parse(ler(d, ...p));
 const limpar = (...ds) => ds.forEach((d) => rmSync(d, { recursive: true, force: true }));
 const saida = (r) => `${r.stdout}${r.stderr}`;
-const ENV = (extra = {}) => ({ ...process.env, HOME: casa, CI: '', KIT_GATE_DENTRO: '', KIT_GATE_TRAVA: join(casa, 'gate.trava'), KIT_CONSERTO_TRAVA: join(casa, 'conserto.trava'), KIT_GATE_VERDE_DIR: join(casa, 'verde'), ...extra });
+const ENV = (extra = {}) => ({ ...process.env, HOME: casa, CI: '', KIT_GATE_TRAVA: join(casa, 'gate.trava'), KIT_CONSERTO_TRAVA: join(casa, 'conserto.trava'), KIT_GATE_VERDE_DIR: join(casa, 'verde'), ...extra });
 const kit = (cwd, args, extra) => spawnSync('node', [KIT, ...args], { cwd, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: ENV(extra) });
 
 const PACOTE = (scripts) => `${JSON.stringify({ name: 'r', version: '1.0.0', scripts }, null, 2)}\n`;
@@ -45,6 +45,26 @@ fs.renameSync = function (a, b) { if (String(a).endsWith('.kit-tmp') && ++i === 
   return spawnSync('node', ['-r', pre, KIT, ...args], { cwd: d, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: ENV() });
 }
 
+// `npm test` em grupo próprio, morto pelo GRUPO no prazo e num `after`. O gate roda a suíte em outro grupo (detached), então
+// o grupo do npm não a alcança: o que sobrar com a pasta do teste na linha de comando é varrido por `pgrep -f`, nunca fica vivo.
+const grupos = new Set(); const pastas = new Set();
+function varrer(pasta) {
+  const r = spawnSync('pgrep', ['-f', pasta], { encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL' });
+  for (const p of r.stdout.split('\n').map(Number).filter((n) => n > 1 && n !== process.pid)) try { process.kill(p, 'SIGKILL'); } catch { /* já morreu */ }
+}
+after(() => { for (const g of grupos) try { process.kill(-g, 'SIGKILL'); } catch { /* já morreu */ } for (const d of pastas) varrer(d); });
+function npmTest(cwd, extra, prazoMs = 30000) {
+  return new Promise((resolve) => {
+    const f = spawn('npm', ['test'], { cwd, detached: true, env: ENV(extra), stdio: ['ignore', 'pipe', 'pipe'] });
+    grupos.add(f.pid); pastas.add(cwd);
+    let out = '';
+    f.stdout.on('data', (c) => { out += c; }); f.stderr.on('data', (c) => { out += c; });
+    const matar = () => { try { process.kill(-f.pid, 'SIGKILL'); } catch { /* já morreu */ } varrer(cwd); };
+    const t = setTimeout(matar, prazoMs);
+    f.on('exit', (status, signal) => { clearTimeout(t); matar(); resolve({ status, signal, saida: out }); });
+  });
+}
+
 describe('R1 — o gate detecta o laço pelo comportamento', () => {
   const casos = [
     ['npm t', { test: 'node -e 1' }, 'npm t'],
@@ -54,7 +74,7 @@ describe('R1 — o gate detecta o laço pelo comportamento', () => {
     ['indireto: npm run suite → npm test', { test: 'node -e 1', suite: 'npm test' }, 'npm run suite'],
   ];
   for (const [nome, scripts, comando] of casos) {
-    it(`${nome}: recusa alto, exit 2, antes de tomar a trava`, () => {
+    it(`${nome}: recusa alto, exit 2, antes de tomar a trava`, async () => {
       const d = repo({ 'CLAUDE.md': '# x\n', 'package.json': PACOTE(scripts) });
       try {
         assert.equal(kit(d, ['adotar', '--trocar-test']).status, 0);
@@ -63,11 +83,11 @@ describe('R1 — o gate detecta o laço pelo comportamento', () => {
         writeFileSync(join(d, '.claude', 'kit.json'), JSON.stringify(kj, null, 2));
         assert.equal(json(d, 'package.json').scripts.test.includes('a-vez-do-gate'), true, 'insumo: o `test` não é o gate');
         const t0 = Date.now();
-        const r = spawnSync('npm', ['test'], { cwd: d, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: ENV() });
+        const r = await npmTest(d);
         const ms = Date.now() - t0;
-        assert.notEqual(r.signal, 'SIGKILL', `o gate travou no laço (${ms} ms): ${saida(r)}`);
-        assert.equal(r.status, 2, saida(r));
-        assert.match(saida(r), /chama o próprio gate/);
+        assert.notEqual(r.signal, 'SIGKILL', `o gate travou no laço (${ms} ms): ${r.saida}`);
+        assert.equal(r.status, 2, r.saida);
+        assert.match(r.saida, /chama o próprio gate/);
         assert.ok(ms < 10000, `demorou ${ms} ms`);
       } finally { limpar(d); }
     });
@@ -77,19 +97,19 @@ describe('R1 — o gate detecta o laço pelo comportamento', () => {
     try {
       assert.equal(kit(d, ['adotar', '--trocar-test']).status, 0);
       const trava = join(casa, 'dentro.trava');
-      const r = spawnSync('node', ['scripts/kit/a-vez-do-gate.mjs'], { cwd: d, encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: ENV({ KIT_GATE_DENTRO: '123', KIT_GATE_TRAVA: trava }) });
+      const r = spawnSync('node', ['scripts/kit/a-vez-do-gate.mjs'], { cwd: d, encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: ENV({ KIT_GATE_DENTRO: realpathSync(d), KIT_GATE_TRAVA: trava }) });
       assert.equal(r.status, 2, saida(r));
       assert.match(r.stderr, /chama o próprio gate/);
       assert.equal(existsSync(trava), false, 'tomou a trava antes de recusar');
     } finally { limpar(d); }
   });
-  it('sem o laço, a suíte roda normal (a variável não atrapalha o gate legítimo)', () => {
+  it('sem o laço, a suíte roda normal (a variável não atrapalha o gate legítimo)', async () => {
     const d = repo({ 'CLAUDE.md': '# x\n', 'package.json': PACOTE({ test: "node -e \"console.log('suite-ok')\"" }) });
     try {
       assert.equal(kit(d, ['adotar', '--trocar-test']).status, 0);
-      const r = spawnSync('npm', ['test'], { cwd: d, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: ENV() });
-      assert.equal(r.status, 0, saida(r));
-      assert.match(saida(r), /suite-ok/);
+      const r = await npmTest(d, undefined, 60000);
+      assert.equal(r.status, 0, r.saida);
+      assert.match(r.saida, /suite-ok/);
     } finally { limpar(d); }
   });
 });

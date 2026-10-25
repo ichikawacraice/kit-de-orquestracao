@@ -34,9 +34,9 @@
  * o primeiro acabou de criar. O desfecho desse empate são dois gates juntos —
  * o mundo sem este arquivo —, nunca um gate preso para sempre.
  */
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { closeSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, openSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { carregarConfig, envKit, inteiroDoEnv, partirComando } from "./config.mjs";
@@ -119,6 +119,9 @@ export const filaDoArgv = (argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) =
 /** A variável que o gate põe no ambiente da suíte: o laço (suíte → `npm test` → gate) é detectado por ela, não pelo texto do comando. */
 export const DENTRO = "KIT_GATE_DENTRO";
 
+/** O erro de quem espera a vez de um gate que é seu próprio ancestral: esperar seria para sempre. */
+export const MENSAGEM_DO_LACO = (detalhe) => `[gate] a suíte chama o gate deste mesmo worktree (laço: o gate.comandoCompleto chama o próprio gate${detalhe ? `; ${detalhe}` : ""}) — recusado, sem esperar. Aponte o comando para o script da suíte do projeto.`;
+
 /**
  * O ambiente do filho que roda a suíte. O conserto leva `KIT_TESTE_WORKERS`
  * (e o legado `IZANAGI_TESTE_WORKERS`, que o `vitest.teto.mjs` de quem migra
@@ -128,7 +131,7 @@ export const DENTRO = "KIT_GATE_DENTRO";
  */
 export function ambienteDoFilho(env = process.env, argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) {
   // `KIT_GATE_DENTRO`: o filho sabe que nasceu de um gate; um gate que nasce com ela recusa (o `comandoCompleto` chamou o próprio gate)
-  const filho = { ...env, [DENTRO]: String(process.pid) };
+  const filho = { ...env, [DENTRO]: raizDoWorktree(raiz) };
   if (filaDoArgv(argv, raiz, cfg) !== "conserto") return filho;
   const pedido = envKit(env, "CONSERTO_WORKERS");
   let n = cfg.gate.workersConserto;
@@ -212,6 +215,30 @@ export function processoVivo(pid) {
   } catch (e) {
     return e?.code === "EPERM";
   }
+}
+
+/** A raiz do worktree, como o gate a conhece: `git rev-parse --show-toplevel` com `realpath` (sem git, a `raiz` dada). Vai em `KIT_GATE_DENTRO`. */
+export function raizDoWorktree(raiz = RAIZ) {
+  const topo = git(["rev-parse", "--show-toplevel"], raiz).saida ?? raiz;
+  try {
+    return realpathSync(topo);
+  } catch {
+    return topo;
+  }
+}
+
+/** Os PIDs acima deste processo (pai, avô…), subindo com `ps -o ppid=` com prazo. Para quando não consegue ler. */
+export function ancestrais(pid = process.pid) {
+  const acima = [];
+  let atual = pid;
+  for (let i = 0; i < 64; i++) {
+    const r = spawnSync("ps", ["-o", "ppid=", "-p", String(atual)], { encoding: "utf-8", timeout: 3_000, killSignal: "SIGKILL" });
+    const pai = Number.parseInt(String(r.stdout ?? "").trim(), 10);
+    if (r.status !== 0 || !Number.isInteger(pai) || pai <= 1 || acima.includes(pai)) break;
+    acima.push(pai);
+    atual = pai;
+  }
+  return acima;
 }
 
 /** Quem pede a vez: o que vai escrito na trava, para quem espera saber por quem. */
@@ -367,6 +394,7 @@ export async function esperarAVez(base, n, eu, opcoes = {}) {
     outras = [],
     fila = "gate",
     ilegivelMs = ILEGIVEL_ABANDONADA_MS,
+    ancestraisDe = ancestrais,
   } = opcoes;
   const naFila = fila === "gate" ? "" : ` (fila do ${fila})`;
   const inicio = agora();
@@ -378,6 +406,10 @@ export async function esperarAVez(base, n, eu, opcoes = {}) {
     if (r.tomou) {
       if (ultimaChave !== undefined) avisar(`[gate] a vez chegou depois de ${Math.round((agora() - inicio) / 1000)} s`);
       return r.vaga;
+    }
+    // o dono "deste mesmo worktree" é ANCESTRAL deste processo: a suíte dele chamou este gate (mesmo com a env limpa) e esperar é para sempre
+    if (r.mesmoWorktree && ancestraisDe().includes(r.mesmoWorktree.pid)) {
+      throw Object.assign(new Error(MENSAGEM_DO_LACO(`o dono da vez, PID ${r.mesmoWorktree.pid}, é ancestral deste processo`)), { codigo: "LACO" });
     }
     const chave = r.donos.map((d) => (d ? d.token : "?")).join(",");
     if (chave !== ultimaChave) {
@@ -440,8 +472,9 @@ function rodarASuite({ cmd, args }, prazoMs, env = process.env, raiz = RAIZ) {
 
 /** O gate inteiro. Devolve o código de saída. */
 export async function main(env = process.env, argv = process.argv.slice(2), raiz = RAIZ, cfg = carregarConfig(raiz)) {
-  if (env[DENTRO]) {
-    console.error(`[gate] o gate (pid ${env[DENTRO]}) chamou a suíte e a suíte chamou o gate de novo: o gate.comandoCompleto chama o próprio gate (laço) — recusado, sem tomar a trava. Aponte o comando para o script da suíte do projeto.`);
+  // só o gate DESTE worktree que chamou a suíte é laço; o de outro repositório ou worktree tem outra trava (ou outra vaga) e segue
+  if (env[DENTRO] && env[DENTRO] === raizDoWorktree(raiz)) {
+    console.error(MENSAGEM_DO_LACO(`o gate de ${env[DENTRO]} chamou a suíte`));
     return 2;
   }
   const comando = comandoDaSuite(env, argv, raiz, cfg);
@@ -450,7 +483,7 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
   if (env["CI"]) {
     console.error("[gate] CI: sem fila e sem teto de pacotes — o comportamento de antes");
     const codigo = constroi(raiz, env, cfg);
-    return codigo !== 0 ? codigo : rodarASuite(comando, prazoMs, { ...env, [DENTRO]: String(process.pid) }, raiz);
+    return codigo !== 0 ? codigo : rodarASuite(comando, prazoMs, { ...env, [DENTRO]: raizDoWorktree(raiz) }, raiz);
   }
 
   // A instalação se confere ANTES da fila: esperar a vez por minutos para morrer
@@ -483,7 +516,14 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
   const eu = quemSouEu(raiz, Date.now(), prazoMs);
   const n = vagas(env, fila) ?? 1;
   const filho = ambienteDoFilho(env, argv, raiz, cfg);
-  const vaga = await esperarAVez(caminho, n, eu, { outras: [outra], fila, ilegivelMs: cfg.gate.prazos.ilegivelSeg * 1000 });
+  let vaga;
+  try {
+    vaga = await esperarAVez(caminho, n, eu, { outras: [outra], fila, ilegivelMs: cfg.gate.prazos.ilegivelSeg * 1000 });
+  } catch (e) {
+    if (e?.codigo !== "LACO") throw e;
+    console.error(e.message);
+    return 2;
+  }
   const minha = caminhoDaVaga(caminho, vaga);
   console.error(
     `[gate] a vez é minha (fila do ${fila}, vaga ${vaga} de ${n}, ${minha}) — ${comando.cmd} ${comando.args.join(" ")}, até ${availableParallelism()} núcleos repartidos pelo teto`,
