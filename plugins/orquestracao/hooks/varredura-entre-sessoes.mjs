@@ -61,7 +61,7 @@ export const limpo = (texto) => {
 };
 
 // Um valor só é segredo quando não é referência: variável de ambiente, chamada, caminho, placeholder, gerenciador de segredos.
-const PLACEHOLDER = /placeholder|your[-_ ]|example|changeme|change[-_]?me|redacted|dummy|replace[-_]?me|insert[-_]|exemplo|troque|substitua|preencha|redigid[oa]|(?:sua|seu|minha|meu)[-_ ]?(?:senha|segredo|token|chave)|\*{3,}|x{5,}|\.{3}|^(?:none|null|undefined|true|false)$/i;
+const PLACEHOLDER = /placeholder|your[-_ ]|example|changeme|change[-_]?me|redacted|dummy|replace[-_]?me|insert[-_]|\*{3,}|x{5,}|\.{3}|^(?:none|null|undefined|true|false)$/i;
 const REFERENCIA = /^(?:\$(?:\{[^}]*\}|\(|[A-Za-z_]\w*$)|%[^%]*%$|<[^>]*>$|\{\{|process\.env|os\.environ|env[.[]|import\.meta|System\.getenv|secrets?\.|vault:|op:\/\/|ref\+|arn:|projects\/[^/]+\/secrets\/|gcp:|kms:|aws:|file:)/i;
 const CHAMADA = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\(|^[A-Za-z_$][\w$]*\[/;
 const CAMINHO_DE_IDENTIFICADOR = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/;
@@ -79,7 +79,7 @@ function ehReferencia(v) {
 function senhaDeUrl(url) {
   const [, usuario, senha] = /^[^:]+:\/\/([^\s:@/]+):([^\s@/]+)@/.exec(url) ?? [];
   if (!senha || senha === usuario || /\$\{|\{\{|%\(|%s/.test(senha)) return false;
-  return !/^(?:password|passwd|pass|pwd|secret|changeme|dbpassword|db_password|senha|segredo|sua[-_]?senha|minha[-_]?senha|senha[-_]?(?:do[-_]?)?(?:banco|db)|db[-_]?senha|usuario|usu[aá]rio|\$\w*|<.*>|\{.*\}|\*+|x+)$/i.test(senha) && !PLACEHOLDER.test(senha);
+  return !/^(?:password|passwd|pass|pwd|secret|changeme|dbpassword|db_password|senha|segredo|sua[-_]?senha|minha[-_]?senha|senha[-_]?(?:do[-_]?)?(?:banco|db)|db[-_]?senha|usuario|usu[aá]rio|exemplo|troque(?:[-_ ]?aqui)?|substitua|preencha|redigid[oa]|\$\w*|<.*>|\{.*\}|\*+|x+)$/i.test(senha) && !PLACEHOLDER.test(senha);
 }
 
 // Formas que só valem depois de um segundo juízo sobre o trecho que casou.

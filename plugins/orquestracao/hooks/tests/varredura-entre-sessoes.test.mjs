@@ -265,3 +265,15 @@ test('marcadores de exemplo em português não viram segredo (URL com SENHA no l
   // o que não é marcador continua recusado
   assert.ok(segredosEm('postgres' + '://admin:s3cr3tPw0rd@db.exemplo.com/app').some((a) => a.padrao === 'url-com-credencial'));
 });
+
+test('conserto 2: o marcador em português só vale inteiro; valor que apenas o contém é segredo', () => {
+  const url = (senha) => 'postgres' + `://admin:${senha}@db.exemplo.com:5432/app`;
+  const recusados = ['minhasenhaforte9', 'exemplo2024', 'Troque!Ja', 's3cr3tPw0rd', 'senha123'];
+  const aceitos = ['SENHA', 'sua_senha', 'senha-do-banco', 'SEGREDO', 'usuário', 'troque-aqui'];
+  assert.ok(recusados.length > 0 && aceitos.length > 0);
+  for (const s of recusados) assert.ok(segredosEm(url(s)).some((a) => a.padrao === 'url-com-credencial'), `aceito por engano: ${s}`);
+  for (const s of aceitos) assert.deepEqual(segredosEm(url(s)), [], `marcador recusado: ${s}`);
+  for (const b of ['Authorization: Bearer minhasenhaForte9aB3dE5gH7jK9mN', 'Authorization: Bearer exemplo2024aB3dE5gH7jK9mN1pQ3sT']) {
+    assert.ok(segredosEm(b).some((a) => a.padrao === 'bearer-token'), `Bearer aceito por engano: ${b}`);
+  }
+});
