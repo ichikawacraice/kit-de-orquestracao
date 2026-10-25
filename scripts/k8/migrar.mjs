@@ -142,6 +142,14 @@ function secoesDoClaudeMd() {
   return tiradas.map((t) => t.split('\n')[0]);
 }
 
+// Primeiro passo: o plugin não pode instalar versão mais velha do que a que está viva em ~/.claude. Paridade ≠ 0 aborta antes de tocar em qualquer coisa.
+function paridadeVerde() {
+  const r = spawnSync('node', [join(KIT, 'scripts', 'paridade.mjs')], { encoding: 'utf8', env: { ...process.env, KIT_PARIDADE_HOME: join(REAL, '.claude') }, timeout: 60000, killSignal: 'SIGKILL' });
+  if (r.status === 0) { log('paridade: 0 diferenças não declaradas'); return true; }
+  console.error(`paridade não deu 0 (exit ${r.status}): a K8 NÃO tocou em nada. Porte o que mudou em ~/.claude para o plugin e rode de novo.\n${`${r.stdout ?? ''}${r.stderr ?? ''}`.trim().split('\n').slice(-12).join('\n')}`);
+  return false;
+}
+
 // ---------- fluxo ----------
 if (valor('--restaurar')) {
   try { restaurar(resolve(valor('--restaurar'))); } catch (e) { console.error(`restauração falhou: ${e.message}`); process.exitCode = 1; }
@@ -149,6 +157,7 @@ if (valor('--restaurar')) {
   const fonte = valor('--fonte');
   if (!fonte) { console.error('uso: --home <HOME> --fonte <marketplace: caminho ou owner/repo> [--ensaio] [--simular] [--tirar-secoes]'); process.exitCode = 2; }
   else if (!existe(join(C, 'settings.json'))) { console.error(`sem ${C}/settings.json`); process.exitCode = 2; }
+  else if (!paridadeVerde()) { process.exitCode = 1; }
   else if (SIMULAR) {
     const s = JSON.parse(readFileSync(join(C, 'settings.json'), 'utf8'));
     log(`simular: backup de ${DO_BACKUP.filter((r) => existe(join(C, r))).length} itens; plugin ${PLUGINS.join(', ')} de ${fonte}; ${Object.values(s.hooks ?? {}).flat().length} grupos de hooks no settings.json`);
