@@ -286,6 +286,11 @@ O passo 2 só muda o desenho se der certo nos dois temas. Nesse caso, a pergunta
 
 O `Client` não resolve isso: ele também desenha com `Box` e `Text`, e não com DOM.
 
+**Medido em 2026-10-25 (passo 0, mod de rascunho no desktop, respostas do operador):**
+- **Passo 1:** a borda do `Box round subtle` **aparece**. Vale o desfecho "a borda aparece": o cartão é o `Box` com a borda inteira na cor do tom, sem fundo, e os botões dentro.
+- **Passo 2:** sobre `backgroundColor="warning"` e `"error"`, o texto fica legível, mas o `Button secondary` fica **meio apagado**. Não passou: a pergunta e a faixa de erro mantêm o tingido em SVG, com os botões logo abaixo, fora dele, como hoje. O fundo `tile` do cartão não entra.
+- A resposta não separou os temas claro e escuro; a fatia 3 confere a borda no outro tema ao abrir o pane.
+
 ## Decisões ao operador
 
 **Q238 — O tema vira etiqueta no cartão, no lugar do cabeçalho de grupo?**
