@@ -1,8 +1,9 @@
 import { describe, it } from "node:test";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { carregarConfig, envKit, lerKitJson } from "../config.mjs";
 import { comandoDaSuite, main, pacoteDoArgv, pacotesDoGate, vagas } from "../a-vez-do-gate.mjs";
 import { pacotesConsumidosCompilados } from "../o-dist-que-o-gate-le.mjs";
@@ -198,5 +199,36 @@ describe("a configuração recusa o que desligaria algo calado", () => {
       expect(com({ tipo: "arquivos-gerados", nome: reservado }), reservado).toThrow(/reservado/);
     }
     expect(com({ tipo: "arquivos-gerados", nome: "x" }, { tipo: "banco-postgres", nome: "x" })).toThrow(/repetido/);
+  });
+});
+
+describe("gate.prazos.ilegivelSeg chega ao `main` (a ligação, não só a função)", () => {
+  const GATE = join(dirname(fileURLToPath(import.meta.url)), "..", "a-vez-do-gate.mjs");
+
+  /** Roda o gate de verdade num repo temporário com uma trava ilegível de 3 s no caminho da fila. */
+  function rodar(ilegivelSeg, prazoMs) {
+    const raiz = repo({ ".claude/kit.json": { gate: { comandoCompleto: "node -e 0", prazos: { ilegivelSeg } } } });
+    const base = realpathSync(mkdtempSync(join(tmpdir(), "kit-ilegivel-")));
+    const trava = join(base, "gate.trava");
+    writeFileSync(trava, "{ meio escrito");
+    const ha3s = (Date.now() - 3000) / 1000;
+    utimesSync(trava, ha3s, ha3s);
+    const r = spawnSync("node", [GATE], {
+      cwd: raiz, encoding: "utf-8", timeout: prazoMs, killSignal: "SIGKILL",
+      env: { ...process.env, CI: "", KIT_GATE_VAGAS: "1", KIT_GATE_TRAVA: trava, KIT_CONSERTO_TRAVA: join(base, "conserto.trava"), KIT_GATE_VERDE_DIR: join(base, "verde") },
+    });
+    rmSync(raiz, { recursive: true, force: true });
+    rmSync(base, { recursive: true, force: true });
+    return r;
+  }
+
+  it("ilegivelSeg 1 retoma a trava ilegível de 3 s; com 120 a mesma trava segura a fila (prova que o teste mede a ligação)", () => {
+    const retomou = rodar(1, 25_000);
+    expect(retomou.status).toBe(0);
+    expect(retomou.stderr).toMatch(/a vez é minha/);
+    // Ausência provada: com o prazo longo o gate fica esperando, e é o `timeout` que o mata (status null).
+    const esperando = rodar(120, 4_000);
+    expect(esperando.status).toBe(null);
+    expect(esperando.stderr).not.toMatch(/a vez é minha/);
   });
 });

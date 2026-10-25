@@ -1,0 +1,15 @@
+{
+  "perfis": {
+    "simples": {
+      "descricao": "Projeto de um pacote só: o gate roda `npm run test:suite`.",
+      "kit": { "gate": { "comandoCompleto": "npm run test:suite" } },
+      "scripts": { "test": "node scripts/kit/a-vez-do-gate.mjs" },
+      "suitePadrao": "node --test"
+    },
+    "pnpm-workspace": {
+      "descricao": "Workspace pnpm: pacotes lidos do pnpm-workspace.yaml, `pnpm -r test` e `pnpm -r typecheck` pelo gate.",
+      "kit": { "gate": { "perfil": "pnpm-workspace", "pacotes": "auto" } },
+      "scripts": { "test": "node scripts/kit/a-vez-do-gate.mjs", "typecheck": "node scripts/kit/o-typecheck-do-gate.mjs" }
+    }
+  }
+}

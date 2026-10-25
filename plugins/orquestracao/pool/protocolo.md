@@ -1,4 +1,4 @@
-# Protocolo do pool de sessões (2026-10-24; origem: Izanagi)
+# Protocolo do pool de sessões (2026-10-24)
 
 Decisão do operador em 24/10 (Q197–Q199 aceitas, com ajuste): *"quero ter várias sessões abertas, mesmo que paradas… se eu estiver dormindo essas sessões não vão se criar sozinhas… o importante é nunca travar"*. Estudo: `~/.claude/orquestracao/estudos/2026-10-24-pool-e-fila.md`.
 
@@ -47,7 +47,7 @@ Título: `<ID> · <o que está fazendo, em palavras do produto>` (ex.: `P1 · ed
 Membro não se arquiva sozinho: quem termina se limpa e fica livre (decisão do operador, 24/10). **Só a orquestradora arquiva, e só membro com título `<ID> · livre`**: fora do modo ausente, o livre sem trabalho previsto para os próximos minutos (âncora `sob-demanda`); em qualquer modo, o que passa do teto. Antes de arquivar, o título tem de dizer `livre` (membro que acabou o item e ainda tem o título dele é renomeado primeiro) e o gasto vai ao painel. Trava: `${CLAUDE_PLUGIN_ROOT}/hooks/papel-do-pool.mjs` recusa `archive_session` e `delete_session` de membro, exceto o da orquestradora sobre membro livre (o título é lido fresco, sem cache).
 
 ## Regras do repositório
-As do `CLAUDE.md` do projeto em que o item roda (leia-o antes de começar). No Izanagi: antes de empurrar, `pnpm test shared`, `pnpm test <pacote mexido>` e `pnpm typecheck` (o gate completo é da orquestradora, por lote — ADR 0389), um gate por vez, migration só da develop, rebase em vez de merge commit, commit em PT-BR, número de ADR/SPEC pedido à orquestradora. Worktree: o do membro serve de base; cada item cria a própria branch a partir da branch de integração do projeto (no Izanagi, `git switch -c <slug> origin/develop`) com a árvore limpa.
+As do `CLAUDE.md` do projeto em que o item roda (leia-o antes de começar). Ex.: antes de empurrar, o teste do pacote mexido e o typecheck (o gate completo, quando pesado, é da orquestradora, por lote), um gate por vez, migration só da branch de integração, rebase em vez de merge commit, commit em PT-BR, número de ADR/SPEC pedido à orquestradora. Worktree: o do membro serve de base; cada item cria a própria branch a partir da branch de integração do projeto (ex.: `git switch -c <slug> origin/<integração>`) com a árvore limpa.
 
 <a id="mais-de-um-projeto"></a>
 ## Mais de um projeto

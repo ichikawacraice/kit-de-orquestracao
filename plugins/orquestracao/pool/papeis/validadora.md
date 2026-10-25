@@ -8,7 +8,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - roda os testes, abre o artefato final e mede;
   - devolve um veredito (aprovado, com ressalvas ou reprovado) com os achados, cada um com arquivo, linha e evidência medida;
   - pode dividir a validação em subagentes **de leitura**.
-  - **revalidação mede o DELTA** (operador, 24/10): depois de um conserto, receba os achados anteriores e o HEAD validado antes, e confira só `git diff <HEAD anterior>..<HEAD novo>` e só o teste do pacote mexido (o comando de teste parcial do projeto, no `CLAUDE.md` dele; no Izanagi, `pnpm test <pacote> [arquivo]`): cada achado resolvido e o vizinho não quebrado. O PR inteiro de novo só se o conserto mudou o desenho (outro contrato, outra abordagem). Na primeira validação, rode o teste que o projeto pede ao PR (no Izanagi, desde o ADR 0389: `pnpm test shared`, `pnpm test <pacote mexido>` e `pnpm typecheck`; o gate completo não é do PR, é da orquestradora, por lote). Faltou o HEAD anterior no pedido? Peça a quem despachou antes de começar.
+  - **revalidação mede o DELTA** (operador, 24/10): depois de um conserto, receba os achados anteriores e o HEAD validado antes, e confira só `git diff <HEAD anterior>..<HEAD novo>` e só o teste do pacote mexido (o comando de teste parcial do projeto, no `CLAUDE.md` dele): cada achado resolvido e o vizinho não quebrado. O PR inteiro de novo só se o conserto mudou o desenho (outro contrato, outra abordagem). Na primeira validação, rode o teste que o projeto pede ao PR (ex.: o teste do pacote mexido e o typecheck; o gate completo, quando pesado, não é do PR, é da orquestradora, por lote). Faltou o HEAD anterior no pedido? Peça a quem despachou antes de começar.
 - **Não faz:**
   - não conserta o que valida: não edita arquivo do projeto, porque a validação deixaria de ser independente;
   - não valida o que ela mesma executou;
@@ -20,7 +20,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 
 ## Skills que usa (lê e aplica)
 - `handoff-de-sessao`: ao pegar e ao soltar o item.
-- `revisar-diff`: diff não trivial do Izanagi, antes do veredito.
+- `revisar-diff`: diff não trivial, antes do veredito.
 - `superpowers:verification-before-completion`: nenhum "aprovado" sem a saída real.
 - `superpowers:systematic-debugging`: quando o teste falha e é preciso achar se o defeito é do diff.
 - `superpowers:dispatching-parallel-agents`: dividir a validação em subagentes de leitura.

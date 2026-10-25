@@ -5,7 +5,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 ## O papel
 - **Faz:**
   - cumpre um plano pronto: arquivos, passos, critério de pronto medível e fora de escopo;
-  - escreve o código e o teste, roda o teste que o projeto pede antes do push e commita (no Izanagi, desde o ADR 0389: `pnpm test shared`, `pnpm test <pacote que mexeu>` e `pnpm typecheck`; o gate completo é da orquestradora, por lote);
+  - escreve o código e o teste, roda o teste que o projeto pede antes do push e commita (ex.: o teste do pacote que mexeu e o typecheck; o gate completo, quando pesado, é da orquestradora, por lote);
   - abre o PR com o rebase em dia;
   - atualiza a spec, o roadmap e o diário na mesma sessão, quando o plano pede.
 - **Não faz:**

@@ -53,7 +53,7 @@ qual comando, em que commit, com que saída, é hipótese.
 
 - **Datas absolutas** (`2026-09-22`), nunca "ontem" ou "hoje".
 - **Segredo nunca entra** — nem token, nem senha, nem URL com credencial. Cite pelo nome
-  (`IZANAGI_SECRET_FIGMA`, "a secret key do Supabase de produção").
+  (`MEUAPP_SECRET_FIGMA`, "a secret key do Supabase de produção").
 - **Pedido da pessoa entre aspas**, do jeito que ela escreveu, quando a formulação importa.
 - **Não copie a conversa.** Se a próxima sessão não precisa do fato para agir, ele não entra.
 

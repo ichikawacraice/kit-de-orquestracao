@@ -5,7 +5,7 @@ Quem lê é quem **usa** o produto, não quem o programa. A pergunta de cada ite
 ## Regras
 
 1. **Uma linha por mudança**, com o verbo no presente: *"O botão X passa a…"*, *"A tela Y mostra…"*.
-2. **Escreva o efeito, nunca o mecanismo.** Nada de arquivo, função, tabela, coluna, rota, flag ou nome de variável. *"O plano do job deixa de ser gravado no repositório da loja"*, e não *"`plan.json` sai do `.izanagi/`"*.
+2. **Escreva o efeito, nunca o mecanismo.** Nada de arquivo, função, tabela, coluna, rota, flag ou nome de variável. *"O plano do job deixa de ser gravado no repositório da loja"*, e não *"`plan.json` sai do `.meuapp/`"*.
 3. **Nunca invente.** Use o título do PR e o caso (`caso` no JSON do `coletar.mjs`). Se o caso não diz o que muda para quem usa, o item vai para *Bastidores* com o título reescrito em português comum. Nunca escreva uma novidade imaginada.
 4. **Junte o que entrega a mesma coisa:** PRs que são o mesmo trabalho (a feature e o conserto do teste dela) viram **um** item, `(#a, #b)`.
 5. **Classifique pelo efeito, não pelo prefixo.** O prefixo sugere: `feat` → Novidades, `fix` → Correções, `docs`/`chore`/`test`/`ci`/`refactor`/`perf` → Bastidores. Mas quem decide é a tela: um `fix` que ninguém vê é Bastidores, e um `feat` de infra também.
