@@ -40,7 +40,7 @@ describe('c13 — temas.json semeado pelo painel', () => {
     const d = novo();
     try {
       mkdirSync(join(d, 'painel'), { recursive: true });
-      const meu = '[ { "id": "editor", "rotulo": "Editor", "projeto": "x" } ]\n';
+      const meu = '[ { "id": "editor", "rotulo": "Editor" } ]\n';
       writeFileSync(join(d, 'painel', 'temas.json'), meu);
       const r = painel(d, 'update', 'fila', 'F1', JSON.stringify({ titulo: 't', etapa: 'planejamento', tema: 'editor', estado: 'aberto' }));
       assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);

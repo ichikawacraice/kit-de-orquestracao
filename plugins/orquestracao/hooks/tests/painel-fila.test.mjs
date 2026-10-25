@@ -8,7 +8,7 @@ import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const TEMAS = JSON.stringify([{ id: 'editor', rotulo: 'Editor', projeto: 'izanagi' }, { id: 'motor', rotulo: 'Motor', projeto: 'izanagi' }]);
+const TEMAS = JSON.stringify([{ id: 'editor', rotulo: 'Editor' }, { id: 'motor', rotulo: 'Motor' }]);
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 let base;
 let falhas = 0;
@@ -566,7 +566,7 @@ for (let rodada = 1; rodada <= 3; rodada++) {
 
 // ---- Fatia 1: o contrato do item da fila ----
 const UUID = 'local_00000000-0000-4000-8000-0000000000aa';
-const semear = () => writeFileSync(join(base, 'painel', 'temas.json'), JSON.stringify([{ id: 'editor', rotulo: 'Editor', projeto: 'izanagi' }, { id: 'motor', rotulo: 'Motor', projeto: 'izanagi' }]));
+const semear = () => writeFileSync(join(base, 'painel', 'temas.json'), JSON.stringify([{ id: 'editor', rotulo: 'Editor' }, { id: 'motor', rotulo: 'Motor' }]));
 const recusa = (r, trecho, msg) => { igual(r.exit, 1, `${msg}: exit (${r.out}${r.err})`); ok(r.err.includes(trecho), `${msg}: stderr sem "${trecho}": ${r.err}`); };
 const COM = (extra = {}) => JSON.stringify({ titulo: 'T', etapa: 'planejamento', tema: 'editor', ...extra });
 

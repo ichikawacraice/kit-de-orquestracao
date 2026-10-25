@@ -21,11 +21,11 @@ function novo() {
   for (const d of ['fila', 'sessoes', 'perguntas']) mkdirSync(join(painelDir, d), { recursive: true });
   mkdirSync(poolDir, { recursive: true });
   writeFileSync(join(painelDir, 'temas.json'), JSON.stringify([
-    { id: 'editor', rotulo: 'Editor', projeto: 'izanagi' }, { id: 'motor', rotulo: 'Motor', projeto: 'izanagi' },
-    { id: 'gate', rotulo: 'Gate', projeto: 'izanagi' }, { id: 'orquestracao', rotulo: 'Orquestração', projeto: 'izanagi' },
-    { id: 'kit', rotulo: 'Kit', projeto: 'izanagi' }]));
-  writeFileSync(join(painelDir, 'sessoes', `${L1}.json`), JSON.stringify({ id: L1, version: 1, data: { titulo: 'P1 · editor da loja', projeto: 'izanagi' } }));
-  writeFileSync(join(painelDir, 'sessoes', `${L2}.json`), JSON.stringify({ id: L2, version: 1, data: { titulo: 'E4 · fatia', projeto: 'izanagi' } }));
+    { id: 'editor', rotulo: 'Editor' }, { id: 'motor', rotulo: 'Motor' },
+    { id: 'gate', rotulo: 'Gate' }, { id: 'orquestracao', rotulo: 'Orquestração' },
+    { id: 'kit', rotulo: 'Kit' }]));
+  writeFileSync(join(painelDir, 'sessoes', `${L1}.json`), JSON.stringify({ id: L1, version: 1, data: { titulo: 'P1 · editor da loja' } }));
+  writeFileSync(join(painelDir, 'sessoes', `${L2}.json`), JSON.stringify({ id: L2, version: 1, data: { titulo: 'E4 · fatia' } }));
 }
 const fim = () => rmSync(raiz, { recursive: true, force: true });
 const env = () => { const e = { ...process.env, PAINEL_DIR: painelDir, POOL_ITENS_DIR: poolDir, CLAUDE_CODE_SESSION_ID: '', HOME: raiz }; delete e.KIT_PROJETO; return e; };
@@ -124,7 +124,7 @@ caso('--seco (e sem flag) não grava nada e mostra antes → depois, 0 campo ant
 });
 caso('a gravação passa pela validação: tema fora de temas.json recusa o lote inteiro, sem gravar nada', () => {
   item('F801', { frente: 'builder', estado: 'feito' }); item('F802', { frente: 'builder', estado: 'feito' });
-  writeFileSync(join(painelDir, 'temas.json'), JSON.stringify([{ id: 'motor', rotulo: 'Motor', projeto: 'izanagi' }]));
+  writeFileSync(join(painelDir, 'temas.json'), JSON.stringify([{ id: 'motor', rotulo: 'Motor' }]));
   const r = migrar('--gravar');
   igual(r.exit, 1, `exit (${r.out.slice(-200)}${r.err})`); ok(r.err.includes('temas.json'), `stderr: ${r.err}`);
   ok('estado' in lido('F801').data && !('etapa' in lido('F801').data), 'F801 intacto'); ok(!existsSync(join(painelDir, 'fila', 'F1.json')), 'nada importado');
