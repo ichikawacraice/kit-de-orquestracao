@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { anteriorSvg, itemSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, seloDaEspera, textoDaEspera, textoDaTrava } from './desenho'
+import { anteriorSvg, fileteSvg, itemSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, seloDaEspera, textoDaTrava } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -163,7 +163,8 @@ export function montarItens(
       situacao,
       dono,
       com,
-      espera: final ? undefined : esperaGravada,
+      // Trava vence espera: o item travado já diz o que o prende, e o selo de espera seria um segundo recado.
+      espera: final || situacao === 'travado' ? undefined : esperaGravada,
       prs: inteiros(d.data.prs),
       depois: Array.isArray(d.data.depois) ? d.data.depois.flatMap(x => (texto((x as Record<string, unknown> | null)?.texto) ? [texto((x as Record<string, unknown>).texto) as string] : [])) : [],
       agora: texto(d.data.agora),
@@ -592,7 +593,7 @@ export const register: Register = on => {
 
       const botoes = quem.flatMap(q => (q.link && !vistos.has(q.localId) ? (vistos.add(q.localId), [abrir(q)]) : []))
 
-      return botoes.length > 1 ? <Box key={`abrir:${i.id}`} flexDirection="row" columnGap={1}>{botoes}</Box> : botoes
+      return botoes
     }
     // Campo de texto só onde a superfície tem um; sem ele, a opção "outra" fica sem campo.
     const Input = 'Input' in elementos ? elementos.Input : undefined
@@ -695,12 +696,20 @@ export const register: Register = on => {
       // O tema é cabeçalho discreto (dimColor, caixa alta curta); o título do bloco é o Text bold, os dois não pesam igual.
       const cabecalho = (t: string) => <Text dimColor>{t.toUpperCase()}</Text>
       const desenhar = (i: LinhaItem, noTravados = false) => {
-        const linha = itemSvg(W, i, agora, { noTravados })
+        const botoes = botoesAbrir(i)
+        // Com botões, o filete que fecha o item vem depois deles: sem isso eles caem na faixa do item seguinte.
+        const linha = itemSvg(W, i, agora, { noTravados, filete: botoes.length === 0 })
+        const filete = fileteSvg(W)
 
         return (
           <Box key={`item:${i.id}`} flexDirection="column">
             <Svg source={linha.source} alt={linha.alt} width={W} height={linha.height} />
-            {botoesAbrir(i)}
+            {botoes.length > 0 && (
+              <Box flexDirection="row" columnGap={1} flexWrap="wrap">
+                {botoes}
+              </Box>
+            )}
+            {botoes.length > 0 && <Svg source={filete.source} alt="" width={W} height={filete.height} />}
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
           </Box>
         )
@@ -813,7 +822,7 @@ export const register: Register = on => {
             <Text dimColor wrap="wrap">{info}</Text>
             {botoesAbrir(i)}
             {i.trava && <Text color="error" wrap="wrap">{textoDaTrava(i.trava)}</Text>}
-            {i.espera && <Text color={i.espera.motivo === 'operador' ? 'warning' : undefined} dimColor={i.espera.motivo !== 'operador'} wrap="wrap">{textoDaEspera(i.espera)}</Text>}
+            {i.espera && <Text color={i.espera.motivo === 'operador' ? 'warning' : undefined} dimColor={i.espera.motivo !== 'operador'} wrap="wrap">{i.espera.texto}</Text>}
             {i.situacao === 'fila' && i.resumo && <Text dimColor wrap="wrap">{i.resumo}</Text>}
             {i.situacao !== 'fila' && i.agora && <Text dimColor wrap="wrap">{i.agora}</Text>}
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}

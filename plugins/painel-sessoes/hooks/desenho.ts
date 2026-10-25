@@ -268,7 +268,8 @@ type Trecho = { t: string; classe?: string; peso?: boolean }
 export function quemDoItem(item: LinhaItem): Trecho[] {
   // O estado de antes desta versão (que sobrevive ao reload) não tem `com`.
   const com = item.com ?? []
-  if (com.length > 0) return com.filter(c => c.vivo !== false).map(c => ({ t: c.apelido, classe: 's' }))
+  const vivos = com.filter(c => c.vivo !== false)
+  if (vivos.length > 0) return vivos.map(c => ({ t: c.apelido, classe: 's' }))
 
   return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ t: item.dono.apelido, classe: 's' }] : []
 }
@@ -278,14 +279,21 @@ export function quemSaiu(item: LinhaItem): Trecho[] {
   return (item.com ?? []).filter(c => c.vivo === false).map(c => ({ t: `${c.apelido} saiu`, classe: 'm' }))
 }
 
-/** O texto da espera, com o rótulo que a trava também tem. */
+/** O dono que a linha 2 não escreveu porque o `com` ocupou o lugar: fica no alt, onde o plano o mantém. */
+function donoForaDaLinha(item: LinhaItem): string | undefined {
+  if (!item.dono || item.trava?.motivo === 'sem-ninguem') return undefined
+
+  return quemDoItem(item).some(q => q.t === item.dono?.apelido) ? undefined : `dono ${item.dono.apelido}`
+}
+
+/** O texto da espera com o rótulo que a trava também tem: só o alt o leva, porque o selo da linha 2 já diz quem espera. */
 export function textoDaEspera(e: { motivo: string; texto: string }): string {
   return `${e.motivo === 'gate' ? 'Espera o gate' : 'Espera você'}: ${e.texto}`
 }
 
 /** O selo da espera: o operador já tem o "aguarda você" da pergunta, e dois selos diriam a mesma coisa. */
 export function seloDaEspera(item: LinhaItem): string | undefined {
-  if (!item.espera) return undefined
+  if (!item.espera || item.situacao === 'travado') return undefined
   if (item.espera.motivo === 'operador') return item.perguntas.length > 0 ? undefined : 'espera você'
 
   return 'espera o gate'
@@ -307,7 +315,7 @@ function tempoDoItem(item: LinhaItem, agora: number): string | undefined {
  * Um item da fila (§4): ponto, título (até 2 linhas) e tempo; etapa, selo, dono e último PR; a trava;
  * `agora` em sessão ou `resumo` na fila; e o que vem depois. `noTravados` põe o tema na linha 2.
  */
-export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noTravados?: boolean } = {}): { source: string; height: number; alt: string } {
+export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noTravados?: boolean; filete?: boolean } = {}): { source: string; height: number; alt: string } {
   const cor = COR_ETAPA[item.etapa] ?? NEUTRO
   const rotulo = ROTULO_ETAPA[item.etapa] ?? item.etapa
   const tw = W - 30 - 8
@@ -362,7 +370,7 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   y += 21
   partes.push(`<text x="30" y="${y}" font-family="${FONTE}" font-size="13">${linha2.join('')}</text>`)
 
-  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? item.temaRotulo : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, seloDaEspera(item), ...quemDoItem(item).map(q => q.t), ultimoPr, ...quemSaiu(item).map(q => q.t)].filter(Boolean).join(' · ')]
+  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? item.temaRotulo : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, seloDaEspera(item), ...quemDoItem(item).map(q => q.t), ultimoPr, ...quemSaiu(item).map(q => q.t), donoForaDaLinha(item)].filter(Boolean).join(' · ')]
   if (item.trava) {
     const trava = quebrar(textoDaTrava(item.trava), 13, tw, 2)
     for (const l of trava) {
@@ -371,8 +379,8 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
     }
     alt.push(textoDaTrava(item.trava))
   }
-  if (item.espera) {
-    for (const l of quebrar(textoDaEspera(item.espera), 13, tw, 2)) {
+  if (item.espera && item.situacao !== 'travado') {
+    for (const l of quebrar(item.espera.texto, 13, tw, 2)) {
       y += 19
       partes.push(texto(30, y, 13, item.espera?.motivo === 'operador' ? AVISO : 's', xml(l)))
     }
@@ -398,7 +406,12 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   }
   if (tempo) alt.push(tempo)
   const altura = y + BASE
-  partes.push(`<line class="ln" x1="0" y1="${altura - 0.5}" x2="${W}" y2="${altura - 0.5}"/>`)
+  if (opcoes.filete !== false) partes.push(`<line class="ln" x1="0" y1="${altura - 0.5}" x2="${W}" y2="${altura - 0.5}"/>`)
 
   return { height: altura, alt: alt.join(' — '), source: svg(W, altura, partes.join('')) }
+}
+
+/** O filete que fecha o item, para quando os botões "abrir" vêm depois do desenho e ficam dentro dele. */
+export function fileteSvg(W: number): { source: string; height: number } {
+  return { height: 1, source: svg(W, 1, '<line class="ln" x1="0" y1="0.5" x2="' + W + '" y2="0.5"/>') }
 }
