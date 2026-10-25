@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,6 +76,74 @@ describe('K8 — sincronizar.mjs: porte deliberado, um item por vez', () => {
       }
       assert.equal(git(c.repo, 'rev-parse', 'HEAD').trim(), antes);
       assert.equal(c.ler('hooks/pool-comum.mjs'), 'velho\n');
+    } finally { rmSync(c.base, { recursive: true, force: true }); }
+  });
+});
+
+describe('K8 — sincronizar.mjs --base: 3 vias, a adaptação do plugin fica e a mudança da frente entra', () => {
+  // base = a viva de antes da frente; o plugin tem a adaptação dele; a viva ganhou a mudança da frente
+  function com3vias({ plugin, base, viva }) {
+    const c = cenario();
+    const pasta = join(c.base, 'base');
+    mkdirSync(pasta, { recursive: true });
+    writeFileSync(join(c.plugin, 'hooks/executor-criterio.mjs'), plugin);
+    writeFileSync(join(c.viva, 'hooks/executor-criterio.mjs'), viva);
+    if (base !== null) writeFileSync(join(pasta, 'executor-criterio.mjs'), base);
+    git(c.repo, 'add', '-A'); git(c.repo, 'commit', '-qm', 'adaptado');
+    return { ...c, pasta, head: () => git(c.repo, 'rev-parse', 'HEAD').trim() };
+  }
+  it('aplicação limpa em arquivo com diferença declarada: a adaptação fica e a mudança entra, num commit', () => {
+    const c = com3vias({ base: 'a\nb\nc\n', plugin: 'a\nb-adaptado\nc\n', viva: 'a\nb\nc\nd\n' });
+    try {
+      const r = c.sinc('F28', 'hooks/executor-criterio.mjs', '--base', c.pasta);
+      assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
+      assert.equal(c.ler('hooks/executor-criterio.mjs'), 'a\nb-adaptado\nc\nd\n');
+      assert.match(git(c.repo, 'log', '-1', '--format=%s').trim(), /^sync\(F28\): hooks\/executor-criterio\.mjs$/);
+    } finally { rmSync(c.base, { recursive: true, force: true }); }
+  });
+  it('conflito: recusa com exit 2, mostra o trecho e não grava nenhum dos arquivos do lote', () => {
+    const c = com3vias({ base: 'a\nb\nc\n', plugin: 'a\nX\nc\n', viva: 'a\nY\nc\n' });
+    try {
+      const antes = c.head();
+      const r = c.sinc('F28', 'hooks/pool-comum.mjs', 'hooks/executor-criterio.mjs', '--base', c.pasta);
+      assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
+      assert.match(r.stderr, /conflito/); assert.match(r.stderr, /<<<<<<< plugin/);
+      assert.equal(c.ler('hooks/executor-criterio.mjs'), 'a\nX\nc\n');
+      assert.equal(c.ler('hooks/pool-comum.mjs'), 'velho\n', 'gravou um arquivo do lote que recusou');
+      assert.equal(c.head(), antes);
+    } finally { rmSync(c.base, { recursive: true, force: true }); }
+  });
+  it('base ausente: recusa com exit 2 e não grava', () => {
+    const c = com3vias({ base: 'a\n', plugin: 'a\n', viva: 'b\n' });
+    try {
+      const antes = c.head();
+      const r = c.sinc('F28', 'hooks/executor-criterio.mjs', '--base', join(c.base, 'nao-existe'));
+      assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
+      assert.match(r.stderr, /não existe/);
+      assert.equal(c.head(), antes);
+    } finally { rmSync(c.base, { recursive: true, force: true }); }
+  });
+  it('arquivo declarado que não existia na base: recusa e explica; o que não é declarado é copiado', () => {
+    const c = com3vias({ base: null, plugin: 'a\n', viva: 'b\n' });
+    try {
+      const r = c.sinc('F28', 'hooks/executor-criterio.mjs', '--base', c.pasta);
+      assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
+      assert.match(r.stderr, /não existia na base e tem diferença declarada/);
+      assert.equal(c.ler('hooks/executor-criterio.mjs'), 'a\n');
+      const ok = c.sinc('F28', 'hooks/pool-comum.mjs', '--base', c.pasta);
+      assert.equal(ok.status, 0, `${ok.stdout}${ok.stderr}`);
+      assert.equal(c.ler('hooks/pool-comum.mjs'), 'novo\n');
+    } finally { rmSync(c.base, { recursive: true, force: true }); }
+  });
+  it('arquivo novo (sem par no plugin nem na base) é copiado', () => {
+    const c = com3vias({ base: 'a\n', plugin: 'a\n', viva: 'a\n' });
+    try {
+      mkdirSync(join(c.viva, 'hooks/tests'), { recursive: true });
+      writeFileSync(join(c.viva, 'hooks/tests/novo.test.mjs'), 'teste novo\n');
+      const r = c.sinc('F28', 'hooks/tests/novo.test.mjs', '--base', c.pasta);
+      assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
+      assert.equal(c.ler('hooks/tests/novo.test.mjs'), 'teste novo\n');
+      assert.equal(existsSync(join(c.plugin, 'hooks/tests/novo.test.mjs')), true);
     } finally { rmSync(c.base, { recursive: true, force: true }); }
   });
 });
