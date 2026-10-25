@@ -11,6 +11,9 @@
 //   painel.mjs delete <colecao> <id>
 //   painel.mjs temas list [--projeto <nome>]   os temas do projeto (o da pasta atual); cada tema vale só no projeto dele
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
+//   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
+//   painel.mjs com del <F> <local_> [--fez]   tira a sessão do `com`; --fez a registra em `fez` (quem executou)
+//   (`com` só muda por `com add|del`: set, update e batch o recusam; `fez` e `espera` se gravam pelo update comum)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
 //   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
 //   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
@@ -112,6 +115,11 @@ const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'fei
 const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
 const MOTIVOS_DA_TRAVA = new Set([...MOTIVOS]);
 const DONOS_ANTIGOS = ['dono', 'dona', 'membro', 'executora'];
+// Só `com add|del` grava `com`: o símbolo não atravessa JSON, então um batch não o forja.
+const VIA_COM = Symbol('via-com');
+const MOTIVOS_DA_ESPERA = ['operador', 'gate'];
+const LOCAL_ID = /^local_[0-9a-f-]{36}$/;
+const CITA_NUMERO = /\bF\d+\b|#\d+/;
 const ARQUIVO_DE_TEMAS = () => join(BASE, 'temas.json');
 // temas.json: lista de { id, rotulo, projeto? }. Tema com `projeto` vale só nele; sem `projeto` (instalação antiga) vale para todos.
 // Sem `projeto` no pedido (list fora de git), enxerga tudo; quem VALIDA item passa por `temasDoItem`, que não deixa o item sem projeto usar tema alheio.
@@ -194,7 +202,7 @@ function filtraPorEstado(colecao, d, filtro) {
 }
 
 let sementePendente = null; // a semente do tema da última validação; quem chama a leva até `efetivar`
-function validarItemDaFila(chave, novo, base, op, existia) {
+function validarItemDaFila(chave, novo, base, op, existia, viaCom) {
   sementePendente = null;
   const tem = (k) => k in novo && novo[k] !== null;
   // apagar o contrato não é mesclar: `null` em update remove o campo, e titulo/etapa/tema são o que faz do documento um item
@@ -234,6 +242,38 @@ function validarItemDaFila(chave, novo, base, op, existia) {
     if (!MOTIVOS_DA_TRAVA.has(t.motivo)) throw new Error(`${chave}: trava.motivo "${t.motivo}" fora da lista (${[...MOTIVOS_DA_TRAVA].join(' · ')})`);
     if (!textoNaoVazio(t.texto)) throw new Error(`${chave}: trava.texto não pode ser vazio`);
   }
+  if (!viaCom && (op === 'update' ? 'com' in novo : Array.isArray(novo.com) && novo.com.length > 0)) {
+    throw new Error(`${chave}: o campo "com" não se grava por ${op} (a lista mesclada perderia quem gravou ao mesmo tempo); use \`painel com add|del\``);
+  }
+  const lista = (k, campos, extra) => {
+    if (!tem(k)) return;
+    if (!Array.isArray(novo[k])) throw new Error(`${chave}: ${k} é uma lista de {${campos.join(', ')}}`);
+    const vistos = new Set();
+    for (const e of novo[k]) {
+      if (!e || typeof e !== 'object' || Array.isArray(e)) throw new Error(`${chave}: ${k} é uma lista de {${campos.join(', ')}}`);
+      if (!LOCAL_ID.test(String(e.localId))) throw new Error(`${chave}: ${k}.localId "${e.localId}" não é local_<uuid>`);
+      if (!textoNaoVazio(e.apelido)) throw new Error(`${chave}: ${k}.apelido não pode ser vazio`);
+      if (!textoNaoVazio(e.oQue)) throw new Error(`${chave}: ${k}.oQue não pode ser vazio`);
+      const citado = String(e.oQue).match(CITA_NUMERO);
+      if (citado) throw new Error(`${chave}: ${k}.oQue não cita item nem PR ("${citado[0]}"); o pane já mostra o número`);
+      if (vistos.has(e.localId)) throw new Error(`${chave}: ${k} repete ${e.localId}`);
+      vistos.add(e.localId);
+      extra?.(e);
+    }
+  };
+  lista('com', ['localId', 'apelido', 'oQue']);
+  lista('fez', ['localId', 'apelido', 'oQue', 'em'], (e) => {
+    if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: fez.em "${e.em}" não é data ISO`);
+  });
+  if (tem('espera')) {
+    const e = novo.espera;
+    if (typeof e !== 'object' || Array.isArray(e)) throw new Error(`${chave}: espera é null ou {motivo, texto}`);
+    if (!MOTIVOS_DA_ESPERA.includes(e.motivo)) throw new Error(`${chave}: espera.motivo "${e.motivo}" fora da lista (${MOTIVOS_DA_ESPERA.join(' · ')})`);
+    if (!textoNaoVazio(e.texto)) throw new Error(`${chave}: espera.texto não pode ser vazio`);
+  }
+  if (ETAPAS_FINAIS.has(base.etapa) && Array.isArray(base.com) && base.com.length) {
+    throw new Error(`${chave}: o item fecha com sessões trabalhando nele (com: ${base.com.map((c) => c.apelido).join(', ')}); tire-as com \`painel com del\``);
+  }
   if (tem('prs') && !(Array.isArray(novo.prs) && novo.prs.every((n) => Number.isInteger(n) && n > 0))) {
     throw new Error(`${chave}: prs é uma lista de inteiros positivos`);
   }
@@ -268,9 +308,9 @@ function validarItemDaFila(chave, novo, base, op, existia) {
   }
 }
 
-function validarPadrao(colecao, id, novo, base, vista, op, existia) {
+function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom) {
   const chave = `${colecao}/${id}`;
-  if (colecao === 'fila') validarItemDaFila(chave, novo, base, op, existia);
+  if (colecao === 'fila') validarItemDaFila(chave, novo, base, op, existia, viaCom);
   if (colecao === 'perguntas' && base.estado === 'aberta' && !base.sessaoId) {
     throw new Error(`${chave}: pergunta aberta sem sessaoId — a resposta do painel não teria para onde voltar`);
   }
@@ -304,13 +344,16 @@ function automaticosDaFila(base, novo, antes) {
   }
   const final = ETAPAS_FINAIS.has(etapa);
   const eraFinal = ETAPAS_FINAIS.has(etapaAntes);
+  if (final) delete base.espera;
   if (final && !eraFinal && !('feitoEm' in novo)) base.feitoEm = new Date().toISOString();
   if (!final && eraFinal) delete base.feitoEm;
 }
 
 // Valida e calcula uma op contra o estado `vista` (mapa "colecao/id" -> documento ou null, que
 // acumula as ops anteriores do mesmo batch). Não grava nada.
-function planejar({ op, colecao, id, data, deOutra }, seVersao, vista) {
+function planejar(o, seVersao, vista) {
+  const { op, colecao, id, data, deOutra } = o;
+  const viaCom = o[VIA_COM] === true;
   if (op !== 'set' && op !== 'update' && op !== 'delete') throw new Error(`op desconhecida: ${op}`);
   const chave = `${colecao}/${id}`;
   const atual = vista.has(chave) ? vista.get(chave) : ler(colecao, id);
@@ -339,7 +382,7 @@ function planejar({ op, colecao, id, data, deOutra }, seVersao, vista) {
     else process.stderr.write(`aviso: ${colecao}/${id} sem projeto (${motivo})\n`);
   }
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
-  validarPadrao(colecao, id, novo, base, vista, op, !!atual);
+  validarPadrao(colecao, id, novo, base, vista, op, !!atual, viaCom);
   const semente = colecao === 'fila' ? sementePendente : null;
   if (colecao === 'fila') automaticosDaFila(base, novo, atual?.data);
   const version = (atual?.version ?? 0) + 1;
@@ -491,6 +534,36 @@ function comTrava(fn) {
   }
 }
 
+// `com add|del`: lê, muda e grava a lista dentro da trava do painel; é a única via que grava `com` (e a que acrescenta a `fez`).
+function comandoCom(args) {
+  const [sub, F, localId, ...resto] = args;
+  if (sub !== 'add' && sub !== 'del') throw new Error('uso: painel.mjs com add <F> <local_> <apelido> "<oQue>" | com del <F> <local_> [--fez]');
+  if (!ID.test(String(F))) throw new Error(`com: id de item inválido "${F}"`);
+  if (!LOCAL_ID.test(String(localId))) throw new Error(`com: "${localId}" não é local_<uuid>`);
+  return comTrava(() => {
+    const atual = ler('fila', F);
+    if (!atual) throw new Error(`fila/${F} não existe`);
+    const com = Array.isArray(atual.data.com) ? atual.data.com : [];
+    let nova; const data = {};
+    if (sub === 'add') {
+      const [apelido, oQue] = resto;
+      if (!textoNaoVazio(apelido) || !textoNaoVazio(oQue)) throw new Error('com add: faltam <apelido> e "<oQue>"');
+      nova = com.some((c) => c.localId === localId) ? com.map((c) => (c.localId === localId ? { ...c, apelido, oQue } : c)) : [...com, { localId, apelido, oQue }];
+    } else {
+      const quem = com.find((c) => c.localId === localId);
+      if (!quem) throw new Error(`com del: ${localId} não está em com de ${F}`);
+      nova = com.filter((c) => c.localId !== localId);
+      if (resto.includes('--fez')) {
+        const fez = Array.isArray(atual.data.fez) ? atual.data.fez : [];
+        data.fez = [...fez.filter((f) => f.localId !== localId || f.oQue !== quem.oQue), { localId, apelido: quem.apelido, oQue: quem.oQue, em: new Date().toISOString() }];
+      }
+    }
+    data.com = nova;
+    const p = planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map());
+    return efetivar(p);
+  });
+}
+
 // Todas as ops são validadas (coleção, op, versão) antes de gravar qualquer uma; uma recusada = nada gravado.
 function aplicarLote(ops) {
   return comTrava(() => {
@@ -537,6 +610,9 @@ function main(argv) {
     case 'temas':
       saida = comandoTemas(resto);
       break;
+    case 'com':
+      saida = comandoCom(resto);
+      break;
     case 'batch': {
       const ops = JSON.parse(a);
       if (!Array.isArray(ops)) throw new Error('batch: esperava uma lista');
@@ -544,7 +620,7 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
   return 0;

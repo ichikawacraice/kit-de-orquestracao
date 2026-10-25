@@ -743,5 +743,64 @@ caso('F29-a: o limite da regra — "Fatia 1", "OF1" e "F5x" passam; título anti
   igual(json(painel('get', 'fila', 'F2')).data.titulo, 'vagas (F22)', 'título antigo preservado');
 });
 
+const LA = 'local_00000000-0000-4000-8000-0000000000a1';
+const LB = 'local_00000000-0000-4000-8000-0000000000b2';
+const comAdd = (F, l, ap, o) => painel('com', 'add', F, l, ap, o);
+
+caso('F30-1: com add duas vezes com sessões diferentes dá duas entradas; repetir a mesma troca o oQue', () => {
+  semear(); painel('set', 'fila', 'F1', COM());
+  igual(comAdd('F1', LA, 'E1', 'título sem número').exit, 0, 'add E1');
+  igual(comAdd('F1', LB, 'V4', 'botão abrir').exit, 0, 'add V4');
+  let com = json(painel('get', 'fila', 'F1')).data.com;
+  igual(com.length, 2, 'duas entradas'); igual(com[1].apelido, 'V4', 'segunda é a V4');
+  igual(comAdd('F1', LA, 'E1', 'só o conserto').exit, 0, 'add repetido');
+  com = json(painel('get', 'fila', 'F1')).data.com;
+  igual(com.length, 2, 'continua com duas'); igual(com[0].oQue, 'só o conserto', 'oQue trocado');
+});
+caso('F30-1: com del tira sem gravar fez; com del --fez grava fez com em; quem não está sai com exit 1', () => {
+  semear(); painel('set', 'fila', 'F1', COM());
+  comAdd('F1', LA, 'E1', 'título'); comAdd('F1', LB, 'V4', 'botão');
+  const a = painel('com', 'del', 'F1', LB); igual(a.exit, 0, `del (${a.err})`);
+  let d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.com.length, 1, 'tirou a V4'); ok(d.fez === undefined, 'del sem --fez gravou fez');
+  const b = painel('com', 'del', 'F1', LA, '--fez'); igual(b.exit, 0, `del --fez (${b.err})`);
+  d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.com.length, 0, 'com vazio'); igual(d.fez.length, 1, 'uma entrada em fez');
+  igual(JSON.stringify([d.fez[0].apelido, d.fez[0].oQue, d.fez[0].localId]), JSON.stringify(['E1', 'título', LA]), 'fez com quem e o quê');
+  ok(!Number.isNaN(Date.parse(d.fez[0].em)), 'fez.em é ISO');
+  recusa(painel('com', 'del', 'F1', LA), 'não está em com', 'del de quem não está');
+});
+caso('F30-1: o update, o set e o batch com com são recusados (use com add|del); o com do disco fica intacto', () => {
+  semear(); painel('set', 'fila', 'F1', COM()); comAdd('F1', LA, 'E1', 'título');
+  recusa(painel('update', 'fila', 'F1', JSON.stringify({ com: [] })), 'painel com add|del', 'update com []');
+  recusa(painel('update', 'fila', 'F1', '{"com":null}'), 'painel com add|del', 'update com null');
+  recusa(painel('set', 'fila', 'F2', COM({ com: [{ localId: LB, apelido: 'V4', oQue: 'x' }] })), 'painel com add|del', 'set com');
+  const b = painel('batch', JSON.stringify([{ op: 'update', colecao: 'fila', id: 'F1', data: { com: [{ localId: LB, apelido: 'V4', oQue: 'x' }] } }]));
+  recusa(b, 'painel com add|del', 'batch com');
+  const com = json(painel('get', 'fila', 'F1')).data.com;
+  igual(com.length, 1, 'com intacto'); igual(com[0].apelido, 'E1', 'ainda a E1');
+});
+caso('F30-1: fechar o item com com não vazio é recusado; sem com, fecha e apaga a espera', () => {
+  semear(); painel('set', 'fila', 'F1', COM()); comAdd('F1', LA, 'E1', 'título');
+  recusa(painel('update', 'fila', 'F1', '{"etapa":"feito"}'), 'fecha com sessões trabalhando nele (com: E1', 'fechar com com');
+  igual(json(painel('get', 'fila', 'F1')).data.etapa, 'planejamento', 'etapa intacta');
+  painel('com', 'del', 'F1', LA);
+  igual(painel('update', 'fila', 'F1', '{"espera":{"motivo":"gate","texto":"gate do lote"}}').exit, 0, 'espera gate passa');
+  igual(painel('update', 'fila', 'F1', '{"etapa":"feito"}').exit, 0, 'fecha sem com');
+  ok(json(painel('get', 'fila', 'F1')).data.espera === undefined, 'a espera foi apagada ao fechar');
+});
+caso('F30-1: espera e com validam o formato (motivo fora da lista, oQue com número, localId repetido, fez.em ruim)', () => {
+  semear(); painel('set', 'fila', 'F1', COM());
+  recusa(painel('update', 'fila', 'F1', '{"espera":{"motivo":"x","texto":"t"}}'), 'espera.motivo "x" fora da lista', 'motivo x');
+  recusa(painel('update', 'fila', 'F1', '{"espera":{"motivo":"operador","texto":" "}}'), 'espera.texto', 'texto vazio');
+  igual(painel('update', 'fila', 'F1', '{"espera":{"motivo":"operador","texto":"decidir"}}').exit, 0, 'operador passa');
+  igual(painel('update', 'fila', 'F1', '{"espera":null}').exit, 0, 'null limpa');
+  recusa(comAdd('F1', LA, 'E1', 'refaz o F12'), 'não cita item nem PR ("F12")', 'oQue com F12');
+  recusa(comAdd('F1', 'local_x', 'E1', 'ok'), 'não é local_<uuid>', 'localId ruim');
+  const rep = JSON.stringify({ fez: [{ localId: LA, apelido: 'E1', oQue: 'a', em: '2026-10-25T10:00:00.000Z' }, { localId: LA, apelido: 'E1', oQue: 'b', em: '2026-10-25T10:00:00.000Z' }] });
+  recusa(painel('update', 'fila', 'F1', rep), 'repete', 'fez repetido');
+  recusa(painel('update', 'fila', 'F1', JSON.stringify({ fez: [{ localId: LA, apelido: 'E1', oQue: 'a', em: 'ontem' }] })), 'não é data ISO', 'fez.em');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;
