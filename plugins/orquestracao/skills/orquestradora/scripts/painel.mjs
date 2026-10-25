@@ -662,6 +662,12 @@ function main(argv) {
         else if (resto.includes('--min')) throw new Error('--min só vale com `list fila vencidos`');
         const flag = resto.slice(1).find((x) => String(x).startsWith('--'));
         if (flag) throw new Error(`list fila: flag desconhecida "${flag}"`);
+        const filtro = resto[1];
+        // os `estado` do contrato antigo ainda filtram (documento sem `etapa`); fora desta lista, o filtro é erro de digitação
+        const validos = ['em-andamento', 'vencidos', ...ETAPAS, 'aberto', 'bloqueado', 'concluido', 'concluida', 'em-planejamento', 'em-execucao', 'em-validacao'];
+        if (filtro !== undefined && !validos.includes(filtro)) {
+          throw new Error(`list fila: filtro desconhecido "${filtro}" (válidos: ${[...new Set(validos)].join(' · ')})`);
+        }
       }
       const b = resto[1];
       const dir = caminho(a);

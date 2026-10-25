@@ -907,6 +907,10 @@ caso('F32 B9: vencidos vale em qualquer posição; --min sem vencidos e flag des
   igual(ids(painel('list', 'fila', '--min', '1', 'vencidos')), 'F1', 'vencidos depois do --min');
   recusa(painel('list', 'fila', '--min', '1'), '--min só vale com', '--min sem vencidos');
   recusa(painel('list', 'fila', '--bobagem'), 'flag desconhecida', 'flag');
+  for (const f of ['vencido', 'xyz']) recusa(painel('list', 'fila', f), 'filtro desconhecido', `filtro ${f}`);
+  recusa(painel('list', 'fila', 'xyz'), 'válidos: em-andamento · vencidos · planejamento', 'a lista dos válidos');
+  for (const f of ['em-andamento', 'vencidos', 'execucao', 'feito', 'aberto', 'concluido']) igual(painel('list', 'fila', f).exit, 0, `filtro ${f} vale`);
+  igual(painel('list', 'sessoes', 'xyz').exit, 0, 'o filtro livre das outras coleções não muda');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

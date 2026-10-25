@@ -13,10 +13,13 @@
 import { readFileSync, existsSync, appendFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { vaiSoltar } from './pool-comum.mjs';
 
 // O aviso de injeção é opcional: se a varredura faltar ou falhar ao carregar, o hook segue sem ele.
 // Hoje ele não protege nada (a razão do bloqueio só cita ids de item); prepara o caso de o texto do painel entrar aqui.
+// Idem o pool-comum: sem ele não há como saber quem vai se soltar, e o hook cobra como sempre.
+let vaiSoltar = () => false;
+try { ({ vaiSoltar } = await import('./pool-comum.mjs')); } catch { /* sem a soltura */ }
+
 let avisoDeInjecao = () => '';
 try { ({ avisoDeInjecao } = await import('./varredura-entre-sessoes.mjs')); } catch { /* sem aviso */ }
 
