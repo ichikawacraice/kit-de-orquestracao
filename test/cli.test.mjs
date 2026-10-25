@@ -40,14 +40,14 @@ test('package.json: bin, engines, test e type module', () => {
   assert.equal(p.dependencies, undefined, 'o kit não traz dependência npm');
 });
 
-test('marketplace.json lista os dois plugins, cada um com plugin.json 0.1.0', () => {
+test('marketplace.json lista os dois plugins, cada um com a versão esperada no plugin.json', () => {
   const m = json('.claude-plugin', 'marketplace.json');
   const nomes = m.plugins.map((p) => p.name).sort();
   assert.deepEqual(nomes, ['orquestracao', 'painel-sessoes']);
   for (const pl of m.plugins) {
     const pj = json(pl.source, '.claude-plugin', 'plugin.json');
     assert.equal(pj.name, pl.name);
-    assert.equal(pj.version, '0.1.0');
+    assert.equal(pj.version, { orquestracao: '0.1.1', 'painel-sessoes': '0.1.0' }[pl.name]); // 0.1.1: o cache do plugin só se renova quando a versão muda
   }
 });
 
