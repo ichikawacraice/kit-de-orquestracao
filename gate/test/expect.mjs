@@ -3,6 +3,7 @@
  * portados do Izanagi (vitest) manterem a forma do original sem dependência.
  */
 import assert from "node:assert/strict";
+import { it } from "node:test";
 
 const parcial = (real, esperado, caminho = "") => {
   for (const [k, v] of Object.entries(esperado)) {
@@ -37,4 +38,13 @@ export function expect(real, msg) {
   const base = de(real, false, msg);
   base.not = de(real, true, msg);
   return base;
+}
+
+/** O `it.each` do vitest: um caso por entrada, `%s` trocado pelos argumentos em ordem. */
+export function cada(casos, titulo, fn) {
+  for (const caso of casos) {
+    const args = Array.isArray(caso) ? caso : [caso];
+    let i = 0;
+    it(titulo.replace(/%s/g, () => String(args[i++])), () => fn(...args));
+  }
 }

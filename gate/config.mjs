@@ -35,6 +35,14 @@ const PADRAO = {
     foraDaChave: ["GATE_SEM_CACHE", "GATE_TRAVA", "GATE_VERDE_DIR"],
     extras: [],
   },
+  guarda: {
+    regras: ["build-com-dev-no-ar", "psql-f", "migration-fora-do-tronco", "merge-commit", "stash-sem-u", "staging-amplo", "kill-por-nome", "destrutivos"],
+    tronco: "origin/develop",
+    frontend: "apps/web",
+    migrations: "supabase/migrations",
+    buildFiltrado: null,
+    descartaveis: ["dist", ".next", "node_modules", "coverage", ".turbo", ".vitest"],
+  },
 };
 
 const PERFIL_PNPM = {
@@ -84,14 +92,14 @@ export function lerKitJson(raiz) {
   }
 }
 
-/** A configuração efetiva do gate para a raiz: padrão ← perfil ← kit.json. */
+/** A configuração efetiva (gate, árvore e guarda) para a raiz: padrão ← perfil ← kit.json. */
 export function carregarConfig(raiz, kit = lerKitJson(raiz)) {
   const perfil = kit?.gate?.perfil ?? PADRAO.gate.perfil;
   if (perfil !== "comando" && perfil !== "pnpm-workspace") {
     throw new Error(`gate.perfil "${perfil}" desconhecido — use "comando" ou "pnpm-workspace"`);
   }
   const base = perfil === "pnpm-workspace" ? mesclar(PADRAO, PERFIL_PNPM) : PADRAO;
-  return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {} });
+  return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: kit.guarda ?? {} });
 }
 
 /** `KIT_<sufixo>`, e o legado `IZANAGI_<sufixo>` como reserva. */

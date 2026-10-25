@@ -1,4 +1,4 @@
-# gate — o gate genérico (K5a)
+# gate — o gate genérico e a guarda de operação (K5)
 
 Um gate por vez na máquina, com verde guardado pela árvore exata e teto de workers.
 Portado do Izanagi (`188f37fb8`) e parametrizado por `.claude/kit.json` do projeto.
@@ -10,6 +10,7 @@ Portado do Izanagi (`188f37fb8`) e parametrizado por `.claude/kit.json` do proje
 | `o-verde-da-arvore.mjs` | imprime a chave e o que a árvore atual já passou |
 | `o-dist-que-o-gate-le.mjs` | só no perfil `pnpm-workspace`: confere o `pnpm-lock.yaml` e constrói os pacotes consumidos compilados |
 | `o-teto-de-workers.mjs` | `tetoDeWorkers()` para o `vitest.config.*` importar |
+| `guarda-de-operacao.mjs` | hook `PreToolUse` (Bash): pede confirmação antes de comando que já custou caro; só avisa em bypass |
 
 ## `.claude/kit.json`
 
@@ -36,9 +37,19 @@ Sem `gate.comandoCompleto` o gate recusa alto — não adivinha o comando.
       { "nome": "tailwind", "tipo": "diretorio-executavel", "dirEnv": "X_TAILWIND_DIR", "dirPadrao": "x-tailwind", "binario": "node_modules/.bin/tailwindcss" },
       { "nome": "tiposDoNext", "tipo": "arquivos-gerados", "base": "apps/web", "padraoDir": "^\\.next[^/]*$", "sub": "types" }
     ]
+  },
+  "guarda": {
+    "regras": ["build-com-dev-no-ar", "psql-f", "migration-fora-do-tronco", "merge-commit", "stash-sem-u", "staging-amplo", "kill-por-nome", "destrutivos"],
+    "tronco": "origin/develop", "frontend": "apps/web", "migrations": "supabase/migrations",
+    "buildFiltrado": "pnpm --filter @escopo/a --filter @escopo/b build",
+    "descartaveis": ["dist", ".next", "node_modules", "coverage", ".turbo", ".vitest"]
   }
 }
 ```
+
+`guarda.regras` lista só as regras LIGADAS (padrão: as oito); tirar uma da lista a desliga. `kit.json` ilegível
+não trava o hook: cai nas regras padrão e avisa no stderr. Registro no `settings.json`:
+`{ "hooks": { "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "node <caminho>/gate/guarda-de-operacao.mjs" }] }] } }`.
 
 O perfil `pnpm-workspace` com `pacotes: "auto"` reproduz o gate do Izanagi (`pnpm -r --workspace-concurrency=2 test`,
 `pnpm --filter <pacote> test`, `pnpm -r typecheck`).
@@ -56,4 +67,4 @@ node --test "gate/test/*.test.mjs"
 ```
 
 (`node --test gate` não funciona no Node 24: o argumento vira arquivo, não diretório.)
-Faltam a **K5b** (guarda de operação) e o registro dos hooks no plugin.
+O registro da guarda no plugin `orquestracao` fica para a K2.
