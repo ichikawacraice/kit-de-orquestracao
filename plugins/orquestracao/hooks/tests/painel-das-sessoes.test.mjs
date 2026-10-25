@@ -123,6 +123,23 @@ caso('(g) entrada isMeta com turnOrigin depois do início não move o início', 
 });
 
 
+caso('R1 (F41): turno aberto por peer na forma real (isMeta + origin) depois de outro turno de peer que gravou no painel: bloqueia', () => {
+  // O turno A gravou no painel; o turno B (isMeta + origin peer, a forma gravada de verdade) abriu PR sem gravar.
+  // Pulando toda isMeta, o início ficava em A e o `painel update` de A escondia o PR de B.
+  const f = dir('t.jsonl');
+  const tu = (command) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Bash', input: { command } }] } });
+  const linhas = [
+    { type: 'user', timestamp: '2026-10-24T12:00:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'F7 para você' } },
+    tu(`node ~/x/painel.mjs update sessoes ${LOCAL} '{"etapa":"x"}'`),
+    { type: 'user', isMeta: true, timestamp: '2026-10-24T12:05:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'F8 para você' } },
+    tu('gh pr create --fill'),
+  ];
+  writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
+  const r = rodar(f);
+  ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
+});
+
+
 // ---- F27 fatia 3: a mensagem manda gravar no item quando a sessão é dona de um ----
 const itemDoDono = (id, data) => { mkdirSync(dir('painel', 'fila'), { recursive: true }); writeFileSync(dir('painel', 'fila', `${id}.json`), JSON.stringify({ id, version: 1, data })); };
 caso('F27-3g: sessão dona de item vivo e com PR aberto sem gravar: a mensagem manda `update fila <F>` com etapa e agora', () => {

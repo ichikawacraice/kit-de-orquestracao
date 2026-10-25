@@ -56,6 +56,14 @@ async function inicioDoFila(arquivo = join(HOOKS, 'fila-do-item.mjs')) {
   writeFileSync(f, `import { readFileSync } from 'node:fs';\nexport ${m[0]}`);
   return (await import(pathToFileURL(f).href)).inicioDoTurno;
 }
+async function inicioDoPainel() {
+  const fonte = readFileSync(join(HOOKS, 'painel-das-sessoes.mjs'), 'utf8');
+  const m = fonte.match(/function inicioDoTurno\(entradas\) \{[\s\S]*?\n\}\n/);
+  ok(m && m[0].length > 100, 'R1: não achei a função inicioDoTurno no painel-das-sessoes.mjs');
+  const f = join(base, `inicio-painel-${Math.random().toString(36).slice(2)}.mjs`);
+  writeFileSync(f, `export ${m[0]}`);
+  return (await import(pathToFileURL(f).href)).inicioDoTurno;
+}
 const U = (t, extra) => ({ type: 'user', timestamp: new Date(t).toISOString(), message: { role: 'user', content: 'x' }, ...extra });
 const fixturesDeTurno = () => {
   const h = U(1000, { origin: { kind: 'human' } });
@@ -74,6 +82,7 @@ const casoR1 = async () => {
   const nome = 'R1: início do turno e origem seguem a mesma regra, e o pool-comum e o fila-do-item concordam em cada transcript';
   try {
     const duas = await inicioDoFila();
+    const tres = await inicioDoPainel();
     const fx = fixturesDeTurno();
     ok(Object.keys(fx).length >= 8, 'R1: fixtures vazias');
     for (const [k, { linhas, inicio, origem }] of Object.entries(fx)) {
@@ -81,6 +90,10 @@ const casoR1 = async () => {
       const a = inicioDoTurno(f), b = duas(f);
       if (a !== inicio) throw new Error(`pool-comum, "${k}": início esperado ${inicio}, veio ${a}`);
       if (b !== inicio) throw new Error(`fila-do-item, "${k}": início esperado ${inicio}, veio ${b}`);
+      const ents = linhas.map((l) => ({ ...l }));
+      const idx = tres(ents);
+      const c = idx < 0 ? null : Date.parse(ents[idx].timestamp);
+      if (c !== inicio) throw new Error(`painel-das-sessoes, "${k}": início esperado ${inicio}, veio ${c}`);
       if (origemDoTurno(f) !== origem) throw new Error(`origemDoTurno, "${k}": esperado ${origem}, veio ${origemDoTurno(f)}`);
     }
     console.log(`ok   ${nome}`);

@@ -77,6 +77,22 @@ function itensDaSessao(sessionId) {
   return ids;
 }
 
+// Abertura do turno pela mesma regra do pool-comum e do fila-do-item (F41): a linha `user` com origem abre o turno, meta ou
+// não (mensagem entre sessões é gravada com `isMeta: true` e `origin`); a meta SEM origem e o `tool_result` não. Devolve o
+// índice da entrada (-1 se nenhuma tem `origin` ou `turnOrigin`). Cópia local porque o hook roda `main` ao carregar; o teste
+// de concordância extrai esta função do texto.
+function inicioDoTurno(entradas) {
+  for (let i = entradas.length - 1; i >= 0; i--) {
+    const e = entradas[i];
+    const c = e.message?.content;
+    const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
+    if (e.type !== 'user' || ehResultado) continue;
+    if (e.isMeta && !e.origin?.kind) continue;
+    if (e.origin?.kind || e.turnOrigin) return i;
+  }
+  return -1;
+}
+
 function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id, transcript_path, stop_hook_active, cwd } = input;
@@ -105,16 +121,7 @@ function main() {
   // `null` (não consegui medir) aqui vale "não": o hook só cobra gravação no painel de quem sabe ter orquestradora.
   if (projetoTemOrquestradora(session_id, meuRepo) !== true) return;
 
-  let inicio = -1;
-  for (let i = entradas.length - 1; i >= 0; i--) {
-    const e = entradas[i];
-    // Critério ANTIGO do fila-do-item.mjs (inicioDoTurno), que desde o F41 não pula mais a meta com origem; esta cópia
-    // ainda pula toda `isMeta` (fora do F41, plano de 25/10): turnos abertos por mensagem entre sessões ou pelo
-    // prompt do pool têm `turnOrigin` e não têm `origin`; `isMeta` e `tool_result` não abrem turno.
-    const c = e.message?.content;
-    const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
-    if (e.type === 'user' && !e.isMeta && !ehResultado && (e.origin?.kind || e.turnOrigin)) { inicio = i; break; }
-  }
+  const inicio = inicioDoTurno(entradas);
   if (inicio < 0) return;
 
   const motivos = new Set();
