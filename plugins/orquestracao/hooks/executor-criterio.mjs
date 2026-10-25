@@ -14,10 +14,10 @@
 // "Bloqueado: <motivo>" abrindo a linha, "devolvo", "parei", "estou bloqueado").
 // Saída com "N failed" exige o relatório citar o N junto da falha.
 // No máximo 2 cobranças por turno; depois deixa passar e registra. Erro vai para o log e o turno termina.
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { BASE, registrar, lerEntrada, lerTranscript, semPrefixoDoPlugin } from './hooks-crewai-comum.mjs';
-import { registroDaSessao, membroDoPool } from './pool-comum.mjs';
+import { BASE, registrar, lerEntrada, lerTranscript, semPrefixoDoPlugin, textoDe, conteudoDe, aberturaDoTurno, devolveuDuvida, lerEstadoDe, gravarEstadoDe } from './hooks-crewai-comum.mjs';
+import { ehExecutora } from './pool-comum.mjs';
 
 const HOOK = 'executor-criterio';
 const ESTADO = join(BASE, 'hooks-crewai-estado.json');
@@ -40,24 +40,8 @@ const SAIDA_DE_TOOL = new Set(['Bash', 'Monitor', 'TaskOutput', 'BashOutput']);
 const STATUS = /\b(?:exit(?:\s*code|\s*status)?\s*[=:]?\s*-?\d+|\w+_EXIT\s*=\s*\d+|(?:test|tests|typecheck|gate|lint|build)\s*=\s*\d+|Found\s+\d+\s+errors?)\b/gi;
 const normalizarStatus = (s) => s.toLowerCase().replace(/\bexit(?:\s*code|\s*status)?\s*[=:]?\s*/, 'exit=').replace(/\s+/g, ' ').trim();
 
-function textoDe(msg) {
-  const c = msg?.content;
-  if (typeof c === 'string') return c;
-  if (Array.isArray(c)) return c.filter((x) => x.type === 'text').map((x) => x.text).join('\n');
-  return '';
-}
-const conteudoDe = (c) => (typeof c === 'string' ? c : (c || []).map((x) => x.text || '').join('\n'));
-
-function ehMensagemDeAbertura(e) {
-  if (e.type !== 'user' || e.isMeta || e.isCompactSummary) return false;
-  const c = e.message?.content;
-  if (typeof c === 'string') return !/^(Subagent)?Stop hook feedback/.test(c);
-  return Array.isArray(c) && !c.some((x) => x.type === 'tool_result');
-}
-
 function turnoAtual(entradas) {
-  let inicio = 0;
-  for (let i = entradas.length - 1; i >= 0; i--) if (ehMensagemDeAbertura(entradas[i])) { inicio = i; break; }
+  const { inicio } = aberturaDoTurno(entradas);
   const turno = entradas.slice(inicio + 1);
   const usos = new Map();
   let editou = false;
@@ -100,16 +84,6 @@ function turnoAtual(entradas) {
     for (const m of t.matchAll(/<tool-use-id>([^<]+)<\/tool-use-id>/g)) fundo.delete(m[1]);
   }
   return { chave: abertura?.uuid || 'inicio', editou, esperaFundo: fundo.size > 0, rodou, saidas: saidas.join("\n"), lista: saidas, ultimoTexto };
-}
-
-// O título vive na última entrada custom-title; achar sem parsear o transcript inteiro
-// (o Stop roda em TODA sessão, e há transcripts de 100+ MB).
-function tituloRapido(caminho) {
-  const s = readFileSync(caminho, 'utf8');
-  const i = s.lastIndexOf('"customTitle":"');
-  if (i < 0) return '';
-  const m = s.slice(i + 14, i + 600).match(/^"((?:[^"\\]|\\.)*)"/);
-  try { return m ? JSON.parse(`"${m[1]}"`) : ''; } catch { return ''; }
 }
 
 // Status do relatório ("exit=0", "Found 0 errors") que aparece igual numa saída do turno.
@@ -162,24 +136,6 @@ function colouSaidaReal(relatorio, saidas) {
   return false;
 }
 
-// Dúvida devolvida: pergunta fora de bloco de código (título markdown terminando em "?" não é
-// pergunta), "Bloqueado:" abrindo a linha, ou o verbo de quem parou.
-function devolveuDuvida(relatorio) {
-  const prosa = relatorio.replace(/```[\s\S]*?```/g, '').replace(/`[^`\n]*`/g, '');
-  return /^(?![ \t]*#)[^\n]*\?[ \t*]*$/m.test(prosa)
-    || /^[ \t]*(?:[-*][ \t]*)?\**bloquead[oa]\**[ \t]*:\**[ \t]*\S[^\n]{14,}/im.test(prosa)
-    || /\b(devolvo|devolvendo|parei|travei|(estou|fiquei|estava)\s+bloquead[oa])\b/i.test(prosa);
-}
-
-function lerEstado() {
-  try { return existsSync(ESTADO) ? JSON.parse(readFileSync(ESTADO, 'utf8')) : {}; } catch { return {}; }
-}
-function gravarEstado(estado) {
-  const limite = Date.now() - 7 * 24 * 3600 * 1000;
-  for (const [k, v] of Object.entries(estado)) if (v.em < limite) delete estado[k];
-  writeFileSync(ESTADO, JSON.stringify(estado));
-}
-
 function main() {
   const e = lerEntrada();
   const sub = e.hook_event_name === 'SubagentStop';
@@ -188,13 +144,12 @@ function main() {
   if (sub && tipo !== 'executor') return;
   const transcript = sub ? e.agent_transcript_path : e.transcript_path;
   if (!transcript || !existsSync(transcript)) return;
-  if (!sub && tipo !== 'executor' && !/^exec\s*·/.test(tituloRapido(transcript))
-    && membroDoPool(registroDaSessao(e.session_id)?.titulo)?.papel !== 'E') return; // executora do pool: `E<n> · …` no registro do app
+  if (!sub && !ehExecutora(e, transcript)) return;
 
   const turno = turnoAtual(lerTranscript(transcript));
   const sessao = e.session_id;
   const quem = sub ? `subagente ${e.agent_id}` : 'principal';
-  const estado = lerEstado();
+  const estado = lerEstadoDe(ESTADO);
   // Fio principal: turno que editou e parou esperando trabalho em background não é o fim;
   // a cobrança fica pendente para o turno em que o resultado chega.
   const pendente = `${sessao}:principal:pendente`;
@@ -206,22 +161,21 @@ function main() {
     // adiado, cobra assim mesmo.
     const adiados = estado[pendente]?.n || 0;
     if (esperando && adiados < MAX_ADIAMENTOS) {
-      estado[pendente] = { n: adiados + 1, em: Date.now() };
-      gravarEstado(estado);
+      gravarEstadoDe(ESTADO, (s) => { s[pendente] = { n: adiados + 1, em: Date.now() }; });
       registrar(sessao, HOOK, 'adiou-esperando-fundo', quem);
       return;
     }
   }
 
   const chave = `${sessao}:${sub ? e.agent_id : 'principal'}:${turno.chave}`;
-  const encerrar = () => { delete estado[pendente]; delete estado[chave]; gravarEstado(estado); };
+  const encerrar = () => gravarEstadoDe(ESTADO, (s) => { delete s[pendente]; delete s[chave]; });
   const relatorio = e.last_assistant_message ?? turno.ultimoTexto;
   const cobrancas = estado[chave]?.n || 0;
 
   const comSaida = !escondeFalha(relatorio, turno.lista)
     && (statusConfere(relatorio, turno.saidas) || resumoConfere(relatorio, turno.saidas) || colouSaidaReal(relatorio, turno.saidas));
   if (comSaida) {
-    registrar(sessao, HOOK, cobrancas ? 'corrigiu-apos-cobranca' : 'passou-com-saida', `${quem} cobrancas=${cobrancas}`);
+    registrar(sessao, HOOK, cobrancas && cobrancas <= MAX_COBRANCAS ? 'corrigiu-apos-cobranca' : 'passou-com-saida', `${quem} cobrancas=${cobrancas}`);
     encerrar();
     return;
   }
@@ -231,13 +185,14 @@ function main() {
     return;
   }
   if (cobrancas >= MAX_COBRANCAS) {
-    registrar(sessao, HOOK, 'deixou-passar-apos-2', quem);
-    encerrar();
+    // Esgotado vale pelo TURNO, não pela sequência: apagar a chave faria a parada seguinte (outro hook
+    // mantendo o turno vivo) recomeçar em 1 e a sessão não sairia nunca (laudo da V3, achado 1).
+    registrar(sessao, HOOK, cobrancas > MAX_COBRANCAS ? 'passou-esgotado' : 'deixou-passar-apos-2', quem);
+    if (cobrancas === MAX_COBRANCAS) gravarEstadoDe(ESTADO, (s) => { delete s[pendente]; s[chave] = { n: MAX_COBRANCAS + 1, em: Date.now() }; });
     return;
   }
 
-  estado[chave] = { n: cobrancas + 1, em: Date.now() };
-  gravarEstado(estado);
+  gravarEstadoDe(ESTADO, (s) => { s[chave] = { n: cobrancas + 1, em: Date.now() }; });
   registrar(sessao, HOOK, `cobrou-${cobrancas + 1}`, `${quem} rodou=${turno.rodou}`);
   process.stdout.write(JSON.stringify({
     decision: 'block',

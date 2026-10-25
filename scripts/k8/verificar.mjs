@@ -43,6 +43,7 @@ if (projeto) {
 const TESTES = [
   ['T1 T2 T3 T5 T6 (papel-do-pool)', 'papel-do-pool.test.mjs'],
   ['orquestradora-nao-edita, subagente-nao-edita, executor-criterio, ritual, T1c (hooks-crewai)', 'hooks-crewai.test.mjs'],
+  ['executor-anuncia (F28)', 'executor-anuncia.test.mjs'],
   ['livre-se-limpa', 'livre-se-limpa.test.mjs'],
   ['painel-das-sessoes', 'painel-das-sessoes.test.mjs'],
   ['fila-do-item', 'fila-do-item.test.mjs'],

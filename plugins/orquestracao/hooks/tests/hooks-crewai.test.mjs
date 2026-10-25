@@ -469,6 +469,25 @@ caso('K2 subagente-nao-edita: a lista casa `orquestracao:designer` com `designer
   igual(rodar(SN, editar(`${REPO}/docs/design/revisoes/a.md`, sub('orquestracao:designer'))), null, 'designer com prefixo');
   igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, sub('orquestracao:executor')))), 'deny', 'executor com prefixo');
 });
+caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
+  const f = transcript([...trabalho(), fala('Pronto, editei.')], 'exec · x');
+  const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');
+  const seq = [];
+  for (let i = 1; i <= 4; i++) {
+    const r = rodar('executor-criterio.mjs', stop(f, { stop_hook_active: i > 1, last_assistant_message: 'Pronto, editei.' }));
+    seq.push(r?.reason?.match(/cobrança \d de 2/)?.[0] ?? 'passou');
+    cresce(abertura('Stop hook feedback:\ncobrança', { isMeta: true }), fala('Pronto, editei.'));
+  }
+  igual(seq.join(','), 'cobrança 1 de 2,cobrança 2 de 2,passou,passou', 'paradas');
+  igual(log().map((l) => l[3]).join(','), 'cobrou-1,cobrou-2,deixou-passar-apos-2,passou-esgotado', 'log');
+});
+caso('2.29 estado malformado ({"x":null}) não derruba o hook e é limpo na gravação', () => {
+  const arq = join(base, 'hooks-crewai-estado.json');
+  writeFileSync(arq, JSON.stringify({ x: null, y: 5 }));
+  if (!bloqueou(rodar('executor-criterio.mjs', stop(transcript([...trabalho(), fala('Pronto.')], 'exec · x'))))) throw new Error('não cobrou');
+  igual(log().some((l) => l[3] === 'erro'), false, 'erro no log');
+  igual(Object.keys(JSON.parse(readFileSync(arq, 'utf8'))).length, 1, 'só a chave desta sessão sobra');
+});
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

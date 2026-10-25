@@ -28,16 +28,17 @@ const SO_NO_PLUGIN = [
 //  caminho   — script/teste resolve o irmão pelo plugin (SCRIPTS_DIR, pool-comum relativo, ../hooks), K3
 //  apelidos  — mapa com apelidos `orquestracao:<skill>`, K3
 const DECLARADAS = {
-  'hooks/executor-criterio.mjs': { motivo: 'prefixo + painel', hash: '58a5f410baa5ad29' },
+  'hooks/executor-criterio.mjs': { motivo: 'prefixo + painel', hash: 'beaf56666f958e5a' },
   'hooks/fila-do-item.mjs': { motivo: 'prefixo + painel', hash: '75a944388492f823' },
   'hooks/hooks-crewai-comum.mjs': { motivo: 'prefixo + painel', hash: '9fb396511bc5f0b0' },
   'hooks/livre-se-limpa.mjs': { motivo: 'prefixo + painel', hash: 'f0882a00b0fcc26a' },
   'hooks/orquestradora-ritual.mjs': { motivo: 'prefixo + painel', hash: '4081d57ca171c9f5' },
   'hooks/painel-das-sessoes.mjs': { motivo: 'prefixo + painel', hash: '62843b71e9c69668' },
   'hooks/papel-do-pool.mjs': { motivo: 'prefixo + painel', hash: '8b361af49eb9f0c6' },
+  'hooks/pool-comum.mjs': { motivo: 'prefixo', hash: '6f8579544c785e2d' },
   'hooks/skill-do-papel.mjs': { motivo: 'prefixo + painel', hash: '25e40b55aeef7931' },
   'hooks/subagente-nao-edita.mjs': { motivo: 'prefixo + painel', hash: '55e5400a46c51163' },
-  'hooks/tests/hooks-crewai.test.mjs': { motivo: 'prefixo + painel', hash: 'fe4cbf3cc37a1e1f' },
+  'hooks/tests/hooks-crewai.test.mjs': { motivo: 'prefixo + painel', hash: '73c401744223b63e' },
   'hooks/tests/livre-se-limpa.test.mjs': { motivo: 'prefixo + painel', hash: '8c1e21dd5c1ce3a0' },
   'hooks/tests/painel-das-sessoes.test.mjs': { motivo: 'caminho (+ prefixo/painel nos testes de hooks)', hash: 'fdee3c233689f1d6' },
   'hooks/tests/painel-fila.test.mjs': { motivo: 'caminho', hash: 'cd0fcdd3e5547866' },
@@ -50,7 +51,7 @@ const DECLARADAS = {
   'skills/handoff-de-sessao/SKILL.md': { motivo: 'texto', hash: 'a28c0cca36977121' },
   'skills/orquestradora/SKILL.md': { motivo: 'texto', hash: 'ac0f648b180a1f83' },
   'skills/orquestradora/scripts/painel.mjs': { motivo: 'caminho', hash: '4af19bf616f8d6c8' },
-  'skills/papeis-e-modelos/SKILL.md': { motivo: 'texto', hash: '3abf78be0f5275c0' },
+  'skills/papeis-e-modelos/SKILL.md': { motivo: 'texto', hash: 'd9702c99434c8203' },
   'skills/notas-de-release/escrita.md': { motivo: 'texto', hash: 'e2935add495e964c' },
   'pool/aplicar-skills-do-papel.mjs': { motivo: 'caminho', hash: '614e8eb73d037280' },
   'pool/papeis/design.md': { motivo: 'texto', hash: 'e5602ef65051318a' },

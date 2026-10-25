@@ -10,12 +10,12 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SINC = join(RAIZ, 'scripts', 'k8', 'sincronizar.mjs');
 const git = (d, ...a) => execFileSync('git', ['-C', d, ...a], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
 
-// Um repo com o plugin e uma "viva" falsos. `hooks/pool-comum.mjs` não é declarado na paridade; `hooks/executor-criterio.mjs` é.
+// Um repo com o plugin e uma "viva" falsos. `hooks/livre-comum.mjs` não é declarado na paridade; `hooks/executor-criterio.mjs` é.
 function cenario() {
   const base = realpathSync(mkdtempSync(join(tmpdir(), 'kit-sinc-')));
   const repo = join(base, 'repo'); const plugin = join(repo, 'plugins', 'orquestracao'); const viva = join(base, 'claude');
-  for (const [d, arqs] of [[plugin, { 'hooks/pool-comum.mjs': 'velho\n', 'hooks/executor-criterio.mjs': 'adaptado-plugin\n', 'hooks/outro.mjs': 'igual\n' }],
-    [viva, { 'hooks/pool-comum.mjs': 'novo\n', 'hooks/executor-criterio.mjs': 'novo-vivo\n', 'hooks/outro.mjs': 'igual\n' }]]) {
+  for (const [d, arqs] of [[plugin, { 'hooks/livre-comum.mjs': 'velho\n', 'hooks/executor-criterio.mjs': 'adaptado-plugin\n', 'hooks/outro.mjs': 'igual\n' }],
+    [viva, { 'hooks/livre-comum.mjs': 'novo\n', 'hooks/executor-criterio.mjs': 'novo-vivo\n', 'hooks/outro.mjs': 'igual\n' }]]) {
     for (const [r, t] of Object.entries(arqs)) { mkdirSync(join(d, r, '..'), { recursive: true }); writeFileSync(join(d, r), t); }
   }
   mkdirSync(repo, { recursive: true }); git(repo, 'init', '-q'); git(repo, 'config', 'user.email', 't@k.local'); git(repo, 'config', 'user.name', 't');
@@ -32,7 +32,7 @@ describe('K8 — sincronizar.mjs: porte deliberado, um item por vez', () => {
       const r = c.sinc('--listar');
       const s = `${r.stdout}${r.stderr}`;
       assert.equal(r.status, 0, s);
-      assert.match(s, /hooks\/pool-comum\.mjs {2}\[sem declaração/);
+      assert.match(s, /hooks\/livre-comum\.mjs {2}\[sem declaração/);
       assert.match(s, /hooks\/executor-criterio\.mjs {2}\[declarada: prefixo \+ painel/);
       assert.doesNotMatch(s, /hooks\/outro\.mjs/);
     } finally { rmSync(c.base, { recursive: true, force: true }); }
@@ -41,15 +41,15 @@ describe('K8 — sincronizar.mjs: porte deliberado, um item por vez', () => {
     const c = cenario();
     try {
       const antes = git(c.repo, 'rev-list', '--count', 'HEAD').trim();
-      const r = c.sinc('F28', 'hooks/pool-comum.mjs');
+      const r = c.sinc('F28', 'hooks/livre-comum.mjs');
       const s = `${r.stdout}${r.stderr}`;
       assert.equal(r.status, 0, s);
       assert.match(s, /^-velho$/m); assert.match(s, /^\+novo$/m);
-      assert.equal(c.ler('hooks/pool-comum.mjs'), 'novo\n');
+      assert.equal(c.ler('hooks/livre-comum.mjs'), 'novo\n');
       assert.equal(c.ler('hooks/executor-criterio.mjs'), 'adaptado-plugin\n', 'copiou o que não foi pedido');
       assert.equal(Number(git(c.repo, 'rev-list', '--count', 'HEAD').trim()), Number(antes) + 1);
-      assert.match(git(c.repo, 'log', '-1', '--format=%s').trim(), /^sync\(F28\): hooks\/pool-comum\.mjs$/);
-      assert.equal(git(c.repo, 'show', '--name-only', '--format=', 'HEAD').trim(), 'plugins/orquestracao/hooks/pool-comum.mjs');
+      assert.match(git(c.repo, 'log', '-1', '--format=%s').trim(), /^sync\(F28\): hooks\/livre-comum\.mjs$/);
+      assert.equal(git(c.repo, 'show', '--name-only', '--format=', 'HEAD').trim(), 'plugins/orquestracao/hooks/livre-comum.mjs');
     } finally { rmSync(c.base, { recursive: true, force: true }); }
   });
   it('arquivo com diferença declarada recusa (exit 2) e não copia nem commita; --forcar copia', () => {
@@ -75,7 +75,7 @@ describe('K8 — sincronizar.mjs: porte deliberado, um item por vez', () => {
         assert.equal(r.status, 2, `${rel}: ${r.stdout}${r.stderr}`);
       }
       assert.equal(git(c.repo, 'rev-parse', 'HEAD').trim(), antes);
-      assert.equal(c.ler('hooks/pool-comum.mjs'), 'velho\n');
+      assert.equal(c.ler('hooks/livre-comum.mjs'), 'velho\n');
     } finally { rmSync(c.base, { recursive: true, force: true }); }
   });
 });
@@ -105,11 +105,11 @@ describe('K8 — sincronizar.mjs --base: 3 vias, a adaptação do plugin fica e 
     const c = com3vias({ base: 'a\nb\nc\n', plugin: 'a\nX\nc\n', viva: 'a\nY\nc\n' });
     try {
       const antes = c.head();
-      const r = c.sinc('F28', 'hooks/pool-comum.mjs', 'hooks/executor-criterio.mjs', '--base', c.pasta);
+      const r = c.sinc('F28', 'hooks/livre-comum.mjs', 'hooks/executor-criterio.mjs', '--base', c.pasta);
       assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
       assert.match(r.stderr, /conflito/); assert.match(r.stderr, /<<<<<<< plugin/);
       assert.equal(c.ler('hooks/executor-criterio.mjs'), 'a\nX\nc\n');
-      assert.equal(c.ler('hooks/pool-comum.mjs'), 'velho\n', 'gravou um arquivo do lote que recusou');
+      assert.equal(c.ler('hooks/livre-comum.mjs'), 'velho\n', 'gravou um arquivo do lote que recusou');
       assert.equal(c.head(), antes);
     } finally { rmSync(c.base, { recursive: true, force: true }); }
   });
@@ -130,9 +130,9 @@ describe('K8 — sincronizar.mjs --base: 3 vias, a adaptação do plugin fica e 
       assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
       assert.match(r.stderr, /não existia na base e tem diferença declarada/);
       assert.equal(c.ler('hooks/executor-criterio.mjs'), 'a\n');
-      const ok = c.sinc('F28', 'hooks/pool-comum.mjs', '--base', c.pasta);
+      const ok = c.sinc('F28', 'hooks/livre-comum.mjs', '--base', c.pasta);
       assert.equal(ok.status, 0, `${ok.stdout}${ok.stderr}`);
-      assert.equal(c.ler('hooks/pool-comum.mjs'), 'novo\n');
+      assert.equal(c.ler('hooks/livre-comum.mjs'), 'novo\n');
     } finally { rmSync(c.base, { recursive: true, force: true }); }
   });
   it('arquivo novo (sem par no plugin nem na base) é copiado', () => {

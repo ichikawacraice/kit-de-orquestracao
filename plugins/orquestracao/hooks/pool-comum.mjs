@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, statS
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join, basename, dirname } from 'node:path';
-import { BASE } from './hooks-crewai-comum.mjs';
+import { BASE, tituloRapido, semPrefixoDoPlugin } from './hooks-crewai-comum.mjs';
 
 export { BASE };
 const H = homedir();
@@ -209,4 +209,12 @@ export function projetoTemOrquestradora(meuId, meuRepo) {
     }
   } catch { indeterminado = true; }
   return indeterminado ? null : false;
+}
+
+// Sessão executora (fio principal): subagente `executor` (agent_type), título `exec ·` no transcript
+// ou `E<n> · …` no registro do app. Mesmo teste do executor-criterio; o Stop de subagente não passa por aqui.
+export function ehExecutora(e, transcript) {
+  return semPrefixoDoPlugin(e.agent_type) === 'executor' || // `orquestracao:executor` vale `executor`
+    /^exec\s*·/.test(tituloRapido(transcript))
+    || membroDoPool(registroDaSessao(e.session_id)?.titulo)?.papel === 'E';
 }
