@@ -49,7 +49,7 @@ const DECLARADAS = {
   'skills/ausente/SKILL.md': { motivo: 'texto', hash: '73c1c6d16efc35b9' },
   'skills/handoff-de-sessao/SKILL.md': { motivo: 'texto', hash: 'a28c0cca36977121' },
   'skills/orquestradora/SKILL.md': { motivo: 'texto', hash: 'ac0f648b180a1f83' },
-  'skills/orquestradora/scripts/painel.mjs': { motivo: 'caminho', hash: '1ef4c4ad43bef9a5' },
+  'skills/orquestradora/scripts/painel.mjs': { motivo: 'caminho', hash: '8f042b0738e5db0e' },
   'skills/papeis-e-modelos/SKILL.md': { motivo: 'texto', hash: '3abf78be0f5275c0' },
   'skills/notas-de-release/escrita.md': { motivo: 'texto', hash: 'e2935add495e964c' },
   'pool/aplicar-skills-do-papel.mjs': { motivo: 'caminho', hash: '614e8eb73d037280' },

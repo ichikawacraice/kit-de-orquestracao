@@ -10,6 +10,9 @@
 //   painel.mjs batch  '[{"op":"set|update|delete","colecao":"…","id":"…","data":{…},"seVersao":N}]'   (seVersao opcional por op)
 //   painel.mjs delete <colecao> <id>
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
+//   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
+//   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
+//   (set em fila/<id> que JÁ existe exige --se-versao N — ou "seVersao" na op do batch —: sem ele, o set apagaria o item em silêncio)
 //
 // Coleções: sessoes, perguntas e fila (itens F<n> do pool; protocolo em pool/protocolo.md#fila-do-pool).
 //
@@ -102,8 +105,72 @@ function objeto(json, onde) {
 // Padrões da skill orquestradora (F5/T4, 24/10) validados na escrita. Só vale para o documento que
 // esta op grava: dado antigo que já está no disco não é revalidado.
 const MOTIVOS = new Set(['conflito', 'gate-vermelho', 'acesso', 'operador', 'outra']);
-function validarPadrao(colecao, id, novo, base, vista) {
+// Contrato do item da fila (F27 fatia 1). Vale para os campos PRESENTES em `novo`: documento antigo segue aceitando `update`.
+const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'feito', 'descartado'];
+const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
+const MOTIVOS_DA_TRAVA = new Set([...MOTIVOS]);
+const DONOS_ANTIGOS = ['dono', 'dona', 'membro', 'executora'];
+// Até a migração (fatia 2) um `set` no contrato antigo (sem etapa nem tema) ainda passa; a fatia 2 põe `false`.
+const SET_LEGADO_TOLERADO = true;
+const ARQUIVO_DE_TEMAS = () => join(BASE, 'temas.json');
+function temasValidos(chave) {
+  const caminho = ARQUIVO_DE_TEMAS();
+  try {
+    const lista = JSON.parse(readFileSync(caminho, 'utf8'));
+    const ids = Array.isArray(lista) ? lista.map((t) => t?.id).filter((x) => typeof x === 'string' && x) : [];
+    if (ids.length === 0) throw new Error('lista vazia ou sem ids');
+    return { ids, caminho };
+  } catch (e) {
+    throw new Error(`${chave}: não consegui ler os temas em ${caminho} (${e.message})`);
+  }
+}
+const textoNaoVazio = (v) => typeof v === 'string' && v.trim() !== '';
+
+function validarItemDaFila(chave, novo, base, op) {
+  const tem = (k) => k in novo && novo[k] !== null;
+  if (tem('etapa') && !ETAPAS.includes(novo.etapa)) {
+    throw new Error(`${chave}: etapa "${novo.etapa}" fora da lista (${ETAPAS.join(' · ')})`);
+  }
+  if (tem('tema')) {
+    const { ids, caminho } = temasValidos(chave);
+    if (!ids.includes(novo.tema)) throw new Error(`${chave}: tema "${novo.tema}" fora da lista (${ids.join(' · ')}); a lista está em ${caminho}`);
+  }
+  if (tem('trava')) {
+    const t = novo.trava;
+    if (typeof t !== 'object' || Array.isArray(t)) throw new Error(`${chave}: trava é null ou {motivo, texto}`);
+    if (t.motivo === 'sem-ninguem') throw new Error(`${chave}: trava "sem-ninguem" só o mod produz, ao desenhar; use ${[...MOTIVOS_DA_TRAVA].join(' · ')}`);
+    if (!MOTIVOS_DA_TRAVA.has(t.motivo)) throw new Error(`${chave}: trava.motivo "${t.motivo}" fora da lista (${[...MOTIVOS_DA_TRAVA].join(' · ')})`);
+    if (!textoNaoVazio(t.texto)) throw new Error(`${chave}: trava.texto não pode ser vazio`);
+  }
+  if (tem('prs') && !(Array.isArray(novo.prs) && novo.prs.every((n) => Number.isInteger(n) && n > 0))) {
+    throw new Error(`${chave}: prs é uma lista de inteiros positivos`);
+  }
+  if (tem('depois')) {
+    const ok = Array.isArray(novo.depois) && novo.depois.every((d) => d && typeof d === 'object' && textoNaoVazio(d.texto) && (d.item === undefined || /^F\d+$/.test(String(d.item))));
+    if (!ok) throw new Error(`${chave}: depois é uma lista de {texto, item?}, texto não vazio e item no formato F<n>`);
+  }
+  if (tem('perguntas') && !(Array.isArray(novo.perguntas) && novo.perguntas.every((q) => /^Q\d+$/.test(String(q))))) {
+    throw new Error(`${chave}: perguntas é uma lista de Q<n>`);
+  }
+  for (const k of ['resumo', 'agora', 'nota']) {
+    if (tem(k) && typeof novo[k] !== 'string') throw new Error(`${chave}: ${k} é texto`);
+  }
+  for (const k of DONOS_ANTIGOS) {
+    if (tem(k)) throw new Error(`${chave}: o campo "${k}" saiu do contrato; use donoLocalId e donoApelido`);
+  }
+  if (tem('donoLocalId')) {
+    if (!/^local_[0-9a-f-]{36}$/.test(String(novo.donoLocalId))) throw new Error(`${chave}: donoLocalId "${novo.donoLocalId}" não é local_<uuid>`);
+    if (!textoNaoVazio(base.donoApelido)) throw new Error(`${chave}: donoLocalId exige donoApelido`);
+  }
+  if (op === 'set' && (!SET_LEGADO_TOLERADO || tem('etapa') || tem('tema'))) {
+    const falta = ['titulo', 'etapa', 'tema'].filter((k) => !textoNaoVazio(base[k]));
+    if (falta.length) throw new Error(`${chave}: o item novo exige ${falta.join(', ')}`);
+  }
+}
+
+function validarPadrao(colecao, id, novo, base, vista, op) {
   const chave = `${colecao}/${id}`;
+  if (colecao === 'fila') validarItemDaFila(chave, novo, base, op);
   if (colecao === 'perguntas' && base.estado === 'aberta' && !base.sessaoId) {
     throw new Error(`${chave}: pergunta aberta sem sessaoId — a resposta do painel não teria para onde voltar`);
   }
@@ -125,6 +192,22 @@ function validarPadrao(colecao, id, novo, base, vista) {
   }
 }
 
+// Histórico e `feitoEm` da fila: quem muda a etapa ou o dono não precisa lembrar de registrar (F27 fatia 1).
+function automaticosDaFila(base, novo, antes) {
+  const etapaAntes = antes?.etapa ?? null;
+  const donoAntes = antes?.donoApelido ?? null;
+  const etapa = base.etapa ?? null;
+  const dono = base.donoApelido ?? null;
+  if (etapa !== etapaAntes || dono !== donoAntes) {
+    const agora = new Date().toISOString();
+    base.historico = [...(Array.isArray(base.historico) ? base.historico : []), { em: agora, etapa, dono }];
+  }
+  const final = ETAPAS_FINAIS.has(etapa);
+  const eraFinal = ETAPAS_FINAIS.has(etapaAntes);
+  if (final && !eraFinal && !('feitoEm' in novo)) base.feitoEm = new Date().toISOString();
+  if (!final && eraFinal) delete base.feitoEm;
+}
+
 // Valida e calcula uma op contra o estado `vista` (mapa "colecao/id" -> documento ou null, que
 // acumula as ops anteriores do mesmo batch). Não grava nada.
 function planejar({ op, colecao, id, data, deOutra }, seVersao, vista) {
@@ -133,6 +216,9 @@ function planejar({ op, colecao, id, data, deOutra }, seVersao, vista) {
   const atual = vista.has(chave) ? vista.get(chave) : ler(colecao, id);
   if (seVersao !== undefined && (atual?.version ?? 0) !== seVersao) {
     throw new Error(`${chave}: versão ${atual?.version ?? 0}, esperava ${seVersao}`);
+  }
+  if (colecao === 'fila' && op === 'set' && atual && seVersao === undefined) {
+    throw new Error(`${chave} já existe (versão ${atual.version}): use update para mesclar, ou set --se-versao ${atual.version} para substituir`);
   }
   if (colecao === 'sessoes' && atual && (op === 'set' || op === 'delete') && deOutra !== true && !ehMinha(id)) {
     throw new Error(`${chave} é de outra sessão: use \`update\` (mescla) ou \`--de-outra\` ("deOutra": true no batch) se a intenção é substituir/apagar`);
@@ -153,7 +239,8 @@ function planejar({ op, colecao, id, data, deOutra }, seVersao, vista) {
     else process.stderr.write(`aviso: ${colecao}/${id} sem projeto (${motivo})\n`);
   }
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
-  validarPadrao(colecao, id, novo, base, vista);
+  validarPadrao(colecao, id, novo, base, vista, op);
+  if (colecao === 'fila') automaticosDaFila(base, novo, atual?.data);
   const version = (atual?.version ?? 0) + 1;
   vista.set(chave, { id, version, data: base });
   return { colecao, id, data: base, version };

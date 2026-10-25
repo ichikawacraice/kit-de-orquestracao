@@ -1,8 +1,8 @@
 #!/bin/bash
 # Devolve o próximo ID de item da fila do pool (F1, F2, …), único entre TODAS as sessões desta máquina.
 # Trava por mkdir (atômico), com prazo. Molde: proxima-pergunta.sh.
-# Quando o contador não existe, começa DEPOIS do maior F<n> que já exista na coleção `fila` do painel
-# (painel/fila/F<n>.json) ou entre os itens antigos (pool/itens/F<n>.md).
+# O próximo é sempre DEPOIS do maior entre o contador (quando numérico) e o maior F<n> que já exista na coleção `fila` do
+# painel (painel/fila/F<n>.json) ou entre os itens antigos (pool/itens/F<n>.md).
 set -euo pipefail
 dir="$HOME/.claude/orquestracao"; cont="$dir/pool/contador-de-itens"; trava="$dir/pool/.trava-itens"
 mkdir -p "$dir/pool"
@@ -101,16 +101,14 @@ lido=""
 [ -f "$cont" ] && lido=$(tr -d '[:space:]' < "$cont" || true)
 # Contador vazio ou não numérico vale como ausente: recalcula pelos itens existentes.
 case "$lido" in ''|*[!0-9]*) lido="" ;; esac
-if [ -n "$lido" ]; then
-  maior=$lido
-else
-  for f in "$dir"/painel/fila/F*.json "$dir"/pool/itens/F*.md; do
-    [ -e "$f" ] || continue
-    b=$(basename "$f"); b=${b#F}; b=${b%%.*}
-    case "$b" in ''|*[!0-9]*) continue ;; esac
-    [ "$b" -gt "$maior" ] && maior=$b
-  done
-fi
+[ -n "$lido" ] && maior=$lido
+# O maior F<n> existente vale SEMPRE (item criado à mão com o contador atrasado não pode ser reaproveitado).
+for f in "$dir"/painel/fila/F*.json "$dir"/pool/itens/F*.md; do
+  [ -e "$f" ] || continue
+  b=$(basename "$f"); b=${b#F}; b=${b%%.*}
+  case "$b" in ''|*[!0-9]*) continue ;; esac
+  [ "$b" -gt "$maior" ] && maior=$b
+done
 n=$(( maior + 1 ))
 echo "$n" > "$cont.$$.tmp" && mv "$cont.$$.tmp" "$cont"
 echo "F$n"
