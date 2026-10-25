@@ -1,6 +1,6 @@
 // `kit doutor`: confere o ambiente (plugin, hooks duplicados, kit.json, versão, Node, git) e o disco contra o lock.
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { avisoDeLaco, carregarConfig } from '../gate/config.mjs';
@@ -36,6 +36,11 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   if (!nomes.length) falha('não consegui listar os hooks do plugin (hooks.json do kit vazio)');
   else if (duplicados.length) for (const n of duplicados) falha(`hook do kit também em ~/.claude/settings.json: ${n} (dispararia duas vezes)`);
   else ok(`nenhum hook do kit também em ~/.claude/settings.json (${nomes.length} conferidos)`);
+
+  // temas.json do painel: o painel o cria na primeira gravação; o doutor só diz se já existe
+  const temas = join(process.env.PAINEL_DIR || join(home, '.claude', 'orquestracao', 'painel'), 'temas.json');
+  if (existsSync(temas)) ok('temas.json do painel existe');
+  else linhas.push(`info: temas.json ausente (${temas}); o painel o cria, com o tema geral, na primeira gravação`);
 
   // kit.json
   try { const cfg = carregarConfig(destino); ok('.claude/kit.json válido'); const laco = avisoDeLaco(cfg.gate?.comandoCompleto); if (laco) linhas.push(`aviso: ${laco}`); } catch (e) { falha(`.claude/kit.json: ${e.message}`); }

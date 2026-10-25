@@ -111,8 +111,17 @@ const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
 const MOTIVOS_DA_TRAVA = new Set([...MOTIVOS]);
 const DONOS_ANTIGOS = ['dono', 'dona', 'membro', 'executora'];
 const ARQUIVO_DE_TEMAS = () => join(BASE, 'temas.json');
+// Instalação nova não tem temas.json: a primeira gravação o cria (flag `wx`: atômico, nunca sobrescreve) com o tema `geral` e avisa uma vez.
+function semearTemas(caminho) {
+  try {
+    mkdirSync(dirname(caminho), { recursive: true });
+    writeFileSync(caminho, `${JSON.stringify([{ id: 'geral', rotulo: 'Geral' }], null, 2)}\n`, { flag: 'wx' });
+    process.stderr.write(`painel.mjs: ${caminho} não existia; criei com o tema "geral". Cadastre os temas do seu projeto nele.\n`);
+  } catch (e) { if (e?.code !== 'EEXIST') throw e; }
+}
 function temasValidos(chave) {
   const caminho = ARQUIVO_DE_TEMAS();
+  if (!existsSync(caminho)) semearTemas(caminho);
   try {
     const lista = JSON.parse(readFileSync(caminho, 'utf8'));
     const ids = Array.isArray(lista) ? lista.map((t) => t?.id).filter((x) => typeof x === 'string' && x) : [];
