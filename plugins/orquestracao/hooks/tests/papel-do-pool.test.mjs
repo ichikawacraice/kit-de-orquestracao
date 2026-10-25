@@ -53,6 +53,9 @@ function rodar(hook, evento, extraEnv = {}) {
   });
   return out ? JSON.parse(out).hookSpecificOutput : null;
 }
+// Turno aberto pelo operador (origem `human`) / por mensagem de outra sessão: o T2 olha a origem (Q245).
+function humano() { return transcriptCom(Date.now() - 60_000, 'human'); }
+function depeer() { return transcriptCom(Date.now() - 60_000, 'peer'); }
 const pre = (quem, tool, tool_input, extra = {}) => rodar('papel-do-pool.mjs', { session_id: S[quem][0], hook_event_name: 'PreToolUse', tool_name: tool, tool_input, cwd: dir(), ...extra });
 const agent = (quem, tipo, extra) => pre(quem, 'Agent', { subagent_type: tipo, prompt: 'x' }, extra);
 const nega = (r, msg) => { if (r?.permissionDecision !== 'deny') throw new Error(`${msg}: esperava deny, veio ${JSON.stringify(r)}`); };
@@ -89,15 +92,19 @@ caso('T1: orquestradora (título) lançando executor → deny; sessão sem prefi
   nega(agent('AVULSA', 'executor'), 'marcador');
 });
 caso('T2: archive/delete de membro → deny; de sessão comum passa; alvo inexistente passa e loga', () => {
-  nega(pre('ORQ', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'local_E3' }), 'orquestradora arquiva membro OCUPADO');
-  passa(pre('ORQ', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'local_E1' }), 'orquestradora arquiva membro LIVRE (teto da Q214)');
-  ok(log().includes('deixou-arquivar-livre'), 'sem o log deixou-arquivar-livre');
-  nega(pre('P1', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'local_E1' }), 'planejadora arquiva membro livre');
-  nega(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['bbbb-e1'] }), 'delete por cli id');
-  nega(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['local_COMUM', 'local_E1'] }), 'delete com dois alvos, só um membro');
+  const A = (quem, alvo, extra = humano()) => pre(quem, 'mcp__ccd_session_mgmt__archive_session', { session_id: alvo }, extra);
+  passa(A('ORQ', 'local_E3'), 'Q245: orquestradora, turno humano, alvo com título de trabalho (E3 ocupado) → passa');
+  passa(A('ORQ', 'local_E1'), 'Q245: orquestradora, turno humano, alvo `· livre` → passa');
+  ok(log().includes('deixou-arquivar-por-comando'), 'sem o log deixou-arquivar-por-comando');
+  nega(A('ORQ', 'local_E1', depeer()), 'Q245: orquestradora em turno de mensagem entre sessões nega, até o `· livre`');
+  nega(A('ORQ', 'local_E3', depeer()), 'Q245: orquestradora em turno de mensagem entre sessões nega o de título de trabalho');
+  nega(A('ORQ', 'local_E1', {}), 'Q245: transcript ausente nega');
+  nega(A('P1', 'local_E1'), 'Q245: planejadora em turno humano nega');
+  nega(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['bbbb-e1'] }, humano()), 'delete por cli id');
+  nega(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['local_COMUM', 'local_E1'] }, humano()), 'delete com dois alvos, só um membro');
   passa(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['local_COMUM', 'local_NAOEXISTE'] }), 'delete só de não membros');
-  passa(pre('ORQ', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'local_COMUM' }), 'comum');
-  passa(pre('ORQ', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'local_NAOEXISTE' }), 'inexistente');
+  passa(A('ORQ', 'local_COMUM'), 'comum');
+  passa(A('ORQ', 'local_NAOEXISTE'), 'inexistente');
   ok(log().includes('alvo-desconhecido'), 'sem o log alvo-desconhecido');
 });
 // Orquestradora ativa de outro projeto: marcador em ativas/ (conteúdo = git common dir) + transcript recente.
@@ -106,7 +113,7 @@ function orquestradoraDe(repo, id = 'cccccccc-0000-0000-0000-000000000001') {
   writeFileSync(join(BASE_ORQ(), 'ativas', id), `${realpathSync(dir(repo))}/.git\n`);
   writeFileSync(dir('home', '.claude', 'projects', 'proj', `${id}.jsonl`), `${JSON.stringify({ type: 'user', cwd: dir(repo) })}\n`);
 }
-const arquiva = (quem, alvo) => pre(quem, 'mcp__ccd_session_mgmt__archive_session', { session_id: alvo });
+const arquiva = (quem, alvo, extra = humano()) => pre(quem, 'mcp__ccd_session_mgmt__archive_session', { session_id: alvo }, extra);
 caso('T2 entre projetos: livre de A passa; livre de B COM orquestradora própria → deny "outro projeto"; repo que não resolve → deny', () => {
   orquestradoraDe('beta');
   passa(arquiva('ORQ', 'local_E1'), 'livre do mesmo projeto');

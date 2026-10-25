@@ -11,7 +11,7 @@ Argumento: `$ARGUMENTS`.
 
 **Só este comando liga e desliga o modo** (operador, 24/10: *"mesmo que eu escreva, não sair do modo, pq posso vir, dar um comando e sair novamente"*). O hook `${CLAUDE_PLUGIN_ROOT}/hooks/operador-ausente.mjs` grava a bandeira `~/.claude/orquestracao/operador-ausente.json` no `on` e a apaga no `off`; frase ("vou dormir") e prompt comum não mexem, e não há prazo. Com o modo ligado, o operador pode mandar comandos normalmente: o turno dele abre sessão (é ele ali), e o de notificação ou de outra sessão só propõe cartão (trava T3a do `papel-do-pool.mjs`).
 
-- **`off`:** responda numa linha que o modo ausente foi desligado. Daí em diante vale o pool sob demanda: no próximo ritual, membro livre sem trabalho previsto se arquiva. Grave a etapa no painel e uma linha no `~/.claude/orquestracao/<projeto>.md` (o da orquestradora deste projeto). Não faça os passos abaixo.
+- **`off`:** responda numa linha que o modo ausente foi desligado. Daí em diante vale o pool sob demanda: no próximo ritual, a orquestradora lista os livres sem trabalho previsto e pergunta se arquiva. Grave a etapa no painel e uma linha no `~/.claude/orquestracao/<projeto>.md` (o da orquestradora deste projeto). Não faça os passos abaixo.
 - **Sem argumento:** diga se o modo está ligado (a bandeira existe, e desde quando) e como ligar/desligar. Não mude nada.
 - **`on`:** os passos abaixo.
 
@@ -27,7 +27,7 @@ O operador digitou `/ausente on`: vai ficar fora ou dormir. Este turno é dele, 
    - **uma D** se alguma frente viva toca tela, mesmo sem item de design na fila;
    - **uma P por frente viva, mais uma P livre** para frente que surgir (*assumida, a confirmar*).
 3. **Quem já existe conta.** Membro livre ou trabalhando não se duplica. Abra só a diferença: `start_session` `user_asked`, título `<ID> · livre` com o próximo número livre do papel, e modelo e esforço do papel (skill `papeis-e-modelos`: P e V em Opus com esforço alto, E em Sonnet com esforço médio). Depois rode `node "${CLAUDE_PLUGIN_ROOT}/pool/aplicar-skills-do-papel.mjs" <local_…>` em cada uma.
-4. **Despache já** o que tem item esperando o papel. O resto fica `livre` e **não se arquiva** enquanto o modo ausente durar (a regra de arquivar livre sem trabalho previsto vale só com o operador presente).
+4. **Despache já** o que tem item esperando o papel. O resto fica `livre` e **nada se arquiva** enquanto o modo ausente durar (a pergunta sobre os livres sem trabalho previsto só vale com o operador presente).
 5. **Registre:**
    - no painel, a linha de cada membro novo e a da orquestradora (etapa *"modo ausente: N membros pré-criados"*);
    - uma linha no `~/.claude/orquestracao/<projeto>.md`.

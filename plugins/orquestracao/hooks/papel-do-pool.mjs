@@ -6,7 +6,7 @@
 // (mesmo `session_id`). Sem título de membro e sem ser orquestradora: passa calado (outros projetos).
 //   T1  Agent/Task: P, D ou orquestradora não lança `executor`/`validador`; E não lança `validador`
 //       nem `executor`; V não lança `executor`.            T1c V não edita arquivo do projeto.
-//   T2  archive_session / delete_session de membro do pool (a orquestradora só arquiva livre do MESMO projeto ou de projeto sem orquestradora).
+//   T2  archive_session / delete_session de membro do pool (a orquestradora só arquiva, por comando do operador no turno dele, membro do MESMO projeto ou de projeto sem orquestradora — Q245).
 //   T3  start_session: negado em turno que não é do operador com o modo ausente ligado (/ausente on) e a membro do pool.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava).
 //   T6  Bash `gh pr merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
@@ -127,23 +127,29 @@ function main() {
       if (!reg) { registrar(sid, HOOK, 'alvo-desconhecido', `${tool} ${alvo}`); continue; }
       const m = membroDoPool(reg.titulo);
       if (!m) continue;
-      // Exceção (operador, 24/10, teto da Q214): a orquestradora arquiva membro LIVRE acima do teto.
+      // Arquivar é do operador (Q245, 25/10: "não arquivar sozinha, mas por comando meu pode arquivar"): a orquestradora
+      // arquiva membro do pool, de qualquer título, SÓ no turno que o operador começou. Fora dele, nem o `· livre`.
       const quemChama = registroDaSessao(e.session_id);
-      if (ehOrquestradora(e.session_id, quemChama?.titulo) && /· livre\s*$/.test(reg.titulo) && alvo !== e.session_id) {
+      if (ehOrquestradora(e.session_id, quemChama?.titulo) && alvo !== e.session_id) {
+        let origem = null;
+        try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
+        if (origem !== 'human') {
+          return nega('T2', m.id, String(alvo), 'Arquivar só por comando do operador, no turno dele (Q245): liste as candidatas, pergunte, e arquive quando ele mandar.');
+        }
         // Do MESMO projeto (D1, 24/10) ou de projeto SEM orquestradora própria (F23, assumida, a confirmar): `E1 · livre`
         // existe em cada projeto. "Não consegui medir" nunca libera: repo indeterminado de qualquer lado, ou projeto do alvo
         // cuja orquestradora não deu para medir (`projetoTemOrquestradora` → null) → não arquiva.
         const meu = projetoDaSessao(quemChama)?.repo; const dele = projetoDaSessao(reg)?.repo;
         const dela = meu && dele && meu !== dele ? projetoTemOrquestradora(alvo, dele) : undefined;
         if (meu && dele && (meu === dele || dela === false)) {
-          registrar(sid, HOOK, 'deixou-arquivar-livre', `${m.id} ${alvo}`);
+          registrar(sid, HOOK, 'deixou-arquivar-por-comando', `${m.id} ${alvo}`);
           continue;
         }
         return nega('T2', m.id, String(alvo), !(meu && dele)
-          ? `Não consegui confirmar o projeto de ${meu ? 'o alvo' : 'quem arquiva'} (git do originCwd/cwd): por segurança, membro livre não se arquiva sem a certeza de que é do mesmo projeto.`
+          ? `Não consegui confirmar o projeto de ${meu ? 'o alvo' : 'quem arquiva'} (git do originCwd/cwd): por segurança, membro do pool não se arquiva sem a certeza de que é do mesmo projeto.`
           : dela === null
-            ? `Não consegui conferir se o projeto desse \`${m.id} · livre\` tem orquestradora própria (marcador sem repo resolvido, transcript velho ou ausente, ou pasta de transcripts ilegível): por segurança, não arquivo.`
-            : `Esse \`${m.id} · livre\` é de outro projeto: a orquestradora só arquiva membro livre do próprio projeto.`);
+            ? `Não consegui conferir se o projeto desse \`${m.id}\` tem orquestradora própria (marcador sem repo resolvido, transcript velho ou ausente, ou pasta de transcripts ilegível): por segurança, não arquivo.`
+            : `Esse \`${m.id}\` é de outro projeto: a orquestradora só arquiva membro do próprio projeto.`);
       }
       return nega('T2', m.id, String(alvo), `Membro do pool não se arquiva (decisão do operador, 24/10): quem termina fica livre — título \`${m.id} · livre\` e clear_session. Só a orquestradora arquiva membro livre, para caber no teto.`);
     }

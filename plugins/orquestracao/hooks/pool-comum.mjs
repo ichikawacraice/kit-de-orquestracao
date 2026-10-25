@@ -40,7 +40,7 @@ function guardarCache(id, reg) {
   } catch { /* sem cache, segue */ }
 }
 
-// fresco: ignora o cache (o título muda e a decisão depende dele — arquivar membro livre).
+// fresco: ignora o cache (o título muda e a decisão depende dele — arquivar membro do pool, só por comando do operador).
 export function registroDaSessao(id, { fresco = false } = {}) {
   if (!id) return null;
   const hit = fresco ? null : lerCache()[id];

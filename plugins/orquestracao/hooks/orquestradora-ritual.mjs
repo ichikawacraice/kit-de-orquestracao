@@ -52,7 +52,7 @@ function main() {
     decision: 'block',
     reason:
       `Ritual da orquestradora não feito neste turno. Falta: ${faltam.join('; ')}. ` +
-      'Rode list_sessions, arquive quem cumpre as quatro condições, dê set na sessão sem linha, ' +
+      'Rode list_sessions, liste as candidatas a arquivar (as quatro condições) e pergunte ao operador — arquive só com o comando dele, no turno dele —, dê set na sessão sem linha, ' +
       'tire o estado mecânico (isRunning → trabalhando, arquivada → concluida) e grave tudo no painel ' +
       'com `painel batch \'[...]\'`. Depois responda.',
   }));
