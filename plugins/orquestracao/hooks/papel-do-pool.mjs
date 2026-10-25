@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PreToolUse (F5, 24/10): as regras do pool que dependem de QUEM chama viram trava. Fonte:
-// ~/.claude/orquestracao/pool/protocolo.md ("Cada papel na sua sessão", "Nunca arquivar", "Nunca travar",
+// ~/.claude/orquestracao/pool/protocolo.md ("Cada papel na sua sessão", "Nunca travar",
 // "Operador dormindo"). Quem chama: título do registro do app (`P|D|E|V<n> · …`) ou orquestradora
 // (marcador em ativas/ ou título `🎛 orquestradora`). Evento de subagente usa o título da sessão-mãe
 // (mesmo `session_id`). Sem título de membro e sem ser orquestradora: passa calado (outros projetos).
@@ -134,7 +134,9 @@ function main() {
         let origem = null;
         try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
         if (origem !== 'human') {
-          return nega('T2', m.id, String(alvo), 'Arquivar só por comando do operador, no turno dele (Q245): liste as candidatas, pergunte, e arquive quando ele mandar.');
+          return nega('T2', m.id, String(alvo), origem === 'plugin'
+            ? 'Arquivar só com o pedido do operador digitado no turno dele (Q245); resposta pelo painel não vale — peça no chat.'
+            : 'Arquivar só por comando do operador, no turno dele (Q245): liste as candidatas, pergunte, e arquive quando ele mandar.');
         }
         // Do MESMO projeto (D1, 24/10) ou de projeto SEM orquestradora própria (F23, assumida, a confirmar): `E1 · livre`
         // existe em cada projeto. "Não consegui medir" nunca libera: repo indeterminado de qualquer lado, ou projeto do alvo
@@ -151,7 +153,7 @@ function main() {
             ? `Não consegui conferir se o projeto desse \`${m.id}\` tem orquestradora própria (marcador sem repo resolvido, transcript velho ou ausente, ou pasta de transcripts ilegível): por segurança, não arquivo.`
             : `Esse \`${m.id}\` é de outro projeto: a orquestradora só arquiva membro do próprio projeto.`);
       }
-      return nega('T2', m.id, String(alvo), `Membro do pool não se arquiva (decisão do operador, 24/10): quem termina fica livre — título \`${m.id} · livre\` e clear_session. Só a orquestradora arquiva membro livre, para caber no teto.`);
+      return nega('T2', m.id, String(alvo), `Membro do pool não se arquiva (decisão do operador, 24/10): quem termina fica livre — título \`${m.id} · livre\` e clear_session. Só a orquestradora arquiva, e só por comando do operador, no turno dele (Q245).`);
     }
     return;
   }

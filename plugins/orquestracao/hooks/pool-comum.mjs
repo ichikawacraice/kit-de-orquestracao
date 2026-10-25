@@ -134,7 +134,9 @@ export function origemDoTurno(transcriptPath) {
     try { e = JSON.parse(linhas[i]); } catch { continue; }
     const c = e.message?.content;
     const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
-    if (e.type === 'user' && !e.isMeta && !ehResultado && (e.origin?.kind || e.turnOrigin)) return String(e.origin?.kind || e.turnOrigin);
+    // A mensagem entre sessões é gravada com `isMeta: true` E origem (peer, plugin, notificação…): a meta que TEM origem
+    // abre o turno (B1, V3 de 25/10: 26 de 180 turnos); a meta sem origem não tem o que devolver e cai fora aqui.
+    if (e.type === 'user' && !ehResultado && (e.origin?.kind || e.turnOrigin)) return String(e.origin?.kind || e.turnOrigin);
   }
   return null;
 }

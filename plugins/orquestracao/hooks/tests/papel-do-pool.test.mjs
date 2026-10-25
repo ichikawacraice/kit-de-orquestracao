@@ -100,6 +100,14 @@ caso('T2: archive/delete de membro → deny; de sessão comum passa; alvo inexis
   nega(A('ORQ', 'local_E3', depeer()), 'Q245: orquestradora em turno de mensagem entre sessões nega o de título de trabalho');
   nega(A('ORQ', 'local_E1', {}), 'Q245: transcript ausente nega');
   nega(A('P1', 'local_E1'), 'Q245: planejadora em turno humano nega');
+  // B1: o turno do operador e, DEPOIS dele, um aberto por outra sessão (meta com origem): vale o último.
+  const humanoEDepoisPeer = () => transcriptDe([Date.now() - 120_000, 'human'], [Date.now() - 60_000, 'peer']);
+  nega(A('ORQ', 'local_E1', humanoEDepoisPeer()), 'B1: turno de peer logo depois de um humano nega');
+  passa(A('ORQ', 'local_E1', transcriptDe([Date.now() - 120_000, 'peer'], [Date.now() - 60_000, 'human'])), 'B1: humano depois de peer passa');
+  // D1: a resposta pelo painel chega como `plugin` e continua negada, com o motivo dizendo isso.
+  const r = A('ORQ', 'local_E1', transcriptCom(Date.now() - 60_000, 'plugin'));
+  nega(r, 'D1: origem plugin (resposta pelo painel) nega');
+  ok(/painel não vale/.test(r.permissionDecisionReason), `D1: motivo sem "painel não vale": ${r.permissionDecisionReason}`);
   nega(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['bbbb-e1'] }, humano()), 'delete por cli id');
   nega(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['local_COMUM', 'local_E1'] }, humano()), 'delete com dois alvos, só um membro');
   passa(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['local_COMUM', 'local_NAOEXISTE'] }), 'delete só de não membros');
@@ -193,11 +201,15 @@ caso('K2 T5: gravar o painel pelo comando `painel` (bin do plugin) e pelo caminh
   nega5(pre('E3', 'Write', { file_path: join(BASE_ORQ(), 'painel', 'sessoes', 'x.json'), content: '{}' }));
 });
 const bandeira = (desde, frase = '/ausente on') => writeFileSync(join(BASE_ORQ(), 'operador-ausente.json'), JSON.stringify({ desde: new Date(desde).toISOString(), frase, sessionId: 'x' }));
-function transcriptCom(inicio, origem = 'peer') {
+// A forma REAL de cada origem no transcript: o humano é uma linha comum; mensagem entre sessões, notificação e a
+// resposta do painel são `isMeta: true` COM origem (medido em transcripts de verdade, 25/10).
+function linhaDeTurno(inicio, origem) { return { type: 'user', timestamp: new Date(inicio).toISOString(), ...(origem === 'human' ? {} : { isMeta: true }), origin: { kind: origem }, message: { role: 'user', content: origem === 'peer' ? '<cross-session-message from="local_x">item</cross-session-message>' : 'item' } }; }
+function transcriptDe(...turnos) {
   const f = dir('t.jsonl');
-  writeFileSync(f, `${JSON.stringify({ type: 'user', timestamp: new Date(inicio).toISOString(), origin: { kind: origem }, message: { role: 'user', content: 'item' } })}\n`);
+  writeFileSync(f, turnos.map(([inicio, origem]) => JSON.stringify(linhaDeTurno(inicio, origem))).join('\n') + '\n');
   return { transcript_path: f };
 }
+function transcriptCom(inicio, origem = 'peer') { return transcriptDe([inicio, origem]); }
 const start = (quem, extra) => pre(quem, 'mcp__ccd_session__start_session', { prompt: 'x' }, extra);
 caso('T2: archive/delete de "self" por membro → deny; por sessão comum passa', () => {
   nega(pre('E3', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'self' }), 'E3 arquiva self');
@@ -212,6 +224,11 @@ caso('T3a: modo ausente e turno que NÃO é do operador → start_session nega, 
 caso('T3a: modo ausente e turno do OPERADOR passa (ele veio, deu um comando)', () => {
   bandeira(Date.now() - 3600_000);
   passa(start('ORQ', transcriptCom(Date.now() - 60_000, 'human')), 'turno humano');
+});
+caso('T3a B1: modo ausente, turno humano seguido de turno aberto por peer (meta com origem) → start_session nega', () => {
+  bandeira(Date.now() - 3600_000);
+  nega(start('ORQ', transcriptDe([Date.now() - 120_000, 'human'], [Date.now() - 60_000, 'peer'])), 'B1: peer depois de humano');
+  passa(start('ORQ', transcriptDe([Date.now() - 120_000, 'peer'], [Date.now() - 60_000, 'human'])), 'B1: humano depois de peer');
 });
 caso('T3a: com o modo ausente, o cartão (own_initiative) da orquestradora passa', () => {
   bandeira(Date.now() - 3600_000);
