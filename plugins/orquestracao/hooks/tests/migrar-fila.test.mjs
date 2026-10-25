@@ -2,6 +2,7 @@
 // Testes do migrar-fila.mjs (F27, fatia 2). Nunca toca o painel real: PAINEL_DIR e POOL_ITENS_DIR são temporários.
 // Rodar: node hooks/tests/migrar-fila.test.mjs   (KIT_F27_FOTO=<pasta fila-antes> liga o caso da foto real)
 import { spawnSync } from 'node:child_process';
+import { test } from 'node:test';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, cpSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -10,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 // A foto do painel real de 25/10 mora na máquina do operador (backups/F27-2/fila-antes); sem KIT_F27_FOTO o caso dela é pulado (teste não lê o ~/.claude real).
 const SNAPSHOT = process.env.KIT_F27_FOTO;
-let raiz, painelDir, poolDir, falhas = 0;
+let raiz, painelDir, poolDir;
 
 const L1 = 'local_00000000-0000-4000-8000-0000000000a1';
 const L2 = 'local_00000000-0000-4000-8000-0000000000a2';
@@ -27,9 +28,9 @@ function novo() {
   writeFileSync(join(painelDir, 'sessoes', `${L2}.json`), JSON.stringify({ id: L2, version: 1, data: { titulo: 'E4 · fatia', projeto: 'izanagi' } }));
 }
 const fim = () => rmSync(raiz, { recursive: true, force: true });
-const env = () => ({ ...process.env, PAINEL_DIR: painelDir, POOL_ITENS_DIR: poolDir, CLAUDE_CODE_SESSION_ID: '', HOME: raiz });
-function run(script, args) {
-  const r = spawnSync('node', [join(SCRIPTS, script), ...args], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: env() });
+const env = () => { const e = { ...process.env, PAINEL_DIR: painelDir, POOL_ITENS_DIR: poolDir, CLAUDE_CODE_SESSION_ID: '', HOME: raiz }; delete e.KIT_PROJETO; return e; };
+function run(script, args, extra = {}) {
+  const r = spawnSync('node', [join(SCRIPTS, script), ...args], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: env(), ...extra });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };
 }
@@ -39,7 +40,7 @@ const item = (id, data, version = 1) => writeFileSync(join(painelDir, 'fila', `$
 const lido = (id) => JSON.parse(readFileSync(join(painelDir, 'fila', `${id}.json`), 'utf8'));
 const igual = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${m}: esperado ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
 const ok = (c, m) => { if (!c) throw new Error(m); };
-function caso(nome, fn) { novo(); try { fn(); console.log(`ok   ${nome}`); } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); } fim(); }
+function caso(nome, fn, opcoes = {}) { test(nome, opcoes, () => { novo(); try { fn(); } finally { fim(); } }); }
 const ANTIGOS = ['estado', 'proximoPapel', 'frente', 'pr', 'nota', 'dono', 'dona', 'membro', 'executora', 'papel', 'item', 'origem'];
 
 caso('etapa: estado + proximoPapel, um por um', () => {
@@ -133,10 +134,9 @@ caso('idempotente: segunda rodada não muda nada; regravar um item migrado passa
   igual(migrar('--gravar').exit, 0, 'primeira');
   const v = lido('F901').version; const r2 = migrar('--gravar'); igual(r2.exit, 0, r2.err);
   ok(/F901: já no contrato novo/.test(r2.out), 'pulou'); igual(lido('F901').version, v, 'versão igual');
-  igual(painel('update', 'fila', 'F901', '{"nota":"ok"}').exit, 0, 'regravação');
+  const w = painel('update', 'fila', 'F901', '{"nota":"ok"}'); igual(w.exit, 0, `regravação: ${w.err}${w.out}`);
 });
 caso('cópia do painel real (foto de 25/10): migra, 0 sem etapa/tema, 0 com campo antigo, e regravar cada um passa', () => {
-  if (!SNAPSHOT) return console.log('     (pulado: KIT_F27_FOTO não definida)');
   ok(existsSync(SNAPSHOT), `foto ausente: ${SNAPSHOT}`);
   const arqs = readdirSync(SNAPSHOT).filter((f) => /^F\d+\.json$/.test(f)); ok(arqs.length >= 15, `foto com ${arqs.length} itens`);
   rmSync(join(painelDir, 'fila'), { recursive: true, force: true }); cpSync(SNAPSHOT, join(painelDir, 'fila'), { recursive: true });
@@ -148,7 +148,7 @@ caso('cópia do painel real (foto de 25/10): migra, 0 sem etapa/tema, 0 com camp
     for (const k of ANTIGOS) ok(!(k in d), `${id} ficou com ${k}`);
     const w = painel('update', 'fila', id, '{"agora":"regravado"}'); igual(w.exit, 0, `${id} regravação: ${w.err}`);
   }
-});
+}, { skip: SNAPSHOT ? false : 'KIT_F27_FOTO não definida (a foto do painel real mora na máquina do operador)' });
 
 
 // ---- --ajustes e --ensaio (passo c da fatia 2) ----
@@ -188,5 +188,31 @@ caso('ajustes: item vivo sem resumo reprova a conferência estrita e nada grava'
   igual(feito.exit, 0, `item feito sem resumo passa (${feito.out.slice(-200)})`);
 });
 
-console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
-process.exitCode = falhas ? 1 : 0;
+// ---- B2: o projeto vem do git da pasta atual quando falta KIT_PROJETO, e o aviso diz isso ----
+function repoGit() {
+  const repo = join(raiz, 'meu-projeto'); mkdirSync(repo);
+  const g = spawnSync('git', ['init', '-q', repo], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
+  ok(g.status === 0, `git init: ${g.stderr}`);
+  return repo;
+}
+caso('projeto: sem KIT_PROJETO deriva do git da pasta atual e avisa no stderr (uma vez)', () => {
+  writeFileSync(join(poolDir, 'F1.md'), '# F1 — builder: fatias\n- frente: builder\n');
+  writeFileSync(join(poolDir, 'F2.md'), '# F2 — motor: Q173\n');
+  const r = run('migrar-fila.mjs', ['--gravar'], { cwd: repoGit() }); igual(r.exit, 0, r.err);
+  igual(lido('F1').data.projeto, 'meu-projeto', 'projeto derivado do git');
+  ok(/projeto.*meu-projeto.*git/i.test(r.err), `stderr sem o aviso: ${JSON.stringify(r.err)}`);
+  igual(r.err.split('\n').filter((l) => /meu-projeto/.test(l)).length, 1, 'avisa uma vez só');
+});
+caso('projeto: com KIT_PROJETO definido usa ele e não avisa', () => {
+  writeFileSync(join(poolDir, 'F1.md'), '# F1 — builder: fatias\n- frente: builder\n');
+  const r = run('migrar-fila.mjs', ['--gravar'], { cwd: repoGit(), env: { ...env(), KIT_PROJETO: 'outro' } }); igual(r.exit, 0, r.err);
+  igual(lido('F1').data.projeto, 'outro', 'projeto da env');
+  ok(!/git/i.test(r.err), `avisou sem precisar: ${JSON.stringify(r.err)}`);
+});
+caso('projeto: fora de um repo git e sem KIT_PROJETO fica sem projeto, sem aviso de derivação', () => {
+  writeFileSync(join(poolDir, 'F1.md'), '# F1 — builder: fatias\n- frente: builder\n');
+  const fora = join(raiz, 'fora'); mkdirSync(fora);
+  const r = run('migrar-fila.mjs', ['--gravar'], { cwd: fora, env: { ...env(), GIT_CEILING_DIRECTORIES: raiz } }); igual(r.exit, 0, r.err);
+  ok(!('projeto' in lido('F1').data), 'sem projeto');
+  ok(!/derivei/i.test(r.err), `avisou derivação sem ter derivado: ${JSON.stringify(r.err)}`);
+});

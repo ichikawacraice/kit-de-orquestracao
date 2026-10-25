@@ -10,7 +10,7 @@
 //   · PAINEL_SCRIPT (padrão o painel.mjs ao lado deste arquivo). Nunca escreve o JSON direto.
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join, dirname, resolve } from 'node:path';
+import { join, dirname, resolve, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -26,6 +26,18 @@ const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'fei
 const DONO_NOVO = ['donoLocalId', 'donoApelido'];
 // campos que o contrato conhece ou que já existiam em item vivo: o resto, aparecido depois do ensaio, é "solto"
 const CONHECIDOS = new Set(['titulo', 'etapa', 'tema', 'trava', 'prs', 'depois', 'perguntas', 'resumo', 'agora', 'donoLocalId', 'donoApelido', 'handoff', 'historico', 'feitoEm', 'atualizadoEm', 'projeto', 'via', 'branch', 'devolverA', 'aplicaMigration', 'adr', 'decisao', 'urgente', 'revisao', 'repo', 'pasta', 'plano', 'nivelValidacao', 'planoFase2', 'detalhe', 'estado', ...['proximoPapel', 'frente', 'pr', 'nota', 'dono', 'dona', 'membro', 'executora', 'papel', 'item', 'origem']]);
+
+// Projeto dos itens importados: KIT_PROJETO; sem ele, o nome da pasta do repositório git da pasta atual (e avisa no stderr, uma vez).
+let projetoDerivado;
+function projetoDosItens() {
+  if (process.env.KIT_PROJETO) return process.env.KIT_PROJETO;
+  if (projetoDerivado === undefined) {
+    const g = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    projetoDerivado = g.status === 0 && g.stdout.trim() ? basename(g.stdout.trim()) : '';
+    if (projetoDerivado) console.error(`migrar-fila: KIT_PROJETO não definido; derivei o projeto "${projetoDerivado}" do git da pasta atual (${process.cwd()}). Defina KIT_PROJETO para outro nome.`);
+  }
+  return projetoDerivado || undefined;
+}
 
 const CAMPOS_ANTIGOS = ['estado', 'proximoPapel', 'frente', 'pr', 'nota', 'dono', 'dona', 'membro', 'executora', 'papel', 'item', 'origem'];
 const DONOS_ANTIGOS = ['dono', 'dona', 'membro', 'executora'];
@@ -184,7 +196,7 @@ function importar(id, cfg, conferir) {
     if (titulo) conferir.push(`${id}: o .md não tem título; usei o do handoff`);
   }
   if (!titulo) { titulo = id; conferir.push(`${id}: sem título na origem; ficou "${id}"`); }
-  const novo = { titulo, tema: cfg.tema, etapa: cfg.etapa, handoff: arq, projeto: process.env.KIT_PROJETO || undefined, historico: [] }; // o nome do projeto não vem do kit: KIT_PROJETO na hora de rodar
+  const novo = { titulo, tema: cfg.tema, etapa: cfg.etapa, handoff: arq, projeto: projetoDosItens(), historico: [] }; // o nome do projeto não vem do kit: KIT_PROJETO, ou o git da pasta atual
   if (resumo) novo.resumo = resumo; else conferir.push(`${id}: sem resumo (o .md não tem "Origem:")`);
   if (cfg.prs) novo.prs = cfg.prs;
   if (cfg.etapa === 'feito') novo.feitoEm = statSync(arq).mtime.toISOString();

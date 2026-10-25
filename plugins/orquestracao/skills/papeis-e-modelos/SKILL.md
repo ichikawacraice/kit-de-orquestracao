@@ -9,7 +9,7 @@ O modelo é função do **papel**, não do gosto de quem abre a sessão. A pergu
 
 ## Os papéis
 
-| Papel | Modelo | Esforço | Agente global | Faz | Não faz |
+| Papel | Modelo | Esforço | Agente (`subagent_type` é `orquestracao:<nome>`) | Faz | Não faz |
 |---|---|---|---|---|---|
 | **Planejador / orquestrador** | Opus 5.5 | alto | `planejador` | spec, ADR, decisão, investigação de causa, plano com arquivos, passos e critério de pronto; distribui trabalho, mergeia, faz release | executar plano grande sozinho quando dá para delegar |
 | **Executor** | Sonnet 5.5 | médio | `executor` (em sessão `exec · …`) | cumpre um plano pronto: edita, testa, commita, abre PR | decidir o que o plano não decidiu; rodar como subagente |
@@ -22,7 +22,7 @@ Ids: Opus 5.5 `claude-opus-5-5` (alias `opus`), Sonnet 5.5 `claude-sonnet-5-5` (
 ## As duas travas da ferramenta
 
 - **Ninguém abre sessão acima do próprio modelo.** `start_session` aceita `model` igual ou mais barato que o de quem chama; mais caro é ignorado em silêncio. Por isso **a sessão principal e a orquestradora rodam em Opus**: é delas que saem as executoras em Sonnet. Sessão em Sonnet que precisa de um planejador não o abre: devolve a pergunta a quem a abriu.
-- **Subagente herda o modelo de quem o lança, a menos que o papel diga outro.** Prefira `subagent_type` com o papel global (o modelo, o esforço e as ferramentas vêm do arquivo em `~/.claude/agents/`) a escrever `model` em cada chamada: o papel não se esquece.
+- **Subagente herda o modelo de quem o lança, a menos que o papel diga outro.** Prefira `subagent_type` com o papel do plugin, que chega com o prefixo (`orquestracao:validador`; o modelo, o esforço e as ferramentas vêm do arquivo em `agents/` do plugin) a escrever `model` em cada chamada: o papel não se esquece.
 
 <a id="quem-escreve-e-sessao"></a>
 ## Quem escreve é sessão (Q154, 23/10)
@@ -121,7 +121,7 @@ A executora também não termina o turno **anunciando** o próximo passo (F28, 2
 ## Ao abrir
 
 - **Sessão** (`start_session`): passe `model` e `effort` do papel. Ex.: executora `model: "claude-sonnet-5-5"`, `effort: "medium"`; validadora sem `model` (herda Opus), `effort: "high"`. No título, o papel na frente: `exec · <tarefa>`, `valida · <tarefa>`, `plano · <tarefa>`.
-- **Subagente** (`Agent`): `subagent_type: "validador" | "explorador" | "planejador"`, só para trabalho que não grava ([quem escreve é sessão](#quem-escreve-e-sessao)); `executor` como subagente só para a conferência mecânica que roda o gate sem editar. Só passe `model` à mão quando nenhum papel servir.
+- **Subagente** (`Agent`): `subagent_type: "orquestracao:validador" | "orquestracao:explorador" | "orquestracao:planejador"`, só para trabalho que não grava ([quem escreve é sessão](#quem-escreve-e-sessao)); `orquestracao:executor` como subagente só para a conferência mecânica que roda o gate sem editar. Só passe `model` à mão quando nenhum papel servir.
 - **Briefing**: o do executor segue as cinco coisas; o do validador traz o plano original, a branch/commit, o que foi afirmado como feito e o critério de pronto; o do explorador traz a pergunta e o teto da resposta.
 
 <a id="contexto"></a>
