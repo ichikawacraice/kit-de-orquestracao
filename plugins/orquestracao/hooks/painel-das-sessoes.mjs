@@ -140,7 +140,7 @@ function main() {
     ? `Grave no item que você é dona: ${itens.map((f) => `\`painel update fila ${f} '{"etapa":…,"agora":…}'\``).join(' · ')} ` +
       '(e, se houve pergunta ou resposta, `… perguntas <ID>`). Depois encerre o turno.'
     : 'Grave no painel com `painel update sessoes <sessionId> \'{...}\'` ' +
-      '(estado, etapa, pr, passos) e, se houve pergunta ou resposta, `… perguntas <ID>`. Depois encerre o turno.';
+      '(estado, etapa, pr) e, se houve pergunta ou resposta, `… perguntas <ID>`. Depois encerre o turno.';
   process.stdout.write(JSON.stringify({
     decision: 'block',
     reason: `Painel das sessões não atualizado neste turno, e a sessão mudou de estado (${[...motivos].join('; ')}). ${onde}`,

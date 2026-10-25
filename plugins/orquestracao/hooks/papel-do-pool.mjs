@@ -113,7 +113,7 @@ function main() {
     if (papel === 'P' || papel === 'D' || papel === 'O') {
       return nega('T1', quem, tipo, 'Execução vai a uma executora E livre e validação a uma validadora V livre (painel: estado parada, etapa livre), por mensagem com o item da fila. Subagente executor/validador não existe mais para planejadora (decisão do operador, 24/10).');
     }
-    if (papel === 'E' && tipo === 'validador') return nega('T1', quem, tipo, 'Quem executou não valida: solte o item com proximoPapel valida.');
+    if (papel === 'E' && tipo === 'validador') return nega('T1', quem, tipo, 'Quem executou não valida: solte o item com `etapa` validacao e sem dono, e o `handoff` gravado.');
     if (papel === 'E' && tipo === 'executor') return nega('T1', quem, tipo, 'Executora executa ela mesma; subagente não grava.');
     if (papel === 'V' && tipo === 'executor') return nega('T1', quem, tipo, 'Validadora não executa: devolva o achado a quem planejou.');
     return;
