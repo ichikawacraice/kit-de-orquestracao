@@ -7,22 +7,24 @@ import type { LinhaItem, PerguntaAberta, PerguntaAnterior } from '../types'
 const FONTE = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif"
 
 const CSS = `<style>
-.t{fill:#1f1f1f}.s{fill:#6b6b68}.m{fill:#9a9a96}.ln{stroke:#e8e7e3}.tile{fill:#f4f3f0}.k{fill:#ecebe8}.card{fill:#fbf6ec;stroke:#efdcb6}
-@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}.m{fill:#7d7d79}.ln{stroke:#2f2f2d}.tile{fill:#262625}.k{fill:#2c2c2b}.card{fill:#2a251b;stroke:#4a3d22}}
+.t{fill:#1f1f1f}.s{fill:#6b6b68}.m{fill:#6f6f6b}.av{fill:#9a6210}.er{fill:#b8452c}.an{fill:#3a68c8}.ok{fill:#2e7d4a}.li{fill:#5b5cd6}.pt{fill:#ffffff}.es{stroke:#b8452c}.oks{stroke:#2e7d4a}.ms{stroke:#6f6f6b}.ln{stroke:#e8e7e3}.tile{fill:#f4f3f0}.k{fill:#ecebe8}.card{fill:#fbf6ec;stroke:#efdcb6}
+@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}.m{fill:#93938f}.av{fill:#d9962b}.er{fill:#e0846b}.an{fill:#5b8def}.ok{fill:#4caf6e}.li{fill:#8b8cf8}.pt{fill:#1f1f1f}.es{stroke:#e0846b}.oks{stroke:#4caf6e}.ms{stroke:#93938f}.ln{stroke:#2f2f2d}.tile{fill:#262625}.k{fill:#2c2c2b}.card{fill:#2a251b;stroke:#4a3d22}}
 .vivo{animation:p 1.6s ease-in-out infinite}@keyframes p{50%{opacity:.35}}
 @media (prefers-reduced-motion: reduce){.vivo{animation:none}}
 </style>`
 
 const NEUTRO = '#9a9a96'
-const AVISO = '#d9962b'
-const ERRO = '#d9674c'
-const OK = '#4caf6e'
-const ANDA = '#5b8def'
+// Cor por CLASSE (claro/escuro no CSS acima, cada uma a 4,5:1 ou mais sobre o fundo e o bloco do tema): um hex fixo vale para um tema só.
+const AVISO = 'av'
+const ERRO = 'er'
+const OK = 'ok'
+const ANDA = 'an'
+const LILAS = 'li'
 
 /** A cor da etapa: nenhuma nasce nova (§4.2). O âmbar fica só para o que espera o operador. */
 export const COR_ETAPA: Record<string, string> = {
-  planejamento: '#8b8cf8',
-  design: '#8b8cf8',
+  planejamento: LILAS,
+  design: LILAS,
   execucao: ANDA,
   validacao: ANDA,
   merge: OK,
@@ -58,7 +60,20 @@ const caber = (s: string, tam: number, max: number): string => {
   return out + '…'
 }
 
-/** Quebra em linhas que cabem em `max`, no máximo `n`; a última leva reticências. */
+/** Corta na última palavra inteira que cabe, com reticências; só corta letra quando uma palavra sozinha passa de `max`. */
+const cabePalavras = (s: string, tam: number, max: number): string => {
+  if (largura(s, tam) <= max) return s
+  const ps = s.replace(/\s*…$/, '').split(/\s+/).filter(Boolean)
+  while (ps.length > 1) {
+    ps.pop()
+    const t = `${ps.join(' ')}…`
+    if (largura(t, tam) <= max) return t
+  }
+
+  return caber(ps[0] ?? '', tam, max)
+}
+
+/** Quebra em linhas que cabem em `max`, no máximo `n`; a última leva reticências, cortada em palavra inteira. */
 const quebrar = (s: string, tam: number, max: number, n: number): string[] => {
   const linhas: string[] = []
   let atual = ''
@@ -73,7 +88,7 @@ const quebrar = (s: string, tam: number, max: number, n: number): string[] => {
   if (atual) linhas.push(atual)
   if (linhas.length <= n) return linhas.map(l => caber(l, tam, max))
 
-  return [...linhas.slice(0, n - 1), caber(linhas.slice(n - 1).join(' ') + ' …', tam, max)]
+  return [...linhas.slice(0, n - 1), cabePalavras(linhas.slice(n - 1).join(' ') + ' …', tam, max)]
 }
 
 const svg = (W: number, H: number, corpo: string): string =>
@@ -82,7 +97,7 @@ const svg = (W: number, H: number, corpo: string): string =>
 const texto = (x: number, y: number, tam: number, classe: string, conteudo: string, extra = ''): string =>
   `<text class="${classe}" x="${x}" y="${y}" font-family="${FONTE}" font-size="${tam}"${extra}>${conteudo}</text>`
 
-/** `classe` pinta ponto e número com a cor do texto (`t`) no lugar de `cor`; o zero fica cinza de qualquer jeito. */
+/** `cor` é uma classe de cor (`av`, `er`, `an`...); `classe` a troca por outra (a `t`, do texto); o zero fica cinza de qualquer jeito. */
 export type Contagem = { rotulo: string; n: number; cor: string; classe?: string }
 
 export const ALTURA_RESUMO = 62
@@ -100,8 +115,8 @@ export function resumoSvg(W: number, contagens: Contagem[]): { source: string; h
     const x = (i % porLinha) * (tw + GAP_RESUMO)
     const y = Math.floor(i / porLinha) * (ALTURA_RESUMO + GAP_RESUMO)
     const viva = c.n > 0
-    const corPonto = viva && c.classe ? `class="${c.classe}"` : `fill="${viva ? c.cor : NEUTRO}"`
-    const corNumero = viva ? (c.classe ? ` class="${c.classe}"` : ` fill="${c.cor}"`) : ' class="m"'
+    const corPonto = viva ? `class="${c.classe ?? c.cor}"` : `fill="${NEUTRO}"`
+    const corNumero = viva ? ` class="${c.classe ?? c.cor}"` : ' class="m"'
 
     return `<rect class="tile" x="${x}" y="${y}" width="${tw}" height="${ALTURA_RESUMO}" rx="10"/>
 <circle ${corPonto} cx="${x + 15}" cy="${y + 19}" r="4.5"${viva ? '' : ' fill-opacity=".45"'}/>
@@ -138,7 +153,7 @@ export function perguntaSvg(W: number, q: PerguntaAberta): { source: string; hei
   }
   if (reco.length > 0) y += 6
   for (const l of reco) {
-    partes.push(texto(16, y, 13, 't', xml(l), ` fill="${AVISO}"`))
+    partes.push(texto(16, y, 13, AVISO, xml(l)))
     y += 18
   }
   const H = y
@@ -149,20 +164,20 @@ export function perguntaSvg(W: number, q: PerguntaAberta): { source: string; hei
       W,
       H,
       `<rect class="card" x=".5" y=".5" width="${W - 1}" height="${H - 1}" rx="10"/>
-<rect x="0" y="0" width="4" height="${H}" rx="2" fill="${AVISO}"/>
-<rect x="16" y="14" width="${pilula}" height="24" rx="12" fill="${AVISO}"/>
-${texto(16 + pilula / 2, 30.5, 13, '', xml(q.id), ` fill="#fff" text-anchor="middle" font-weight="700"`)}
+<rect class="${AVISO}" x="0" y="0" width="4" height="${H}" rx="2"/>
+<rect class="${AVISO}" x="16" y="14" width="${pilula}" height="24" rx="12"/>
+${texto(16 + pilula / 2, 30.5, 13, 'pt', xml(q.id), ` text-anchor="middle" font-weight="700"`)}
 ${texto(16 + pilula + 10, 30.5, 13, 's', xml(caber(q.rotulo ?? q.sessao, 13, W - pilula - 42)))}
 ${partes.join('')}`,
     ),
   }
 }
 
-const COR_DESFECHO: Record<string, string> = { respondida: OK, cancelada: NEUTRO }
+const COR_DESFECHO: Record<string, { texto: string; traco: string }> = { respondida: { texto: OK, traco: 'oks' }, cancelada: { texto: 'm', traco: 'ms' } }
 
 /** Uma pergunta já fechada, inteira: ID, pergunta, o que se recomendou e a resposta (pedido de 23/10). */
 export function anteriorSvg(W: number, a: PerguntaAnterior, agora: number): { source: string; height: number; alt: string } {
-  const cor = COR_DESFECHO[a.estado] ?? NEUTRO
+  const cor = COR_DESFECHO[a.estado] ?? COR_DESFECHO.cancelada!
   const quando = desde(a.quando, agora)
   const pilula = largura(a.id, 13) + 16
   const direita = quando ? largura(quando, 13) + 10 : 0
@@ -174,7 +189,7 @@ export function anteriorSvg(W: number, a: PerguntaAnterior, agora: number): { so
   for (const l of titulo) { partes.push(texto(pilula + 10, y, 14, 't', xml(l))); y += 19 }
   y += 3
   for (const l of reco) { partes.push(texto(pilula + 10, y, 13, 's', xml(l))); y += 18 }
-  for (const l of resposta) { partes.push(texto(pilula + 10, y, 13, 't', xml(l), ` fill="${cor}" font-weight="600"`)); y += 18 }
+  for (const l of resposta) { partes.push(texto(pilula + 10, y, 13, cor.texto, xml(l), ` font-weight="600"`)); y += 18 }
   partes.push(texto(pilula + 10, y, 13, 'm', xml(a.sessao)))
   const H = y + 14
 
@@ -187,8 +202,8 @@ export function anteriorSvg(W: number, a: PerguntaAnterior, agora: number): { so
       W,
       H,
       `<line x1="0" y1="${H - .5}" x2="${W}" y2="${H - .5}" class="ln"/>
-<rect x="0.5" y="7" width="${pilula}" height="21" rx="10.5" fill="none" stroke="${cor}"/>
-${texto(pilula / 2, 22, 13, '', xml(a.id), ` fill="${cor}" text-anchor="middle" font-weight="700"`)}
+<rect x="0.5" y="7" width="${pilula}" height="21" rx="10.5" fill="none" class="${cor.traco}"/>
+${texto(pilula / 2, 22, 13, cor.texto, xml(a.id), ` text-anchor="middle" font-weight="700"`)}
 ${quando ? texto(W, 22, 13, 'm', xml(quando), ' text-anchor="end"') : ''}
 ${partes.join('')}`,
     ),
@@ -210,21 +225,21 @@ export function desde(iso: string | undefined, agora: number): string | undefine
 const TOPO = 16
 const BASE = 16
 
-/** 'sem-ninguem' é rótulo interno do mod: a frase já diz tudo, sem o slug entre parênteses. */
+/** 'sem-ninguem' é o código interno do mod: lê-se "sem ninguém", como no desenho aprovado. */
 export function textoDaTrava(t: { motivo: string; texto: string }): string {
-  return t.motivo === 'sem-ninguem' ? t.texto : `Trava (${t.motivo}): ${t.texto}`
+  return `Trava (${t.motivo === 'sem-ninguem' ? 'sem ninguém' : t.motivo}): ${t.texto}`
 }
 
 /** O ponto do item (§4.1): anda, trava ou espera na fila; o feito leva o círculo cheio do OK. */
 function pontoDoItem(item: LinhaItem, cor: string): string {
   const cy = TOPO + 11
   if (item.situacao === 'travado')
-    return `<circle cx="12" cy="${cy}" r="6.5" fill="none" stroke="${ERRO}" stroke-width="2"/><path d="M12 ${cy - 3.2}v4" stroke="${ERRO}" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="${cy + 3.4}" r="1" fill="${ERRO}"/>`
+    return `<circle class="es" cx="12" cy="${cy}" r="6.5" fill="none" stroke-width="2"/><path class="es" d="M12 ${cy - 3.2}v4" stroke-width="2" stroke-linecap="round"/><circle class="${ERRO}" cx="12" cy="${cy + 3.4}" r="1"/>`
   if (item.situacao === 'fila')
     return `<circle cx="12" cy="${cy}" r="5" fill="none" stroke="${NEUTRO}" stroke-width="1.3" stroke-dasharray="2 2"/>`
-  if (item.situacao === 'feito') return `<circle cx="12" cy="${cy}" r="6" fill="${OK}"/>`
+  if (item.situacao === 'feito') return `<circle class="${OK}" cx="12" cy="${cy}" r="6"/>`
 
-  return `<circle class="vivo" cx="12" cy="${cy}" r="6" fill="${cor}"/>`
+  return `<circle class="vivo ${cor}" cx="12" cy="${cy}" r="6"/>`
 }
 
 /** Quebra em até duas linhas: a primeira cabe em `max1` (divide a linha com o tempo), a segunda em `max2`. */
@@ -242,7 +257,7 @@ function quebrarEmDuas(s: string, tam: number, max1: number, max2: number): stri
   return resto ? [caber(primeira, tam, max1), ...quebrar(resto, tam, max2, 1)] : [caber(primeira, tam, max1)]
 }
 
-type Trecho = { t: string; cor?: string; classe?: string; peso?: boolean }
+type Trecho = { t: string; classe?: string; peso?: boolean }
 
 /** O TEMPO: em sessão, há quanto o dono agiu; na fila, há quanto está parado (§4.3). */
 function tempoDoItem(item: LinhaItem, agora: number): string | undefined {
@@ -279,11 +294,12 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   // O que gera decisão (etapa, selo) vem antes do que só informa (dono, PR): o corte com reticências come o fim da linha.
   const ultimoPr = item.prs.length > 0 ? `#${item.prs[item.prs.length - 1]}${item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''}` : ''
   const trechos: Trecho[] = [
-    item.situacao === 'fila' ? { t: `espera ${rotulo}`, classe: 's', peso: true } : { t: rotulo, cor, peso: true },
+    item.situacao === 'fila' ? { t: `espera ${rotulo}`, classe: 's', peso: true } : { t: rotulo, classe: cor, peso: true },
     ...(opcoes.noTravados ? [{ t: item.temaRotulo, classe: 's' }] : []),
-    ...(item.perguntas.length > 0 ? [{ t: `aguarda você · ${item.perguntas[0]}`, cor: AVISO, peso: true }] : []),
-    ...(item.dono ? [{ t: item.dono.apelido, classe: 's' }] : []),
-    ...(ultimoPr ? [{ t: ultimoPr, cor: ANDA, peso: true }] : []),
+    ...(item.perguntas.length > 0 ? [{ t: `aguarda você · ${item.perguntas[0]}`, classe: AVISO, peso: true }] : []),
+    // O dono sem ninguém já está escrito na trava: repetir faria dois textos sobre a mesma sessão que sumiu.
+    ...(item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ t: item.dono.apelido, classe: 's' }] : []),
+    ...(ultimoPr ? [{ t: ultimoPr, classe: ANDA, peso: true }] : []),
   ]
   const linha2: string[] = []
   let usado = 0
@@ -293,7 +309,7 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
     const tam = 13.6
     const sobra = tw - usado
     const completo = antes + tr.t
-    const atrib = tr.cor ? ` fill="${tr.cor}"` : tr.classe ? ` class="${tr.classe}"` : ''
+    const atrib = tr.classe ? ` class="${tr.classe}"` : ''
     const peso = tr.peso ? ' font-weight="600"' : ''
     if (largura(completo, tam) <= sobra) {
       linha2.push(`<tspan${atrib}${peso}>${xml(completo)}</tspan>`)
@@ -306,12 +322,12 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   y += 21
   partes.push(`<text x="30" y="${y}" font-family="${FONTE}" font-size="13">${linha2.join('')}</text>`)
 
-  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? item.temaRotulo : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, item.dono?.apelido, ultimoPr].filter(Boolean).join(' · ')]
+  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? item.temaRotulo : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, item.trava?.motivo === 'sem-ninguem' ? undefined : item.dono?.apelido, ultimoPr].filter(Boolean).join(' · ')]
   if (item.trava) {
     const trava = quebrar(textoDaTrava(item.trava), 13, tw, 2)
     for (const l of trava) {
       y += 19
-      partes.push(texto(30, y, 13, '', xml(l), ` fill="${ERRO}"`))
+      partes.push(texto(30, y, 13, ERRO, xml(l)))
     }
     alt.push(textoDaTrava(item.trava))
   }

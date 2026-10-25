@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { itemSvg, resumoSvg } from '../hooks/desenho.js'
+import { itemSvg, perguntaSvg, resumoSvg } from '../hooks/desenho.js'
 import { FILA_REAL, TEMAS_REAIS } from './fixtura-fila.js'
 
 const PANE = {
@@ -304,7 +304,7 @@ test('sem ninguém: dono que não está na lista vira trava, com a mesma contage
   const { lido } = await lerPane($, on, { fila: fila('F23', 'F13'), vivas: vivasDe(P2), perguntas: [] })
   for (const surface of ['terminal', 'desktop'] as const) {
     antes(lido[surface], /TRAVADOS/, /EDITOR DA LOJA/)
-    expect(lido[surface]).toMatch(/E8 não está mais ativa/)
+    expect(lido[surface]).toMatch(/Trava \(sem ninguém\): E8 não está mais ativa/)
     expect(lido[surface]).not.toMatch(/sem-ninguem/)
   }
   expect(lido.desktop).toMatch(/0 Esperam você, 1 Travados, 1 Andando, 0 Na fila/)
@@ -378,10 +378,10 @@ test('feitos: só nas últimas 24 h, recolhidos, e o botão abre', async ($, on)
 
 test('a 300 px os quatro rótulos do resumo cabem inteiros, em 2×2', () => {
   const contagens = [
-    { rotulo: 'Esperam você', n: 2, cor: '#e2a94e' },
-    { rotulo: 'Travados', n: 1, cor: '#e0846b' },
-    { rotulo: 'Andando', n: 5, cor: '#5b8def' },
-    { rotulo: 'Na fila', n: 4, cor: '#5b8def', classe: 't' },
+    { rotulo: 'Esperam você', n: 2, cor: 'av' },
+    { rotulo: 'Travados', n: 1, cor: 'er' },
+    { rotulo: 'Andando', n: 5, cor: 'an' },
+    { rotulo: 'Na fila', n: 4, cor: 'an', classe: 't' },
   ]
   for (const W of [300, 420, 480]) {
     const r = resumoSvg(W, contagens)
@@ -559,4 +559,78 @@ test('prompt recusado e pergunta sem sessaoId também viram aviso', async ($, on
   expect(lido).toMatch(/Q9 gravada, mas não chegou à sessão \(bloqueado por hook\)/)
   expect(lido).toMatch(/Q7 gravada, mas não chegou à sessão \(a pergunta não tem sessaoId\)/)
   await ui.unmount()
+})
+
+const itemBase = { id: 'F9', titulo: 'Canvas', tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'execucao', situacao: 'andando' as const, prs: [1128], depois: [], perguntas: ['Q225'], dono: { apelido: 'E3', localId: 'local_x' } }
+const luz = (h: string): number => {
+  const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+
+  return 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!
+}
+const razao = (a: string, b: string): number => {
+  const [x, y] = [luz(a), luz(b)]
+
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+}
+const regras = (css: string): Record<string, string> =>
+  Object.fromEntries([...css.matchAll(/\.(\w+)\{(?:fill|stroke):(#[0-9a-f]{6})\}/g)].map(m => [m[1]!, m[2]!]))
+
+test('contraste: cada cor de texto passa de 4,5:1 sobre o fundo e o bloco, nos dois temas', () => {
+  const css = itemSvg(360, itemBase, AGORA).source.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? ''
+  const [claro = '', escuro = ''] = css.split('@media (prefers-color-scheme: dark)')
+  const tema = { claro: regras(claro), escuro: regras(escuro) }
+  const fundos = { claro: ['#ffffff', '#f4f3f0', '#fbf6ec'], escuro: ['#1b1b1d', '#262625', '#2a251b'] }
+  for (const t of ['claro', 'escuro'] as const) {
+    for (const classe of ['av', 'er', 'an', 'ok', 'li', 'm', 's', 't']) {
+      const cor = tema[t][classe]
+      expect(cor, `a classe ${classe} existe no tema ${t}`).toBeTruthy()
+      for (const f of fundos[t]) expect(razao(cor!, f), `${classe} ${cor} sobre ${f} (${t})`).toBeGreaterThanOrEqual(4.5)
+    }
+  }
+  // O Q-ID da pílula: texto `pt` sobre o fundo `av`, nos dois temas.
+  for (const t of ['claro', 'escuro'] as const) expect(razao(tema[t].pt!, tema[t].av!)).toBeGreaterThanOrEqual(4.5)
+})
+
+test('nenhum texto leva cor fixa: tudo passa por classe de tema', () => {
+  const q = { id: 'Q225', projeto: 'p', sessao: 's', titulo: 'Pergunta', opcoes: [], rotulo: 'F27' } as never
+  const fontes = [
+    itemSvg(360, { ...itemBase, trava: { motivo: 'decisao', texto: 'precisa de você' } }, AGORA).source,
+    itemSvg(360, { ...itemBase, situacao: 'fila' as const }, AGORA).source,
+    perguntaSvg(360, q).source,
+    resumoSvg(360, [{ rotulo: 'A', n: 1, cor: 'av' }]).source,
+  ]
+  for (const f of fontes) {
+    expect(f, 'o desenho não pode vir vazio').toBeTruthy()
+    const corpo = f.replace(/<style>[\s\S]*?<\/style>/, '')
+    expect(corpo.match(/<text[^>]*fill="#/g) ?? [], 'texto com fill hex').toEqual([])
+  }
+})
+
+test('trava sem ninguém: escreve "Trava (sem ninguém)" e o dono não se repete na linha 2', () => {
+  const item = { ...itemBase, perguntas: [], situacao: 'travado' as const, trava: { motivo: 'sem-ninguem', texto: 'E3 não está mais ativa' } }
+  const r = itemSvg(360, item, AGORA, { noTravados: true })
+  expect(r.source, 'o desenho não pode vir vazio').toBeTruthy()
+  expect(r.source).toContain('Trava (sem ninguém): E3 não está mais ativa')
+  expect(r.source).not.toContain('sem-ninguem')
+  expect(r.source.match(/E3/g)?.length, 'o apelido aparece uma vez só').toBe(1)
+  expect(r.alt.match(/E3/g)?.length).toBe(1)
+  const comOutra = itemSvg(360, { ...item, trava: { motivo: 'decisao', texto: 'espera você' } }, AGORA)
+  expect(comOutra.source).toContain(' · E3</tspan>')
+})
+
+test('o título que não cabe em duas linhas corta em palavra inteira, em qualquer largura', () => {
+  const titulo = 'Migrar a fila para o formato novo e avisar o projeto derivado do git quando faltar o campo'
+  const palavras = new Set(titulo.split(' '))
+  let cortados = 0
+  for (const W of [280, 300, 320, 340, 360, 380, 400, 420]) {
+    const r = itemSvg(W, { ...itemBase, titulo }, AGORA)
+    const linhas = [...r.source.matchAll(/font-size="16"[^>]*>([^<]*)</g)].map(m => m[1]!)
+    expect(linhas.length, `o título tem duas linhas a ${W} px`).toBe(2)
+    const ultima = linhas[1]!
+    if (!ultima.endsWith('…')) continue
+    cortados++
+    const sobra = ultima.slice(0, -1).split(' ').pop()!
+    expect(palavras.has(sobra), `a ${W} px "${sobra}" é palavra do título`).toBe(true)
+  }
+  expect(cortados, 'ao menos uma largura corta o título').toBeGreaterThan(0)
 })

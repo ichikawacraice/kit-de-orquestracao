@@ -196,7 +196,8 @@ export function linkDe(sessaoId: string | undefined, vivas: Vivo[]): string | un
 
 /** O ponto do item no terminal, em chaves do tema. */
 const COR_ETAPA_TERMINAL: Record<string, string> = { planejamento: 'suggestion', design: 'suggestion', execucao: 'suggestion', validacao: 'suggestion', merge: 'success' }
-const COR_RESUMO: Record<string, string> = { warning: '#e2a94e', error: '#e0846b', suggestion: '#5b8def', success: '#4caf6e' }
+// A classe de cor que o desenho define para o claro e o escuro (hex fixo valeria para um tema só).
+const COR_RESUMO: Record<string, string> = { warning: 'av', error: 'er', suggestion: 'an', success: 'ok' }
 const ROTULO_ETAPA_TERMINAL: Record<string, string> = { planejamento: 'planejamento', design: 'design', execucao: 'execução', validacao: 'validação', merge: 'merge', feito: 'feito', descartado: 'descartado' }
 
 const dois = (n: number) => String(n).padStart(2, '0')
@@ -540,7 +541,7 @@ export const register: Register = on => {
       { n: contar('andando'), rotulo: 'Andando', cor: 'suggestion' },
       { n: contar('fila'), rotulo: 'Na fila', cor: 'suggestion', classe: 't' },
     ]
-    const resumo4 = resumo.map(r => ({ ...r, cor: COR_RESUMO[r.cor] ?? '#9a9a96' }))
+    const resumo4 = resumo.map(r => ({ ...r, cor: COR_RESUMO[r.cor] ?? 'm' }))
     const lido = l.lidoEm !== null
 
     const aberta = await read($, respondendoEm)
