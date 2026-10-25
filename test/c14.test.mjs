@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { after } from 'node:test';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,11 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const HOOKS = join(RAIZ, 'plugins', 'orquestracao', 'hooks');
 const SKILL_PAPEIS = join(RAIZ, 'plugins', 'orquestracao', 'skills', 'papeis-e-modelos', 'SKILL.md');
 const NOMES = ['executor', 'orquestracao:executor', 'outro:executor'];
+// HOME próprio, fora de tmpdir (as pastas livres da trava incluem tmpdir: um HOME ali faria o que deve ser negado passar). Os casos medem `~/Developer/...`.
+const HOME_DO_TESTE = mkdtempSync(join(RAIZ, 'test', '.home-c14-'));
+after(() => rmSync(HOME_DO_TESTE, { recursive: true, force: true }));
+process.env.HOME = HOME_DO_TESTE;
+assert.ok(!realpathSync(HOME_DO_TESTE).startsWith(`${realpathSync(tmpdir())}/`), 'precondição: o HOME do teste está fora de tmpdir');
 
 /** Mesma entrada sintética, três nomes, três travas. Devolve { nome: { nao_edita, criterio, anuncia } }. */
 function matriz(pastaHooks) {

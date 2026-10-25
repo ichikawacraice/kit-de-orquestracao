@@ -98,7 +98,7 @@ describe('c18c.1 remover e a lista que o kit (c18) criou', () => {
     assert.equal(a.lista('trava-edicao-repos.txt'), null, 'o arquivo que o kit criou some quando fica vazio');
     assert.match(hookDaTrava(a, 's-m1', outro, outro), PERGUNTA, 'a trava volta a cobrir os outros repositórios');
   });
-  it('criouArquivo com a lista ainda com outras linhas: o arquivo fica; sem criouArquivo e vazia: o arquivo fica', (t) => {
+  it('criouArquivo, mas a lista ainda tem outra linha depois do remover: o arquivo fica', (t) => {
     const a = ambiente(t); const d = a.projeto('m1b');
     assert.equal(a.kit(d, 'iniciar').status, 0);
     const lock = join(d, '.claude', 'kit.lock.json'); const l = JSON.parse(readFileSync(lock, 'utf8'));
@@ -106,6 +106,16 @@ describe('c18c.1 remover e a lista que o kit (c18) criou', () => {
     mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), `/Users/x/Izanagi/.git\n${join(d, '.git')}\n`);
     assert.equal(a.kit(d, 'remover').status, 0);
     assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n', 'sobrou outra linha: o arquivo fica');
+  });
+  it('sem criouArquivo no lock e a lista fica vazia: o arquivo fica (vazio), o kit não o criou', (t) => {
+    const a = ambiente(t); const d = a.projeto('m1c');
+    assert.equal(a.kit(d, 'iniciar').status, 0);
+    const lock = join(d, '.claude', 'kit.lock.json'); const l = JSON.parse(readFileSync(lock, 'utf8'));
+    l.operador = { trava: { linha: join(d, '.git'), adicionou: true } }; writeFileSync(lock, `${JSON.stringify(l, null, 2)}\n`);
+    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), `${join(d, '.git')}\n`);
+    assert.equal(a.kit(d, 'remover').status, 0);
+    assert.notEqual(a.lista('trava-edicao-repos.txt'), null, 'o arquivo fica');
+    assert.equal(a.lista('trava-edicao-repos.txt').trim(), '', 'sem a linha do kit');
   });
 });
 

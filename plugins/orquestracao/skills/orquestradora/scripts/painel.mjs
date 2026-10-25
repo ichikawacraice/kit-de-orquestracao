@@ -239,6 +239,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     const projeto = base?.projeto ? String(base.projeto).toLowerCase() : null;
     const { ids, caminho, semente } = temasValidos(chave, projeto);
     sementePendente = semente;
+    if (ids.length === 0) throw new Error(`${chave}: tema "${novo.tema}" recusado: ${projeto ? `o projeto "${projeto}" não tem tema nenhum` : 'o item não tem projeto e não há tema global'} (lista em ${caminho}); para criar: painel.mjs temas add <id> "<rótulo>"`);
     if (!ids.includes(novo.tema)) throw new Error(`${chave}: tema "${novo.tema}" fora da lista${projeto ? ` do projeto "${projeto}"` : ''} (${ids.join(' · ')}); para criar: painel.mjs temas add <id> "<rótulo>" (lista em ${caminho})`);
   }
   if (tem('trava')) {
@@ -393,6 +394,13 @@ function planejar(o, seVersao, vista) {
     const { projeto, motivo } = projetoDoCwd();
     if (projeto) base.projeto = projeto;
     else process.stderr.write(`aviso: ${colecao}/${id} sem projeto (${motivo})\n`);
+  }
+  // Item legado sem projeto que troca para um tema de projeto passa a ser desse projeto (senão nunca sai do limbo dos globais).
+  if (colecao === 'fila' && op === 'update' && atual && !base.projeto && typeof novo.tema === 'string') {
+    const { projeto } = projetoDoCwd();
+    try {
+      if (projeto && lerTemas(ARQUIVO_DE_TEMAS()).some((t) => t?.id === novo.tema && t?.projeto && String(t.projeto).toLowerCase() === projeto)) base.projeto = projeto;
+    } catch { /* lista ilegível: a validação do tema reporta */ }
   }
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
   validarPadrao(colecao, id, novo, base, vista, op, !!atual, viaCom, atual?.data);

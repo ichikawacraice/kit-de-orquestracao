@@ -3,12 +3,17 @@
 // transcripts sintéticos no formato real (.jsonl), log e estado num diretório temporário.
 // Rodar: node ~/.claude/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Atenção: HOME dentro de /tmp dá falso vermelho — as pastas livres da trava (caso 4.5) incluem /tmp, então o que devia ser negado passa.
+// HOME próprio: os casos medem caminhos sob `~/Developer/...` que a trava nega, e não dependem do HOME de quem roda. Ele fica FORA de tmpdir:
+// as pastas livres da trava (caso 4.5) incluem /tmp, então um HOME ali dá falso vermelho (o que devia ser negado passa).
+const HOME_DO_TESTE = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '.home-'));
+process.on('exit', () => rmSync(HOME_DO_TESTE, { recursive: true, force: true }));
+process.env.HOME = HOME_DO_TESTE;
+{ const t = realpathSync(tmpdir()); const h = realpathSync(HOME_DO_TESTE); if (h === t || h.startsWith(`${t}/`)) throw new Error(`precondição: o HOME do teste (${h}) está dentro de tmpdir (${t}); rode o teste de uma pasta fora dele`); }
 const HOOKS = process.env.HOOKS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..');
 let base;
 let falhas = 0;
