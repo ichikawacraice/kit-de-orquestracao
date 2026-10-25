@@ -3,6 +3,7 @@
 // JEITO declarado abaixo (o hash do `diff` do par). Conserto copiado igual nos dois lados não muda o diff e passa; conserto
 // só de um lado muda o diff e falha. Não é teste da suíte: lê o HOME real. Rodar antes de commit que toque hooks/scripts/skills.
 //   node scripts/paridade.mjs              confere (exit 1 se algo não declarado)
+//   node scripts/paridade.mjs --declaradas imprime o DECLARADAS gravado (o sincronizar lê, para recusar arquivo novo declarado)
 //   node scripts/paridade.mjs --declarar   imprime o objeto DECLARADAS atual para colar aqui, depois de conferir cada diferença
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -92,7 +93,8 @@ for (const [dePlugin, deClaude] of PARES) {
 }
 for (const rel of SO_NO_PLUGIN) if (!existsSync(join(PLUGIN, rel))) achados.push(`${rel}: está em SO_NO_PLUGIN e não existe`);
 
-if (process.argv.includes('--declarar')) { console.log(JSON.stringify(atual, null, 2)); process.exitCode = 0; }
+if (process.argv.includes('--declaradas')) { console.log(JSON.stringify(DECLARADAS, null, 2)); process.exitCode = 0; }
+else if (process.argv.includes('--declarar')) { console.log(JSON.stringify(atual, null, 2)); process.exitCode = 0; }
 else {
   for (const a of achados) console.log(`DIFERE ${a}`);
   console.log(`${pares} pares conferidos, ${Object.keys(atual).filter((k) => DECLARADAS[k]).length} com diferença declarada, ${achados.length} não declarada(s)`);

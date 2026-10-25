@@ -146,4 +146,41 @@ describe('K8 — sincronizar.mjs --base: 3 vias, a adaptação do plugin fica e 
       assert.equal(existsSync(join(c.plugin, 'hooks/tests/novo.test.mjs')), true);
     } finally { rmSync(c.base, { recursive: true, force: true }); }
   });
+  it('c12·B1: arquivo novo que está em DECLARADAS recusa com exit 2 em vez de ser copiado cru', () => {
+    const c = com3vias({ base: 'a\n', plugin: 'a\n', viva: 'a\n' });
+    try {
+      mkdirSync(join(c.viva, 'hooks'), { recursive: true });
+      writeFileSync(join(c.viva, 'hooks/pool-comum.mjs'), 'cru\n'); // declarado na paridade real (prefixo), ausente do plugin falso
+      assert.equal(existsSync(join(c.plugin, 'hooks/pool-comum.mjs')), false);
+      const r = c.sinc('F28', 'hooks/pool-comum.mjs', '--base', c.pasta);
+      assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
+      assert.match(r.stderr, /DECLARADAS/);
+      assert.equal(existsSync(join(c.plugin, 'hooks/pool-comum.mjs')), false, 'copiou cru');
+    } finally { rmSync(c.base, { recursive: true, force: true }); }
+  });
+  it('c12·B2: diferença só de fim de linha não vira conflito; o EOL do plugin é preservado', () => {
+    const c = com3vias({ base: 'a\nb\nc\n', plugin: 'a\r\nb\r\nc\r\n', viva: 'a\nb\nc\nd\n' });
+    try {
+      const r = c.sinc('F28', 'hooks/executor-criterio.mjs', '--base', c.pasta);
+      assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
+      assert.equal(c.ler('hooks/executor-criterio.mjs'), 'a\r\nb\r\nc\r\nd\r\n');
+    } finally { rmSync(c.base, { recursive: true, force: true }); }
+  });
+  it('c12·B2: plugin em LF e viva em CRLF: nada de conflito, o plugin continua em LF', () => {
+    const c = com3vias({ base: 'a\r\nb\r\nc\r\n', plugin: 'a\nb-adaptado\nc\n', viva: 'a\r\nb\r\nc\r\nd\r\n' });
+    try {
+      const r = c.sinc('F28', 'hooks/executor-criterio.mjs', '--base', c.pasta);
+      assert.equal(r.status, 0, `${r.stdout}${r.stderr}`);
+      assert.equal(c.ler('hooks/executor-criterio.mjs'), 'a\nb-adaptado\nc\nd\n');
+    } finally { rmSync(c.base, { recursive: true, force: true }); }
+  });
+  it('c12·B3: erro do merge-file (arquivo binário) sai como "erro do merge-file", não como conflito', () => {
+    const c = com3vias({ base: 'a\0b\n', plugin: 'a\0b-adaptado\n', viva: 'a\0b\nd\n' });
+    try {
+      const r = c.sinc('F28', 'hooks/executor-criterio.mjs', '--base', c.pasta);
+      assert.equal(r.status, 2, `${r.stdout}${r.stderr}`);
+      assert.match(r.stderr, /erro do merge-file/);
+      assert.doesNotMatch(r.stderr, /conflito/);
+    } finally { rmSync(c.base, { recursive: true, force: true }); }
+  });
 });

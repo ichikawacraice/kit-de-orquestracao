@@ -53,19 +53,28 @@ function baseDe(rel) {
 }
 
 // 3 vias: devolve { texto } com a mudança da frente aplicada sobre o plugin, ou { conflitos } (os trechos em conflito).
-function emTresVias(plugin, base, viva) {
-  const r = run('git', ['merge-file', '-p', '-L', 'plugin', '-L', 'base', '-L', 'viva', plugin, base, viva]);
-  if (r.status === 0) return { texto: r.stdout };
-  if (r.status > 0) {
+// O EOL é normalizado para LF antes do merge (diferença só de fim de linha não é conflito) e o resultado volta ao EOL do plugin.
+// `git merge-file` sai com o número de conflitos (1..127); fora disso (255, sinal, timeout) é erro, não conflito.
+function emTresVias(plugin, base, viva, tmp) {
+  const lf = (t) => t.replace(/\r\n/g, '\n');
+  const textoDoPlugin = readFileSync(plugin, 'utf8');
+  const crlf = textoDoPlugin.includes('\r\n');
+  const copias = [['plugin', textoDoPlugin], ['base', readFileSync(base, 'utf8')], ['viva', readFileSync(viva, 'utf8')]].map(([n, t]) => {
+    const f = join(tmp, `3v-${n}`); writeFileSync(f, lf(t)); return f;
+  });
+  const r = run('git', ['merge-file', '-p', '-L', 'plugin', '-L', 'base', '-L', 'viva', ...copias]);
+  if (r.status === 0) return { texto: crlf ? r.stdout.replace(/\n/g, '\r\n') : r.stdout };
+  if (r.status !== null && r.status > 0 && r.status <= 127) {
     const trechos = r.stdout.match(/<<<<<<< plugin[\s\S]*?>>>>>>> viva/g) ?? [];
     return { conflitos: trechos };
   }
-  return { erro: r.stderr || `git merge-file saiu ${r.status}` };
+  return { erro: (r.stderr || '').trim() || `git merge-file saiu ${r.status ?? r.signal}` };
 }
 
 function sincronizar(rotulo, alvos) {
   if (BASE !== undefined && !existsSync(BASE)) { console.error(`--base ${BASE}: não existe`); return 2; }
   const atual = JSON.parse(paridade(['--declarar']).stdout || '{}');
+  const declaradas = JSON.parse(paridade(['--declaradas']).stdout || '{}');
   const gravar = []; // [rel, para, conteúdo]
   const tmp = mkdtempSync(join(tmpdir(), 'kit-sinc-'));
   try {
@@ -83,14 +92,15 @@ function sincronizar(rotulo, alvos) {
           novo = readFileSync(de, 'utf8');
         } else {
           if (readFileSync(base, 'utf8') === readFileSync(de, 'utf8')) { console.log(`${rel}: a viva não mudou desde a base, nada a aplicar`); continue; }
-          const m = emTresVias(para, base, de);
-          if (m.erro) { console.error(`${rel}: ${m.erro}`); return 2; }
+          const m = emTresVias(para, base, de, tmp);
+          if (m.erro) { console.error(`${rel}: erro do merge-file: ${m.erro}`); return 2; }
           if (m.conflitos) { console.error(`${rel}: conflito entre a adaptação do plugin e a mudança da frente (${m.conflitos.length} trecho(s)); nada foi gravado.\n${m.conflitos.join('\n---\n')}`); return 2; }
           novo = m.texto;
         }
       } else {
         if (!existsSync(para)) {
           if (BASE === undefined) { console.error(`${rel}: não existe no plugin (${para}); arquivo novo se cria à mão`); return 2; }
+          if (declaradas[rel]) { console.error(`${rel}: arquivo novo no plugin, mas está em DECLARADAS (${declaradas[rel].motivo}): a cópia crua apagaria a adaptação. Refaça à mão.`); return 2; }
           novo = readFileSync(de, 'utf8'); // novo na frente: não há adaptação a preservar
         } else {
           if (declarada && !flag('--forcar')) {
