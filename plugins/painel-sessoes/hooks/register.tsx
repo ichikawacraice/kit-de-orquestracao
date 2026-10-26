@@ -1455,7 +1455,7 @@ export const register: Register = on => {
 
       return (
         <Button
-          key={`abrir:${dono.localId}`}
+          key={botao}
           variant="secondary"
           onPress={() => {
             if (abrindoAgora?.localId !== dono.localId) void abrirSessao($, dono, e.surface, botao)
