@@ -3,7 +3,7 @@ import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { esperandoPapel } from './esperando'
 import type { Citado, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, LEITURA_MS, RASCUNHO, RESPOSTA_DO_OK, abertasDoProjeto, contarPool, desenharBarra, desenharPedidoNoPane, meuItem, orquestradorasDoProjeto, papelEApelido, perguntaDeLimpeza, relogio as relogioDoCache } from './barra'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, LEITURA_MS, RASCUNHO, RESPOSTA_DO_OK, abertasDoProjeto, contarPool, desenharBarra, desenharPedidoNoPane, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, perguntaDeLimpeza, relogio as relogioDoCache } from './barra'
 import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
 
@@ -938,6 +938,7 @@ const BARRA_VAZIA: Barra = {
   cache: { expiraEm: null, segundos: null },
   avisado: 0,
   tokens: null,
+  janela: null,
   erros: [],
 }
 export const barra = atom({ plugin: 'painel-sessoes', key: 'barra' } as const, BARRA_VAZIA)
@@ -1026,11 +1027,18 @@ async function lerBarra($: EngineInterface, depoisDoClique = false): Promise<voi
     const pedida = perguntaDeLimpeza(docsPerguntas, orquestradoras, host, agoraDaLeitura)
     await atualizarModo($).catch(err => void erros.push(`modo ausente: ${mensagem(err)}`))
     let tokens: number | null = null
+    let janelaDoModelo: number | null = null
     try {
-      tokens = (await $.session.usage()).context.tokens ?? null
+      const { context } = await $.session.usage()
+      tokens = context.tokens ?? null
+      janelaDoModelo = context.window ?? null
     } catch (err) {
       erros.push(`contexto: ${mensagem(err)}`)
     }
+    // A janela do denominador: falha de leitura não vira erro na barra, cai para o próximo da lista.
+    const daEnv = await $.env.get('CLAUDE_CODE_AUTO_COMPACT_WINDOW').catch(() => undefined)
+    const doSettings = home ? ((await $.fs.read(`${home}/.claude/settings.json`).catch(() => null)) as string | null) : null
+    const janela = janelaDeCompactacao({ env: daEnv ?? undefined, settings: doSettings, modelo: janelaDoModelo })
     const agora = await $.clock.now()
     await update($, barra, b => {
       // Logo depois do clique, o pedido que acabou de ser respondido fica na tela para o "✓ Ok enviado"; a próxima leitura o tira.
@@ -1049,6 +1057,7 @@ async function lerBarra($: EngineInterface, depoisDoClique = false): Promise<voi
         pool: contarPool(docsFila, projeto),
         projeto,
         tokens,
+        janela,
         erros,
       }
     })

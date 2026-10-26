@@ -3,19 +3,25 @@ import type { On } from 'claude-code'
 import type { TestBody } from 'claude-code/testing'
 import {
   CACHE_TTL_MS,
+  PALAVRA_ALTO,
+  PALAVRA_LIMPAR,
   REGUAS,
   abertasDoProjeto,
   contarPool,
   corDoContexto,
   faixaDaBarra,
+  janelaDeCompactacao,
+  larguraDaFaixa,
   meuItem,
   mostraLimparAntes,
   nivelDoCache,
   orquestradorasDoProjeto,
   papelEApelido,
+  pecasDaBarra,
   perguntaDeLimpeza,
   reguaDoPapel,
   relogio,
+  textoDoContexto,
 } from '../hooks/barra.js'
 import type { EstadoBarra } from '../hooks/barra.js'
 
@@ -25,6 +31,7 @@ const doc = (id: string, data: Record<string, unknown>, version = 1): Doc => ({ 
 const EU = 'local_eu'
 const ORQ = 'local_orq'
 const HOME = '/home/teste'
+const SETTINGS = `${HOME}/.claude/settings.json`
 const PASTA = `${HOME}/.claude/orquestracao/painel`
 const BANDEIRA = `${HOME}/.claude/orquestracao/operador-ausente.json`
 const REGISTRO_DO_APP = `${HOME}/Library/Application Support/Claude/claude-code-sessions/conta/org/${EU}.json`
@@ -198,7 +205,9 @@ test('mostraLimparAntes: só orquestradora, 1–600 s, parada, com 150 mil', () 
 
 const REFERENCIA: EstadoBarra = {
   relogio: '47:12',
+  bloco: false,
   tokens: 142_000,
+  janela: 600_000,
   regua: { aviso: 200_000, teto: 300_000 },
   item: 'F52 · design',
   pool: 'E 2 · V 1',
@@ -207,6 +216,8 @@ const REFERENCIA: EstadoBarra = {
   trocando: false,
   painelAberto: true,
   moldura: false,
+  pedido: null,
+  limparAntes: false,
 }
 
 test('faixaDaBarra: a mais rica cuja soma cabe, com os textos reais', () => {
@@ -216,6 +227,104 @@ test('faixaDaBarra: a mais rica cuja soma cabe, com os textos reais', () => {
   expect(f(94, { tokens: 250_000 })).toBe(2)
   expect(f(114, { moldura: true })).toBe(1)
   expect(f(114, { abertas: 12 })).toBe(1)
+})
+
+test('faixaDaBarra: a palavra · limpar conta na soma (P a 510 mil, 119 colunas)', () => {
+  const p: EstadoBarra = { ...REFERENCIA, tokens: 510_000, regua: REGUAS.P, modo: 'presente', painelAberto: false }
+  expect(larguraDaFaixa(p, 0), 'a soma é a da revisão: 63 + 2 + 52 + 2').toBe(119)
+  expect([faixaDaBarra(119, p), faixaDaBarra(118, p)]).toEqual([0, 1])
+})
+
+test('faixaDaBarra: o relógio em bloco (alerta e venceu) soma as duas células do respiro', () => {
+  const base = larguraDaFaixa(REFERENCIA, 0)
+  expect(base, 'a referência soma 114').toBe(114)
+  expect(larguraDaFaixa({ ...REFERENCIA, bloco: true }, 0)).toBe(base + 2)
+  expect(faixaDaBarra(114, REFERENCIA)).toBe(0)
+  expect(faixaDaBarra(114, { ...REFERENCIA, bloco: true }), 'com o bloco a faixa 0 já não cabe').toBe(1)
+})
+
+// O caso do print: orquestradora, 253 mil, 1 pergunta, presente, pane aberto, pedido aberto (revisão, teste 10).
+const COM_PEDIDO: EstadoBarra = { ...REFERENCIA, tokens: 253_000, regua: REGUAS.orquestradora, item: null, pool: null, abertas: 1, modo: 'presente', pedido: 'aberto' }
+
+test('faixaDaBarra: o pedido de limpeza entra na soma, com a frase e o botão reais', () => {
+  expect([0, 1, 2].map(f => larguraDaFaixa(COM_PEDIDO, f as 0 | 1 | 2)), 'as somas da revisão').toEqual([142, 101, 79])
+  const f = (cols: number, extra: Partial<EstadoBarra> = {}) => faixaDaBarra(cols, { ...COM_PEDIDO, ...extra })
+  expect([f(142), f(141), f(114), f(101), f(100), f(94), f(79), f(78)]).toEqual([0, 1, 1, 1, 2, 2, 2, 2])
+  expect(larguraDaFaixa({ ...COM_PEDIDO, modo: 'ausente' }, 2), 'ausente com selo: 100').toBe(100)
+})
+
+test('faixaDaBarra: Enviando… e ✓ ok enviado somam o texto deles, não o do repouso', () => {
+  const repouso = larguraDaFaixa(COM_PEDIDO, 0)
+  expect(repouso).toBe(142)
+  expect(larguraDaFaixa({ ...COM_PEDIDO, pedido: 'enviando' }, 0), '`Enviando…` tem 5 células a menos que `Pode se limpar`').toBe(repouso - 5)
+  expect(larguraDaFaixa({ ...COM_PEDIDO, pedido: 'enviado' }, 0), 'frase e botão dão lugar a `✓ ok enviado`').toBe(107)
+  expect(faixaDaBarra(137, COM_PEDIDO), 'no repouso, 137 não cabe na faixa 0').toBe(1)
+  expect(faixaDaBarra(137, { ...COM_PEDIDO, pedido: 'enviando' })).toBe(0)
+  expect(faixaDaBarra(107, { ...COM_PEDIDO, pedido: 'enviado' })).toBe(0)
+})
+
+test('pecasDaBarra: o pedido abre o grupo da direita; item, pool e o Ficar ausente caem', () => {
+  const dir = (e: EstadoBarra, f: 0 | 1 | 2) => pecasDaBarra(e, f).dir.map(p => p.k)
+  expect(dir(COM_PEDIDO, 0)).toEqual(['pedido', 'limpar-pedido', 'perguntas', 'modo', 'painel'])
+  expect(dir(COM_PEDIDO, 1), 'faixa 1: o Ficar ausente já caiu').toEqual(['pedido', 'limpar-pedido', 'perguntas', 'painel'])
+  expect(dir(COM_PEDIDO, 2)).toEqual(['pedido', 'limpar-pedido', 'perguntas'])
+  expect(dir({ ...COM_PEDIDO, modo: 'ausente' }, 1), 'o ☾ Estou de volta nunca cai').toEqual(['pedido', 'limpar-pedido', 'perguntas', 'modo', 'painel'])
+  expect(dir({ ...COM_PEDIDO, pedido: 'enviado' }, 1)).toEqual(['pedido', 'perguntas', 'painel'])
+  const completo = { ...COM_PEDIDO, item: 'F52 · design', pool: 'E 2 · V 1' }
+  expect(pecasDaBarra(completo, 0).esq.map(p => p.k), 'com o pedido, sem item nem pool').toEqual(['relogio', 'contexto'])
+  expect(pecasDaBarra({ ...completo, pedido: null }, 0).esq.map(p => p.k), 'sem o pedido, item e pool voltam').toEqual(['relogio', 'contexto', 'item', 'pool'])
+  const frase = (f: 0 | 1 | 2) => pecasDaBarra(COM_PEDIDO, f).dir[0]?.t
+  expect([frase(0), frase(1), frase(2)]).toEqual(['◆ orquestradora pede limpeza', '◆ pede limpeza', '◆ pede limpeza'])
+  expect(pecasDaBarra({ ...COM_PEDIDO, pedido: 'enviado' }, 0).dir[0]?.t).toBe('✓ ok enviado')
+})
+
+test('pecasDaBarra: o limpar antes é só o botão, com as mesmas quedas e sem frase', () => {
+  const e: EstadoBarra = { ...REFERENCIA, modo: 'presente', limparAntes: true }
+  const p = pecasDaBarra(e, 1)
+  expect(p.dir.map(x => x.k)).toEqual(['limpar-antes', 'perguntas', 'painel'])
+  expect(p.dir.some(x => x.t.includes('◆')), 'sem frase').toBe(false)
+  expect(p.esq.map(x => x.k)).toEqual(['relogio', 'contexto'])
+  expect(pecasDaBarra({ ...e, pedido: 'aberto' }, 1).dir.map(x => x.k), 'o pedido vence o limpar antes').toEqual(['pedido', 'limpar-pedido', 'perguntas', 'painel'])
+})
+
+test('textoDoContexto: a janela é o denominador; a régua só dá a palavra', () => {
+  expect(PALAVRA_ALTO).toBe(' · alto')
+  expect(PALAVRA_LIMPAR).toBe(' · limpar')
+  expect(textoDoContexto(198_000, REGUAS.orquestradora, 600_000, 0)).toBe('contexto 198/600 mil')
+  expect(textoDoContexto(260_000, REGUAS.orquestradora, 600_000, 0)).toBe('contexto 260/600 mil · limpar')
+  expect(textoDoContexto(360_000, REGUAS.P, 600_000, 0)).toBe('contexto 360/600 mil · alto')
+  expect(textoDoContexto(510_000, REGUAS.P, 600_000, 0)).toBe('contexto 510/600 mil · limpar')
+  expect(textoDoContexto(312_000, REGUAS.E, 600_000, 0)).toBe('contexto 312/600 mil · limpar')
+  expect(textoDoContexto(500_000, REGUAS.V, 600_000, 0), 'a V também ganha o limpar aos 500 mil').toBe('contexto 500/600 mil · limpar')
+  expect(textoDoContexto(260_000, REGUAS.orquestradora, 600_000, 1)).toBe('260/600 mil · limpar')
+  expect(textoDoContexto(260_000, REGUAS.orquestradora, 600_000, 2)).toBe('260 mil · limpar')
+  expect(textoDoContexto(142_000, null, 600_000, 0), 'papel desconhecido: com a janela, sem palavra').toBe('contexto 142/600 mil')
+  expect(textoDoContexto(198_000, REGUAS.orquestradora, null, 0), 'sem janela, sem /').toBe('contexto 198 mil')
+  expect(textoDoContexto(510_000, REGUAS.P, null, 0)).toBe('contexto 510 mil · limpar')
+  expect(textoDoContexto(198_000, REGUAS.orquestradora, null, 1)).toBe('198 mil')
+  // a ausência mede: o mesmo estado, só a janela muda, e o `/` aparece
+  expect(textoDoContexto(198_000, REGUAS.orquestradora, 600_000, 0)).toContain('/')
+  expect(textoDoContexto(198_000, REGUAS.orquestradora, null, 0)).not.toContain('/')
+})
+
+test('janelaDeCompactacao: env, depois autoCompactWindow do settings, depois a janela do modelo; o modelo limita', () => {
+  const j = (env: string | undefined, settings: string | null, modelo: number | null | undefined = 1_000_000) => janelaDeCompactacao({ env, settings, modelo })
+  const doSettings = '{"autoCompactWindow": 600000}'
+  expect(doSettings, 'o insumo existe').toContain('600000')
+  expect(j(undefined, doSettings)).toBe(600_000)
+  expect(j('500000', doSettings), 'a env vence o settings').toBe(500_000)
+  for (const ruim of ['x', '0', '-5', '1.5', '']) expect(j(ruim, doSettings), `env inválida (${ruim}) cai para o settings`).toBe(600_000)
+  for (const ruim of ['{"autoCompactWindow": "x"}', '{"autoCompactWindow": 0}', '{"autoCompactWindow": -1}', '{"autoCompactWindow": 1.5}', '{"autoCompactWindow": "600000"}', '{"outra": 1}', '{não é json', '[]', 'null', '']) {
+    expect(j(undefined, ruim), `settings inválido (${ruim}) cai para o modelo`).toBe(1_000_000)
+  }
+  expect(j(undefined, null), 'sem settings').toBe(1_000_000)
+  expect(j(undefined, '{"autoCompactWindow": 2000000}'), 'maior que a janela do modelo: vale a do modelo').toBe(1_000_000)
+  expect(j('2000000', null)).toBe(1_000_000)
+  expect(j(undefined, doSettings, null), 'sem janela do modelo, vale o settings').toBe(600_000)
+  expect(j(undefined, doSettings, undefined)).toBe(600_000)
+  expect(j(undefined, null, null), 'nada disponível').toBeNull()
+  expect(j(undefined, null, 0), 'janela do modelo inválida').toBeNull()
+  expect(j('x', 'lixo', null)).toBeNull()
 })
 
 // ---- o mod, pelo motor ----
@@ -235,6 +344,12 @@ type Opcoes = {
   painelAbertoNoInicio?: boolean
   /** O teste registra command.register e tool.register por conta própria. */
   semRegistros?: boolean
+  /** O texto de `~/.claude/settings.json`; `null` = o arquivo não existe. Padrão: o do operador, `autoCompactWindow` 600 000. */
+  settings?: string | null
+  /** Variáveis de ambiente a mais (ex.: `CLAUDE_CODE_AUTO_COMPACT_WINDOW`). */
+  env?: Record<string, string>
+  /** O `context.window` do `usage()`; `null` = o motor não informa. Padrão: 1 000 000 (a janela do modelo). */
+  janelaDoModelo?: number | null
 }
 
 function engine(on: On, opc: Opcoes = {}) {
@@ -260,7 +375,7 @@ function engine(on: On, opc: Opcoes = {}) {
     return { value: undefined }
   })
   const relogioDeTeste = mock.clock(on, { now: AGORA })
-  mock.env(on, { HOME, CLAUDE_CODE_HOST_SESSION_ID: EU, CLAUDE_CODE_ACCOUNT_UUID: 'conta', CLAUDE_CODE_ORGANIZATION_UUID: 'org' })
+  mock.env(on, { HOME, CLAUDE_CODE_HOST_SESSION_ID: EU, CLAUDE_CODE_ACCOUNT_UUID: 'conta', CLAUDE_CODE_ORGANIZATION_UUID: 'org', ...opc.env })
   mock.store(on)
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.complete', (_, e) => ({ text: e.answer }))
@@ -268,7 +383,7 @@ function engine(on: On, opc: Opcoes = {}) {
   on('session.cwd', () => ({ value: opc.cwd ?? '/work/kit' }))
   on('session.usage', () => {
     if (opc.semUsage) throw new Error('sem usage')
-    return { value: { startedAt: 0, context: { tokens: opc.tokens === undefined ? 142_000 : (opc.tokens ?? undefined), window: 1_000_000 }, rateLimits: [] } }
+    return { value: { startedAt: 0, context: { tokens: opc.tokens === undefined ? 142_000 : (opc.tokens ?? undefined), window: opc.janelaDoModelo === null ? undefined : (opc.janelaDoModelo ?? 1_000_000) }, rateLimits: [] } }
   })
   const arquivos = new Map<string, string>()
   for (const d of opc.perguntas ?? []) arquivos.set(`${PASTA}/perguntas/${d.id}.json`, JSON.stringify(d))
@@ -276,6 +391,7 @@ function engine(on: On, opc: Opcoes = {}) {
   for (const d of opc.sessoes ?? [sessaoOrq()]) arquivos.set(`${PASTA}/sessoes/${d.id}.json`, JSON.stringify(d))
   arquivos.set(`${PASTA}/temas.json`, JSON.stringify([{ id: 'geral', rotulo: 'Geral' }]))
   if (opc.bandeira !== undefined) arquivos.set(BANDEIRA, opc.bandeira)
+  if (opc.settings !== null) arquivos.set(SETTINGS, opc.settings ?? '{"autoCompactWindow": 600000}')
   if (opc.titulo !== null) arquivos.set(REGISTRO_DO_APP, JSON.stringify({ title: opc.titulo ?? '🎛 orquestradora — kit' }))
   const escritas: Array<{ path: string; data: Record<string, unknown>; texto: string }> = []
   const bandeiras: Array<Record<string, unknown>> = []
@@ -457,19 +573,107 @@ test('ordem: à esquerda relógio e contexto; à direita selo, modo e painel', a
   await ui.unmount()
 })
 
-test('contexto no aviso termina em · alto; no teto, · teto; papel desconhecido, sem a régua', async ($, on) => {
-  await iniciar($, on, { titulo: 'E2 · x', tokens: 300_000 })
-  const teto = await montar($, 'terminal')
-  expect(await lido(teto)).toMatch(/300\/300 mil · teto/)
-  await teto.unmount()
+const textosDe = async (ui: Awaited<ReturnType<typeof montar>>) => (await ui.findAll({ type: 'Text' })).map(t => t.text)
+
+test('contexto contra a janela do settings: a orquestradora a 198 mil mostra 198/600 mil, sem palavra, nas duas superfícies', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 198_000 })
+  expect(m.arquivos.get(SETTINGS), 'o fixture devolve o settings').toContain('"autoCompactWindow": 600000')
+  for (const surface of SUPERFICIES) {
+    const ui = await montar($, surface)
+    const t = await lido(ui)
+    expect(t).toMatch(/contexto 198\/600 mil/)
+    expect(t).not.toMatch(/limpar|alto/)
+    await ui.unmount()
+  }
 })
 
-test('contexto de papel desconhecido: só o número', async ($, on) => {
+test('contexto no limpar: só a palavra leva cor (error e negrito), o número fica apagado', async ($, on) => {
+  await iniciar($, on, { tokens: 260_000 })
+  const ui = await montar($, 'terminal')
+  expect(await lido(ui)).toMatch(/contexto 260\/600 mil · limpar/)
+  const textos = await ui.findAll({ type: 'Text' })
+  const palavra = textos.find(t => t.text === ' · limpar')
+  const numero = textos.find(t => t.text === 'contexto 260/600 mil')
+  expect(palavra, 'a palavra é um Text à parte').toBeTruthy()
+  expect(palavra?.props.color).toBe('error')
+  expect(palavra?.props.bold).toBe(true)
+  expect(numero, 'o número é um Text à parte').toBeTruthy()
+  expect(numero?.props.dimColor).toBe(true)
+  expect(numero?.props.color).toBeUndefined()
+  await ui.unmount()
+})
+
+test('contexto no alto: P a 360 mil → · alto, warning só na palavra; E a 300 mil → direto ao · limpar', async ($, on) => {
+  await iniciar($, on, { titulo: 'P1 · x', tokens: 360_000 })
+  const p = await montar($, 'terminal')
+  expect(await lido(p)).toMatch(/contexto 360\/600 mil · alto/)
+  const alto = (await p.findAll({ type: 'Text' })).find(t => t.text === ' · alto')
+  expect(alto?.props.color).toBe('warning')
+  expect((await p.findAll({ type: 'Text' })).find(t => t.text === 'contexto 360/600 mil')?.props.dimColor).toBe(true)
+  await p.unmount()
+})
+
+test('contexto da E no teto: 300/600 mil · limpar', async ($, on) => {
+  await iniciar($, on, { titulo: 'E2 · x', tokens: 300_000 })
+  const ui = await montar($, 'terminal')
+  expect(await lido(ui)).toMatch(/300\/600 mil · limpar/)
+  expect(await lido(ui)).not.toMatch(/teto/)
+  await ui.unmount()
+})
+
+test('janela: a env CLAUDE_CODE_AUTO_COMPACT_WINDOW vence o settings', async ($, on) => {
+  await iniciar($, on, { tokens: 198_000, env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: '500000' } })
+  expect(await lido(await montar($, 'terminal'))).toMatch(/198\/500 mil/)
+})
+
+test('janela: env inválida cai para o settings', async ($, on) => {
+  await iniciar($, on, { tokens: 198_000, env: { CLAUDE_CODE_AUTO_COMPACT_WINDOW: 'x' } })
+  expect(await lido(await montar($, 'terminal'))).toMatch(/198\/600 mil/)
+})
+
+test('janela: settings ausente → context.window do motor', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 198_000, settings: null })
+  expect(m.arquivos.has(SETTINGS), 'o settings não existe').toBe(false)
+  const ui = await montar($, 'terminal')
+  expect(await lido(ui)).toMatch(/198\/1000 mil/)
+  await ui.unmount()
+})
+
+for (const [nome, settings] of [
+  ['texto', '{"autoCompactWindow": "x"}'],
+  ['zero', '{"autoCompactWindow": 0}'],
+  ['JSON quebrado', '{não é json'],
+] as const) {
+  test(`janela: settings inválido (${nome}) → context.window do motor`, async ($, on) => {
+    await iniciar($, on, { tokens: 198_000, settings })
+    const ui = await montar($, 'terminal')
+    expect(await lido(ui)).toMatch(/198\/1000 mil/)
+    await ui.unmount()
+  })
+}
+
+test('janela: autoCompactWindow maior que a janela do modelo → vale a do modelo', async ($, on) => {
+  await iniciar($, on, { tokens: 198_000, settings: '{"autoCompactWindow": 2000000}', janelaDoModelo: 800_000 })
+  const ui = await montar($, 'terminal')
+  expect(await lido(ui)).toMatch(/198\/800 mil/)
+  await ui.unmount()
+})
+
+test('janela: nada disponível → sem o / (o mesmo estado com settings mostra /600, no primeiro teste da janela)', async ($, on) => {
+  await iniciar($, on, { tokens: 198_000, settings: null, janelaDoModelo: null })
+  const sem = await montar($, 'terminal')
+  const t = await lido(sem)
+  expect(t, 'a barra desenhou o contexto').toMatch(/contexto 198 mil/)
+  expect(t).not.toMatch(/198\//)
+  await sem.unmount()
+})
+
+test('contexto de papel desconhecido: com a janela e sem palavra', async ($, on) => {
   await iniciar($, on, { titulo: 'qualquer', tokens: 142_000 })
   const ui = await montar($, 'terminal')
   const t = await lido(ui)
-  expect(t).toMatch(/contexto 142 mil/)
-  expect(t).not.toMatch(/142\//)
+  expect(t).toMatch(/contexto 142\/600 mil/)
+  expect(t).not.toMatch(/limpar|alto/)
   await ui.unmount()
 })
 
@@ -477,7 +681,8 @@ test('pedido de limpeza: o botão aparece em toda sessão do projeto, e o clique
   const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
   const ui = await montar($, 'terminal')
   const texto = await lido(ui)
-  expect(texto).toMatch(/◆ A orquestradora pede para se limpar · Q290/)
+  expect(texto).toMatch(/◆ pede limpeza/)
+  expect(texto, 'o Q-ID não entra na barra').not.toMatch(/Q290/)
   const botao = await ui.find({ key: 'limpar-pedido' })
   expect(botao?.text).toBe('Pode se limpar')
   expect(botao?.props.variant).toBe('primary')
@@ -504,7 +709,7 @@ test('pedido de limpeza: o ok enviado troca o botão por ✓ e o clique repetido
   await m.relogio.settle()
   expect(m.escritas.filter(e => e.path.endsWith('Q290.json')).length).toBe(1)
   const u2 = await montar($, 'terminal')
-  expect(await lido(u2)).toMatch(/✓ Ok enviado à orquestradora/)
+  expect(await lido(u2)).toMatch(/✓ ok enviado/)
   expect(await u2.find({ key: 'limpar-pedido' })).toBeUndefined()
   await ui.unmount()
   await u2.unmount()
@@ -534,22 +739,61 @@ test('pedido de limpeza: versão mudada entre a leitura e o clique dá toast, n�
   expect((await ui.find({ key: 'limpar-pedido' }))?.text, 'o botão volta na mesma montagem').toBe('Pode se limpar')
   const u2 = await montar($, 'terminal')
   expect((await u2.find({ key: 'limpar-pedido' }))?.text, 'e numa montagem nova').toBe('Pode se limpar')
-  expect(await lido(ui)).not.toMatch(/✓ Ok enviado/)
-  expect(await lido(u2)).not.toMatch(/✓ Ok enviado/)
+  expect(await lido(ui)).not.toMatch(/✓ ok enviado/)
+  expect(await lido(u2)).not.toMatch(/✓ ok enviado/)
   await ui.unmount()
   await u2.unmount()
 })
 
-test('a linha do pedido vem antes da barra e o Q-ID some nas faixas estreitas', async ($, on) => {
+test('pedido de limpeza: não há linha acima; a barra tem uma linha principal com o botão do pedido, em 94, 114 e 140 colunas, no terminal e no desktop', async ($, on) => {
   await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290')] })
-  const largo = await montar($, 'terminal')
-  const t = await lido(largo)
-  expect(t.indexOf('◆')).toBeGreaterThanOrEqual(0)
-  expect(t.indexOf('◆'), 'o pedido vem antes do relógio').toBeLessThan(t.indexOf('⧗'))
-  await largo.unmount()
-  const estreito = await montar($, 'terminal', { bodyColumns: 80 })
-  expect(await lido(estreito)).not.toMatch(/Q290/)
-  await estreito.unmount()
+  for (const surface of SUPERFICIES) {
+    for (const bodyColumns of [94, 114, 140]) {
+      const ui = await montar($, surface, { bodyColumns })
+      const caixas = await ui.findAll({ type: 'Box' })
+      const rotulo = `${surface} ${bodyColumns}`
+      expect(caixas.length, `${rotulo}: a barra desenhou caixas`).toBeGreaterThan(0)
+      expect(caixas.some(b => b.props.key === 'linha-do-pedido'), `${rotulo}: não há Box linha-do-pedido`).toBe(false)
+      expect(caixas.filter(b => b.props.flexDirection === 'column').length, `${rotulo}: só a coluna da moldura`).toBe(1)
+      expect(caixas.filter(b => b.props.flexDirection === 'row' && b.props.flexWrap === 'wrap').length, `${rotulo}: uma linha principal`).toBe(1)
+      const botao = await ui.find({ key: 'limpar-pedido' })
+      expect(botao?.text, `${rotulo}: o botão do pedido`).toBe('Pode se limpar')
+      const t = await lido(ui)
+      expect(t.indexOf('⧗'), `${rotulo}: relógio antes da frase`).toBeLessThan(t.indexOf('◆'))
+      expect(t).toMatch(bodyColumns >= 140 ? /◆ orquestradora pede limpeza/ : /◆ pede limpeza/)
+      expect(t, `${rotulo}: sem Q-ID`).not.toMatch(/Q290/)
+      expect((await ui.findAll({ type: 'Button' })).map(b => b.props.key)[0], `${rotulo}: o pedido abre o grupo da direita`).toBe('limpar-pedido')
+      await ui.unmount()
+    }
+  }
+})
+
+test('pedido de limpeza: item e pool caem enquanto ele está aberto; o Ficar ausente cai já a 114', async ($, on) => {
+  await iniciar($, on, {
+    titulo: 'E1 · x',
+    perguntas: [limpar('Q290')],
+    fila: [item('F1', { donoLocalId: EU, com: [{ localId: EU, apelido: 'E1' }, { localId: 'b', apelido: 'V1' }] })],
+  })
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  const t = await lido(ui)
+  expect(t, 'sem o pedido item e pool existiriam: o item é F1').not.toMatch(/F1 ·/)
+  expect(t).not.toMatch(/E 1 · V 1/)
+  await ui.unmount()
+  const m = await montar($, 'terminal', { bodyColumns: 114 })
+  expect((await m.findAll({ type: 'Button' })).map(b => b.props.key)).toEqual(['limpar-pedido', 'perguntas', 'painel'])
+  await m.unmount()
+})
+
+test('pedido de limpeza: o item e o pool voltam sem o pedido (a ausência acima mede)', async ($, on) => {
+  await iniciar($, on, {
+    titulo: 'E1 · x',
+    fila: [item('F1', { donoLocalId: EU, com: [{ localId: EU, apelido: 'E1' }, { localId: 'b', apelido: 'V1' }] })],
+  })
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  const t = await lido(ui)
+  expect(t).toMatch(/F1 ·/)
+  expect(t).toMatch(/E 1 · V 1/)
+  await ui.unmount()
 })
 
 test('limpar antes de vencer: sem pedido aberto o clique põe o rascunho e nunca chama clear_session', async ($, on) => {
@@ -557,7 +801,9 @@ test('limpar antes de vencer: sem pedido aberto o clique põe o rascunho e nunca
   await $.turn.complete(turnoCompleto())
   await m.relogio.advance((3600 - 480) * 1000)
   const ui = await montar($, 'terminal')
-  expect(await lido(ui)).toMatch(/◆ Cache vence em 8 min com 212 mil no contexto/)
+  const texto = await lido(ui)
+  expect(texto, 'a barra desenhou o contexto').toMatch(/contexto 212\/600 mil/)
+  expect(texto, 'o limpar antes é só o botão, sem frase').not.toMatch(/◆|Cache vence/)
   const botao = await ui.find({ key: 'limpar-antes' })
   expect(botao?.text).toBe('Limpar antes de vencer')
   expect(botao?.props.variant).toBe('secondary')
@@ -615,7 +861,7 @@ test('cache: 1201 s sem moldura; 1200 s aviso (round, warning, relógio bold sem
   await alerta.unmount()
   const trab = await montar($, 'terminal', { isWorking: true })
   expect((await trab.findAll({ type: 'Box' })).some(b => b.props.borderStyle)).toBe(false)
-  expect(await lido(trab)).toMatch(/⧗ …/)
+  expect(await lido(trab)).toMatch(/⧗ ativo/)
   await trab.unmount()
 })
 
@@ -667,7 +913,7 @@ test('modo ausente com o pane nunca aberto: a barra lê e o botão grava a bande
 test('clique na barra com o pane nunca aberto não dispara a leitura pesada (list_sessions/get_session)', async ($, on) => {
   const pesadas = (c: string[]) => c.filter(t => t.endsWith('__list_sessions') || t.endsWith('__get_session'))
   const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
-  const ui = await montar($, 'terminal')
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
   expect(pesadas(m.chamadas), 'a leitura da barra não chama').toEqual([])
   await ui.press({ key: 'modo' })
   await m.relogio.settle()
@@ -767,7 +1013,7 @@ test('barra e pane: o pedido aberto 2 min atrás volta mesmo com o sim de 5 min'
   const novo = limpar('Q291', { atualizadoEm: new Date(AGORA - 2 * 60_000).toISOString() }, 2)
   const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [ok, novo] })
   const ui = await montar($, 'terminal')
-  expect(await lido(ui), 'a barra mostra o pedido novo').toMatch(/A orquestradora pede para se limpar · Q291/)
+  expect(await lido(ui), 'a barra mostra o pedido novo').toMatch(/◆ pede limpeza/)
   expect((await ui.find({ key: 'limpar-pedido' }))?.text).toBe('Pode se limpar')
   await ui.unmount()
   await $.command.run({ command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
