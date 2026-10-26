@@ -2,7 +2,7 @@
 // Nada aqui toca ~/.claude: o estado (KIT_DESIGN_ESTADO) e os repositórios ficam em pasta temporária.
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
@@ -18,8 +18,8 @@ const PLUGIN = join(AQUI, '..', '..');
 const SCRIPT = join(AQUI, '..', 'guarda-de-design.mjs');
 const RAIZ = '/repo';
 const CONFIG = {
-  visual: ['apps/web/src/**/*.tsx', 'apps/web/src/**/*.css', '!apps/web/src/**/*.test.tsx'],
-  negadoAoDesigner: ['apps/web/src/**', 'apps/web/tailwind.config.ts'],
+  visual: ['web/src/**/*.tsx', 'web/src/**/*.css', '!web/src/**/*.test.tsx'],
+  negadoAoDesigner: ['web/src/**', 'web/tailwind.config.ts'],
   bases: ['origin/develop', 'origin/main'],
 };
 const sh = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf-8', timeout: 10_000, killSignal: 'SIGKILL' });
@@ -73,18 +73,18 @@ describe('eCritica, eCodigoDeTela, globs e normalizarDiff', () => {
   });
   it('código de tela vem dos globs do kit.json, em qualquer worktree; doc e revisão passam', () => {
     const g = CONFIG.negadoAoDesigner;
-    assert.equal(eCodigoDeTela('/repo/apps/web/src/components/ui/button.tsx', g), true);
-    assert.equal(eCodigoDeTela('apps/web/src/app/globals.css', g), true);
-    assert.equal(eCodigoDeTela('/repo/apps/web/tailwind.config.ts', g), true);
-    assert.equal(eCodigoDeTela('/Users/x/p/.claude/worktrees/outro/apps/web/src/x/y.tsx', g), true);
+    assert.equal(eCodigoDeTela('/repo/web/src/components/ui/button.tsx', g), true);
+    assert.equal(eCodigoDeTela('web/src/app/globals.css', g), true);
+    assert.equal(eCodigoDeTela('/repo/web/tailwind.config.ts', g), true);
+    assert.equal(eCodigoDeTela('/Users/x/p/.claude/worktrees/outro/web/src/x/y.tsx', g), true);
     assert.equal(eCodigoDeTela('/repo/docs/design/revisoes/2026-10-23-tela.md', g), false);
-    assert.equal(eCodigoDeTela('/repo/apps/web/ANATOMIA.md', g), false);
+    assert.equal(eCodigoDeTela('/repo/web/ANATOMIA.md', g), false);
     assert.equal(eCodigoDeTela('', g), false);
     assert.equal(eCodigoDeTela(undefined, g), false);
   });
   it('glob com exclusão (!) tira o teste do que é visual', () => {
-    assert.equal(eCodigoDeTela('/repo/apps/web/src/a/b.tsx', CONFIG.visual), true);
-    assert.equal(eCodigoDeTela('/repo/apps/web/src/a/b.test.tsx', CONFIG.visual), false);
+    assert.equal(eCodigoDeTela('/repo/web/src/a/b.tsx', CONFIG.visual), true);
+    assert.equal(eCodigoDeTela('/repo/web/src/a/b.test.tsx', CONFIG.visual), false);
   });
   it('globParaRegex: ** atravessa pasta, * não', () => {
     assert.equal(globParaRegex('a/**/*.tsx').test('a/x/y/z.tsx'), true);
@@ -117,6 +117,22 @@ describe('lerConfig — o kit.json do projeto', () => {
     kit({ design: { visual: ['src/**/*.tsx'], negadoAoDesigner: ['app/**'] } });
     assert.deepEqual(lerConfig(pasta).negadoAoDesigner, ['app/**']);
   });
+  it('A2: só design.pasta deriva o padrão visual por extensão; negado = o mesmo', () => {
+    kit({ design: { pasta: 'web/' } });
+    const c = lerConfig(pasta);
+    assert.deepEqual(c.visual, ['tsx', 'jsx', 'vue', 'svelte', 'css', 'scss'].map((e) => `web/**/*.${e}`));
+    assert.deepEqual(c.negadoAoDesigner, c.visual);
+    assert.equal(eCodigoDeTela('/r/web/src/a/B.tsx', c.visual), true);
+    assert.equal(eCodigoDeTela('/r/web/README.md', c.visual), false);
+  });
+  it('A2: design.visual explícito vence o derivado de design.pasta', () => {
+    kit({ design: { pasta: 'web', visual: ['outra/**/*.tsx'] } });
+    assert.deepEqual(lerConfig(pasta).visual, ['outra/**/*.tsx']);
+  });
+  it('A2: sem pasta e sem visual, inerte', () => {
+    kit({ design: { largura: 1280 } });
+    assert.equal(lerConfig(pasta), null);
+  });
   it('JSON ilegível é erro, não inércia calada', () => {
     writeFileSync(join(pasta, '.claude', 'kit.json'), '{ nao e json');
     assert.throws(() => lerConfig(pasta), /ilegível/);
@@ -129,7 +145,7 @@ describe('decidir — sem a seção design, não age', () => {
     estados.set('s1', { ...INICIO });
     assert.equal(decidir({ hook_event_name: 'Stop', session_id: 's1' }, null, ctx), null);
     assert.equal(decidir({ hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: 'redesenha a tela' }, null, ctx), null);
-    assert.equal(decidir({ hook_event_name: 'PreToolUse', agent_type: 'designer', tool_input: { file_path: '/repo/apps/web/src/a.tsx' } }, null, ctx), null);
+    assert.equal(decidir({ hook_event_name: 'PreToolUse', agent_type: 'designer', tool_input: { file_path: '/repo/web/src/a.tsx' } }, null, ctx), null);
   });
 });
 
@@ -137,7 +153,7 @@ describe('decidir — o designer não implementa (papel pelo agent_type do paylo
   const { ctx } = ctxDuble();
   const editar = (file_path, agent_type = 'design:designer') => ({ hook_event_name: 'PreToolUse', tool_name: 'Edit', agent_type, tool_input: { file_path } });
   it('nega Edit em código de tela, com o motivo', () => {
-    const d = decidir(editar('/repo/apps/web/src/components/ui/button.tsx'), null, ctx);
+    const d = decidir(editar('/repo/web/src/components/ui/button.tsx'), null, ctx);
     assert.equal(d?.hookSpecificOutput?.permissionDecision, 'deny');
     assert.match(d.hookSpecificOutput.permissionDecisionReason, /executor/);
   });
@@ -145,11 +161,11 @@ describe('decidir — o designer não implementa (papel pelo agent_type do paylo
     assert.equal(decidir(editar('/repo/docs/design/revisoes/2026-10-23-tela.md'), null, ctx), null);
   });
   it('fora do papel designer (executor, sessão principal), o mesmo Edit passa', () => {
-    assert.equal(decidir(editar('/repo/apps/web/src/components/ui/button.tsx', 'general-purpose'), null, ctx), null);
-    assert.equal(decidir(editar('/repo/apps/web/src/components/ui/button.tsx', ''), null, ctx), null);
+    assert.equal(decidir(editar('/repo/web/src/components/ui/button.tsx', 'general-purpose'), null, ctx), null);
+    assert.equal(decidir(editar('/repo/web/src/components/ui/button.tsx', ''), null, ctx), null);
   });
   it('--papel na linha de comando vale como o agent_type', () => {
-    assert.equal(decidir(editar('/repo/apps/web/src/a.tsx', ''), PAPEL_DESIGNER, ctx)?.hookSpecificOutput?.permissionDecision, 'deny');
+    assert.equal(decidir(editar('/repo/web/src/a.tsx', ''), PAPEL_DESIGNER, ctx)?.hookSpecificOutput?.permissionDecision, 'deny');
   });
 });
 
@@ -288,6 +304,17 @@ describe('decidir — o turno que mexe no visual chama o crítico', () => {
     estados.set('s1', { ...INICIO });
     assert.equal(decidir(parar(), null, ctx), null);
   });
+  it('sessão aberta com --agent (agent_type sem agent_id) é sessão, não subagente: cobra', () => {
+    const { ctx, estados } = ctxDuble('f1');
+    estados.set('s1', { ...INICIO });
+    assert.equal(falha(decidir({ hook_event_name: 'Stop', session_id: 's1', agent_type: 'orquestracao:executor' }, null, ctx)), true);
+  });
+  it('dentro de subagente (agent_id), o Stop da sessão não roda: não cobra nem grava', () => {
+    const { ctx, estados } = ctxDuble('f1');
+    estados.set('s1', { ...INICIO });
+    assert.equal(decidir({ hook_event_name: 'Stop', session_id: 's1', agent_type: 'general-purpose', agent_id: 'a1' }, null, ctx), null);
+    assert.equal(estados.get('s1').cobrado, false);
+  });
   it('sem estado (hook instalado no meio do turno): passa', () => {
     const { ctx } = ctxDuble('f1');
     assert.equal(decidir(parar(), null, ctx), null);
@@ -299,8 +326,8 @@ describe('fotoDoVisual — cada gesto do git, num repositório sintético', () =
   const outro = `${base}-tronco`;
   const gravar = (rel, texto) => { mkdirSync(join(base, rel, '..'), { recursive: true }); writeFileSync(join(base, rel), texto); };
   const linhas = (n, troca = {}) => `${Array.from({ length: n }, (_, i) => troca[i] ?? `linha ${i}`).join('\n')}\n`;
-  const TELA = 'apps/web/src/components/ui/button.tsx';
-  const OUTRA = 'apps/web/src/components/ui/card.tsx';
+  const TELA = 'web/src/components/ui/button.tsx';
+  const OUTRA = 'web/src/components/ui/card.tsx';
   const foto = () => fotoDoVisual(base, CONFIG);
   const troncoAnda = (troca) => {
     writeFileSync(join(outro, TELA), linhas(40, troca));
@@ -329,7 +356,7 @@ describe('fotoDoVisual — cada gesto do git, num repositório sintético', () =
   });
   it('doc e teste de tela não contam; tela conta', () => {
     gravar('docs/x.md', 'doc mudado\n');
-    gravar('apps/web/src/components/ui/button.test.tsx', 'teste\n');
+    gravar('web/src/components/ui/button.test.tsx', 'teste\n');
     assert.equal(foto().vazia, true);
     gravar(TELA, linhas(40, { 2: 'minha linha' }));
     assert.equal(foto().vazia, false);
@@ -384,8 +411,8 @@ describe('fotoDoVisual — cada gesto do git, num repositório sintético', () =
       if (args[0] === 'merge-base') throw Object.assign(new Error('not a valid object name'), { status: 128 });
       return sh(cwd, ...args);
     };
-    assert.notEqual(sh(base, 'ls-files', 'apps/web/src').trim(), '');
-    assert.equal(sh(base, 'status', '--porcelain', '--', 'apps/web/src').trim(), '');
+    assert.notEqual(sh(base, 'ls-files', 'web/src').trim(), '');
+    assert.equal(sh(base, 'status', '--porcelain', '--', 'web/src').trim(), '');
     assert.equal(fotoDoVisual(base, CONFIG, semBase).vazia, true);
   });
   it('o tronco do kit.json vale como base: base declarada ausente cai na seguinte', () => {
@@ -408,13 +435,45 @@ describe('fotoDoVisual — cada gesto do git, num repositório sintético', () =
   });
   it('arquivo de tela novo, não rastreado, muda a foto', () => {
     const antes = foto();
-    gravar('apps/web/src/components/ui/novo.tsx', 'export const n = 1;\n');
+    gravar('web/src/components/ui/novo.tsx', 'export const n = 1;\n');
     assert.notEqual(foto().hash, antes.hash);
   });
   it('editar o conteúdo de uma tela não rastreada (edição de subagente) muda a foto', () => {
     const antes = foto();
-    gravar('apps/web/src/components/ui/novo.tsx', 'export const n = 2;\n');
+    gravar('web/src/components/ui/novo.tsx', 'export const n = 2;\n');
     assert.notEqual(foto().hash, antes.hash);
+  });
+});
+
+describe('A3: rebase em que o tronco mexe ACIMA, no mesmo arquivo visual (repositório próprio)', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'kit-design-acima-')));
+  const outro = `${base}-tronco`;
+  const TELA = 'web/src/ui/button.tsx';
+  const linhas = (troca = {}) => `${Array.from({ length: 40 }, (_, i) => troca[i] ?? `linha ${i}`).join('\n')}\n`;
+  after(() => { rmSync(outro, { recursive: true, force: true }); rmSync(base, { recursive: true, force: true }); });
+  it('duas linhas novas no topo do tronco deslocam as nossas e a foto não muda', () => {
+    sh(base, 'init', '-q', '-b', 'develop');
+    sh(base, 'config', 'user.email', 't@t');
+    sh(base, 'config', 'user.name', 't');
+    mkdirSync(join(base, 'web/src/ui'), { recursive: true });
+    writeFileSync(join(base, TELA), linhas());
+    sh(base, 'add', '-A');
+    sh(base, 'commit', '-qm', 'base');
+    sh(base, 'update-ref', 'refs/remotes/origin/develop', 'HEAD');
+    sh(base, 'checkout', '-qb', 'trabalho');
+    sh(base, 'worktree', 'add', '-q', outro, 'develop');
+    writeFileSync(join(base, TELA), linhas({ 10: 'minha linha', 25: 'outra minha' }));
+    sh(base, 'commit', '-qam', 'meu trabalho');
+    const antes = fotoDoVisual(base, CONFIG);
+    assert.equal(antes.vazia, false);
+    const arq = join(outro, TELA);
+    writeFileSync(arq, `linha nova no topo\noutra no topo\n${readFileSync(arq, 'utf-8')}`);
+    sh(outro, 'commit', '-qam', 'outro PR, no topo');
+    sh(base, 'update-ref', 'refs/remotes/origin/develop', 'develop');
+    sh(base, 'rebase', '-q', 'origin/develop');
+    assert.match(sh(base, 'show', `HEAD:${TELA}`), /^linha nova no topo\noutra no topo\n/);
+    assert.match(sh(base, 'diff', '-U0', 'origin/develop', '--', TELA), /@@ -13 \+13 @@/); // as nossas linhas desceram duas posições
+    assert.deepEqual(fotoDoVisual(base, CONFIG), antes);
   });
 });
 
@@ -454,6 +513,25 @@ describe('o hook de ponta a ponta: um projeto de rascunho com `design` no kit.js
     assert.equal(w(join(proj, 'web', 'src', 'Tela.tsx'))?.hookSpecificOutput?.permissionDecision, 'deny');
     assert.equal(w(join(proj, 'docs', 'design', 'revisoes', 'x.md')), null);
   });
+  it('A4: fora de repositório git sai 0 calado (sem stderr); JSON do kit.json quebrado continua no stderr', () => {
+    const fora = realpathSync(mkdtempSync(join(tmpdir(), 'kit-design-fora-')));
+    try {
+      const r = spawnSync('node', [SCRIPT], { input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'x', cwd: fora }), encoding: 'utf-8', timeout: 15_000, killSignal: 'SIGKILL', env: { ...env, GIT_CEILING_DIRECTORIES: dirname(fora) } });
+      assert.equal(r.status, 0);
+      assert.equal(r.stdout, '');
+      assert.equal(r.stderr, '');
+      mkdirSync(join(proj, '.claude'), { recursive: true });
+      const kitJson = join(proj, '.claude', 'kit.json');
+      const bom = readFileSync(kitJson, 'utf-8');
+      writeFileSync(kitJson, '{ quebrado');
+      const q = spawnSync('node', [SCRIPT], { input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'x', cwd: proj }), encoding: 'utf-8', timeout: 15_000, killSignal: 'SIGKILL', env });
+      writeFileSync(kitJson, bom);
+      assert.equal(q.status, 0);
+      assert.match(q.stderr, /ilegível/);
+    } finally {
+      rmSync(fora, { recursive: true, force: true });
+    }
+  });
   it('evento ilegível sai 0 sem decisão', () => {
     const r = spawnSync('node', [SCRIPT], { input: 'nao e json', encoding: 'utf-8', timeout: 15_000, killSignal: 'SIGKILL', env });
     assert.equal(r.status, 0);
@@ -490,15 +568,30 @@ describe('os arquivos do plugin concordam entre si', () => {
     assert.deepEqual(h.PostToolUse[0].matcher.split('|').sort(), ['Agent', 'Task']);
     assert.deepEqual(h.PreToolUse[0].matcher.split('|').sort(), ['Edit', 'MultiEdit', 'NotebookEdit', 'Write']);
   });
-  it('as skills têm name e description, e não citam o produto de origem', () => {
+  it('as skills têm name e description', () => {
     for (const s of ['revisao-de-arquitetura-de-ui', 'critica-de-ui']) {
-      const rel = `skills/${s}/SKILL.md`;
-      const fm = frontmatter(rel);
+      const fm = frontmatter(`skills/${s}/SKILL.md`);
       assert.equal(campo(fm, 'name'), s);
       assert.ok(campo(fm, 'description')?.length > 20);
-      assert.doesNotMatch(ler(rel), /Izanagi|Wake|VTEX|apps\/web|packages\/shared/);
     }
-    for (const a of ['designer', 'critico-de-ui']) assert.doesNotMatch(ler(`agents/${a}.md`), /Izanagi|Wake|VTEX|apps\/web/);
+  });
+  it('nenhum arquivo do plugin (teste incluído) cita o produto de origem', () => {
+    // O padrão é montado em pedaços: escrito por inteiro, este arquivo se reprovaria.
+    const proibidos = [['Iza', 'nagi'], ['Wa', 'ke'], ['VT', 'EX'], ['apps', '/web'], ['packages', '/shared']].map((p) => p.join(''));
+    const arquivos = [];
+    const varrer = (dir) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        if (e.isDirectory()) varrer(join(dir, e.name));
+        else arquivos.push(join(dir, e.name));
+      }
+    };
+    varrer(PLUGIN);
+    assert.ok(arquivos.length >= 8, `varredura vazia: ${arquivos.length} arquivos`);
+    assert.ok(arquivos.some((a) => a.endsWith('guarda-de-design.test.mjs')), 'o próprio teste tem de estar na varredura');
+    for (const a of arquivos) {
+      const t = readFileSync(a, 'utf-8');
+      for (const w of proibidos) assert.ok(!t.includes(w), `${a} cita ${w}`);
+    }
   });
   it('o teto da crítica (24/30, 2 recríticas) está nas duas skills e nos dois agents', () => {
     for (const rel of ['skills/critica-de-ui/SKILL.md', 'agents/critico-de-ui.md', 'agents/designer.md']) assert.match(ler(rel), /24/, rel);

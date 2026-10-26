@@ -22,10 +22,10 @@
  *     problemas, cada um com `Onde` e `Correção`. Fora disso, devolve uma vez.
  *
  * **Configuração: `.claude/kit.json` do projeto.** `design.visual` (globs do que
- * é visual; prefixo `!` exclui), `design.negadoAoDesigner` (globs; padrão =
- * `design.visual` sem as exclusões) e `guarda.tronco` (de onde a branch sai;
- * padrão `origin/develop`, depois `origin/main`). Sem `design.visual` o hook sai
- * 0 sem decisão: projeto sem design não é cobrado.
+ * é visual; prefixo `!` exclui; sem ele, o padrão sai de `design.pasta`: telas por
+ * extensão), `design.negadoAoDesigner` (globs; padrão = `design.visual` sem as exclusões) e `guarda.tronco` (de onde a branch sai;
+ * padrão `origin/develop`, depois `origin/main`). Sem `design.visual` nem
+ * `design.pasta` o hook sai 0 sem decisão: projeto sem design não é cobrado.
  *
  * **A foto é o CONTEÚDO do trabalho próprio, não um diff contra um HEAD.** O diff
  * dos arquivos visuais entre o `merge-base` e a árvore de trabalho, reduzido às
@@ -50,6 +50,9 @@ import { fileURLToPath } from "node:url";
 
 export const AGENTE_CRITICO = "critico-de-ui";
 export const PAPEL_DESIGNER = "designer";
+
+/** As extensões que o padrão derivado de `design.pasta` conta como tela. */
+const EXTENSOES_DE_TELA = ["tsx", "jsx", "vue", "svelte", "css", "scss"];
 
 const BASES_PADRAO = ["origin/develop", "origin/main"];
 
@@ -102,8 +105,13 @@ export function lerConfig(raiz) {
   } catch (e) {
     throw new Error(`${caminho} ilegível: ${e.message}`);
   }
-  const visual = lista(kit?.design?.visual);
-  if (visual.length === 0) return null;
+  let visual = lista(kit?.design?.visual);
+  if (visual.length === 0) {
+    // Sem `design.visual`, o padrão sai de `design.pasta`: as telas por extensão.
+    const pasta = typeof kit?.design?.pasta === "string" ? kit.design.pasta.replace(/\/+$/, "") : "";
+    if (!pasta) return null;
+    visual = EXTENSOES_DE_TELA.map((e) => `${pasta}/**/*.${e}`);
+  }
   const negado = lista(kit?.design?.negadoAoDesigner);
   const tronco = typeof kit?.guarda?.tronco === "string" && kit.guarda.tronco ? kit.guarda.tronco : null;
   return {
@@ -234,7 +242,17 @@ export function criarContexto(ler) {
   return {
     cwd: process.cwd(),
     raiz: (cwd) => ler(cwd, ["rev-parse", "--show-toplevel"]).trim(),
-    config: (cwd) => lerConfig(ler(cwd, ["rev-parse", "--show-toplevel"]).trim()),
+    config: (cwd) => {
+      let raiz;
+      try {
+        raiz = ler(cwd, ["rev-parse", "--show-toplevel"]).trim();
+      } catch (e) {
+        // Fora de repositório não há projeto a guardar: calado. Outro erro (prazo, git ausente) segue para o stderr.
+        if (/not a git repository/i.test(String(e?.stderr ?? e?.message ?? ""))) return null;
+        throw e;
+      }
+      return lerConfig(raiz);
+    },
     foto: (cwd, config) => fotoDoVisual(cwd, config, ler),
     ler: (cwd, sessao) => {
       const arquivo = arquivoDoEstado(cwd, sessao, ler);
@@ -304,8 +322,9 @@ export function decidir(evento, papelArg, ctx) {
     return { decision: "block", reason: `A crítica não tem a forma combinada: ${defeitos.join("; ")}.` };
   }
 
-  // Os eventos da sessão principal (e de quem edita a tela): subagente não é a sessão do turno.
-  if (!sessao || (papel && papel !== PAPEL_DESIGNER)) return null;
+  // Os eventos da sessão do turno: quem tem `agent_id` é subagente. O `agent_type` sozinho
+  // também aparece na sessão aberta com `--agent`, que é sessão e é cobrada.
+  if (!sessao || evento?.agent_id) return null;
 
   if (nome === "UserPromptSubmit") {
     const lembrete = PEDIDO_DE_DESIGN.test(String(evento?.prompt ?? ""))
