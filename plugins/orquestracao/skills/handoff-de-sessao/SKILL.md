@@ -23,10 +23,17 @@ mkdir -p "$DIR"
 ```
 
 `--git-common-dir` aponta para o `.git` da árvore PRINCIPAL, então todo worktree do
-mesmo repositório cai na mesma pasta. Nome do arquivo:
-`AAAA-MM-DD-HHMM-<slug-curto>.md` (hora local, 24 h).
+mesmo repositório cai na mesma pasta. Nome do arquivo: `<slug-curto>.md`, um por
+trabalho: a passagem seguinte do mesmo trabalho **reescreve** o arquivo (a data vai no
+cabeçalho, no campo **Quando**), em vez de abrir outro ao lado.
 
 **No pool, o handoff é do ITEM, não da sessão.** O arquivo é `~/.claude/orquestracao/pool/handoffs/F<n>.md` e o caminho fica gravado em `fila/F<n>.handoff` (`painel update fila F<n> '{"handoff":"…"}'`), para sobreviver à limpeza de contexto da sessão. Protocolo: `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md#fila-do-pool`.
+
+<!-- regra-do-handoff-do-item: início (texto idêntico em handoff-de-sessao/SKILL.md e pool/protocolo.md; um teste compara) -->
+- **Um arquivo por item, reescrito a cada passagem.** O handoff do item é `~/.claude/orquestracao/pool/handoffs/F<n>.md`. Quem solta o item **reescreve o arquivo inteiro** com o estado de agora, no molde da skill `handoff-de-sessao`: nunca acrescenta uma passagem nova ao fim. "Decidido" e "Tentado e falhou" levam tudo o que ainda vale, das passagens anteriores também, uma linha por item; o que deixou de valer sai. Plano, laudo e briefing da mesma etapa podem morar em `F<n>-<slug>.md` ao lado.
+- **Item fechado vai para o arquivo.** Quando o item vai a `feito` ou `descartado`, o `painel` move sozinho todo arquivo `F<n>.md` e `F<n>-*` (e `F<n><letra>-*`) para `handoffs/arquivo/`; item reaberto volta com os arquivos. `painel handoffs arquivar` faz o mesmo para os itens já fechados que ficaram para trás.
+- **O arquivo se limpa.** Arquivo de item fechado há mais de **30 dias** (pelo `feitoEm` do item; sem item na fila, pela data do arquivo) é apagado do `arquivo/`. Roda sozinho a cada item que fecha, e à mão com `painel handoffs limpar [--dias N] [--seco]` (`--seco` só lista).
+<!-- regra-do-handoff-do-item: fim -->
 
 ## Modo passar
 
@@ -34,7 +41,8 @@ mesmo repositório cai na mesma pasta. Nome do arquivo:
    `git branch --show-current`, `git rev-parse --short HEAD`, `git status --short`,
    `git log --oneline -5`, `git worktree list`, PR aberta (`gh pr view --json number,url,state`
    se houver), e processos que você deixou no ar (dev server, worker, watcher).
-2. **Preencha o molde abaixo.** Seção sem conteúdo leva `—` (nunca some: a ausência é
+2. **Reescreva o arquivo inteiro no molde abaixo** — nunca acrescente a passagem nova ao
+   fim do que já estava lá: o que ainda vale das passagens anteriores entra resumido. Seção sem conteúdo leva `—` (nunca some: a ausência é
    informação). Cada item de "Medido" e de "Tentado e falhou" leva **procedência** e
    **evidência**.
 3. **Mostre o caminho do arquivo** à pessoa e as 3 linhas de "Próximo passo".
