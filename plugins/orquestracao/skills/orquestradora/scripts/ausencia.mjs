@@ -70,7 +70,12 @@ const etapaDe = (h) => h?.etapa ?? h?.para ?? null;
 
 export function montarResumo({ projeto, desde, ate, repo, branch = 'main' }) {
   const d0 = ms(desde); const d1 = ms(ate);
-  const dentro = (v) => { const t = ms(v); return t !== null && t >= d0 && t <= d1; };
+  // Data só-dia (AAAA-MM-DD) vale como o dia inteiro em UTC: está dentro se o dia cruza o período.
+  const dentro = (v) => {
+    const t = ms(v); if (t === null) return false;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(v).trim())) return t <= d1 && t + 86400000 > d0;
+    return t >= d0 && t <= d1;
+  };
   const avisos = [];
   const mesmo = (p) => p && String(p).toLowerCase() === projeto;
 
