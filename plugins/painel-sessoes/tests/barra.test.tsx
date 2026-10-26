@@ -257,7 +257,7 @@ test('faixaDaBarra: o pedido de limpeza entra na soma, com a frase e o botão re
 })
 
 // A barra de uma E ou P (o pedido não é da própria sessão): a frase diz sempre quem pede.
-const DE_OUTRA: EstadoBarra = { ...REFERENCIA, tokens: 142_000, item: null, pool: null, abertas: 1, modo: 'presente', pedido: 'aberto', pedidoProprio: false }
+const DE_OUTRA: EstadoBarra = { ...REFERENCIA, tokens: 142_000, item: null, pool: null, abertas: 3, modo: 'presente', painelAberto: false, pedido: 'aberto', pedidoProprio: false }
 
 test('pecasDaBarra: pedido de outra sessão usa a frase longa em toda faixa; o da própria, a curta na 1 e na 2', () => {
   const frase = (e: EstadoBarra, f: 0 | 1 | 2) => pecasDaBarra(e, f).dir.find(p => p.k === 'pedido')?.t
@@ -267,7 +267,7 @@ test('pecasDaBarra: pedido de outra sessão usa a frase longa em toda faixa; o d
 })
 
 test('faixaDaBarra: a barra de uma E com pedido aberto a 142 mil soma 133, 106 e 85', () => {
-  expect([0, 1, 2].map(f => larguraDaFaixa(DE_OUTRA, f as 0 | 1 | 2))).toEqual([133, 106, 84])
+  expect([0, 1, 2].map(f => larguraDaFaixa(DE_OUTRA, f as 0 | 1 | 2))).toEqual([133, 106, 85])
   const f = (cols: number) => faixaDaBarra(cols, DE_OUTRA)
   expect([f(133), f(132), f(106), f(105)]).toEqual([0, 1, 1, 2])
 })
@@ -281,14 +281,19 @@ test('barra: o grupo da direita quebra a linha a 40 colunas, com pedido aberto',
   await ui.unmount()
 })
 
-test('faixaDaBarra: Enviando… e ✓ ok enviado somam o texto deles, não o do repouso', () => {
+test('faixaDaBarra: com pedido, aberto, Enviando… e ✓ ok enviado somam a mesma largura (a do repouso), e a faixa não muda debaixo do clique', () => {
+  const estados = ['aberto', 'enviando', 'enviado'] as const
   const repouso = larguraDaFaixa(COM_PEDIDO, 0)
-  expect(repouso).toBe(142)
-  expect(larguraDaFaixa({ ...COM_PEDIDO, pedido: 'enviando' }, 0), '`Enviando…` tem 5 células a menos que `Pode se limpar`').toBe(repouso - 5)
-  expect(larguraDaFaixa({ ...COM_PEDIDO, pedido: 'enviado' }, 0), 'frase e botão dão lugar a `✓ ok enviado`').toBe(107)
-  expect(faixaDaBarra(137, COM_PEDIDO), 'no repouso, 137 não cabe na faixa 0').toBe(1)
-  expect(faixaDaBarra(137, { ...COM_PEDIDO, pedido: 'enviando' })).toBe(0)
-  expect(faixaDaBarra(107, { ...COM_PEDIDO, pedido: 'enviado' })).toBe(0)
+  expect(repouso, 'o repouso soma 142').toBe(142)
+  for (const f of [0, 1, 2] as const) {
+    const somas = estados.map(pedido => larguraDaFaixa({ ...COM_PEDIDO, pedido }, f))
+    expect(new Set(somas).size, `faixa ${f}: ${somas.join('/')}`).toBe(1)
+  }
+  for (const cols of [140, 137, 114, 107, 101]) {
+    const faixas = estados.map(pedido => faixaDaBarra(cols, { ...COM_PEDIDO, pedido }))
+    expect(new Set(faixas).size, `${cols} colunas: ${faixas.join('/')}`).toBe(1)
+  }
+  expect(faixaDaBarra(137, { ...COM_PEDIDO, pedido: 'enviando' }), 'a 137 o repouso não cabe na 0, e o Enviando… também não').toBe(1)
 })
 
 test('pecasDaBarra: o pedido abre o grupo da direita; item, pool e o Ficar ausente caem', () => {
