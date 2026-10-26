@@ -72,7 +72,7 @@ function contido(sub, todo, caminho = '') {
     for (const [k, v] of Object.entries(sub)) { assert.ok(k in todo, `${caminho}.${k} sumiu`); contido(v, todo[k], `${caminho}.${k}`); }
   } else assert.equal(todo, sub, `${caminho} mudou`);
 }
-const NOMES_DOS_BLOCOS = ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'convencoes-de-teste', 'orquestradora'];
+const NOMES_DOS_BLOCOS = ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'documentos', 'design', 'convencoes-de-teste', 'orquestradora'];
 // num CLAUDE.md que já existe entram só os blocos de orquestração (c18b): `comandos` e `regras-de-operacao` podem contradizer as regras do projeto
 const NOMES_ADOTADOS = NOMES_DOS_BLOCOS.filter((x) => !['projeto', 'comandos', 'regras-de-operacao'].includes(x));
 

@@ -36,7 +36,7 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       for (const f of ['CLAUDE.md', '.claude/kit.json', '.claude/settings.json', '.claude/kit.lock.json', 'package.json']) assert.ok(existsSync(join(d, f)), `falta ${f}`);
       const claude = ler(d, 'CLAUDE.md');
       assert.ok(claude.startsWith(`# ${basename(d)}\n`), 'o título leva o nome da pasta');
-      assert.equal((claude.match(/<!-- kit:[a-z-]+ v\d+ -->/g) || []).length, 6);
+      assert.equal((claude.match(/<!-- kit:[a-z-]+ v\d+ -->/g) || []).length, 8);
       assert.deepEqual(json(d, '.claude/kit.json'), { gate: { comandoCompleto: 'npm run test:suite' } });
       const gate = readdirSync(join(RAIZ, 'gate')).filter((f) => f.endsWith('.mjs')).sort();
       assert.ok(gate.length >= 7, 'insumo vazio: gate/ sem scripts');
@@ -94,10 +94,10 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       assert.ok(arquivos.includes('CLAUDE.md') && arquivos.includes('.claude/kit.json') && arquivos.includes('scripts/kit/a-vez-do-gate.mjs'), arquivos.join());
       assert.ok(!arquivos.includes('.claude/kit.lock.json'), 'o lock não lista a si mesmo');
       for (const [f, h] of Object.entries(lock.arquivos)) assert.equal(h, sha(ler(d, f)), `hash de ${f}`);
-      assert.deepEqual(Object.keys(lock.blocos), ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'convencoes-de-teste', 'orquestradora']);
+      assert.deepEqual(Object.keys(lock.blocos), ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'documentos', 'design', 'convencoes-de-teste', 'orquestradora']);
       const claude = ler(d, 'CLAUDE.md');
       for (const [nome, b] of Object.entries(lock.blocos)) {
-        assert.equal(b.versao, nome === 'regras-de-trabalho' ? 2 : 1); // o bloco neutro de c18 subiu para v2
+        assert.equal(b.versao, nome === 'regras-de-trabalho' ? 3 : 1); // c18 subiu para v2; K10 para v3
         const m = new RegExp(`<!-- kit:${nome} v${b.versao} -->([\\s\\S]*?)<!-- /kit:${nome} -->`).exec(claude);
         assert.ok(m, `bloco ${nome} sumiu`);
         assert.equal(b.sha256, sha(m[1]), `hash do bloco ${nome}`);

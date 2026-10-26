@@ -250,7 +250,7 @@ describe('c18.6 adotar num projeto com guarda própria, gate próprio e CLAUDE.m
     // CLAUDE.md: sem o bloco projeto e sem a frase "opcionais"
     const claude = ler(real, 'CLAUDE.md');
     assert.doesNotMatch(claude, /kit:projeto/, 'o projeto já se descreve'); assert.doesNotMatch(claude, /opcionais/i, 'sem bloco que contradiz o Spec-driven');
-    assert.match(claude, /kit:regras-de-trabalho v2/); assert.match(claude, /declara isso nas regras dele/);
+    assert.match(claude, /kit:regras-de-trabalho v3/); assert.match(claude, /declara isso nas regras dele/);
     // doutor e remover
     const dr = a.kit(real, 'doutor'); assert.doesNotMatch(dr.stdout, /^falha:/m, dr.stdout);
     assert.match(dr.stdout, /aviso: scripts\/kit\/guarda-de-operacao\.mjs não foi copiado/);

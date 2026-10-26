@@ -51,10 +51,10 @@ test('marketplace.json lista os dois plugins, cada um com a versão esperada no 
   }
 });
 
-const BLOCOS = ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'convencoes-de-teste', 'orquestradora'];
+const BLOCOS = ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'documentos', 'design', 'convencoes-de-teste', 'orquestradora'];
 const blocos = (texto) => [...texto.matchAll(/<!-- kit:([a-z-]+) v(\d+) -->([\s\S]*?)<!-- \/kit:\1 -->/g)].map((m) => ({ nome: m[1], conteudo: m[3] }));
 
-test('modelos/CLAUDE.md tem os seis blocos marcados, abertos e fechados, não vazios', () => {
+test('modelos/CLAUDE.md tem os oito blocos marcados, abertos e fechados, não vazios', () => {
   const t = readFileSync(join(RAIZ, 'modelos', 'CLAUDE.md'), 'utf8');
   const b = blocos(t);
   assert.deepEqual(b.map((x) => x.nome), BLOCOS);
