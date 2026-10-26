@@ -112,7 +112,7 @@ A F48 (P1, branch `claude/f48-limpeza-e-header`) mexe nos mesmos arquivos em out
 - `npm test; echo "exit=$?"` → `exit=0`.
 - `claude plugin validate . ; echo "exit=$?"` e `claude plugin validate plugins/orquestracao --strict; echo "exit=$?"` → `exit=0`.
 - `grep -rn "livre-com-contexto\|satisfeito-parei" plugins/orquestracao/hooks/*.mjs` → vazio.
-- D7: `grep -rn "Q214\|teto previsto\|passa do teto\|acima do teto\|dentro do teto" plugins/orquestracao` → vazio; `grep -c "Q277" plugins/orquestracao/pool/protocolo.md plugins/orquestracao/skills/orquestradora/SKILL.md` → nenhum zero.
+- D7: `grep -rn "Q214\|teto previsto\|passa do teto\|acima do teto\|dentro do teto" plugins/orquestracao` → só a linha do "teto para a entrega" do subagente na skill orquestradora (outra regra); `grep -c "Q277" plugins/orquestracao/pool/protocolo.md plugins/orquestracao/skills/orquestradora/SKILL.md` → nenhum zero.
 - `grep -c "aguardando validação" plugins/orquestracao/pool/protocolo.md plugins/orquestracao/pool/papeis/executora.md plugins/orquestracao/pool/papeis/planejadora.md plugins/orquestracao/pool/papeis/orquestradora.md plugins/orquestracao/skills/orquestradora/SKILL.md` → nenhum zero.
 
 ## Fora de escopo
