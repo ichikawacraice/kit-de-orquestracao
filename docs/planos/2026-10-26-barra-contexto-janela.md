@@ -1,4 +1,4 @@
-# F65 — a barra mostra o contexto contra a janela, não contra a régua de limpeza
+# F65 — a barra mostra o contexto contra a janela, não contra a régua de limpeza (e o pedido de limpeza novo não some)
 
 - **Data:** 2026-10-26 · **Planejadora:** P1 · **Base:** main em `69850a4`
 - **Pedido do operador (26/10):** "a janela de contexto aqui da orquestradora está errada, esta falando 198/250 mas o contexto maximo é 600".
@@ -52,6 +52,22 @@ Regras: Node ≥ 20, ESM, sem dependência npm; teste antes do código; testes d
 - Mudar as réguas (`REGUAS`, `PEDIR`, `ALTO`, `TETO`, `EXEC`) ou o hook `contexto-do-papel.mjs`.
 - O frontmatter `autoCompactWindow` dos agentes e a skill `papeis-e-modelos` (corrigir lá que os membros do pool não herdam o frontmatter fica para outro item, se a orquestradora quiser).
 - Mostrar percentual, barra gráfica ou a régua como segundo número (`198/600 · limpa em 250`): recusado para não alargar a peça mais apertada da faixa; se a D achar que o número da régua faz falta, propõe no delta.
+
+## Parte B — o pedido de limpeza aberto depois do ok volta a aparecer (pedido do operador, 26/10)
+
+Origem: laudo da V da F52 (delta), "Observações", primeiro item: a janela de 30 min do ok esconde também um pedido `limpar · orquestradora` **aberto depois** do ok.
+
+- **Medido:** `perguntaDeLimpeza` (`barra.tsx` ≈ l. 98) devolve `null` se houver um sim do painel há ≤ 30 min (`OK_VALE_MS`) da mesma orquestradora, sem comparar o `respondidaEm` desse sim com o `atualizadoEm` das abertas. O teste da l. 118-131 de `barra.test.tsx` só cobre abertas **anteriores** ao ok. Efeito: a orquestradora abre um pedido novo (ex.: o ok chegou, ela não limpou, e pede de novo) e a barra e a faixa do pane (D10) não mostram o botão; a pergunta só aparece em "Esperam você", e ela fica esperando.
+- **Vale fazer.** A segurança não muda: a T7 já aceita o sim de ≤ 30 min, e um ok novo só renova essa prova pelo mesmo `responder`. O custo é uma comparação; o ganho é não esconder a pergunta de quem espera a resposta.
+- **D6 · Regra:** o sim do painel de ≤ 30 min esconde só as abertas com `atualizadoEm` **até** o `respondidaEm` dele (≤); aberta com `atualizadoEm` posterior volta a ser candidata, e entre as candidatas vale a mais recente, como hoje. Com vários sins na janela, vale o de `respondidaEm` mais recente. `atualizadoEm` ilegível na aberta → tratada como anterior (escondida, o comportamento de hoje). *Assumida, a confirmar.*
+  - Limite conhecido: o painel não grava data de criação, então uma aberta **antiga** que seja regravada depois do ok (o `atualizadoEm` muda) também volta. Aceito: regravar a pergunta é a orquestradora ainda pedindo.
+- **Passos para a E** (antes da parte A ou junto, mesmo PR):
+  1. Teste vermelho em `barra.test.tsx`, no teste da l. 118: `ok('Q99053', 5)` (sim às 11:55) com `limpar('Q99054', { atualizadoEm: '2026-10-26T11:58:00Z' })` → devolve `Q99054`; aberta com `atualizadoEm` igual ao `respondidaEm` → `null`; dois sins na janela (5 e 20 min) e aberta entre eles (11:50) → `null` (vale o mais recente); aberta com `atualizadoEm` inválido → `null`. Os casos já existentes continuam verdes sem mudança.
+  2. Teste montado (o mesmo `iniciar`/`montar` da barra): com o sim de 5 min e um pedido aberto 2 min atrás, a barra mostra a linha `A orquestradora pede para se limpar` e o botão `Pode se limpar`; e o pane (`desenharPedidoNoPane`) também, porque lê da mesma função.
+  3. Código: em `perguntaDeLimpeza`, troque o `some(...)` que devolve `null` pelo cálculo do `respondidaEm` mais recente dos sins válidos e filtre as `achadas` por `Date.parse(atualizadoEm) > esse`. Comentário de uma linha dizendo a regra.
+  4. `processos:auditoria-de-clique` no gesto `Pode se limpar` depois do pedido novo: o clique grava o sim na pergunta nova, a próxima leitura a esconde, e o "✓ Ok enviado" aparece (o `respondidaAgora` do `lerBarra` compara pelo `id`, então segue valendo).
+- **Critério de pronto:** os quatro casos do passo 1 e o montado do passo 2 verdes; os testes atuais de `perguntaDeLimpeza` verdes sem edição.
+- **Para a V:** tente fazer o pedido novo sumir (empate de horário, sim de outra `sessaoId`, sim com `resposta: não`, sim de 31 min) e confira que a T7 (`plugins/orquestracao`) não foi tocada.
 
 ## Para a V
 
