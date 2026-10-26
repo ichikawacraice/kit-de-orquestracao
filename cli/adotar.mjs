@@ -45,7 +45,7 @@ export function adotar({ destino, perfil: perfilPedido, versao, simular = false,
   }
   for (const t of plano.avisos) linhas.push(`trocado: ${t}`);
   for (const a of plano.avisosProjeto) linhas.push(`aviso: ${a}`);
-  if (plano.docsExistentes.length) linhas.push(`aviso: ${avisoDasRegras(plano.docsExistentes)}`);
+  if (plano.docsExistentes.length) linhas.push(`aviso: ${avisoDasRegras(plano.docsExistentes, true)}`);
   for (const c of plano.conflitos) linhas.push(`conflito: ${c}`);
   for (const p of plano.pendencias) linhas.push(`pendente: ${p}`);
   if (barrado) linhas.push(`kit adotar${simular ? ' --simular' : ''}: ${plano.conflitos.length} conflito(s); nada foi gravado. Resolva e rode de novo, ou use --parcial para gravar o resto e deixar os conflitos registrados no lock como pendentes.`);

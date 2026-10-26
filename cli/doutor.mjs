@@ -109,7 +109,7 @@ function processos(destino, home, configs, linhas) {
   }
   // plugin fora do enabledPlugins (projeto instalado antes dos processos): o gate confere as docs mesmo assim, pelo padrão
   const docsDoProj = docsDoProjeto(destino);
-  if (ligado.processos === undefined && !Array.isArray(kj.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: plugin processos fora do enabledPlugins deste projeto, mas o gate confere as docs mesmo assim (documentos.conferir ausente = as cinco regras): ${avisoDasRegras(docsDoProj)}`);
+  if (ligado.processos === undefined && !Array.isArray(kj.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: plugin processos fora do enabledPlugins deste projeto, mas o gate confere as docs mesmo assim (documentos.conferir ausente = as cinco regras): ${avisoDasRegras(docsDoProj, ligado.processos)}`);
   // design: a guarda só age com pasta do front (design.pasta, design.visual ou a opção pasta_do_front do plugin)
   const opDesign = opcoesDoPlugin('design', home);
   const pasta = typeof kj.design?.pasta === 'string' ? kj.design.pasta.replace(/\/+$/, '') : '';

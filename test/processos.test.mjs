@@ -310,7 +310,20 @@ describe('V2 M1 — projeto instalado antes dos processos: o atualizar e o douto
     assert.match(r.stdout, /podem reprovar o primeiro gate/);
     assert.match(r.stdout, /docs\/adr/);
     assert.match(r.stdout, /documentos\.conferir/);
-    assert.match(r.stdout, /\/plugin do terminal/);
+  });
+
+  it('B6: com o plugin fora do enabledPlugins o aviso manda ligá-lo ou usar o kit.json, não o /plugin; com o plugin ligado, o /plugin vale', () => {
+    const d = projetoAntigo();
+    const fora = kit(d, 'atualizar').stdout;
+    assert.match(fora, /ligue o plugin processos/);
+    assert.match(fora, /enabledPlugins/);
+    assert.match(fora, /documentos\.conferir/);
+    assert.doesNotMatch(fora, /\/plugin do terminal/, 'o plugin nem está ligado: o /plugin não tem opção para ajustar');
+    const s = json(d, '.claude/settings.json'); s.enabledPlugins[`processos@${MKT}`] = true; escrever(d, '.claude/settings.json', JSON.stringify(s));
+    const ligado = kit(d, 'atualizar').stdout;
+    assert.match(ligado, /podem reprovar o primeiro gate/);
+    assert.match(ligado, /\/plugin do terminal/);
+    assert.doesNotMatch(ligado, /ligue o plugin/);
   });
 
   it('com documentos.conferir no kit.json, ou sem docs, o atualizar não avisa', () => {
@@ -330,6 +343,8 @@ describe('V2 M1 — projeto instalado antes dos processos: o atualizar e o douto
     const r = kit(d, 'doutor').stdout;
     assert.match(r, /processos.*fora do enabledPlugins/);
     assert.match(r, /docs\/adr/);
+    assert.match(r, /ligue o plugin processos/);
+    assert.doesNotMatch(r, /\/plugin do terminal/);
     const k = json(d, '.claude/kit.json'); k.documentos = { conferir: [] }; escrever(d, '.claude/kit.json', JSON.stringify(k));
     assert.doesNotMatch(kit(d, 'doutor').stdout, /fora do enabledPlugins/);
   });

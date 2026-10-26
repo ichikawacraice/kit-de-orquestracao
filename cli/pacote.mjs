@@ -66,8 +66,14 @@ export function planejarModelos(destino, pastaDoFrontEscolhida) {
 
 /** Os documentos que o projeto já tem e que as regras de conferência olhariam. */
 export const docsDoProjeto = (destino) => ['docs/adr', 'docs/specs', 'docs/roadmap.md', 'docs/diario'].filter((rel) => existsSync(join(destino, rel)));
-/** O aviso de que as cinco regras de conferência, ligadas por padrão, podem reprovar o primeiro gate com os documentos que o projeto já tem. */
-export const avisoDasRegras = (docs) => `o projeto já tem ${docs.join(', ')} e o plugin processos liga as cinco regras de conferência de documento por padrão: elas podem reprovar o primeiro gate com os documentos de hoje. Para desligar para o time, escreva documentos.conferir no .claude/kit.json (lista vazia não confere nada); para ajustar só a sua conta, use o /plugin do terminal (opções do processos), que grava no seu ~/.claude/settings.json.`;
+/**
+ * O aviso de que as cinco regras de conferência, ligadas por padrão, podem reprovar o primeiro gate com os documentos que o projeto já tem.
+ * `pluginLigado`: o que `enabledPlugins` diz do `processos` (`true`, `false` ou `undefined`; sem valor não vale como ligado). Fora do `enabledPlugins` o `/plugin` não tem
+ * opção para ajustar: o aviso manda ligar o plugin ou, para desligar uma regra, escrever `documentos.conferir` no kit.json.
+ */
+export const avisoDasRegras = (docs, pluginLigado) => (pluginLigado === true
+  ? `o projeto já tem ${docs.join(', ')} e o plugin processos liga as cinco regras de conferência de documento por padrão: elas podem reprovar o primeiro gate com os documentos de hoje. Para desligar para o time, escreva documentos.conferir no .claude/kit.json (lista vazia não confere nada); para ajustar só a sua conta, use o /plugin do terminal (opções do processos), que grava no seu ~/.claude/settings.json.`
+  : `o projeto já tem ${docs.join(', ')} e o gate confere as docs pelo padrão do plugin processos (as cinco regras) mesmo com o plugin fora do enabledPlugins deste projeto: elas podem reprovar o primeiro gate com os documentos de hoje. Para poder ajustar as opções, ligue o plugin processos (enabledPlugins "processos@${MARKETPLACE}": true no .claude/settings.json); para desligar uma regra sem ligá-lo, escreva documentos.conferir no .claude/kit.json (lista vazia não confere nada).`);
 
 /** Os caminhos (relativos ao projeto) dos modelos de documento e, com `--design`, de front: onde um `.kit-tmp` órfão pode ter ficado. */
 export const caminhosDosModelos = (pastaDoFrontEscolhida) => [

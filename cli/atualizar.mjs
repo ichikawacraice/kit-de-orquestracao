@@ -1,6 +1,8 @@
 // `kit atualizar [--simular]`: troca pela versão nova o que o projeto não editou; o que foi editado vira conflito com o diff.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { diffTexto } from './diff.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { RAIZ_DO_KIT, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
@@ -60,7 +62,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
   // o projeto instalado antes dos processos passa a ter as cinco regras ligadas pelo padrão do plugin: diz isso, uma vez por atualização
   const kitJson = (() => { try { return JSON.parse(semBom(lerTexto(destino, '.claude/kit.json') ?? '{}')); } catch { return {}; } })();
   const docsDoProj = docsDoProjeto(destino);
-  if (!Array.isArray(kitJson.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: ${avisoDasRegras(docsDoProj)}`);
+  if (!Array.isArray(kitJson.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: ${avisoDasRegras(docsDoProj, pluginLigado('processos', destino, process.env.HOME || homedir(), process.env))}`);
 
   if (trocarTest) trocarOTest({ destino, lock, mudancas, linhas, conflito });
 
