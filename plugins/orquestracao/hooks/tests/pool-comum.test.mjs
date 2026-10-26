@@ -23,7 +23,7 @@ git(A, 'worktree', 'add', '-q', join(base, 'alfa-wt'), '-b', 'wt');
 const SEM = join(base, 'semgit'); mkdirSync(SEM);
 
 process.env.HOME = join(base, 'home'); mkdirSync(join(base, 'home', '.claude', 'projects', 'p'), { recursive: true });
-const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
+const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre, ocupacaoDaSessao } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
 function reg(k, campos) {
   writeFileSync(join(base, 'app', 'conta', `local_${k}.json`), JSON.stringify({ sessionId: `local_${k}`, cliSessionId: `cli-${k}`, title: `E1 · x`, ...campos }));
   return registroDaSessao(`cli-${k}`, { fresco: true });
@@ -172,6 +172,25 @@ caso_repoDoMarcador();
     eq(a?.como, 'título aguardando', 'como'); eq(a?.aguardando, true, 'aguardando'); eq(a?.propria, true, 'propria');
     const l = declarouLivre(t('E2 · livre'), 0, []);
     eq(l?.como, 'título livre', 'como livre'); eq(l?.aguardando, false, 'aguardando do livre');
+    console.log(`ok   ${nome}`);
+  } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
+}
+{
+  const nome = 'B1 ocupacaoDaSessao: pasta da fila ausente (ENOENT) → ocupação vazia; arquivo no lugar da pasta e item ilegível → null';
+  try {
+    const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${m}: esperava ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
+    const antes = process.env.FILA_DIR;
+    const fila = join(base, 'fila-b1');
+    process.env.FILA_DIR = fila;
+    eq(ocupacaoDaSessao('local_X'), { com: [], fez: [], dono: [] }, 'pasta ausente');
+    mkdirSync(fila);
+    writeFileSync(join(fila, 'F1.json'), JSON.stringify({ id: 'F1', data: { etapa: 'execucao', com: [{ localId: 'local_X' }] } }));
+    eq(ocupacaoDaSessao('local_X'), { com: ['F1'], fez: [], dono: [] }, 'prova: a presença é detectada');
+    writeFileSync(join(fila, 'F2.json'), '{parcial');
+    eq(ocupacaoDaSessao('local_X'), null, 'item ilegível');
+    const arq = join(base, 'fila-arquivo'); writeFileSync(arq, 'x'); process.env.FILA_DIR = arq;
+    eq(ocupacaoDaSessao('local_X'), null, 'arquivo no lugar da pasta');
+    if (antes === undefined) delete process.env.FILA_DIR; else process.env.FILA_DIR = antes;
     console.log(`ok   ${nome}`);
   } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
 }

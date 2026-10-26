@@ -256,6 +256,12 @@ caso('D8.6: doc × código — protocolo e skill da orquestradora citam Q277 e n
     ok(t.length > 0 && t.includes('Q277'), `${f} sem Q277`);
     ok(!t.includes('arquive só quando ele mandar'), `${f} ainda manda arquivar só por comando`);
   }
+  // A1: a regra velha (só com o comando do operador, pergunta de arquivar) não pode sobrar em doc nem no ritual.
+  for (const f of ['pool/protocolo.md', 'skills/orquestradora/SKILL.md', 'pool/papeis/orquestradora.md', 'hooks/orquestradora-ritual.mjs']) {
+    const t = readFileSync(join(raiz, f), 'utf8');
+    ok(t.length > 0, `${f} vazio`);
+    for (const velho of ['comando do operador', 'pergunta de arquivar', 'não conta no teto']) ok(!t.includes(velho), `${f} ainda tem "${velho}"`);
+  }
 });
 caso('T3a: modo ausente e turno que NÃO é do operador → start_session nega, até para a orquestradora', () => {
   bandeira(Date.now() - 3600_000);

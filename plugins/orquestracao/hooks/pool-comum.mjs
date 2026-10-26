@@ -105,11 +105,11 @@ export function itensDonosDaSessao(localId) {
 }
 
 // F49/D8: tudo o que prende a sessão a item vivo (etapa ≠ feito/descartado): `com`, `fez` (de QUALQUER etapa viva) e dono. Quem decide arquivar
-// não pode tratar erro como "sem item": pasta da fila ilegível, ou item que não se lê, → null (quem chama nega). Os outros helpers não mudam.
+// não pode tratar erro como "sem item": pasta da fila ilegível (≠ ausente: sem pasta não há item vivo), ou item que não se lê, → null (quem chama nega). Os outros helpers não mudam.
 export function ocupacaoDaSessao(localId) {
   const saida = { com: [], fez: [], dono: [] };
   if (!localId) return saida;
-  let nomes; try { nomes = readdirSync(filaDir()); } catch { return null; }
+  let nomes; try { nomes = readdirSync(filaDir()); } catch (err) { return err?.code === 'ENOENT' ? saida : null; }
   for (const nome of nomes) {
     if (!nome.endsWith('.json')) continue;
     try {
