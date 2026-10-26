@@ -114,6 +114,14 @@ const ehPasta = (caminho) => {
   }
 };
 
+const ehArquivo = (caminho) => {
+  try {
+    return statSync(caminho).isFile();
+  } catch {
+    return false;
+  }
+};
+
 const arquivosDe = (dir, padrao) => (existsSync(dir) && statSync(dir).isDirectory() ? readdirSync(dir).filter((f) => padrao.test(f)).sort() : []);
 
 /** O contexto de uma conferência: raiz, pastas absolutas e orçamentos, já mesclados com os padrões. */
@@ -308,7 +316,7 @@ const REGRAS = {
   "tamanho-do-diario"(c) {
     const acervo = arquivosDe(c.diario, /^\d{4}-\d{2}(-parte-\d+)?\.md$/);
     const subpastas = existsSync(c.diario) && statSync(c.diario).isDirectory() ? readdirSync(c.diario).filter((f) => !f.startsWith(".") && ehPasta(join(c.diario, f))).sort() : [];
-    const entradas = subpastas.filter(MES_VALIDO.test.bind(MES_VALIDO)).flatMap((mes) => arquivosDe(join(c.diario, mes), /\.md$/).map((f) => `${mes}/${f}`));
+    const entradas = subpastas.filter(MES_VALIDO.test.bind(MES_VALIDO)).flatMap((mes) => arquivosDe(join(c.diario, mes), /\.md$/).filter((f) => ehArquivo(join(c.diario, mes, f))).map((f) => `${mes}/${f}`));
     c.vistos = acervo.length + entradas.length;
     if (c.vistos === 0 && subpastas.length === 0) return { achados: [], nada: `nenhum AAAA-MM.md nem AAAA-MM/DD-*.md em ${c.rel(c.diario)}` };
     const achados = [];
@@ -322,7 +330,7 @@ const REGRAS = {
       if (!MES_VALIDO.test(nome)) acha(nome, `pasta do mês fora de AAAA-MM: "${nome}"`);
     }
     for (const mes of subpastas.filter((n) => MES_VALIDO.test(n))) {
-      for (const sub of readdirSync(join(c.diario, mes)).filter((f) => ehPasta(join(c.diario, mes, f))).sort()) acha(`${mes}/${sub}`, "subpasta dentro do mês; a entrada mora direto em AAAA-MM/");
+      for (const sub of readdirSync(join(c.diario, mes)).filter((f) => !f.startsWith(".") && ehPasta(join(c.diario, mes, f))).sort()) acha(`${mes}/${sub}`, "subpasta dentro do mês; a entrada mora direto em AAAA-MM/");
     }
     for (const entrada of entradas) {
       const texto = ler(join(c.diario, entrada));

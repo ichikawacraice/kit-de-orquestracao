@@ -531,6 +531,35 @@ describe("tamanho-do-diario", () => {
       }
     });
 
+    it("pasta chamada x.md dentro do mês não derruba o gate: não é arquivo, não conta como entrada", () => {
+      const raiz = pasta({ "docs/diario/2026-11/03-x.md": entrada("x"), "docs/diario/2026-11/x.md/dentro.txt": "i\n" });
+      try {
+        const r = conferirDocs(raiz, {}, ["tamanho-do-diario"]);
+        assert.equal(r.arquivos, 1);
+        assert.ok(r.achados.every((a) => !/EISDIR/.test(a.motivo)));
+      } finally {
+        limpar(raiz);
+      }
+    });
+
+    it("link simbólico .md pendurado dentro do mês é pulado, sem exceção", () => {
+      const raiz = pasta({ "docs/diario/2026-11/03-x.md": entrada("x") });
+      try {
+        symlinkSync(join(raiz, "nao-existe"), join(raiz, "docs/diario/2026-11/04-y.md"));
+        const r = conferirDocs(raiz, {}, ["tamanho-do-diario"]);
+        assert.equal(r.arquivos, 1);
+        assert.deepEqual(r.achados, []);
+      } finally {
+        limpar(raiz);
+      }
+    });
+
+    it("pasta oculta dentro do mês é ignorada, como na raiz", () => {
+      const r = rodar({ "docs/diario/2026-11/03-x.md": entrada("x"), "docs/diario/2026-11/.algo/z.txt": "z\n" });
+      assert.equal(r.arquivos, 1);
+      assert.deepEqual(r.achados, []);
+    });
+
     it("pasta oculta na raiz do diário é ignorada; a de nome inválido sem ponto continua reprovando", () => {
       const ok = rodar({ "docs/diario/2026-11/03-x.md": entrada("x"), "docs/diario/.obsidian/x.json": "{}", "docs/diario/.git/HEAD": "ref\n" });
       assert.deepEqual(ok.achados, []);
