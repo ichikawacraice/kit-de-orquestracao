@@ -145,13 +145,13 @@ ${texto(x + 26, y + 23.5, 13, 's', xml(caber(c.rotulo, 13, tw - 32)))}
   return { height, source: svg(W, height, blocos.join('')) }
 }
 
-export function perguntaSvg(W: number, q: PerguntaAberta, citados: Citado[] = []): { source: string; height: number } {
+export function perguntaSvg(W: number, q: PerguntaAberta, citados: Citado[] = [], rotuloReco = 'Recomendo'): { source: string; height: number } {
   const pilula = largura(q.id, 13) + 18
   // Sem teto de linhas: o operador responde pelo card, e frase cortada não se responde (pedido de 23/10).
   const titulo = quebrar(q.titulo, 15, W - 32, Infinity)
   const caso = q.caso ? quebrar(q.caso, 13, W - 32, Infinity) : []
   const seNao = q.seNaoDecidir ? quebrar(`Se não decidir: ${q.seNaoDecidir}`, 13, W - 32, Infinity) : []
-  const reco = q.recomendacao ? quebrar(`Recomendo: ${q.recomendacao}`, 13, W - 32, Infinity) : []
+  const reco = q.recomendacao ? quebrar(`${rotuloReco}: ${q.recomendacao}`, 13, W - 32, Infinity) : []
   let y = 60
   const partes: string[] = []
   for (const l of titulo) {

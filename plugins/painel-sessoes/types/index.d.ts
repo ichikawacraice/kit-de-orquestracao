@@ -106,6 +106,8 @@ export type Leitura = {
   /** Todos os itens da fila, de qualquer etapa e idade (a leitura de 24 h só alcança `itens`). Ausente no estado de antes desta versão. */
   indice?: ItemDoIndice[]
   perguntas: PerguntaAberta[]
+  /** As decisões que uma sessão assumiu (`estado: assumida`), a confirmar pelo operador; da mais nova para a mais velha. Ausente no estado de antes desta versão. */
+  assumidas?: PerguntaAberta[]
   /** As últimas respondidas e canceladas, da mais nova para a mais velha. */
   anteriores: PerguntaAnterior[]
   /** As sessões vivas da última leitura (a do próprio pane inclusive). Ausente no estado de antes desta versão. */
@@ -156,6 +158,7 @@ declare module 'claude-code' {
       /** A pergunta com o campo de resposta aberto, ou nenhuma. */
       respondendoEm: string | null
       verAnteriores: boolean
+      verAssumidas: boolean
       verFeitos: boolean
       /** A lista de todos os itens aberta. */
       verTodos: boolean

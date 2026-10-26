@@ -2924,3 +2924,114 @@ test('F85 C: o cartão do item sem orquestradora ativa diz a saída, sem a conta
   expect(ts).toContain('Sem orquestradora ativa em kit · abra uma orquestradora para pedir')
   await ui.unmount()
 })
+
+// F85 D: a decisão que a sessão assumiu fica no painel, a confirmar.
+const ASSUMIDA = (id: string, extra: Record<string, unknown> = {}, version = 3) =>
+  doc(id, { projeto: 'izanagi', sessao: 'frente B', sessaoId: 'local_b', titulo: `decisão ${id}`, recomendacao: `seguir com ${id}`, estado: 'assumida', ...extra }, version)
+const RESPONDIDA_ANTIGA = doc('Q5', { projeto: 'izanagi', sessao: 'frente B', titulo: 'já fechada', estado: 'respondida', resposta: 'sim' }, 2)
+const comAssumidas = (extra: Partial<Opcoes> = {}): Opcoes => ({ perguntas: [ASSUMIDA('Q30'), ASSUMIDA('Q31'), RESPONDIDA_ANTIGA], fila: {}, ...extra })
+const abrirAssumidas = async ($: Parameters<TestBody>[0], on: On, surface: 'desktop' | 'terminal' = 'desktop', extra: Partial<Opcoes> = {}) => {
+  const motor = engine(on, false, {}, { agora: AGORA, vivas: vivasDe(P7), ...comAssumidas(extra) })
+  await $.session.start({ cwd: '/', surface, isInteractive: true })
+  await $.command.run(ABRIR)
+  await motor.relogio.settle()
+  const ui = await $.ui.mount({ ...PANE, surface })
+
+  return { ...motor, ui }
+}
+
+test('F85 D (1): a assumida não entra em "Perguntas respondidas" nem nas contas do topo', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on)
+  const lido = await lerTudo(ui)
+  expect(lido, 'precondição: a respondida de verdade existe').toMatch(/Perguntas respondidas · 1/)
+  expect(lido, 'só a respondida conta').not.toMatch(/Perguntas respondidas · [23]/)
+  expect(lido).toMatch(/0 Esperam você/)
+  expect(await ui.find({ key: 'Q30:confirmar' }), 'recolhida: o cartão não aparece').toBeUndefined()
+  await ui.press({ key: 'anteriores' })
+  expect(await lerTudo(ui), 'as assumidas não vão à lista das fechadas').not.toMatch(/Q30 · assumida/)
+  await ui.unmount()
+})
+
+test('F85 D (2): o botão do rodapé mostra o N e abre a lista com "Assumido:" e as ações', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on)
+  expect((await ui.find({ key: 'assumidas' }))?.text).toBe('▸ Decisões assumidas · 2')
+  await ui.press({ key: 'assumidas' })
+  expect((await ui.find({ key: 'assumidas' }))?.text).toBe('▾ Decisões assumidas · 2')
+  const lido = await lerTudo(ui)
+  expect(lido).toMatch(/Q31[^\n]*decisão Q31/)
+  expect(lido).toMatch(/Assumido: seguir com Q30/)
+  expect(lido, 'o rótulo da pergunta aberta não vaza').not.toMatch(/Recomendo: seguir com Q30/)
+  for (const q of ['Q30', 'Q31']) {
+    expect(await ui.find({ key: `${q}:confirmar` }), `${q} Confirmar`).toBeDefined()
+    expect(await ui.find({ key: `${q}:mudar` }), `${q} Mudar…`).toBeDefined()
+  }
+  expect(lido.indexOf('Q31'), 'a mais nova primeiro').toBeLessThan(lido.indexOf('Q30'))
+  await ui.unmount()
+})
+
+test('F85 D (2b): sem assumida o botão não existe (o rodapé existe, a ausência é medida)', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on, 'desktop', { perguntas: [RESPONDIDA_ANTIGA] })
+  expect(await ui.find({ key: 'anteriores' }), 'precondição: o rodapé existe').toBeDefined()
+  expect(await ui.find({ key: 'assumidas' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('F85 D (2c): o terminal tem a mesma lista e as mesmas ações', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on, 'terminal')
+  expect((await ui.find({ key: 'assumidas' }))?.text).toBe('▸ Decisões assumidas · 2')
+  await ui.press({ key: 'assumidas' })
+  expect(await lerTudo(ui)).toMatch(/Assumido: seguir com Q30/)
+  expect(await ui.find({ key: 'Q30:confirmar' })).toBeDefined()
+  expect(await ui.find({ key: 'Q30:mudar' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('F85 D (3): Confirmar grava respondida com a prova do clique e não acorda a sessão', async ($, on) => {
+  const { ui, arquivos, enviadas, prompts, toasts, relogio } = await abrirAssumidas($, on)
+  await ui.press({ key: 'assumidas' })
+  expect(await ui.find({ key: 'Q30:confirmar' }), 'precondição').toBeDefined()
+  await ui.press({ key: 'Q30:confirmar' })
+  await relogio.settle()
+  const gravado = JSON.parse(arquivos.get(`${PASTA}/perguntas/Q30.json`) as string) as Doc
+  expect(gravado.version).toBe(4)
+  expect(gravado.data).toMatchObject({ estado: 'respondida', resposta: 'confirmada pelo operador (painel)', respondidaPor: 'painel', respondidaEm: new Date(AGORA).toISOString() })
+  expect(enviadas, 'não manda nada à sessão').toEqual([])
+  expect(prompts).toEqual([])
+  expect(toasts).toContain('Q30 confirmada')
+  const lido = await lerTudo(ui)
+  expect(lido, 'a confirmada sai das assumidas').toMatch(/Decisões assumidas · 1/)
+  expect(lido, 'e entra nas respondidas').toMatch(/Perguntas respondidas · 2/)
+  await ui.unmount()
+})
+
+test('F85 D (4): Mudar… grava o texto e entrega à sessão dona com o texto da assumida', async ($, on) => {
+  const { ui, arquivos, enviadas, relogio } = await abrirAssumidas($, on)
+  await ui.press({ key: 'assumidas' })
+  expect(await ui.find({ key: 'Q30:outra' }), 'precondição: o campo começa fechado').toBeUndefined()
+  await ui.press({ key: 'Q30:mudar' })
+  await ui.input({ key: 'Q30:outra', text: 'rebasear só depois do gate' })
+  await relogio.settle()
+  const gravado = JSON.parse(arquivos.get(`${PASTA}/perguntas/Q30.json`) as string) as Doc
+  expect(gravado.data).toMatchObject({ estado: 'respondida', resposta: 'rebasear só depois do gate', respondidaPor: 'painel' })
+  expect(enviadas.length).toBe(1)
+  expect(enviadas[0]?.session_id).toBe('local_b')
+  const msg = String(enviadas[0]?.message)
+  expect(msg).toMatch(/^Q30 — decisão que ESTA sessão assumiu/)
+  expect(msg).toContain('"decisão Q30"')
+  expect(msg).toContain('O operador mudou pelo painel: rebasear só depois do gate.')
+  await ui.unmount()
+})
+
+test('F85 D (5): assumida que mudou desde a leitura não é sobrescrita e vira aviso', async ($, on) => {
+  const { ui, arquivos, escritas, enviadas, relogio } = await abrirAssumidas($, on)
+  await ui.press({ key: 'assumidas' })
+  const mudada = JSON.stringify(ASSUMIDA('Q30', { estado: 'respondida', resposta: 'outro operador' }, 4))
+  arquivos.set(`${PASTA}/perguntas/Q30.json`, mudada)
+  await ui.press({ key: 'Q30:confirmar' })
+  await relogio.settle()
+  expect(escritas.filter(e => e.doc_id === 'Q30'), 'nada gravado').toEqual([])
+  expect(arquivos.get(`${PASTA}/perguntas/Q30.json`)).toBe(mudada)
+  expect(enviadas).toEqual([])
+  expect(await lerTudo(ui)).toMatch(/Q30 não gravada: Q30 mudou desde a leitura \(agora: respondida\)/)
+  await ui.unmount()
+})
