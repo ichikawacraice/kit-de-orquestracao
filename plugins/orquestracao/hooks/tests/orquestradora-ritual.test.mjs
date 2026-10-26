@@ -130,6 +130,24 @@ test('(iii) sem E livre, ausente desligado, sem start_session → bloqueia pedin
   assert.match(r.reason, /F7/); assert.match(r.reason, /sem E livre/); assert.match(r.reason, /start_session/);
 });
 
+const planejando = (F) => item(F, { etapa: 'planejamento', donoApelido: null, com: [], historico: [{ em: minAtras(10), etapa: 'planejamento', dono: null }] });
+test('(iii-P) item em planejamento sem P + P2 livre → bloqueia citando esperando P e P2', () => {
+  planejando('F9'); livre('local_P2', 'P2 · livre');
+  const r = rodar([LIST, GRAVA]);
+  assert.equal(r?.decision, 'block');
+  assert.match(r.reason, /F9/); assert.match(r.reason, /esperando P há 10 min/); assert.match(r.reason, /livres: P2/);
+});
+test('(iii-P2) item em planejamento sem P e sem P livre → pede a vaga de P', () => {
+  planejando('F9');
+  const r = rodar([LIST, GRAVA]);
+  assert.equal(r?.decision, 'block');
+  assert.match(r.reason, /F9/); assert.match(r.reason, /sem P livre/); assert.match(r.reason, /start_session/);
+});
+test('(iii-P3) item em planejamento com P dona não é cobrado', () => {
+  item('F9', { etapa: 'planejamento', donoApelido: 'P3', com: [{ apelido: 'P3' }], historico: [{ em: minAtras(10), etapa: 'planejamento', dono: 'P3' }] });
+  assert.equal(rodar([LIST, GRAVA]), null);
+});
+
 test('(iv) sem E livre, com start_session no turno → passa', () => {
   item('F7');
   assert.equal(rodar([LIST, GRAVA, START]), null);

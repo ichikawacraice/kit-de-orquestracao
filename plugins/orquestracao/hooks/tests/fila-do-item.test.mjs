@@ -352,6 +352,9 @@ caso('F58-4f: stop_hook_active passa; dona que se declarou livre passa como hoje
   transcript(livreNoTurno());
   igual(rodar(stop()), null, 'livre');
 });
+caso('F58-4p: dona P de item em planejamento não é cobrada por esperar P', () => {
+  igual(esperando(turno(), esperaE({ etapa: 'planejamento', historico: [{ em: DESDE, etapa: 'planejamento', dono: 'P1' }] })), null, 'planejamento com P dona');
+});
 caso('F58-4g: item com E no com não é cobrado; as duas faltas (não gravou + espera) saem na mesma razão', () => {
   igual(esperando(turno(), esperaE({ com: [{ apelido: 'P1' }, { apelido: 'E1' }] })), null, 'com E passa');
   rmSync(join(filaDir(), 'F58.json'));

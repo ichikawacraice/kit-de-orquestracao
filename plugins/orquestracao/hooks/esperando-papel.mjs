@@ -2,7 +2,7 @@
 // e pelo fila-do-item. O pane (plugin painel-sessoes) tem a cópia em `hooks/esperando.ts`; o teste
 // `esperando-concorda.test.mjs` compara as duas. Plano: docs/planos/2026-10-26-item-esperando-papel.md (D1).
 
-export const PAPEL_DA_ETAPA = { design: 'D', execucao: 'E', validacao: 'V' };
+export const PAPEL_DA_ETAPA = { planejamento: 'P', design: 'D', execucao: 'E', validacao: 'V' };
 
 const ms = (v) => { const t = Date.parse(v); return Number.isNaN(t) ? null : t; };
 const doPapel = (apelido, papel) => typeof apelido === 'string' && apelido.toUpperCase().startsWith(papel);

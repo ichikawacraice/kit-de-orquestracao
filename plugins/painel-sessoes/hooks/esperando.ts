@@ -2,9 +2,9 @@
 // (o pane é outro plugin e não alcança o outro). O teste `esperando-concorda.test.mjs` do plugin orquestracao compara as duas
 // sobre a mesma tabela de casos: mude nas duas. Só anotações de tipo, para o Node tirá-las sozinho.
 
-export type Esperando = { papel: 'D' | 'E' | 'V'; desde: string; minutos: number; entregue: boolean }
+export type Esperando = { papel: 'P' | 'D' | 'E' | 'V'; desde: string; minutos: number; entregue: boolean }
 
-export const PAPEL_DA_ETAPA: Record<string, 'D' | 'E' | 'V'> = { design: 'D', execucao: 'E', validacao: 'V' }
+export const PAPEL_DA_ETAPA: Record<string, 'P' | 'D' | 'E' | 'V'> = { planejamento: 'P', design: 'D', execucao: 'E', validacao: 'V' }
 
 const ms = (v: unknown): number | null => {
   const t = Date.parse(String(v))
