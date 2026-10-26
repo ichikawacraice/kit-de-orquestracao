@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { esperandoPapel } from './esperando'
-import type { Citado, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
+import type { Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
 import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, LEITURA_MS, RASCUNHO, RESPOSTA_DO_OK, abertasDoProjeto, contarPool, desenharBarra, desenharPedidoNoPane, meuItem, orquestradorasDoProjeto, papelEApelido, perguntaDeLimpeza, relogio as relogioDoCache } from './barra'
 import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
@@ -49,6 +49,8 @@ const limpezas = atom({ plugin: 'painel-sessoes', key: 'limpezas' } as const, 0)
 // A resposta em curso (a pergunta e a opção pressionada) e a sessão que o botão "abrir" está abrindo; null = nenhuma.
 export const enviando = atom({ plugin: 'painel-sessoes', key: 'enviando' } as const, null as { q: string; opcao: string } | null)
 const abrindo = atom({ plugin: 'painel-sessoes', key: 'abrindo' } as const, null as string | null)
+// Os pedidos de sessão em curso, por id de item (e `lote`); só em memória (F69 D6): recarregar o pane traz os botões de volta.
+export const pedindo = atom({ plugin: 'painel-sessoes', key: 'pedindo' } as const, {} as Record<string, EstadoPedido>)
 // O relógio da leitura pendurada: cada tique que encontra a leitura em curso grava a hora, para a tela redesenhar e dizer "Parou".
 const tique = atom({ plugin: 'painel-sessoes', key: 'tique' } as const, 0)
 // O botão do modo está gravando a bandeira.
@@ -211,7 +213,7 @@ function montarTodos(
         situacao = travaGravada ? 'travado' : 'andando'
         trava = travaGravada
       }
-    } else situacao = 'fila'
+    } else situacao = com.some(c => c.vivo === true) ? 'andando' : 'fila' // sem dono, mas com alguém vivo no `com`: o item anda (F69 A0)
     itens.push({ antigo, projeto: projetoDoItem, linha: {
       id: d.id,
       titulo: texto(d.data.titulo) ?? d.id,
@@ -560,6 +562,174 @@ async function abrirSessao($: EngineInterface, dono: NonNullable<LinhaItem['dono
   }
 }
 
+// ── F69: pedir a sessão que falta a um item ────────────────────────────────────────────────────────────────────────────
+
+export type PapelPedido = 'P' | 'D' | 'E' | 'V'
+const PAPEL_DA_ETAPA_PEDIDO: Record<string, PapelPedido> = { planejamento: 'P', design: 'D', execucao: 'E', validacao: 'V' }
+const ROTULO_DO_PAPEL: Record<PapelPedido, string> = { P: 'planejadora', D: 'designer', E: 'executora', V: 'validadora' }
+/** O "No prompt" some depois disto (o Enter costuma vir em segundos); o "Pedido às", depois do segundo. */
+const PROMPT_MS = 5 * 60_000
+const PEDIDO_MS = 30 * 60_000
+
+/** O papel que falta ao item: na fila, o da etapa (planejamento, design, execução, validação); andando, o do chip "esperando" que ainda não entregou. `espera` e `trava` não têm. */
+export function papelQueFalta(i: LinhaItem): PapelPedido | undefined {
+  if (i.espera || i.trava) return undefined
+  if (i.situacao === 'fila') return PAPEL_DA_ETAPA_PEDIDO[i.etapa]
+  if (i.situacao === 'andando') return i.esperando && !i.esperando.entregue ? i.esperando.papel : undefined
+
+  return undefined
+}
+
+export type Destino = { id: string } | { nenhuma: true } | { varias: number } | { semLista: true }
+
+/** A orquestradora de um projeto: o documento com `papel: "orquestradora"` do projeto (sem distinguir caixa) que o app lista como viva. `vivas` null = a lista não veio. */
+export function orquestradoraDoProjeto(projeto: string, orqs: Array<{ id: string; projeto: string }>, vivas: string[] | null): Destino {
+  if (vivas === null) return { semLista: true }
+  const doProjeto = projeto.toLowerCase()
+  const ids = [...new Set(orqs.filter(o => o.projeto.toLowerCase() === doProjeto && vivas.includes(o.id)).map(o => o.id))]
+
+  return ids.length === 1 ? { id: ids[0] as string } : ids.length === 0 ? { nenhuma: true } : { varias: ids.length }
+}
+
+/** O texto que vai à orquestradora (D7 do plano): a skill dela o atende pela âncora `vaga-pelo-painel`. */
+export function textoDoPedidoDeVaga(projeto: string, itens: Array<{ id: string; titulo: string; papel: PapelPedido }>, agora: number): string {
+  const lista = itens.map(i => `${i.id} · ${i.titulo} (espera ${i.papel})`).join('; ')
+
+  return `Pedido do operador pelo painel (${hora(agora).slice(0, 5)}): abra ou despache a sessão de cada item que espera papel em ${projeto} — ${lista}. Num turno do operador, abra o membro do papel (ou despache a um livre); fora dele, proponha um cartão \`<ID> · livre\` por vaga. Skill orquestradora, âncora vaga-pelo-painel.`
+}
+
+/** O estado ainda vale no instante `agora`? `enviando` vale até acabar; o resto, até o prazo. */
+export const vivoDoEstado = (e: EstadoPedido, agora: number): boolean =>
+  e.estado === 'enviando' || agora - e.em <= (e.estado === 'prompt' ? PROMPT_MS : PEDIDO_MS)
+
+/** Tira do átomo o pedido de item que ganhou o papel (ou sumiu) e o que passou do prazo. A chave `lote` é do gesto, que a apaga. */
+export function podarPedidos(atual: Record<string, EstadoPedido>, itens: LinhaItem[], agora: number): Record<string, EstadoPedido> {
+  const porId = new Map(itens.map(i => [i.id, i]))
+  const fica = Object.entries(atual).filter(([id, e]) => {
+    if (id === 'lote') return true
+    const item = porId.get(id)
+
+    return item !== undefined && papelQueFalta(item) !== undefined && vivoDoEstado(e, agora)
+  })
+
+  return fica.length === Object.keys(atual).length ? atual : Object.fromEntries(fica)
+}
+
+const curto = (t: string) => (t.length > 40 ? `${t.slice(0, 39)}…` : t)
+const hhmm = (ms: number) => hora(ms).slice(0, 5)
+
+/**
+ * O clique em "Pedir <papel>" (`ids` com um item) ou em "Pedir n sessões": um pedido por orquestradora de projeto. A própria sessão
+ * recebe o texto no campo do prompt (o Enter é do operador, e só um turno dele abre sessão); outra recebe `send_message` e responde
+ * com um cartão. Cada item sai do gesto num estado visível; a falha volta o botão e vai para os avisos.
+ */
+async function pedirSessoes($: EngineInterface, ids: string[], chave: string, surface: RenderSurface): Promise<void> {
+  const atual = await read($, pedindo)
+  if (atual[chave]?.estado === 'enviando') return
+  const l = await read($, leitura)
+  const agora = await $.clock.now()
+  const lote = chave === 'lote'
+  const vivas = l.semLista ? null : (l.sessoes ?? []).map(v => v.sessionId)
+  const grupos = new Map<string, { orq: string; alvos: Array<{ item: LinhaItem; papel: PapelPedido }> }>()
+  for (const item of l.itens.filter(i => ids.includes(i.id))) {
+    const papel = papelQueFalta(item)
+    const e = atual[item.id]
+    if (!papel || !item.projeto || (e && (e.estado === 'enviando' || (lote ? vivoDoEstado(e, agora) : e.estado === 'pedido')))) continue
+    const destino = orquestradoraDoProjeto(item.projeto, l.orquestradoras ?? [], vivas)
+    if (!('id' in destino)) continue
+    const g = grupos.get(item.projeto) ?? { orq: destino.id, alvos: [] }
+    g.alvos.push({ item, papel })
+    grupos.set(item.projeto, g)
+  }
+  if (grupos.size === 0) return
+
+  const marcar = (alvos: Array<{ item: LinhaItem }>, estado: EstadoPedido | null) =>
+    update($, pedindo, p => {
+      const novo = { ...p }
+      for (const { item } of alvos) {
+        if (estado) novo[item.id] = estado
+        else delete novo[item.id]
+      }
+
+      return novo
+    })
+  const todos = [...grupos.values()].flatMap(g => g.alvos)
+  await marcar(todos, { estado: 'enviando' })
+  if (lote) await update($, pedindo, p => ({ ...p, lote: { estado: 'enviando' } }))
+
+  // Nada que escape do gesto deixa o botão em "Pedindo…" para sempre: o que ainda estiver `enviando` ao fim volta ao botão.
+  const soltar = () =>
+    update($, pedindo, p => Object.fromEntries(Object.entries(p).filter(([k, e]) => !(e.estado === 'enviando' && (k === 'lote' || todos.some(a => a.item.id === k))))))
+  try {
+    await enviarPedidos($, grupos, lote, agora, surface, marcar)
+  } finally {
+    await soltar()
+  }
+}
+
+async function enviarPedidos(
+  $: EngineInterface,
+  grupos: Map<string, { orq: string; alvos: Array<{ item: LinhaItem; papel: PapelPedido }> }>,
+  lote: boolean,
+  agora: number,
+  surface: RenderSurface,
+  marcar: (alvos: Array<{ item: LinhaItem }>, estado: EstadoPedido | null) => Promise<void>,
+): Promise<void> {
+  const propria = await sessaoDoApp($)
+  const saiu: Array<{ kind: 'prompt' | 'mensagem'; projeto: string; n: number; orq: string }> = []
+  for (const [projeto, g] of grupos) {
+    const texto = textoDoPedidoDeVaga(projeto, g.alvos.map(a => ({ id: a.item.id, titulo: a.item.titulo, papel: a.papel })), agora)
+    const kind = g.orq === propria ? 'prompt' : 'mensagem'
+    let erro: string | undefined
+    try {
+      if (kind === 'prompt') {
+        const rascunho = await $.prompt.read()
+        const comRascunho = rascunho.text.trim() !== ''
+        const r = await $.prompt.fill({ text: comRascunho ? `\n${texto}` : texto, mode: comRascunho ? 'append' : 'replace' })
+        if (!r.isFilled) erro = 'a caixa do prompt não aceitou o texto'
+      } else {
+        const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: g.orq, message: texto })
+        if (r.deny !== undefined || r.isError) erro = r.deny || r.text || 'erro sem texto'
+      }
+    } catch (err) {
+      erro = mensagem(err)
+    }
+    if (erro === undefined) {
+      await marcar(g.alvos, { estado: kind === 'prompt' ? 'prompt' : 'pedido', em: agora })
+      saiu.push({ kind, projeto, n: g.alvos.length, orq: g.orq })
+      continue
+    }
+    await marcar(g.alvos, null)
+    const titulos = g.alvos.map(a => `${a.item.id} · ${curto(a.item.titulo)}`)
+    await avisar(
+      $,
+      kind === 'prompt'
+        ? `Não pus o pedido na caixa do prompt (${erro}): escreva à orquestradora.`
+        : g.alvos.length === 1
+          ? `Não pedi a sessão do ${titulos[0]} à orquestradora de ${projeto} (${erro}): peça na conversa dela.`
+          : `Não pedi ${g.alvos.length} sessões à orquestradora de ${projeto} (${erro}): ${titulos.join(', ')}; peça na conversa dela.`,
+    )
+  }
+  if (saiu.length > 0) {
+    $.ui.toast(
+      lote
+        ? `${saiu
+            .map(s =>
+              s.kind === 'prompt'
+                ? `${s.n} ${s.n === 1 ? 'pedido' : 'pedidos'} na caixa do prompt, aperte Enter`
+                : `${s.n} ${s.n === 1 ? 'pedido enviado' : 'pedidos enviados'} à orquestradora de ${s.projeto}, ${s.n === 1 ? 'o cartão aparece' : 'os cartões aparecem'} na conversa dela`,
+            )
+            .join('; ')}.`
+        : saiu[0]?.kind === 'prompt'
+          ? 'Pedido na caixa do prompt: aperte Enter para abrir a sessão.'
+          : `Pedido enviado à orquestradora de ${saiu[0]?.projeto}: o cartão aparece na conversa dela.`,
+    )
+  }
+  // Com um destino só e a mensagem enviada, a conversa da orquestradora vai a foco; com dois ou mais, o toast diz onde estão os cartões.
+  const unico = saiu.length === 1 && grupos.size === 1 ? saiu[0] : undefined
+  if (unico?.kind === 'mensagem') await abrirSessao($, { apelido: `orquestradora de ${unico.projeto}`, localId: unico.orq, link: linkDe(unico.orq, []) }, surface)
+}
+
 // O último lugar onde uma superfície desenhou o pane: o que a tool de diagnóstico relata.
 const desenhos: Record<string, { placement: string; bodyColumns: number; em: string }> = {}
 
@@ -716,8 +886,13 @@ async function ler($: EngineInterface): Promise<void> {
   }
   const projetoDaLeitura = (await read($, barra)).projeto ?? (await projetoDoCwd($))
   const limpeza = perguntaDeLimpeza(docsPerguntas, orquestradorasDoProjeto(docsSessoes, projetoDaLeitura), proprio, agora)
+  const orquestradoras = docsSessoes
+    .filter(d => d.data.papel === 'orquestradora' && d.data.estado !== 'concluida')
+    .map(d => ({ id: texto(d.data.sessionId) ?? d.id, projeto: (texto(d.data.projeto) ?? '').toLowerCase() }))
+  await update($, pedindo, p => podarPedidos(p, itens, agora))
   await update($, leitura, l => ({
     limpeza,
+    orquestradoras,
     avisos: l.avisos ?? [],
     lidoEm: agora,
     lendo: false,
@@ -1277,6 +1452,111 @@ export const register: Register = on => {
 
       return quem.flatMap(q => (q.link && !vistos.has(q.localId) ? (vistos.add(q.localId), [abrir(q)]) : [])).slice(0, 3)
     }
+    // F69: pedir a sessão que falta. O estado vive no átomo `pedindo`; o destino vem das orquestradoras lidas e das sessões vivas.
+    const pedindoAgora = await read($, pedindo)
+    const agoraDoPedido = await $.clock.now()
+    const lidaAgora = await read($, leitura)
+    const idsVivos = lidaAgora.semLista ? null : (lidaAgora.sessoes ?? []).map(v => v.sessionId)
+    const destinoDo = (projeto: string): Destino => orquestradoraDoProjeto(projeto, lidaAgora.orquestradoras ?? [], idsVivos)
+    const estadoVivo = (id: string): EstadoPedido | undefined => {
+      const e = pedindoAgora[id]
+
+      return e && vivoDoEstado(e, agoraDoPedido) ? e : undefined
+    }
+    const pedidoDe = (i: LinhaItem) => {
+      const papel = papelQueFalta(i)
+      if (!papel || !i.projeto) return undefined
+
+      return { papel, projeto: i.projeto, destino: destinoDo(i.projeto), estado: estadoVivo(i.id) }
+    }
+    const textoDoAviso = (projeto: string, d: Destino, n?: number): string =>
+      'semLista' in d
+        ? 'Sem a lista de sessões do app · os botões de pedir voltam na próxima leitura'
+        : 'varias' in d
+          ? `${d.varias} orquestradoras ativas em ${projeto} · peça na conversa da certa`
+          : `Sem orquestradora ativa em ${projeto}${n === undefined ? '' : ` · ${n} ${n === 1 ? 'item' : 'itens'}`}`
+    // Quem espera o operador iniciar o cartão: por projeto, com a orquestradora de destino (o botão "Abrir a orquestradora").
+    const emPedido = new Map<string, { id: string; n: number }>()
+    for (const i of lidaAgora.itens) {
+      const p = pedidoDe(i)
+      if (p?.estado?.estado === 'pedido' && 'id' in p.destino) emPedido.set(p.projeto, { id: p.destino.id, n: (emPedido.get(p.projeto)?.n ?? 0) + 1 })
+    }
+    const botaoOrquestradora = (key: string, projeto: string, id: string) => (
+      <Button
+        key={key}
+        variant="secondary"
+        onPress={() => {
+          if (abrindoAgora !== id) void abrirSessao($, { apelido: `orquestradora de ${projeto}`, localId: id, link: linkDe(id, []) }, e.surface)
+        }}
+      >
+        {abrindoAgora === id ? 'Abrindo…' : emPedido.size > 1 ? `Abrir a orquestradora de ${projeto}` : 'Abrir a orquestradora'}
+      </Button>
+    )
+    // O que o item pede, em três peças: a linha de estado (acima), o botão e, no cartão, o botão da orquestradora. `curta`: na linha da fila.
+    const acaoDoPedido = (i: LinhaItem, naFila: boolean) => {
+      const p = pedidoDe(i)
+      if (!p) return {}
+      if (!('id' in p.destino)) {
+        // Na fila o aviso mora no topo da seção; o cartão não o vê, então leva a própria linha.
+        return naFila ? {} : { linha: { t: textoDoAviso(p.projeto, p.destino), cor: undefined as 'warning' | undefined } }
+      }
+      const enviando = p.estado?.estado === 'enviando'
+      const botao = p.estado?.estado === 'pedido' ? undefined : (
+        <Button
+          key={`pedir:${i.id}`}
+          variant="secondary"
+          onPress={() => {
+            if (!enviando) void pedirSessoes($, [i.id], i.id, e.surface)
+          }}
+        >
+          {enviando ? 'Pedindo…' : `Pedir ${ROTULO_DO_PAPEL[p.papel]}`}
+        </Button>
+      )
+      const linha =
+        p.estado?.estado === 'prompt'
+          ? { t: `No prompt às ${hhmm(p.estado.em)} · aperte Enter`, cor: 'warning' as const }
+          : p.estado?.estado === 'pedido'
+            ? { t: naFila ? `Pedido às ${hhmm(p.estado.em)} · inicie o cartão` : `Pedido às ${hhmm(p.estado.em)} · inicie o cartão na conversa da orquestradora`, cor: 'warning' as const }
+            : undefined
+
+      return { linha, botao, orq: p.estado?.estado === 'pedido' && !naFila ? botaoOrquestradora(`orq:${i.id}`, p.projeto, p.destino.id) : undefined }
+    }
+    // O topo da Na fila: "Pedir n sessões", os "Abrir a orquestradora", a frase de cada projeto e os avisos de projeto.
+    const topoDaFila = (naFila: LinhaItem[]) => {
+      const podem = naFila.filter(i => {
+        const p = pedidoDe(i)
+
+        return p !== undefined && 'id' in p.destino && p.estado === undefined
+      })
+      const loteEnviando = pedindoAgora.lote?.estado === 'enviando'
+      const botoes = [
+        ...(podem.length >= 2 || loteEnviando
+          ? [
+              <Button
+                key="pedir:lote"
+                variant="secondary"
+                onPress={() => {
+                  if (!loteEnviando) void pedirSessoes($, podem.map(i => i.id), 'lote', e.surface)
+                }}
+              >
+                {loteEnviando ? 'Pedindo…' : `Pedir ${podem.length} sessões`}
+              </Button>,
+            ]
+          : []),
+        ...[...emPedido].map(([projeto, o]) => botaoOrquestradora(`orq:${projeto}`, projeto, o.id)),
+      ]
+      const frases = [...emPedido].map(([projeto, o]) => ({ projeto, t: `${o.n} ${o.n === 1 ? 'cartão espera' : 'cartões esperam'} você na conversa da orquestradora de ${projeto}` }))
+      const avisosDeProjeto: string[] = []
+      const contados = new Map<string, { d: Destino; n: number }>()
+      for (const i of naFila) {
+        const p = pedidoDe(i)
+        if (p && !('id' in p.destino)) contados.set(p.projeto, { d: p.destino, n: (contados.get(p.projeto)?.n ?? 0) + 1 })
+      }
+      if ([...contados.values()].some(c => 'semLista' in c.d)) avisosDeProjeto.push(textoDoAviso('', { semLista: true }))
+      else for (const [projeto, c] of contados) avisosDeProjeto.push(textoDoAviso(projeto, c.d, c.n))
+
+      return { botoes, frases, avisosDeProjeto }
+    }
     // Campo de texto só onde a superfície tem um; sem ele, a opção "outra" fica sem campo.
     const Input = 'Input' in elementos ? elementos.Input : undefined
     const agora = await $.clock.now()
@@ -1453,13 +1733,15 @@ export const register: Register = on => {
       // A moldura é do `Box round`, na cor do tom; o desenho e os botões ficam dentro dela.
       const cartao = (i: LinhaItem, tom: 'subtle' | 'error' | 'warning') => {
         const r = cartaoSvg(Wc, i, agora, { situacao, citados: citadosDoCartao(i) })
-        const botoes = botoesAbrir(i)
+        const botoes = [...(() => { const a = acaoDoPedido(i, false); return [a.botao, a.orq].filter(Boolean) })(), ...botoesAbrir(i)]
+        const a = acaoDoPedido(i, false)
 
         return (
           <Box key={`item:${i.id}`} flexDirection="column" borderStyle="round" borderColor={tom} paddingX={1}>
             <Svg source={r.source} alt={r.alt} width={Wc} height={r.height} />
+            {a.linha && <Text color={a.linha.cor} dimColor={a.linha.cor === undefined} wrap="wrap">{a.linha.t}</Text>}
             {botoes.length > 0 && (
-              <Box flexDirection="row" columnGap={1} flexWrap="wrap">
+              <Box flexDirection="row" columnGap={1} flexWrap="wrap" alignItems="center">
                 {botoes}
               </Box>
             )}
@@ -1468,12 +1750,26 @@ export const register: Register = on => {
         )
       }
       const linhaDaFila = (i: LinhaItem) => {
-        const r = filaSvg(W, i, agora, { citados: citadosDaFila(i) })
+        const a = acaoDoPedido(i, true)
+        const comAcao = a.linha !== undefined || a.botao !== undefined
+        const r = filaSvg(W, i, agora, { citados: citadosDaFila(i), filete: !comAcao })
+        const filete = comAcao ? fileteSvg(W) : undefined
 
         return (
           <Box key={`item:${i.id}`} flexDirection="column">
             <Svg source={r.source} alt={r.alt} width={W} height={r.height} />
+            {a.linha && (
+              <Box paddingLeft={3}>
+                <Text color={a.linha.cor} dimColor={a.linha.cor === undefined} wrap="wrap">{a.linha.t}</Text>
+              </Box>
+            )}
+            {a.botao && (
+              <Box flexDirection="row" alignItems="center" flexWrap="wrap" columnGap={1} paddingLeft={3}>
+                {a.botao}
+              </Box>
+            )}
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
+            {filete && <Svg source={filete.source} alt="" width={W} height={filete.height} />}
           </Box>
         )
       }
@@ -1557,6 +1853,21 @@ export const register: Register = on => {
             <Box flexDirection="column" gap={1}>
               {faixa({ titulo: 'Na fila', n: contagem.fila, tom: 'm', legenda: 'não começaram', tracejado: true })}
               {contagem.fila === 0 && <Text dimColor>Nada na fila.</Text>}
+              {(() => {
+                const t = topoDaFila(sec.fila)
+
+                return (
+                  <>
+                    {t.botoes.length > 0 && (
+                      <Box flexDirection="row" alignItems="center" flexWrap="wrap" columnGap={1}>
+                        {t.botoes}
+                      </Box>
+                    )}
+                    {t.frases.map(f => <Text key={`frase:${f.projeto}`} color="warning" wrap="wrap">{f.t}</Text>)}
+                    {t.avisosDeProjeto.map(a => <Text key={`aviso:${a}`} dimColor wrap="wrap">{a}</Text>)}
+                  </>
+                )
+              })()}
               {sec.fila.map(i => linhaDaFila(i))}
             </Box>
           )}
@@ -1617,6 +1928,17 @@ export const register: Register = on => {
               const c = i.situacao === 'fila' ? citadosDaFila(i) : citadosDoCartao(i)
 
               return c.length > 0 ? <Text dimColor wrap="wrap">{altDosCitados(c)}</Text> : null
+            })()}
+            {(() => {
+              const a = acaoDoPedido(i, i.situacao === 'fila')
+
+              return (
+                <>
+                  {a.linha && <Text color={a.linha.cor} dimColor={a.linha.cor === undefined} wrap="wrap">{a.linha.t}</Text>}
+                  {a.botao}
+                  {a.orq}
+                </>
+              )
             })()}
             {botoesAbrir(i)}
             {i.trava && <Text color="error" wrap="wrap">{textoDaTrava(i.trava)}</Text>}
@@ -1724,6 +2046,21 @@ export const register: Register = on => {
           <Box flexDirection="column" gap={1}>
             {tituloDaSecao('Na fila', contagem.fila, 'inactive')}
             {contagem.fila === 0 && <Text dimColor>Nada na fila.</Text>}
+            {(() => {
+              const t = topoDaFila(sec.fila)
+
+              return (
+                <>
+                  {t.botoes.length > 0 && (
+                    <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+                      {t.botoes}
+                    </Box>
+                  )}
+                  {t.frases.map(f => <Text key={`frase:${f.projeto}`} color="warning" wrap="wrap">{f.t}</Text>)}
+                  {t.avisosDeProjeto.map(a => <Text key={`aviso:${a}`} dimColor wrap="wrap">{a}</Text>)}
+                </>
+              )
+            })()}
             {sec.fila.map(i => linhaItem(i))}
           </Box>
         )}
