@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barra de status — mock</title>
+<style>
+:root{--bg:#fbfaf8;--fg:#1f1f1f;--dim:#6f6f6b;--warn:#9a6210;--err:#b8452c;--li:#5b5cd6;--acc:#3a68c8;--tile:#f4f3f0;--ln:#e8e7e3;--btn:#ecebe8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1c1b;--fg:#ececec;--dim:#93938f;--warn:#d9962b;--err:#e0846b;--li:#8b8cf8;--acc:#5b8def;--tile:#262625;--ln:#2f2f2d;--btn:#2c2c2b}}
+:root[data-theme="dark"]{--bg:#1c1c1b;--fg:#ececec;--dim:#93938f;--warn:#d9962b;--err:#e0846b;--li:#8b8cf8;--acc:#5b8def;--tile:#262625;--ln:#2f2f2d;--btn:#2c2c2b}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,system-ui,sans-serif}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;margin:28px 0 6px}p.n{color:var(--dim);margin:0 0 8px;max-width:72ch}
+.tema{margin:8px 0 16px}.tema button{font:inherit;margin-right:6px}
+.term{font:13px/1.5 ui-monospace,Menlo,monospace;background:var(--tile);border:1px solid var(--ln);padding:6px 0;overflow-x:auto;white-space:pre}
+.cols{display:inline-block;border-left:1px dashed var(--ln);border-right:1px dashed var(--ln)}
+.d{color:var(--dim)}.w{color:var(--warn)}.e{color:var(--err)}.l{color:var(--li)}.b{font-weight:700}
+.inv{background:var(--err);color:var(--bg);font-weight:700}
+.p{color:var(--acc);font-weight:700}
+.prompt{color:var(--dim)}
+.desk{max-width:760px;border:1px solid var(--ln);border-radius:10px;padding:10px 12px;background:var(--tile)}
+.row{display:flex;flex-wrap:wrap;align-items:center;column-gap:16px;row-gap:6px}
+.grow{display:flex;flex-wrap:wrap;column-gap:6px;flex-grow:1;justify-content:flex-end}
+.btn{border:1px solid var(--ln);background:var(--btn);border-radius:6px;padding:2px 9px;font:13px system-ui;color:var(--fg)}
+.btn.dim{color:var(--dim)}.btn.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+.fr-w{border:1.5px solid var(--warn);border-radius:10px}.fr-e{border:1.5px solid var(--err);border-radius:10px}
+.pane{width:288px;border:1px solid var(--ln);background:var(--tile);padding:8px;border-radius:8px}
+.ped{border:1.5px solid var(--warn);border-radius:8px;padding:6px 8px;margin-top:6px}
+.aus{border:1.5px solid var(--li);border-radius:8px;padding:6px 12px;margin-top:6px;color:var(--dim);font-size:12px}
+.box{display:inline-block;width:100%;height:10px;background:var(--btn);border-radius:4px;margin-top:6px}
+.inp{margin-top:8px;border:1px solid var(--ln);border-radius:8px;padding:8px;color:var(--dim)}
+</style>
+</head>
+<body>
+<h1>Barra de status do kit — mock</h1>
+<p class="n">Estático. O terminal é desenhado em células reais (a borda tracejada marca a largura). Cores pelas chaves de tema do motor; aqui, os valores do pane.</p>
+<div class="tema"><button onclick="document.documentElement.dataset.theme='light'">Claro</button><button onclick="document.documentElement.dataset.theme='dark'">Escuro</button></div>
+
+<h2>1 · Sessão nova, antes da 1ª leitura (terminal, 94)</h2>
+<div class="term"><span class="cols"> ⧗ —                                                                                          </span></div>
+
+<h2>2 · Comum, presente, 3 perguntas (terminal, 114)</h2>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="d">contexto 142/300 mil  F52 · design  E 2 · V 1</span>   [ <span class="w">●</span> 3 perguntas ] <span class="d">[ Ficar ausente ] [ Abrir painel ]</span> </span></div>
+<p class="n">Sem perguntas: o selo some e o resto da direita fica onde está. Pane aberto: <code>[ Fechar painel ]</code>.</p>
+
+<h2>3 · Ausente, contexto alto (terminal, 94)</h2>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="w">142/300 mil · alto</span>  <span class="d">F52 · design</span>      [ <span class="w">●</span> 3 perguntas ] [ <span class="l">☾</span> Estou de volta ] <span class="d">[ Abrir painel ]</span> </span></div>
+
+<h2>4 · Pedido de limpeza (terminal, 114) e os estados do botão</h2>
+<div class="term"><span class="cols"> <span class="w">◆</span> A orquestradora pede para se limpar · Q290  <span class="p">[ Pode se limpar ]</span>                                                </span>
+<span class="cols"> ⧗ 47:12  <span class="d">contexto 142/300 mil  F52 · design  E 2 · V 1</span>   [ <span class="w">●</span> 3 perguntas ] <span class="d">[ Ficar ausente ] [ Abrir painel ]</span> </span></div>
+<div class="term" style="margin-top:6px"><span class="cols"> <span class="w">◆</span> A orquestradora pede para se limpar · Q290  <span class="d">[ Enviando… ]</span>                                                     </span>
+<span class="cols"> ✓ Ok enviado à orquestradora                                                                                     </span></div>
+
+<h2>5 · Limpar antes de vencer (barra da orquestradora, sem pedido, 94)</h2>
+<div class="fr-e term" style="border-radius:0"><span class="cols"> <span class="w">◆</span> Cache vence em 8 min com 212 mil no contexto  [ Limpar antes de vencer ]                     </span>
+<span class="cols"> <span class="inv"> ⧗ 08:12 </span>  <span class="w">212/250 mil · alto</span>                                             [ <span class="w">●</span> 2 perguntas ] <span class="d">[ Abrir painel ]</span> </span></div>
+
+<h2>6 · Cache em aviso, alerta e venceu (terminal, 72)</h2>
+<div class="term"><span class="w">╭──────────────────────────────────────────────────────────────────────╮</span>
+<span class="w">│</span> <span class="w b">⧗ 18:40</span>  <span class="d">142 mil</span>                                     [ <span class="w">●</span> 3 perguntas ] <span class="w">│</span>
+<span class="w">╰──────────────────────────────────────────────────────────────────────╯</span></div>
+<div class="term" style="margin-top:6px"><span class="e">╭──────────────────────────────────────────────────────────────────────╮</span>
+<span class="e">│</span> <span class="inv"> ⧗ 08:12 </span>  <span class="e b">148/150 mil · teto</span>                       [ <span class="w">●</span> 3 perguntas ] <span class="e">│</span>
+<span class="e">╰──────────────────────────────────────────────────────────────────────╯</span></div>
+<div class="term" style="margin-top:6px"><span class="e">╭──────────────────────────────────────────────────────────────────────╮</span>
+<span class="e">│</span> <span class="inv"> ⧗ venceu </span>  <span class="d">142 mil</span>                                        <span class="d">[ Abrir painel ]</span> <span class="e">│</span>
+<span class="e">╰──────────────────────────────────────────────────────────────────────╯</span></div>
+
+<h2>7 · 40 células, ausente, com pedido (tudo quebra, nada sai pela direita)</h2>
+<div class="term"><span class="cols"> <span class="w">◆</span> Orquestradora pede limpeza            </span>
+<span class="cols"> <span class="p">[ Pode se limpar ]</span>                      </span>
+<span class="cols"> ⧗ 47:12  <span class="d">142 mil</span>                       </span>
+<span class="cols">     [ <span class="w">●</span> 3 perguntas ] [ <span class="l">☾</span> Estou de volta ] </span></div>
+
+<h2>Desktop, coluna do chat (~94 células), pedido aberto</h2>
+<div class="desk">
+  <div class="row" style="column-gap:10px"><span><span class="w">◆</span> A orquestradora pede para se limpar · Q290</span><span class="btn pri">Pode se limpar</span></div>
+  <div class="row" style="margin-top:6px"><span>⧗ 47:12</span><span class="d">142/300 mil</span><span class="d">F52 · design</span>
+    <span class="grow"><span class="btn"><span class="w">●</span> 3 perguntas</span><span class="btn dim">Ficar ausente</span><span class="btn dim">Abrir painel</span></span></div>
+  <div class="inp">Escreva para o Claude…</div>
+</div>
+<div class="desk fr-w" style="margin-top:10px">
+  <div class="row"><span class="w b">⧗ 18:40</span><span class="d">142/300 mil</span><span class="d">F52 · design</span>
+    <span class="grow"><span class="btn"><span class="w">●</span> 3 perguntas</span><span class="btn">☾ Estou de volta</span><span class="btn dim">Abrir painel</span></span></div>
+  <div class="inp">Escreva para o Claude…</div>
+</div>
+
+<h2>8 · Pane, faixa do topo com o pedido (W = 288)</h2>
+<div class="pane">
+  <div class="row"><span class="btn">Estou de volta</span><span class="grow"><span class="btn">↻ 18:22</span></span></div>
+  <div class="ped"><div class="b"><span class="w">◆</span> A orquestradora pede para se limpar</div><div class="d" style="font-size:12px">Q290 · há 3 min</div>
+    <div style="display:flex;justify-content:flex-end;margin-top:4px"><span class="btn pri">Pode se limpar</span></div></div>
+  <div class="aus"><div style="color:var(--fg);font-weight:700;font-size:13px"><span class="l">☾</span> Ausente há 3 h</div>desde 14:05 · a orquestradora pode se limpar<br>sessões novas só abrem com você</div>
+  <div class="box"></div>
+</div>
+</body>
+</html>
