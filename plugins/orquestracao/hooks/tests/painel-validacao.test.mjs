@@ -253,5 +253,49 @@ caso('F43: o exemplo do protocolo concorda com a regra do painel', () => {
   ok(painel('set', 'perguntas', 'Q3', pergunta({ caso: solto })).exit === 1, 'a versão solta do exemplo foi aceita');
 });
 
+caso('respondidaPor é prova do clique no painel: set/update/batch pela linha de comando são recusados', () => {
+  igual(painel('set', 'perguntas', 'Q1', '{"estado":"aberta","titulo":"x","sessaoId":"local_a"}').exit, 0, 'preparo');
+  for (const args of [['update', 'perguntas', 'Q1', '{"respondidaPor":"painel"}'], ['set', 'perguntas', 'Q2', '{"estado":"respondida","respondidaPor":"painel"}']]) {
+    const r = painel(...args);
+    igual(r.exit, 1, `exit (${r.out})`); ok(r.err.includes('respondidaPor'), `stderr sem respondidaPor: ${r.err}`);
+  }
+  ok(!existsSync(arq('perguntas', 'Q2')), 'Q2 foi gravada');
+  igual(JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data.respondidaPor, undefined, 'Q1 ganhou respondidaPor');
+  const b = painel('batch', JSON.stringify([{ op: 'update', colecao: 'perguntas', id: 'Q1', data: { respondidaPor: 'painel' } }]));
+  igual(b.exit, 1, `batch exit (${b.out}${b.err})`); ok(b.err.includes('respondidaPor'), `batch stderr: ${b.err}`);
+  igual(painel('update', 'perguntas', 'Q1', '{"estado":"respondida","resposta":"sim"}').exit, 0, 'resposta normal deve passar');
+});
+
+const RESP = { estado: 'respondida', titulo: 'limpar · orquestradora', sessaoId: 'local_a', resposta: 'não', respondidaPor: 'painel', respondidaEm: '2026-10-26T01:00:00.000Z', atualizadoEm: '2026-10-26T01:00:00.000Z' };
+const gravaComoOPane = (extra = {}) => { mkdirSync(join(base, 'painel', 'perguntas'), { recursive: true }); writeFileSync(arq('perguntas', 'Q1'), JSON.stringify({ id: 'Q1', version: 1, data: { ...RESP, ...extra } })); };
+const dado = () => JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data;
+caso('respondidaEm também só o pane grava: set/update/batch pela linha de comando são recusados', () => {
+  gravaComoOPane();
+  const r = painel('update', 'perguntas', 'Q1', '{"respondidaEm":"2099-01-01T00:00:00.000Z"}');
+  igual(r.exit, 1, `exit (${r.out})`); ok(r.err.includes('respondidaEm só o pane grava'), `stderr não cita o campo recusado: ${r.err}`);
+  igual(dado().respondidaEm, RESP.respondidaEm, 'o respondidaEm mudou');
+  igual(painel('set', 'perguntas', 'Q2', '{"estado":"respondida","respondidaEm":"2026-10-26T01:00:00.000Z"}').exit, 1, 'set aceitou');
+});
+for (const [campo, valor] of [['resposta', 'sim'], ['estado', 'aberta'], ['titulo', 'limpar · orquestradora (outra)'], ['sessaoId', 'local_b']]) {
+  caso(`A1/R2: trocar ${campo} pela linha de comando apaga respondidaPor e respondidaEm`, () => {
+    gravaComoOPane(); igual(dado().respondidaPor, 'painel', 'precondição: o documento nasce com a prova');
+    const r = painel('update', 'perguntas', 'Q1', JSON.stringify({ [campo]: valor }));
+    igual(r.exit, 0, `exit (${r.err})`);
+    igual(dado()[campo], valor, 'o valor novo foi gravado');
+    igual(dado().respondidaPor, undefined, 'respondidaPor sobreviveu'); igual(dado().respondidaEm, undefined, 'respondidaEm sobreviveu');
+  });
+}
+caso('L: regravar estado e resposta com o MESMO valor (fluxo da skill) mantém a prova', () => {
+  gravaComoOPane();
+  igual(painel('update', 'perguntas', 'Q1', '{"estado":"respondida","resposta":"não"}').exit, 0, 'update');
+  igual(dado().respondidaPor, 'painel', 'perdeu respondidaPor'); igual(dado().respondidaEm, RESP.respondidaEm, 'mexeu no respondidaEm');
+});
+caso('A1b/R1/R3: nota e atualizadoEm não apagam a prova nem mexem no respondidaEm', () => {
+  gravaComoOPane();
+  igual(painel('update', 'perguntas', 'Q1', '{"nota":"y"}').exit, 0, 'nota');
+  igual(painel('update', 'perguntas', 'Q1', '{"atualizadoEm":"2099-01-01T00:00:00.000Z"}').exit, 0, 'atualizadoEm');
+  igual(dado().respondidaPor, 'painel', 'apagou sem motivo'); igual(dado().respondidaEm, RESP.respondidaEm, 'o respondidaEm andou');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

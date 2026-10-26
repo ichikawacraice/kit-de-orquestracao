@@ -32,6 +32,19 @@ export function gravaNoPainel(comando) {
   return porScript || new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:set|update|batch|delete)\b`).test(c);
 }
 
+// Modo ausente (F48): ligado ⇔ a bandeira existe, é JSON válido, `desde` é data válida e `ligado !== false`. Qualquer outra
+// coisa = desligado (`null`). O botão do painel desliga gravando `{ligado:false}` porque o pane não apaga arquivo.
+export function modoAusente() {
+  const f = join(BASE, 'operador-ausente.json');
+  if (!existsSync(f)) return null;
+  try {
+    const b = JSON.parse(readFileSync(f, 'utf8'));
+    if (!b || typeof b !== 'object' || b.ligado === false) return null;
+    const desde = Date.parse(b.desde);
+    return Number.isNaN(desde) ? null : { ...b, desdeMs: desde };
+  } catch { return null; }
+}
+
 export function lerEntrada() {
   return JSON.parse(readFileSync(0, 'utf8'));
 }

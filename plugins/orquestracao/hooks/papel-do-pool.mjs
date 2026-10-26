@@ -10,6 +10,7 @@
 //       (sem com, fez nem dono); com ele ligado, só por pedido do operador no turno dele (Q277). Sempre membro do MESMO projeto ou de projeto sem orquestradora.
 //   T3  start_session: negado em turno que não é do operador com o modo ausente ligado (/ausente on) e a membro do pool.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava).
+//   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente ou o sim do painel, F48).
 //   T6  Bash `gh pr merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
 // Limites conhecidos: o cache do registro (pool-comum.mjs, 2 min) atrasa em até 2 min a troca de título, nos dois
 // sentidos (acerto e ausência). Orquestradora reconhecida só por título (sem marcador em ativas/) não ativa o T6; projeto não medido (null) pergunta
@@ -17,11 +18,10 @@
 // ~/.claude/** (inclusive nos hooks): decisão consciente, notas e memória moram lá.
 // `deny` (vale em bypass) onde a decisão já foi tomada; `ask` no T6 (o operador às vezes manda mergear direto).
 // Erro do hook vai para o log e a ferramenta segue.
-import { existsSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { registrar, lerEntrada, semPrefixoDoPlugin } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao } from './pool-comum.mjs';
+import { registrar, lerEntrada, semPrefixoDoPlugin, modoAusente } from './hooks-crewai-comum.mjs';
+import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, perguntasDeLimpeza } from './pool-comum.mjs';
 
 const HOOK = 'papel-do-pool';
 const H = homedir();
@@ -49,16 +49,10 @@ function decisao(tipo, motivo) {
   }));
 }
 
-function bandeiraDeAusencia() {
-  const f = join(BASE, 'operador-ausente.json');
-  if (!existsSync(f)) return null;
-  try {
-    const b = JSON.parse(readFileSync(f, 'utf8'));
-    const desde = Date.parse(b.desde);
-    if (Number.isNaN(desde)) return null; // sem prazo: só /ausente off desliga
-    return { ...b, desdeMs: desde };
-  } catch { return null; }
-}
+const bandeiraDeAusencia = modoAusente;
+// O sim do painel vale 30 min a partir de `respondidaEm` (a hora do clique); `atualizadoEm` não conta (qualquer update o renova).
+const OK_DO_PAINEL_MS = 30 * 60_000;
+const noPrazo = (iso) => { const t = Date.parse(iso); const d = Date.now() - t; return !Number.isNaN(t) && d >= 0 && d <= OK_DO_PAINEL_MS; };
 
 function main() {
   const e = lerEntrada();
@@ -160,6 +154,23 @@ function main() {
       return nega('T2', m.id, String(alvo), `Membro do pool não se arquiva (decisão do operador, 24/10): quem termina fica livre — título \`${m.id} · livre\` e clear_session. Só a orquestradora arquiva: com o modo ausente desligado, sozinha, o membro sem item vivo; com ele ligado, só por pedido do operador no turno dele (Q277).`);
     }
     return;
+  }
+
+  if (tool === 'mcp__ccd_session_mgmt__clear_session') {
+    const reg = registroDaSessao(e.session_id);
+    const alvo = ti.session_id;
+    const ehEu = [undefined, null, 'self', e.session_id, reg?.localId].includes(alvo);
+    if (!ehEu || !ehOrquestradora(e.session_id, reg?.titulo)) return;
+    const alvoReal = String(alvo ?? 'self');
+    const libera = (motivo) => registrar(sid, HOOK, 'liberou-limpeza', `${alvoReal} ${motivo}`);
+    if (modoAusente()) return libera('modo ausente ligado');
+    let origem = null;
+    try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
+    if (origem === 'human') return libera('turno do operador');
+    const ok = perguntasDeLimpeza(reg?.localId).find((d) => d.estado === 'respondida' && d.respondidaPor === 'painel'
+      && /^\s*sim/i.test(String(d.resposta ?? '')) && noPrazo(d.respondidaEm));
+    if (ok) return libera('sim do painel');
+    return nega('T7', 'orquestradora', alvoReal, 'Limpeza inteira só com o ok do operador (F48): ele pode estar lendo. Escreva o estado, abra a pergunta `limpar · orquestradora` (Q-ID, sessaoId, recomendação: limpar) e siga; limpe quando ele disser sim no chat ou no painel. Com o modo ausente ligado, pode.');
   }
 
   if (tool === 'mcp__ccd_session__start_session') {

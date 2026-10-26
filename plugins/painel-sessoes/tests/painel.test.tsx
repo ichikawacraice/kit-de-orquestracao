@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { cartaoSvg, faixaSvg, filaSvg, itemSvg, largura, perguntaSvg, resumoSvg, secaoSvg } from '../hooks/desenho.js'
+import { cartaoSvg, faixaSvg, filaSvg, itemSvg, largura, modoSvg, parouSvg, perguntaSvg, resumoSvg, rotuloModoSvg, secaoSvg } from '../hooks/desenho.js'
 import { contarSecoes, desmarcar, deveFechar, fechamentoDesmarca, marcar, vencidas, esperaOperadorSemPergunta, leituraParada, montarItens, papelDe, porTema, secoes, situacaoDe } from '../hooks/register.js'
 import * as R from '../hooks/register.js'
 import * as D from '../hooks/desenho.js'
@@ -32,6 +32,7 @@ type Doc = { id: string; data: Record<string, unknown>; version: number }
 const doc = (id: string, data: Record<string, unknown>, version = 1): Doc => ({ id, data, version })
 const banco = (...docs: Doc[]) => docs
 const PASTA = '/home/teste/.claude/orquestracao/painel'
+const BANDEIRA = '/home/teste/.claude/orquestracao/operador-ausente.json'
 
 const PERGUNTAS = banco(
   doc(
@@ -119,11 +120,21 @@ type Opcoes = {
   storeFalha?: boolean
   /** O desktop não tem onde desenhar um pane aberto sem pedido: o pane consta, mas `isPlaced` é false (até a pessoa pedir). */
   semLugar?: boolean
+  /** O texto cru da bandeira do modo ausente (`operador-ausente.json`); sem ele o arquivo não existe. */
+  bandeira?: string
+  /** A gravação da bandeira falha com este motivo. */
+  bandeiraFalha?: string
+  /** A gravação da bandeira só termina quando esta promessa se resolve: o clique em curso. */
+  segurarBandeira?: Promise<void>
 }
 
 function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {}) {
   on('command.register', () => ({ value: { command: 'painel' } }))
-  on('tool.register', () => ({ value: { tool: 'mcp__painel-sessoes__onde_esta_o_painel' } }))
+  const registradas: string[] = []
+  on('tool.register', (_, e) => {
+    registradas.push(String((e as unknown as { name?: string }).name))
+    return { value: { tool: 'mcp__painel-sessoes__onde_esta_o_painel' } }
+  })
   let aberto = false
   let pedido = false
   on('ui.open', () => {
@@ -170,6 +181,8 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   for (const d of opc.perguntas ?? PERGUNTAS) arquivos.set(`${PASTA}/perguntas/${d.id}.json`, JSON.stringify(d))
   // a foto da fila não traz o `projeto`, mas os 29 itens reais têm `izanagi`: sem ele o item legado cai em "Sem tema" (c19)
   for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, { projeto: 'izanagi', ...data })))
+  if (opc.bandeira !== undefined) arquivos.set(BANDEIRA, opc.bandeira)
+  const bandeiras: Escrita[] = []
   if (!opc.semTemas) arquivos.set(`${PASTA}/temas.json`, JSON.stringify(opc.temas ?? TEMAS_REAIS))
   const escritas: Escrita[] = []
   on('fs.list', async (_, e) => {
@@ -188,7 +201,15 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
 
     return { value: t }
   })
-  on('fs.write', (_, e) => {
+  on('fs.write', async (_, e) => {
+    if (e.path === BANDEIRA) {
+      if (opc.segurarBandeira) await opc.segurarBandeira
+      if (opc.bandeiraFalha) return { deny: opc.bandeiraFalha }
+      arquivos.set(e.path, e.text)
+      bandeiras.push(JSON.parse(e.text) as Escrita)
+
+      return { value: undefined }
+    }
     arquivos.set(e.path, e.text)
     const d = JSON.parse(e.text) as Doc
     escritas.push({ path: e.path, doc_id: d.id, version: d.version, data: d.data })
@@ -223,7 +244,7 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
     return { result: {}, text: opc.vivas ?? VIVAS }
   })
 
-  return { relogio, escritas, contagem, enviadas, prompts, toasts, copiadas, abertas, loja, painelAberto: () => aberto }
+  return { relogio, escritas, contagem, enviadas, prompts, toasts, copiadas, abertas, loja, registradas, bandeiras, arquivos, painelAberto: () => aberto }
 }
 
 const lerSuperficie = async (ui: { findAll: (q: object) => Promise<Array<{ text: string; props: Record<string, unknown> }>> }) =>
@@ -1461,21 +1482,20 @@ test('F34-3: erro de leitura da lista de sessões não cria item "sem ninguém"'
 test('F34-3 R8: leitura pendurada: o "Parou" aparece sozinho, sem remontar, e o botão solta a leitura', async ($, on) => {
   const parar = { on: false }
   const { ui, relogio } = await abrirDe({ parar }, $, on)
-  expect(await lerSuperficie(ui)).toMatch(/Atualizado /)
+  const lidoAs = `↻ ${R.hora(AGORA).slice(0, 5)}`
+  expect((await ui.find({ key: 'atualizar' }))?.text).toBe(lidoAs)
   parar.on = true
   await relogio.advance(60_000)
-  expect(await lerSuperficie(ui), 'a leitura pendurada começou: ainda não passou de 3 min').toMatch(/Atualizado /)
+  expect(await lerSuperficie(ui), 'a leitura pendurada começou: ainda não passou de 3 min').not.toMatch(/⚠ Parou /)
   await relogio.advance(200_000)
   const texto = await lerSuperficie(ui)
   expect(texto, 'o tique redesenhou a tela e ela diz que parou').toMatch(/⚠ Parou /)
-  expect(texto).not.toMatch(/Atualizado /)
-  expect((await ui.find({ key: 'atualizar' }))?.text, 'parada, o botão não fica em "Lendo…"').toBe('↻ Atualizar')
+  expect((await ui.find({ key: 'atualizar' }))?.text, 'parada, o botão não fica em "Lendo…" e guarda a hora da última leitura').toBe(lidoAs)
   parar.on = false
   await ui.press({ key: 'atualizar' })
   await relogio.settle()
   const depois = await lerSuperficie(ui)
-  expect(depois, 'o botão soltou a pendurada e leu de novo').toMatch(/Atualizado /)
-  expect(depois).not.toMatch(/⚠ Parou /)
+  expect(depois, 'o botão soltou a pendurada e leu de novo').not.toMatch(/⚠ Parou /)
   await ui.unmount()
 })
 
@@ -1804,4 +1824,290 @@ test('largura: no desktop o desenho ocupa a largura do pane, sem folga à direit
   expect(Math.max(...larguras)).toBeGreaterThanOrEqual(570)
   expect(Math.max(...larguras)).toBeLessThanOrEqual(586)
   await ui.unmount()
+})
+
+
+// F48, bloco B: o topo do painel diz o modo (presente ou ausente) e liga ou desliga o ausente.
+type No = { type: string; props: Record<string, unknown>; text?: string; children?: Array<No | string> }
+const filhos = (n: No): No[] => (n.children ?? []).filter((c): c is No => typeof c !== 'string')
+const subarvore = (n: No): No[] => [n, ...filhos(n).flatMap(subarvore)]
+const raiz = async (ui: { findAll: (q: object) => Promise<unknown[]> }) => (await ui.findAll({}))[0] as No
+const rotulo = (n?: No) => String(n?.props.label ?? n?.text)
+const HM = (ms: number) => R.hora(ms).slice(0, 5)
+const LIGADA = (desde: string) => JSON.stringify({ desde, frase: '/ausente on', sessionId: 'local_x', por: 'comando' })
+const HA_3H = new Date(AGORA - 3 * 3600_000).toISOString()
+const botoesDoTopo = async (ui: { findAll: (q: object) => Promise<unknown[]> }) => {
+  const topo = filhos(await raiz(ui))[0]!
+  const fileira = filhos(topo)[0]!
+
+  return { topo, fileira, botoes: subarvore(fileira).filter(n => n.type === 'Button') }
+}
+
+test('F48 B1: sem a bandeira o topo diz presente: Ficar ausente, o Svg Presente e o ↻ com a hora, nesta ordem', async ($, on) => {
+  const { ui } = await abrirDe({}, $, on)
+  const todos = (await ui.findAll({})) as No[]
+  const iModo = todos.findIndex(n => n.type === 'Button' && n.props.key === 'modo')
+  const iPresente = todos.findIndex(n => n.type === 'Svg' && String(n.props.source).includes('Presente'))
+  const iAtualizar = todos.findIndex(n => n.type === 'Button' && n.props.key === 'atualizar')
+  expect([iModo >= 0, iPresente >= 0, iAtualizar >= 0], 'os três existem').toEqual([true, true, true])
+  expect(iModo).toBeLessThan(iPresente)
+  expect(iPresente).toBeLessThan(iAtualizar)
+  expect(todos[iModo]?.text).toBe('Ficar ausente')
+  expect(todos[iAtualizar]?.text).toBe(`↻ ${HM(AGORA)}`)
+  expect(todos.filter(n => n.type === 'Svg' && String(n.props.source).includes('☾')), 'presente não tem a faixa do ausente').toEqual([])
+  await ui.unmount()
+})
+
+test('F48 B2: modoSvg ausente há 3 h a W = 372: as três linhas, altura 66, contorno lilás sem fundo', () => {
+  const r = modoSvg(372, { modo: 'ausente', desde: HA_3H, agora: AGORA })
+  expect(r.source, 'o desenho não pode vir vazio').toBeTruthy()
+  expect(r.source).toContain('☾')
+  expect(r.source).toContain('Ausente há 3 h')
+  expect(r.source).toContain(`desde ${HM(AGORA - 3 * 3600_000)} · a orquestradora pode se limpar`)
+  expect(r.source).toContain('sessões novas só abrem com você')
+  expect(r.height).toBe(66)
+  expect(r.source).toContain('class="lis"')
+  const retangulos = r.source.match(/<rect[^>]*>/g) ?? []
+  expect(retangulos.length, 'há o contorno').toBeGreaterThan(0)
+  for (const re of retangulos) expect(re, 'sem fundo').toContain('fill="none"')
+  expect(r.alt).toMatch(/a orquestradora pode se limpar sozinha/)
+  expect(r.alt).toMatch(/sessão nova só abre num turno seu/)
+})
+
+test('F48 B3: a W = 288 com desde de ontem a frase quebra no " · ", em duas linhas inteiras, altura 82', () => {
+  const d = new Date(AGORA)
+  d.setDate(d.getDate() - 1)
+  d.setHours(22, 10, 0, 0)
+  const r = modoSvg(288, { modo: 'ausente', desde: d.toISOString(), agora: AGORA })
+  expect(r.source).toContain('desde ontem 22:10 ·')
+  expect(r.source).toContain('a orquestradora pode se limpar')
+  expect(r.source, 'quebrou, não ficou numa linha só').not.toContain('desde ontem 22:10 · a orquestradora')
+  expect(r.source, 'nenhuma linha termina em reticências').not.toContain('…')
+  expect(r.height).toBe(82)
+})
+
+test('F48 B4: desde 5 min no futuro diz "Ausente agora", e o desde() segue devolvendo undefined', () => {
+  const futuro = new Date(AGORA + 5 * 60_000).toISOString()
+  expect(D.desde(futuro, AGORA)).toBeUndefined()
+  const r = modoSvg(372, { modo: 'ausente', desde: futuro, agora: AGORA })
+  expect(r.source).toContain('Ausente agora')
+  expect(modoSvg(372, { modo: 'ausente', desde: new Date(AGORA).toISOString(), agora: AGORA }).source).toContain('Ausente agora')
+  const presente = rotuloModoSvg('presente')
+  expect(presente.source).toContain('Presente')
+  expect(presente.width).toBeGreaterThan(0)
+  expect(rotuloModoSvg('desconhecido').source).toContain('Modo não lido (vale presente)')
+  expect(parouSvg(288, '⚠ Parou há 7 min').source).toContain('⚠ Parou há 7 min')
+})
+
+for (const bandeira of [undefined, LIGADA(HA_3H)]) {
+  test(`F48 B5: bandeira ${bandeira ? 'ligada' : 'ausente'}: o botão do modo é o primeiro da fileira e o ↻ o último, com autoFocus e a hora; o grupo da direita cresce`, async ($, on) => {
+    const { ui } = await abrirDe({ bandeira }, $, on)
+    const { topo, fileira, botoes } = await botoesDoTopo(ui)
+    expect(botoes.map(b => b.props.key)).toEqual(['modo', 'atualizar'])
+    expect(rotulo(botoes[0])).toBe(bandeira ? 'Estou de volta' : 'Ficar ausente')
+    // O motor não deixa o Button ter `label` e texto ao mesmo tempo: o nome acessível é o texto visível.
+    expect(botoes[1]?.props.autoFocus).toBe(true)
+    expect(rotulo(botoes[1])).toBe(`↻ ${HM(AGORA)}`)
+    expect(botoes[1]?.props.variant, 'nenhum botão da faixa é primário').toBe('secondary')
+    expect(botoes[0]?.props.variant).toBe('secondary')
+    expect(topo.props.gap, 'o topo não tem gap: no motor ele é uma linha de texto').toBeUndefined()
+    const direita = filhos(fileira)[1]
+    expect([direita?.props.flexGrow, direita?.props.justifyContent]).toEqual([1, 'flex-end'])
+    await ui.unmount()
+  })
+}
+
+test('F48 B5b: sem ler o modo não há botão do modo, e o ↻ segue o último', async ($, on) => {
+  const { ui } = await abrirDe({ bandeira: '{não é json' }, $, on)
+  const { botoes } = await botoesDoTopo(ui)
+  expect(botoes.map(b => b.props.key)).toEqual(['atualizar'])
+  await ui.unmount()
+})
+
+test('F48 B6a: bandeira ligada mostra a faixa do ausente', async ($, on) => {
+  const { ui } = await abrirDe({ bandeira: LIGADA(HA_3H) }, $, on)
+  const lido = await lerSuperficie(ui)
+  expect(lido).toMatch(/Modo ausente há 3 h/)
+  expect(lido).not.toMatch(/Modo presente/)
+  await ui.unmount()
+})
+
+test('F48 B6b: ligado:false é presente', async ($, on) => {
+  const { ui } = await abrirDe({ bandeira: JSON.stringify({ ligado: false, desligadoEm: HA_3H, por: 'painel' }) }, $, on)
+  const lido = await lerSuperficie(ui)
+  expect(lido).toMatch(/Modo presente\./)
+  expect(lido).not.toMatch(/Modo ausente/)
+  await ui.unmount()
+})
+
+test('F48 B6c: bandeira sem desde válido é presente', async ($, on) => {
+  const { ui } = await abrirDe({ bandeira: JSON.stringify({ frase: 'sem desde' }) }, $, on)
+  expect(await lerSuperficie(ui)).toMatch(/Modo presente\./)
+  await ui.unmount()
+})
+
+test('F48 B6d: JSON inválido: a faixa diz que não leu o modo, o erro vai para a faixa de erro e não há botão do modo', async ($, on) => {
+  const { ui } = await abrirDe({ bandeira: '{não é json' }, $, on)
+  const lido = await lerSuperficie(ui)
+  expect(lido).toMatch(/Não consegui ler o modo ausente; para as travas, vale presente\./)
+  expect(lido, 'o erro vai para a faixa de erro').toMatch(/modo ausente \(operador-ausente\.json\)/)
+  expect(await ui.find({ key: 'modo' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('F48 B7: ligar grava a bandeira com desde ISO e por painel, e a faixa troca antes de a gravação terminar', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurarBandeira = new Promise<void>(res => (soltar = res))
+  const { ui, bandeiras, relogio, toasts } = await abrirDe({ segurarBandeira }, $, on)
+  await ui.press({ key: 'modo' })
+  const durante = await lerSuperficie(ui)
+  expect(bandeiras, 'a gravação ainda não terminou').toEqual([])
+  expect(durante, 'a faixa já está na tela (otimista)').toMatch(/Modo ausente agora/)
+  expect((await ui.find({ key: 'modo' }))?.text).toBe('Ligando…')
+  soltar()
+  await relogio.settle()
+  expect(bandeiras.length).toBe(1)
+  const gravada = bandeiras[0] as Record<string, unknown>
+  expect(gravada.desde).toBe(new Date(AGORA).toISOString())
+  expect(gravada.por).toBe('painel')
+  expect(gravada.frase).toBe('botão do painel')
+  expect('ligado' in gravada && gravada.ligado === false, 'não grava ligado:false ao ligar').toBe(false)
+  expect((await ui.find({ key: 'modo' }))?.text).toBe('Estou de volta')
+  expect(toasts.at(-1)).toBe('Modo ausente ligado. Para pré-abrir o pool, use /ausente on no chat.')
+  await ui.unmount()
+})
+
+test('F48 B8: desligar grava {ligado:false, desligadoEm, por:"painel"}, volta ao presente e avisa', async ($, on) => {
+  const { ui, bandeiras, relogio, toasts } = await abrirDe({ bandeira: LIGADA(HA_3H) }, $, on)
+  await ui.press({ key: 'modo' })
+  await relogio.settle()
+  expect(bandeiras).toEqual([{ ligado: false, desligadoEm: new Date(AGORA).toISOString(), por: 'painel' }])
+  expect(await lerSuperficie(ui)).toMatch(/Modo presente\./)
+  expect((await ui.find({ key: 'modo' }))?.text).toBe('Ficar ausente')
+  expect(toasts.at(-1)).toBe('Modo ausente desligado')
+  await ui.unmount()
+})
+
+test('F48 B9: gravação que falha: a faixa volta ao modo anterior e a faixa de avisos diz o motivo', async ($, on) => {
+  const { ui, relogio, bandeiras } = await abrirDe({ bandeiraFalha: 'disco cheio' }, $, on)
+  await ui.press({ key: 'modo' })
+  await relogio.settle()
+  const lido = await lerSuperficie(ui)
+  expect(bandeiras).toEqual([])
+  expect(lido, 'voltou a presente').toMatch(/Modo presente\./)
+  expect(lido).not.toMatch(/Modo ausente agora/)
+  expect((await ui.find({ key: 'modo' }))?.text).toBe('Ficar ausente')
+  expect(lido).toMatch(/Ação não concluída/)
+  expect(lido).toMatch(/Não consegui ligar o modo ausente \(.*disco cheio.*\)/)
+  await ui.unmount()
+})
+
+test('F48 B10: segundo clique durante a gravação não grava de novo', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurarBandeira = new Promise<void>(res => (soltar = res))
+  const { ui, bandeiras, relogio } = await abrirDe({ segurarBandeira }, $, on)
+  await ui.press({ key: 'modo' })
+  await ui.press({ key: 'modo' })
+  soltar()
+  await relogio.settle()
+  expect(bandeiras.length, 'uma gravação só').toBe(1)
+  await ui.unmount()
+})
+
+test('F48 B11a: sem piscar: a releitura pendente depois de ligar não apaga a faixa', async ($, on) => {
+  const parar = { on: false }
+  const a = await abrirDe({ parar }, $, on)
+  parar.on = true
+  await a.ui.press({ key: 'modo' })
+  await a.relogio.settle()
+  expect(a.bandeiras.length).toBe(1)
+  expect(await lerSuperficie(a.ui), 'releitura pendurada: a faixa segue').toMatch(/Modo ausente agora/)
+  await a.ui.unmount()
+})
+
+test('F48 B11b: sem piscar: o ↻ clicado durante a gravação, resolvido depois dela com o arquivo lido antes, mantém a faixa', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurarBandeira = new Promise<void>(res => (soltar = res))
+  const b = await abrirDe({ segurarBandeira }, $, on)
+  await b.ui.press({ key: 'modo' })
+  await b.ui.press({ key: 'atualizar' })
+  await b.relogio.settle()
+  expect(await lerSuperficie(b.ui), 'a leitura feita antes da gravação não apaga a faixa').toMatch(/Modo ausente agora/)
+  soltar()
+  await b.relogio.settle()
+  expect(await lerSuperficie(b.ui)).toMatch(/Modo ausente/)
+  expect(b.bandeiras.length).toBe(1)
+  await b.ui.unmount()
+})
+
+test('F48 B12: a falha do modo vai para a faixa de avisos com o título novo; a resposta não entregue usa o mesmo título', async ($, on) => {
+  const { ui, relogio } = await abrirDe({ bandeiraFalha: 'sem permissão' }, $, on)
+  await ui.press({ key: 'modo' })
+  await relogio.settle()
+  const lido = await lerSuperficie(ui)
+  expect(lido).toMatch(/Ação não concluída/)
+  expect(lido).not.toMatch(/Resposta não entregue/)
+  await ui.unmount()
+})
+
+test('F48 B13: leitura parada: o Svg "⚠ Parou há" vem logo depois da fileira', async ($, on) => {
+  const parar = { on: false }
+  const { ui, relogio } = await abrirDe({ parar }, $, on)
+  parar.on = true
+  await relogio.advance(60_000)
+  await relogio.advance(200_000)
+  const topo = filhos(await raiz(ui))[0]!
+  const seguinte = filhos(topo)[1]
+  expect(seguinte?.type).toBe('Svg')
+  expect(String(seguinte?.props.source)).toContain('⚠ Parou há')
+  await ui.unmount()
+})
+
+for (const bandeira of [undefined, LIGADA(HA_3H)]) {
+  test(`F48 B14: terminal, bandeira ${bandeira ? 'ligada' : 'ausente'}: a 1ª linha é a fileira com o botão do modo e o ↻; o ausente tem AUSENTE invertido; sem gap; o ↻ fora da linha dos contadores`, async ($, on) => {
+    const motor = engine(on, false, {}, { agora: AGORA, fila: fila('F27', 'F1'), vivas: vivasDe(P7, P1), perguntas: [], bandeira })
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+    await $.command.run(ABRIR)
+    await motor.relogio.settle()
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    const topo = filhos(await raiz(ui))[0]!
+    expect(topo.props.gap, 'sem gap').toBeUndefined()
+    const [fileira, segunda] = filhos(topo)
+    const botoes = subarvore(fileira!).filter(n => n.type === 'Button')
+    expect(botoes.map(b => b.props.key)).toEqual(['modo', 'atualizar'])
+    expect(rotulo(botoes[0])).toBe(bandeira ? 'Estou de volta' : 'Ficar ausente')
+    expect(rotulo(botoes[1])).toBe(`↻ ${R.hora(AGORA)}`)
+    const invertidos = (n: No) => subarvore(n).filter(x => x.type === 'Text' && x.props?.inverse === true)
+    if (bandeira) {
+      expect(invertidos(segunda!).length, 'o ausente é o único texto invertido').toBe(1)
+      expect(String(invertidos(segunda!)[0]?.children?.join(''))).toMatch(/AUSENTE há 3 h/)
+    } else {
+      expect(invertidos(topo), 'presente não tem o bloco invertido').toEqual([])
+    }
+    const contadores = filhos(topo).slice(bandeira ? 2 : 1)
+    expect(contadores.length, 'os contadores vêm depois').toBeGreaterThan(0)
+    expect(contadores.flatMap(subarvore).filter(n => n.type === 'Button'), 'o ↻ não está na linha dos contadores').toEqual([])
+    await ui.unmount()
+  })
+}
+
+test('F48 B15: responder pelo painel grava respondidaPor "painel" e respondidaEm igual ao atualizadoEm do clique', async ($, on) => {
+  const { relogio, escritas } = engine(on)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(ABRIR)
+  await relogio.settle()
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.press({ key: 'Q7:b' })
+  const data = escritas[0]?.data as Record<string, unknown> | undefined
+  expect(data, 'a resposta foi gravada').toBeDefined()
+  expect(data?.respondidaPor).toBe('painel')
+  expect(typeof data?.respondidaEm).toBe('string')
+  expect(data?.respondidaEm).toBe(data?.atualizadoEm)
+  await ui.unmount()
+})
+
+test('F48 B16: o mod não registra ferramenta nova para o modo: só onde_esta_o_painel', async ($, on) => {
+  const { registradas } = await abrirDe({}, $, on)
+  expect(registradas.length, 'registrou ao menos a de hoje').toBeGreaterThan(0)
+  expect(registradas).toEqual(['onde_esta_o_painel'])
 })

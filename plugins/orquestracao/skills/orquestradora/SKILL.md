@@ -147,20 +147,24 @@ Sessão nova que vá consumir produção ou gastar execução de job pede o meu 
 
 Cada turno relê a conversa inteira, e depois de mais de 1 hora parada o cache expira e a conversa inteira é **reescrita** a preço dobrado. Medido no Battlewand (2026-10-20, 177 chamadas, preço do Opus 5.5): ~45% do custo foi releitura de cache, ~45% escrita de cache (dois terços disso em três retomadas depois de pausa longa, ~280 mil tokens cada) e ~10% saída. O piso de uma sessão nova é ~90 mil tokens; a mediana relida por chamada foi ~270 mil. Encurtar resposta não economiza; o que economiza é **limpar cedo**, **limpar antes de ficar parada** e **não deixar entrar** texto que não vai ser usado.
 
-**Gatilho de limpeza (objetivo).** Depois de cada merge, e antes de responder a um lote de notificações, a orquestradora lê o próprio contexto (`get_usage` com `"self"`, campo `context.tokensUsed`):
-- **≥ 200 mil tokens:** limpa no próximo momento oportuno (abaixo).
-- **≥ 300 mil tokens:** não aceita trabalho novo de orquestração (merge, conferência, release) até limpar; só registra no arquivo de estado o que chegar e limpa assim que o momento for oportuno.
-- **≥ 150 mil tokens e o turno termina esperando por mim** (nada rodando, nenhuma sessão trabalhando para ela, só decisão minha pendente): limpa antes de encerrar o turno. Eu posso demorar mais de 1 hora, e retomar do zero custa ~90 mil de escrita em vez de reescrever a conversa inteira.
-- Sem `get_usage` na sessão, conte: limpa a cada **3 merges** ou **40 turnos** desde a última limpeza, o que vier primeiro.
+**Quem decide a limpeza inteira é o operador (26/10):** *"se limpar por inteiro em uma janela maior, e não se limpar por inteiro automaticamente, ela solicitar ou perguntar se pode se limpar"*. Ele pode estar lendo a resposta dela; limpar nesse momento apaga o que ele lê.
+
+**Limpeza leve, sozinha.** A compactação automática (300 mil, `autoCompactWindow` global) e o "Ler pouco" abaixo. Não há nada a fazer.
+
+**Limpeza inteira com o operador presente.** Depois de cada merge e antes de um lote de notificações, leia o próprio contexto (`get_usage` com `"self"`, campo `context.tokensUsed`). **A partir de 250 mil ela PEDE**: grava o estado, abre a pergunta `limpar · orquestradora` (Q-ID de `proxima-pergunta`, `sessaoId`, recomendação: limpar) e segue trabalhando. Limpa só quando ele disser sim no chat dela ou no botão do painel (o sim do painel vale 30 min; um "não" ou "adiar" segura a cobrança por 2 h). Não limpa ao terminar o turno esperando por ele. Sem `get_usage` na sessão, conte: pede a cada **3 merges** ou **40 turnos** desde a última limpeza.
+
+**Modo ausente ligado** (`/ausente on` ou o botão do painel): ninguém está lendo, então valem as regras de antes e ela limpa sozinha. **≥ 200 mil:** limpa no próximo momento oportuno. **≥ 300 mil:** não aceita trabalho novo (merge, conferência, release) até limpar. **≥ 150 mil e o turno termina esperando por mim:** limpa antes de encerrar.
 
 **Momento oportuno:** nenhum merge ou release em andamento, nenhum subagente dela rodando (a notificação dele se perderia), nenhuma pergunta minha sem resposta, nenhuma mensagem de sessão por processar.
 
-**Como limpar.**
+**Como limpar** (quando pode: ok do operador ou modo ausente).
 1. Atualize o arquivo de estado. Ele precisa bastar sozinho: PRs e branches abertos, o que cada sessão viva está fazendo e o que ela espera, decisões acumuladas, números reservados, o que estava no meio (próximo passo exato).
 2. Me avise numa linha (*"limpando o contexto em 270 mil tokens; estado salvo"*).
 3. `clear_session` com `"self"`. O título sobrevive, e o `CLAUDE.md` global manda a sessão com título de orquestradora carregar esta skill antes de qualquer outra coisa — que recomeça pelo "Ao assumir".
 
-Prefira `clear_session` a `/compact`: o resumo da compactação fica na conversa e é relido de novo a cada turno; o arquivo de estado é lido uma vez.
+Ao marcar `respondida` a pergunta `limpar · orquestradora` que o operador respondeu pelo painel, não reescreva `resposta` nem `estado` com outro texto (ex.: resumir "sim (segue a recomendação)" para "sim"): isso apaga a prova do clique e o T7 recusa. Só a pergunta de título exato `limpar · orquestradora` vale como pedido e como ok.
+
+A trava: o T7 em `hooks/papel-do-pool.mjs` recusa `clear_session "self"` da orquestradora sem o ok (turno do operador, modo ausente ou sim do painel); a cobrança em `hooks/contexto-do-papel.mjs` pede a pergunta a partir de 250 mil. Prefira `clear_session` a `/compact`: o resumo da compactação fica na conversa e é relido de novo a cada turno; o arquivo de estado é lido uma vez.
 
 **Ler pouco — a orquestradora não lê o que pode perguntar.**
 - **Outra sessão:** não leia a transcrição dela (`list_events`, `export_transcript`, `search_session_transcripts`) para saber o que fez. Peça a ela por `send_message` um resumo de até 150 palavras (o que entregou, branch/commit, gate, decisões). `list_sessions` sempre com `limit`.

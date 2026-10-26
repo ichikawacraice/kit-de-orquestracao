@@ -347,6 +347,9 @@ function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom, ante
     const solto = itemSoltoNaPergunta(novo);
     if (solto) throw new Error(`${chave}: ${solto.campo} cita "${solto.numero}" solto — na primeira menção escreva "${solto.numero} · <título do item>" (painel get fila ${solto.numero}); o operador não sabe o que é o número (a tecla F5 se descreve por extenso)`);
   }
+  if (colecao === 'perguntas' && ('respondidaPor' in novo || 'respondidaEm' in novo)) {
+    throw new Error(`${chave}: ${'respondidaPor' in novo ? 'respondidaPor' : 'respondidaEm'} só o pane grava (é a prova do clique do operador)`);
+  }
   if (colecao === 'perguntas' && base.estado === 'aberta' && !base.sessaoId) {
     throw new Error(`${chave}: pergunta aberta sem sessaoId — a resposta do painel não teria para onde voltar`);
   }
@@ -415,6 +418,11 @@ function planejar(o, seVersao, vista) {
   }
   // `set` monta o documento do zero, mas `com` não é de quem o substitui: o gravado fica (só `com add|del` o muda),
   // e a trava de fechamento abaixo o lê. Sem isto, `set --se-versao` sem o campo apagaria quem trabalha no item.
+  // O clique do painel (`respondidaPor` + `respondidaEm`) vale só para a resposta e a pergunta que ele gravou: trocar
+  // `resposta`, `estado`, `titulo` ou `sessaoId` por OUTRO valor apaga a prova; regravar o mesmo valor, `nota` e `atualizadoEm` não.
+  if (colecao === 'perguntas' && ['resposta', 'estado', 'titulo', 'sessaoId'].some((k) => k in novo && novo[k] !== atual?.data?.[k])) {
+    delete base.respondidaPor; delete base.respondidaEm;
+  }
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.com) && atual.data.com.length) base.com = atual.data.com;
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.fez)) base.fez = atual.data.fez;
   if ((colecao === 'sessoes' || colecao === 'fila') && !base.projeto && (op === 'set' || !atual)) {
