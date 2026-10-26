@@ -23,7 +23,7 @@ Fora destes eixos não há achado. Gosto pessoal, outra marca, outra fonte e dec
 ## Como se mede
 
 - **Leia o artefato, não o relato.** O arquivo da revisão, o código da tela (arquivo:linha) e, quando existir, a tela renderizada (nos dois temas).
-- Quando o Impeccable estiver instalado, o detector dele ajuda no eixo 3: rode-o **de dentro da pasta do front** (da raiz ele ignora as exceções do projeto e infla o número). O achado dele entra só se cair num dos seis eixos. Sem o Impeccable, siga sem ele: o detector é ajuda, não requisito.
+- O detector do Impeccable ajuda no eixo 3: rode-o **de dentro da pasta do front** (da raiz ele ignora as exceções do projeto e infla o número) com `node "$(node "${CLAUDE_PLUGIN_ROOT}/skills/critica-de-ui/scripts/achar-detector.mjs")" --json .`; o `achar-detector.mjs` acha o `detect.mjs` instalado. O achado dele entra só se cair num dos seis eixos. Saída `DEGRADED` (dependências de parser ausentes) entra como observação, não como "não instalado". Se o `achar-detector.mjs` sair 1, siga sem o detector e diga na crítica o motivo que ele imprimiu: o detector é ajuda, não requisito.
 - Conte quando a frase depender de número: quantos controles na barra, quantas mensagens à vista no estado pior, quantas larguras somam à largura de referência.
 
 ## A entrega (formato fixo, no máximo 5)
