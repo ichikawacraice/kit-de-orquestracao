@@ -24,7 +24,7 @@ Leia as pastas do `.claude/kit.json`, seção `documentos`. Sem a seção, valem
 | `documentos.research` | `docs/research` | pesquisa datada (snapshot) |
 | `documentos.planos` | `docs/planos` | planos por data |
 
-O vocabulário de status e os orçamentos (400 caracteres por linha do roadmap, 150 KB por entrada do diário (e por parte do acervo antigo)) são os padrões deste texto; `documentos.estados` e `documentos.orcamentos` do `kit.json` os trocam, e `documentos.docs` é a raiz de onde os links relativos são conferidos.
+O vocabulário de status e os orçamentos (400 caracteres por linha do roadmap, 150 KB por entrada do diário e por parte do acervo antigo) são os padrões deste texto; `documentos.estados` e `documentos.orcamentos` do `kit.json` os trocam, e `documentos.docs` é a raiz de onde os links relativos são conferidos.
 
 Se o projeto tem orquestradora ativa, **peça a ela o número** (ADR, SPEC) antes de escrever o arquivo; sem orquestradora, confira o maior existente e some um. Número nunca é reutilizado. Número reservado sem spec escrita fica registrado no índice, de forma explícita.
 

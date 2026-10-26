@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -517,6 +517,31 @@ describe("tamanho-do-diario", () => {
       }
       const ok = rodar({ "docs/diario/2026-11/03-x.md": entrada("x"), "docs/diario/README.md": "i\n", "docs/diario/notas.txt": "n\n" });
       assert.deepEqual(ok.achados, []);
+    });
+
+    it("link simbólico pendurado na raiz do diário é pulado, sem exceção", () => {
+      const raiz = pasta({ "docs/diario/2026-11/03-x.md": entrada("x") });
+      try {
+        symlinkSync(join(raiz, "nao-existe"), join(raiz, "docs/diario/pendurado"));
+        const r = conferirDocs(raiz, {}, ["tamanho-do-diario"]);
+        assert.equal(r.arquivos, 1);
+        assert.deepEqual(r.achados, []);
+      } finally {
+        limpar(raiz);
+      }
+    });
+
+    it("pasta oculta na raiz do diário é ignorada; a de nome inválido sem ponto continua reprovando", () => {
+      const ok = rodar({ "docs/diario/2026-11/03-x.md": entrada("x"), "docs/diario/.obsidian/x.json": "{}", "docs/diario/.git/HEAD": "ref\n" });
+      assert.deepEqual(ok.achados, []);
+      const ruim = rodar({ "docs/diario/2026-11/03-x.md": entrada("x"), "docs/diario/obsidian/x.json": "{}" });
+      assert.equal(ruim.achados.length, 1);
+    });
+
+    it("subpasta dentro da pasta do mês reprova, mesmo com .md dentro", () => {
+      const r = rodar({ "docs/diario/2026-11/03-x.md": entrada("x"), "docs/diario/2026-11/sub/y.md": entrada("y") });
+      assert.deepEqual(onde(r), ["docs/diario/2026-11/sub:1"]);
+      assert.match(r.achados[0].motivo, /subpasta dentro do mês; a entrada mora direto em AAAA-MM\//);
     });
 
     it("mês depois da primeira pasta como arquivo único reprova; o mês da transição e as partes antigas não", () => {
