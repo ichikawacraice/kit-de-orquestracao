@@ -7,29 +7,46 @@
  * `gate.typecheck` declarado, recusa alto: não adivinha o comando.
  */
 import { spawnSync } from "node:child_process";
+import { availableParallelism } from "node:os";
 import { carregarConfig, partirComando } from "./config.mjs";
 import { RAIZ, conferirInstalacao, constroi } from "./o-dist-que-o-gate-le.mjs";
 import { consultar, guardarSeAArvoreNaoMudou, linhaDoPulo } from "./o-verde-da-arvore.mjs";
 import { rodarSePrincipal } from "./o-script-principal.mjs";
+import { pastaDoTeto, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFichasSync } from "./o-teto-da-maquina.mjs";
 
 /** Roda `gate.typecheck` com prazo (`gate.prazos.typecheckMin`) e SIGKILL: um `tsc` pendurado não pode segurar a sessão. Devolve o código de saída. */
-function rodarOTypecheck(raiz, cfg) {
+function rodarOTypecheck(raiz, cfg, env = process.env) {
   if (!cfg.gate.typecheck) {
     console.error('[typecheck] falta "gate.typecheck" no .claude/kit.json — não adivinho o comando');
     return 1;
   }
   const prazoMs = cfg.gate.prazos.typecheckMin * 60_000;
   const [cmd, ...args] = partirComando(cfg.gate.typecheck);
-  const { status, signal, error } = spawnSync(cmd, args, {
-    cwd: raiz,
-    stdio: "inherit",
-    shell: process.platform === "win32",
-    timeout: prazoMs,
-    killSignal: "SIGKILL",
-  });
-  if (error) console.error(`[typecheck] não rodou: ${error.message}`);
-  if (signal) console.error(`[typecheck] terminou pelo sinal ${signal} (prazo de ${prazoMs / 60_000} min)`);
-  return status ?? 1;
+  // As fichas do teto da máquina (ADR 0005): `gate.nucleosTypecheck`, a não ser que quem chamou já as tenha (`KIT_FICHAS_TOMADAS`) ou seja o CI.
+  const jaTem = env["KIT_FICHAS_TOMADAS"] !== undefined && env["KIT_FICHAS_TOMADAS"] !== "";
+  const pasta = pastaDoTeto(env);
+  const teto = env["CI"] || jaTem ? null : tetoDaMaquina(env, availableParallelism(), pasta);
+  const eu = teto === null ? null : quemSouEuNasFichas(raiz);
+  const levou = eu === null ? [] : tomarFichasSync({ quero: cfg.gate.nucleosTypecheck, pasta, teto, eu });
+  const soltar = () => (eu === null ? [] : soltarFichas(pasta, levou, eu));
+  process.on("exit", soltar);
+  try {
+    const filho = eu === null ? env : { ...env, KIT_FICHAS_TOMADAS: String(levou.length) };
+    const { status, signal, error } = spawnSync(cmd, args, {
+      cwd: raiz,
+      env: filho,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+      timeout: prazoMs,
+      killSignal: "SIGKILL",
+    });
+    if (error) console.error(`[typecheck] não rodou: ${error.message}`);
+    if (signal) console.error(`[typecheck] terminou pelo sinal ${signal} (prazo de ${prazoMs / 60_000} min)`);
+    return status ?? 1;
+  } finally {
+    soltar();
+    process.off("exit", soltar);
+  }
 }
 
 /** O typecheck do gate. Devolve o código de saída. */
@@ -37,7 +54,7 @@ export async function main(env = process.env, raiz = RAIZ, cfg = carregarConfig(
   if (env["CI"]) {
     const codigo = constroi(raiz, env, cfg);
     if (codigo !== 0) return codigo;
-    return rodarOTypecheck(raiz, cfg);
+    return rodarOTypecheck(raiz, cfg, env);
   }
 
   const instalacao = conferirInstalacao(raiz, env, undefined, cfg);
@@ -57,7 +74,7 @@ export async function main(env = process.env, raiz = RAIZ, cfg = carregarConfig(
   const inicio = Date.now();
   const codigo = constroi(raiz, env, cfg);
   if (codigo !== 0) return codigo;
-  const resultado = rodarOTypecheck(raiz, cfg);
+  const resultado = rodarOTypecheck(raiz, cfg, env);
   if (resultado === 0) guardarSeAArvoreNaoMudou("typecheck", verde, inicio, raiz, env, undefined, cfg);
   return resultado;
 }

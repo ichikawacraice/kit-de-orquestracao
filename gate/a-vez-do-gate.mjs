@@ -44,6 +44,8 @@ import { carregarConfig, envKit, inteiroDoEnv, partirComando } from "./config.mj
 import { RAIZ, conferirInstalacao, constroi, projetosDoWorkspace } from "./o-dist-que-o-gate-le.mjs";
 import { consultar, guardarSeAArvoreNaoMudou, linhaDoPulo } from "./o-verde-da-arvore.mjs";
 import { rodarSePrincipal } from "./o-script-principal.mjs";
+import { workersPorPacote } from "./o-teto-de-workers.mjs";
+import { pastaDoTeto, processoVivo, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFichas } from "./o-teto-da-maquina.mjs";
 
 /** Quanto uma vez vale por padrão (`gate.prazos.vezMin`). O gate leva minutos; isto só existe para que um dono travado não segure a fila para sempre. */
 export const PRAZO_DA_VEZ_MS = 60 * 60 * 1000;
@@ -147,10 +149,11 @@ export function ambienteDoFilho(env = process.env, argv = [], raiz = RAIZ, cfg =
  * O comando que mede a suíte: `{ cmd, args }`. Perfil `pnpm-workspace`:
  * `pnpm -r [--workspace-concurrency=n] test`, ou `pnpm --filter <pacote> test …`.
  * Perfil `comando`: o `gate.comandoCompleto` (ou o `gate.comandoPorPacote` com
- * `{pacote}` trocado) — partido por espaço, sem shell. Sem o comando declarado,
+ * `{pacote}` trocado) — partido por espaço, sem shell, com `{fichas}` trocado pelo número levado do teto da máquina (`fichas`). Sem o comando declarado,
  * recusa alto: o gate não adivinha como o projeto roda os testes.
  */
-export function comandoDaSuite(env = process.env, argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) {
+export function comandoDaSuite(env = process.env, argv = [], raiz = RAIZ, cfg = carregarConfig(raiz), fichas = undefined) {
+  const troca = (texto) => (fichas === undefined ? texto : texto.replaceAll("{fichas}", String(fichas)));
   const pacote = pacoteDoArgv(argv, raiz, cfg);
   const resto = pacote === null ? [] : semSeparador(argv).slice(1);
   if (cfg.gate.perfil === "pnpm-workspace") {
@@ -160,16 +163,45 @@ export function comandoDaSuite(env = process.env, argv = [], raiz = RAIZ, cfg = 
   }
   if (pacote !== null) {
     if (!cfg.gate.comandoPorPacote) throw new Error("este projeto não declara gate.comandoPorPacote no .claude/kit.json — não sei rodar um pacote só");
-    const [cmd, ...args] = partirComando(cfg.gate.comandoPorPacote.replaceAll("{pacote}", pacote.filtro));
+    const [cmd, ...args] = partirComando(troca(cfg.gate.comandoPorPacote.replaceAll("{pacote}", pacote.filtro)));
     return { cmd, args: [...args, ...resto] };
   }
   if (!cfg.gate.comandoCompleto) throw new Error('falta "gate.comandoCompleto" no .claude/kit.json — o gate não adivinha o comando dos testes');
-  const [cmd, ...args] = partirComando(cfg.gate.comandoCompleto);
+  const [cmd, ...args] = partirComando(troca(cfg.gate.comandoCompleto));
   return { cmd, args };
 }
 
 /** Só os argumentos de {@link comandoDaSuite} — o que o `pnpm` recebe no perfil `pnpm-workspace`. */
 export const argumentosDaSuite = (env = process.env, argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) => comandoDaSuite(env, argv, raiz, cfg).args;
+
+/**
+ * Quantas fichas do teto da máquina a suíte pede (ADR 0005). Perfil `pnpm-workspace`: a suíte inteira, pacotes juntos × workers
+ * (`KIT_TESTE_WORKERS` ou um quarto da máquina); o conserto, `gate.workersConserto` (ou `KIT_CONSERTO_WORKERS`). Perfil `comando`: `gate.nucleos`.
+ */
+export function fichasDaSuite(env = process.env, argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) {
+  if (cfg.gate.perfil !== "pnpm-workspace") return cfg.gate.nucleos;
+  if (filaDoArgv(argv, raiz, cfg) === "conserto") return inteiroDoEnv(env, "CONSERTO_WORKERS", cfg.gate.workersConserto);
+  const juntos = pacotesJuntos(env, cfg) ?? 1;
+  return juntos * inteiroDoEnv(env, "TESTE_WORKERS", workersPorPacote(availableParallelism()));
+}
+
+/**
+ * Toma as fichas do teto da máquina para a suíte, esperando se não houver nenhuma: `{ levou, quantas, teto, pasta, eu }`.
+ * Quem já tem fichas (`KIT_FICHAS_TOMADAS` no env) não toma de novo: `levou` vazio e `quantas` = o que veio.
+ */
+export async function tomarAsFichasDoGate(env, argv, raiz, cfg, opcoes = {}) {
+  const pasta = pastaDoTeto(env);
+  const ja = env["KIT_FICHAS_TOMADAS"];
+  if (ja !== undefined && ja !== "") {
+    const n = Number(ja);
+    if (!Number.isInteger(n) || n < 1) throw new Error(`KIT_FICHAS_TOMADAS precisa ser inteiro ≥ 1, e veio ${JSON.stringify(ja)}`);
+    return { levou: [], quantas: n, teto: null, pasta, eu: null };
+  }
+  const teto = tetoDaMaquina(env, availableParallelism(), pasta);
+  const eu = quemSouEuNasFichas(raiz);
+  const levou = await tomarFichas({ quero: fichasDaSuite(env, argv, raiz, cfg), pasta, teto, eu, ...opcoes });
+  return { levou, quantas: levou.length, teto, pasta, eu };
+}
 
 /** Roda `git` com prazo, e devolve a saída — ou `null` com o motivo escrito em `erro`. */
 function git(args, cwd) {
@@ -207,16 +239,8 @@ export function caminhoDaTrava(env = process.env, raiz = RAIZ, fila = "gate", cf
   };
 }
 
-/** `true` se o PID existe. `EPERM` é processo vivo de outro usuário — vivo. */
-export function processoVivo(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return e?.code === "EPERM";
-  }
-}
+/** `true` se o PID existe. Mora em `o-teto-da-maquina.mjs` (o teto não importa o gate: evita o ciclo); reexportada aqui. */
+export { processoVivo };
 
 /** A raiz do worktree, como o gate a conhece: `git rev-parse --show-toplevel` com `realpath` (sem git, a `raiz` dada). Vai em `KIT_GATE_DENTRO`. */
 export function raizDoWorktree(raiz = RAIZ) {
@@ -509,13 +533,13 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
   // As docs concordam ANTES da suíte, no CI também: é barato, e doc que diverge não vale esperar a vez nem guardar o verde.
   const docs = conferirDocsDoGate(raiz, cfg);
   if (docs !== 0) return docs;
-  const comando = comandoDaSuite(env, argv, raiz, cfg);
+  let comando = comandoDaSuite(env, argv, raiz, cfg);
   const pacote = pacoteDoArgv(argv, raiz, cfg);
   const prazoMs = cfg.gate.prazos.vezMin * 60_000;
   if (env["CI"]) {
     console.error("[gate] CI: sem fila e sem teto de pacotes — o comportamento de antes");
     const codigo = constroi(raiz, env, cfg);
-    return codigo !== 0 ? codigo : rodarASuite(comando, prazoMs, { ...env, [DENTRO]: raizDoWorktree(raiz) }, raiz);
+    return codigo !== 0 ? codigo : rodarASuite(comandoDaSuite(env, argv, raiz, cfg, availableParallelism()), prazoMs, { ...env, [DENTRO]: raizDoWorktree(raiz) }, raiz);
   }
 
   // A instalação se confere ANTES da fila: esperar a vez por minutos para morrer
@@ -557,14 +581,15 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
     return 2;
   }
   const minha = caminhoDaVaga(caminho, vaga);
-  console.error(
-    `[gate] a vez é minha (fila do ${fila}, vaga ${vaga} de ${n}, ${minha}) — ${comando.cmd} ${comando.args.join(" ")}, até ${availableParallelism()} núcleos repartidos pelo teto`,
-  );
 
   // Soltar no fim é o caminho normal; o `exit` cobre a saída por exceção. Um
   // SIGKILL — ou um Ctrl-C durante o build, que é síncrono — não passa por
   // nenhum dos dois: por isso a trava de PID morto é retomada.
-  const soltarAoSair = () => soltar(minha, eu);
+  let fichas = { levou: [], quantas: 0, teto: null, pasta: null, eu: null };
+  const soltarAoSair = () => {
+    if (fichas.eu) soltarFichas(fichas.pasta, fichas.levou, fichas.eu);
+    soltar(minha, eu);
+  };
   process.on("exit", soltarAoSair);
   try {
     // De novo, já com a vez: a sessão que estava na frente pode ter acabado de
@@ -577,6 +602,19 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
         return 0;
       }
     }
+    // As fichas do teto da máquina vêm DEPOIS da vez e do verde reconferido: quem espera a vez não segura núcleo (ADR 0005).
+    fichas = await tomarAsFichasDoGate(env, argv, raiz, cfg);
+    comando = comandoDaSuite(env, argv, raiz, cfg, fichas.quantas);
+    const doTeto = fichas.teto === null ? "" : ` de ${fichas.teto} da máquina`;
+    console.error(
+      `[gate] a vez é minha (fila do ${fila}, vaga ${vaga} de ${n}, ${minha}) — ${comando.cmd} ${comando.args.join(" ")}, ${fichas.quantas} fichas${doTeto}`,
+    );
+    filho["KIT_FICHAS_TOMADAS"] = String(fichas.quantas);
+    if (cfg.gate.perfil === "pnpm-workspace") {
+      const porPacote = pacote === null ? Math.max(1, Math.floor(fichas.quantas / (pacotesJuntos(env, cfg) ?? 1))) : fichas.quantas;
+      filho["KIT_TESTE_WORKERS"] = String(porPacote);
+      filho["IZANAGI_TESTE_WORKERS"] = String(porPacote);
+    }
     const inicio = Date.now();
     const codigo = constroi(raiz, env, cfg);
     if (codigo !== 0) return codigo;
@@ -584,6 +622,8 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
     if (resultado === 0 && verde !== null) guardarSeAArvoreNaoMudou("test", verde, inicio, raiz, env, undefined, cfg);
     return resultado;
   } finally {
+    // as fichas saem antes da vez: quem esperava a vez já pode precisar delas
+    if (fichas.eu) soltarFichas(fichas.pasta, fichas.levou, fichas.eu);
     soltar(minha, eu);
     process.off("exit", soltarAoSair);
   }

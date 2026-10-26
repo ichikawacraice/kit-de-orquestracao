@@ -12,6 +12,8 @@
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava).
 //   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o sim do painel ou o da janela, F48/F53).
 //   T6  Bash `gh pr merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
+//   T8  Bash `painel … com add F<n> …` da orquestradora, item `F<n>` em `etapa: "validacao"` e máquina cheia (todas as fichas do teto
+//       tomadas ou carga ≥ núcleos, ADR 0005) → deny: a V testa logo ao começar. Item em `execucao` passa (a E escreve código antes de testar).
 // Limites conhecidos: o cache do registro (pool-comum.mjs, 2 min) atrasa em até 2 min a troca de título, nos dois
 // sentidos (acerto e ausência). Orquestradora reconhecida só por título (sem marcador em ativas/) não ativa o T6; projeto não medido (null) pergunta
 // para as outras; o painel-das-sessoes.mjs repõe o marcador no primeiro Stop dela. T1c deixa a V gravar em
@@ -20,8 +22,9 @@
 // Erro do hook vai para o log e a ferramenta segue.
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { registrar, lerEntrada, semPrefixoDoPlugin, modoAusente } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, membrosLivres, perguntasDeLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS } from './pool-comum.mjs';
+import { readFileSync } from 'node:fs';
+import { registrar, lerEntrada, semPrefixoDoPlugin, modoAusente, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
+import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, membrosLivres, perguntasDeLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS, filaDir, maquinaCheia, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'papel-do-pool';
 const H = homedir();
@@ -81,6 +84,17 @@ function main() {
   }
 
   if (tool === 'Bash') {
+    // T8: a orquestradora não despacha V (`painel com add` de uma V em item em validação; o de E é o conserto e passa) com a máquina cheia (ADR 0005).
+    const normal = separadoresDeAspasNeutros(semHeredoc(ti.command || ''));
+    const itensDeV = [...normal.matchAll(new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+com\s+add\s+(F\d+)\s+\S+\s+["']?(\S+?)["']?(?:\s|$)`, 'g'))].filter((m) => /^V/i.test(m[2])).map((m) => m[1]).filter((F) => {
+      try { return JSON.parse(readFileSync(join(filaDir(), `${F}.json`), 'utf8'))?.data?.etapa === 'validacao'; } catch { return false; }
+    });
+    if (itensDeV.length > 0 && ehOrquestradora(e.session_id, registroDaSessao(e.session_id)?.titulo)) {
+      const m = maquinaCheia();
+      if (m.cheia) {
+        return nega('T8', 'orquestradora', itensDeV.join(','), `Máquina cheia (${m.tomadas} de ${m.teto} fichas, carga ${m.carga.toFixed(1)}): não despache a V agora; grave no item espera {"motivo":"gate","texto":"máquina cheia"} (ADR 0005).`);
+      }
+    }
     if (!/\bgh\b[^\n|;&]*\bpr\s+merge\b/.test(ti.command || '')) return;
     const reg = registroDaSessao(e.session_id);
     if (ehOrquestradora(e.session_id, reg?.titulo)) return;

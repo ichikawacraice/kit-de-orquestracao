@@ -10,8 +10,10 @@ Portado do Izanagi (`188f37fb8`) e parametrizado por `.claude/kit.json` do proje
 | `o-verde-da-arvore.mjs` | imprime a chave e o que a árvore atual já passou |
 | `o-dist-que-o-gate-le.mjs` | só no perfil `pnpm-workspace`: confere o `pnpm-lock.yaml` e constrói os pacotes consumidos compilados |
 | `as-docs-concordam.mjs [--regra x]…` | confere as docs (spec, ADR, roadmap, links, diário) e sai 1 com `arquivo:linha — motivo`; o gate roda antes da suíte |
-| `o-teto-de-workers.mjs` | `tetoDeWorkers()` para o `vitest.config.*` importar |
-| `guarda-de-operacao.mjs` | hook `PreToolUse` (Bash): pede confirmação antes de comando que já custou caro; só avisa em bypass |
+| `o-teto-de-workers.mjs` | `tetoDeWorkers()` para o `vitest.config.*` importar; o processo principal toma as fichas do teto da máquina |
+| `o-teto-da-maquina.mjs` | as fichas de núcleo que todo teste da máquina toma; sem argumento mostra quem as tem, `--teto N` grava o `teto.json`, `--teto padrao` o apaga |
+| `com-fichas.mjs [--quero N] -- <comando>` | roda um comando de teste pelo teto da máquina: toma até N fichas (padrão 2), troca `{fichas}` nos argumentos e passa `KIT_FICHAS_TOMADAS` ao filho |
+| `guarda-de-operacao.mjs` | hook `PreToolUse` (Bash): pede confirmação antes de comando que já custou caro; só avisa em bypass. A regra `teste-fora-do-teto` recusa (`deny`, também em bypass) `vitest`, `node --test` e `jest` soltos |
 
 ## `.claude/kit.json`
 
@@ -92,10 +94,16 @@ Os scripts do gate medem o toplevel do git do **diretório de onde rodam** (o `c
 fora do repositório, medem o `cwd`. Chamados pelo `package.json` da raiz (`scripts/kit/…`), não são afetados.
 A trava e o verde ficam no `git-common-dir`, então valem entre worktrees do mesmo repositório.
 
+## Teto da máquina
+
+Todo teste da máquina (o gate, o typecheck do gate, o `com-fichas` e o `vitest` com `tetoDeWorkers()`) toma **fichas de núcleo** numa pasta comum a todas as sessões e projetos: `~/.claude/orquestracao/nucleos-de-teste/` (`KIT_NUCLEOS_DIR` troca a pasta; existe para os testes). O valor, nesta ordem: `KIT_NUCLEOS_DE_TESTE` (ou o legado `IZANAGI_NUCLEOS_DE_TESTE`), o arquivo `<pasta>/teto.json` `{"nucleos": N}` (`node scripts/kit/o-teto-da-maquina.mjs --teto N`) e metade dos núcleos. Quem pede leva o que houver livre (no mínimo 1) e só espera sem nenhuma, dizendo por quem. `KIT_FICHAS_TOMADAS=<n>` no ambiente diz que quem chamou já tem as fichas: o filho não toma de novo. `gate.nucleos` (padrão 4) e `gate.nucleosTypecheck` (padrão 2) dizem quanto o gate pede no perfil `comando` e no typecheck. No CI não há teto.
+
 ## Variáveis de ambiente
 
 `KIT_GATE_TRAVA`, `KIT_CONSERTO_TRAVA`, `KIT_GATE_VAGAS`, `KIT_CONSERTO_VAGAS`, `KIT_GATE_PACOTES`,
-`KIT_GATE_SEM_CACHE=1`, `KIT_GATE_VERDE_DIR`, `KIT_TESTE_WORKERS`, `KIT_CONSERTO_WORKERS`.
+`KIT_GATE_SEM_CACHE=1`, `KIT_GATE_VERDE_DIR`, `KIT_TESTE_WORKERS`, `KIT_CONSERTO_WORKERS`, `KIT_NUCLEOS_DIR`,
+`KIT_NUCLEOS_DE_TESTE`, `KIT_FICHAS_TOMADAS`.
+`KIT_CARGA_1MIN` fixa a carga de 1 min que a orquestradora lê para dizer "máquina cheia"; é só para testes.
 Os nomes `IZANAGI_*` equivalentes valem como reserva (`KIT_*` vence). No CI (`CI` definido) não há fila, teto nem verde.
 
 ## Testes

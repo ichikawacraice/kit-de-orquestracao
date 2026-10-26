@@ -35,7 +35,7 @@ test('package.json: bin, engines, test e type module', () => {
   assert.equal(p.type, 'module');
   assert.equal(p.bin.kit, 'cli/kit.mjs');
   assert.equal(p.engines.node, '>=20');
-  assert.equal(p.scripts.test, 'node --test');
+  assert.equal(p.scripts.test, 'node gate/com-fichas.mjs --quero 4 -- node --test --test-concurrency={fichas}'); // o teste do kit passa pelo teto da máquina (ADR 0005)
   assert.ok(existsSync(join(RAIZ, p.bin.kit)));
   assert.equal(p.dependencies, undefined, 'o kit não traz dependência npm');
 });
@@ -47,7 +47,7 @@ test('marketplace.json lista os plugins do kit, cada um com a versão esperada n
   for (const pl of m.plugins) {
     const pj = json(pl.source, '.claude-plugin', 'plugin.json');
     assert.equal(pj.name, pl.name);
-    assert.match(pj.version, /^\d+\.\d+\.\d+$/); if (pl.name === 'orquestracao') assert.equal(pj.version, '0.1.40'); // o cache do plugin só se renova quando a versão muda
+    assert.match(pj.version, /^\d+\.\d+\.\d+$/); if (pl.name === 'orquestracao') assert.equal(pj.version, '0.1.41'); // o cache do plugin só se renova quando a versão muda
   }
 });
 

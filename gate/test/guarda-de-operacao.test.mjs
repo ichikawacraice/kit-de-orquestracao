@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { REGRAS, avaliar, migracoesForaDoTronco, segmentos } from "../guarda-de-operacao.mjs";
+import { carregarConfig } from "../config.mjs";
+import { REGRAS, avaliar, avaliarFirmes, migracoesForaDoTronco, segmentos } from "../guarda-de-operacao.mjs";
 import { cada, expect } from "./expect.mjs";
 
 /**
@@ -520,7 +521,8 @@ describe("a lista real de migrations lê o disco e a origin/main", () => {
 
 describe("(c) regra desligada não pergunta", () => {
   const SO = (...regras) => ctx(true, RAIZ, { fora: ["x.sql"] }, { regras: new Set(regras) });
-  // Um comando por regra: com SÓ a regra dele ligada pergunta; com as outras sete, não.
+  // Um comando por regra que PERGUNTA: com SÓ a regra dele ligada pergunta; com as outras, não. A `teste-fora-do-teto` recusa
+  // (`avaliarFirmes`) e tem o seu `describe` abaixo.
   const UM_POR_REGRA = {
     "build-com-dev-no-ar": "pnpm build",
     "psql-f": "psql -f a.sql",
@@ -532,11 +534,14 @@ describe("(c) regra desligada não pergunta", () => {
     destrutivos: "git reset --hard",
   };
 
-  it("cada uma das oito regras tem o seu comando de prova", () => {
-    expect(Object.keys(UM_POR_REGRA).sort()).toEqual([...REGRAS].sort());
+  const QUE_PERGUNTAM = REGRAS.filter((r) => r !== "teste-fora-do-teto");
+
+  it("cada uma das oito regras que perguntam tem o seu comando de prova", () => {
+    expect(Object.keys(UM_POR_REGRA).sort()).toEqual([...QUE_PERGUNTAM].sort());
+    expect(QUE_PERGUNTAM).toHaveLength(8);
   });
 
-  for (const regra of REGRAS) {
+  for (const regra of QUE_PERGUNTAM) {
     it(`${regra}: ligada pergunta; desligada (as outras ligadas) não`, () => {
       const comando = UM_POR_REGRA[regra];
       expect(avaliar(comando, SO(regra)).length, `ligada: \`${comando}\``).toBeGreaterThan(0);
@@ -673,5 +678,134 @@ describe("o kit.json de um repositório real chega até a decisão do hook", () 
       expect(r.stderr, JSON.stringify(regras)).toMatch(/guarda\.regras/);
       expect(decisao(r)?.permissionDecision, JSON.stringify(regras)).toBe("ask");
     }
+  });
+});
+
+describe("a regra `teste-fora-do-teto` (ADR 0005, operador, 26/10)", () => {
+  // Diferente das outras regras, esta RECUSA (`deny`), também em bypass: o teste solto é o que trava a máquina.
+  const firmes = (comando, c = ctx(false)) => avaliarFirmes(comando, c);
+
+  it("está em REGRAS e ligada por padrão no kit.json", () => {
+    expect(REGRAS).toContain("teste-fora-do-teto");
+    expect(carregarConfig("/", {}).guarda.regras).toContain("teste-fora-do-teto");
+  });
+
+  cada(
+    [
+      "vitest run x",
+      "npx vitest run x",
+      "pnpm vitest",
+      "pnpm exec vitest run",
+      "pnpm --filter web exec vitest run",
+      "npm exec vitest",
+      "npm exec -- vitest run",
+      "pnpm dlx vitest",
+      "yarn vitest",
+      "./node_modules/.bin/vitest run",
+      "node --test",
+      "node --test gate/test/x.test.mjs",
+      "node --test --test-concurrency=2 gate",
+      "node --experimental-test-coverage --test x",
+      "node --import tsx --test x.ts",
+      "node --import=tsx --test x.ts",
+      "node -r ts-node/register --test x",
+      "node --require ts-node/register --test x",
+      "node --loader ts-node/esm --test x",
+      "node --experimental-loader=ts-node/esm --test x",
+      "jest",
+      "npx jest --ci",
+      "cd gate && node --test x.test.mjs",
+      "git status && npx vitest run x | tail",
+      "sudo vitest",
+    ],
+    "recusa %s",
+    (comando) => {
+      const motivos = firmes(comando);
+      expect(motivos, comando).toHaveLength(1);
+      expect(motivos[0]).toMatch(/Teste fora do teto da máquina \(ADR 0005\)/);
+      expect(motivos[0]).toMatch(/node scripts\/kit\/com-fichas\.mjs -- <o comando>/);
+      expect(motivos[0]).toMatch(/npm test \[pacote\]/);
+    },
+  );
+
+  cada(
+    [
+      "npm test",
+      "npm test -- gate",
+      "pnpm test",
+      "pnpm --filter web test",
+      "node scripts/kit/a-vez-do-gate.mjs web",
+      "node scripts/kit/com-fichas.mjs -- npx vitest run x",
+      "node gate/com-fichas.mjs --quero 2 -- node --test x",
+      "KIT_FICHAS_TOMADAS=2 npx vitest run x",
+      "env KIT_FICHAS_TOMADAS=3 node --test x",
+      "grep vitest arquivo",
+      'cat package.json | grep "node --test"',
+      'echo "node --test"',
+      "node script.mjs --test",
+      "node --import tsx script.mjs --test",
+      "node -e \"console.log('vitest')\"",
+      "git commit -m 'npx vitest run'",
+      "ls vitest.config.ts",
+    ],
+    "deixa passar %s",
+    (comando) => {
+      expect(firmes(comando), comando).toEqual([]);
+    },
+  );
+
+  it("o teste mede: o detector enxerga o comando solto (prova antes da ausência) e a regra desligada não recusa", () => {
+    expect(firmes("npx vitest run")).toHaveLength(1);
+    expect(firmes("npx vitest run", ctx(false, RAIZ, { fora: [] }, { regras: new Set(["destrutivos"]) }))).toEqual([]);
+    expect(firmes("npx vitest run", ctx(false, RAIZ, { fora: [] }, { regras: new Set(["teste-fora-do-teto"]) }))).toHaveLength(1);
+  });
+
+  it("no CI não recusa", () => {
+    expect(firmes("npx vitest run", ctx(false, RAIZ, { fora: [] }, { ci: true }))).toEqual([]);
+  });
+
+  it("não aparece entre as perguntas (`avaliar`): é recusa, não pergunta", () => {
+    expect(avaliar("npx vitest run", ctx(false))).toEqual([]);
+  });
+
+  describe("ponta a ponta", () => {
+    const rodar = (command, permission_mode, env = {}) =>
+      spawnSync("node", [SCRIPT], {
+        input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: "/tmp", permission_mode }),
+        encoding: "utf-8",
+        timeout: 15_000,
+        killSignal: "SIGKILL",
+        env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env },
+      });
+
+    cada(["default", "acceptEdits", "plan", "bypassPermissions"], "%s: deny", (modo) => {
+      const r = rodar("npx vitest run x", modo);
+      expect(r.status).toBe(0);
+      expect(r.stdout.length, "o hook não escreveu nada — o resto deste caso seria vácuo").toBeGreaterThan(0);
+      const saida = JSON.parse(r.stdout);
+      expect(saida.hookSpecificOutput.hookEventName).toBe("PreToolUse");
+      expect(saida.hookSpecificOutput.permissionDecision).toBe("deny");
+      expect(saida.hookSpecificOutput.permissionDecisionReason).toMatch(/com-fichas/);
+    });
+
+    it("`npm test` em bypass não sai nada; e o mesmo comando recusado antes sai deny (a prova de que a saída vazia é de verdade)", () => {
+      expect(JSON.parse(rodar("node --test x", "bypassPermissions").stdout).hookSpecificOutput.permissionDecision).toBe("deny");
+      const r = rodar("npm test", "bypassPermissions");
+      expect(r.status).toBe(0);
+      expect(r.stdout).toBe("");
+    });
+
+    it("no CI (env CI=1 do hook) não recusa", () => {
+      const r = rodar("npx vitest run x", "default", { CI: "1" });
+      expect(r.status).toBe(0);
+      expect(r.stdout).toBe("");
+    });
+
+    it("a recusa vem junto com as perguntas que o mesmo comando também dispara", () => {
+      const saida = JSON.parse(rodar("git reset --hard && npx vitest run x", "default").stdout);
+      expect(saida.hookSpecificOutput.permissionDecision).toBe("deny");
+      expect(saida.hookSpecificOutput.permissionDecisionReason).toMatch(/Teste fora do teto/);
+      expect(saida.hookSpecificOutput.permissionDecisionReason).toMatch(/reset --hard/);
+    });
   });
 });

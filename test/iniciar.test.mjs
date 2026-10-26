@@ -46,7 +46,8 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       for (const f of gate) assert.equal(ler(d, 'scripts/kit', f), readFileSync(join(RAIZ, 'gate', f), 'utf8'), `${f} difere do gate/`);
       const p = json(d, 'package.json');
       assert.equal(p.scripts.test, 'node scripts/kit/a-vez-do-gate.mjs');
-      assert.equal(p.scripts['test:suite'], 'node --test');
+      assert.equal(p.scripts['test:suite'], 'node --test --test-concurrency=${KIT_FICHAS_TOMADAS:-2}');
+      for (const f of ['o-teto-da-maquina.mjs', 'com-fichas.mjs']) assert.ok(existsSync(join(d, 'scripts', 'kit', f)), `falta scripts/kit/${f}: a guarda e o gate dependem do teto da máquina`);
       assert.equal(p.scripts.typecheck, undefined, 'o perfil simples não tem typecheck');
     } finally { limpar(d); }
   });
@@ -99,7 +100,7 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       assert.deepEqual(Object.keys(lock.blocos), ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'documentos', 'design', 'convencoes-de-teste', 'orquestradora']);
       const claude = ler(d, 'CLAUDE.md');
       for (const [nome, b] of Object.entries(lock.blocos)) {
-        assert.equal(b.versao, nome === 'regras-de-trabalho' ? 3 : 1); // c18 subiu para v2; K10 para v3
+        assert.equal(b.versao, { 'regras-de-trabalho': 3, comandos: 2 }[nome] ?? 1); // c18 subiu para v2; K10 para v3; o teste isolado (ADR 0005) subiu `comandos` para v2
         const m = new RegExp(`<!-- kit:${nome} v${b.versao} -->([\\s\\S]*?)<!-- /kit:${nome} -->`).exec(claude);
         assert.ok(m, `bloco ${nome} sumiu`);
         assert.equal(b.sha256, sha(m[1]), `hash do bloco ${nome}`);

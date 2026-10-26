@@ -14,10 +14,12 @@ Regras do código (valem para toda fatia):
 - Nada neste repo grava em `~/.claude/` antes da fatia K7/K8; nada no repositório Izanagi.
 <!-- /kit:projeto -->
 
+Teste isolado neste repo: `node gate/com-fichas.mjs -- <comando>` (teto de núcleos da máquina, somando todas as sessões); `vitest` e `node --test` soltos a guarda recusa.
+
 <!-- kit:comandos v1 -->
 ## Comandos
 Lidos de `.claude/kit.json`:
-- **Gate:** `npm test` (= `node --test`).
+- **Gate:** `npm test` (= `node gate/com-fichas.mjs -- node --test`, pelo teto de núcleos da máquina).
 - Sem typecheck neste repo.
 - Validar manifestos: `claude plugin validate .` (e `claude plugin validate plugins/<nome> --strict`)
 - Testes do mod: `claude plugin test plugins/painel-sessoes` (o `node --test` da raiz não os pega: são `.tsx`).

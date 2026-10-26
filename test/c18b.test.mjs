@@ -176,7 +176,7 @@ describe('c18b.2 scripts que ficam sem uso', () => {
     assert.equal(existsSync(join(sem, 'scripts', 'kit')), false, 'ninguém o chama: nem ele nem o config que só ele importa, e a pasta nem nasce');
     const com = projetoComRegras(a, 'p6d', { 'vitest.config.ts': "import { tetoDeWorkers } from './scripts/kit/o-teto-de-workers.mjs';\nexport default { test: { maxWorkers: tetoDeWorkers() } };\n" });
     assert.equal(a.kit(com, 'adotar').status, 0);
-    assert.deepEqual(readdirSync(join(com, 'scripts', 'kit')).sort(), ['config.mjs', 'o-teto-de-workers.mjs', 'opcoes-do-plugin.mjs']); // o config importa o helper das opções do plugin
+    assert.deepEqual(readdirSync(join(com, 'scripts', 'kit')).sort(), ['config.mjs', 'o-script-principal.mjs', 'o-teto-da-maquina.mjs', 'o-teto-de-workers.mjs', 'opcoes-do-plugin.mjs']); // o helper toma as fichas do teto da máquina (e o config importa o helper das opções do plugin)
     const { todos, chamados: c } = chamados(com); assert.deepEqual(todos.filter((f) => !c.has(f)), []);
   });
   it('projeto novo (iniciar) continua com todos os scripts: o gate do kit os chama', (t) => {

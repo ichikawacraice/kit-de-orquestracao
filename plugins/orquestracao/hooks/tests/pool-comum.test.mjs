@@ -23,7 +23,7 @@ git(A, 'worktree', 'add', '-q', join(base, 'alfa-wt'), '-b', 'wt');
 const SEM = join(base, 'semgit'); mkdirSync(SEM);
 
 process.env.HOME = join(base, 'home'); mkdirSync(join(base, 'home', '.claude', 'projects', 'p'), { recursive: true });
-const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre, ocupacaoDaSessao, janelasDeLimpeza, ehPerguntaDeLimpeza } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
+const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre, ocupacaoDaSessao, janelasDeLimpeza, ehPerguntaDeLimpeza, maquinaCheia } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
 function reg(k, campos) {
   writeFileSync(join(base, 'app', 'conta', `local_${k}.json`), JSON.stringify({ sessionId: `local_${k}`, cliSessionId: `cli-${k}`, title: `E1 · x`, ...campos }));
   return registroDaSessao(`cli-${k}`, { fresco: true });
@@ -220,6 +220,40 @@ function caso_janelas() {
     console.log(`ok   ${nome}`);
   } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
 }
+// ADR 0005 (26/10): a máquina está cheia para teste quando as fichas do teto acabam ou a carga alcança os núcleos. Pasta temporária.
+caso('maquinaCheia: 2 fichas vivas e teto 2 → cheia; 1 ficha → não; sem fichas e carga ≥ núcleos → cheia; ficha de PID morto não conta', () => {
+  const pasta = join(base, 'nucleos'); mkdirSync(pasta);
+  const ficha = (k, pid) => writeFileSync(join(pasta, String(k)), JSON.stringify({ pid, token: 't', worktree: '/w', projeto: 'p', desde: new Date().toISOString() }));
+  const morto = execFileSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' }).trim();
+  ok(Number(morto) > 0, 'precondição: PID do filho');
+  ficha(1, process.pid);
+  let r = maquinaCheia({ pasta, teto: 2, carga: 0, nucleos: 15 });
+  ok(r.cheia === false && r.tomadas === 1, `1 ficha de 2: ${JSON.stringify(r)}`);
+  ficha(2, process.pid);
+  r = maquinaCheia({ pasta, teto: 2, carga: 0, nucleos: 15 });
+  ok(r.cheia === true && r.tomadas === 2 && r.teto === 2, `2 de 2: ${JSON.stringify(r)}`);
+  ficha(2, Number(morto));
+  r = maquinaCheia({ pasta, teto: 2, carga: 0, nucleos: 15 });
+  ok(r.cheia === false && r.tomadas === 1, `PID morto não conta: ${JSON.stringify(r)}`);
+  rmSync(join(pasta, '1')); rmSync(join(pasta, '2'));
+  r = maquinaCheia({ pasta, teto: 2, carga: 20, nucleos: 15 });
+  ok(r.cheia === true && r.tomadas === 0 && r.carga === 20, `carga alta: ${JSON.stringify(r)}`);
+  r = maquinaCheia({ pasta, teto: 2, carga: 14.9, nucleos: 15 });
+  ok(r.cheia === false, `carga abaixo dos núcleos: ${JSON.stringify(r)}`);
+  r = maquinaCheia({ pasta: join(base, 'nao-existe'), teto: 2, carga: 0, nucleos: 15 });
+  ok(r.cheia === false && r.tomadas === 0, `pasta ausente: ${JSON.stringify(r)}`);
+});
+caso('maquinaCheia: pasta, teto e carga vêm do env (KIT_NUCLEOS_DIR, KIT_NUCLEOS_DE_TESTE, KIT_CARGA_1MIN)', () => {
+  const pasta = join(base, 'nucleos-env'); mkdirSync(pasta);
+  writeFileSync(join(pasta, '1'), JSON.stringify({ pid: process.pid }));
+  const env = { KIT_NUCLEOS_DIR: pasta, KIT_NUCLEOS_DE_TESTE: '1', KIT_CARGA_1MIN: '0' };
+  let r = maquinaCheia({ env });
+  ok(r.cheia === true && r.pasta === pasta && r.teto === 1 && r.tomadas === 1, `env: ${JSON.stringify(r)}`);
+  r = maquinaCheia({ env: { ...env, KIT_NUCLEOS_DE_TESTE: '2' } });
+  ok(r.cheia === false && r.teto === 2, `teto 2: ${JSON.stringify(r)}`);
+  r = maquinaCheia({ env: { ...env, KIT_NUCLEOS_DE_TESTE: '2', KIT_CARGA_1MIN: '99' } });
+  ok(r.cheia === true && r.carga === 99, `carga pelo env: ${JSON.stringify(r)}`);
+});
 rmSync(base, { recursive: true, force: true });
 console.log(falhas ? `\n${falhas} caso(s) falharam` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

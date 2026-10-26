@@ -4,12 +4,47 @@
 import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { homedir } from 'node:os';
+import { homedir, loadavg, availableParallelism } from 'node:os';
 import { join, basename, dirname } from 'node:path';
 import { BASE, tituloRapido, semPrefixoDoPlugin, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
 
 export { BASE };
 const H = homedir();
+// A máquina está cheia para teste? (ADR 0005, operador, 26/10) — o plugin não importa `gate/` (que não vai junto quando ele é instalado),
+// então lê as fichas por conta própria: a pasta, o teto e o PID dono seguem o mesmo contrato do `gate/o-teto-da-maquina.mjs` (um teste
+// compara os dois). Cheia = todas as fichas tomadas, ou carga de 1 min ≥ núcleos. Valor de teto inválido aqui não derruba o hook:
+// cai para o próximo da ordem (o gate, esse, recusa alto). `KIT_CARGA_1MIN` fixa a carga (os testes).
+const FICHA_ILEGIVEL_MS = 30_000;
+const inteiroPositivo = (n) => Number.isInteger(n) && n >= 1;
+const vivo = (pid) => { if (!Number.isInteger(pid) || pid <= 0) return false; try { process.kill(pid, 0); return true; } catch (e) { return e?.code === 'EPERM'; } };
+export const pastaDoTeto = (env = process.env) => env.KIT_NUCLEOS_DIR || join(H, '.claude', 'orquestracao', 'nucleos-de-teste');
+export function tetoDaMaquina(env = process.env, nucleos = availableParallelism(), pasta = pastaDoTeto(env)) {
+  for (const nome of ['KIT_NUCLEOS_DE_TESTE', 'IZANAGI_NUCLEOS_DE_TESTE']) {
+    const v = env[nome];
+    if (v !== undefined && v !== '' && inteiroPositivo(Number(v))) return Number(v);
+  }
+  try { const n = JSON.parse(readFileSync(join(pasta, 'teto.json'), 'utf8'))?.nucleos; if (inteiroPositivo(n)) return n; } catch { /* sem arquivo: o padrão */ }
+  return Math.max(1, Math.floor(nucleos / 2));
+}
+export function maquinaCheia({ env = process.env, pasta, teto, carga, nucleos = availableParallelism() } = {}) {
+  const dir = pasta ?? pastaDoTeto(env);
+  const limite = teto ?? tetoDaMaquina(env, nucleos, dir);
+  let cargaAgora = carga;
+  if (cargaAgora === undefined) { const c = Number(env.KIT_CARGA_1MIN); cargaAgora = env.KIT_CARGA_1MIN !== undefined && env.KIT_CARGA_1MIN !== '' && Number.isFinite(c) ? c : loadavg()[0]; }
+  let tomadas = 0;
+  let nomes = [];
+  try { nomes = readdirSync(dir); } catch { /* sem pasta: nenhuma ficha */ }
+  for (const nome of nomes) {
+    if (!/^[1-9]\d*$/.test(nome)) continue;
+    const caminho = join(dir, nome);
+    try {
+      let pid = null;
+      try { const p = JSON.parse(readFileSync(caminho, 'utf8'))?.pid; if (Number.isInteger(p)) pid = p; } catch { /* ilegível */ }
+      if (pid === null ? Date.now() - statSync(caminho).mtimeMs <= FICHA_ILEGIVEL_MS : vivo(pid)) tomadas += 1;
+    } catch { /* sumiu entre listar e ler */ }
+  }
+  return { cheia: tomadas >= limite || cargaAgora >= nucleos, tomadas, teto: limite, carga: cargaAgora, nucleos, pasta: dir };
+}
 const SESSOES_DIR = () => process.env.POOL_APP_SESSOES_DIR || join(H, 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
 
 function* arquivosLocal(dir) {

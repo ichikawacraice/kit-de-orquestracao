@@ -52,17 +52,20 @@ const PADRAO = {
     verdeDir: "kit-gate-verde",
     pacotesJuntos: 2,
     workersConserto: 2,
+    // fichas do teto da máquina (ADR 0005): o que a suíte e o typecheck pedem; leva o que houver livre
+    nucleos: 4,
+    nucleosTypecheck: 2,
     prazos: { vezMin: 60, verdeHoras: 24, retencaoDias: 7, typecheckMin: 15, buildMin: 10, ilegivelSeg: 30 },
   },
   documentos: DOCUMENTOS_PADRAO,
   arvore: {
     prefixosEnv: ["KIT_"],
     avulsas: ["CI", "TZ", "NODE_OPTIONS"],
-    foraDaChave: ["GATE_SEM_CACHE", "GATE_TRAVA", "GATE_VERDE_DIR"],
+    foraDaChave: ["GATE_SEM_CACHE", "GATE_TRAVA", "GATE_VERDE_DIR", "NUCLEOS_DIR", "NUCLEOS_DE_TESTE", "FICHAS_TOMADAS"],
     extras: [],
   },
   guarda: {
-    regras: ["build-com-dev-no-ar", "psql-f", "migration-fora-do-tronco", "merge-commit", "stash-sem-u", "staging-amplo", "kill-por-nome", "destrutivos"],
+    regras: ["build-com-dev-no-ar", "psql-f", "migration-fora-do-tronco", "merge-commit", "stash-sem-u", "staging-amplo", "kill-por-nome", "destrutivos", "teste-fora-do-teto"],
     tronco: "origin/main",
     frontend: "apps/web",
     migrations: "supabase/migrations",

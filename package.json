@@ -6,6 +6,6 @@
   "type": "module",
   "bin": { "kit": "cli/kit.mjs" },
   "engines": { "node": ">=20" },
-  "scripts": { "test": "node --test" },
+  "scripts": { "test": "node gate/com-fichas.mjs --quero 4 -- node --test --test-concurrency={fichas}" },
   "license": "UNLICENSED"
 }

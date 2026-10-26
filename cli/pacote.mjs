@@ -244,6 +244,7 @@ export function scriptsSemUso({ destino, guardaPropria, gatePropria, perfil }) {
   const raizes = projetoImportaOTeto(destino) ? ['o-teto-de-workers.mjs'] : []; // biblioteca: só conta quando um `vitest.config*` do projeto a importa
   if (!guardaPropria) raizes.push('guarda-de-operacao.mjs');
   if (!gatePropria) raizes.push('a-vez-do-gate.mjs');
+  if (!guardaPropria || !gatePropria) raizes.push('com-fichas.mjs'); // a guarda recusa teste solto e manda para ele; o gate toma as fichas do mesmo teto
   for (const gate of Object.values(perfil.scripts ?? {})) for (const f of todos) if (gate.includes(`scripts/kit/${f}`) && !(gatePropria && f === 'a-vez-do-gate.mjs')) raizes.push(f);
   const usados = new Set(raizes);
   for (let mudou = true; mudou;) {

@@ -44,6 +44,7 @@ describe("(a) projeto npm simples, só com kit.json mínimo", () => {
       KIT_GATE_TRAVA: join(base, "gate.trava"),
       KIT_CONSERTO_TRAVA: join(base, "conserto.trava"),
       KIT_GATE_VERDE_DIR: join(base, "verde"),
+      KIT_NUCLEOS_DIR: join(base, "nucleos"), // o teto da máquina de verdade nunca é tocado
       MARCA: join(base, "marca.txt"),
     };
   }
@@ -169,12 +170,15 @@ describe("a configuração", () => {
   });
 
   it("o teto de workers: CI sem teto, quarto da máquina, KIT_/IZANAGI_TESTE_WORKERS manda, inválido recusado", () => {
+    // `VITEST_WORKER_ID` é o ramo de "um worker do vitest": o número de hoje, sem tomar ficha do teto da máquina (esse ramo
+    // tem o teste dele em `o-teto-de-workers.test.mjs`, com pasta temporária — aqui a pasta de verdade nunca é tocada).
+    const worker = { VITEST_WORKER_ID: "1" };
     expect(tetoDeWorkers({ CI: "1" }, 15)).toEqual({});
-    expect(tetoDeWorkers({}, 15)).toEqual({ maxWorkers: 3, minWorkers: 1 });
-    expect(tetoDeWorkers({}, 2)).toEqual({ maxWorkers: 1, minWorkers: 1 });
-    expect(tetoDeWorkers({}, 16, 0.5)).toEqual({ maxWorkers: 8, minWorkers: 1 });
-    expect(tetoDeWorkers({ KIT_TESTE_WORKERS: "5" }, 15)).toEqual({ maxWorkers: 5, minWorkers: 1 });
-    expect(tetoDeWorkers({ IZANAGI_TESTE_WORKERS: "4" }, 15)).toEqual({ maxWorkers: 4, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker }, 15)).toEqual({ maxWorkers: 3, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker }, 2)).toEqual({ maxWorkers: 1, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker }, 16, 0.5)).toEqual({ maxWorkers: 8, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker, KIT_TESTE_WORKERS: "5" }, 15)).toEqual({ maxWorkers: 5, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker, IZANAGI_TESTE_WORKERS: "4" }, 15)).toEqual({ maxWorkers: 4, minWorkers: 1 });
     expect(() => tetoDeWorkers({ KIT_TESTE_WORKERS: "0" }, 15)).toThrow(/inteiro ≥ 1/);
     expect(() => tetoDeWorkers({ KIT_TESTE_WORKERS: "dois" }, 15)).toThrow(/inteiro ≥ 1/);
   });
@@ -215,7 +219,7 @@ describe("gate.prazos.ilegivelSeg chega ao `main` (a ligação, não só a funç
     utimesSync(trava, ha3s, ha3s);
     const r = spawnSync("node", [GATE], {
       cwd: raiz, encoding: "utf-8", timeout: prazoMs, killSignal: "SIGKILL",
-      env: { ...process.env, CI: "", KIT_GATE_VAGAS: "1", KIT_GATE_TRAVA: trava, KIT_CONSERTO_TRAVA: join(base, "conserto.trava"), KIT_GATE_VERDE_DIR: join(base, "verde") },
+      env: { ...process.env, CI: "", KIT_GATE_VAGAS: "1", KIT_GATE_TRAVA: trava, KIT_CONSERTO_TRAVA: join(base, "conserto.trava"), KIT_GATE_VERDE_DIR: join(base, "verde"), KIT_NUCLEOS_DIR: join(base, "nucleos") },
     });
     rmSync(raiz, { recursive: true, force: true });
     rmSync(base, { recursive: true, force: true });

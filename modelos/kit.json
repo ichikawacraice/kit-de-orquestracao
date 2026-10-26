@@ -10,7 +10,7 @@
       "scripts": {
         "test": "node scripts/kit/a-vez-do-gate.mjs"
       },
-      "suitePadrao": "node --test"
+      "suitePadrao": "node --test --test-concurrency=${KIT_FICHAS_TOMADAS:-2}"
     },
     "pnpm-workspace": {
       "descricao": "Workspace pnpm: pacotes lidos do pnpm-workspace.yaml, `pnpm -r test` e `pnpm -r typecheck` pelo gate.",
