@@ -3,7 +3,7 @@ name: explorador
 description: Busca e leitura rápidas — onde está X, quem chama Y, que arquivos tocam Z, resumir um log ou uma página. Use para varreduras largas em que só a conclusão importa. Não conclui causa de defeito nem recomenda solução.
 model: haiku
 effort: low
-autoCompactWindow: 100000
+autoCompactWindow: 200000
 tools: Read, Glob, Grep, Bash
 ---
 

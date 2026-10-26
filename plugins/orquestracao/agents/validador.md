@@ -3,7 +3,7 @@ name: validador
 description: Valida o trabalho de outro — compara o diff com o plano, tenta derrubar cada afirmação do relatório, roda os testes e abre o artefato final. Use depois de toda execução que muda código ou doc que decide algo, sempre em agente separado de quem executou. Não edita: devolve achados.
 model: opus
 effort: high
-autoCompactWindow: 200000
+autoCompactWindow: 400000
 tools: Read, Glob, Grep, Bash, WebFetch
 ---
 

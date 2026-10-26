@@ -150,11 +150,11 @@ Cada turno relê a conversa inteira, e depois de mais de 1 hora parada o cache e
 
 **Quem decide a limpeza inteira é o operador (26/10):** *"se limpar por inteiro em uma janela maior, e não se limpar por inteiro automaticamente, ela solicitar ou perguntar se pode se limpar"*. Ele pode estar lendo a resposta dela; limpar nesse momento apaga o que ele lê.
 
-**Limpeza leve, sozinha.** A compactação automática (300 mil, `autoCompactWindow` global) e o "Ler pouco" abaixo. Não há nada a fazer.
+**Limpeza leve, sozinha.** A compactação automática (600 mil, `autoCompactWindow` global) e o "Ler pouco" abaixo. Não há nada a fazer.
 
 **Limpeza inteira com o operador presente.** Depois de cada merge e antes de um lote de notificações, leia o próprio contexto (`get_usage` com `"self"`, campo `context.tokensUsed`). **A partir de 250 mil ela PEDE**: grava o estado, abre a pergunta `limpar · orquestradora` (Q-ID de `proxima-pergunta`, `sessaoId`, recomendação: limpar) e segue trabalhando. Limpa só quando ele disser sim no chat dela ou no botão do painel (o sim do painel vale 30 min; um "não" ou "adiar" segura a cobrança por 2 h). Não limpa ao terminar o turno esperando por ele. Sem `get_usage` na sessão, conte: pede a cada **3 merges** ou **40 turnos** desde a última limpeza.
 
-**Modo ausente ligado** (`/ausente on` ou o botão do painel): ninguém está lendo, então valem as regras de antes e ela limpa sozinha. **≥ 200 mil:** limpa no próximo momento oportuno. **≥ 300 mil:** não aceita trabalho novo (merge, conferência, release) até limpar. **≥ 150 mil e o turno termina esperando por mim:** limpa antes de encerrar.
+**Modo ausente ligado** (`/ausente on` ou o botão do painel): ninguém está lendo, então valem as regras de antes e ela limpa sozinha. **≥ 350 mil:** limpa no próximo momento oportuno. **≥ 500 mil:** não aceita trabalho novo (merge, conferência, release) até limpar. **≥ 250 mil e o turno termina esperando por mim:** limpa antes de encerrar.
 
 **Momento oportuno:** nenhum merge ou release em andamento, nenhum subagente dela rodando (a notificação dele se perderia), nenhuma pergunta minha sem resposta, nenhuma mensagem de sessão por processar.
 

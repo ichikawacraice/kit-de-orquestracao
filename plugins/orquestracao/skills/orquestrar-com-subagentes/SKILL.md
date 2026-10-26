@@ -92,7 +92,7 @@ Fora isso, delegue. Sinal de alerta: a principal está lendo o quinto arquivo ou
 - Comando longo (gate, testes, build): saída para arquivo e só o fim na conversa (`cmd > "$TMP/x.log" 2>&1; echo "exit=$?"; tail -n 30 "$TMP/x.log"`).
 - Nunca abra o arquivo de saída/transcrição de um subagente; a notificação já traz a entrega.
 
-**Limpar cedo.** Sessão longa: ao passar de ~200 mil tokens de contexto (`get_usage`, se houver) e sem agente rodando, atualize o registro (seção 1) com o próximo passo exato, use a skill `handoff-de-sessao` se houver estado que o registro não guarda, e limpe o contexto (`clear_session` com `"self"`, ou `/clear`); a retomada segue a seção 7. Prefira limpar a `/compact`: o resumo da compactação fica na conversa e é relido a cada turno.
+**Limpar cedo.** Sessão longa: ao passar de ~350 mil tokens de contexto (`get_usage`, se houver) e sem agente rodando, atualize o registro (seção 1) com o próximo passo exato, use a skill `handoff-de-sessao` se houver estado que o registro não guarda, e limpe o contexto (`clear_session` com `"self"`, ou `/clear`); a retomada segue a seção 7. Prefira limpar a `/compact`: o resumo da compactação fica na conversa e é relido a cada turno.
 
 ## 5. Revisão antes de "feito"
 

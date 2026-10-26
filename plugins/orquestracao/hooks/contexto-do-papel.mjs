@@ -3,11 +3,12 @@
 // lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain) e não grava estado nenhum.
 //   orquestradora (F48): com o modo ausente ligado segue a régua da planejadora abaixo; com o operador presente ela não limpa
 //     sozinha: ≥ 250 mil cobra PEDIR (pergunta `limpar · orquestradora` aberta, ou respondida há ≤ 2 h; ou limpou), abaixo disso nada.
-//   planejadora / design: ≥ 300 mil cobra limpar (só `clear_session` "self" satisfaz); ≥ 200 mil cobra limpar OU
-//     a linha `Contexto: sigo — <o que falta na unidade>`; ≥ 150 mil com o turno terminando esperando o operador (`?` ou `Q<n>` no
+//   planejadora / design: ≥ 500 mil cobra limpar (só `clear_session` "self" satisfaz); ≥ 350 mil cobra limpar OU
+//     a linha `Contexto: sigo — <o que falta na unidade>`; ≥ 250 mil com o turno terminando esperando o operador (`?` ou `Q<n>` no
 //     último parágrafo) cobra limpar antes.
-//   executora (F49): ≥ 150 mil cobra limpar (só `clear_session` "self" satisfaz; a linha `Parei em:` sozinha não).
-//   validadora: nunca cobra (não limpa no meio); só registra `validadora-<mil>` a partir de 200 mil.
+//   executora (F49): ≥ 300 mil cobra limpar (só `clear_session` "self" satisfaz; a linha `Parei em:` sozinha não).
+//   validadora: nunca cobra (não limpa no meio); só registra `validadora-<mil>` a partir de 350 mil.
+// `clear_session` recusado (tool_result com `is_error`) não conta como limpeza (F54).
 // Uma cobrança por turno (`stop_hook_active` deixa passar). Erro nunca prende o turno. Limites: constantes abaixo, com override
 // `CONTEXTO_LIMITE_<NOME>` só para teste. Fonte da regra: skills/papeis-e-modelos/SKILL.md, seção "Contexto".
 import { readFileSync } from 'node:fs';
@@ -16,7 +17,7 @@ import { registroDaSessao, membroDoPool, ehOrquestradora, ehExecutora, inicioDoT
 
 const HOOK = 'contexto-do-papel';
 const limite = (nome, padrao) => { const v = Number(process.env[`CONTEXTO_LIMITE_${nome}`]); return Number.isFinite(v) && v > 0 ? v : padrao; };
-const ESPERA = limite('ESPERA', 150_000); const ALTO = limite('ALTO', 200_000); const TETO = limite('TETO', 300_000); const EXEC = limite('EXEC', 150_000);
+const ESPERA = limite('ESPERA', 250_000); const ALTO = limite('ALTO', 350_000); const TETO = limite('TETO', 500_000); const EXEC = limite('EXEC', 300_000);
 const PEDIR = limite('PEDIR', 250_000); const SEGURA_MS = 2 * 3600_000;
 const mil = (t) => Math.round(t / 1000);
 
@@ -31,19 +32,25 @@ function papelDe(e, transcript, reg) {
 
 // O que o turno que começou em `inicio` (ms) fez e disse: chamou `clear_session` "self"? e o último texto (a última entrada com texto).
 function doTurno(transcript, inicio, ultimaMensagem) {
-  let limpou = false; let texto = '';
+  const pedidos = new Set(); const recusados = new Set(); let texto = '';
   for (const l of readFileSync(transcript, 'utf8').split('\n')) {
     if (!l) continue;
     let x; try { x = JSON.parse(l); } catch { continue; }
-    if (x.type !== 'assistant' || x.isSidechain === true || Date.parse(x.timestamp) < inicio) continue;
+    if (x.isSidechain === true || Date.parse(x.timestamp) < inicio) continue;
+    if (x.type === 'user' && Array.isArray(x.message?.content)) {
+      for (const b of x.message.content) if (b?.type === 'tool_result' && b.is_error === true && b.tool_use_id) recusados.add(b.tool_use_id);
+      continue;
+    }
+    if (x.type !== 'assistant') continue;
     const t = textoDe(x.message).trim(); if (t) texto = t;
     const c = x.message?.content;
     if (!Array.isArray(c)) continue;
     for (const b of c) {
-      if (b?.type === 'tool_use' && String(b.name || '').endsWith('clear_session') && [undefined, null, 'self'].includes(b.input?.session_id)) limpou = true;
+      if (b?.type === 'tool_use' && String(b.name || '').endsWith('clear_session') && [undefined, null, 'self'].includes(b.input?.session_id)) pedidos.add(b.id);
     }
   }
   if (typeof ultimaMensagem === 'string' && ultimaMensagem.trim()) texto = ultimaMensagem.trim();
+  const limpou = [...pedidos].some((id) => !recusados.has(id)); // pedido sem `id` (transcript antigo) conta
   return { limpou, texto };
 }
 
@@ -79,7 +86,7 @@ function main() {
   let cobranca = null;
   if (papel === 'executora') {
     if (t >= EXEC) cobranca = { desfecho: 'cobrou-exec-150', sigoVale: false, reason:
-      `Contexto em ${mil(t)} mil, acima de 150 mil: a próxima etapa começa com a conversa vazia. Não compacte. Antes de limpar, conforme o caso: ` +
+      `Contexto em ${mil(t)} mil, acima de ${mil(EXEC)} mil: a próxima etapa começa com a conversa vazia. Não compacte. Antes de limpar, conforme o caso: ` +
       'acabou de receber item (novo ou conserto) → grave no item `{"agora":"recebido; limpo antes de começar"}` e mande a quem despachou "limpa a ' + mil(t) + ' mil; reenvie o briefing"; ' +
       'no meio do item → commite o que está pronto e mande a quem despachou o relatório com `Parei em: <passo exato>`; ' +
       'entregou à validação → grave no handoff do item o que o conserto vai precisar e ponha o título `<ID> · livre`. ' +
@@ -87,7 +94,7 @@ function main() {
   } else if (t >= TETO) {
     cobranca = { desfecho: 'cobrou-300', sigoVale: false, reason: `Contexto em ${mil(t)} mil. Não pegue trabalho novo. Escreva o estado (o próximo passo exato) e chame clear_session "self".` };
   } else if (t >= ALTO) {
-    cobranca = { desfecho: 'cobrou-200', sigoVale: true, reason: `Contexto em ${mil(t)} mil, acima de 200 mil. Se a unidade de trabalho acabou, escreva o estado e chame clear_session "self"; se não acabou, diga numa linha \`Contexto: sigo — <o que falta na unidade>\`.` };
+    cobranca = { desfecho: 'cobrou-200', sigoVale: true, reason: `Contexto em ${mil(t)} mil, acima de ${mil(ALTO)} mil. Se a unidade de trabalho acabou, escreva o estado e chame clear_session "self"; se não acabou, diga numa linha \`Contexto: sigo — <o que falta na unidade>\`.` };
   } else if (t >= ESPERA) {
     cobranca = { desfecho: 'cobrou-150-espera', sigoVale: true, esperando: true, reason: `Contexto em ${mil(t)} mil e o turno termina esperando resposta: limpe antes (retomar custa ~90 mil, reler ${mil(t)} mil a cada turno custa mais).` };
   }
