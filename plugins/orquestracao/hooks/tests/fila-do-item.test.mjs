@@ -355,6 +355,19 @@ caso('F58-4f: stop_hook_active passa; dona que se declarou livre passa como hoje
 caso('F58-4p: dona P de item em planejamento não é cobrada por esperar P', () => {
   igual(esperando(turno(), esperaE({ etapa: 'planejamento', historico: [{ em: DESDE, etapa: 'planejamento', dono: 'P1' }] })), null, 'planejamento com P dona');
 });
+const planejando = (extra = {}) => esperaE({ etapa: 'planejamento', donoApelido: 'E1', com: [{ apelido: 'E1' }], historico: [{ em: DESDE, etapa: 'planejamento', dono: 'E1' }], ...extra });
+caso('F69-V1a: dona de item em planejamento sem nenhuma P: o texto diz "planejamento", não "undefined"', () => {
+  const r = esperando(turno(), planejando());
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('F58 está em planejamento sem nenhuma P no item'), `texto: ${r.reason}`);
+  ok(!r.reason.includes('undefined'), `sem undefined: ${r.reason}`);
+});
+caso('F69-V1b: item em planejamento entregue pela P: o texto diz a próxima etapa, não "undefined"', () => {
+  const r = esperando(turno(), planejando({ fez: [{ apelido: 'P2', localId: 'local_p2', oQue: 'x', em: '2026-10-24T11:55:00.000Z' }] }));
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('F58: a P entregou; avance a etapa (design ou execucao)'), `texto: ${r.reason}`);
+  ok(!r.reason.includes('undefined'), `sem undefined: ${r.reason}`);
+});
 caso('F58-4g: item com E no com não é cobrado; as duas faltas (não gravou + espera) saem na mesma razão', () => {
   igual(esperando(turno(), esperaE({ com: [{ apelido: 'P1' }, { apelido: 'E1' }] })), null, 'com E passa');
   rmSync(join(filaDir(), 'F58.json'));

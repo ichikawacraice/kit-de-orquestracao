@@ -36,8 +36,8 @@ const SESSOES_DIR = process.env.FILA_APP_SESSOES_DIR || join(homedir(), 'Library
 const LOG = process.env.FILA_LOG || join(homedir(), '.claude', 'orquestracao', 'fila-hook.log');
 const PROTOCOLO = '~/.claude/orquestracao/pool/protocolo.md#fila-do-pool';
 const PROTOCOLO_ESPERA = '~/.claude/orquestracao/pool/protocolo.md#esperando-papel';
-const NOME_DA_ETAPA = { D: 'design', E: 'execução', V: 'validação' };
-const PROXIMA_ETAPA = { D: 'execucao', E: 'validacao com uma V no com', V: 'merge' };
+const NOME_DA_ETAPA = { P: 'planejamento', D: 'design', E: 'execução', V: 'validação' };
+const PROXIMA_ETAPA = { P: 'design ou execucao', D: 'execucao', E: 'validacao com uma V no com', V: 'merge' };
 
 function registrar(sessionId, localId, desfecho, detalhe = '') {
   try {
