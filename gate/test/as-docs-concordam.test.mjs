@@ -522,7 +522,7 @@ describe("ligado ao gate", () => {
     git(["add", "-A"], raiz);
     git(["commit", "-qm", "base"], raiz);
     const base = mkdtempSync(join(tmpdir(), "kit-docs-base-"));
-    const env = { ...process.env, CI: "", KIT_GATE_TRAVA: join(base, "g.trava"), KIT_CONSERTO_TRAVA: join(base, "c.trava"), KIT_GATE_VERDE_DIR: join(base, "verde"), MARCA: join(base, marca) };
+    const env = { ...process.env, CI: "", KIT_GATE_TRAVA: join(base, "g.trava"), KIT_CONSERTO_TRAVA: join(base, "c.trava"), KIT_GATE_VERDE_DIR: join(base, "verde"), KIT_NUCLEOS_DIR: join(base, "nucleos"), MARCA: join(base, marca) };
     return { raiz, base, env };
   }
 

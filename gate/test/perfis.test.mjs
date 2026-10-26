@@ -44,6 +44,7 @@ describe("(a) projeto npm simples, só com kit.json mínimo", () => {
       KIT_GATE_TRAVA: join(base, "gate.trava"),
       KIT_CONSERTO_TRAVA: join(base, "conserto.trava"),
       KIT_GATE_VERDE_DIR: join(base, "verde"),
+      KIT_NUCLEOS_DIR: join(base, "nucleos"), // o teto da máquina de verdade nunca é tocado
       MARCA: join(base, "marca.txt"),
     };
   }
@@ -215,7 +216,7 @@ describe("gate.prazos.ilegivelSeg chega ao `main` (a ligação, não só a funç
     utimesSync(trava, ha3s, ha3s);
     const r = spawnSync("node", [GATE], {
       cwd: raiz, encoding: "utf-8", timeout: prazoMs, killSignal: "SIGKILL",
-      env: { ...process.env, CI: "", KIT_GATE_VAGAS: "1", KIT_GATE_TRAVA: trava, KIT_CONSERTO_TRAVA: join(base, "conserto.trava"), KIT_GATE_VERDE_DIR: join(base, "verde") },
+      env: { ...process.env, CI: "", KIT_GATE_VAGAS: "1", KIT_GATE_TRAVA: trava, KIT_CONSERTO_TRAVA: join(base, "conserto.trava"), KIT_GATE_VERDE_DIR: join(base, "verde"), KIT_NUCLEOS_DIR: join(base, "nucleos") },
     });
     rmSync(raiz, { recursive: true, force: true });
     rmSync(base, { recursive: true, force: true });
