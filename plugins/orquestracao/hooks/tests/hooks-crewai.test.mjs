@@ -467,6 +467,19 @@ caso('4.8 sem lista de tipos: todo subagente recusa, inclusive o designer', () =
   igual(existsSync(join(base, 'subagente-pode-escrever.txt')), false, 'precondição: sem lista');
   igual(decisao(rodar(SN, editar(`${REPO}/docs/design/revisoes/a.md`, sub('designer')))), 'deny', 'designer');
 });
+caso('4.10 F60 · design:designer: lista com `designer` libera o tipo com o prefixo do plugin design; `x:executor` e `outro:designer` seguem recusados', () => {
+  writeFileSync(join(base, 'subagente-pode-escrever.txt'), 'designer\n');
+  igual(rodar(SN, editar(`${REPO}/docs/design/revisoes/a.md`, sub('design:designer'))), null, 'design:designer');
+  igual(log()[0][3], 'liberado-por-tipo', 'log');
+  igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, sub('x:executor')))), 'deny', 'x:executor');
+  igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, sub('outro:designer')))), 'deny', 'outro:designer');
+});
+caso('4.11 F60 · sem lista, o designer do próprio kit (design:designer) grava; outro:designer e executor recusam', () => {
+  igual(existsSync(join(base, 'subagente-pode-escrever.txt')), false, 'precondição: sem lista');
+  igual(rodar(SN, editar(`${REPO}/docs/design/revisoes/a.md`, sub('design:designer'))), null, 'design:designer');
+  igual(decisao(rodar(SN, editar(`${REPO}/docs/design/revisoes/a.md`, sub('outro:designer')))), 'deny', 'outro:designer');
+  igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, sub('orquestracao:executor')))), 'deny', 'executor');
+});
 caso('4.9 Bash não é coberto; sem caminho passa; entrada quebrada sai 0 com erro no log', () => {
   igual(rodar(SN, pre('Bash', { command: 'echo x > a.ts' }, sub())), null, 'Bash');
   igual(rodar(SN, pre('Edit', {}, sub())), null, 'sem caminho');

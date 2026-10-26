@@ -120,10 +120,12 @@ describe('lerConfig — o kit.json do projeto', () => {
   it('A2: só design.pasta deriva o padrão visual por extensão; negado = o mesmo', () => {
     kit({ design: { pasta: 'web/' } });
     const c = lerConfig(pasta);
-    assert.deepEqual(c.visual.filter((g) => !g.startsWith('!')), ['tsx', 'jsx', 'vue', 'svelte', 'css', 'scss'].map((e) => `web/**/*.${e}`));
+    assert.deepEqual(c.visual.filter((g) => !g.startsWith('!')), ['tsx', 'jsx', 'vue', 'svelte', 'css', 'scss', 'html'].map((e) => `web/**/*.${e}`));
     assert.deepEqual(c.negadoAoDesigner, c.visual.filter((g) => !g.startsWith('!')));
     assert.equal(eCodigoDeTela('/r/web/src/a/B.tsx', c.visual), true);
     assert.equal(eCodigoDeTela('/r/web/README.md', c.visual), false);
+    assert.equal(eCodigoDeTela('/r/web/index.html', c.visual), true, 'F60: .html é tela');
+    assert.equal(eCodigoDeTela('/r/web/index.html', c.negadoAoDesigner), true, 'F60: o designer não grava .html da pasta');
   });
   it('K14: o padrão derivado de design.pasta não conta teste como tela (*.test.*, *.spec.*, __tests__/)', () => {
     kit({ design: { pasta: 'web' } });

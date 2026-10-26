@@ -53,7 +53,7 @@ export const AGENTE_CRITICO = "critico-de-ui";
 export const PAPEL_DESIGNER = "designer";
 
 /** As extensões que o padrão derivado de `design.pasta` conta como tela. */
-const EXTENSOES_DE_TELA = ["tsx", "jsx", "vue", "svelte", "css", "scss"];
+const EXTENSOES_DE_TELA = ["tsx", "jsx", "vue", "svelte", "css", "scss", "html"];
 
 /** As opções do plugin (`userConfig` do plugin.json); o teste confere que as duas listas concordam. */
 export const OPCOES_DO_DESIGN = ["guarda", "cobrar_critica", "pasta_do_front", "largura"];
