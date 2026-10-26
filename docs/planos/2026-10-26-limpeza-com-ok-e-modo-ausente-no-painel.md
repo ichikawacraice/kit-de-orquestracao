@@ -20,7 +20,7 @@
 - **D3 · A partir de 250 mil ela PEDE**: abre a pergunta `limpar · orquestradora` (Q-ID, no painel, com `sessaoId`) e segue trabalhando. Limpa só com ação humana: o operador escreve no chat dela (turno `human`) ou responde **Sim** no painel. O "sim" do painel vale por 30 min. Pergunta respondida "não"/"adiar" segura a cobrança por 2 h (não fica pedindo a cada turno).
 - **D4 · Modo ausente ligado: valem as regras de hoje** (150-espera, 200, 300) e ela limpa sozinha.
 - **D5 · Trava nova (T7) no `papel-do-pool.mjs`**: `clear_session` da orquestradora sobre ela mesma é recusado sem o ok. Só a orquestradora; membros e a orquestradora limpando membro não mudam.
-- **D6 · O "sim" do painel se prova pelo campo `respondidaPor: "painel"`**, que só o pane grava; o `painel.mjs` passa a recusar esse campo. Limite conhecido: Bash pode gravar o arquivo à mão; o risco aceito é o mesmo de hoje (sessões cooperativas).
+- **D6 · O "sim" do painel se prova pelos campos `respondidaPor: "painel"` e `respondidaEm` (ISO, a hora do clique)**, que só o pane grava; o `painel.mjs` recusa os dois vindos da linha de comando e os apaga quando `resposta`, `estado`, `titulo` ou `sessaoId` chegam com valor diferente do gravado (regravar o mesmo valor mantém a prova; `nota` e `atualizadoEm` não mexem nela). A janela de 30 min conta de `respondidaEm`, nunca de `atualizadoEm`, que qualquer update renova (revisão de 26/10, depois da validação V2 do bloco A). Limite conhecido: Bash pode gravar o arquivo à mão; o risco aceito é o mesmo de hoje (sessões cooperativas).
 - **D7 · O botão do painel desliga gravando `{ligado:false, desligadoEm, por:"painel"}`**, porque o pane não apaga arquivo. Contrato único de leitura (abaixo). O `/ausente off` continua apagando.
 - **D8 · O topo do painel passa pela D1 antes da E** (regra do projeto: revisão de design antes de tela).
 
@@ -33,7 +33,7 @@
 
 **Pergunta de limpeza** — documento em `<painel>/perguntas/Q<n>.json` (pasta: `PAINEL_DIR` || `IZANAGI_PAINEL_DIR` || `$HOME/.claude/orquestracao/painel`):
 - `data.titulo` começa com `limpar · ` (ex.: `limpar · orquestradora`); `data.sessaoId` = o `local_…` da orquestradora (o hook acha pelo `registroDaSessao(session_id).localId`).
-- **Ok do painel** = `estado:"respondida"`, `respondidaPor:"painel"`, `resposta` que começa com `sim` (sem caixa), `atualizadoEm` há ≤ 30 min.
+- **Ok do painel** = `estado:"respondida"`, `respondidaPor:"painel"`, `resposta` que começa com `sim` (sem caixa), `respondidaEm` há ≤ 30 min e não no futuro (`atualizadoEm` não conta).
 
 ---
 
@@ -51,7 +51,7 @@ Executora: E (Sonnet, médio). Faixa: só `plugins/orquestracao/**`. Pode rodar 
 | `plugins/orquestracao/hooks/hooks.json` | matcher do `papel-do-pool.mjs` ganha `mcp__ccd_session_mgmt__clear_session`. |
 | `plugins/orquestracao/hooks/contexto-do-papel.mjs` | papel `orquestradora` separado (regra abaixo); constante `PEDIR` = 250 000 com override `CONTEXTO_LIMITE_PEDIR`; comentário do topo atualizado. |
 | `plugins/orquestracao/hooks/operador-ausente.mjs` | grava `por:"comando"` no `on`; comentário cita o botão do painel como segunda via humana. |
-| `plugins/orquestracao/skills/orquestradora/scripts/painel.mjs` | recusa `respondidaPor` vindo da linha de comando (`set`, `update`, `batch`) na coleção `perguntas`: *"respondidaPor só o pane grava (é a prova do clique do operador)"*. |
+| `plugins/orquestracao/skills/orquestradora/scripts/painel.mjs` | recusa `respondidaPor` e `respondidaEm` vindos da linha de comando (`set`, `update`, `batch`) na coleção `perguntas`: *"respondidaPor só o pane grava (é a prova do clique do operador)"*; no `update`, apaga os dois quando `resposta`, `estado`, `titulo` ou `sessaoId` chegam com valor diferente do gravado. |
 | `plugins/orquestracao/skills/orquestradora/SKILL.md` | seção `## Orçamento de contexto`: reescrever o "Gatilho de limpeza" e o "Como limpar" (texto abaixo). Linha 13 continua citando a seção. |
 | `plugins/orquestracao/skills/papeis-e-modelos/SKILL.md` | tabela "Por papel", linha Planejador/orquestrador: *"A orquestradora com o operador presente não limpa sozinha: a partir de 250 mil pede o ok (skill `orquestradora`, "Orçamento de contexto")"*; parágrafo **A trava**: a exceção da orquestradora e o T7. |
 | `plugins/orquestracao/skills/ausente/SKILL.md` | o botão do topo do painel é a segunda via humana (liga/desliga, mesma bandeira); com o modo ligado a orquestradora pode se limpar inteira sozinha; "sem argumento" lê pelo contrato (`ligado:false` = desligado). |
@@ -107,14 +107,14 @@ Executora: E (Sonnet, médio). Faixa: só `plugins/orquestracao/**`. Pode rodar 
 - T7: ORQ `clear_session "self"` em turno `peer`, sem bandeira, sem pergunta → nega com `T7`.
 - T7: o mesmo em turno `human` → passa.
 - T7: turno `peer` com bandeira ligada → passa; com bandeira `ligado:false` → nega.
-- T7: pergunta de limpeza dela `respondida`, `respondidaPor:"painel"`, `resposta:"sim (segue a recomendação)"`, há 10 min → passa; sem `respondidaPor` → nega; há 40 min → nega; `resposta:"não"` → nega; `sessaoId` de outra → nega.
+- T7: pergunta de limpeza dela `respondida`, `respondidaPor:"painel"`, `resposta:"sim (segue a recomendação)"`, `respondidaEm` há 10 min → passa; sem `respondidaPor` → nega; `respondidaEm` há 40 min → nega, mesmo com `atualizadoEm` de agora; sem `respondidaEm` → nega; `respondidaEm` no futuro → nega; `resposta:"não"` → nega; `sessaoId` de outra → nega.
 - T7: ORQ `clear_session` de um membro (`local_E1`) em turno `peer` → passa (sem mudança).
 - T7: P1 `clear_session "self"` em turno `peer` → passa.
 - T3a: bandeira `ligado:false` → `start_session` em turno `peer` passa (desligado).
 
 `hooks/tests/hooks-json.test.mjs`: o matcher do `papel-do-pool.mjs` contém `mcp__ccd_session_mgmt__clear_session`.
 
-`hooks/tests/painel-validacao.test.mjs` (ou o arquivo de teste do `painel.mjs` que já cobre `perguntas`): `update perguntas Q1 '{"respondidaPor":"painel"}'` sai com `exit≠0` e a mensagem cita `respondidaPor`; `update perguntas Q1 '{"estado":"respondida","resposta":"sim"}'` continua passando.
+`hooks/tests/painel-validacao.test.mjs` (ou o arquivo de teste do `painel.mjs` que já cobre `perguntas`): `update perguntas Q1 '{"respondidaPor":"painel"}'` sai com `exit≠0` e a mensagem cita `respondidaPor`; `update perguntas Q1 '{"estado":"respondida","resposta":"sim"}'` continua passando. Com o documento gravado como o pane grava (`respondidaPor`, `respondidaEm`): regravar `estado` e `resposta` com o mesmo valor mantém os dois (o fluxo da skill `orquestradora`, "quem recebe a resposta marca respondida"); trocar `resposta`, `estado`, `titulo` ou `sessaoId` apaga os dois; `nota` e `atualizadoEm` não apagam e não mexem no `respondidaEm`; `respondidaEm` vindo da linha de comando sai com `exit≠0`. Ponta a ponta (com o `painel.mjs` e o `papel-do-pool.mjs` de verdade): "sim" de 3 h + `nota` → T7 nega; "sim" de outra pergunta + troca de `titulo` → T7 nega; `atualizadoEm` no futuro → T7 nega; "sim" de 5 min + regravação da skill → T7 passa.
 
 ### Critério de pronto (Bloco A)
 
@@ -143,7 +143,7 @@ Executora: E (Sonnet, médio). Faixa: só `plugins/painel-sessoes/**`.
 | Arquivo | O que muda |
 |---|---|
 | `plugins/painel-sessoes/types/index.d.ts` | `Leitura.ausente?: { ligado: boolean; desde?: string; por?: string } \| null` (`null` = não deu para ler; ausente no estado antigo). `PluginState` ganha `trocandoModo: boolean`. |
-| `plugins/painel-sessoes/hooks/register.tsx` | lê a bandeira em cada `atualizar` (contrato acima; arquivo ausente = presente; JSON inválido = `null` e o erro em `erros`); desenha a faixa do topo pela revisão; `alternarModo($)`: otimista, grava pelo contrato, desfaz e avisa na falha, toast no feito, relê; **não** registra ferramenta nem comando novo para isso. Em `responder`, o `data` gravado ganha `respondidaPor: 'painel'`. |
+| `plugins/painel-sessoes/hooks/register.tsx` | lê a bandeira em cada `atualizar` (contrato acima; arquivo ausente = presente; JSON inválido = `null` e o erro em `erros`); desenha a faixa do topo pela revisão; `alternarModo($)`: otimista, grava pelo contrato, desfaz e avisa na falha, toast no feito, relê; **não** registra ferramenta nem comando novo para isso. Em `responder`, o `data` gravado ganha `respondidaPor: 'painel'` e `respondidaEm` (a mesma hora ISO do `atualizadoEm` do clique). |
 | `plugins/painel-sessoes/hooks/desenho.ts` | o que a revisão pedir para o SVG da faixa (se ela for SVG). |
 | `plugins/painel-sessoes/tests/painel.test.tsx` | testes abaixo. |
 | `plugins/painel-sessoes/.claude-plugin/plugin.json` | versão `0.6.0`. |
@@ -166,7 +166,7 @@ Executora: E (Sonnet, médio). Faixa: só `plugins/painel-sessoes/**`.
 - Clique em desligar → o arquivo gravado é `{ligado:false, desligadoEm, por:"painel"}`.
 - Gravação que falha → a faixa volta ao modo anterior e `avisos` ganha a linha com o motivo.
 - Segundo clique durante a gravação → uma gravação só.
-- Responder uma pergunta pelo pane → o documento gravado tem `respondidaPor:"painel"`.
+- Responder uma pergunta pelo pane → o documento gravado tem `respondidaPor:"painel"` e `respondidaEm` igual ao `atualizadoEm` do clique.
 - O mod não registra ferramenta nova (a lista de `tool.register` continua só com `onde_esta_o_painel`).
 
 ### Critério de pronto (Bloco B)
@@ -195,3 +195,5 @@ Executora: E (Sonnet, médio). Faixa: só `plugins/painel-sessoes/**`.
 ## Validação
 
 **Robusta** (grava estado, trava nova, dois pacotes): sessão V em contexto novo, Opus, esforço alto, sobre o PR inteiro, com prova no artefato real (pane clicado; hook rodado com transcript de verdade).
+
+**Merge:** o bloco A só entra junto com o B ou depois dele. Sem o pane gravando `respondidaPor` e `respondidaEm`, o caminho do painel no T7 fica morto e só o "sim" no chat libera a limpeza.
