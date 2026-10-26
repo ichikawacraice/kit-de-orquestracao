@@ -30,12 +30,13 @@ function reg(k, campos) {
 }
 let falhas = 0;
 function caso_repoDoMarcador() {
-  const nome = 'repoDoMarcador: vazio e `null` = sem repo, barra final sai; os três leitores do marcador a usam';
+  const nome = 'repoDoMarcador: vazio e `null` = sem repo, barra final sai; os leitores do marcador a usam';
   try {
     const eq = (a, b) => { if (a !== b) throw new Error(`esperava ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
     eq(repoDoMarcador('/r/x/.git\n'), '/r/x/.git'); eq(repoDoMarcador('/r/x/.git/\n'), '/r/x/.git');
     eq(repoDoMarcador('\n'), ''); eq(repoDoMarcador('null\n'), ''); eq(repoDoMarcador(undefined), '');
-    for (const h of ['pool-comum.mjs', 'painel-das-sessoes.mjs', 'orquestradora-nao-edita.mjs']) {
+    for (const h of ['pool-comum.mjs', 'orquestradora-nao-edita.mjs']) // painel-das-sessoes.mjs saiu: vale com ou sem orquestradora (ADR 0007)
+     {
       const src = readFileSync(join(HOOKS, h), 'utf8');
       if (h === 'pool-comum.mjs' ? !/repoDoMarcador\(readFileSync/.test(src) : !(/repoDoMarcador/.test(src) || /projetoTemOrquestradora.*from '\.\/pool-comum\.mjs'/.test(src))) throw new Error(`${h} não lê o marcador pela função comum`);
     }

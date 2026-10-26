@@ -193,6 +193,7 @@ caso('c4 R1: o painel.mjs do plugin não cai para ~/.claude/hooks (só vale onde
   const plugin = join(base, 'plugin'); mkdirSync(join(plugin, 'skills', 'orquestradora', 'scripts'), { recursive: true }); mkdirSync(join(plugin, 'hooks'));
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'painel.mjs'), fonte);
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'handoffs.mjs'), readFileSync(join(SCRIPTS, 'handoffs.mjs'), 'utf8')); // módulo vizinho que o painel importa
+  writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'batida.mjs'), readFileSync(join(SCRIPTS, 'batida.mjs'), 'utf8')); // idem
   const r = spawnSync('node', [join(plugin, 'skills', 'orquestradora', 'scripts', 'painel.mjs'), 'set', 'sessoes', 'local_OUTRA', '{"titulo":"x"}'], {
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', cwd: base,
     env: { ...process.env, HOME: lar, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: 'cli-self', KIT_HOOKS_DIR: '' },

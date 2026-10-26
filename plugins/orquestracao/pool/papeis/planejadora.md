@@ -15,6 +15,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - PR validado → orquestradora (`PR N validado, HEAD Y`);
   - número de ADR ou SPEC → pede à orquestradora;
   - pergunta irreversível → Q-ID no painel.
+  - **Ao receber `F<n> para você`** (aviso da batida ou de quem soltou o item): rode `painel pegar <F<n>> <seu local_…> <seu apelido>` (atômico; se recusar, outro pegou ou o item mudou: não insista), troque o título (`<ID> · <o quê>`) e leia o handoff do item (protocolo, âncora `batida`).
 
 ## Skills que usa (lê e aplica)
 - `handoff-de-sessao`: ao soltar ou retomar um item.

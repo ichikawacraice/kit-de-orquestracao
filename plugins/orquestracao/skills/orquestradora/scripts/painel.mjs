@@ -14,6 +14,9 @@
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_> [--fez]   tira a sessão do `com`; --fez a registra em `fez` (quem executou)
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
+//   painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]   os membros livres do papel no projeto, o mais antigo parado primeiro → [{localId, apelido}]; --sessoes é o JSON do list_sessions (sem ele, o registro do app, sem contar a mesma sessão duas vezes)
+//   painel.mjs pegar <F> <local_> <apelido>   o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
+//   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, relata merge/vagas/excedentes à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
 //   (item que vira feito/descartado arquiva os próprios handoffs e roda a limpeza; reaberto, eles voltam. Pasta: PAINEL_HANDOFFS_DIR, senão PAINEL_DIR/../pool/handoffs, senão ~/.claude/orquestracao/pool/handoffs)
@@ -39,6 +42,7 @@ import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
+import { BATIDA_SOLTA_MIN, julgar, livresDe, ocupadosDaFila } from './batida.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 // Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
@@ -79,9 +83,13 @@ const pool = MEU_CLI
   : null;
 // `esperando` da `list fila` (F58): a regra mora em hooks/esperando-papel.mjs; só `list fila` a carrega (as outras
 // invocações não dependem do módulo, nem a cópia do script solta numa pasta sem `hooks/`).
-const esperandoPapel = process.argv[2] === 'list' && process.argv.slice(3).includes('fila')
+const DA_BATIDA = ['batida', 'pegar', 'livres'].includes(process.argv[2]);
+const esperandoPapel = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
   ? (await import(pathToFileURL(join(HOOKS_DIR, 'esperando-papel.mjs')).href)).esperandoPapel
   : null;
+// `batida`, `pegar` e `livres` também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
+const regras = DA_BATIDA ? await import(pathToFileURL(POOL_COMUM).href) : null;
+const crewai = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'hooks-crewai-comum.mjs')).href) : null;
 let meusIds; // Set de ids que contam como "a própria sessão"; null = não resolvido
 function ehMinha(id) {
   if (!MEU_CLI) return true;
@@ -684,16 +692,159 @@ function comandoSoltar(args) {
   if (!textoNaoVazio(motivo)) throw new Error('soltar: falta o "<motivo>" (vira o `agora` do item)');
   const citado = motivo.match(CITA_NUMERO);
   if (citado) throw new Error(`soltar: o motivo não cita item nem PR ("${citado[0]}"); o pane mostra o número ao lado do tema`);
+  return comTrava(() => soltarSemTrava(F, motivo, soDono));
+}
+function soltarSemTrava(F, motivo, soDono) {
+  const atual = ler('fila', F);
+  if (!atual) throw new Error(`fila/${F} não existe`);
+  const d0 = atual.data ?? {};
+  // item legado, sem `etapa` válida, fecha pelo `estado` (o mesmo critério do `vencidos`)
+  const final = ETAPAS.includes(d0.etapa) ? ETAPAS_FINAIS.has(d0.etapa) : ['feito', 'descartado'].includes(d0.estado);
+  if (final) throw new Error(`soltar: ${F} está em etapa final (${d0.etapa ?? d0.estado}); não há o que soltar`);
+  const data = { donoLocalId: null, donoApelido: null, agora: motivo, ...(soDono ? {} : { com: [] }) };
+  return efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
+}
+
+// ---- batida, pegar, livres (ADR 0007) ----
+const flag = (args, nome, comValor = true) => {
+  const i = args.indexOf(nome);
+  if (i < 0) return comValor ? null : false;
+  if (!comValor) { args.splice(i, 1); return true; }
+  const v = args.splice(i, 2)[1];
+  if (!textoNaoVazio(v)) throw new Error(`${nome} pede um valor`);
+  return v;
+};
+function lerSessoes(arquivo) {
+  const t = readFileSync(arquivo, 'utf8');
+  const v = JSON.parse(t.slice(Math.max(0, t.indexOf('['))));
+  if (!Array.isArray(v)) throw new Error(`${arquivo}: esperava a lista do list_sessions`);
+  return v;
+}
+function projetoDeUmaLinha() {
+  const cache = new Map();
+  return (r) => {
+    const chave = `${r?.originCwd ?? ''}|${r?.cwd ?? ''}`;
+    if (!cache.has(chave)) {
+      let nome = null;
+      try { nome = regras.projetoDaSessao({ cwd: r?.cwd, originCwd: r?.originCwd })?.nome ?? null; } catch { /* sem projeto */ }
+      cache.set(chave, nome);
+    }
+    return cache.get(chave);
+  };
+}
+const itensVivos = () => new Map([...itensDaFila()].filter(([, d]) => !ETAPAS_FINAIS.has(d?.etapa)));
+
+function comandoLivres(args) {
+  const arquivo = flag(args, '--sessoes');
+  const projeto = (flag(args, '--projeto') ?? projetoDoCwd().projeto ?? '').toLowerCase();
+  const [papel, ...sobra] = args;
+  if (!['P', 'D', 'E', 'V'].includes(papel) || sobra.length) throw new Error('uso: painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]');
+  if (!projeto) throw new Error('livres: sem projeto (fora de git); passe --projeto');
+  const ocupados = ocupadosDaFila(itensDaFila());
+  if (arquivo) return livresDe(lerSessoes(arquivo), papel, projeto, projetoDeUmaLinha(), ocupados);
+  const repo = regras.gitCommonDir(process.cwd());
+  const vistos = new Set();
+  return regras.membrosLivres(repo)
+    .filter((m) => m.papel === papel && m.localId && !ocupados.has(m.localId) && !vistos.has(m.localId) && vistos.add(m.localId))
+    .map((m) => ({ localId: m.localId, apelido: m.apelido }));
+}
+
+// `pegar`: o membro livre que recebeu o aviso. Tudo dentro da trava: dois livres no mesmo item, um só pega.
+function comandoPegar(args) {
+  const [F, localId, apelido, ...sobra] = args;
+  if (!ID.test(String(F)) || sobra.length) throw new Error('uso: painel.mjs pegar <F> <local_…> <apelido>');
+  if (!LOCAL_ID.test(String(localId))) throw new Error(`pegar: "${localId}" não é local_<uuid>`);
+  if (!/^[PDEV]\d+$/.test(String(apelido))) throw new Error(`pegar: apelido "${apelido}" não é P<n>, D<n>, E<n> ou V<n>`);
+  const recusa = (motivo) => ({ recusado: true, item: F, motivo });
   return comTrava(() => {
     const atual = ler('fila', F);
-    if (!atual) throw new Error(`fila/${F} não existe`);
-    const d0 = atual.data ?? {};
-    // item legado, sem `etapa` válida, fecha pelo `estado` (o mesmo critério do `vencidos`)
-    const final = ETAPAS.includes(d0.etapa) ? ETAPAS_FINAIS.has(d0.etapa) : ['feito', 'descartado'].includes(d0.estado);
-    if (final) throw new Error(`soltar: ${F} está em etapa final (${d0.etapa ?? d0.estado}); não há o que soltar`);
-    const data = { donoLocalId: null, donoApelido: null, agora: motivo, ...(soDono ? {} : { com: [] }) };
-    return efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
+    if (!atual) return recusa(`fila/${F} não existe`);
+    const d = atual.data ?? {};
+    if (ETAPAS_FINAIS.has(d.etapa)) return recusa(`o item está em etapa final (${d.etapa})`);
+    if (d.etapa === 'merge') return recusa('o item está em merge: é da orquestradora');
+    const r = esperandoPapel(d, Date.now());
+    if (!r) return recusa('o item não está esperando ninguém (já tem quem trabalhe nele, está em espera ou travado)');
+    if (r.papel !== apelido[0]) return recusa(`o item espera o papel ${r.papel}, não o ${apelido[0]}`);
+    if (r.entregue) return recusa(`a parte do papel ${r.papel} já foi entregue; o item espera a dona avançar a etapa`);
+    const com = Array.isArray(d.com) ? d.com : [];
+    const data = { com: [...com.filter((c) => c.localId !== localId), { localId, apelido, oQue: d.titulo }], agora: `${apelido} começou` };
+    if ((d.etapa === 'planejamento' || d.etapa === 'design') && !textoNaoVazio(d.donoLocalId)) { data.donoLocalId = localId; data.donoApelido = apelido; }
+    efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
+    const handoff = join(HANDOFFS, `${F}.md`);
+    return { pegou: true, item: F, titulo: d.titulo, etapa: d.etapa, handoff: existsSync(handoff) ? handoff : null };
   });
+}
+
+const ORQ = () => regras.BASE;
+const arquivoJson = (f, padrao) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return padrao; } };
+function gravarJson(f, v) {
+  mkdirSync(dirname(f), { recursive: true });
+  const tmp = `${f}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(v, null, 2)}\n`);
+  renameSync(tmp, f);
+}
+const SETE_DIAS_MS = 7 * 24 * 3600_000;
+// Marcadores `ativas/<id>` de orquestradora que já não existem: sessão arquivada ou fora do registro, ou parada há 7 dias.
+function marcadoresMortos(porId, agoraMs) {
+  const dir = join(ORQ(), 'ativas');
+  let nomes = [];
+  try { nomes = readdirSync(dir); } catch { return []; }
+  const mortos = [];
+  for (const id of nomes.sort()) {
+    let reg = null;
+    try { reg = regras.registroDaSessao(id, { fresco: true }); } catch { continue; }
+    if (reg === null || reg.arquivada) { mortos.push(id); continue; }
+    const linha = porId.get(reg.localId);
+    if (linha?.isRunning === true) continue;
+    const t = Date.parse(linha?.lastActivityAt);
+    if (!Number.isNaN(t) && agoraMs - t >= SETE_DIAS_MS) mortos.push(id);
+  }
+  return mortos;
+}
+
+function comandoBatida(args) {
+  const arquivo = flag(args, '--sessoes');
+  const seco = flag(args, '--seco', false);
+  const agoraIso = flag(args, '--agora');
+  if (!arquivo || args.length) throw new Error('uso: painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]');
+  const agoraMs = agoraIso ? Date.parse(agoraIso) : Date.now();
+  if (Number.isNaN(agoraMs)) throw new Error(`--agora: "${agoraIso}" não é data ISO`);
+  const linhas = lerSessoes(arquivo);
+  const pasta = join(ORQ(), 'batida');
+  const solta = Number(process.env.BATIDA_SOLTA_MIN);
+  const rodar = () => {
+    const itens = itensVivos();
+    const julgado = julgar({
+      agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(),
+      estado: arquivoJson(join(pasta, 'estado.json'), {}), ausente: Boolean(crewai.modoAusente()),
+      cheia: () => regras.maquinaCheia().cheia, esperandoPapel,
+      ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
+      caminhoDoRelatorio: (nome) => join(pasta, `${nome}.json`),
+      prazoMin: prazoEmMin([]), soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
+    });
+    const marcadoresApagados = marcadoresMortos(new Map(linhas.map((r) => [r.sessionId, r])), agoraMs);
+    const saida = { mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
+    if (seco) return saida;
+    const soltos = [];
+    for (const { F, motivo } of julgado.soltar) {
+      try { soltarSemTrava(F, motivo, false); soltos.push(F); } catch (e) { process.stderr.write(`batida: não soltei ${F}: ${e?.message || e}\n`); }
+    }
+    saida.soltos = soltos;
+    for (const { F, texto } of julgado.espera) {
+      try { efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { espera: { motivo: 'gate', texto } } }, undefined, new Map())); } catch (e) { process.stderr.write(`batida: não gravei a espera de ${F}: ${e?.message || e}\n`); }
+    }
+    gravarJson(join(pasta, 'estado.json'), julgado.estado);
+    const em = new Date(agoraMs).toISOString();
+    for (const [nome, p] of Object.entries(julgado.projetos)) {
+      const { mudou, ...conteudo } = p;
+      // o relatório só passa a ser "o último" quando a orquestradora existe para recebê-lo: sem ela, a próxima batida o oferece de novo
+      if (mudou && !conteudo.orquestradora) { const antes = arquivoJson(join(pasta, `${nome}.json`), null); gravarJson(join(pasta, `${nome}.json`), { ...conteudo, merge: antes?.merge ?? [], vagas: antes?.vagas ?? [], excedentes: antes?.excedentes ?? [], em }); continue; }
+      gravarJson(join(pasta, `${nome}.json`), { ...conteudo, em });
+    }
+    for (const id of marcadoresApagados) rmSync(join(ORQ(), 'ativas', id), { force: true });
+    return saida;
+  };
+  return seco ? rodar() : comTrava(rodar);
 }
 
 // `list fila vencidos`: vivo, com dono ou `com`, sem `espera` nem `trava` (quem espera o operador ou o gate está parado de propósito)
@@ -786,6 +937,15 @@ function main(argv) {
     case 'soltar':
       saida = comandoSoltar(resto);
       break;
+    case 'livres':
+      saida = comandoLivres(resto);
+      break;
+    case 'pegar':
+      saida = comandoPegar(resto);
+      break;
+    case 'batida':
+      saida = comandoBatida(resto);
+      break;
     case 'handoffs':
       saida = comandoHandoffs(resto);
       break;
@@ -796,10 +956,10 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|handoffs … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|batida|handoffs … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
-  return 0;
+  return cmd === 'pegar' && saida.recusado ? 1 : 0;
 }
 
 try {

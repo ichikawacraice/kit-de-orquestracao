@@ -63,14 +63,16 @@ caso('(b) resposta a Q12 desta sessão, sem gravar no painel: bloqueia', () => {
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
   ok(r.reason.includes('Qnn'), `motivo: ${r.reason}`);
 });
-caso('c3 R2: marcador sem transcript (projeto indeterminado, null) → passa, mesmo com a resposta do painel sem gravar', () => {
+caso('ADR 0007: sem orquestradora ativa no projeto, a sessão que abriu PR e não gravou também é cobrada', () => {
   pergunta('Q12', LOCAL);
   const msg = 'Q12 — resposta do operador pelo painel: sim';
-  ok(rodar(transcript(msg))?.decision === 'block', 'precondição: com o projeto medido, a mesma situação bloqueia');
-  rmSync(dir('home', '.claude', 'projects', 'proj', `${ORQ}.jsonl`));
-  ok(!existsSync(dir('home', '.claude', 'projects', 'proj', `${ORQ}.jsonl`)) && existsSync(dir('home', '.claude', 'orquestracao', 'ativas', ORQ)), 'precondição: marcador ficou, transcript saiu');
+  ok(rodar(transcript(msg))?.decision === 'block', 'precondição: com orquestradora a cobrança aparece');
+  rmSync(dir('home', '.claude', 'orquestracao', 'ativas', ORQ));
+  ok(!existsSync(dir('home', '.claude', 'orquestracao', 'ativas', ORQ)), 'precondição: o marcador saiu');
   const r = rodar(transcript(msg));
-  ok(r === null, `esperava passar: ${JSON.stringify(r)}`);
+  ok(r?.decision === 'block', `esperava bloquear mesmo sem orquestradora: ${JSON.stringify(r)}`);
+  const pr = rodar(transcript('segue', ['gh pr create --title x']));
+  ok(pr?.decision === 'block' && pr.reason.includes('abriu PR'), `PR aberto e nada gravado: ${JSON.stringify(pr)}`);
 });
 caso('(b2) o nome antigo IZANAGI_PAINEL_DIR segue valendo (PAINEL_DIR vazio): bloqueia como (b)', () => {
   pergunta('Q12', LOCAL);

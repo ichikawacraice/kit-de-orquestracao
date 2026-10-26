@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Stop hook: numa sessão orquestradora, o turno só termina depois do ritual
-// (skill orquestradora, seção "Ritual de cada turno"): list_sessions e um
-// gravação no painel (painel.mjs set|update|batch|delete) desde a última mensagem que abriu o turno.
+// Stop hook: numa sessão orquestradora, o turno só termina depois do que a batida não resolve (ADR 0007): o item esperando
+// papel sem membro livre (pedir a vaga), o piso de E, o resumo do modo ausente e a batida parada. O estado mecânico das
+// sessões, o item parado e o aviso ao livre são da batida (mod painel-sessoes); a orquestradora só lê o relatório dela.
 // F59: e, havendo período do modo ausente desligado (≤ 7 dias) sem entrega registrada para o projeto, o resumo
 // (skills/orquestradora/scripts/ausencia.mjs, seção `resumo-da-ausencia`).
 // A sessão é orquestradora quando existe ~/.claude/orquestracao/ativas/<session_id>.
@@ -9,7 +9,7 @@ import { readFileSync, existsSync, appendFileSync, readdirSync, writeFileSync, m
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BASE, gravaNoPainel, modoAusente } from './hooks-crewai-comum.mjs';
+import { BASE, modoAusente } from './hooks-crewai-comum.mjs';
 import { esperandoPapel, PAPEL_DA_ETAPA } from './esperando-papel.mjs';
 import { filaDir, gitCommonDir, membrosLivres, chaveDoPiso, maquinaCheia } from './pool-comum.mjs';
 import { pendente, projetoDoRepo } from '../skills/orquestradora/scripts/ausencia.mjs';
@@ -21,6 +21,9 @@ const ESPERA_MIN = (() => { const n = Number(process.env.ESPERA_MIN); return Num
 
 // Minutos em que o cartão de vaga de E já proposto dispensa um novo (marca em BASE/piso).
 const PISO_VAGA_MIN = (() => { const n = Number(process.env.PISO_VAGA_MIN); return Number.isInteger(n) && n > 0 ? n : 720; })();
+
+// Minutos sem a batida escrever o relatório do projeto a partir dos quais o ritual avisa que o mod não a está rodando.
+const BATIDA_VELHA_MIN = (() => { const n = Number(process.env.BATIDA_VELHA_MIN); return Number.isInteger(n) && n > 0 ? n : 30; })();
 
 const LOG = join(homedir(), '.claude', 'orquestracao', 'ritual-hook.log');
 
@@ -60,7 +63,7 @@ function itensComEsperaGate(nomeProjeto) {
 
 const textoDaMaquina = (m) => `${m.tomadas} de ${m.teto} fichas${m.carga >= m.nucleos ? `, carga ${m.carga.toFixed(1)}` : ''}`;
 
-// O que falta por item esperando (F58): despachar (há membro livre do papel), pedir a vaga (não há), cobrar a dona de avançar a
+// O que falta por item esperando (F58): pedir a vaga (não há membro livre do papel; havendo, a batida o avisa), cobrar a dona de avançar a
 // etapa (a parte já foi entregue) ou confirmar com a dona (validação sem V, sem registro de quem validou).
 function cobrancaDeEspera(cwd, nomeProjeto, comandos, usadas, mensagens) {
   const itens = itensEsperando(nomeProjeto);
@@ -97,9 +100,9 @@ function cobrancaDeEspera(cwd, nomeProjeto, comandos, usadas, mensagens) {
     const base = `${it.id} esperando ${it.papel} há ${it.minutos} min`;
     const confirma = it.papel === 'V';
     const frase = confirma ? `${it.id} sem V no item há ${it.minutos} min: confirme com a dona${dona} se a validação já voltou antes de despachar` : base;
+    if (doPapel.length > 0) continue; // há livre do papel: a batida o avisa e ele roda `painel pegar`
     if (comAdd(it.id) || (confirma && citou(it.id))) continue;
-    if (doPapel.length > 0) faltas.push(`${frase} — livres: ${doPapel.map((m) => m.apelido).join(', ')}: despache (título + painel com add + mensagem)`);
-    else if (!pediuVaga && !(maquina.cheia && (it.papel === 'E' || it.papel === 'V'))) faltas.push(`${frase} — sem ${it.papel} livre: peça a vaga (start_session; fora do turno do operador, cartão)`);
+    if (!pediuVaga && !(maquina.cheia && (it.papel === 'E' || it.papel === 'V'))) faltas.push(`${frase} — sem ${it.papel} livre: peça a vaga (start_session; fora do turno do operador, cartão)`);
   }
   return faltas;
 }
@@ -133,6 +136,17 @@ function faltaPiso(cwd, usadas, startsDeE, sessao) {
   return 'Piso do pool (ADR 0004): sem E livre no projeto: peça a vaga (start_session; fora do turno do operador, cartão).';
 }
 
+// A batida (ADR 0007) escreve `batida/<projeto>.json` a cada rodada; sem ele, ou velho, o mod não a está rodando.
+function faltaBatida(projeto) {
+  let em = NaN;
+  try { em = Date.parse(JSON.parse(readFileSync(join(BASE, 'batida', `${projeto}.json`), 'utf8'))?.em); } catch { /* sem relatório */ }
+  const min = Math.floor((Date.now() - em) / 60_000);
+  if (Number.isFinite(min) && min < BATIDA_VELHA_MIN) return null;
+  return Number.isFinite(min)
+    ? `A batida não roda há ${min} min: confira se o mod painel-sessoes está ligado.`
+    : `A batida nunca escreveu o relatório de ${projeto}: confira se o mod painel-sessoes está ligado.`;
+}
+
 function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id, transcript_path, stop_hook_active } = input;
@@ -156,7 +170,6 @@ function main() {
   const usadas = new Set();
   const comandos = [];
   const mensagens = [];
-  let gravou = false;
   let startsDeE = false;
   for (const e of entradas.slice(inicio + 1)) {
     if (e.type !== 'assistant') continue;
@@ -169,34 +182,25 @@ function main() {
       if (item.name === 'Bash') {
         const cmd = String(item.input?.command ?? '');
         comandos.push(cmd);
-        if (gravaNoPainel(cmd)) gravou = true;
       }
       if (/(^|__)(SendMessage|send_message)$/.test(item.name)) mensagens.push(JSON.stringify(item.input ?? {}));
     }
   }
 
-  const faltam = [];
-  if (![...usadas].some((n) => n.endsWith('list_sessions'))) faltam.push('list_sessions {"linked": true}');
-  if (!gravou) faltam.push('gravar no painel com painel.mjs (batch com o que mudou, ou ao menos update da própria linha)');
   const projeto = projetoDoRepo(input.cwd || process.cwd());
   const periodo = projeto ? pendente(projeto) : null;
   const espera = cobrancaDeEspera(input.cwd || process.cwd(), projeto, comandos, usadas, mensagens);
   const piso = projeto ? faltaPiso(input.cwd || process.cwd(), usadas, startsDeE, session_id) : null;
-  if (faltam.length === 0 && !periodo && espera.length === 0 && !piso) return;
+  const batidaParada = projeto ? faltaBatida(projeto) : null;
+  if (!periodo && espera.length === 0 && !piso && !batidaParada) return;
   const resumo = periodo
     ? `O operador desligou o modo ausente (período de ${periodo.desde} a ${periodo.ate}) e o resumo ainda não foi entregue: ` +
       `rode \`node "${AUSENCIA}" resumo --md\`, entregue o resumo no formato da skill orquestradora (seção resumo-da-ausencia) e registre com \`node "${AUSENCIA}" entregue\`. `
     : '';
-  const ritual = faltam.length > 0
-    ? `Ritual da orquestradora não feito neste turno. Falta: ${faltam.join('; ')}. ` +
-      'Rode list_sessions, liste as candidatas a arquivar (as cinco condições): arquive sozinha o membro do pool sem item vivo com o modo ausente desligado (com ele ligado, só a pedido do operador no turno dele) e leve ao operador a sessão avulsa fora do pool; dê set na sessão sem linha, ' +
-      'tire o estado mecânico (isRunning → trabalhando, arquivada → concluida) e grave tudo no painel ' +
-      'com `painel batch \'[...]\'`. Depois responda.'
-    : '';
   const paradas = espera.length > 0
     ? `Item parado sem o papel da etapa (protocolo.md#esperando-papel): ${espera.join(' · ')}.`
     : '';
-  process.stdout.write(JSON.stringify({ decision: 'block', reason: [resumo.trim(), ritual, paradas, piso].filter(Boolean).join('\n') }));
+  process.stdout.write(JSON.stringify({ decision: 'block', reason: [resumo.trim(), paradas, piso, batidaParada].filter(Boolean).join('\n') }));
 }
 
 try {
