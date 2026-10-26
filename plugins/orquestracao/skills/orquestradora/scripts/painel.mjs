@@ -14,6 +14,9 @@
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_> [--fez]   tira a sessão do `com`; --fez a registra em `fez` (quem executou)
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
+//   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
+//   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
+//   (item que vira feito/descartado arquiva os próprios handoffs e roda a limpeza; reaberto, eles voltam. Pasta: PAINEL_HANDOFFS_DIR, senão PAINEL_DIR/../pool/handoffs, senão ~/.claude/orquestracao/pool/handoffs)
 //   painel.mjs list fila vencidos [--min N]   itens vivos com dono ou `com`, sem `espera` nem `trava`, parados há mais de N min (padrão 30 ou PAINEL_PRAZO_MIN)
 //   (`com` e `fez` só mudam por `com add|del [--fez]`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
@@ -34,8 +37,11 @@ import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
+// Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
+const HANDOFFS = process.env.PAINEL_HANDOFFS_DIR || ((process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR) ? join(BASE, '..', 'pool', 'handoffs') : join(homedir(), '.claude', 'orquestracao', 'pool', 'handoffs'));
 const COLECOES = new Set(['sessoes', 'perguntas', 'fila']);
 const ID = /^[A-Za-z0-9_.-]{1,120}$/;
 
@@ -377,6 +383,7 @@ function automaticosDaFila(base, novo, antes) {
   if (final) delete base.espera;
   if (final && !eraFinal && !('feitoEm' in novo)) base.feitoEm = new Date().toISOString();
   if (!final && eraFinal) delete base.feitoEm;
+  return { fechou: final && !eraFinal, reabriu: !final && eraFinal };
 }
 
 // Valida e calcula uma op contra o estado `vista` (mapa "colecao/id" -> documento ou null, que
@@ -425,10 +432,10 @@ function planejar(o, seVersao, vista) {
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
   validarPadrao(colecao, id, novo, base, vista, op, !!atual, viaCom, atual?.data);
   const semente = colecao === 'fila' ? sementePendente : null;
-  if (colecao === 'fila') automaticosDaFila(base, novo, atual?.data);
+  const transicao = colecao === 'fila' ? automaticosDaFila(base, novo, atual?.data) : {};
   const version = (atual?.version ?? 0) + 1;
   vista.set(chave, { id, version, data: base });
-  return { colecao, id, data: base, version, semente };
+  return { colecao, id, data: base, version, semente, ...transicao };
 }
 
 function efetivar(p) {
@@ -437,7 +444,54 @@ function efetivar(p) {
     return { id: p.id, deleted: true };
   }
   semearTema(p.semente);
-  return gravar(p.colecao, p.id, p.data, p.version);
+  const r = gravar(p.colecao, p.id, p.data, p.version);
+  if (p.fechou || p.reabriu) moverHandoffs(p);
+  return r;
+}
+
+// F50: o item fechado leva os arquivos de handoff para `arquivo/` (e a limpeza dos velhos roda junto); reaberto, eles voltam.
+// A gravação do item já foi feita: erro de fs avisa e segue.
+function moverHandoffs(p) {
+  try {
+    if (p.fechou) {
+      arquivarItem(HANDOFFS, p.id);
+      limparArquivados(HANDOFFS, itensDaFila(), { dias: DIAS_ARQUIVO });
+    } else desarquivarItem(HANDOFFS, p.id);
+  } catch (e) {
+    process.stderr.write(`aviso: handoff de ${p.id} não foi ${p.fechou ? 'arquivado' : 'trazido de volta'} (${e?.message || e})\n`);
+  }
+}
+function itensDaFila() {
+  const dir = caminho('fila');
+  const itens = new Map();
+  if (!existsSync(dir)) return itens;
+  for (const n of readdirSync(dir).filter((x) => x.endsWith('.json'))) {
+    try { const d = JSON.parse(readFileSync(join(dir, n), 'utf8')); itens.set(d.id, d.data ?? {}); } catch { /* documento ilegível: fica de fora */ }
+  }
+  return itens;
+}
+
+// `handoffs arquivar` (os itens já fechados que ficaram para trás) e `handoffs limpar [--dias N] [--seco]`.
+function comandoHandoffs(args) {
+  const [sub, ...resto] = args;
+  if (sub === 'arquivar') {
+    if (resto.length) throw new Error('uso: painel.mjs handoffs arquivar');
+    return comTrava(() => {
+      const fechados = new Map([...itensDaFila()].filter(([, d]) => ETAPAS_FINAIS.has(d.etapa)));
+      return { movidos: arquivarFechados(HANDOFFS, fechados) };
+    });
+  }
+  if (sub === 'limpar') {
+    const seco = resto.includes('--seco');
+    if (seco) resto.splice(resto.indexOf('--seco'), 1);
+    const i = resto.indexOf('--dias');
+    const bruto = i >= 0 ? String(resto.splice(i, 2)[1] ?? '') : null;
+    if (resto.length) throw new Error('uso: painel.mjs handoffs limpar [--dias N] [--seco]');
+    if (bruto !== null && !/^[1-9]\d*$/.test(bruto)) throw new Error(`--dias pede um inteiro positivo (recebi "${bruto}")`);
+    const dias = bruto === null ? DIAS_ARQUIVO : Number(bruto);
+    return comTrava(() => ({ apagados: limparArquivados(HANDOFFS, itensDaFila(), { dias, seco }), seco }));
+  }
+  throw new Error('uso: painel.mjs handoffs arquivar | handoffs limpar [--dias N] [--seco]');
 }
 
 // Trava única do painel. A trava nasce COMPLETA: um diretório temporário ao lado dela, com o `dono` (token pid-aleatório)
@@ -712,6 +766,9 @@ function main(argv) {
     case 'soltar':
       saida = comandoSoltar(resto);
       break;
+    case 'handoffs':
+      saida = comandoHandoffs(resto);
+      break;
     case 'batch': {
       const ops = JSON.parse(a);
       if (!Array.isArray(ops)) throw new Error('batch: esperava uma lista');
@@ -719,7 +776,7 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|handoffs … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
   return 0;
