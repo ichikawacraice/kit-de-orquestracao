@@ -24,7 +24,7 @@
 - **D4 · Trégua** — resposta da janela que não é sim, há ≤ 2 h, segura a cobrança como o "não" do painel. Janela aberta no turno, respondida ou fechada sem resposta, satisfaz a cobrança daquele turno (não fica reabrindo).
 - **D5 · Depois da janela, a orquestradora atualiza a pergunta do painel**: sim → `estado: "respondida"`, `resposta: "sim (pela janela)"`, e limpa; não → `respondida`, `resposta: "não (pela janela)"`. Assim o botão da F52 some e o pedido não fica em dois lugares. O `painel.mjs` já aceita isso da linha de comando (só `respondidaPor`/`respondidaEm` são recusados, e não são precisos aqui: a prova é o transcript).
 - **D6 · O destaque no painel fica com a F52 (D10 dela)**, já desenhado pela D2 da F52. A F53 não mexe em `plugins/painel-sessoes/**`. A pergunta continua aparecendo em "Esperam você" como hoje.
-- **D7 · Versão `0.1.28`** do plugin `orquestracao` (main em 0.1.26; a F54 leva 0.1.27). Quem mergear depois acerta no rebase.
+- **D7 · Versão `0.1.29`** do plugin `orquestracao` (main em 0.1.28 depois do #19 e do #20). Quem mergear depois acerta no rebase.
 
 ## Bloco único — executora (Sonnet, médio)
 
@@ -38,7 +38,7 @@ Faixa: só `plugins/orquestracao/**`. Sem tela, sem D.
 | `plugins/orquestracao/hooks/papel-do-pool.mjs` | No T7, depois do sim do painel: passa (`liberou-limpeza` com motivo `sim da janela`) se `janelasDeLimpeza(e.transcript_path)` tem uma com `resposta` que casa `/^\s*sim\b/i`, `!recusada` e `respondidaEm` dentro de 30 min e não no futuro. Linha 13 do comentário: `(turno humano, modo ausente, o sim do painel ou o da janela, F48/F53)`. Motivo do `nega` termina em `…limpe quando ele disser sim no chat, na janela ou no painel. Com o modo ausente ligado, pode.` |
 | `plugins/orquestracao/hooks/contexto-do-papel.mjs` | Função `orquestradora` (regra abaixo). Comentário do topo ganha a janela. Extraia a detecção do "termina esperando" (`ultimoParagrafo` + a regex) para uma função `terminaEsperando(texto)` usada pelos dois ramos, sem mudar o ramo da planejadora. |
 | `plugins/orquestracao/skills/orquestradora/SKILL.md` | Seção `## Orçamento de contexto`, parágrafo "Limpeza inteira com o operador presente" e o da trava (texto abaixo). |
-| `plugins/orquestracao/.claude-plugin/plugin.json` | versão `0.1.28`. |
+| `plugins/orquestracao/.claude-plugin/plugin.json` | versão `0.1.29`. |
 
 ### Regra nova da orquestradora no `contexto-do-papel.mjs` (modo ausente desligado, `t ≥ PEDIR`)
 
@@ -89,7 +89,7 @@ Fixture de janela: copie a forma medida (entrada `assistant` com `tool_use` `Ask
 - 260 mil, pergunta aberta, texto final `feito.` (não espera) → `null`, `satisfeito-pediu` (sem mudança);
 - 260 mil, sem pergunta no painel, texto final com `?` → `block` `cobrou-pedir`, motivo casa `/janela/`; texto sem `?` → `cobrou-pedir`, motivo **não** casa `/janela/`;
 - `stop_hook_active` no caso do `cobrou-janela` → `null`, `deixou-passar`;
-- com a bandeira ligada, 160 mil e `?` → `cobrou-150-espera` (sem mudança: a janela não entra no modo ausente);
+- com a bandeira ligada, 260 mil e `?` → `cobrou-150-espera` (sem mudança: a janela não entra no modo ausente);
 - os testes atuais do ramo da planejadora continuam passando (a extração de `terminaEsperando` não muda nada).
 
 `hooks/tests/pool-comum.test.mjs`: `ehPerguntaDeLimpeza` casa `Q9 · limpar · orquestradora: …`, `q9 · LIMPAR  ·  orquestradora` e não casa `limpar · worktrees órfãos` nem `limpar · orquestradora-velha`; `janelasDeLimpeza` devolve `[]` para arquivo que não existe e afirma antes que o transcript da fixture tem 1 janela (não vazio).

@@ -273,9 +273,9 @@ test('F53-5. stop_hook_active no cobrou-janela: deixa passar (deixou-passar)', (
   assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q }), { stop_hook_active: true }), null);
   assert.match(log(b), /\tdeixou-passar\tcobrou-janela/);
 }));
-test('F53-6. com a bandeira ligada, 160 mil e "?": segue cobrou-150-espera (a janela não entra no modo ausente)', () => com((b) => {
+test('F53-6. com a bandeira ligada, 260 mil e "?": segue cobrou-150-espera (a janela não entra no modo ausente)', () => com((b) => {
   ligar(b); pergunta(b, 'Q9', LIMPAR());
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 160_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
   assert.match(log(b), /\tcobrou-150-espera\t/); assert.doesNotMatch(log(b), /janela/);
 }));
 test('F53-7. janela de outra pergunta (merge) não satisfaz: cobra a janela', () => com((b) => {
