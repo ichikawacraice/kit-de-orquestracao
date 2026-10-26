@@ -112,6 +112,8 @@ type Opcoes = {
   parar?: { on: boolean }
   /** send_message e open_session_in só voltam quando esta promessa se resolve: o gesto em curso. */
   segurar?: Promise<void>
+  /** Só o open_session_in espera `p` (quando posta): o "Abrindo…" em curso sem prender o pedido nem o foco automático. */
+  segurarAbrir?: { p?: Promise<void> }
   /** CLAUDE_CODE_HOST_SESSION_ID: a sessão do app que roda este processo (sem ele, o CLI no terminal). */
   host?: string
   /** O que o store do plugin já guarda ao começar. */
@@ -241,6 +243,7 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   on('tool.call', async (_, e) => {
     const input = e as unknown as Escrita
     if (opc.segurar && (e.tool === 'mcp__ccd_session_mgmt__send_message' || e.tool === 'mcp__ccd_window__open_session_in')) await opc.segurar
+    if (opc.segurarAbrir?.p && e.tool === 'mcp__ccd_window__open_session_in') await opc.segurarAbrir.p
     if (e.tool === 'mcp__ccd_session_mgmt__send_message') {
       if (falhas.envio) return { result: {}, text: falhas.envio, isError: true }
       enviadas.push(input)
@@ -2421,7 +2424,7 @@ test('F69 A (v): projeto sem orquestradora ativa: sem botão, e o aviso no topo 
   const { ui } = await abrirDe(pedir({ fila: FILA_TRES(), sessoesDocs: [ORQ_IZ] }), $, on)
   expect(await ui.find({ key: 'pedir:F68' }), 'precondição: o izanagi tem botão').toBeDefined()
   expect(await ui.find({ key: 'pedir:F71' }), 'o kit não tem orquestradora').toBeUndefined()
-  expect(await lerSuperficie(ui)).toMatch(/Sem orquestradora ativa em kit · 1 item/)
+  expect(await lerSuperficie(ui)).toMatch(/Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item/)
   expect((await ui.find({ key: 'pedir:lote' }))?.text, 'o item sem destino não conta no lote').toBe('Pedir 2 sessões')
   await ui.unmount()
 })
@@ -2554,7 +2557,7 @@ test('F69 A (xii): R2 — depois do lote a linha diz só "inicie o cartão" e a 
   await relogio.settle()
   const textos = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   expect(textos.filter(t => /^Pedido às \d\d:\d\d · inicie o cartão$/.test(t)).length, 'uma por linha, curta').toBe(2)
-  expect(textos.filter(t => /2 cartões esperam você na conversa da orquestradora de izanagi/.test(t)).length, 'a frase inteira, uma vez').toBe(1)
+  expect(textos.filter(t => /2 cartões da fila esperam você na conversa da orquestradora de izanagi/.test(t)).length, 'a frase inteira, uma vez').toBe(1)
   await ui.unmount()
 })
 
@@ -2601,12 +2604,12 @@ test('F76 A: o topo da Na fila conta só a Na fila; o cartão em Executando em "
   expect(await ui.find({ key: 'orq:F2' }), 'precondição: o cartão tem o próprio botão').toBeDefined()
   expect(await ui.find({ key: 'orq:izanagi' }), 'sem item da fila em Pedido, o topo não tem o botão').toBeUndefined()
   const textos = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(textos.filter(t => /cartões? esperam? você/.test(t))).toEqual([])
+  expect(textos.filter(t => /cartões? (da fila )?esperam? você/.test(t))).toEqual([])
   await ui.press({ key: 'pedir:F68' })
   await relogio.settle()
   expect((await ui.findAll({ key: 'orq:izanagi' })).length, 'o botão do topo aparece uma vez').toBe(1)
   const ts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(ts.filter(t => /^1 cartão espera você na conversa da orquestradora de izanagi$/.test(t)).length, 'conta só o da fila').toBe(1)
+  expect(ts.filter(t => /^1 cartão da fila espera você na conversa da orquestradora de izanagi$/.test(t)).length, 'conta só o da fila').toBe(1)
   await ui.unmount()
 })
 
@@ -2627,9 +2630,9 @@ const topoF76 = (r: No) => {
   return {
     todos,
     lote: i(n => n.props?.key === 'pedir:lote'),
-    fIz: i(n => n.type === 'Text' && txt(n) === '1 cartão espera você na conversa da orquestradora de izanagi'),
+    fIz: i(n => n.type === 'Text' && txt(n) === '1 cartão da fila espera você na conversa da orquestradora de izanagi'),
     bIz: i(n => n.props?.key === 'orq:izanagi'),
-    fKit: i(n => n.type === 'Text' && txt(n) === '1 cartão espera você na conversa da orquestradora de kit'),
+    fKit: i(n => n.type === 'Text' && txt(n) === '1 cartão da fila espera você na conversa da orquestradora de kit'),
     bKit: i(n => n.props?.key === 'orq:kit'),
   }
 }
@@ -2656,9 +2659,9 @@ test('F76 C/E: o topo agrupa frase e botão por projeto, com o recuo da linha (d
   const m = pais(r)
   const todos = achar(r, () => true)
   const no = (f: (n: No) => boolean) => todos.find(f)!
-  const frIz = no(n => n.type === 'Text' && txt(n) === '1 cartão espera você na conversa da orquestradora de izanagi')
+  const frIz = no(n => n.type === 'Text' && txt(n) === '1 cartão da fila espera você na conversa da orquestradora de izanagi')
   const btIz = no(n => n.props?.key === 'orq:izanagi')
-  const frKit = no(n => n.type === 'Text' && txt(n) === '1 cartão espera você na conversa da orquestradora de kit')
+  const frKit = no(n => n.type === 'Text' && txt(n) === '1 cartão da fila espera você na conversa da orquestradora de kit')
   const btKit = no(n => n.props?.key === 'orq:kit')
   const grupo = ancestralComum(m, [frIz, btIz])!
   expect(grupo.type).toBe('Box')
@@ -2758,4 +2761,113 @@ test('F76 F: lote com papéis diferentes guarda o papel de cada item e sobrevive
   expect(depois).toEqual(antes)
   expect(depois.includes('Pedir executora') || depois.includes('Pedir planejadora'), 'o item pedido não volta como pendente').toBe(false)
   await ui.unmount()
+})
+
+// F82: a frase e o "Abrindo…" do topo da Na fila não confundem.
+test('F82 A: a frase do topo diz de onde conta ("da fila"), no singular e no plural', async ($, on) => {
+  const um = await abrirDe(pedir({ fila: { ...ESPERANDO_V(), F68: FILA_DOIS().F68 }, vivas: vivasPedir(P1) }), $, on)
+  await um.ui.press({ key: 'pedir:F2' })
+  await um.ui.press({ key: 'pedir:F68' })
+  await um.relogio.settle()
+  expect(await um.ui.find({ key: 'orq:F2' }), 'precondição: o cartão em Executando também está em Pedido').toBeDefined()
+  const t1 = (await um.ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect(t1.filter(t => t === '1 cartão da fila espera você na conversa da orquestradora de izanagi').length).toBe(1)
+  expect(t1.filter(t => /1 cartão espera você/.test(t))).toEqual([])
+  await um.ui.unmount()
+})
+
+test('F82 A: com dois itens da fila em Pedido a frase vai ao plural', async ($, on) => {
+  const { ui, relogio } = await abrirDe(pedir({ fila: FILA_DOIS() }), $, on)
+  await ui.press({ key: 'pedir:lote' })
+  await relogio.settle()
+  const ts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect(ts.filter(t => t === '2 cartões da fila esperam você na conversa da orquestradora de izanagi').length).toBe(1)
+  await ui.unmount()
+})
+
+test('F82 B: o "Abrindo…" acende só no botão pressionado; o clique em outro botão da mesma sessão é ignorado', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurarAbrir: { p?: Promise<void> } = {}
+  const { ui, abertas, relogio } = await abrirDe(pedir({ fila: { ...ESPERANDO_V(), F68: FILA_DOIS().F68 }, vivas: vivasPedir(P1), segurarAbrir }), $, on)
+  await ui.press({ key: 'pedir:F2' })
+  await ui.press({ key: 'pedir:F68' })
+  await relogio.settle()
+  segurarAbrir.p = new Promise<void>(res => (soltar = res))
+  const jaAbertas = abertas.length
+  expect((await ui.find({ key: 'orq:izanagi' }))?.text, 'precondição: botão do topo').toBe('Abrir a orquestradora')
+  expect((await ui.find({ key: 'orq:F2' }))?.text, 'precondição: botão do cartão').toBe('Abrir a orquestradora')
+  await ui.press({ key: 'orq:izanagi' })
+  await relogio.settle()
+  expect((await ui.find({ key: 'orq:izanagi' }))?.text).toBe('Abrindo…')
+  expect((await ui.find({ key: 'orq:F2' }))?.text, 'o do cartão não acende').toBe('Abrir a orquestradora')
+  await ui.press({ key: 'orq:F2' })
+  await relogio.settle()
+  soltar()
+  await relogio.settle()
+  expect(abertas.length - jaAbertas, 'o segundo clique, em outro botão da mesma sessão, foi ignorado').toBe(1)
+  expect((await ui.find({ key: 'orq:izanagi' }))?.text).toBe('Abrir a orquestradora')
+  expect((await ui.find({ key: 'orq:F2' }))?.text).toBe('Abrir a orquestradora')
+  await ui.unmount()
+})
+
+const linhaDoPedido = async (ui: Awaited<ReturnType<typeof abrirDe>>['ui']) => {
+  const r = await raiz(ui)
+
+  return achar(r, n => n.type === 'Text' && /^Pedido às \d\d:\d\d · inicie o cartão/.test(txt(n)))
+}
+
+for (const superficie of ['desktop', 'terminal'] as const) {
+  test(`F82 C: na Na fila a linha "Pedido às" é dimColor; no cartão em Executando segue warning (${superficie})`, async ($, on) => {
+    const opc = pedir({ fila: { ...ESPERANDO_V(), F68: FILA_DOIS().F68 }, vivas: vivasPedir(P1) })
+    let ui: Awaited<ReturnType<typeof abrirDe>>['ui']
+    let relogio: { settle: () => Promise<unknown> }
+    if (superficie === 'desktop') ({ ui, relogio } = await abrirDe(opc, $, on))
+    else {
+      const motor = engine(on, false, {}, { agora: AGORA, ...opc })
+      await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+      await $.command.run(ABRIR)
+      await motor.relogio.settle()
+      ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+      relogio = motor.relogio
+    }
+    await ui.press({ key: 'pedir:F2' })
+    await ui.press({ key: 'pedir:F68' })
+    await relogio.settle()
+    const linhas = await linhaDoPedido(ui)
+    const fila = linhas.filter(n => txt(n) === 'Pedido às ' + txt(n).slice(10, 15) + ' · inicie o cartão')
+    const cartao = linhas.filter(n => /na conversa da orquestradora$/.test(txt(n)))
+    expect([fila.length, cartao.length], 'precondição: uma linha de cada').toEqual([1, 1])
+    expect(fila[0]!.props.dimColor).toBe(true)
+    expect(fila[0]!.props.color).not.toBe('warning')
+    expect(cartao[0]!.props.color).toBe('warning')
+    await ui.unmount()
+  })
+}
+
+test('F82 C: "No prompt às … · aperte Enter" segue warning', async ($, on) => {
+  const { ui, relogio } = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, host: 'local_orq_iz' }), $, on)
+  await ui.press({ key: 'pedir:F68' })
+  await relogio.settle()
+  const r = await raiz(ui)
+  const nos = achar(r, n => n.type === 'Text' && /^No prompt às \d\d:\d\d · aperte Enter$/.test(txt(n)))
+  expect(nos.length, 'precondição: a linha existe').toBeGreaterThan(0)
+  for (const n of nos) expect(n.props.color).toBe('warning')
+  await ui.unmount()
+})
+
+test('F82 D: o aviso sem orquestradora prende "· N item(ns)" com espaço inquebrável', async ($, on) => {
+  const um = await abrirDe(pedir({ fila: FILA_TRES(), sessoesDocs: [ORQ_IZ] }), $, on)
+  const ts = (await um.ui.findAll({ type: 'Text' })).map(t => t.text)
+  const aviso = ts.find(t => /^Sem orquestradora ativa em kit/.test(t))
+  expect(aviso, 'precondição: o aviso existe').toBeDefined()
+  expect(aviso).toBe('Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item')
+  expect(aviso).not.toContain(' · ')
+  await um.ui.unmount()
+})
+
+test('F82 D: com dois itens o sufixo é "2 itens", também inquebrável', async ($, on) => {
+  const dois = await abrirDe(pedir({ fila: { ...FILA_TRES(), F72: parado('execucao', { projeto: 'kit', titulo: 'outro do kit' }) }, sessoesDocs: [ORQ_IZ] }), $, on)
+  const ts2 = (await dois.ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect(ts2).toContain('Sem orquestradora ativa em kit\u00a0·\u00a02\u00a0itens')
+  await dois.ui.unmount()
 })
