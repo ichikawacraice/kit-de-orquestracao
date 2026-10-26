@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { cartaoSvg, faixaSvg, filaSvg, itemSvg, largura, perguntaSvg, resumoSvg, secaoSvg } from '../hooks/desenho.js'
-import { contarSecoes, esperaOperadorSemPergunta, leituraParada, montarItens, papelDe, porTema, secoes, situacaoDe } from '../hooks/register.js'
+import { contarSecoes, desmarcar, fechamentoDesmarca, marcar, vencidas, esperaOperadorSemPergunta, leituraParada, montarItens, papelDe, porTema, secoes, situacaoDe } from '../hooks/register.js'
 import { FILA_REAL, TEMAS_REAIS } from './fixtura-fila.js'
 
 const PANE = {
@@ -108,6 +108,12 @@ type Opcoes = {
   parar?: { on: boolean }
   /** send_message e open_session_in só voltam quando esta promessa se resolve: o gesto em curso. */
   segurar?: Promise<void>
+  /** CLAUDE_CODE_HOST_SESSION_ID: a sessão do app que roda este processo (sem ele, o CLI no terminal). */
+  host?: string
+  /** O que o store do plugin já guarda ao começar. */
+  store?: Record<string, unknown>
+  /** O store recusa toda leitura e escrita. */
+  storeFalha?: boolean
 }
 
 function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {}) {
@@ -137,7 +143,19 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
     return { value: opc.copiaFalha ? { isCopied: false as const, reason: 'no-clipboard' as const } : { isCopied: true as const } }
   })
   const relogio = mock.clock(on, { now: opc.agora ?? Date.UTC(2026, 9, 23, 12) })
-  mock.env(on, { HOME: '/home/teste' })
+  mock.env(on, { HOME: '/home/teste', ...(opc.host ? { CLAUDE_CODE_HOST_SESSION_ID: opc.host } : {}) })
+  const loja = new Map<string, unknown>(Object.entries(opc.store ?? {}))
+  on('store.get', (_, e) => (opc.storeFalha ? { deny: 'store fora do ar' } : { value: loja.get(e.key) }))
+  on('store.set', (_, e) => {
+    if (opc.storeFalha) return { deny: 'store fora do ar' }
+    loja.set(e.key, JSON.parse(JSON.stringify(e.value)))
+    return { value: undefined }
+  })
+  on('store.delete', (_, e) => {
+    loja.delete(e.key)
+    return { value: undefined }
+  })
+  on('store.keys', () => ({ value: [...loja.keys()] }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   // A pasta do painel em memória: um arquivo por documento.
   const arquivos = new Map<string, string>()
@@ -197,7 +215,7 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
     return { result: {}, text: opc.vivas ?? VIVAS }
   })
 
-  return { relogio, escritas, contagem, enviadas, prompts, toasts, copiadas, abertas }
+  return { relogio, escritas, contagem, enviadas, prompts, toasts, copiadas, abertas, loja, painelAberto: () => aberto }
 }
 
 const lerSuperficie = async (ui: { findAll: (q: object) => Promise<Array<{ text: string; props: Record<string, unknown> }>> }) =>
@@ -440,6 +458,88 @@ test('sem o pane aberto a sessão não lê nada', async ($, on) => {
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await relogio.advance(180_000)
   expect(contagem.vivas).toBe(0)
+})
+
+// F45: a limpeza do app mata o processo e o pane vai junto; o mod lembra no store que a sessão do app tinha o painel aberto.
+const marcas = (loja: Map<string, unknown>) => (loja.get('abertos') ?? {}) as Record<string, string>
+
+test('F45 t1: /painel abrindo marca a sessão do app no store', async ($, on) => {
+  const { loja } = engine(on, false, {}, { host: 'local_a' })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(Object.keys(marcas(loja)), 'antes de abrir o store está sem marca').toEqual([])
+  await $.command.run(ABRIR)
+  expect(Object.keys(marcas(loja))).toEqual(['local_a'])
+  expect(Number.isNaN(Date.parse(marcas(loja).local_a ?? '')), 'a marca guarda a data de abertura').toBe(false)
+})
+
+test('F45 t2: processo novo com a sessão marcada reabre o pane e liga a leitura', async ($, on) => {
+  const { relogio, contagem, painelAberto } = engine(on, false, {}, { host: 'local_a', agora: AGORA, store: { abertos: { local_a: new Date(AGORA - 3_600_000).toISOString() } } })
+  expect(painelAberto(), 'antes da partida não há pane').toBe(false)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(painelAberto()).toBe(true)
+  await relogio.advance(180_000)
+  expect(contagem.vivas, 'a leitura ligou').toBeGreaterThan(0)
+})
+
+test('F45 t3: marca de outra sessão do app não abre nada', async ($, on) => {
+  const marca = { abertos: { local_a: new Date(AGORA - 3_600_000).toISOString() } }
+  const certo = engine(on, false, {}, { host: 'local_a', agora: AGORA, store: marca })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(certo.painelAberto(), 'prova: a marca de local_a abriria').toBe(true)
+  await certo.relogio.advance(180_000)
+  expect(certo.contagem.vivas).toBeGreaterThan(0)
+})
+
+test('F45 t3b: com a marca só de local_b, local_a não abre e não lê', async ($, on) => {
+  const { relogio, contagem, painelAberto } = engine(on, false, {}, { host: 'local_a', agora: AGORA, store: { abertos: { local_b: new Date(AGORA - 3_600_000).toISOString() } } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(painelAberto()).toBe(false)
+  await relogio.advance(180_000)
+  expect(contagem.vivas).toBe(0)
+})
+
+test('F45 t4: fechar por /painel apaga a marca e abrir de novo marca', async ($, on) => {
+  const { loja } = engine(on, false, {}, { host: 'local_a', agora: AGORA })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(ABRIR)
+  expect(Object.keys(marcas(loja)), 'abriu e marcou').toEqual(['local_a'])
+  await $.command.run(ABRIR)
+  expect(Object.keys(marcas(loja)), '/painel fechando apaga').toEqual([])
+})
+
+test('F45 t4b: a pessoa fechando desmarca; a descarga do mod (unload) não; as funções puras', () => {
+  expect(fechamentoDesmarca('person')).toBe(true)
+  expect(fechamentoDesmarca('plugin')).toBe(true)
+  expect(fechamentoDesmarca('unload')).toBe(false)
+  const m = marcar({}, 'local_a', AGORA)
+  expect(Object.keys(m), 'marcou').toEqual(['local_a'])
+  expect(Object.keys(desmarcar(m, 'local_a'))).toEqual([])
+  expect(vencidas({ x: new Date(AGORA - 8 * 86_400_000).toISOString(), y: new Date(AGORA - 1000).toISOString(), z: 'lixo' }, AGORA)).toEqual(['x', 'z'])
+})
+
+test('F45 t5: sem CLAUDE_CODE_HOST_SESSION_ID o /painel funciona e o store não ganha nada', async ($, on) => {
+  const { loja, painelAberto } = engine(on, false, {}, { agora: AGORA })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(ABRIR)
+  expect(painelAberto(), 'o pane abriu').toBe(true)
+  expect([...loja.keys()]).toEqual([])
+})
+
+test('F45 t6: marca com mais de 7 dias é ignorada e removida na partida', async ($, on) => {
+  const velha = new Date(AGORA - 8 * 86_400_000).toISOString()
+  const nova = new Date(AGORA - 86_400_000).toISOString()
+  const { loja, painelAberto } = engine(on, false, {}, { host: 'local_a', agora: AGORA, store: { abertos: { local_a: velha, local_c: nova } } })
+  expect(Object.keys(marcas(loja)), 'antes: as duas marcas existem').toEqual(['local_a', 'local_c'])
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(painelAberto()).toBe(false)
+  expect(Object.keys(marcas(loja))).toEqual(['local_c'])
+})
+
+test('F45: store que falha não derruba a partida nem o /painel', async ($, on) => {
+  const { painelAberto } = engine(on, false, {}, { host: 'local_a', agora: AGORA, storeFalha: true })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(ABRIR)
+  expect(painelAberto()).toBe(true)
 })
 
 test('o botão da opção grava a resposta presa à versão lida', async ($, on) => {

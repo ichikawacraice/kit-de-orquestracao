@@ -12,6 +12,20 @@ import { papelDe as papelDeDesenho, anteriorSvg, cartaoSvg, desde, faixaSvg, fil
 
 const PANE = 'painel-sessoes'
 const TITULO = 'Sessões'
+// F45: a limpeza do app mata o processo do CLI e o pane vai junto. O store guarda quais sessões do app (`local_…`) deixaram o painel aberto.
+const ABERTOS = 'abertos'
+const VALIDADE_MARCA_MS = 7 * 86_400_000
+
+type Marcas = Record<string, string>
+
+export const marcar = (marcas: Marcas, id: string, quando: number): Marcas => ({ ...marcas, [id]: new Date(quando).toISOString() })
+export const desmarcar = (marcas: Marcas, id: string): Marcas => Object.fromEntries(Object.entries(marcas).filter(([k]) => k !== id))
+/** O engine só levanta `ui.close` de `person` e `unload` para o mod (o teste não consegue); `unload` é o processo indo embora, não o operador fechando. */
+export const fechamentoDesmarca = (origem: string): boolean => origem !== 'unload'
+export const vencidas = (marcas: Marcas, agora: number): string[] =>
+  Object.entries(marcas)
+    .filter(([, em]) => !(agora - Date.parse(em) <= VALIDADE_MARCA_MS))
+    .map(([id]) => id)
 const INTERVALO_MS = 60_000
 const PASTA = '.claude/orquestracao/painel'
 
@@ -593,6 +607,59 @@ async function ler($: EngineInterface): Promise<void> {
   }))
 }
 
+// A sessão do app (`local_…`) que roda este processo; o CLI no terminal não tem, e então o mod não grava nem reabre.
+async function sessaoDoApp($: EngineInterface): Promise<string | undefined> {
+  try {
+    return (await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')) || undefined
+  } catch (erro) {
+    await $.ui.log(`painel: sem o id da sessão do app: ${String(erro)}`)
+    return undefined
+  }
+}
+async function lerMarcas($: EngineInterface): Promise<Marcas> {
+  try {
+    const v = await $.store.get(ABERTOS)
+
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Marcas) : {}
+  } catch (erro) {
+    await $.ui.log(`painel: não li as marcas de painel aberto: ${String(erro)}`)
+    return {}
+  }
+}
+async function gravarMarcas($: EngineInterface, marcas: Marcas): Promise<void> {
+  try {
+    if (Object.keys(marcas).length === 0) await $.store.delete(ABERTOS)
+    else await $.store.set(ABERTOS, marcas)
+  } catch (erro) {
+    await $.ui.log(`painel: não gravei as marcas de painel aberto: ${String(erro)}`)
+  }
+}
+async function mudarMarca($: EngineInterface, quem: (marcas: Marcas, id: string, agora: number) => Marcas): Promise<void> {
+  const id = await sessaoDoApp($)
+  if (!id) return
+  const antes = await lerMarcas($)
+  const depois = quem(antes, id, await $.clock.now())
+  if (JSON.stringify(antes) !== JSON.stringify(depois)) await gravarMarcas($, depois)
+}
+
+// Processo novo (limpeza ou reinício do app) numa sessão que deixou o painel aberto: abre de novo, sem comando.
+async function reabrir($: EngineInterface): Promise<void> {
+  const id = await sessaoDoApp($)
+  if (!id) return
+  const marcas = await lerMarcas($)
+  const agora = await $.clock.now()
+  const vencido = vencidas(marcas, agora)
+  if (vencido.length > 0) await gravarMarcas($, vencido.reduce(desmarcar, marcas))
+  if (!marcas[id] || vencido.includes(id)) return
+  try {
+    const r = await $.ui.open({ id: PANE, title: TITULO, columns: 60 })
+    ligar($)
+    if (!r.isPlaced) await $.ui.log(`painel: reabri sem lugar: ${r.reason}`)
+  } catch (erro) {
+    await $.ui.log(`painel: não reabri: ${String(erro)}`)
+  }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
@@ -604,6 +671,7 @@ export const register: Register = on => {
     })
     // Global em toda sessão: só lê enquanto o pane está aberto, nunca de fundo.
     if ((await $.ui.panes()).some(p => p.id === PANE)) ligar($)
+    else await reabrir($)
 
     return r
   })
@@ -613,11 +681,13 @@ export const register: Register = on => {
     if (aberto) {
       await $.ui.close({ id: PANE })
       parar()
+      await mudarMarca($, (m, id) => desmarcar(m, id))
 
       return { text: 'Painel das sessões fechado.' }
     }
     const r = await $.ui.open({ id: PANE, title: TITULO, columns: 60 })
     ligar($)
+    await mudarMarca($, marcar)
 
     return {
       text: r.isPlaced ? 'Painel das sessões aberto.' : `Painel aberto, mas sem lugar agora: ${r.reason}`,
@@ -625,7 +695,10 @@ export const register: Register = on => {
   })
 
   on('ui.close', async ($, e, next) => {
-    if (e.id === PANE) parar()
+    if (e.id === PANE) {
+      parar()
+      if (fechamentoDesmarca(e.origin.kind)) await mudarMarca($, (m, id) => desmarcar(m, id))
+    }
 
     return next(e)
   })
