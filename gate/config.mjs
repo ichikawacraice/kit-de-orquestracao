@@ -125,14 +125,16 @@ export function lerKitJson(raiz) {
  * (ligadas por padrão); plugin desligado em `enabledPlugins` não roda nada, diga o `kit.json` o que disser.
  * Devolve `{ regras, origem }`, com `origem` em "kit.json", "plugin" ou "plugin-desligado".
  */
-export function regrasQueRodam(raiz, kit, { home = homedir() } = {}) {
-  if (pluginLigado("processos", raiz, home) === false) return { regras: [], origem: "plugin-desligado" };
+export function regrasQueRodam(raiz, kit, ambiente = {}) {
+  const home = ambiente.home ?? homedir();
+  const env = ambiente.env ?? (ambiente.home ? {} : process.env); // `home` explícito (testes) não herda o CLAUDE_CONFIG_DIR de quem roda
+  if (pluginLigado("processos", raiz, home, env) === false) return { regras: [], origem: "plugin-desligado" };
   if (Array.isArray(kit?.documentos?.conferir)) return { regras: kit.documentos.conferir, origem: "kit.json" };
-  const opcoes = opcoesDoPlugin("processos", home);
+  const opcoes = opcoesDoPlugin("processos", home, env);
   return { regras: REGRAS_DE_DOCUMENTO.filter((r) => booleanoDaOpcao(opcoes[opcaoDaRegra(r)])), origem: "plugin" };
 }
 
-/** A configuração efetiva (gate, árvore e guarda) para a raiz: padrão ← perfil ← kit.json. `ambiente.home` troca o `~` (testes). */
+/** A configuração efetiva (gate, árvore e guarda) para a raiz: padrão ← perfil ← kit.json. `ambiente.home` troca o `~` e `ambiente.env` o ambiente (testes). */
 export function carregarConfig(raiz, kit = lerKitJson(raiz), ambiente = {}) {
   const perfil = kit?.gate?.perfil ?? PADRAO.gate.perfil;
   if (perfil !== "comando" && perfil !== "pnpm-workspace") {

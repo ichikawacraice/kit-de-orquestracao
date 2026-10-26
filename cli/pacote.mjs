@@ -64,6 +64,11 @@ export function planejarModelos(destino, pastaDoFrontEscolhida) {
   return { novos, deixados };
 }
 
+/** Os documentos que o projeto já tem e que as regras de conferência olhariam. */
+export const docsDoProjeto = (destino) => ['docs/adr', 'docs/specs', 'docs/roadmap.md', 'docs/diario'].filter((rel) => existsSync(join(destino, rel)));
+/** O aviso de que as cinco regras de conferência, ligadas por padrão, podem reprovar o primeiro gate com os documentos que o projeto já tem. */
+export const avisoDasRegras = (docs) => `o projeto já tem ${docs.join(', ')} e o plugin processos liga as cinco regras de conferência de documento por padrão: elas podem reprovar o primeiro gate com os documentos de hoje. Para desligar para o time, escreva documentos.conferir no .claude/kit.json (lista vazia não confere nada); para ajustar só a sua conta, use o /plugin do terminal (opções do processos), que grava no seu ~/.claude/settings.json.`;
+
 /** Os caminhos (relativos ao projeto) dos modelos de documento e, com `--design`, de front: onde um `.kit-tmp` órfão pode ter ficado. */
 export const caminhosDosModelos = (pastaDoFrontEscolhida) => [
   ...arquivosDe(join(RAIZ_DO_KIT, 'modelos', 'docs')).map((f) => `docs/${f}`),
@@ -318,7 +323,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
   for (const m of modelosDeDoc.novos) lock.arquivos[m.arquivo] = sha256(m.novo);
   if (modelosDeDoc.deixados.length) avisosDoProjeto.push(`modelos de documento: já existe ${modelosDeDoc.deixados.join(', ')}; não copiei o modelo para lá nem mexi em nada dentro`);
   if (design) lock.design = design;
-  const docsExistentes = ['docs/adr', 'docs/specs', 'docs/roadmap.md', 'docs/diario'].filter((rel) => existsSync(join(destino, rel)));
+  const docsExistentes = docsDoProjeto(destino);
 
   // package.json
   const pk = lerJsonOuErro(destino, 'package.json', erros);

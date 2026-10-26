@@ -24,7 +24,7 @@
  * **Configuração: `.claude/kit.json` do projeto.** `design.visual` (globs do que
  * é visual; prefixo `!` exclui; sem ele, o padrão sai de `design.pasta`: telas por
  * extensão), `design.negadoAoDesigner` (globs; padrão = `design.visual` sem as exclusões) e `guarda.tronco` (de onde a branch sai;
- * padrão `origin/develop`, depois `origin/main`). Sem `design.visual` nem
+ * padrão `origin/main`, o mesmo do gate). Sem `design.visual` nem
  * `design.pasta` o hook sai 0 sem decisão: projeto sem design não é cobrado.
  *
  * **A foto é o CONTEÚDO do trabalho próprio, não um diff contra um HEAD.** O diff
@@ -61,7 +61,7 @@ export const OPCOES_DO_DESIGN = ["guarda", "cobrar_critica", "pasta_do_front", "
 /** Exclusões do padrão derivado de `design.pasta`: teste não é tela. */
 const TESTES_FORA = ["*.test.*", "*.spec.*", "__tests__/**"];
 
-const BASES_PADRAO = ["origin/develop", "origin/main"];
+const BASES_PADRAO = ["origin/main"];
 
 /** Muda quando a forma do estado muda: o estado de outra versão não cobra. */
 const VERSAO_DO_ESTADO = 1;
@@ -108,7 +108,7 @@ const lista = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" &
 function opcao(chave, { home, env }) {
   const doEnv = env[`CLAUDE_PLUGIN_OPTION_${chave.toUpperCase()}`];
   if (doEnv !== undefined && doEnv !== "") return doEnv;
-  return opcoesDoPlugin("design", home)[chave];
+  return opcoesDoPlugin("design", home, env)[chave];
 }
 
 /**
@@ -119,7 +119,7 @@ function opcao(chave, { home, env }) {
  */
 export function lerConfig(raiz, ambiente = {}) {
   const amb = { home: ambiente.home ?? homedir(), env: ambiente.env ?? process.env };
-  if (pluginLigado("design", raiz, amb.home) === false) return null;
+  if (pluginLigado("design", raiz, amb.home, amb.env) === false) return null;
   const caminho = join(raiz, ".claude", "kit.json");
   let kit = {};
   if (existsSync(caminho)) {

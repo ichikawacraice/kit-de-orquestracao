@@ -163,3 +163,68 @@ describe('as opções dos plugin.json × as chaves que o código lê', () => {
     for (const v of [true, false, 'false', 'true', '0', 'off', undefined, '', 'talvez']) for (const p of [true, false]) assert.equal(booleanoDoHook(v, p), booleanoDaOpcao(v, p));
   });
 });
+
+describe('V2 B2 — CLAUDE_CONFIG_DIR: a casa das opções é a pasta de configuração que a conta usa', () => {
+  const NA_PASTA = (pluginConfigs, enabledPlugins) => {
+    const dir = pasta();
+    gravar(dir, 'settings.json', { pluginConfigs, ...(enabledPlugins ? { enabledPlugins } : {}) });
+    return dir;
+  };
+  it('o gate lê pluginConfigs de CLAUDE_CONFIG_DIR quando o env o diz', () => {
+    const c = cenario({ enabled: LIGADO });
+    const dir = NA_PASTA({ 'processos@kit-de-orquestracao': { options: { conferir_links_relativos: false } } });
+    const sem = carregarConfig(c.raiz, undefined, { home: c.home }).documentos.conferir;
+    assert.ok(sem.includes('links-relativos'), 'controle: sem o env a opção não existe e a regra roda');
+    const com = carregarConfig(c.raiz, undefined, { home: c.home, env: { CLAUDE_CONFIG_DIR: dir } }).documentos.conferir;
+    assert.ok(!com.includes('links-relativos'));
+  });
+  it('enabledPlugins da pasta de configuração também vale', () => {
+    const c = cenario({});
+    const dir = NA_PASTA({}, { 'processos@kit-de-orquestracao': false });
+    assert.equal(pluginLigado('processos', c.raiz, c.home, {}), undefined); // controle
+    assert.equal(pluginLigado('processos', c.raiz, c.home, { CLAUDE_CONFIG_DIR: dir }), false);
+  });
+  it('a guarda de design lê da mesma pasta', () => {
+    const c = cenario({ kit: { design: { pasta: 'web' } }, enabled: { 'design@kit-de-orquestracao': true } });
+    const dir = NA_PASTA({ 'design@kit-de-orquestracao': { options: { guarda: false } } });
+    assert.ok(lerConfig(c.raiz, { home: c.home, env: {} }), 'controle: ligada');
+    assert.equal(lerConfig(c.raiz, { home: c.home, env: { CLAUDE_CONFIG_DIR: dir } }), null);
+  });
+});
+
+describe('V2 B1 — o tronco padrão é o mesmo no gate e na guarda de design', () => {
+  it('lerConfig da guarda parte de origin/main, igual ao guarda.tronco do gate', () => {
+    const c = cenario({ kit: { design: { pasta: 'web' } }, enabled: { 'design@kit-de-orquestracao': true } });
+    const bases = lerConfig(c.raiz, { home: c.home, env: {} }).bases;
+    assert.ok(bases.length > 0);
+    assert.equal(bases[0], carregarConfig(c.raiz, undefined, { home: c.home }).guarda.tronco);
+    assert.equal(bases[0], 'origin/main');
+    assert.ok(!bases.includes('origin/develop'), 'develop só entra quando o kit.json o declara em guarda.tronco');
+    const declarado = cenario({ kit: { design: { pasta: 'web' }, guarda: { tronco: 'origin/develop' } } });
+    assert.equal(lerConfig(declarado.raiz, { home: declarado.home, env: {} }).bases[0], 'origin/develop');
+  });
+});
+
+describe('V2 M2 — cada opção declarada tem um leitor no texto que a lê, não só na constante', () => {
+  const texto = (rel) => readFileSync(join(RAIZ_DO_KIT, rel), 'utf8');
+  const declaradas = (plugin) => Object.keys(JSON.parse(texto(`plugins/${plugin}/.claude-plugin/plugin.json`)).userConfig);
+  const textosDeDesign = ['plugins/design/agents/designer.md', 'plugins/design/agents/critico-de-ui.md', 'plugins/design/skills/revisao-de-arquitetura-de-ui/SKILL.md', 'plugins/design/skills/critica-de-ui/SKILL.md'].map(texto);
+
+  it('design: guarda, cobrar_critica e pasta_do_front são lidas pela guarda (opcao("<chave>")); largura e pasta_do_front, pelo texto das skills e dos agents', () => {
+    const guarda = texto('plugins/design/hooks/guarda-de-design.mjs');
+    assert.ok(declaradas('design').length === 4);
+    for (const chave of ['guarda', 'cobrar_critica', 'pasta_do_front']) assert.ok(guarda.includes(`opcao("${chave}"`), `a guarda não lê a opção ${chave}`);
+    for (const chave of ['largura', 'pasta_do_front']) assert.ok(textosDeDesign.some((t) => t.includes(`\${user_config.${chave}}`)), `nenhuma skill ou agent lê \${user_config.${chave}}`);
+    // todo ${user_config.X} que o texto usa é uma opção declarada
+    const usadas = new Set(textosDeDesign.flatMap((t) => [...t.matchAll(/\$\{user_config\.([a-z_]+)\}/g)].map((m) => m[1])));
+    assert.ok(usadas.size > 0);
+    for (const u of usadas) assert.ok(declaradas('design').includes(u), `${u} não é opção declarada`);
+  });
+
+  it('processos: o gate lê cada opção pelo nome que a regra gera (conferir_<regra>), e o nome está no config', () => {
+    const config = texto('gate/config.mjs');
+    assert.ok(config.includes('opcoes[opcaoDaRegra(r)]'), 'o gate não lê as opções por regra');
+    assert.ok(config.includes('`conferir_${regra.replace(/-/g, "_")}`'), 'a regra de nome mudou: confira o plugin.json');
+    assert.equal(declaradas('processos').length, REGRAS_DE_DOCUMENTO.length);
+  });
+});

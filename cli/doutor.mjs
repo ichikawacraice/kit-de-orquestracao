@@ -4,9 +4,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { avisoDeLaco, carregarConfig, opcaoDaRegra, REGRAS_DE_DOCUMENTO } from '../gate/config.mjs';
-import { booleanoDaOpcao, opcoesDoPlugin } from '../gate/opcoes-do-plugin.mjs';
+import { booleanoDaOpcao, opcoesDoPlugin, pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
@@ -22,7 +22,7 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   const instalados = lerJson(join(home, '.claude', 'plugins', 'installed_plugins.json'))?.plugins ?? {};
   if (instalados[PLUGIN]?.length) ok('plugin instalado na máquina: sim (orquestracao)');
   else falha(`plugin instalado na máquina: não (orquestracao) — rode \`claude plugin install ${PLUGIN}\``);
-  const configs = [join(home, '.claude', 'settings.json'), join(destino, '.claude', 'settings.json'), join(destino, '.claude', 'settings.local.json')].map(lerJson);
+  const configs = [join(pastaDeConfig(home), 'settings.json'), join(destino, '.claude', 'settings.json'), join(destino, '.claude', 'settings.local.json')].map(lerJson);
   const flags = configs.map((s) => s?.enabledPlugins?.[PLUGIN]).filter((v) => v !== undefined);
   if (flags.length && flags.every((v) => v === true) || (flags.includes(true) && !flags.includes(false))) ok('plugin habilitado no projeto: sim (orquestracao)');
   else falha('plugin habilitado no projeto: não (orquestracao) — `enabledPlugins` do settings.json precisa trazer true');
@@ -107,6 +107,9 @@ function processos(destino, home, configs, linhas) {
     else if (ligado[nome] === false) linhas.push(`info: plugin ${nome} desligado neste projeto`);
     else if (ligado[nome] === true && kj[secao[nome]] === undefined) linhas.push(`aviso: plugin ${nome} ligado, mas o .claude/kit.json está sem a seção ${secao[nome]}: valem os caminhos e os padrões do plugin; o \`kit atualizar\` não a acrescenta, copie-a do modelo do kit`);
   }
+  // plugin fora do enabledPlugins (projeto instalado antes dos processos): o gate confere as docs mesmo assim, pelo padrão
+  const docsDoProj = docsDoProjeto(destino);
+  if (ligado.processos === undefined && !Array.isArray(kj.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: plugin processos fora do enabledPlugins deste projeto, mas o gate confere as docs mesmo assim (documentos.conferir ausente = as cinco regras): ${avisoDasRegras(docsDoProj)}`);
   // design: a guarda só age com pasta do front (design.pasta, design.visual ou a opção pasta_do_front do plugin)
   const opDesign = opcoesDoPlugin('design', home);
   const pasta = typeof kj.design?.pasta === 'string' ? kj.design.pasta.replace(/\/+$/, '') : '';

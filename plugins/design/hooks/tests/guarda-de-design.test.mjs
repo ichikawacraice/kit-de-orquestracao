@@ -111,7 +111,7 @@ describe('lerConfig — o kit.json do projeto', () => {
     const c = lerConfig(pasta);
     assert.deepEqual(c.visual, ['src/**/*.tsx', '!src/**/*.test.tsx']);
     assert.deepEqual(c.negadoAoDesigner, ['src/**/*.tsx']);
-    assert.deepEqual(c.bases, ['origin/trunk', 'origin/develop', 'origin/main']);
+    assert.deepEqual(c.bases, ['origin/trunk', 'origin/main']);
   });
   it('negadoAoDesigner explícito vence o padrão', () => {
     kit({ design: { visual: ['src/**/*.tsx'], negadoAoDesigner: ['app/**'] } });

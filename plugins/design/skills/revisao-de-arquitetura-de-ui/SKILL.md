@@ -9,7 +9,7 @@ Quem desenha decide **o que a tela é** antes de decidir **como ela parece**. Es
 
 ## Onde estão os caminhos
 
-Leia `.claude/kit.json`, seção `design`: `fontes` (lista de arquivos; padrão `<pasta>/PRODUCT.md`, `<pasta>/ANATOMIA.md`, `<pasta>/DESIGN.md`, com `<pasta>` = `design.pasta`), `kit` (pasta dos componentes), `largura` (padrão 1280), `revisoes` (padrão `docs/design/revisoes`). Sem a seção `design`, pergunte ao operador onde estão antes de opinar; não invente caminho.
+Leia `.claude/kit.json`, seção `design`: `fontes` (lista de arquivos; padrão `<pasta>/PRODUCT.md`, `<pasta>/ANATOMIA.md`, `<pasta>/DESIGN.md`, com `<pasta>` = `design.pasta`), `kit` (pasta dos componentes), `revisoes` (padrão `docs/design/revisoes`). Fora dessas chaves: a largura de referência é `design.largura` do kit.json; sem a chave vale a opção `largura` do plugin, hoje ${user_config.largura} px (se este texto chegar sem o número, use 1280); a pasta do front é `design.pasta` do kit.json; sem a chave vale a opção `pasta_do_front` do plugin, hoje `${user_config.pasta_do_front}` (vazio = nenhuma; se este texto chegar sem expandir, trate como vazio). Sem a seção `design` nem a pasta, pergunte ao operador onde estão antes de opinar; não invente caminho.
 
 ## As fontes, nesta ordem (leia antes de opinar)
 

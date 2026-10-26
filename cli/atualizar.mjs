@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffTexto } from './diff.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { RAIZ_DO_KIT, arquivosDoGate, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
+import { RAIZ_DO_KIT, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -56,6 +56,11 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
     }
   }
   if (claude !== claudeAtual) mudancas.push({ arquivo: 'CLAUDE.md', antigo: claudeAtual, novo: claude });
+
+  // o projeto instalado antes dos processos passa a ter as cinco regras ligadas pelo padrão do plugin: diz isso, uma vez por atualização
+  const kitJson = (() => { try { return JSON.parse(semBom(lerTexto(destino, '.claude/kit.json') ?? '{}')); } catch { return {}; } })();
+  const docsDoProj = docsDoProjeto(destino);
+  if (!Array.isArray(kitJson.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: ${avisoDasRegras(docsDoProj)}`);
 
   if (trocarTest) trocarOTest({ destino, lock, mudancas, linhas, conflito });
 

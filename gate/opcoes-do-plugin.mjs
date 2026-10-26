@@ -25,9 +25,12 @@ export function lerSettings(caminho) {
   }
 }
 
+/** A pasta de configuração da conta: `CLAUDE_CONFIG_DIR` quando o env o diz, senão `<home>/.claude`. */
+export const pastaDeConfig = (home = homedir(), env = process.env) => (env?.CLAUDE_CONFIG_DIR ? env.CLAUDE_CONFIG_DIR : join(home, ".claude"));
+
 /** As opções gravadas para o plugin do kit (`{}` sem nada gravado). */
-export function opcoesDoPlugin(plugin, home = homedir()) {
-  const opcoes = lerSettings(join(home, ".claude", "settings.json"))?.pluginConfigs?.[`${plugin}@${MARKETPLACE_DO_KIT}`]?.options;
+export function opcoesDoPlugin(plugin, home = homedir(), env = process.env) {
+  const opcoes = lerSettings(join(pastaDeConfig(home, env), "settings.json"))?.pluginConfigs?.[`${plugin}@${MARKETPLACE_DO_KIT}`]?.options;
   return objeto(opcoes) ? opcoes : {};
 }
 
@@ -40,11 +43,11 @@ export function booleanoDaOpcao(valor, padrao = true) {
 
 /**
  * O que `enabledPlugins` diz do plugin: `true`, `false` ou `undefined` (ninguém diz). Vale a camada mais próxima:
- * `.claude/settings.local.json` > `.claude/settings.json` do projeto > `~/.claude/settings.json`.
+ * `.claude/settings.local.json` > `.claude/settings.json` do projeto > `settings.json` da pasta de configuração da conta (`~/.claude`, ou `CLAUDE_CONFIG_DIR`).
  */
-export function pluginLigado(plugin, raiz, home = homedir()) {
+export function pluginLigado(plugin, raiz, home = homedir(), env = process.env) {
   const id = `${plugin}@${MARKETPLACE_DO_KIT}`;
-  for (const caminho of [join(raiz, ".claude", "settings.local.json"), join(raiz, ".claude", "settings.json"), join(home, ".claude", "settings.json")]) {
+  for (const caminho of [join(raiz, ".claude", "settings.local.json"), join(raiz, ".claude", "settings.json"), join(pastaDeConfig(home, env), "settings.json")]) {
     const v = lerSettings(caminho)?.enabledPlugins?.[id];
     if (typeof v === "boolean") return v;
   }

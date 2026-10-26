@@ -286,3 +286,51 @@ describe('o README do gate diz a regra nova do documentos.conferir', () => {
     assert.match(t, /scripts\/kit\/as-docs-concordam\.mjs/);
   });
 });
+
+describe('V2 M1 — projeto instalado antes dos processos: o atualizar e o doutor avisam das regras ligadas', () => {
+  /** Um projeto "antigo": adotado, depois sem o que o K14 pôs (plugins, seções do kit.json), com docs/adr fora do índice. */
+  function projetoAntigo() {
+    const d = projeto();
+    escrever(d, 'CLAUDE.md', '# meu\n');
+    escrever(d, 'package.json', '{"name":"x","scripts":{"test":"node --test"}}\n');
+    escrever(d, 'docs/adr/0001-x.md', '# 1\n');
+    assert.equal(kit(d, 'adotar').status, 0);
+    const s = json(d, '.claude/settings.json');
+    delete s.enabledPlugins[`processos@${MKT}`]; delete s.enabledPlugins[`design@${MKT}`];
+    escrever(d, '.claude/settings.json', JSON.stringify(s));
+    const k = json(d, '.claude/kit.json'); delete k.documentos; delete k.design;
+    escrever(d, '.claude/kit.json', JSON.stringify(k));
+    return d;
+  }
+
+  it('o atualizar imprime o mesmo aviso do adotar quando documentos.conferir está ausente e há docs', () => {
+    const d = projetoAntigo();
+    const r = kit(d, 'atualizar');
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /podem reprovar o primeiro gate/);
+    assert.match(r.stdout, /docs\/adr/);
+    assert.match(r.stdout, /documentos\.conferir/);
+    assert.match(r.stdout, /\/plugin do terminal/);
+  });
+
+  it('com documentos.conferir no kit.json, ou sem docs, o atualizar não avisa', () => {
+    const com = projetoAntigo();
+    escrever(com, '.claude/kit.json', JSON.stringify({ ...json(com, '.claude/kit.json'), documentos: { conferir: [] } }));
+    assert.doesNotMatch(kit(com, 'atualizar').stdout, /podem reprovar/);
+    const vazio = projeto();
+    escrever(vazio, 'CLAUDE.md', '# meu\n');
+    assert.equal(kit(vazio, 'adotar').status, 0);
+    const k = json(vazio, '.claude/kit.json'); delete k.documentos; escrever(vazio, '.claude/kit.json', JSON.stringify(k));
+    rmSync(join(vazio, 'docs'), { recursive: true, force: true });
+    assert.doesNotMatch(kit(vazio, 'atualizar').stdout, /podem reprovar/);
+  });
+
+  it('o doutor avisa com o plugin fora do enabledPlugins (undefined), e só quando há docs e conferir ausente', () => {
+    const d = projetoAntigo();
+    const r = kit(d, 'doutor').stdout;
+    assert.match(r, /processos.*fora do enabledPlugins/);
+    assert.match(r, /docs\/adr/);
+    const k = json(d, '.claude/kit.json'); k.documentos = { conferir: [] }; escrever(d, '.claude/kit.json', JSON.stringify(k));
+    assert.doesNotMatch(kit(d, 'doutor').stdout, /fora do enabledPlugins/);
+  });
+});
