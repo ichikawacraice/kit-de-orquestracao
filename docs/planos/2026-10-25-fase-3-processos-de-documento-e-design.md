@@ -27,16 +27,16 @@ Pedido do operador: *"lá no Izanagi temos skill de spec, de criação de docume
 
 ## 2. O desenho (resumo do ADR 0002)
 
-- **Dois plugins novos no marketplace**, opcionais por projeto: `processos` (spec-driven, revisar-diff com o workflow, auditoria-de-clique) e `design` (agents `designer` e `critico-de-ui`, skills `revisao-de-arquitetura-de-ui` e `critica-de-ui`, hook `guarda-de-design`). O projeto liga cada um em `enabledPlugins` do seu `.claude/settings.json`; o pool já filtra plugin por worktree.
+- **Dois plugins novos no marketplace**, ligados por padrão em todo projeto (Q259) e desligáveis no próprio plugin: `processos` (spec-driven, revisar-diff com o workflow, auditoria-de-clique) e `design` (agents `designer` e `critico-de-ui`, skills `revisao-de-arquitetura-de-ui` e `critica-de-ui`, hook `guarda-de-design`). O projeto liga cada um em `enabledPlugins` do seu `.claude/settings.json`; o pool já filtra plugin por worktree.
 - **Os caminhos saem do `.claude/kit.json`**, seções `documentos` e `design`; sem a seção, a skill e o hook não agem (o hook sai 0 sem decisão).
-- **O CLI copia os modelos de doc só onde não existem**, registra no lock e nunca sobrescreve; ganha `--processos completo|leve|nenhum` e `--design <pasta do front>`.
-- **O Impeccable é recomendado, não dependência:** ligado no settings do projeto só com `--design` e a resposta da Q260; o `kit doutor` diz quando o projeto tem design e não tem o Impeccable. As skills do kit funcionam sem ele (o detector é ajuda do crítico, não requisito).
+- **O CLI liga tudo em `iniciar` e em `adotar`** (Q259): copia os modelos de doc só onde não existem, registra no lock e nunca sobrescreve; ganha `--design <pasta do front>`. Sem nível no CLI: o que se desliga, desliga-se nas opções do plugin, editáveis na aba de plugins do app (Q260).
+- **O Impeccable é recomendado, não dependência:** ligado no settings do projeto só com `--design` (Q260); o `kit doutor` diz quando o projeto tem design e não tem o Impeccable. As skills do kit funcionam sem ele (o detector é ajuda do crítico, não requisito).
 
 ## 3. Decisões
 
-**Ao operador (Q-ID, no painel):**
-- **Q259 — o nível de processo de um projeto novo.** Ver a pergunta no painel. Recomendação: `iniciar` nasce `completo` (spec com ciclo de vida, roadmap e diário, conferidos pelo gate); `adotar` nasce `leve` (ADR, planos, pesquisa datada) para não impor estrutura a quem já tem a sua; `--processos` troca nos dois.
-- **Q260 — o Impeccable declarado no projeto.** Ver a pergunta no painel. Recomendação: com `--design`, o CLI declara o marketplace e o plugin no `.claude/settings.json` do projeto (como o ADR 0375 do Izanagi), com as envs de corte de telemetria escritas no bloco `kit:design`; sem `--design`, nada.
+**Respondidas pelo operador (2026-10-25):**
+- **Q259 — o nível de processo.** Resposta: nasce com tudo ativo, em projeto novo e no que já existe; o plugin leva todas as skills necessárias e a pessoa desliga o que não quer no próprio plugin. (A recomendação era `iniciar` completo e `adotar` leve, com `--processos`; ficou rejeitada.)
+- **Q260 — o Impeccable declarado no projeto.** Resposta: sim, segue a recomendação (com `--design`, o CLI declara o marketplace e o plugin no `.claude/settings.json` do projeto, com as envs de corte de telemetria no bloco `kit:design`; sem `--design`, nada); e tudo o que der para configurar na aba de plugins do app fica configurável por lá também.
 
 **Assumidas, a confirmar** (reversíveis, seguem com a recomendação):
 - **A1.** Dois plugins (`processos`, `design`) em vez de engordar o `orquestracao`: é o que deixa cada um opcional por projeto e filtrável por worktree no pool.
@@ -45,6 +45,7 @@ Pedido do operador: *"lá no Izanagi temos skill de spec, de criação de docume
 - **A4.** O UI/UX Pro Max e catálogos de estilo de terceiros não entram (o Izanagi já os recusou por medida).
 - **A5.** O Izanagi continua com as cópias dele até um item próprio (fora desta fase): os nomes do plugin têm prefixo (`design:critica-de-ui`), então as duas não colidem.
 - **A6.** O plugin `design` fica ligado para D **e** E no pool (o `Stop` que cobra a crítica tem de rodar em quem edita a tela); a skill de design na E continua vigiada pelo `skill-do-papel` (aviso, não recusa).
+- **A7.** Precedência entre opção do plugin e `kit.json`: o que se desliga no plugin fica desligado mesmo que o `kit.json` ligue (desligar pela aba do app tem de ter efeito); caminho preenchido no plugin vence o padrão; opção vazia deixa valer o `kit.json`, que é o que o projeto versiona.
 
 ## 4. Regras para toda fatia
 - As do [`CLAUDE.md`](../../CLAUDE.md) deste repo: Node ≥ 20, ESM, só módulos nativos; `node:test`; `process.exitCode`; testes com `HOME` e pastas em diretório temporário; commits conventional em PT-BR sem ADR no título.
@@ -83,12 +84,14 @@ Pedido do operador: *"lá no Izanagi temos skill de spec, de criação de docume
 - **Pronto:** testes da guarda verdes; um teste mutado por caso fica vermelho na linha certa; um projeto de rascunho em pasta temporária com `design` no `kit.json` e um `.tsx` editado tem o `Stop` recusado uma vez e o segundo liberado (saída do hook colada).
 - **Fora de escopo:** desenhar qualquer tela; o `shadcn add` da decisão 5 do ADR 0378 do Izanagi (é do stack de lá; entra no bloco `kit:design` só como "peça nova parte do registro oficial do kit de componentes que o projeto usa").
 
-### K14 — CLI: `--processos`, `--design`, `doutor` · **Robusta**
-- **Depende de:** Q259 e Q260 respondidas (os padrões); K10–K13 mergeadas.
-- **Arquivos:** `cli/pacote.mjs`, `cli/iniciar.mjs`, `cli/adotar.mjs`, `cli/doutor.mjs`, `cli/remover.mjs`, `cli/atualizar.mjs`, `modelos/kit.json` (seções `documentos` e `design` por nível), `test/processos.test.mjs`.
-- **Passos:** 1. testes antes, em pasta temporária com `git init`: `iniciar --processos completo` cria os modelos de doc ausentes, liga `processos@kit-de-orquestracao` em `enabledPlugins` do projeto e põe `documentos.conferir` com as cinco regras; `leve` cria só `adr`, `planos`, `research` e nenhuma regra além de `indice-de-adr` e `links-relativos`; `nenhum` não cria doc; `--design apps/web` cria os modelos de front **só onde não existem**, liga `design@…` e (pela Q260) o Impeccable; `adotar` com `docs/adr/` já existente não toca nenhum byte dele (comparar hash). 2. lock registra cada arquivo criado; `remover` apaga só o que o hash diz intacto; `atualizar` troca bloco `kit:documentos`/`kit:design` como os outros. 3. `doutor`: acusa `design` no `kit.json` sem `PRODUCT.md`/`DESIGN.md`, Impeccable recomendado e não ligado, plugin ligado sem a seção do `kit.json` e vice-versa.
-- **Pronto:** `npm test` verde; os três níveis e o `--design` cobertos, cada um com um caso mutado vermelho; a saída real de `kit iniciar --processos completo --design web` numa pasta temporária colada.
-- **Fora de escopo:** perguntar interativamente (o CLI segue sem prompt; flags e padrões).
+### K14 — CLI liga tudo; opções na aba de plugins; `doutor` · **Robusta**
+- **Depende de:** K10–K13 e K15 mergeadas. Q259 e Q260 respondidas (2026-10-25): tudo nasce ativo, em `iniciar` e em `adotar`; desligar e ajustar mora no plugin, na aba de plugins do app; Impeccable só com `--design`.
+- **Medir antes** (não documentado o bastante; colar a saída): (a) como o plugin declara opção que o app mostra na aba de plugins (esperado: `userConfig` no `plugin.json`); quais tipos aparecem (booleano, texto, lista) e se o app desktop as edita ou só o `/plugin` do terminal; (b) como o hook e a skill leem o valor (esperado: env `CLAUDE_PLUGIN_OPTION_<CHAVE>` no hook; `${user_config.<chave>}` no texto da skill) e se a troca vale sem reiniciar a sessão; (c) se a opção é por usuário ou por projeto (onde o app grava). Se (a) não existir ou o app não editar, a K14 para e volta à P2 com a medição: a resposta da Q260 depende disso.
+- **Arquivos:** `cli/pacote.mjs`, `cli/iniciar.mjs`, `cli/adotar.mjs`, `cli/doutor.mjs`, `cli/remover.mjs`, `cli/atualizar.mjs`, `modelos/kit.json` (seções `documentos` e `design`), `plugins/processos/.claude-plugin/plugin.json` e `plugins/design/.claude-plugin/plugin.json` (opções + `version`), `gate/config.mjs` e `plugins/design/hooks/guarda-de-design.mjs` (leem a opção do plugin), `test/processos.test.mjs`, `test/opcoes-do-plugin.test.mjs`.
+- **Opções do plugin** (nomes fixos; booleano ligado por padrão, a menos que dito): `processos` — uma por regra de conferência (`conferir_status_da_spec`, `conferir_indice_de_adr`, `conferir_linha_do_roadmap`, `conferir_links_relativos`, `conferir_tamanho_do_diario`); `design` — `guarda`, `cobrar_critica`, `pasta_do_front` (texto, vazio = o do `kit.json`), `largura` (número, vazio = 1280). Precedência (A7): opção desligada no plugin vence o `kit.json`; caminho preenchido no plugin vence o padrão; sem opção preenchida vale o `kit.json`.
+- **Passos:** 1. testes antes, em pasta temporária com `git init`: `iniciar` cria os modelos de doc ausentes, liga `processos@kit-de-orquestracao` e `design@kit-de-orquestracao` em `enabledPlugins` do projeto e põe `documentos.conferir` com as cinco regras; `adotar` faz o mesmo e, com `docs/adr/` já existente, não toca nenhum byte dele (comparar hash) e avisa na saída que as regras ligadas podem reprovar o primeiro gate; `--design apps/web` cria os modelos de front **só onde não existem**, grava `design.pasta` e (Q260) declara o marketplace e o plugin do Impeccable com as envs do bloco `kit:design`; sem `--design`, o Impeccable não entra e a seção `design` fica sem pasta. 2. as opções no `plugin.json` dos dois plugins, com teste que compara a lista de opções × as chaves que o `gate/config.mjs` e a guarda leem (as duas devem concordar); teste que, com a env da opção desligada, a regra não roda mesmo ligada no `kit.json` (e prova antes que, ligada, rodaria). 3. lock registra cada arquivo criado; `remover` apaga só o que o hash diz intacto e desliga os dois plugins do `enabledPlugins`; `atualizar` troca bloco `kit:documentos`/`kit:design` como os outros. 4. `doutor`: acusa `design` sem pasta (guarda inerte), pasta sem `PRODUCT.md`/`DESIGN.md`, Impeccable recomendado e não ligado, plugin desligado com a seção do `kit.json` presente e vice-versa, e lista as opções desligadas no plugin.
+- **Pronto:** `npm test` verde; `iniciar`, `adotar` e `--design` cobertos, cada um com um caso mutado vermelho; a medição (a)/(b)/(c) colada; a saída real de `kit iniciar --design web` e de `kit adotar` num projeto com `docs/adr/` próprio, em pasta temporária, colada; uma opção desligada pela aba de plugins do app (print ou saída do settings que o app gravou) e o gate seguinte sem a regra.
+- **Fora de escopo:** perguntar interativamente (o CLI segue sem prompt); flags de nível (`--processos`) — rejeitadas na Q259.
 
 ### K15 — pool: os papéis citam o que o kit entrega · Média
 - **Arquivos:** `plugins/orquestracao/pool/papeis/{design,planejadora,executora,validadora,orquestradora}.md`, `plugins/orquestracao/pool/skills-por-papel.{json,md}`, `plugins/orquestracao/hooks/skill-do-papel.mjs` (se o nome com prefixo pedir apelido), testes do mapa.
@@ -97,12 +100,12 @@ Pedido do operador: *"lá no Izanagi temos skill de spec, de criação de docume
 - **Fora de escopo:** reescrever o protocolo do pool.
 
 ### K16 — prova num projeto do zero · Média (junto com a K9 da fase 2, se ela ainda não rodou)
-- **Passos:** projeto vazio em `~/Developer/Projects/<rascunho>` (o operador escolhe o nome; nada no Izanagi), `kit iniciar --processos completo --design web`, abrir uma sessão nele e pedir: uma SPEC nova, um ADR, uma tela trivial. Medir: a skill `processos:spec-driven` carrega; o gate reprova uma spec com status inventado; o `Stop` cobra a crítica da tela; com o Impeccable ligado, `/impeccable critique` roda.
+- **Passos:** projeto vazio em `~/Developer/Projects/<rascunho>` (o operador escolhe o nome; nada no Izanagi), `kit iniciar --design web`, abrir uma sessão nele e pedir: uma SPEC nova, um ADR, uma tela trivial. Medir: a skill `processos:spec-driven` carrega; o gate reprova uma spec com status inventado; o `Stop` cobra a crítica da tela; com o Impeccable ligado, `/impeccable critique` roda.
 - **Pronto:** relatório com as saídas reais de cada medição.
 - **Fora de escopo:** migrar o Izanagi para os plugins (item próprio, PR no Izanagi, com a orquestradora de lá).
 
 ## 6. Ordem e paralelismo
-K10 → (K11 ∥ K12 ∥ K13) → K15 → K14 → K16. K11, K12 e K13 não tocam os mesmos arquivos (só o `marketplace.json`, que K11 e K13 editam em linhas diferentes; quem mergeia por último rebaseia). K14 espera Q259 e Q260. Teto de E do pool: no máximo duas ao mesmo tempo.
+K10 → (K11 ∥ K12 ∥ K13) → K15 → K14 → K16. K11, K12 e K13 não tocam os mesmos arquivos (só o `marketplace.json`, que K11 e K13 editam em linhas diferentes; quem mergeia por último rebaseia). K14 entra depois da K15 (Q259 e Q260 já respondidas) e começa pela medição das opções de plugin. Teto de E do pool: no máximo duas ao mesmo tempo.
 
 ## 7. Fora de escopo da fase
 - Gravar qualquer coisa no Izanagi, inclusive trocar as cópias de lá pelas do plugin (A5).
