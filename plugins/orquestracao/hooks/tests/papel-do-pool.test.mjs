@@ -224,6 +224,12 @@ caso('D8.1: modo ausente ligado → a orquestradora não arquiva fora do turno d
   ok(/ausente/.test(r.permissionDecisionReason), `motivo sem "ausente": ${r.permissionDecisionReason}`);
   passa(arquiva('ORQ', 'local_E1', humano()), 'bandeira + turno humano passa');
 });
+caso('D8.1b: bandeira {ligado:false, desde} vale desligada → a orquestradora arquiva livre em turno peer', () => {
+  bandeira(Date.now() - 3600_000);
+  nega(arquiva('ORQ', 'local_E1', depeer()), 'contraste: bandeira ligada nega');
+  writeFileSync(join(BASE_ORQ(), 'operador-ausente.json'), JSON.stringify({ ligado: false, desligadoEm: new Date().toISOString(), por: 'painel', desde: new Date(Date.now() - 3600_000).toISOString() }));
+  passa(arquiva('ORQ', 'local_E1', depeer()), 'ligado:false passa');
+});
 caso('D8.2: alvo no com/fez/dono de item vivo → deny citando o item; o mesmo item em feito passa', () => {
   for (const [campo, data] of [['com', { com: [{ localId: 'local_E3', apelido: 'E3' }] }], ['fez', { fez: [{ localId: 'local_E3', apelido: 'E3' }] }], ['dono', { donoLocalId: 'local_E3' }]]) {
     fila('F5', { etapa: 'planejamento', ...data });
