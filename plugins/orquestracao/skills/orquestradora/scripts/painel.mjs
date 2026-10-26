@@ -18,6 +18,7 @@
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
 //   (item que vira feito/descartado arquiva os próprios handoffs e roda a limpeza; reaberto, eles voltam. Pasta: PAINEL_HANDOFFS_DIR, senão PAINEL_DIR/../pool/handoffs, senão ~/.claude/orquestracao/pool/handoffs)
 //   painel.mjs list fila vencidos [--min N]   itens vivos com dono ou `com`, sem `espera` nem `trava`, parados há mais de N min (padrão 30 ou PAINEL_PRAZO_MIN)
+//   painel.mjs list fila esperando   itens vivos esperando o papel da etapa (D, E ou V) sem ninguém dele no item; todo documento de `list fila` sai com `esperando` ({papel, desde, minutos} ou null) FORA de `data`, calculado na hora e nunca gravado
 //   (`com` e `fez` só mudam por `com add|del [--fez]`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
 //   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
@@ -37,6 +38,7 @@ import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { esperandoPapel } from '../../../hooks/esperando-papel.mjs';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
@@ -747,7 +749,7 @@ function main(argv) {
         if (flag) throw new Error(`list fila: flag desconhecida "${flag}"`);
         const filtro = resto[1];
         // os `estado` do contrato antigo ainda filtram (documento sem `etapa`); fora desta lista, o filtro é erro de digitação
-        const validos = ['em-andamento', 'vencidos', ...ETAPAS, 'aberto', 'bloqueado', 'concluido', 'concluida', 'em-planejamento', 'em-execucao', 'em-validacao'];
+        const validos = ['em-andamento', 'vencidos', 'esperando', ...ETAPAS, 'aberto', 'bloqueado', 'concluido', 'concluida', 'em-planejamento', 'em-execucao', 'em-validacao'];
         if (filtro !== undefined && !validos.includes(filtro)) {
           throw new Error(`list fila: filtro desconhecido "${filtro}" (válidos: ${[...new Set(validos)].join(' · ')})`);
         }
@@ -758,9 +760,11 @@ function main(argv) {
         ? readdirSync(dir)
             .filter((n) => n.endsWith('.json'))
             .map((n) => JSON.parse(readFileSync(join(dir, n), 'utf8')))
-            .filter((d) => (prazoMin !== null ? ehVencido(d.data, prazoMin * 60_000, Date.now()) : !b || filtraPorEstado(a, d.data, b)))
+            .filter((d) => (prazoMin !== null ? ehVencido(d.data, prazoMin * 60_000, Date.now()) : !b || (a === 'fila' && b === 'esperando') || filtraPorEstado(a, d.data, b)))
             .filter((d) => !projeto || String(d.data?.projeto ?? '').toLowerCase() === projeto)
             .filter((d) => !sessao || d.data?.sessaoId === sessao)
+            .map((d) => (a === 'fila' ? { ...d, esperando: esperandoPapel(d.data, Date.now()) } : d))
+            .filter((d) => !(a === 'fila' && b === 'esperando') || d.esperando)
         : [];
       break;
     }

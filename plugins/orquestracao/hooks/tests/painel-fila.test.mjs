@@ -908,9 +908,28 @@ caso('F32 B9: vencidos vale em qualquer posição; --min sem vencidos e flag des
   recusa(painel('list', 'fila', '--min', '1'), '--min só vale com', '--min sem vencidos');
   recusa(painel('list', 'fila', '--bobagem'), 'flag desconhecida', 'flag');
   for (const f of ['vencido', 'xyz']) recusa(painel('list', 'fila', f), 'filtro desconhecido', `filtro ${f}`);
-  recusa(painel('list', 'fila', 'xyz'), 'válidos: em-andamento · vencidos · planejamento', 'a lista dos válidos');
-  for (const f of ['em-andamento', 'vencidos', 'execucao', 'feito', 'aberto', 'concluido']) igual(painel('list', 'fila', f).exit, 0, `filtro ${f} vale`);
+  recusa(painel('list', 'fila', 'xyz'), 'válidos: em-andamento · vencidos · esperando · planejamento', 'a lista dos válidos');
+  for (const f of ['em-andamento', 'vencidos', 'esperando', 'execucao', 'feito', 'aberto', 'concluido']) igual(painel('list', 'fila', f).exit, 0, `filtro ${f} vale`);
   igual(painel('list', 'sessoes', 'xyz').exit, 0, 'o filtro livre das outras coleções não muda');
+});
+
+// F58: `esperando` na `list fila`, calculado fora de `data` e nunca gravado.
+caso('F58: list fila traz `esperando` fora de data (null quando não espera) e não grava nada; o filtro `esperando` separa os que esperam', () => {
+  semear();
+  porCom('F1', { ...dono, historico: [{ em: agoraMenos(30), etapa: 'execucao', dono: 'P1' }] });
+  porCom('F2', { ...dono, historico: [{ em: agoraMenos(30), etapa: 'execucao', dono: 'P1' }] });
+  comAdd('F2', LB, 'E1', 'executa');
+  const antes = readFileSync(join(base, 'painel', 'fila', 'F1.json'), 'utf8');
+  const todos = json(painel('list', 'fila'));
+  const f1 = todos.find((d) => d.id === 'F1'); const f2 = todos.find((d) => d.id === 'F2');
+  ok(f1 && f2, 'os dois itens saem na lista');
+  igual(f1.esperando?.papel, 'E', 'F1 espera E');
+  ok(f1.esperando.minutos >= 29, `minutos de F1 (${f1.esperando.minutos})`);
+  igual(f2.esperando, null, 'F2 tem E: esperando é null');
+  igual('esperando' in f1.data, false, 'esperando fora de data');
+  igual(readFileSync(join(base, 'painel', 'fila', 'F1.json'), 'utf8'), antes, 'o arquivo não muda');
+  igual(ids(painel('list', 'fila', 'esperando')), 'F1', 'filtro esperando');
+  igual(painel('get', 'fila', 'F1').out.includes('esperando"'), false, 'get não grava nem mostra o calculado');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
