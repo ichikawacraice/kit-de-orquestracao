@@ -24,6 +24,10 @@ try {
   if (typeof m.vaiSoltar === 'function') vaiSoltar = m.vaiSoltar;
 } catch { /* sem a soltura */ }
 
+// A regra "esperando papel" é de um módulo puro; se faltar no cache, o hook segue sem a cobrança nova.
+let esperandoPapel = () => null;
+try { ({ esperandoPapel } = await import('./esperando-papel.mjs')); } catch { /* sem a cobrança de espera */ }
+
 let avisoDeInjecao = () => '';
 try { ({ avisoDeInjecao } = await import('./varredura-entre-sessoes.mjs')); } catch { /* sem aviso */ }
 
@@ -31,6 +35,9 @@ const FILA_DIR = process.env.FILA_DIR || join(homedir(), '.claude', 'orquestraca
 const SESSOES_DIR = process.env.FILA_APP_SESSOES_DIR || join(homedir(), 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
 const LOG = process.env.FILA_LOG || join(homedir(), '.claude', 'orquestracao', 'fila-hook.log');
 const PROTOCOLO = '~/.claude/orquestracao/pool/protocolo.md#fila-do-pool';
+const PROTOCOLO_ESPERA = '~/.claude/orquestracao/pool/protocolo.md#esperando-papel';
+const NOME_DA_ETAPA = { D: 'design', E: 'execução', V: 'validação' };
+const PROXIMA_ETAPA = { D: 'execucao', E: 'validacao com uma V no com', V: 'merge' };
 
 function registrar(sessionId, localId, desfecho, detalhe = '') {
   try {
@@ -43,7 +50,7 @@ function registrar(sessionId, localId, desfecho, detalhe = '') {
 const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'feito', 'descartado'];
 const ETAPAS_FINAIS = ['feito', 'descartado'];
 
-// Itens da fila que têm dono e estão vivos: [{ id, dono, atualizadoEm, etapa }].
+// Itens da fila que têm dono e estão vivos: [{ id, dono, atualizadoEm, etapa, data }].
 function itensComDono() {
   if (!existsSync(FILA_DIR)) return [];
   const itens = [];
@@ -54,7 +61,7 @@ function itensComDono() {
       const d = doc?.data;
       const vivo = ETAPAS.includes(d?.etapa) ? !ETAPAS_FINAIS.includes(d.etapa) : d?.estado === 'em-andamento';
       if (vivo && d?.donoLocalId) {
-        itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), dono: d.donoLocalId, atualizadoEm: d.atualizadoEm, etapa: ETAPAS.includes(d.etapa) ? d.etapa : null });
+        itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), dono: d.donoLocalId, atualizadoEm: d.atualizadoEm, etapa: ETAPAS.includes(d.etapa) ? d.etapa : null, data: d });
       }
     } catch { /* arquivo parcial ou ilegível: ignora este item */ }
   }
@@ -108,6 +115,36 @@ function inicioDoTurno(transcriptPath) {
   return null;
 }
 
+// F58 (D4): a dona de item esperando o papel da etapa não termina o turno sem ter, DEPOIS do `desde` da espera, rodado
+// `painel com add <F>` ou mandado mensagem (SendMessage / send_message) que cite o `F<n>`. Procura no transcript inteiro.
+function despachos(transcriptPath) {
+  const achados = [];
+  for (const l of readFileSync(transcriptPath, 'utf8').split('\n')) {
+    if (!l) continue;
+    let e;
+    try { e = JSON.parse(l); } catch { continue; }
+    const c = e.type === 'assistant' && Array.isArray(e.message?.content) ? e.message.content : [];
+    const t = Date.parse(e.timestamp);
+    if (Number.isNaN(t)) continue;
+    for (const b of c) {
+      if (b?.type !== 'tool_use') continue;
+      if (b.name === 'Bash') achados.push({ t, tipo: 'com', texto: String(b.input?.command ?? '') });
+      else if (/(^|__)(SendMessage|send_message)$/.test(b.name)) achados.push({ t, tipo: 'msg', texto: JSON.stringify(b.input ?? {}) });
+    }
+  }
+  return achados;
+}
+function semDespacho(meus, transcriptPath) {
+  const esperando = meus.map((i) => ({ i, e: esperandoPapel(i.data, Date.now()) })).filter((x) => x.e);
+  if (esperando.length === 0) return [];
+  const feitos = despachos(transcriptPath);
+  return esperando.filter(({ i, e }) => {
+    const desde = Date.parse(e.desde);
+    const cita = new RegExp(`\\b${i.id}\\b`);
+    return !feitos.some((f) => f.t > desde && cita.test(f.texto) && (f.tipo === 'msg' || new RegExp(`\\bcom\\s+add\\s+${i.id}\\b`).test(f.texto)));
+  }).map(({ i, e }) => ({ id: i.id, papel: e.papel, entregue: e.entregue }));
+}
+
 let sessaoAtual = '';
 
 function main() {
@@ -141,21 +178,33 @@ function main() {
     const t = Date.parse(i.atualizadoEm);
     return Number.isNaN(t) || t < inicio;
   });
-  if (pendentes.length === 0) return registrar(sid, local, 'passou', meus.map((i) => i.id).join(','));
+  const parados = semDespacho(meus, tp);
+  if (pendentes.length === 0 && parados.length === 0) return registrar(sid, local, 'passou', meus.map((i) => i.id).join(','));
 
   const ids = pendentes.map((i) => i.id);
   const lista = ids.length === 1 ? `do item ${ids[0]} (em andamento)` : `dos itens ${ids.join(', ')} (em andamento)`;
   const cmds = ids.map((id) => `\`painel update fila ${id} '{"agora":"…"}'\``).join(' · ');
   // O texto do painel (ids dos itens) é dado de outra sessão: com padrão de injeção, o aviso vai antes.
-  const aviso = avisoDeInjecao(ids.join('\n'));
+  const aviso = avisoDeInjecao([...ids, ...parados.map((p) => p.id)].join('\n'));
+  const partes = [];
+  if (pendentes.length > 0) {
+    partes.push(`Você é dona ${lista} e não o atualizou neste turno. Grave o estado antes de terminar: ${cmds}, ou solte o item (protocolo em ${PROTOCOLO}).`);
+  }
+  for (const p of parados) {
+    const ref = `(protocolo em ${PROTOCOLO_ESPERA})`;
+    if (p.entregue) {
+      partes.push(`${p.id}: a ${p.papel} entregou; avance a etapa (${PROXIMA_ETAPA[p.papel]}) ou mande uma linha à orquestradora citando ${p.id} ${ref}.`);
+    } else if (p.papel === 'V') {
+      partes.push(`${p.id} sem V no item: se o laudo já voltou, avance a etapa (merge) ou mande o conserto; senão, despache uma V (\`painel com add ${p.id} <local_> <apelido> "<oQue>"\` e mensagem a ela) ou mande uma linha à orquestradora citando ${p.id} ${ref}.`);
+    } else {
+      partes.push(`${p.id} está em ${NOME_DA_ETAPA[p.papel]} sem nenhuma ${p.papel} no item. Antes de terminar: despache (título da sessão livre, \`painel com add ${p.id} <local_> <apelido> "<oQue>"\` e mensagem a ela) ou mande mensagem (SendMessage) que cite ${p.id} à orquestradora pedindo a vaga ${ref}.`);
+    }
+  }
   process.stdout.write(JSON.stringify({
     decision: 'block',
-    reason:
-      (aviso ? `${aviso}\n` : '') +
-      `Você é dona ${lista} e não o atualizou neste turno. Grave o estado antes de terminar: ${cmds}, ` +
-      `ou solte o item (protocolo em ${PROTOCOLO}).`,
+    reason: (aviso ? `${aviso}\n` : '') + partes.join('\n'),
   }));
-  registrar(sid, local, 'bloqueou', ids.join(','));
+  registrar(sid, local, 'bloqueou', [...ids, ...parados.map((p) => p.id)].join(','));
 }
 
 try {

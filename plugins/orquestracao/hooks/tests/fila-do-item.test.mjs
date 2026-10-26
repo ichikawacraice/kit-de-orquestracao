@@ -220,7 +220,7 @@ caso('F27-3e: com etapa nova, o estado antigo que sobrou não decide (etapa feit
   igual(bloqueia({ etapa: 'execucao', estado: 'feito', donoLocalId: LOCAL, atualizadoEm: ANTES })?.decision, 'block', 'execucao vence');
 });
 caso('F27-3f: item com dono e etapa, gravado DEPOIS do início do turno: passa', () => {
-  igual(bloqueia({ etapa: 'validacao', donoLocalId: LOCAL, atualizadoEm: DEPOIS }), null, 'passa');
+  igual(bloqueia({ etapa: 'validacao', donoLocalId: LOCAL, com: [{ apelido: 'V1' }], atualizadoEm: DEPOIS }), null, 'passa');
 });
 
 const livreNoTurno = () => [...turno(), { type: 'assistant', uuid: 'a2', timestamp: '2026-10-24T12:01:00.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'mcp__ccd_session_mgmt__set_session_title', input: { session_id: 'self', title: 'P1 · livre' } }] } }];
@@ -311,6 +311,67 @@ caso('R1: o mesmo item gravado DEPOIS do turno aberto por peer → passa', () =>
     { type: 'user', uuid: 'u2', isMeta: true, timestamp: '2026-10-24T12:30:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'valide' } },
   ]);
   igual(rodar(stop()), null, 'saída');
+});
+
+// F58 (D4): a dona de item esperando papel não termina o turno sem ter despachado depois do `desde`.
+const DESDE = '2026-10-24T11:50:00.000Z';
+const esperaE = (extra = {}) => ({ etapa: 'execucao', donoLocalId: LOCAL, donoApelido: 'P1', com: [{ apelido: 'P1' }], historico: [{ em: DESDE, etapa: 'execucao', dono: 'P1' }], atualizadoEm: DEPOIS, ...extra });
+const tool = (id, ts, name, input) => ({ type: 'assistant', uuid: id, timestamp: ts, message: { role: 'assistant', content: [{ type: 'tool_use', name, input }] } });
+const turnoComAntes = (...antes) => { const t = turno(); return [t[0], t[1], ...antes, t[2], t[3]]; };
+function esperando(entradas, data = esperaE()) {
+  item('F58', data); registroLocal(LOCAL, SID); transcript(entradas);
+  return rodar(stop());
+}
+caso('F58-4a: dona de item esperando E, item gravado no turno mas sem despacho: bloqueia com as duas saídas', () => {
+  const r = esperando(turno());
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('F58 está em execução sem nenhuma E no item'), `texto: ${r.reason}`);
+  ok(r.reason.includes('painel com add') && /mensagem|SendMessage/.test(r.reason), `as duas saídas: ${r.reason}`);
+  igual(desfechos().join(','), 'bloqueou', 'log');
+});
+caso('F58-4b: SendMessage citando F58 depois do desde: passa; send_message do ccd também', () => {
+  for (const nome of ['SendMessage', 'mcp__ccd_session_mgmt__send_message']) {
+    const r = esperando([...turno(), tool('a5', '2026-10-24T12:01:00.000Z', nome, { to: 'local_x', message: 'F58 pronto para a E' })]);
+    igual(r, null, `${nome} devia passar`);
+  }
+});
+caso('F58-4c: mensagem citando F58 ANTES do desde não vale: bloqueia', () => {
+  const r = esperando(turnoComAntes(tool('a4', '2026-10-24T11:40:00.000Z', 'SendMessage', { to: 'local_x', message: 'F58 vai sair' })));
+  igual(r?.decision, 'block', 'decisão');
+});
+caso('F58-4d: mensagem que não cita o F58 não vale', () => {
+  igual(esperando([...turno(), tool('a5', '2026-10-24T12:01:00.000Z', 'SendMessage', { to: 'local_x', message: 'F59 pronto' })])?.decision, 'block', 'decisão');
+});
+caso('F58-4e: painel com add F58 no turno: passa', () => {
+  const r = esperando([...turno(), tool('a5', '2026-10-24T12:01:00.000Z', 'Bash', { command: 'painel com add F58 local_e1 E1 "executa"' })]);
+  igual(r, null, 'passa');
+});
+caso('F58-4f: stop_hook_active passa; dona que se declarou livre passa como hoje', () => {
+  item('F58', esperaE()); registroLocal(LOCAL, SID); transcript(turno());
+  igual(rodar(stop({ stop_hook_active: true })), null, 'stop_hook_active');
+  transcript(livreNoTurno());
+  igual(rodar(stop()), null, 'livre');
+});
+caso('F58-4g: item com E no com não é cobrado; as duas faltas (não gravou + espera) saem na mesma razão', () => {
+  igual(esperando(turno(), esperaE({ com: [{ apelido: 'P1' }, { apelido: 'E1' }] })), null, 'com E passa');
+  rmSync(join(filaDir(), 'F58.json'));
+  const r = esperando(turno(), esperaE({ atualizadoEm: ANTES }));
+  ok(r.reason.includes('não o atualizou neste turno') && r.reason.includes('sem nenhuma E no item'), `as duas faltas: ${r.reason}`);
+});
+
+caso('F58-4h: item entregue pela E: a dona é cobrada a avançar a etapa, não a despachar', () => {
+  const r = esperando(turno(), esperaE({ fez: [{ apelido: 'E4', localId: 'local_e4', oQue: 'x', em: '2026-10-24T11:55:00.000Z' }] }));
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('F58: a E entregou; avance a etapa (validacao com uma V no com) ou mande uma linha à orquestradora'), `texto: ${r.reason}`);
+  ok(!r.reason.includes('despache'), `não manda despachar: ${r.reason}`);
+  rmSync(join(filaDir(), 'F58.json'));
+  const msg = esperando([...turno(), tool('a5', '2026-10-24T12:01:00.000Z', 'SendMessage', { to: 'local_x', message: 'F58 entregue, avance' })], esperaE({ fez: [{ apelido: 'E4', localId: 'local_e4', oQue: 'x', em: '2026-10-24T11:55:00.000Z' }] }));
+  igual(msg, null, 'mensagem citando o item satisfaz');
+});
+caso('F58-4i: validacao sem V: a dona é lembrada de avançar a etapa (merge) ou despachar uma V', () => {
+  const r = esperando(turno(), esperaE({ etapa: 'validacao', historico: [{ em: DESDE, etapa: 'validacao', dono: 'P1' }] }));
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('F58 sem V no item: se o laudo já voltou, avance a etapa (merge) ou mande o conserto; senão, despache uma V'), `texto: ${r.reason}`);
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
