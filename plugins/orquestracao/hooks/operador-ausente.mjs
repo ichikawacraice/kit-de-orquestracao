@@ -5,7 +5,9 @@
 // `/ausente` sem argumento só mostra o estado (a skill responde). Mensagem de outra sessão não liga nem desliga.
 // O botão do painel é a segunda via humana: liga gravando `por:"painel"` e desliga gravando `{ligado:false}` (o pane não apaga arquivo).
 // Bandeira: <BASE>/operador-ausente.json = { desde, frase, sessionId, por }. Quem lê: `modoAusente()` (T3a, T7, contexto-do-papel).
-import { existsSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+// F59: o off GUARDA o período: `{ligado:false, desde, desligadoEm, por, sessionId}` (o `desde` do on), para a orquestradora
+// trazer o resumo (skills/orquestradora/scripts/ausencia.mjs). Sem bandeira, ilegível ou já desligada: não inventa período.
+import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BASE, registrar, lerEntrada } from './hooks-crewai-comum.mjs';
 
@@ -21,6 +23,12 @@ export function comandoDoModo(prompt) {
   const m = CRU.exec(prompt) || EXPANDIDO.exec(prompt);
   return m ? m[1].toLowerCase() : null;
 }
+
+function lerBandeira(arq) {
+  try { const b = JSON.parse(readFileSync(arq, 'utf8')); return b && typeof b === 'object' ? b : null; } catch { return null; }
+}
+const bandeiraLigada = (arq) => { const b = lerBandeira(arq); return b && b.ligado !== false && !Number.isNaN(Date.parse(b.desde)) ? b : null; };
+const bandeiraDesligada = (arq) => lerBandeira(arq)?.ligado === false;
 
 function main() {
   const e = lerEntrada();
@@ -39,7 +47,12 @@ function main() {
     writeFileSync(arq, `${JSON.stringify({ desde: new Date().toISOString(), frase: '/ausente on', sessionId: e.session_id || null, por: 'comando' })}\n`);
     registrar(sid, HOOK, 'ausente-on');
   } else {
-    rmSync(arq, { force: true });
+    const ligada = bandeiraLigada(arq);
+    if (ligada) {
+      writeFileSync(arq, `${JSON.stringify({ ligado: false, desde: ligada.desde, desligadoEm: new Date().toISOString(), por: 'comando', sessionId: e.session_id || null })}\n`);
+    } else if (!bandeiraDesligada(arq)) {
+      rmSync(arq, { force: true });
+    }
     registrar(sid, HOOK, 'ausente-off');
   }
 }
