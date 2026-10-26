@@ -36,6 +36,8 @@ Regras: Node ≥ 20, ESM, sem dependência; teste antes do código; `claude plug
 3. **R2:** em `test/reguas-de-contexto.test.mjs`, trocar os `includes` por `/regua\??\.(teto|aviso)/`; prove que a regex pega `regua?.teto` (um caso que roda a regex sobre a string `mil(regua?.teto ?? janela)` e espera achar).
 4. Versão (D5); gates verdes; `claude plugin validate plugins/painel-sessoes --strict`.
 
+5. **P1 do F65, que não entrou na main** (medido pela D1 em 453e26f e conferido no código: `larguraDaFaixa` soma o texto real, então aberto 142/101/79, enviando 137/96/74, enviado 107/80/58, e a barra se rearruma debaixo do clique). Com pedido, a soma da faixa usa sempre a largura do repouso (frase + `[ Pode se limpar ]`), também no `Enviando…` e no `✓ ok enviado`. Teste vermelho: a 114 e a 140 a faixa é a mesma nos três estados; `larguraDaFaixa` igual nos três. *Assumida, a confirmar* (entra aqui porque é o mesmo arquivo e a E está nele).
+
 ## Critério de pronto
 
 - Os testes do passo 1 e o da regex verdes; os do F65 verdes sem edição além dos que a revisão mudar.
