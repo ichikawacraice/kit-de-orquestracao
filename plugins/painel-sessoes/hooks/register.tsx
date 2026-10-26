@@ -22,6 +22,8 @@ export const marcar = (marcas: Marcas, id: string, quando: number): Marcas => ({
 export const desmarcar = (marcas: Marcas, id: string): Marcas => Object.fromEntries(Object.entries(marcas).filter(([k]) => k !== id))
 /** O engine só levanta `ui.close` de `person` e `unload` para o mod (o teste não consegue); `unload` é o processo indo embora, não o operador fechando. */
 export const fechamentoDesmarca = (origem: string): boolean => origem !== 'unload'
+/** Fecha só o pane que a pessoa vê: o reaberto sem pedido pode estar sem lugar (`isPlaced` false) e, então, o `/painel` o abre de vez. */
+export const deveFechar = (panes: ReadonlyArray<{ id: string; isPlaced: boolean }>): boolean => panes.some(p => p.id === PANE && p.isPlaced)
 export const vencidas = (marcas: Marcas, agora: number): string[] =>
   Object.entries(marcas)
     .filter(([, em]) => !(agora - Date.parse(em) <= VALIDADE_MARCA_MS))
@@ -677,8 +679,7 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'painel' }, async $ => {
-    const aberto = (await $.ui.panes()).some(p => p.id === PANE)
-    if (aberto) {
+    if (deveFechar(await $.ui.panes())) {
       await $.ui.close({ id: PANE })
       parar()
       await mudarMarca($, (m, id) => desmarcar(m, id))

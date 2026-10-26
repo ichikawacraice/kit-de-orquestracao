@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { cartaoSvg, faixaSvg, filaSvg, itemSvg, largura, perguntaSvg, resumoSvg, secaoSvg } from '../hooks/desenho.js'
-import { contarSecoes, desmarcar, fechamentoDesmarca, marcar, vencidas, esperaOperadorSemPergunta, leituraParada, montarItens, papelDe, porTema, secoes, situacaoDe } from '../hooks/register.js'
+import { contarSecoes, desmarcar, deveFechar, fechamentoDesmarca, marcar, vencidas, esperaOperadorSemPergunta, leituraParada, montarItens, papelDe, porTema, secoes, situacaoDe } from '../hooks/register.js'
 import { FILA_REAL, TEMAS_REAIS } from './fixtura-fila.js'
 
 const PANE = {
@@ -114,21 +114,26 @@ type Opcoes = {
   store?: Record<string, unknown>
   /** O store recusa toda leitura e escrita. */
   storeFalha?: boolean
+  /** O desktop não tem onde desenhar um pane aberto sem pedido: o pane consta, mas `isPlaced` é false (até a pessoa pedir). */
+  semLugar?: boolean
 }
 
 function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {}) {
   on('command.register', () => ({ value: { command: 'painel' } }))
   on('tool.register', () => ({ value: { tool: 'mcp__painel-sessoes__onde_esta_o_painel' } }))
   let aberto = false
+  let pedido = false
   on('ui.open', () => {
     aberto = true
-    return { value: { isPlaced: true } }
+    const colocado = !opc.semLugar || pedido
+    return { value: colocado ? { isPlaced: true } : { isPlaced: false, reason: 'no-surface' as const } }
   })
   on('ui.panes', () => ({
-    value: aberto ? [{ id: 'painel-sessoes', title: 'Sessões', isShown: true, isFocused: false, isPlaced: true }] : [],
+    value: aberto ? [{ id: 'painel-sessoes', title: 'Sessões', isShown: true, isFocused: false, isPlaced: !opc.semLugar || pedido }] : [],
   }))
   on('ui.close', () => {
     aberto = false
+    pedido = false
     return { value: undefined }
   })
   const toasts: string[] = []
@@ -515,6 +520,23 @@ test('F45 t4b: a pessoa fechando desmarca; a descarga do mod (unload) não; as f
   expect(Object.keys(m), 'marcou').toEqual(['local_a'])
   expect(Object.keys(desmarcar(m, 'local_a'))).toEqual([])
   expect(vencidas({ x: new Date(AGORA - 8 * 86_400_000).toISOString(), y: new Date(AGORA - 1000).toISOString(), z: 'lixo' }, AGORA)).toEqual(['x', 'z'])
+})
+
+test('F45 t7: pane reaberto sem lugar não conta como aberto: um /painel basta e a marca fica', async ($, on) => {
+  const { loja, painelAberto } = engine(on, false, {}, { host: 'local_a', agora: AGORA, semLugar: true, store: { abertos: { local_a: new Date(AGORA - 3_600_000).toISOString() } } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(painelAberto(), 'a reabertura sem pedido consta como aberta, sem lugar').toBe(true)
+  const r = await $.command.run(ABRIR)
+  expect(String((r as { text?: string }).text), 'o /painel abre, não fecha').toMatch(/aberto/)
+  expect(String((r as { text?: string }).text)).not.toMatch(/fechado/)
+  expect(Object.keys(marcas(loja)), 'a marca continua').toEqual(['local_a'])
+})
+
+test('F45 t7b: deveFechar só com o pane colocado', () => {
+  expect(deveFechar([{ id: 'painel-sessoes', isPlaced: true }])).toBe(true)
+  expect(deveFechar([{ id: 'painel-sessoes', isPlaced: false }])).toBe(false)
+  expect(deveFechar([{ id: 'outro', isPlaced: true }])).toBe(false)
+  expect(deveFechar([])).toBe(false)
 })
 
 test('F45 t5: sem CLAUDE_CODE_HOST_SESSION_ID o /painel funciona e o store não ganha nada', async ($, on) => {
