@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { Citado, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, secaoSvg, seloDaEspera, textoDaTrava, tituloDoTema, todosSvg } from './desenho'
+import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -32,6 +32,8 @@ export const vencidas = (marcas: Marcas, agora: number): string[] =>
     .map(([id]) => id)
 const INTERVALO_MS = 60_000
 const PASTA = '.claude/orquestracao/painel'
+const BASE_ORQUESTRACAO = '.claude/orquestracao'
+const BANDEIRA = 'operador-ausente.json'
 
 const VAZIA: Leitura = { lidoEm: null, lendo: false, erros: [], avisos: [], itens: [], temas: [], perguntas: [], anteriores: [] }
 const leitura = atom({ plugin: 'painel-sessoes', key: 'leitura' } as const, VAZIA)
@@ -46,6 +48,8 @@ const enviando = atom({ plugin: 'painel-sessoes', key: 'enviando' } as const, nu
 const abrindo = atom({ plugin: 'painel-sessoes', key: 'abrindo' } as const, null as string | null)
 // O relógio da leitura pendurada: cada tique que encontra a leitura em curso grava a hora, para a tela redesenhar e dizer "Parou".
 const tique = atom({ plugin: 'painel-sessoes', key: 'tique' } as const, 0)
+// O botão do modo está gravando a bandeira.
+const trocandoModo = atom({ plugin: 'painel-sessoes', key: 'trocandoModo' } as const, false)
 
 // As respostas rápidas das perguntas sem opções próprias: o texto vai ao banco e à sessão.
 const RAPIDAS = [
@@ -451,7 +455,8 @@ async function responder($: EngineInterface, q: PerguntaAberta, resposta: string
     if (atual.data.estado !== 'aberta' || (q.versao !== undefined && atual.version !== q.versao)) {
       throw new Error(`${q.id} mudou desde a leitura (agora: ${String(atual.data.estado)}); nada gravado`)
     }
-    const data = { ...atual.data, estado: 'respondida', resposta: resposta.trim(), atualizadoEm: agora }
+    // `respondidaPor` e `respondidaEm` são a prova do clique do operador: só o pane os grava (a trava da limpeza da orquestradora os lê).
+    const data = { ...atual.data, estado: 'respondida', resposta: resposta.trim(), atualizadoEm: agora, respondidaPor: 'painel', respondidaEm: agora }
     await $.fs.write(arquivo, `${JSON.stringify({ id: q.id, version: (atual.version ?? 0) + 1, data }, null, 2)}\n`)
     await update($, respondendoEm, atual => (atual === q.id ? null : atual))
     // "Enviando…" dura até a sessão de fora responder ao send_message; o prompt da própria sessão não se espera.
@@ -558,6 +563,8 @@ async function atualizar($: EngineInterface, forcar = false): Promise<void> {
 // A leitura inteira: duas fontes, cada uma com o próprio erro, nunca lista vazia calada.
 async function ler($: EngineInterface): Promise<void> {
   await update($, leitura, l => ({ ...l, lendo: true }))
+  // O modo que uma troca mudou depois de a leitura começar vale mais que o que ela leu: ver `alternarModo`.
+  const geracao = geracaoModo
   const erros: string[] = []
   const pasta = `${await $.env.get('HOME')}/${PASTA}`
   pastaLida = pasta
@@ -583,7 +590,12 @@ async function ler($: EngineInterface): Promise<void> {
   let temas: Tema[] = []
   let vivas: Vivo[] = []
   let vivasLidas = false
+  let ausente: Leitura['ausente'] = null
   await Promise.all([
+    lerBandeira($).then(
+      b => void (ausente = b),
+      err => void erros.push(`modo ausente (${BANDEIRA}): ${mensagem(err)}`),
+    ),
     lerColecao('sessoes').then(
       d => void (docsSessoes = d),
       err => void erros.push(`sessoes do painel: ${mensagem(err)}`),
@@ -694,7 +706,64 @@ async function ler($: EngineInterface): Promise<void> {
     anteriores,
     sessoes: vivas.map(({ sessionId, isRunning, lastActivityAt }) => ({ sessionId, isRunning, lastActivityAt })),
     semLista: !(vivasLidas && proprio !== undefined),
+    ausente: geracao === geracaoModo && !trocandoAgora ? ausente : l.ausente,
   }))
+}
+
+/**
+ * O modo ausente pelo contrato da bandeira: ligado só com o arquivo, JSON válido, `desde` data válida e `ligado !== false`;
+ * sem arquivo ou com outro formato é desligado. JSON que não se lê é `null` (a leitura levanta o erro).
+ */
+async function lerBandeira($: EngineInterface): Promise<NonNullable<Leitura['ausente']>> {
+  const base = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}`
+  const entradas = await $.fs.list(base)
+  if (!entradas.some(e => e.kind === 'file' && e.name === BANDEIRA)) return { ligado: false }
+  const b = JSON.parse((await $.fs.read(`${base}/${BANDEIRA}`)) as string) as Record<string, unknown> | null
+  if (b === null || typeof b !== 'object' || Array.isArray(b)) throw new Error('o arquivo não é um objeto JSON')
+  const desdeOk = typeof b.desde === 'string' && !Number.isNaN(Date.parse(b.desde))
+
+  return { ligado: desdeOk && b.ligado !== false, desde: desdeOk ? (b.desde as string) : undefined, por: texto(b.por) }
+}
+
+// A cada troca do modo a geração sobe: a leitura que começou antes dela não escreve o campo `ausente` (escreve o resto).
+let geracaoModo = 0
+let trocandoAgora = false
+
+/**
+ * O botão do modo: o efeito entra na hora (`leitura.ausente` já é o modo novo) e a recusa desfaz, dizendo o motivo.
+ * Liga gravando `{desde, frase, sessionId, por: "painel"}`; desliga gravando `{ligado: false, desligadoEm, por: "painel"}`
+ * (o pane não apaga arquivo). Não abre sessão nem pré-abre o pool: isso é do `/ausente on`.
+ */
+async function alternarModo($: EngineInterface): Promise<void> {
+  if (trocandoAgora) return
+  trocandoAgora = true
+  const antes = (await read($, leitura)).ausente
+  if (antes === undefined || antes === null) {
+    trocandoAgora = false
+
+    return
+  }
+  await update($, trocandoModo, () => true)
+  const ligando = !antes.ligado
+  try {
+    const agora = new Date(await $.clock.now()).toISOString()
+    geracaoModo++
+    await update($, leitura, l => ({ ...l, ausente: ligando ? { ligado: true, desde: agora, por: 'painel' } : { ligado: false, por: 'painel' } }))
+    const conteudo = ligando
+      ? { desde: agora, frase: 'botão do painel', sessionId: (await sessaoDoApp($)) ?? null, por: 'painel' }
+      : { ligado: false, desligadoEm: agora, por: 'painel' }
+    await $.fs.write(`${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/${BANDEIRA}`, `${JSON.stringify(conteudo, null, 2)}\n`)
+    geracaoModo++
+    $.ui.toast(ligando ? 'Modo ausente ligado. Para pré-abrir o pool, use /ausente on no chat.' : 'Modo ausente desligado')
+  } catch (err) {
+    geracaoModo++
+    await update($, leitura, l => ({ ...l, ausente: antes }))
+    await avisar($, `Não consegui ${ligando ? 'ligar' : 'desligar'} o modo ausente (${mensagem(err)}).`)
+  } finally {
+    trocandoAgora = false
+    await update($, trocandoModo, () => false)
+  }
+  await atualizar($)
 }
 
 // A sessão do app (`local_…`) que roda este processo; o CLI no terminal não tem, e então o mod não grava nem reabre.
@@ -820,6 +889,7 @@ export const register: Register = on => {
     const enviandoAgora = await read($, enviando)
     const abrindoAgora = await read($, abrindo)
     await read($, tique)
+    const trocando = await read($, trocandoModo)
     // "Abrir P2": pede ao app que ponha a sessão em foco; o que ele recusar, o botão devolve como endereço copiado.
     // O `Button` não tem `disabled`: enquanto abre, o rótulo vira "Abrindo…" e o clique é ignorado.
     const abrir = (dono: NonNullable<LinhaItem['dono']>) => (
@@ -926,10 +996,27 @@ export const register: Register = on => {
       )
     }
 
-    const botaoAtualizar = (rotulo: string, key: string) => (
+    // O modo da leitura: `undefined` é antes da 1ª leitura; `null`, o arquivo que não se leu; senão a bandeira.
+    const modo: 'lendo' | 'presente' | 'ausente' | 'desconhecido' = l.ausente === undefined ? 'lendo' : l.ausente === null ? 'desconhecido' : l.ausente.ligado ? 'ausente' : 'presente'
+    // O botão do modo fica no canto esquerdo da fileira e o rótulo é o gesto; sem ler o modo não há botão (gravar por cima esconderia o problema).
+    // `trocando`: o modo na tela já é o novo (otimista), o rótulo diz que grava e o clique é ignorado.
+    const botaoModo =
+      modo === 'presente' || modo === 'ausente' ? (
+        <Button
+          key="modo"
+          variant="secondary"
+          onPress={() => {
+            if (!trocando) void alternarModo($)
+          }}
+        >
+          {trocando ? (modo === 'ausente' ? 'Ligando…' : 'Desligando…') : modo === 'ausente' ? 'Estou de volta' : 'Ficar ausente'}
+        </Button>
+      ) : null
+    const botaoAtualizar = (rotulo: string, key: string, extra: { autoFocus?: boolean } = {}) => (
       <Button
         key={key}
         variant="secondary"
+        {...(extra.autoFocus ? { autoFocus: true } : {})}
         onPress={() => {
           // Leitura que parou de renovar não trava o botão: ele solta a pendurada e lê de novo.
           if (!l.lendo || parada) void atualizar($, true)
@@ -1023,16 +1110,28 @@ export const register: Register = on => {
         )
       }
       const erroLido = l.erros.length > 0 ? faixaSvg(W, { titulo: 'Não consegui ler tudo', detalhe: l.erros.join(' · '), tom: 'er' }) : undefined
-      const avisoLido = avisos.length > 0 ? faixaSvg(W, { titulo: 'Resposta não entregue', detalhe: avisos.join(' · '), tom: 'er' }) : undefined
+      const avisoLido = avisos.length > 0 ? faixaSvg(W, { titulo: 'Ação não concluída', detalhe: avisos.join(' · '), tom: 'er' }) : undefined
       const rodape = fileteSvg(W)
+      const horaLida = l.lidoEm !== null ? hora(l.lidoEm).slice(0, 5) : undefined
+      const palavraDoModo = modo === 'presente' || modo === 'desconhecido' ? rotuloModoSvg(modo) : undefined
+      const linhaParou = parada ? parouSvg(W, `⚠ Parou ${desde(new Date(l.lidoEm as number).toISOString(), agora) ?? 'há pouco'}`) : undefined
+      const faixaModo = modo === 'ausente' ? modoSvg(W, { modo: 'ausente', desde: l.ausente?.desde, agora }) : undefined
 
       return (
         <Box flexDirection="column" gap={1}>
-          <Box flexDirection="row" justifyContent="space-between" alignItems="center">
-            <Text color={parada ? 'error' : undefined} dimColor={!parada}>
-              {l.lendo && !lido ? 'Lendo…' : !lido ? 'ainda não lido' : parada ? `⚠ Parou ${desde(new Date(l.lidoEm as number).toISOString(), agora) ?? 'há pouco'}` : `Atualizado ${hora(l.lidoEm as number).slice(0, 5)}`}
-            </Text>
-            {botaoAtualizar('↻ Atualizar', 'atualizar')}
+          <Box key="topo" flexDirection="column">
+            <Box flexDirection="row" alignItems="center" flexWrap="wrap" columnGap={1}>
+              <Box flexDirection="row" columnGap={1}>
+                {botaoModo}
+              </Box>
+              <Box flexDirection="row" columnGap={1} alignItems="center" flexGrow={1} justifyContent="flex-end">
+                {palavraDoModo && <Svg source={palavraDoModo.source} alt={palavraDoModo.alt} width={palavraDoModo.width} height={20} />}
+                {!lido && !l.lendo && <Text dimColor>ainda não lido</Text>}
+                {botaoAtualizar(l.lendo && !parada ? 'Lendo…' : horaLida ? `↻ ${horaLida}` : '↻ ler', 'atualizar', { autoFocus: true })}
+              </Box>
+            </Box>
+            {linhaParou && <Svg source={linhaParou.source} alt={linhaParou.alt} width={W} height={linhaParou.height} />}
+            {faixaModo && <Svg source={faixaModo.source} alt={faixaModo.alt} width={W} height={faixaModo.height} />}
           </Box>
           <Svg source={cartaoResumo.source} alt={resumo4.map(r => `${r.n} ${r.rotulo}`).join(', ')} width={W} height={cartaoResumo.height} />
 
@@ -1164,7 +1263,25 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" gap={1} paddingX={1}>
-        <Box flexDirection="row" justifyContent="space-between" alignItems="center">
+        <Box key="topo" flexDirection="column">
+          <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+            <Box flexDirection="row" columnGap={1}>
+              {botaoModo}
+            </Box>
+            <Box flexDirection="row" flexGrow={1} justifyContent="flex-end" columnGap={1}>
+              {modo === 'presente' && <Text dimColor>presente</Text>}
+              {modo === 'desconhecido' && <Text dimColor italic>modo não lido (vale presente)</Text>}
+              {botaoAtualizar(parada ? '⚠ ler' : l.lidoEm === null ? '↻ ler' : `↻ ${hora(l.lidoEm)}`, 'atualizar', { autoFocus: true })}
+            </Box>
+          </Box>
+          {modo === 'ausente' && (
+            <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+              <Text inverse bold>{` ☾ AUSENTE ${modoDescrito(l.ausente?.desde, agora).ha} `}</Text>
+              {modoDescrito(l.ausente?.desde, agora).quando && <Text dimColor>{`desde ${modoDescrito(l.ausente?.desde, agora).quando}`}</Text>}
+              <Text dimColor>· a orquestradora pode se limpar</Text>
+              <Text dimColor>· sessões novas só abrem com você</Text>
+            </Box>
+          )}
           <Box flexDirection="row" columnGap={2} flexWrap="wrap">
             {resumo.every(r => r.n === 0) && <Text dimColor>{lido ? 'nada em andamento' : 'ainda não lido'}</Text>}
             {resumo.filter(r => r.n > 0).map(r => (
@@ -1174,7 +1291,6 @@ export const register: Register = on => {
               </Text>
             ))}
           </Box>
-          {botaoAtualizar(parada ? '⚠ ler' : l.lidoEm === null ? '↻ ler' : `↻ ${hora(l.lidoEm)}`, 'atualizar')}
         </Box>
 
         {avisos.length + l.erros.length > 0 && (
