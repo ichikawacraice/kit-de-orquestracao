@@ -9,7 +9,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HOOKS = process.env.HOOKS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..');
-let base; let falhas = 0;
+let base; let falhas = 0; let FILA = null;
 const dir = (...p) => join(base, ...p);
 const BASE_ORQ = () => dir('orq');
 const log = () => (existsSync(join(BASE_ORQ(), 'hooks-crewai.log')) ? readFileSync(join(BASE_ORQ(), 'hooks-crewai.log'), 'utf8') : '');
@@ -26,6 +26,7 @@ const S = {
 function novoBase() {
   base = mkdtempSync(join(tmpdir(), 'papel-pool-'));
   mkdirSync(BASE_ORQ()); mkdirSync(dir('home', '.claude', 'projects', 'proj'), { recursive: true });
+  FILA = dir('fila'); mkdirSync(FILA);
   mkdirSync(dir('app', 'conta'), { recursive: true });
   // Dois repositórios git de verdade (a trava T2 compara o git common dir do originCwd): A é o do projeto das sessões
   // de sempre; B é "outro projeto".
@@ -49,7 +50,7 @@ function novoBase() {
 function rodar(hook, evento, extraEnv = {}) {
   const out = execFileSync('node', [join(HOOKS, hook)], {
     input: typeof evento === 'string' ? evento : JSON.stringify(evento), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
-    env: { ...process.env, HOME: dir('home'), HOOKS_CREWAI_BASE: BASE_ORQ(), POOL_APP_SESSOES_DIR: dir('app'), ...extraEnv },
+    env: { ...process.env, HOME: dir('home'), HOOKS_CREWAI_BASE: BASE_ORQ(), POOL_APP_SESSOES_DIR: dir('app'), ...(FILA ? { FILA_DIR: FILA } : {}), ...extraEnv },
   });
   return out ? JSON.parse(out).hookSpecificOutput : null;
 }
@@ -96,18 +97,17 @@ caso('T2: archive/delete de membro → deny; de sessão comum passa; alvo inexis
   passa(A('ORQ', 'local_E3'), 'Q245: orquestradora, turno humano, alvo com título de trabalho (E3 ocupado) → passa');
   passa(A('ORQ', 'local_E1'), 'Q245: orquestradora, turno humano, alvo `· livre` → passa');
   ok(log().includes('deixou-arquivar-por-comando'), 'sem o log deixou-arquivar-por-comando');
-  nega(A('ORQ', 'local_E1', depeer()), 'Q245: orquestradora em turno de mensagem entre sessões nega, até o `· livre`');
-  nega(A('ORQ', 'local_E3', depeer()), 'Q245: orquestradora em turno de mensagem entre sessões nega o de título de trabalho');
-  nega(A('ORQ', 'local_E1', {}), 'Q245: transcript ausente nega');
+  // D8: sem a bandeira e sem item vivo, a orquestradora arquiva sozinha em qualquer turno (era `nega`).
+  passa(A('ORQ', 'local_E1', depeer()), 'D8: turno de peer, alvo fora de todo item → passa');
+  ok(log().includes('arquivou-sozinha'), 'sem o log arquivou-sozinha');
+  passa(A('ORQ', 'local_E3', depeer()), 'D8: o título de trabalho não importa, só o item vivo');
+  passa(A('ORQ', 'local_E1', {}), 'D8: transcript ausente passa');
   nega(A('P1', 'local_E1'), 'Q245: planejadora em turno humano nega');
   // B1: o turno do operador e, DEPOIS dele, um aberto por outra sessão (meta com origem): vale o último.
   const humanoEDepoisPeer = () => transcriptDe([Date.now() - 120_000, 'human'], [Date.now() - 60_000, 'peer']);
-  nega(A('ORQ', 'local_E1', humanoEDepoisPeer()), 'B1: turno de peer logo depois de um humano nega');
+  passa(A('ORQ', 'local_E1', humanoEDepoisPeer()), 'B1: sem bandeira e sem item vivo passa em qualquer origem');
   passa(A('ORQ', 'local_E1', transcriptDe([Date.now() - 120_000, 'peer'], [Date.now() - 60_000, 'human'])), 'B1: humano depois de peer passa');
-  // D1: a resposta pelo painel chega como `plugin` e continua negada, com o motivo dizendo isso.
-  const r = A('ORQ', 'local_E1', transcriptCom(Date.now() - 60_000, 'plugin'));
-  nega(r, 'D1: origem plugin (resposta pelo painel) nega');
-  ok(/painel não vale/.test(r.permissionDecisionReason), `D1: motivo sem "painel não vale": ${r.permissionDecisionReason}`);
+  passa(A('ORQ', 'local_E1', transcriptCom(Date.now() - 60_000, 'plugin')), 'D8: origem plugin cai nas regras de bandeira e item');
   nega(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['bbbb-e1'] }, humano()), 'delete por cli id');
   nega(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['local_COMUM', 'local_E1'] }, humano()), 'delete com dois alvos, só um membro');
   passa(pre('P1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['local_COMUM', 'local_NAOEXISTE'] }), 'delete só de não membros');
@@ -215,6 +215,53 @@ caso('T2: archive/delete de "self" por membro → deny; por sessão comum passa'
   nega(pre('E3', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'self' }), 'E3 arquiva self');
   nega(pre('V1', 'mcp__ccd_session_mgmt__delete_session', { session_ids: ['self'] }), 'V1 deleta self');
   passa(pre('AVULSA', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'self' }), 'avulsa arquiva self');
+});
+const fila = (id, data) => writeFileSync(join(FILA, `${id}.json`), JSON.stringify({ id, version: 1, data: { titulo: 't', ...data } }));
+caso('D8.1: modo ausente ligado → a orquestradora não arquiva fora do turno do operador; no turno dele passa', () => {
+  bandeira(Date.now() - 3600_000);
+  const r = arquiva('ORQ', 'local_E1', depeer());
+  nega(r, 'bandeira + peer');
+  ok(/ausente/.test(r.permissionDecisionReason), `motivo sem "ausente": ${r.permissionDecisionReason}`);
+  passa(arquiva('ORQ', 'local_E1', humano()), 'bandeira + turno humano passa');
+});
+caso('D8.2: alvo no com/fez/dono de item vivo → deny citando o item; o mesmo item em feito passa', () => {
+  for (const [campo, data] of [['com', { com: [{ localId: 'local_E3', apelido: 'E3' }] }], ['fez', { fez: [{ localId: 'local_E3', apelido: 'E3' }] }], ['dono', { donoLocalId: 'local_E3' }]]) {
+    fila('F5', { etapa: 'planejamento', ...data });
+    const r = arquiva('ORQ', 'local_E3', depeer());
+    nega(r, `${campo} de item vivo`);
+    ok(/F5/.test(r.permissionDecisionReason), `${campo}: motivo sem F5: ${r.permissionDecisionReason}`);
+    fila('F5', { etapa: 'feito', ...data });
+    passa(arquiva('ORQ', 'local_E3', depeer()), `${campo} com o item em feito passa`);
+  }
+});
+caso('D8.3: fila que não se lê (arquivo no lugar da pasta) → deny com o motivo da fila', () => {
+  const arq = dir('fila-arquivo'); writeFileSync(arq, 'x'); FILA = arq;
+  const r = arquiva('ORQ', 'local_E1', depeer());
+  nega(r, 'fila ilegível');
+  ok(/fila/.test(r.permissionDecisionReason), `motivo sem "fila": ${r.permissionDecisionReason}`);
+});
+caso('D8.4: projeto — turno peer, sem bandeira, livre de B com orquestradora própria → deny "outro projeto"', () => {
+  orquestradoraDe('beta');
+  const r = arquiva('ORQ', 'local_E1B', depeer());
+  nega(r, 'outro projeto');
+  ok(/outro projeto/.test(r.permissionDecisionReason), `motivo: ${r.permissionDecisionReason}`);
+});
+caso('D8.5: planejadora em turno peer continua negada (P1)', () => {
+  nega(arquiva('P1', 'local_E1', depeer()), 'P1 arquiva');
+});
+caso('D8.6: doc × código — protocolo e skill da orquestradora citam Q277 e não mandam mais "arquive só quando ele mandar"', () => {
+  const raiz = join(HOOKS, '..');
+  for (const f of ['pool/protocolo.md', 'skills/orquestradora/SKILL.md']) {
+    const t = readFileSync(join(raiz, f), 'utf8');
+    ok(t.length > 0 && t.includes('Q277'), `${f} sem Q277`);
+    ok(!t.includes('arquive só quando ele mandar'), `${f} ainda manda arquivar só por comando`);
+  }
+  // A1: a regra velha (só com o comando do operador, pergunta de arquivar) não pode sobrar em doc nem no ritual.
+  for (const f of ['pool/protocolo.md', 'skills/orquestradora/SKILL.md', 'pool/papeis/orquestradora.md', 'hooks/orquestradora-ritual.mjs']) {
+    const t = readFileSync(join(raiz, f), 'utf8');
+    ok(t.length > 0, `${f} vazio`);
+    for (const velho of ['comando do operador', 'pergunta de arquivar', 'não conta no teto']) ok(!t.includes(velho), `${f} ainda tem "${velho}"`);
+  }
 });
 caso('T3a: modo ausente e turno que NÃO é do operador → start_session nega, até para a orquestradora', () => {
   bandeira(Date.now() - 3600_000);

@@ -4,7 +4,7 @@
 //   planejadora / design / orquestradora: ≥ 300 mil cobra limpar (só `clear_session` "self" satisfaz); ≥ 200 mil cobra limpar OU
 //     a linha `Contexto: sigo — <o que falta na unidade>`; ≥ 150 mil com o turno terminando esperando o operador (`?` ou `Q<n>` no
 //     último parágrafo) cobra limpar antes.
-//   executora: ≥ 150 mil cobra `Parei em: <passo exato>` no texto (ou limpar).
+//   executora (F49): ≥ 150 mil cobra limpar (só `clear_session` "self" satisfaz; a linha `Parei em:` sozinha não).
 //   validadora: nunca cobra (não limpa no meio); só registra `validadora-<mil>` a partir de 200 mil.
 // Uma cobrança por turno (`stop_hook_active` deixa passar). Erro nunca prende o turno. Limites: constantes abaixo, com override
 // `CONTEXTO_LIMITE_<NOME>` só para teste. Fonte da regra: skills/papeis-e-modelos/SKILL.md, seção "Contexto".
@@ -60,7 +60,12 @@ function main() {
   // O que cobraria, nesta ordem de gravidade. `sigoVale`: a linha de escape não vale no teto.
   let cobranca = null;
   if (papel === 'executora') {
-    if (t >= EXEC) cobranca = { desfecho: 'cobrou-exec-150', sigoVale: false, parei: true, reason: `Contexto em ${mil(t)} mil, acima de 150 mil. Commite o que está pronto, escreva no relatório \`Parei em: <passo exato>\` e devolva. Não compacte.` };
+    if (t >= EXEC) cobranca = { desfecho: 'cobrou-exec-150', sigoVale: false, reason:
+      `Contexto em ${mil(t)} mil, acima de 150 mil: a próxima etapa começa com a conversa vazia. Não compacte. Antes de limpar, conforme o caso: ` +
+      'acabou de receber item (novo ou conserto) → grave no item `{"agora":"recebido; limpo antes de começar"}` e mande a quem despachou "limpa a ' + mil(t) + ' mil; reenvie o briefing"; ' +
+      'no meio do item → commite o que está pronto e mande a quem despachou o relatório com `Parei em: <passo exato>`; ' +
+      'entregou à validação → grave no handoff do item o que o conserto vai precisar e ponha o título `<ID> · livre`. ' +
+      'Depois chame clear_session com session_id "self" e termine o turno.' };
   } else if (t >= TETO) {
     cobranca = { desfecho: 'cobrou-300', sigoVale: false, reason: `Contexto em ${mil(t)} mil. Não pegue trabalho novo. Escreva o estado (o próximo passo exato) e chame clear_session "self".` };
   } else if (t >= ALTO) {
@@ -76,7 +81,6 @@ function main() {
   const ultimoParagrafo = (texto.split(/\n\s*\n/).pop() || '').replace(/https?:\/\/\S*\?\S+/g, '');
   if (cobranca.esperando && !/\?|\bQ\d+\b/.test(ultimoParagrafo)) return; // não termina esperando o operador
   if (limpou) { registrar(sid, HOOK, 'limpou', det); return; }
-  if (cobranca.parei && /^\s*Parei em:\s*\S/m.test(texto)) { registrar(sid, HOOK, 'satisfeito-parei', det); return; }
   if (cobranca.sigoVale && /^\s*Contexto:\s*sigo\s*—\s*\S.{8,}/m.test(texto)) { registrar(sid, HOOK, 'satisfeito-sigo', det); return; }
   if (ativo) { registrar(sid, HOOK, 'deixou-passar', `${cobranca.desfecho} ${det}`); return; }
   registrar(sid, HOOK, cobranca.desfecho, det);

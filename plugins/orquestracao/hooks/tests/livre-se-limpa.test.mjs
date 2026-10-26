@@ -178,10 +178,37 @@ caso('K2: o comando `painel` do plugin (bin) cobra como o `node …/painel.mjs`;
 const item = (id, data) => { mkdirSync(join(base, 'fila'), { recursive: true }); writeFileSync(join(base, 'fila', `${id}.json`), JSON.stringify({ id, version: 1, data: { titulo: 't', tema: 'x', ...data } })); };
 const QUEM = (apelido, localId) => ({ localId, apelido, oQue: 'parte', em: '2026-10-25T10:00:00.000Z' });
 const COM_DEL = (F, l, extra = '') => ['Bash', { command: `node ~/.claude/skills/orquestradora/scripts/painel.mjs com del ${F} ${l} ${extra}`.trim() }];
-caso('F30-2: livre no fez de um item em validação, sem limpar → passa (livre-com-contexto)', () => {
+caso('F49.a: livre no fez de um item em validação, sem limpar → block (cobrou-livre-no-fez); com stop_hook_active passa', () => {
   item('F1', { etapa: 'validacao', fez: [QUEM('E3', 'local_E3')], com: [] });
-  ok(rodar('E3', transcript([TITULO])) === null, 'esperava passar');
-  ok(/livre-com-contexto/.test(log()), 'log sem livre-com-contexto');
+  const r = rodar('E3', transcript([TITULO]));
+  ok(r?.decision === 'block' && /aguardando validação/.test(r.reason) && /clear_session/.test(r.reason), `esperava block, veio ${JSON.stringify(r)}`);
+  ok(/cobrou-livre-no-fez/.test(log()), 'log sem cobrou-livre-no-fez');
+  ok(rodar('E3', transcript([TITULO]), { stop_hook_active: true }) === null, 'stop_hook_active devia soltar');
+});
+caso('F49.b: livre no fez com clear_session self → passa', () => {
+  item('F1', { etapa: 'validacao', fez: [QUEM('E3', 'local_E3')], com: [] });
+  ok(rodar('E3', transcript([TITULO, LIMPA])) === null, 'esperava passar');
+});
+const AGUARDA = ['mcp__ccd_session_mgmt__set_session_title', { session_id: 'self', title: 'E3 · aguardando validação' }];
+caso('F49.c: título aguardando no fez de item vivo, sem limpar → passa (aguardando-com-contexto)', () => {
+  item('F1', { etapa: 'validacao', fez: [QUEM('E3', 'local_E3')], com: [] });
+  ok(rodar('E3', transcript([AGUARDA])) === null, 'esperava passar');
+  ok(/aguardando-com-contexto/.test(log()), 'log sem aguardando-com-contexto');
+});
+caso('F49.d: o mesmo título com F1 em feito ou fez de outra sessão → block (cobrou-aguardando-sem-fez)', () => {
+  item('F1', { etapa: 'feito', fez: [QUEM('E3', 'local_E3')], com: [] });
+  const r = rodar('E3', transcript([AGUARDA]));
+  ok(r?.decision === 'block' && /· livre/.test(r.reason) && /clear_session/.test(r.reason), `esperava block, veio ${JSON.stringify(r)}`);
+  ok(/cobrou-aguardando-sem-fez/.test(log()), 'log sem cobrou-aguardando-sem-fez');
+  item('F1', { etapa: 'validacao', fez: [QUEM('E4', 'local_E4')], com: [] });
+  ok(rodar('E3', transcript([AGUARDA]))?.decision === 'block', 'fez de outra sessão devia bloquear');
+});
+caso('F49.f: registro do app com título aguardando + Edit sem trocar título → block cobrou-titulo; título de item + Edit passa', () => {
+  ok(rodar('E3', transcript([EDITA])) === null, 'precondição: título E3 · lançador + Edit passa');
+  writeFileSync(join(base, 'app', 'local_E3.json'), JSON.stringify({ sessionId: 'local_E3', cliSessionId: ID.E3, title: 'E3 · aguardando validação', isArchived: false }));
+  const r = rodar('E3', transcript([EDITA]));
+  ok(r?.decision === 'block' && /aguardando validação/.test(r.reason), `esperava block, veio ${JSON.stringify(r)}`);
+  ok(/cobrou-titulo/.test(log()), 'log sem cobrou-titulo');
 });
 caso('F30-2: livre sem estar no fez de nenhum item e sem limpar → block (a regra 1 de hoje)', () => {
   item('F1', { etapa: 'validacao', fez: [QUEM('E4', 'local_E4')], com: [] });
@@ -331,6 +358,29 @@ caso('F32 B10: o hook confere a linha de `sessoes` na pasta de IZANAGI_PAINEL_DI
   ok(rodar('P5', transcript([livre('P5'), LIMPA]), {}, { IZANAGI_PAINEL_DIR: alt }) === null, 'esperava passar');
   const l = JSON.parse(readFileSync(join(alt, 'sessoes', `${UP5}.json`), 'utf8')).data;
   ok(l.estado === 'parada' && l.etapa === 'livre', `linha: ${JSON.stringify(l)}`);
+});
+caso('F49.e: E ainda no com e linha de sessoes: título aguardando → solta com fez e a linha vira aguardando validação', () => {
+  pessoal(); item('F1', { etapa: 'execucao', com: comDe(UE5, 'E5') });
+  mkdirSync(join(base, 'sessoes'), { recursive: true });
+  writeFileSync(join(base, 'sessoes', `${UE5}.json`), JSON.stringify({ id: UE5, version: 1, data: { estado: 'trabalhando', etapa: 'x' } }));
+  const r = rodar('E5', transcript([['mcp__ccd_session_mgmt__set_session_title', { session_id: 'self', title: 'E5 · aguardando validação' }]]));
+  ok(r === null, `esperava passar, veio ${JSON.stringify(r)}`);
+  const d = real('F1');
+  ok(d.com.length === 0 && d.fez?.length === 1 && d.fez[0].localId === UE5, `fez: ${JSON.stringify(d)}`);
+  const l = JSON.parse(readFileSync(join(base, 'sessoes', `${UE5}.json`), 'utf8')).data;
+  ok(l.estado === 'parada' && l.etapa === 'aguardando validação', `linha: ${JSON.stringify(l)}`);
+});
+caso('F49.g: com del --fez + título aguardando no mesmo turno → sem cobrou-titulo-velho', () => {
+  item('F1', { etapa: 'validacao', fez: [QUEM('E3', 'local_E3')], com: [] });
+  rodar('E3', transcript([COM_DEL('F1', 'local_E3', '--fez'), AGUARDA]));
+  ok(!/cobrou-titulo-velho/.test(log()), `log: ${log()}`);
+});
+caso('F49.h: doc × código — protocolo e executora citam o título aguardando validação', () => {
+  const pool = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pool');
+  for (const f of ['protocolo.md', join('papeis', 'executora.md')]) {
+    const t = readFileSync(join(pool, f), 'utf8');
+    ok(t.includes('· aguardando validação'), `${f} sem "· aguardando validação"`);
+  }
 });
 caso('F32 A2: com a trava do painel presa e três escritas, o hook bloqueia dentro do prazo de 10 s do hooks.json (não morre calado)', () => {
   pessoal();

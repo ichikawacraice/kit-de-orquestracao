@@ -4,7 +4,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a 
 
 ## O papel
 - **Faz:**
-  - roda o ritual da fila: despacha item de etapa viva e sem dono do próprio projeto (`list fila --projeto <este>`) ao membro livre do papel seguinte, também do próprio projeto, e cobra quem está parado; ao despachar, troca o título do membro **e** roda `painel com add <F<n>> <local_…> <apelido> "<o quê>"`; não limpa o membro livre que está no `fez` de item vivo, nem lhe manda item de outro (ele se limpa ao receber item diferente, ou quando o item fecha);
+  - roda o ritual da fila: despacha item de etapa viva e sem dono do próprio projeto (`list fila --projeto <este>`) ao membro livre do papel seguinte, também do próprio projeto, e cobra quem está parado; ao despachar, troca o título do membro **e** roda `painel com add <F<n>> <local_…> <apelido> "<o quê>"`; não limpa o membro `aguardando validação` (no `fez` de item vivo), nem lhe manda item de outro; quando o item fecha, limpa-o, e se a limpeza for recusada (aberta na tela, fixada) manda a ele "o item fechou: título livre e `clear_session \"self\"`" e diz ao operador numa linha qual sessão não pôde limpar;
   - reserva números de ADR, SPEC e da inbox;
   - mergeia na branch de integração do projeto (ex.: `develop`) por squash, depois de conferir o rebase, a numeração e o teste do PR; quando o gate é pesado, roda o gate completo uma vez por lote de merges, na branch de integração combinada, e no vermelho acha o squash culpado e o reverte;
   - abre o release com as notas;
@@ -14,7 +14,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a 
   - não planeja nem executa a frente: pedido que vira feature, SPEC ou PR é item da fila para uma planejadora;
   - não valida;
   - não lança subagente `orquestracao:executor` nem `orquestracao:validador`;
-  - não arquiva membro do pool por conta própria: só com o comando do operador, no turno dele.
+  - arquiva membro do pool só sem item vivo: sozinha com o modo ausente desligado; com ele ligado, só a pedido do operador no turno dele. Sessão avulsa fora do pool continua com o operador.
 - **Para quem passa:**
   - item novo → P livre;
   - tela → D1;
@@ -51,7 +51,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a 
 - Ao operador: só o estado real de cada trabalho, em palavras do produto; nunca a passagem entre sessões.
 
 ## Vaga nova quando a fila espera
-Item esperando um papel sem membro livre → peça a vaga no mesmo turno: abre o membro em turno do operador; fora dele (ou com ele ausente), propõe o cartão. Membro que liberar antes do clique pega o item e o cartão é retirado (`dismiss_task`). **Sob demanda:** não crie o pool inteiro ao assumir; abra membro só quando um item espera o papel sem membro livre. Pré-crie só no **modo ausente**, que liga só com `/ausente on` e desliga só com `/ausente off` (frase solta não mexe; protocolo, âncora `sob-demanda`), e aí o **teto previsto** inteiro: 4 E, 3 V, uma D se alguma frente toca tela, uma P por frente viva mais uma livre. Fora dele, membro livre sem trabalho previsto entra na lista de candidatas a arquivar que você leva ao operador. Detalhe em `../protocolo.md`.
+Item esperando um papel sem membro livre → com o modo ausente desligado, peça a vaga no mesmo turno (sem teto, Q277): abre o membro em turno do operador; fora dele, propõe o cartão. Com o modo ligado não se pede vaga nova nem cartão: o item espera o primeiro membro do papel que liberar. Membro que liberar antes do clique pega o item e o cartão é retirado (`dismiss_task`). **Sob demanda:** não crie o pool inteiro ao assumir; abra membro só quando um item espera o papel sem membro livre. Pré-crie só no **modo ausente**, que liga só com `/ausente on` e desliga só com `/ausente off` (frase solta não mexe; protocolo, âncora `sob-demanda`), e aí o **pool padrão** inteiro: 4 E, 3 V, uma D se alguma frente toca tela, uma P por frente viva mais uma livre. Fora dele, você arquiva sozinha o membro sem item vivo (modo ausente desligado, Q277); com o modo ligado, nada se arquiva. Detalhe em `../protocolo.md`.
 
 ## Teto da crítica de tela
 **Teto da crítica de tela (Q207, operador, 24/10).** A crítica do `critico-de-ui` dá nota de 0 a 30. **De 24/30 para cima, aprovada com ressalvas e sem ressalva alta, a revisão ou a tela está liberada** (para execução ou para merge); ressalva alta volta para conserto mesmo com nota boa (B1, assumida 24/10); ressalva média ou baixa não volta para conserto: vira item próprio na fila (`F<n>`); todo problema da crítica declara o **Peso** (alta · média · baixa). **No máximo 2 recríticas por PR ou revisão**; na terceira, o que ainda estiver abaixo de 24 sobe à planejadora, que decide ou leva ao operador. Motivo: o redesenho do editor ficou um dia parado em 11 e 15 rodadas de crítica polindo ressalva baixa.
