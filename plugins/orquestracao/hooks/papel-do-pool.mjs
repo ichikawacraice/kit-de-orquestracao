@@ -6,7 +6,8 @@
 // (mesmo `session_id`). Sem título de membro e sem ser orquestradora: passa calado (outros projetos).
 //   T1  Agent/Task: P, D ou orquestradora não lança `executor`/`validador`; E não lança `validador`
 //       nem `executor`; V não lança `executor`.            T1c V não edita arquivo do projeto.
-//   T2  archive_session / delete_session de membro do pool (a orquestradora só arquiva, por comando do operador no turno dele, membro do MESMO projeto ou de projeto sem orquestradora — Q245).
+//   T2  archive_session / delete_session de membro do pool. Só a orquestradora arquiva: com o modo ausente desligado, sozinha, o membro sem item vivo
+//       (sem com, fez nem dono); com ele ligado, só por pedido do operador no turno dele (Q277). Sempre membro do MESMO projeto ou de projeto sem orquestradora.
 //   T3  start_session: negado em turno que não é do operador com o modo ausente ligado (/ausente on) e a membro do pool.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava).
 //   T6  Bash `gh pr merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
@@ -20,7 +21,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { registrar, lerEntrada, semPrefixoDoPlugin } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao } from './pool-comum.mjs';
+import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao } from './pool-comum.mjs';
 
 const HOOK = 'papel-do-pool';
 const H = homedir();
@@ -127,16 +128,19 @@ function main() {
       if (!reg) { registrar(sid, HOOK, 'alvo-desconhecido', `${tool} ${alvo}`); continue; }
       const m = membroDoPool(reg.titulo);
       if (!m) continue;
-      // Arquivar é do operador (Q245, 25/10: "não arquivar sozinha, mas por comando meu pode arquivar"): a orquestradora
-      // arquiva membro do pool, de qualquer título, SÓ no turno que o operador começou. Fora dele, nem o `· livre`.
+      // Q277/D8: com o modo ausente desligado a orquestradora arquiva sozinha, em qualquer turno, o membro sem item vivo; com ele ligado,
+      // só no turno que o operador começou (pedido digitado dele vale em qualquer modo). Erro ao ler a fila nunca libera.
       const quemChama = registroDaSessao(e.session_id);
       if (ehOrquestradora(e.session_id, quemChama?.titulo) && alvo !== e.session_id) {
         let origem = null;
         try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
-        if (origem !== 'human') {
-          return nega('T2', m.id, String(alvo), origem === 'plugin'
-            ? 'Arquivar só com o pedido do operador digitado no turno dele (Q245); resposta pelo painel não vale — peça no chat.'
-            : 'Arquivar só por comando do operador, no turno dele (Q245): liste as candidatas, pergunte, e arquive quando ele mandar.');
+        const porComando = origem === 'human';
+        if (!porComando) {
+          if (bandeiraDeAusencia()) return nega('T2', m.id, String(alvo), 'Modo ausente ligado: nada se arquiva (Q277). O membro fica no pool para o que surgir.');
+          const oc = ocupacaoDaSessao(reg.localId);
+          if (!oc) return nega('T2', m.id, String(alvo), 'Não consegui ler a fila: por segurança, não arquivo.');
+          const onde = [...oc.com.map((f) => `${f} (com)`), ...oc.fez.map((f) => `${f} (fez)`), ...oc.dono.map((f) => `${f} (dono)`)];
+          if (onde.length) return nega('T2', m.id, String(alvo), `${m.id} ainda está em ${onde.join(', ')}: só se arquiva membro sem item vivo.`);
         }
         // Do MESMO projeto (D1, 24/10) ou de projeto SEM orquestradora própria (F23, assumida, a confirmar): `E1 · livre`
         // existe em cada projeto. "Não consegui medir" nunca libera: repo indeterminado de qualquer lado, ou projeto do alvo
@@ -144,7 +148,7 @@ function main() {
         const meu = projetoDaSessao(quemChama)?.repo; const dele = projetoDaSessao(reg)?.repo;
         const dela = meu && dele && meu !== dele ? projetoTemOrquestradora(alvo, dele) : undefined;
         if (meu && dele && (meu === dele || dela === false)) {
-          registrar(sid, HOOK, 'deixou-arquivar-por-comando', `${m.id} ${alvo}`);
+          registrar(sid, HOOK, porComando ? 'deixou-arquivar-por-comando' : 'arquivou-sozinha', `${m.id} ${alvo}`);
           continue;
         }
         return nega('T2', m.id, String(alvo), !(meu && dele)
@@ -153,7 +157,7 @@ function main() {
             ? `Não consegui conferir se o projeto desse \`${m.id}\` tem orquestradora própria (marcador sem repo resolvido, transcript velho ou ausente, ou pasta de transcripts ilegível): por segurança, não arquivo.`
             : `Esse \`${m.id}\` é de outro projeto: a orquestradora só arquiva membro do próprio projeto.`);
       }
-      return nega('T2', m.id, String(alvo), `Membro do pool não se arquiva (decisão do operador, 24/10): quem termina fica livre — título \`${m.id} · livre\` e clear_session. Só a orquestradora arquiva, e só por comando do operador, no turno dele (Q245).`);
+      return nega('T2', m.id, String(alvo), `Membro do pool não se arquiva (decisão do operador, 24/10): quem termina fica livre — título \`${m.id} · livre\` e clear_session. Só a orquestradora arquiva: com o modo ausente desligado, sozinha, o membro sem item vivo; com ele ligado, só por pedido do operador no turno dele (Q277).`);
     }
     return;
   }
