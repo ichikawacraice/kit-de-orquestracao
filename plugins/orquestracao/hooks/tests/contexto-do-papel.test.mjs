@@ -194,21 +194,24 @@ test('F48-5. ORQ com 260 mil que chamou clear_session "self" no turno: passa (li
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/); // sem a chamada no turno a mesma entrada cobra: o teste mede a limpeza
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, anterior: [LIMPA] })), /limpar · orquestradora/);
 }));
-test('F48-6. ORQ com 240 mil terminando em "?": sem bandeira passa; com bandeira, a 260 mil, cobra cobrou-150-espera', () => com((b) => {
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 240_000, texto: 'pronto.\n\nPosso seguir?' })), null);
+test('F48-6. ORQ com "?" no fim: sem bandeira, a 260 mil, cobra pedir (não espera); com bandeira cobra cobrou-150-espera', () => com((b) => {
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /limpar · orquestradora/);
+  assert.match(log(b), /\tcobrou-pedir\t/); assert.doesNotMatch(log(b), /cobrou-150-espera/);
   ligar(b);
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
   assert.match(log(b), /\tcobrou-150-espera\t/);
 }));
-test('F48-7. ORQ: sem bandeira, a 240 mil passa; com bandeira, a 360 mil cobra cobrou-200', () => com((b) => {
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 240_000 })), null);
+test('F48-7. ORQ a 360 mil: sem bandeira cobra pedir; com bandeira cobra cobrou-200', () => com((b) => {
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /limpar · orquestradora/);
+  assert.match(log(b), /\tcobrou-pedir\t/); assert.doesNotMatch(log(b), /cobrou-200/);
   ligar(b);
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /360 mil/);
   assert.match(log(b), /\tcobrou-200\t/);
 }));
-test('F48-8. bandeira {ligado:false} vale como desligada: ORQ com 240 mil passa', () => com((b) => {
+test('F48-8. bandeira {ligado:false} vale como desligada: ORQ a 360 mil cobra pedir, não cobrou-200', () => com((b) => {
   ligar(b, { ligado: false, desligadoEm: agora(), por: 'painel' });
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 240_000 })), null);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /limpar · orquestradora/);
+  assert.match(log(b), /\tcobrou-pedir\t/); assert.doesNotMatch(log(b), /cobrou-200/);
 }));
 test('F48-9. planejadora com 360 mil segue cobrando sem bandeira (a mudança é só da orquestradora)', () => com((b) => {
   cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
