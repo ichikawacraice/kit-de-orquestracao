@@ -7,7 +7,8 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - cumpre um plano pronto: arquivos, passos, critério de pronto medível e fora de escopo;
   - escreve o código e o teste, roda o teste que o projeto pede antes do push e commita (ex.: o teste do pacote que mexeu e o typecheck; o gate completo, quando pesado, é da orquestradora, por lote);
   - abre o PR com o rebase em dia;
-  - atualiza a spec, o roadmap e o diário na mesma sessão, quando o plano pede.
+  - atualiza a spec, o roadmap e o diário na mesma sessão, quando o plano pede;
+  - **na via rápida** (`via: "rapida"`, `protocolo.md#via-rapida`), depois do código lança o subagente `design:critico-de-ui` **uma vez**, com o escopo do plano no briefing. Nota ≥ 24 sem ressalva alta dentro do escopo → entrega à V. Ressalva alta dentro do escopo → conserta sem recrítica e registra no handoff. Nota < 24 ou item que muda decisão → devolve à planejadora. Achado fora do escopo → não faz: anota no handoff para virar item.
 - **Não faz:**
   - não decide desenho: dúvida que muda o plano volta à planejadora;
   - não redesenha tela: segue a revisão aprovada da D1 em `docs/design/revisoes/`;

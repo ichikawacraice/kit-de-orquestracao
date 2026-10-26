@@ -3,7 +3,7 @@
 // Tudo em pasta temporária: HOME, HOOKS_CREWAI_BASE (BASE) e POOL_APP_SESSOES_DIR (registro do app).
 // Rodar: node ~/.claude/hooks/tests/papel-do-pool.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +45,8 @@ function novoBase() {
   // Mesmo título `E1 · livre` em outro projeto (beta), e um livre cujo repositório não resolve.
   writeFileSync(dir('app', 'conta', 'local_E1B.json'), JSON.stringify({ sessionId: 'local_E1B', cliSessionId: 'bbbb-e1b', title: 'E1 · livre', isArchived: false, cwd: dir('beta'), originCwd: dir('beta') }));
   writeFileSync(dir('app', 'conta', 'local_E1X.json'), JSON.stringify({ sessionId: 'local_E1X', cliSessionId: 'bbbb-e1x', title: 'E1 · livre', isArchived: false, cwd: dir('semgit'), originCwd: dir('semgit') }));
+  // Outra E livre do projeto (ADR 0004): os casos de arquivar E1/E3 não esbarram no piso, salvo o que o tira de propósito.
+  writeFileSync(dir('app', 'conta', 'local_E9.json'), JSON.stringify({ sessionId: 'local_E9', cliSessionId: 'bbbb-e9', title: 'E9 · livre', isArchived: false, cwd: dir('alfa'), originCwd: dir('alfa') }));
   writeFileSync(dir('app', 'conta', 'local_COMUM.json'), JSON.stringify({ sessionId: 'local_COMUM', cliSessionId: 'bbbb-comum', title: 'feat(web): algo', isArchived: false }));
 }
 function rodar(hook, evento, extraEnv = {}) {
@@ -114,6 +116,17 @@ caso('T2: archive/delete de membro → deny; de sessão comum passa; alvo inexis
   passa(A('ORQ', 'local_COMUM'), 'comum');
   passa(A('ORQ', 'local_NAOEXISTE'), 'inexistente');
   ok(log().includes('alvo-desconhecido'), 'sem o log alvo-desconhecido');
+});
+caso('T2 piso (ADR 0004): última E livre não se arquiva fora do turno do operador; havendo outra, passa; no turno dele, passa sempre', () => {
+  const A = (alvo, extra) => pre('ORQ', 'mcp__ccd_session_mgmt__archive_session', { session_id: alvo }, extra);
+  passa(A('local_E1', depeer()), 'precondição: com a E9 livre, arquivar E1 passa');
+  unlinkSync(dir('app', 'conta', 'local_E9.json'));
+  const r = A('local_E1', depeer());
+  nega(r, 'única E livre, turno de peer');
+  ok(/última E livre/.test(r.permissionDecisionReason) && /ADR 0004/.test(r.permissionDecisionReason), `motivo: ${r.permissionDecisionReason}`);
+  passa(A('local_E1', humano()), 'turno do operador passa sempre');
+  passa(A('local_E1B', depeer()), 'livre de outro projeto sem orquestradora própria: o piso olha o projeto do alvo');
+  passa(pre('ORQ', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'local_V1' }, depeer()), 'V não tem piso');
 });
 // Orquestradora ativa de outro projeto: marcador em ativas/ (conteúdo = git common dir) + transcript recente.
 function orquestradoraDe(repo, id = 'cccccccc-0000-0000-0000-000000000001') {
