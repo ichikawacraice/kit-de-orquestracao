@@ -2,7 +2,7 @@
 
 - **Data:** 2026-10-26
 - **Autora:** D1, designer do pool
-- **Estado:** **sobe à planejadora** (rodada 1: 19/30; rodada 2: 22/30; rodada 3, a última recrítica permitida: 22/30 com uma ressalva alta, P3-1). Todos os consertos da rodada 3 que cabem à designer estão aplicados; a P3-1 tem uma parte que é do plano (§Decisões, D1-7)
+- **Estado:** **liberada para execução pela P1 com 22/30** (Q279 decidida); histórico: sobe à planejadora (rodada 1: 19/30; rodada 2: 22/30; rodada 3, a última recrítica permitida: 22/30 com uma ressalva alta, P3-1). Todos os consertos da rodada 3 que cabem à designer estão aplicados; a P3-1 tem uma parte que é do plano (§Decisões, D1-7)
 - **Mock:** [`2026-10-26-topo-do-painel-mock.html`](2026-10-26-topo-do-painel-mock.html), estático, claro e escuro, colunas com a largura útil do código (W = 372 e W = 288) e o terminal a 72 e a 40 colunas
 - **Plano de origem:** [`docs/planos/2026-10-26-limpeza-com-ok-e-modo-ausente-no-painel.md`](../planos/2026-10-26-limpeza-com-ok-e-modo-ausente-no-painel.md), bloco B. O comportamento (contrato da bandeira, estados do botão, efeito otimista) é do plano; esta revisão decide o texto, a posição, o peso, como o ausente se distingue sem depender só de cor, os 300 px e o terminal.
 - **Base:** [`2026-10-25-painel-redesenho.md`](2026-10-25-painel-redesenho.md) (F34) e [`2026-10-26-item-citado-pelo-numero.md`](2026-10-26-item-citado-pelo-numero.md) (F43). O que esta revisão não cita continua como lá.
@@ -257,6 +257,7 @@ A barra do terminal hoje é um `Box row space-between`: os contadores (com `flex
   - **O caso:** o `/ausente on` grava a bandeira **e** pré-abre o pool para a noite (4 E, 3 V, D, P; skill `ausente`). O botão, pelo plano (D7), só grava a bandeira. Com a bandeira ligada, a trava T3a impede abrir sessão em turno que não seja do operador. Quem liga pelo botão à noite pode amanhecer com o pool parado.
   - **Se não decidir:** a E executa como está nesta revisão: a faixa diz `sessões novas só abrem com você` e o toast de ligar diz `Para pré-abrir o pool, use /ausente on no chat.` O operador fica avisado, mas o botão continua menor que o comando.
   - **Recomendo:** manter o botão só como bandeira (o pane não deve abrir sessões; isso é da orquestradora) e, no bloco A, fazer a orquestradora, ao ver a bandeira com `por:"painel"` ligada sem o pré-abrir, perguntar ao operador se pré-abre. É mudança de comportamento, por isso é do plano, não da designer.
+  - **Decidido pela P1 (Q279, assumida, a confirmar):** o botão fica só como bandeira, **sem** a pergunta da orquestradora no bloco A (com o operador fora, ninguém responderia). O aviso no clique (3ª linha da faixa e toast) fecha a P3-1; a E cumpre esta revisão como está.
 
 **Gotchas para a E:**
 - **A releitura é de 60 s.** Quem liga pelo `/ausente on` no chat vê a faixa mudar só na próxima leitura (ou no ↻).
