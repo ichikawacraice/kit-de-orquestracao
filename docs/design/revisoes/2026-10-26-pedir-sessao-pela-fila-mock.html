@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedir sessão pela fila — mock</title>
+<style>
+/* Mock estático do redesenho do pane /painel (F34). Cores = as classes do desenho.ts de hoje
+   (t, s, m, av, er, an, ok, li, tile, k, ln). Nada de cor nova: o que muda é a estrutura. */
+:root{
+  --bg:#ffffff;--t:#1f1f1f;--s:#6b6b68;--m:#6f6f6b;--av:#9a6210;--er:#b8452c;--an:#3a68c8;--ok:#2e7d4a;--li:#5b5cd6;
+  --tile:#f4f3f0;--k:#ecebe8;--ln:#e8e7e3;--card:#fbf6ec;--cardb:#efdcb6;--ertint:#fbefeb;
+  --pt:#ffffff;--btn:#ffffff;--btnb:#d6d5d1;--btnt:#1f1f1f;--pri:#3a68c8;--prit:#ffffff;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#1f1f1f;--t:#ececec;--s:#a8a8a4;--m:#93938f;--av:#d9962b;--er:#e0846b;--an:#5b8def;--ok:#4caf6e;--li:#8b8cf8;
+  --tile:#262625;--k:#2c2c2b;--ln:#2f2f2d;--card:#2a251b;--cardb:#4a3d22;--ertint:#2d201c;
+  --pt:#1f1f1f;--btn:#2c2c2b;--btnb:#3d3d3b;--btnt:#ececec;--pri:#5b8def;--prit:#ffffff;
+}}
+:root[data-theme="dark"]{
+  --bg:#1f1f1f;--t:#ececec;--s:#a8a8a4;--m:#93938f;--av:#d9962b;--er:#e0846b;--an:#5b8def;--ok:#4caf6e;--li:#8b8cf8;
+  --tile:#262625;--k:#2c2c2b;--ln:#2f2f2d;--card:#2a251b;--cardb:#4a3d22;--ertint:#2d201c;
+  --pt:#1f1f1f;--btn:#2c2c2b;--btnb:#3d3d3b;--btnt:#ececec;--pri:#5b8def;--prit:#ffffff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif}
+.doc{max-width:1240px;margin:0 auto;padding:24px 16px 64px}
+.doc>h1{font-size:18px;margin:0 0 4px}
+.doc>p{color:var(--s);margin:0 0 20px;max-width:720px}
+.tema-sw{position:fixed;top:12px;right:16px;display:flex;gap:6px}
+.grade{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+.coluna{width:380px;max-width:100%}
+.coluna>h2{font-size:12px;font-weight:600;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px}
+.pane{min-width:0;border:1px solid var(--ln);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:14px;background:var(--bg)}
+
+/* barra do topo: hora da leitura + Atualizar (Button secondary nativo) */
+.topo{display:flex;justify-content:space-between;align-items:center}
+.cap{font-size:12px;color:var(--m)}
+.cap.ruim{color:var(--er)}
+
+/* Button nativo do desktop: secondary e primary. Nenhum botão "plain" sobra. */
+.b{font:inherit;font-size:12.5px;line-height:1;padding:6px 10px;border-radius:6px;border:1px solid var(--btnb);background:var(--btn);color:var(--btnt);cursor:pointer}
+.b.pri{background:var(--pri);border-color:var(--pri);color:var(--prit);font-weight:600}
+.b.ocupado{opacity:.6;cursor:progress}
+.acoes{display:flex;flex-wrap:wrap;gap:6px}
+
+/* resumoSvg: 2×2 abaixo de 500 px, como hoje; rótulo = nome da seção */
+.resumo{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tile{background:var(--tile);border-radius:10px;padding:10px 12px 8px;height:62px}
+.tile .r{display:flex;align-items:center;gap:7px;color:var(--s)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--m);opacity:.45;flex:none}
+.tile .n{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--m);margin-top:2px}
+.tile.av .dot{background:var(--av);opacity:1}.tile.av .n{color:var(--av)}
+.tile.er .dot{background:var(--er);opacity:1}.tile.er .n{color:var(--er)}
+.tile.an .dot{background:var(--an);opacity:1}.tile.an .n{color:var(--an)}
+.tile.t .dot{background:var(--t);opacity:1}.tile.t .n{color:var(--t)}
+
+/* secaoSvg: a faixa que abre cada seção — filete da cor da seção, título, contagem, legenda */
+.secao{display:flex;flex-direction:column;gap:8px}
+.cab{display:flex;align-items:center;gap:8px;padding-left:10px;border-left:3px solid var(--m);min-height:24px}
+.cab .ti{font-size:15px;font-weight:600}
+.cab .ct{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;padding:1px 7px;border-radius:9px;background:var(--k);color:var(--s)}
+.cab .lg{font-size:12px;color:var(--m);margin-left:auto}
+.cab.av{border-color:var(--av)}.cab.av .ct{background:var(--av);color:var(--pt)}
+.cab.er{border-color:var(--er)}.cab.er .ct{background:var(--er);color:var(--pt)}
+.cab.an{border-color:var(--an)}.cab.an .ct{background:var(--an);color:var(--pt)}
+.cab.fi{border-left-style:dashed}
+.vazio{font-size:12.5px;color:var(--m);padding:2px 0 2px 13px}
+
+/* cartão do item executando: Box com borda arredondada (a medir no desktop — §7 da revisão) */
+.cartao{border:1px solid var(--btnb);border-radius:10px;background:transparent;padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px}
+.cartao.trav{border-color:var(--er)}
+.sobre{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.tema{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--m)}
+.tempo{font-size:12px;color:var(--m);font-variant-numeric:tabular-nums;white-space:nowrap}
+.titulo{font-size:15px;font-weight:600;line-height:1.3}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:9px;background:var(--k);color:var(--s)}
+.chip.an{color:var(--an)}.chip.li{color:var(--li)}.chip.ok{color:var(--ok)}
+.chip.av{background:var(--av);color:var(--bg)}
+.chip.pr{color:var(--an);background:transparent;border:1px solid var(--btnb)}
+.chip.fila{background:transparent;border:1px dashed var(--m);color:var(--s)}
+.quem{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--s)}
+.quem+.quem{margin-top:-2px}
+.sel{position:relative;flex:none;min-width:30px;height:22px;padding:0 6px;border-radius:6px;background:var(--k);color:var(--t);font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.sel i{position:absolute;right:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--an);border:2px solid var(--bg)}
+.sel i.vivo{animation:p 1.6s ease-in-out infinite}
+@keyframes p{50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){.sel i.vivo{animation:none}}
+.quem b{color:var(--t);font-weight:600}
+.agora{font-size:12.5px;color:var(--s)}
+.depois{font-size:12px;color:var(--m)}
+.trava{background:var(--ertint);border-radius:6px;padding:6px 8px;font-size:12.5px;color:var(--er)}
+.trava b{font-weight:700}
+.acoes.cartao-acoes{margin-top:4px}
+.acoes.sob{padding-left:16px;margin-top:-6px}
+.cartao.esp{border-color:var(--av)}
+.espera{font-size:12.5px;color:var(--av)}
+.coluna.w300{width:300px}
+.w300 .tile{height:36px;padding:0 10px;display:flex;align-items:center;justify-content:space-between}
+.w300 .tile .n{font-size:17px;margin:0}
+
+/* linha da fila: sem cartão, sem botão (ninguém para abrir); anel tracejado */
+.fila{display:flex;flex-direction:column}
+.lin{display:grid;grid-template-columns:18px 1fr;gap:0 8px;padding:9px 0 10px;border-bottom:1px solid var(--ln)}
+.lin:last-child{border-bottom:0}
+.anel{width:11px;height:11px;border-radius:50%;border:1.3px dashed var(--m);margin-top:4px;justify-self:center}
+.lin .sobre{grid-column:2}
+.lin .titulo{font-size:14px}
+.lin .resumo-l{font-size:12.5px;color:var(--s);margin-top:3px}
+.lin .chips{margin-top:4px}
+
+.acoes.lin-acoes{padding-left:26px;margin-top:-2px}
+.estado{font-size:12.5px;color:var(--m)}
+.estado.av{color:var(--av)}
+.aviso-proj{font-size:12.5px;color:var(--m);padding-left:13px}
+.acoes{align-items:center}
+.lin.sem-filete{border-bottom:0;padding-bottom:6px}
+.filete{border-bottom:1px solid var(--ln);margin:8px 0 0}
+.nota{font-size:11.5px;color:var(--m);margin:6px 0 0}
+</style>
+</head>
+<body>
+<div class="tema-sw">
+  <button class="b" onclick="document.documentElement.dataset.theme='light'">Claro</button>
+  <button class="b" onclick="document.documentElement.dataset.theme='dark'">Escuro</button>
+</div>
+<div class="doc">
+<h1>Pedir a sessão de cada item que espera — mock estático</h1>
+<p>A seção Na fila e um cartão em Executando, a 380 px e a 300 px. Os botões são os nativos (<code>secondary</code>); estados mostrados lado a lado para comparar. Cores e classes são as do redesenho do pane.</p>
+<div class="grade">
+<div class="coluna">
+<h2>380 px — Na fila com todos os estados</h2>
+<div class="pane">
+  <div class="secao">
+    <div class="cab an"><span class="ti">Executando</span><span class="ct">2</span><span class="lg">0 trabalhando</span></div>
+    <div class="cartao">
+      <div class="sobre"><span class="tema">F61 · Sessões e painel</span><span class="tempo">há 35 min</span></div>
+      <div class="titulo">A barra de status mostra o cache em alerta</div>
+      <div class="chips"><span class="chip an">validação</span><span class="chip">esperando V · 35 min</span><a class="chip pr">#28</a></div>
+      <div class="quem"><span class="sel">E2</span><span><b>executora</b> · parada há 35 min</span></div>
+      <div class="acoes cartao-acoes"><button class="b">Pedir validadora</button><button class="b">Abrir E2</button></div>
+    </div>
+    <div class="cartao">
+      <div class="sobre"><span class="tema">F59 · Sessões e painel</span><span class="tempo">há 22 min</span></div>
+      <div class="titulo">O resumo da ausência traz as perguntas respondidas</div>
+      <div class="chips"><span class="chip an">validação</span><span class="chip">esperando V · 22 min</span></div>
+      <div class="quem"><span class="sel">E4</span><span><b>executora</b> · parada há 22 min</span></div>
+      <div class="estado av">Pedido às 10:40 · inicie o cartão na conversa da orquestradora</div>
+      <div class="acoes cartao-acoes"><button class="b">Abrir E4</button></div>
+    </div>
+  </div>
+  <div class="secao">
+    <div class="cab fi"><span class="ti">Na fila</span><span class="ct">6</span><span class="lg">não começaram</span></div>
+    <div class="acoes"><button class="b">Abrir a orquestradora de izanagi</button></div>
+    <div class="aviso-proj">Sem orquestradora ativa em loja-velha · 1 item</div>
+    <div class="fila">
+      <div class="lin sem-filete"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F63 · Izanagi · Editor</span><span class="tempo">parado há 13 min</span></div>
+        <div class="titulo">O editor guarda o rascunho ao trocar de seção</div>
+        <div class="chips"><span class="chip fila">espera planejamento · 13 min</span></div>
+      </div></div>
+      <div class="acoes lin-acoes"><button class="b">Pedir planejadora</button></div>
+      <div class="filete"></div>
+
+      <div class="lin sem-filete"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F68 · Kit · Painel</span><span class="tempo">parado há 44 min</span></div>
+        <div class="titulo">O painel pede a sessão de cada item que espera</div>
+        <div class="chips"><span class="chip fila">espera execução · 44 min</span></div>
+      </div></div>
+      <div class="acoes lin-acoes"><button class="b">Pedir executora</button><span class="estado av">No prompt às 10:44 · aperte Enter</span></div>
+      <div class="filete"></div>
+
+      <div class="lin sem-filete"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F64 · Izanagi · Editor</span><span class="tempo">parado há 13 min</span></div>
+        <div class="titulo">A prévia acompanha a rolagem do editor</div>
+        <div class="chips"><span class="chip fila">espera design · 13 min</span></div>
+      </div></div>
+      <div class="acoes lin-acoes"><button class="b ocupado">Pedindo…</button></div>
+      <div class="filete"></div>
+
+      <div class="lin sem-filete"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F17 · Izanagi · Loja</span><span class="tempo">parado há 7 h</span></div>
+        <div class="titulo">O checkout mostra o frete antes do CEP</div>
+        <div class="chips"><span class="chip fila">espera planejamento · 416 min</span></div>
+      </div></div>
+      <div class="acoes lin-acoes"><span class="estado av">Pedido às 10:42 · inicie o cartão na conversa da orquestradora</span></div>
+      <div class="filete"></div>
+
+      <div class="lin"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F12 · Loja velha</span><span class="tempo">parado há 2 h</span></div>
+        <div class="titulo">O cupom de primeira compra</div>
+        <div class="chips"><span class="chip fila">espera execução · 120 min</span></div>
+      </div></div>
+
+      <div class="lin"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F66 · Kit · Gate</span><span class="tempo">parado há 5 min</span></div>
+        <div class="titulo">Release 0.1.34</div>
+        <div class="chips"><span class="chip fila">espera merge</span><a class="chip pr">#29</a></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+<p class="nota">Executando: o cartão com o botão e o cartão com o pedido já enviado (texto em linha própria, acima dos “Abrir”). Na fila, de cima para baixo: o “Abrir a orquestradora de izanagi”, porque o F17 está em “Pedido” (sem o lote: só o F63 pode ser pedido, e o lote pede 2 ou mais; o F68 já está no prompt e não conta), o aviso do projeto sem orquestradora, botão, no prompt, enviando, pedido, o item do projeto sem orquestradora (a linha de hoje) e um item em merge, sem papel a pedir.</p>
+</div>
+<div class="coluna w300">
+<h2>300 px — pior caso</h2>
+<div class="pane">
+  <div class="secao">
+    <div class="cab an"><span class="ti">Executando</span><span class="ct">2</span><span class="lg">0 trabalhando</span></div>
+    <div class="cartao">
+      <div class="sobre"><span class="tema">F61 · Sessões e painel</span><span class="tempo">há 35 min</span></div>
+      <div class="titulo">A barra de status mostra o cache em alerta</div>
+      <div class="chips"><span class="chip an">validação</span><span class="chip">esperando V · 35 min</span><a class="chip pr">#28</a></div>
+      <div class="quem"><span class="sel">E2</span><span><b>executora</b> · parada há 35 min</span></div>
+      <div class="acoes cartao-acoes"><button class="b">Pedir validadora</button><button class="b">Abrir E2</button></div>
+    </div>
+    <div class="cartao">
+      <div class="sobre"><span class="tema">F59 · Sessões e painel</span><span class="tempo">há 22 min</span></div>
+      <div class="titulo">O resumo da ausência traz as perguntas respondidas</div>
+      <div class="chips"><span class="chip an">validação</span><span class="chip">esperando V · 22 min</span></div>
+      <div class="quem"><span class="sel">E4</span><span><b>executora</b> · parada há 22 min</span></div>
+      <div class="estado av">Pedido às 10:40 · inicie o cartão na conversa da orquestradora</div>
+      <div class="acoes cartao-acoes"><button class="b">Abrir E4</button></div>
+    </div>
+  </div>
+  <div class="secao">
+    <div class="cab fi"><span class="ti">Na fila</span><span class="ct">6</span><span class="lg">não começaram</span></div>
+    <div class="acoes"><button class="b">Abrir a orquestradora de izanagi</button></div>
+    <div class="aviso-proj">Sem orquestradora ativa em loja-velha · 1 item</div>
+    <div class="fila">
+      <div class="lin sem-filete"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F63 · Izanagi · Editor</span><span class="tempo">parado há 13 min</span></div>
+        <div class="titulo">O editor guarda o rascunho ao trocar de seção</div>
+        <div class="chips"><span class="chip fila">espera planejamento · 13 min</span></div>
+      </div></div>
+      <div class="acoes lin-acoes"><button class="b">Pedir planejadora</button></div>
+      <div class="filete"></div>
+
+      <div class="lin sem-filete"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F68 · Kit · Painel</span><span class="tempo">parado há 44 min</span></div>
+        <div class="titulo">O painel pede a sessão de cada item que espera</div>
+        <div class="chips"><span class="chip fila">espera execução · 44 min</span></div>
+      </div></div>
+      <div class="acoes lin-acoes"><button class="b">Pedir executora</button><span class="estado av">No prompt às 10:44 · aperte Enter</span></div>
+      <div class="filete"></div>
+
+      <div class="lin sem-filete"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F64 · Izanagi · Editor</span><span class="tempo">parado há 13 min</span></div>
+        <div class="titulo">A prévia acompanha a rolagem do editor</div>
+        <div class="chips"><span class="chip fila">espera design · 13 min</span></div>
+      </div></div>
+      <div class="acoes lin-acoes"><button class="b ocupado">Pedindo…</button></div>
+      <div class="filete"></div>
+
+      <div class="lin sem-filete"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F17 · Izanagi · Loja</span><span class="tempo">parado há 7 h</span></div>
+        <div class="titulo">O checkout mostra o frete antes do CEP</div>
+        <div class="chips"><span class="chip fila">espera planejamento · 416 min</span></div>
+      </div></div>
+      <div class="acoes lin-acoes"><span class="estado av">Pedido às 10:42 · inicie o cartão na conversa da orquestradora</span></div>
+      <div class="filete"></div>
+
+      <div class="lin"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F12 · Loja velha</span><span class="tempo">parado há 2 h</span></div>
+        <div class="titulo">O cupom de primeira compra</div>
+        <div class="chips"><span class="chip fila">espera execução · 120 min</span></div>
+      </div></div>
+
+      <div class="lin"><span class="anel"></span><div>
+        <div class="sobre"><span class="tema">F66 · Kit · Gate</span><span class="tempo">parado há 5 min</span></div>
+        <div class="titulo">Release 0.1.34</div>
+        <div class="chips"><span class="chip fila">espera merge</span><a class="chip pr">#29</a></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+<p class="nota">Executando: o cartão com o botão e o cartão com o pedido já enviado (texto em linha própria, acima dos “Abrir”). Na fila, de cima para baixo: o “Abrir a orquestradora de izanagi”, porque o F17 está em “Pedido” (sem o lote: só o F63 pode ser pedido, e o lote pede 2 ou mais; o F68 já está no prompt e não conta), o aviso do projeto sem orquestradora, botão, no prompt, enviando, pedido, o item do projeto sem orquestradora (a linha de hoje) e um item em merge, sem papel a pedir.</p>
+</div>
+</div></div></body></html>
