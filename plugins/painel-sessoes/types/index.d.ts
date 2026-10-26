@@ -12,6 +12,8 @@ export type LinhaItem = {
   /** O projeto do tema que casou (ausente em tema global e em 'sem-tema'): o grupo é (projeto, id). */
   temaProjeto?: string
   temaRotulo: string
+  /** O projeto do documento (minúsculo), que abre o título do cartão; ausente no item legado. */
+  projeto?: string
   /** A etapa como veio no documento (pode estar fora da lista: aí `foraDoContrato` explica). */
   etapa: string
   situacao: Situacao

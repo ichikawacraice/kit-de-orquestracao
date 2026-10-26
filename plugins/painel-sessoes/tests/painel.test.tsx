@@ -1773,3 +1773,35 @@ test('F43-10: com Todos os itens e Feitos hoje abertos, a lista inteira vem depo
   expect(semFeitos.lido.desktop).toMatch(/Todos os itens · 1/)
   expect(R.ordemDoRodape({ todos: true, feitos: true, anteriores: true })).toEqual(['botoes', 'feitos', 'anteriores', 'todos'])
 })
+
+test('projeto no título: o cartão e a linha da fila abrem com "PROJETO · TEMA"; sem projeto, só o tema', () => {
+  const com = cartaoSvg(360, itemCheio({ projeto: 'izanagi' }), AGORA, { situacao: situacaoDoTeste })
+  expect(com.source, 'o desenho não pode vir vazio').toBeTruthy()
+  expect(com.source).toContain('IZANAGI · EDITOR DA LOJA')
+  const fila = filaSvg(360, itemCheio({ situacao: 'fila', com: [], projeto: 'kit-de-orquestracao' }), AGORA)
+  expect(fila.source).toContain('KIT-DE-ORQUESTRACAO · EDITOR DA LOJA')
+  const sem = cartaoSvg(360, itemCheio({ projeto: undefined }), AGORA, { situacao: situacaoDoTeste })
+  expect(sem.source).toContain('EDITOR DA LOJA')
+  expect(sem.source, 'sem projeto, nada de projeto no rótulo').not.toMatch(/IZANAGI|KIT-DE-ORQUESTRACAO/)
+})
+
+test('projeto no título: montarItens leva o projeto do documento ao item', () => {
+  const [item] = montarItens([doc('F1', { titulo: 'x', tema: 'editor', etapa: 'execucao', projeto: 'Izanagi' })], TEMAS_REAIS, [], undefined, [], AGORA)
+  expect(item, 'o item existe').toBeDefined()
+  expect(item!.projeto).toBe('izanagi')
+})
+
+test('largura: no desktop o desenho ocupa a largura do pane, sem folga à direita', async ($, on) => {
+  const motor = engine(on, false, {}, { agora: AGORA, fila: fila('F27', 'F1'), vivas: vivasDe(P7, P1), perguntas: [] })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(ABRIR)
+  await motor.relogio.settle()
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop', props: { ...PANE.props, bodyColumns: 66 } })
+  const svgs = (await ui.findAll({ type: 'Svg' })) as ElPane[]
+  expect(svgs.length, 'há desenhos').toBeGreaterThan(0)
+  const larguras = svgs.map(s => s.props.width as number)
+  // 66 colunas medem ~586 px no desktop: o desenho mais largo passa de 570 e nenhum passa de 586.
+  expect(Math.max(...larguras)).toBeGreaterThanOrEqual(570)
+  expect(Math.max(...larguras)).toBeLessThanOrEqual(586)
+  await ui.unmount()
+})

@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { Citado, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, secaoSvg, seloDaEspera, textoDaTrava, todosSvg } from './desenho'
+import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, secaoSvg, seloDaEspera, textoDaTrava, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -12,6 +12,8 @@ import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde
 
 const PANE = 'painel-sessoes'
 const TITULO = 'Sessões'
+/** Pixels por coluna do pane no desktop: o `bodyColumns` conta células, o `Svg` mede em px. */
+const COLUNA_PX = 8.75
 // F45: a limpeza do app mata o processo do CLI e o pane vai junto. O store guarda quais sessões do app (`local_…`) deixaram o painel aberto.
 const ABERTOS = 'abertos'
 const VALIDADE_MARCA_MS = 7 * 86_400_000
@@ -211,6 +213,7 @@ function montarTodos(
       tema: tema && motivos.length === 0 ? tema.id : SEM_TEMA,
       temaProjeto: tema && motivos.length === 0 ? tema.projeto?.toLowerCase() : undefined,
       temaRotulo: tema && motivos.length === 0 ? tema.rotulo : 'Sem tema',
+      projeto: projetoDoItem,
       etapa: etapaCrua ?? '?',
       situacao,
       dono,
@@ -982,9 +985,10 @@ export const register: Register = on => {
 
     if (e.surface === 'desktop' && 'Svg' in elementos) {
       const { Svg } = elementos
-      const W = Math.max(240, Math.min(900, (e.props.bodyColumns || 40) * 8 - 8))
-      // Dentro do `Box round` a borda e o respiro comem 4 colunas (32 px): o desenho do cartão leva essa largura.
-      const Wc = Math.max(200, W - 32)
+      // A coluna do desktop mede ~8,8 px (66 colunas = 586 px); 8,75 enche o pane sem passar dele.
+      const W = Math.max(240, Math.min(900, Math.floor((e.props.bodyColumns || 40) * COLUNA_PX)))
+      // Dentro do `Box round` a borda e o respiro comem 4 colunas: o desenho do cartão leva essa largura.
+      const Wc = Math.max(200, W - Math.ceil(4 * COLUNA_PX))
       const cartaoResumo = resumoSvg(W, resumo4)
       const faixa = (f: { titulo: string; n: number; tom: string; legenda?: string; tracejado?: boolean }) => {
         const r = secaoSvg(W, f)
@@ -1127,7 +1131,7 @@ export const register: Register = on => {
       const etapa = ROTULO_ETAPA_TERMINAL[i.etapa] ?? i.etapa
       const info = [
         i.situacao === 'fila' ? `espera ${etapa}` : etapa,
-        i.temaRotulo,
+        tituloDoTema(i),
         i.perguntas[0] ? `aguarda você · ${i.perguntas[0]}` : undefined,
         seloDaEspera(i),
         ...quemDoItem(i).map(q => q.t),

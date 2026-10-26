@@ -21,6 +21,9 @@ const OK = 'ok'
 const ANDA = 'an'
 const LILAS = 'li'
 
+/** O rótulo que abre o cartão: "projeto · tema", ou só o tema quando o item não diz o projeto. */
+export const tituloDoTema = (item: Pick<LinhaItem, 'projeto' | 'temaRotulo'>): string => (item.projeto ? `${item.projeto} · ${item.temaRotulo}` : item.temaRotulo)
+
 /** A cor da etapa: nenhuma nasce nova (§4.2). O âmbar fica só para o que espera o operador. */
 export const COR_ETAPA: Record<string, string> = {
   planejamento: LILAS,
@@ -355,7 +358,7 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   const ultimoPr = item.prs.length > 0 ? `#${item.prs[item.prs.length - 1]}${item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''}` : ''
   const montar = (quem: Trecho[]): Trecho[] => [
     item.situacao === 'fila' ? { t: `espera ${rotulo}`, classe: 's', peso: true } : { t: rotulo, classe: cor, peso: true },
-    ...(opcoes.noTravados ? [{ t: item.temaRotulo, classe: 's' }] : []),
+    ...(opcoes.noTravados ? [{ t: tituloDoTema(item), classe: 's' }] : []),
     ...(item.perguntas.length > 0 ? [{ t: `aguarda você · ${item.perguntas[0]}`, classe: AVISO, peso: true }] : []),
     ...(seloDaEspera(item) ? [{ t: seloDaEspera(item) as string, classe: item.espera?.motivo === 'operador' ? AVISO : 's', peso: true }] : []),
     // O dono sem ninguém já está escrito na trava: repetir faria dois textos sobre a mesma sessão que sumiu.
@@ -390,7 +393,7 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   y += 21
   partes.push(`<text x="30" y="${y}" font-family="${FONTE}" font-size="13">${linha2.join('')}</text>`)
 
-  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? item.temaRotulo : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, seloDaEspera(item), ...quemDoItem(item).map(q => q.t), ultimoPr, ...quemSaiu(item).map(q => q.t), donoForaDaLinha(item)].filter(Boolean).join(' · ')]
+  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? tituloDoTema(item) : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, seloDaEspera(item), ...quemDoItem(item).map(q => q.t), ultimoPr, ...quemSaiu(item).map(q => q.t), donoForaDaLinha(item)].filter(Boolean).join(' · ')]
   if (item.trava) {
     const trava = quebrar(textoDaTrava(item.trava), 13, tw, 2)
     for (const l of trava) {
@@ -585,7 +588,7 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   partes.push(...linhaDeChips.partes)
   y += 9 + linhaDeChips.altura
 
-  const alt = [`${item.id} · ${item.temaRotulo}`, item.titulo, chips.map(c => c.t).join(' · ')]
+  const alt = [`${item.id} · ${tituloDoTema(item)}`, item.titulo, chips.map(c => c.t).join(' · ')]
 
   if (item.trava) {
     const sem = item.trava.motivo === 'sem-ninguem'
@@ -684,7 +687,7 @@ export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { cit
     y += 19
     partes.push(texto(X_FILA, y, 14, 't', xml(l), ' font-weight="600"'))
   }
-  const alt = [`${item.id} · ${item.temaRotulo}`, item.titulo]
+  const alt = [`${item.id} · ${tituloDoTema(item)}`, item.titulo]
   if (item.resumo) {
     y += 3
     for (const l of quebrar(item.resumo, 12.5, tw, 2)) {
@@ -712,10 +715,10 @@ export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { cit
 }
 
 /** `F13 · TEMA`: o número em `t` 11/700, nunca cortado (o corte vale só para o tema); o tempo à direita já está fora de `max`. */
-function sobreSvg(x: number, y: number, max: number, item: { id: string; temaRotulo: string }): string {
+function sobreSvg(x: number, y: number, max: number, item: { id: string; temaRotulo: string; projeto?: string }): string {
   const prefixo = ' · '
   const reserva = largura(item.id, 11) * 1.1 + largura(prefixo, 11)
-  const tema = caber(upper(item.temaRotulo), 11, Math.max(0, max - reserva))
+  const tema = caber(upper(tituloDoTema(item)), 11, Math.max(0, max - reserva))
 
   return `<text x="${x}" y="${y}" font-family="${FONTE}" font-size="11" font-variant-numeric="tabular-nums"><tspan class="t" font-weight="700">${xml(item.id)}</tspan><tspan class="m" font-weight="600">${xml(prefixo + tema)}</tspan></text>`
 }
