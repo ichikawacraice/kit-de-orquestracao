@@ -3,6 +3,8 @@ import type { On } from 'claude-code'
 import type { TestBody } from 'claude-code/testing'
 import {
   CACHE_TTL_MS,
+  FRASE_CURTA_NA_BARRA,
+  FRASE_NA_BARRA,
   PALAVRA_ALTO,
   PALAVRA_LIMPAR,
   REGUAS,
@@ -217,6 +219,7 @@ const REFERENCIA: EstadoBarra = {
   painelAberto: true,
   moldura: false,
   pedido: null,
+  pedidoProprio: false,
   limparAntes: false,
 }
 
@@ -244,7 +247,7 @@ test('faixaDaBarra: o relógio em bloco (alerta e venceu) soma as duas células 
 })
 
 // O caso do print: orquestradora, 253 mil, 1 pergunta, presente, pane aberto, pedido aberto (revisão, teste 10).
-const COM_PEDIDO: EstadoBarra = { ...REFERENCIA, tokens: 253_000, regua: REGUAS.orquestradora, item: null, pool: null, abertas: 1, modo: 'presente', pedido: 'aberto' }
+const COM_PEDIDO: EstadoBarra = { ...REFERENCIA, tokens: 253_000, regua: REGUAS.orquestradora, item: null, pool: null, abertas: 1, modo: 'presente', pedido: 'aberto', pedidoProprio: true }
 
 test('faixaDaBarra: o pedido de limpeza entra na soma, com a frase e o botão reais', () => {
   expect([0, 1, 2].map(f => larguraDaFaixa(COM_PEDIDO, f as 0 | 1 | 2)), 'as somas da revisão').toEqual([142, 101, 79])
@@ -253,14 +256,52 @@ test('faixaDaBarra: o pedido de limpeza entra na soma, com a frase e o botão re
   expect(larguraDaFaixa({ ...COM_PEDIDO, modo: 'ausente' }, 2), 'ausente com selo: 100').toBe(100)
 })
 
-test('faixaDaBarra: Enviando… e ✓ ok enviado somam o texto deles, não o do repouso', () => {
+// A barra de uma E ou P (o pedido não é da própria sessão): a frase diz sempre quem pede.
+const DE_OUTRA: EstadoBarra = { ...REFERENCIA, tokens: 142_000, item: null, pool: null, abertas: 3, modo: 'presente', painelAberto: false, pedido: 'aberto', pedidoProprio: false }
+
+test('pecasDaBarra: pedido de outra sessão usa a frase longa em toda faixa; o da própria, a curta na 1 e na 2', () => {
+  const frase = (e: EstadoBarra, f: 0 | 1 | 2) => pecasDaBarra(e, f).dir.find(p => p.k === 'pedido')?.t
+  for (const f of [0, 1, 2] as const) expect(frase(DE_OUTRA, f), `de outra, faixa ${f}`).toBe(FRASE_NA_BARRA)
+  const propria = { ...DE_OUTRA, pedidoProprio: true }
+  expect([0, 1, 2].map(f => frase(propria, f as 0 | 1 | 2))).toEqual([FRASE_NA_BARRA, FRASE_CURTA_NA_BARRA, FRASE_CURTA_NA_BARRA])
+})
+
+test('faixaDaBarra: a barra de uma E com pedido aberto a 142 mil soma 133, 106 e 85', () => {
+  expect([0, 1, 2].map(f => larguraDaFaixa(DE_OUTRA, f as 0 | 1 | 2))).toEqual([133, 106, 85])
+  const f = (cols: number) => faixaDaBarra(cols, DE_OUTRA)
+  expect([f(133), f(132), f(106), f(105)]).toEqual([0, 1, 1, 2])
+})
+
+test('faixaDaBarra: o ok que zera as abertas (o pedido era a única) não muda a faixa a 120 colunas', () => {
+  const unica = { ...DE_OUTRA, abertas: 1 }
+  const antes = faixaDaBarra(120, { ...unica, pedido: 'aberto' })
+  expect(antes, 'a 120 a barra de uma E com o pedido como única pergunta não cabe na faixa 0').toBe(1)
+  for (const pedido of ['enviando', 'enviado'] as const) expect(faixaDaBarra(120, { ...unica, abertas: 0, pedido }), `${pedido} com abertas 1→0`).toBe(antes)
+  expect([0, 1, 2].map(f => larguraDaFaixa({ ...unica, abertas: 0, pedido: 'enviado' }, f as 0 | 1 | 2))).toEqual([0, 1, 2].map(f => larguraDaFaixa({ ...unica, pedido: 'aberto' }, f as 0 | 1 | 2)))
+})
+
+test('barra: o grupo da direita quebra a linha a 40 colunas, com pedido aberto', async ($, on) => {
+  await iniciar($, on, { titulo: 'E1 · x', perguntas: [limpar('Q290')] })
+  const ui = await montar($, 'terminal', { bodyColumns: 40 })
+  const direita = (await ui.findAll({ type: 'Box' })).filter(b => b.props.justifyContent === 'flex-end')
+  expect(direita.length, 'o grupo da direita desenhou').toBe(1)
+  expect(direita[0]?.props.flexWrap).toBe('wrap')
+  await ui.unmount()
+})
+
+test('faixaDaBarra: com pedido, aberto, Enviando… e ✓ ok enviado somam a mesma largura (a do repouso), e a faixa não muda debaixo do clique', () => {
+  const estados = ['aberto', 'enviando', 'enviado'] as const
   const repouso = larguraDaFaixa(COM_PEDIDO, 0)
-  expect(repouso).toBe(142)
-  expect(larguraDaFaixa({ ...COM_PEDIDO, pedido: 'enviando' }, 0), '`Enviando…` tem 5 células a menos que `Pode se limpar`').toBe(repouso - 5)
-  expect(larguraDaFaixa({ ...COM_PEDIDO, pedido: 'enviado' }, 0), 'frase e botão dão lugar a `✓ ok enviado`').toBe(107)
-  expect(faixaDaBarra(137, COM_PEDIDO), 'no repouso, 137 não cabe na faixa 0').toBe(1)
-  expect(faixaDaBarra(137, { ...COM_PEDIDO, pedido: 'enviando' })).toBe(0)
-  expect(faixaDaBarra(107, { ...COM_PEDIDO, pedido: 'enviado' })).toBe(0)
+  expect(repouso, 'o repouso soma 142').toBe(142)
+  for (const f of [0, 1, 2] as const) {
+    const somas = estados.map(pedido => larguraDaFaixa({ ...COM_PEDIDO, pedido }, f))
+    expect(new Set(somas).size, `faixa ${f}: ${somas.join('/')}`).toBe(1)
+  }
+  for (const cols of [140, 137, 114, 107, 101]) {
+    const faixas = estados.map(pedido => faixaDaBarra(cols, { ...COM_PEDIDO, pedido }))
+    expect(new Set(faixas).size, `${cols} colunas: ${faixas.join('/')}`).toBe(1)
+  }
+  expect(faixaDaBarra(137, { ...COM_PEDIDO, pedido: 'enviando' }), 'a 137 o repouso não cabe na 0, e o Enviando… também não').toBe(1)
 })
 
 test('pecasDaBarra: o pedido abre o grupo da direita; item, pool e o Ficar ausente caem', () => {
@@ -681,7 +722,7 @@ test('pedido de limpeza: o botão aparece em toda sessão do projeto, e o clique
   const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
   const ui = await montar($, 'terminal')
   const texto = await lido(ui)
-  expect(texto).toMatch(/◆ pede limpeza/)
+  expect(texto, 'a barra de outra sessão diz quem pede').toMatch(/◆ orquestradora pede limpeza/)
   expect(texto, 'o Q-ID não entra na barra').not.toMatch(/Q290/)
   const botao = await ui.find({ key: 'limpar-pedido' })
   expect(botao?.text).toBe('Pode se limpar')
@@ -755,12 +796,13 @@ test('pedido de limpeza: não há linha acima; a barra tem uma linha principal c
       expect(caixas.length, `${rotulo}: a barra desenhou caixas`).toBeGreaterThan(0)
       expect(caixas.some(b => b.props.key === 'linha-do-pedido'), `${rotulo}: não há Box linha-do-pedido`).toBe(false)
       expect(caixas.filter(b => b.props.flexDirection === 'column').length, `${rotulo}: só a coluna da moldura`).toBe(1)
-      expect(caixas.filter(b => b.props.flexDirection === 'row' && b.props.flexWrap === 'wrap').length, `${rotulo}: uma linha principal`).toBe(1)
+      // A linha de fora e o grupo da direita quebram; nenhuma outra caixa em linha tem wrap (não há linha do pedido).
+      expect(caixas.filter(b => b.props.flexDirection === 'row' && b.props.flexWrap === 'wrap').length, `${rotulo}: a linha principal e o grupo da direita`).toBe(2)
       const botao = await ui.find({ key: 'limpar-pedido' })
       expect(botao?.text, `${rotulo}: o botão do pedido`).toBe('Pode se limpar')
       const t = await lido(ui)
       expect(t.indexOf('⧗'), `${rotulo}: relógio antes da frase`).toBeLessThan(t.indexOf('◆'))
-      expect(t).toMatch(bodyColumns >= 140 ? /◆ orquestradora pede limpeza/ : /◆ pede limpeza/)
+      expect(t, `${rotulo}: a frase diz quem pede`).toMatch(/◆ orquestradora pede limpeza/)
       expect(t, `${rotulo}: sem Q-ID`).not.toMatch(/Q290/)
       expect((await ui.findAll({ type: 'Button' })).map(b => b.props.key)[0], `${rotulo}: o pedido abre o grupo da direita`).toBe('limpar-pedido')
       await ui.unmount()
@@ -1013,7 +1055,7 @@ test('barra e pane: o pedido aberto 2 min atrás volta mesmo com o sim de 5 min'
   const novo = limpar('Q291', { atualizadoEm: new Date(AGORA - 2 * 60_000).toISOString() }, 2)
   const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [ok, novo] })
   const ui = await montar($, 'terminal')
-  expect(await lido(ui), 'a barra mostra o pedido novo').toMatch(/◆ pede limpeza/)
+  expect(await lido(ui), 'a barra mostra o pedido novo').toMatch(/◆ orquestradora pede limpeza/)
   expect((await ui.find({ key: 'limpar-pedido' }))?.text).toBe('Pode se limpar')
   await ui.unmount()
   await $.command.run({ command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })

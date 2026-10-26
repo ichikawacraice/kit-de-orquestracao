@@ -218,6 +218,8 @@ export type EstadoBarra = {
   moldura: boolean
   /** O pedido de limpeza da orquestradora na barra: aberto, com o ok a caminho ou já enviado; `null` sem pedido. */
   pedido: 'aberto' | 'enviando' | 'enviado' | null
+  /** O pedido é da própria sessão (a orquestradora): só aí o "quem pede" é óbvio e a frase encurta nas faixas 1 e 2. */
+  pedidoProprio: boolean
   /** O botão `Limpar antes de vencer` (só sem pedido). */
   limparAntes: boolean
 }
@@ -261,7 +263,7 @@ export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
   const dir: Pecas['dir'] = []
   if (e.pedido === 'enviado') dir.push({ k: 'pedido', t: OK_ENVIADO })
   else if (e.pedido !== null) {
-    dir.push({ k: 'pedido', t: faixa === 0 ? FRASE_NA_BARRA : FRASE_CURTA_NA_BARRA })
+    dir.push({ k: 'pedido', t: faixa === 0 || !e.pedidoProprio ? FRASE_NA_BARRA : FRASE_CURTA_NA_BARRA })
     dir.push({ k: 'limpar-pedido', t: e.pedido === 'enviando' ? ROTULO_ENVIANDO : ROTULO_LIMPAR })
   } else if (e.limparAntes) dir.push({ k: 'limpar-antes', t: ROTULO_LIMPAR_ANTES })
   const selo = e.abertas > 0
@@ -274,7 +276,8 @@ export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
 
 /** A largura que a faixa pede, com os textos reais: peça à esquerda com 2 de vão, botão com `[ ]` (+4), texto sem, a moldura +2. */
 export function larguraDaFaixa(e: EstadoBarra, faixa: 0 | 1 | 2): number {
-  const { esq, dir } = pecasDaBarra(e, faixa)
+  // Com pedido a largura é a do repouso (frase + botão + o selo que o conta), também no `Enviando…` e no `✓ ok enviado`: a barra não se rearruma debaixo do clique, nem quando o ok zera as abertas.
+  const { esq, dir } = pecasDaBarra(e.pedido === null ? e : { ...e, pedido: 'aberto', abertas: Math.max(e.abertas, 1) }, faixa)
   const ladoEsq = esq.reduce((n, p) => n + largura(p.t), 0) + 2 * (esq.length - 1)
   const ladoDir = dir.reduce((n, p) => n + largura(p.t) + (p.k === 'pedido' ? 0 : 4), 0) + Math.max(0, dir.length - 1)
 
@@ -314,8 +317,6 @@ export type AcoesDaBarra = {
   rascunho: () => void
 }
 
-const minutosQueFaltam = (segundos: number) => (segundos < 60 ? 'menos de 1 min' : `${Math.ceil(segundos / 60)} min`)
-
 export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra, acoes: AcoesDaBarra) {
   const { b, modo, trocando, painelAberto, bodyColumns: colunas } = d
   const nivel = nivelDoCache(b.cache.segundos, d.isWorking)
@@ -338,6 +339,7 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
     painelAberto,
     moldura: nivel !== null,
     pedido,
+    pedidoProprio: b.limpeza?.propria ?? false,
     limparAntes,
   }
   const faixa = faixaDaBarra(colunas, estado)
@@ -433,7 +435,7 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
         <Box flexDirection="row" columnGap={2}>
           {esq.map(pecaEsq)}
         </Box>
-        <Box flexDirection="row" columnGap={1} flexGrow={1} justifyContent="flex-end">
+        <Box flexDirection="row" columnGap={1} flexGrow={1} flexWrap="wrap" justifyContent="flex-end">
           {dir.map(botaoDir)}
         </Box>
       </Box>
