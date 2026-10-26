@@ -473,13 +473,22 @@ const avisar = ($: EngineInterface, aviso: string) =>
 const naoChegou = ($: EngineInterface, q: PerguntaAberta, motivo: string) =>
   avisar($, `${q.id} gravada, mas não chegou à sessão (${motivo}); abra a sessão pela barra lateral e responda lá`)
 
+const CASO_NA_ENTREGA = 300
+
+/** O texto que a sessão dona recebe: diz que a pergunta é dela (pode ter sido aberta antes de uma limpeza), com título e caso. */
+export function textoDaEntrega(q: Pick<PerguntaAberta, 'id' | 'titulo' | 'caso'>, resposta: string): string {
+  const caso = q.caso ? ` Caso: ${q.caso.length > CASO_NA_ENTREGA ? `${q.caso.slice(0, CASO_NA_ENTREGA)}…` : q.caso}.` : ''
+
+  return `${q.id} — pergunta aberta POR ESTA SESSÃO (talvez antes de uma limpeza de contexto): "${q.titulo}".${caso} Chegou a resposta do operador pelo painel: ${resposta}. A pergunta já está como respondida no painel; retome pelo caso e pelo handoff do item, sem repassar a outra sessão.`
+}
+
 /**
  * Leva a resposta ao modelo da sessão dona. Outra sessão: send_message. A
  * própria (o painel aberto nela): um prompt desta sessão, que entra quando ela
  * fica livre — por isso não se espera por ele. Falha vira erro no pane. O que se espera (send_message) a devolução cobre.
  */
 function entregar($: EngineInterface, q: PerguntaAberta, resposta: string): Promise<void> {
-  const texto = `${q.id} — resposta do operador pelo painel: ${resposta}. A pergunta já está como respondida no painel.`
+  const texto = textoDaEntrega(q, resposta)
   if (!q.sessaoId) {
     void naoChegou($, q, 'a pergunta não tem sessaoId')
 
