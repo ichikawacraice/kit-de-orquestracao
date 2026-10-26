@@ -84,11 +84,10 @@ test('5. P com 250 mil que chamou clear_session "self" no turno: passa (limpou);
 test('5b. clear_session de OUTRA sessão não vale', () => com((b) => {
   cobrou(rodar(b, 'P', transcript(b, { tokens: 250_000, ferramentas: [['mcp__ccd_session_mgmt__clear_session', { session_id: 'local_X' }]] })), /250 mil/);
 }));
-test('6. E com 160 mil sem "Parei em:": cobra (cobrou-exec-150); com a linha, passa', () => com((b) => {
-  cobrou(rodar(b, 'E', transcript(b, { tokens: 160_000 })), /160 mil.*Parei em:/s);
+test('6. E com 160 mil sem limpar: cobra (cobrou-exec-150) mesmo com "Parei em:"; só a limpeza satisfaz', () => com((b) => {
+  const r = rodar(b, 'E', transcript(b, { tokens: 160_000, texto: 'Parei em: passo 4, falta o teste' }));
+  cobrou(r, /clear_session.*"self"/s); cobrou(r, /quem despachou/); cobrou(r, /recebido; limpo antes de começar/);
   assert.match(log(b), /\tcobrou-exec-150\texecutora 160 mil/);
-  assert.equal(rodar(b, 'E', transcript(b, { tokens: 160_000, texto: 'Parei em: passo 4, falta o teste' })), null);
-  assert.match(log(b), /\tsatisfeito-parei\t/);
 }));
 test('6b. E abaixo de 150 mil não é cobrada', () => com((b) => { assert.equal(rodar(b, 'E', transcript(b, { tokens: 149_000 })), null); }));
 test('7. V com 400 mil: não cobra e registra validadora-400', () => com((b) => {
@@ -162,4 +161,18 @@ test('O3b. o mesmo parágrafo com uma pergunta de verdade ao lado da URL dispara
 }));
 test('O3c. precondição: sem URL, o `?` sozinho dispara (o teste mede a URL, não um hook que nunca cobra)', () => com((b) => {
   cobrou(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'pronto\n\nposso seguir?' })), /160 mil/);
+}));
+
+// F49: executora cheia termina com a limpeza.
+test('F49.1 E com 160 mil e clear_session "self" no turno: passa (limpou)', () => com((b) => {
+  assert.equal(rodar(b, 'E', transcript(b, { tokens: 160_000, ferramentas: [LIMPA] })), null);
+  assert.match(log(b), /\tlimpou\texecutora 160 mil/);
+}));
+test('F49.2 E com 160 mil e a limpeza só no turno anterior: cobra', () => com((b) => {
+  cobrou(rodar(b, 'E', transcript(b, { tokens: 160_000, anterior: [LIMPA] })), /160 mil/);
+}));
+test('F49.3 E com 160 mil e stop_hook_active: passa (deixou-passar)', () => com((b) => {
+  assert.equal(rodar(b, 'E', transcript(b, { tokens: 160_000 }), { stop_hook_active: true }), null);
+  assert.match(log(b), /\tdeixou-passar\tcobrou-exec-150 executora 160 mil/);
+  assert.doesNotMatch(log(b), /satisfeito-parei/);
 }));

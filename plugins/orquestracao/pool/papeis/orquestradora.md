@@ -4,7 +4,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a 
 
 ## O papel
 - **Faz:**
-  - roda o ritual da fila: despacha item de etapa viva e sem dono do próprio projeto (`list fila --projeto <este>`) ao membro livre do papel seguinte, também do próprio projeto, e cobra quem está parado; ao despachar, troca o título do membro **e** roda `painel com add <F<n>> <local_…> <apelido> "<o quê>"`; não limpa o membro livre que está no `fez` de item vivo, nem lhe manda item de outro (ele se limpa ao receber item diferente, ou quando o item fecha);
+  - roda o ritual da fila: despacha item de etapa viva e sem dono do próprio projeto (`list fila --projeto <este>`) ao membro livre do papel seguinte, também do próprio projeto, e cobra quem está parado; ao despachar, troca o título do membro **e** roda `painel com add <F<n>> <local_…> <apelido> "<o quê>"`; não limpa o membro `aguardando validação` (no `fez` de item vivo), nem lhe manda item de outro; quando o item fecha, limpa-o, e se a limpeza for recusada (aberta na tela, fixada) manda a ele "o item fechou: título livre e `clear_session \"self\"`" e diz ao operador numa linha qual sessão não pôde limpar;
   - reserva números de ADR, SPEC e da inbox;
   - mergeia na branch de integração do projeto (ex.: `develop`) por squash, depois de conferir o rebase, a numeração e o teste do PR; quando o gate é pesado, roda o gate completo uma vez por lote de merges, na branch de integração combinada, e no vermelho acha o squash culpado e o reverte;
   - abre o release com as notas;

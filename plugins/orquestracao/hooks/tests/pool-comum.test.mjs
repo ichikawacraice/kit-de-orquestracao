@@ -23,7 +23,7 @@ git(A, 'worktree', 'add', '-q', join(base, 'alfa-wt'), '-b', 'wt');
 const SEM = join(base, 'semgit'); mkdirSync(SEM);
 
 process.env.HOME = join(base, 'home'); mkdirSync(join(base, 'home', '.claude', 'projects', 'p'), { recursive: true });
-const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
+const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
 function reg(k, campos) {
   writeFileSync(join(base, 'app', 'conta', `local_${k}.json`), JSON.stringify({ sessionId: `local_${k}`, cliSessionId: `cli-${k}`, title: `E1 · x`, ...campos }));
   return registroDaSessao(`cli-${k}`, { fresco: true });
@@ -157,6 +157,21 @@ caso_repoDoMarcador();
     // Orquestradora só por título, cuja pasta não é git: não sei.
     writeFileSync(join(base, 'app', 'conta', 'local_ORQX.json'), JSON.stringify({ sessionId: 'local_ORQX', cliSessionId: 'cli-orqx', title: '🎛 orquestradora — x', isArchived: false, cwd: SEM }));
     eq(projetoTemOrquestradora('eu', comum), null, 'orquestradora só por título sem git');
+    console.log(`ok   ${nome}`);
+  } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
+}
+{
+  const nome = 'F49: tituloAguardando e declarouLivre reconhecem o título aguardando validação';
+  try {
+    const eq = (a, b, m) => { if (a !== b) throw new Error(`${m}: esperava ${b}, veio ${a}`); };
+    eq(tituloAguardando('E2 · aguardando validação'), true, 'título aguardando');
+    eq(tituloAguardando('E2 · livre'), false, 'livre não é aguardando');
+    eq(tituloAguardando('E2 · aguardando validação do X'), false, 'texto depois não vale');
+    const t = (title) => { const f = join(base, 'dl.jsonl'); writeFileSync(f, `${JSON.stringify({ type: 'assistant', timestamp: new Date().toISOString(), message: { content: [{ type: 'tool_use', name: 'mcp__ccd_session_mgmt__set_session_title', input: { session_id: 'self', title } }] } })}\n`); return f; };
+    const a = declarouLivre(t('E2 · aguardando validação'), 0, []);
+    eq(a?.como, 'título aguardando', 'como'); eq(a?.aguardando, true, 'aguardando'); eq(a?.propria, true, 'propria');
+    const l = declarouLivre(t('E2 · livre'), 0, []);
+    eq(l?.como, 'título livre', 'como livre'); eq(l?.aguardando, false, 'aguardando do livre');
     console.log(`ok   ${nome}`);
   } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
 }

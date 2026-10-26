@@ -7,16 +7,17 @@
 // Segunda regra (operador, 24/10: "executoras rodando trabalho com o nome de livre"): membro cujo título
 // ainda termina em "· livre" e que TRABALHOU no turno (Edit/Write, commit, push, PR, gate) sem chamar
 // set_session_title "self" é cobrado a pôr o título do item.
-// F30: quem está no `fez` de um item vivo (espera a validação ou o conserto) e fora de todo `com` fica livre SEM se limpar
-// (o contexto serve ao conserto). Quem se declara livre e ainda está no `com` de um item é cobrado a sair (`painel com del`).
-// Quem saiu do item no turno (`painel com del`) e ficou com o título dele é cobrado a pôr o título livre.
+// F49: "livre" é só conversa vazia: quem se declara livre se limpa SEMPRE, também no `fez` de item vivo. Quem entregou e quer guardar a
+// conversa para o conserto põe `<ID> · aguardando validação` (vale só no `fez` de item vivo; fora dele é cobrado a pôr livre e se limpar).
+// Quem se declara livre ou aguardando e ainda está no `com` de um item é solto dele (`painel com del`).
+// Quem saiu do item no turno (`painel com del`) e ficou com o título dele é cobrado a pôr o título livre ou aguardando.
 // Fonte da regra: ~/.claude/orquestracao/pool/protocolo.md, "Ao terminar um item" e "Pegar".
 import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registrar, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { registroDaSessao, membroDoPool, inicioDoTurno, itensDaSessao, itensDonosDaSessao, declarouLivre, vaiSoltar, tituloLivre, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
+import { registroDaSessao, membroDoPool, inicioDoTurno, itensDaSessao, itensDonosDaSessao, declarouLivre, vaiSoltar, tituloLivre, tituloAguardando, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'livre-se-limpa';
 const ehSelf = (id) => id === undefined || id === null || id === 'self';
@@ -50,7 +51,7 @@ const baseDoPainel = () => { const e = painelEnv(); return e.PAINEL_DIR || e.IZA
 // Tira a sessão de cada `com` (com `--fez` só para a E: quem sai sem entregar não ganha `fez`), solta SÓ O DONO dos itens de que ela é
 // dona (o `com` das outras sessões fica) e põe a linha dela em `sessoes` como livre (só se a linha já existe; falha ali só vai ao log).
 // → { falhou: [{F, tipo}], erros: [texto] }.
-function soltarDoItem(sessionId, reg, itens) {
+function soltarDoItem(sessionId, reg, itens, aguardando = false) {
   const falhou = []; const erros = [];
   const papel = membroDoPool(reg?.titulo)?.papel;
   const local = reg?.localId;
@@ -66,7 +67,7 @@ function soltarDoItem(sessionId, reg, itens) {
   if (!falhou.length) {
     for (const id of new Set([local, sessionId].filter(Boolean))) {
       if (!existsSync(join(baseDoPainel(), 'sessoes', `${id}.json`))) continue;
-      try { painel(['update', 'sessoes', id, JSON.stringify({ estado: 'parada', etapa: 'livre' })]); }
+      try { painel(['update', 'sessoes', id, JSON.stringify({ estado: 'parada', etapa: aguardando ? 'aguardando validação' : 'livre' })]); }
       catch (e) { registrar(sessionId, HOOK, 'erro-sessoes', `${id}: ${msgDe(e)}`); }
     }
   }
@@ -104,28 +105,29 @@ function main() {
   if (!declarou && trabalhou && !trocouTitulo) {
     const reg = registroDaSessao(session_id, { fresco: true });
     const m = membroDoPool(reg?.titulo);
-    if (!m || !tituloLivre(reg.titulo)) return;
+    if (!m || !(tituloLivre(reg.titulo) || tituloAguardando(reg.titulo))) return;
+    const tituloAtual = tituloAguardando(reg.titulo) ? 'aguardando validação' : 'livre';
     if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar-titulo', trabalhou); return; }
     registrar(session_id, HOOK, 'cobrou-titulo', `${m.id} ${trabalhou}`);
     process.stdout.write(JSON.stringify({
       decision: 'block',
       reason:
-        `Seu título ainda diz "livre" e você trabalhou neste turno (${trabalhou}). Quem olha a lista acha que você está parado ` +
+        `Seu título ainda diz "${tituloAtual}" e você trabalhou neste turno (${trabalhou}). Quem olha a lista acha que você está parado ` +
         `e pode te mandar outro item. Chame set_session_title com session_id "self" e o título \`${m.id} · <o item, em poucas palavras>\` ` +
         '(com o número do PR, se houver), e termine o turno.',
     }));
     return;
   }
   // F30, regra 4: saiu do item neste turno e o título ainda é o dele.
-  if (tirados.length && !tituloLivre(tituloNovo)) {
+  if (tirados.length && !tituloLivre(tituloNovo) && !tituloAguardando(tituloNovo)) {
     const reg = registroDaSessao(session_id, { fresco: true });
     const m = membroDoPool(reg?.titulo);
-    if (m && tirados.includes(reg.localId) && !tituloLivre(reg.titulo) && itensDaSessao(reg.localId).com.length === 0) {
+    if (m && tirados.includes(reg.localId) && !tituloLivre(reg.titulo) && !tituloAguardando(reg.titulo) && itensDaSessao(reg.localId).com.length === 0) {
       if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar-titulo-velho', m.id); return; }
       registrar(session_id, HOOK, 'cobrou-titulo-velho', m.id);
       process.stdout.write(JSON.stringify({
         decision: 'block',
-        reason: `Você saiu do item e o título ainda é o dele: chame set_session_title com session_id "self" e o título \`${m.id} · livre\`, e termine o turno.`,
+        reason: `Você saiu do item e o título ainda é o dele: chame set_session_title com session_id "self" e o título \`${m.id} · livre\` (ou \`${m.id} · aguardando validação\`, se guarda a conversa para o conserto), e termine o turno.`,
       }));
       return;
     }
@@ -141,7 +143,7 @@ function main() {
   // cobrar (`vaiSoltar` é a mesma função que o `fila-do-item` usa para deixar de cobrar). Se a escrita falhar ou estourar o
   // orçamento, volta a bloquear dizendo o que faltou (nunca passa calado). Declaração sobre a linha de OUTRA sessão não solta nada.
   if (vaiSoltar(transcript_path, inicio, { sessionId: session_id, localId: regDecl?.localId, titulo: regDecl?.titulo })) {
-    const solto = soltarDoItem(session_id, regDecl, itens);
+    const solto = soltarDoItem(session_id, regDecl, itens, decl.aguardando);
     if (solto.falhou.length) {
       const lista = solto.falhou.map((f) => f.F).join(', ');
       registrar(session_id, HOOK, 'erro-ao-soltar', solto.erros.join(' | '));
@@ -158,11 +160,31 @@ function main() {
   }
   const itensDepois = itensDaSessao(regDecl?.localId);
   if (limpou) return;
-  // F30, regra 1 com exceção: no `fez` de item vivo e fora de todo `com`, o contexto serve ao conserto.
-  if (itensDepois.fez.length) { registrar(session_id, HOOK, 'livre-com-contexto', itensDepois.fez.join(',')); return; }
-
+  // F49: aguardando validação vale só no `fez` de item vivo (a conversa fica para o conserto); fora dele, livre e limpa.
+  if (decl.aguardando) {
+    if (itensDepois.fez.length) { registrar(session_id, HOOK, 'aguardando-com-contexto', itensDepois.fez.join(',')); return; }
+    if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar', declarou); return; }
+    registrar(session_id, HOOK, 'cobrou-aguardando-sem-fez', declarou);
+    process.stdout.write(JSON.stringify({
+      decision: 'block',
+      reason:
+        'Aguardando validação é só para quem entregou um item que ainda espera validação ou conserto. ' +
+        'Sem item esperando: título `' + (membroDoPool(tituloNovo)?.id ?? 'E<n>') + ' · livre` e clear_session com session_id "self", e termine o turno.',
+    }));
+    return;
+  }
   if (stop_hook_active) { registrar(session_id, HOOK, 'deixou-passar', declarou); return; }
-  registrar(session_id, HOOK, 'cobrou', declarou);
+  const noFez = itensDepois.fez.length > 0;
+  registrar(session_id, HOOK, noFez ? 'cobrou-livre-no-fez' : 'cobrou', noFez ? itensDepois.fez.join(',') : declarou);
+  if (noFez) {
+    process.stdout.write(JSON.stringify({
+      decision: 'block',
+      reason:
+        `Você está no \`fez\` de ${itensDepois.fez.join(', ')} e não se limpou. Livre é só com a conversa vazia: se quer guardar a conversa para o conserto, ` +
+        `o título é \`${membroDoPool(tituloNovo)?.id ?? membroDoPool(regDecl?.titulo)?.id ?? 'E<n>'} · aguardando validação\`; se não, chame clear_session com session_id "self" e termine o turno.`,
+    }));
+    return;
+  }
   process.stdout.write(JSON.stringify({
     decision: 'block',
     reason:
