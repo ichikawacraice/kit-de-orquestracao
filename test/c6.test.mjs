@@ -79,7 +79,7 @@ describe('M1 — recuperação depois de processo morto no meio', () => {
   it('test já é o gate e não há onde achar a suíte: recusa com exit 2 dizendo o que fazer', () => {
     const d = repo({ 'package.json': PACOTE });
     try {
-      const morto = morreNoRename(d, ['iniciar'], 13); // o 13º rename é o do package.json: ele já é o gate quando o processo morre
+      const morto = morreNoRename(d, ['iniciar'], 15); // o 15º rename é o do package.json (12 scripts do gate, mais o teto da máquina): ele já é o gate quando o processo morre
       assert.equal(morto.signal, 'SIGKILL');
       const p = json(d, 'package.json'); delete p.scripts['test:suite'];
       writeFileSync(join(d, 'package.json'), `${JSON.stringify(p, null, 2)}\n`);

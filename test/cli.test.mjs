@@ -35,7 +35,7 @@ test('package.json: bin, engines, test e type module', () => {
   assert.equal(p.type, 'module');
   assert.equal(p.bin.kit, 'cli/kit.mjs');
   assert.equal(p.engines.node, '>=20');
-  assert.equal(p.scripts.test, 'node --test');
+  assert.equal(p.scripts.test, 'node gate/com-fichas.mjs --quero 4 -- node --test --test-concurrency={fichas}'); // o teste do kit passa pelo teto da máquina (ADR 0005)
   assert.ok(existsSync(join(RAIZ, p.bin.kit)));
   assert.equal(p.dependencies, undefined, 'o kit não traz dependência npm');
 });
