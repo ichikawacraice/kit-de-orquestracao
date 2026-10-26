@@ -40,10 +40,10 @@ test('package.json: bin, engines, test e type module', () => {
   assert.equal(p.dependencies, undefined, 'o kit não traz dependência npm');
 });
 
-test('marketplace.json lista os dois plugins, cada um com a versão esperada no plugin.json', () => {
+test('marketplace.json lista os plugins do kit, cada um com a versão esperada no plugin.json', () => {
   const m = json('.claude-plugin', 'marketplace.json');
   const nomes = m.plugins.map((p) => p.name).sort();
-  assert.deepEqual(nomes, ['orquestracao', 'painel-sessoes']);
+  assert.deepEqual(nomes, ['orquestracao', 'painel-sessoes', 'processos']);
   for (const pl of m.plugins) {
     const pj = json(pl.source, '.claude-plugin', 'plugin.json');
     assert.equal(pj.name, pl.name);

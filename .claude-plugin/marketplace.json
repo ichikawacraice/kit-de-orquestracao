@@ -13,6 +13,11 @@
       "name": "painel-sessoes",
       "source": "./plugins/painel-sessoes",
       "description": "Mod /painel: as sessões do pool, as perguntas com Q-ID e a fila."
+    },
+    {
+      "name": "processos",
+      "source": "./plugins/processos",
+      "description": "Processos de desenvolvimento: spec-driven, revisar-diff e auditoria-de-clique."
     }
   ],
   "description": "Kit de orquestração de sessões do Claude Code (marketplace privado)."
