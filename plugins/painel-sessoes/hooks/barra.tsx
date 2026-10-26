@@ -1,7 +1,7 @@
 import type { Barra, PerguntaAberta } from '../types'
 import { desde } from './desenho'
 
-// A barra de status acima do prompt: o relógio do cache de 1 h, o contexto contra a régua do papel, o selo das perguntas
+// A barra de status acima do prompt: o relógio do cache de 1 h, o contexto contra a janela de compactação, o selo das perguntas
 // abertas, o botão do painel, o do modo ausente e o ok para a orquestradora se limpar. Só lê arquivos (a cada 30 s e a cada
 // turno); o `list_sessions` fica para o pane aberto. Nunca manda a limpeza: o ok grava a resposta pelo mesmo `responder` do pane.
 
@@ -24,10 +24,19 @@ export const BANDEIRA_DO_APP = 'Library/Application Support/Claude/claude-code-s
 export const ROTULO_LIMPAR = 'Pode se limpar'
 export const ROTULO_LIMPAR_ANTES = 'Limpar antes de vencer'
 export const FRASE_DO_PEDIDO = 'A orquestradora pede para se limpar'
+/** A frase do pedido dentro da barra: a longa só na faixa 0, onde há largura. */
+export const FRASE_NA_BARRA = '◆ orquestradora pede limpeza'
+export const FRASE_CURTA_NA_BARRA = '◆ pede limpeza'
+export const OK_ENVIADO = '✓ ok enviado'
+export const ROTULO_ENVIANDO = 'Enviando…'
+/** As palavras do contexto: só elas levam cor; o denominador é a janela, a régua do papel só dá a palavra. */
+export const PALAVRA_ALTO = ' · alto'
+export const PALAVRA_LIMPAR = ' · limpar'
 
 /**
  * As réguas de contexto por papel, as mesmas do hook `contexto-do-papel` (um teste da raiz compara): `aviso` marca `· alto`,
- * `teto` marca `· teto` e é o denominador. Sem faixa intermediária (executora, orquestradora), aviso e teto coincidem.
+ * `teto` marca `· limpar`; nenhum dos dois é o denominador (esse é a janela de compactação). Sem faixa intermediária
+ * (executora, orquestradora), aviso e teto coincidem.
  */
 export const REGUAS = {
   E: { aviso: 300_000, teto: 300_000 },
@@ -70,6 +79,29 @@ export function reguaDoPapel(titulo: string | null | undefined, ausente = false)
 export const corDoContexto = (tokens: number, regua: Regua | null): 'normal' | 'aviso' | 'teto' | null =>
   regua === null ? null : tokens >= regua.teto ? 'teto' : tokens >= regua.aviso ? 'aviso' : 'normal'
 
+const inteiroPositivo = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : null)
+
+/**
+ * A janela em que a sessão compacta, para o denominador do contexto: `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, senão o
+ * `autoCompactWindow` do `~/.claude/settings.json` (texto do arquivo), senão a janela do modelo. Só inteiro > 0 vale; o
+ * escolhido nunca passa da janela do modelo (a compactação não passa dela). Nenhuma: `null`, sem denominador.
+ */
+export function janelaDeCompactacao({ env, settings, modelo }: { env: string | undefined; settings: string | null | undefined; modelo: number | null | undefined }): number | null {
+  const doModelo = inteiroPositivo(modelo)
+  const daEnv = env !== undefined && env.trim() !== '' ? inteiroPositivo(Number(env)) : null
+  let doSettings: number | null = null
+  try {
+    const lido: unknown = settings ? JSON.parse(settings) : null
+    doSettings = typeof lido === 'object' && lido !== null ? inteiroPositivo((lido as Record<string, unknown>).autoCompactWindow) : null
+  } catch {
+    doSettings = null
+  }
+  const escolhida = daEnv ?? doSettings
+  if (escolhida === null) return doModelo
+
+  return doModelo === null ? escolhida : Math.min(escolhida, doModelo)
+}
+
 /** A moldura do cache: nunca com o turno rodando (o cache está sendo renovado); `null` sem resposta ainda. */
 export function nivelDoCache(segundos: number | null, trabalhando: boolean): 'aviso' | 'alerta' | 'venceu' | null {
   if (segundos === null || trabalhando) return null
@@ -97,19 +129,18 @@ export function orquestradorasDoProjeto(docs: Doc[], projeto: string | null): st
  */
 export function perguntaDeLimpeza(docs: Doc[], ids: string[], proprio?: string, agora?: number): PerguntaAberta | null {
   const doOk = (d: Doc) => (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? '')
-  // O sim do painel dado há até 30 min (a janela da T7) atende o pedido: as outras abertas da mesma orquestradora não voltam à tela.
-  if (
-    agora !== undefined &&
-    docs.some(d => {
-      const quando = Date.parse(texto(d.data.respondidaEm) ?? '')
-
-      return d.data.estado === 'respondida' && doOk(d) && d.data.respondidaPor === 'painel' && (texto(d.data.resposta) ?? '').trim().toLowerCase().startsWith('sim') && agora - quando <= OK_VALE_MS
-    })
-  ) {
-    return null
-  }
-  const achadas = docs.filter(d => d.data.estado === 'aberta' && (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? ''))
+  // O sim do painel dado há até 30 min (a janela da T7) atende só as abertas com `atualizadoEm` até o `respondidaEm` dele (o mais recente);
+  // a aberta depois do ok volta, e `atualizadoEm` ilegível conta como anterior.
+  const oks =
+    agora === undefined
+      ? []
+      : docs
+          .filter(d => d.data.estado === 'respondida' && doOk(d) && d.data.respondidaPor === 'painel' && (texto(d.data.resposta) ?? '').trim().toLowerCase().startsWith('sim'))
+          .map(d => Date.parse(texto(d.data.respondidaEm) ?? ''))
+          .filter(q => Number.isFinite(q) && agora - q <= OK_VALE_MS)
+  const okDoPainel = oks.length > 0 ? Math.max(...oks) : -Infinity
   const quando = (d: Doc) => Date.parse(texto(d.data.atualizadoEm) ?? '') || 0
+  const achadas = docs.filter(d => d.data.estado === 'aberta' && (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? '') && quando(d) > okDoPainel)
   const d = achadas.sort((a, b) => quando(b) - quando(a) || numero(b.id) - numero(a.id))[0]
   if (!d) return null
   const sessaoId = texto(d.data.sessaoId)
@@ -167,9 +198,13 @@ export const mostraLimparAntes = (a: { ehOrquestradora: boolean; segundos: numbe
 // ---- a faixa de largura ----
 
 export type EstadoBarra = {
-  /** O relógio já escrito (`47:12`, `—`, `…`, `venceu`), sem o glifo. */
+  /** O relógio já escrito (`47:12`, `—`, `ativo`, `venceu`), sem o glifo. */
   relogio: string
+  /** O relógio em bloco invertido (alerta e venceu): ganha uma célula de respiro de cada lado, que a soma conta. */
+  bloco: boolean
   tokens: number | null
+  /** A janela de compactação (o denominador); `null` = sem `/`. */
+  janela: number | null
   regua: Regua | null
   /** `F52 · design`, quando há item. */
   item: string | null
@@ -181,20 +216,33 @@ export type EstadoBarra = {
   trocando: boolean
   painelAberto: boolean
   moldura: boolean
+  /** O pedido de limpeza da orquestradora na barra: aberto, com o ok a caminho ou já enviado; `null` sem pedido. */
+  pedido: 'aberto' | 'enviando' | 'enviado' | null
+  /** O botão `Limpar antes de vencer` (só sem pedido). */
+  limparAntes: boolean
 }
 
 type Peca<K extends string> = { k: K; t: string }
-export type Pecas = { esq: Array<Peca<'relogio' | 'contexto' | 'item' | 'pool'>>; dir: Array<Peca<'perguntas' | 'modo' | 'painel'>> }
+export type Pecas = {
+  esq: Array<Peca<'relogio' | 'contexto' | 'item' | 'pool'>>
+  /** `pedido` é texto (a frase ou o `✓ ok enviado`); as demais são botões. */
+  dir: Array<Peca<'pedido' | 'limpar-pedido' | 'limpar-antes' | 'perguntas' | 'modo' | 'painel'>>
+}
 
 export const mil = (t: number) => Math.floor(t / 1000)
 
-/** O texto do contexto na faixa: mil para baixo (nunca `150/150` antes de chegar); a palavra do aviso conta em todas as faixas. */
-export function textoDoContexto(tokens: number, regua: Regua | null, faixa: 0 | 1 | 2): string {
+/** A palavra da régua do papel para este contexto: `· alto` no aviso, `· limpar` no teto, nenhuma abaixo (ou sem régua). */
+export function palavraDoContexto(tokens: number, regua: Regua | null): string {
   const cor = corDoContexto(tokens, regua)
-  const palavra = cor === 'aviso' ? ' · alto' : cor === 'teto' ? ' · teto' : ''
-  const numeros = regua && faixa < 2 ? `${mil(tokens)}/${mil(regua.teto)} mil` : `${mil(tokens)} mil`
 
-  return `${faixa === 0 ? 'contexto ' : ''}${numeros}${palavra}`
+  return cor === 'aviso' ? PALAVRA_ALTO : cor === 'teto' ? PALAVRA_LIMPAR : ''
+}
+
+/** O texto do contexto na faixa: mil para baixo, contra a janela (sem janela, sem `/`); a palavra da régua conta em todas as faixas. */
+export function textoDoContexto(tokens: number, regua: Regua | null, janela: number | null, faixa: 0 | 1 | 2): string {
+  const numeros = janela !== null && faixa < 2 ? `${mil(tokens)}/${mil(janela)} mil` : `${mil(tokens)} mil`
+
+  return `${faixa === 0 ? 'contexto ' : ''}${numeros}${palavraDoContexto(tokens, regua)}`
 }
 
 export const rotuloDoSelo = (n: number) => `● ${n} ${n === 1 ? 'pergunta' : 'perguntas'}`
@@ -204,27 +252,38 @@ export const rotuloDoPainel = (aberto: boolean) => (aberto ? 'Fechar painel' : '
 
 /** As peças de cada faixa (0 larga, 1 média, 2 estreita): o que cai quando aperta está decidido aqui, não no desenho. */
 export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
-  const esq: Pecas['esq'] = [{ k: 'relogio', t: `⧗ ${e.relogio}` }]
-  if (e.tokens !== null) esq.push({ k: 'contexto', t: textoDoContexto(e.tokens, e.regua, faixa) })
-  if (faixa < 2 && e.item) esq.push({ k: 'item', t: e.item })
-  if (faixa === 0 && e.pool) esq.push({ k: 'pool', t: e.pool })
+  // Com o pedido (ou o "limpar antes") na barra, item e pool caem em toda faixa e o `Ficar ausente` já na 1.
+  const acao = e.pedido !== null || e.limparAntes
+  const esq: Pecas['esq'] = [{ k: 'relogio', t: e.bloco ? ` ⧗ ${e.relogio} ` : `⧗ ${e.relogio}` }]
+  if (e.tokens !== null) esq.push({ k: 'contexto', t: textoDoContexto(e.tokens, e.regua, e.janela, faixa) })
+  if (!acao && faixa < 2 && e.item) esq.push({ k: 'item', t: e.item })
+  if (!acao && faixa === 0 && e.pool) esq.push({ k: 'pool', t: e.pool })
   const dir: Pecas['dir'] = []
+  if (e.pedido === 'enviado') dir.push({ k: 'pedido', t: OK_ENVIADO })
+  else if (e.pedido !== null) {
+    dir.push({ k: 'pedido', t: faixa === 0 ? FRASE_NA_BARRA : FRASE_CURTA_NA_BARRA })
+    dir.push({ k: 'limpar-pedido', t: e.pedido === 'enviando' ? ROTULO_ENVIANDO : ROTULO_LIMPAR })
+  } else if (e.limparAntes) dir.push({ k: 'limpar-antes', t: ROTULO_LIMPAR_ANTES })
   const selo = e.abertas > 0
   if (selo) dir.push({ k: 'perguntas', t: rotuloDoSelo(e.abertas) })
-  if (e.modo && (faixa < 2 || e.modo === 'ausente')) dir.push({ k: 'modo', t: rotuloDoModo(e.modo, e.trocando) })
+  if (e.modo && (e.modo === 'ausente' ? true : acao ? faixa === 0 : faixa < 2)) dir.push({ k: 'modo', t: rotuloDoModo(e.modo, e.trocando) })
   if (faixa < 2 || !selo) dir.push({ k: 'painel', t: rotuloDoPainel(e.painelAberto) })
 
   return { esq, dir }
 }
 
+/** A largura que a faixa pede, com os textos reais: peça à esquerda com 2 de vão, botão com `[ ]` (+4), texto sem, a moldura +2. */
+export function larguraDaFaixa(e: EstadoBarra, faixa: 0 | 1 | 2): number {
+  const { esq, dir } = pecasDaBarra(e, faixa)
+  const ladoEsq = esq.reduce((n, p) => n + largura(p.t), 0) + 2 * (esq.length - 1)
+  const ladoDir = dir.reduce((n, p) => n + largura(p.t) + (p.k === 'pedido' ? 0 : 4), 0) + Math.max(0, dir.length - 1)
+
+  return ladoEsq + 2 + ladoDir + 2 + (e.moldura ? 2 : 0)
+}
+
 /** A faixa mais rica cuja soma cabe, com os textos reais do momento; nenhuma cabendo, a 2 (o `flexWrap` quebra). */
 export function faixaDaBarra(colunas: number, e: EstadoBarra): 0 | 1 | 2 {
-  for (const f of [0, 1, 2] as const) {
-    const { esq, dir } = pecasDaBarra(e, f)
-    const ladoEsq = esq.reduce((n, p) => n + largura(p.t), 0) + 2 * (esq.length - 1)
-    const ladoDir = dir.reduce((n, p) => n + largura(p.t) + 4, 0) + Math.max(0, dir.length - 1)
-    if (ladoEsq + 2 + ladoDir + 2 + (e.moldura ? 2 : 0) <= colunas) return f
-  }
+  for (const f of [0, 1, 2] as const) if (larguraDaFaixa(e, f) <= colunas) return f
 
   return 2
 }
@@ -262,9 +321,14 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
   const nivel = nivelDoCache(b.cache.segundos, d.isWorking)
   const lido = b.lidoEm !== null
   const regua = reguaDoPapel(b.titulo, modo === 'ausente')
+  // O pedido de limpeza vale para toda sessão do projeto e vence o "limpar antes de vencer" (que só a orquestradora vê).
+  const pedido: EstadoBarra['pedido'] = b.limpeza ? (b.okEnviado === b.limpeza.id ? 'enviado' : d.enviandoQ === b.limpeza.id ? 'enviando' : 'aberto') : null
+  const limparAntes = !b.limpeza && b.cache.segundos !== null && mostraLimparAntes({ ehOrquestradora: b.ehOrquestradora, segundos: b.cache.segundos, trabalhando: d.isWorking, tokens: b.tokens })
   const estado: EstadoBarra = {
-    relogio: d.isWorking ? '…' : relogio(b.cache.segundos),
+    relogio: d.isWorking ? 'ativo' : relogio(b.cache.segundos),
+    bloco: nivel === 'alerta' || nivel === 'venceu',
     tokens: b.tokens,
+    janela: b.janela,
     regua,
     item: d.item,
     pool: b.projeto ? `E ${b.pool.e} · V ${b.pool.v}` : null,
@@ -273,6 +337,8 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
     trocando,
     painelAberto,
     moldura: nivel !== null,
+    pedido,
+    limparAntes,
   }
   const faixa = faixaDaBarra(colunas, estado)
   const { esq, dir: direita } = pecasDaBarra(estado, faixa)
@@ -282,7 +348,7 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
   const pecaEsq = (p: Pecas['esq'][number]) => {
     if (p.k === 'relogio') {
       return nivel === 'alerta' || nivel === 'venceu' ? (
-        <Text key="relogio" inverse bold>{` ${p.t} `}</Text>
+        <Text key="relogio" inverse bold>{p.t}</Text>
       ) : nivel === 'aviso' ? (
         <Text key="relogio" bold>{p.t}</Text>
       ) : (
@@ -290,14 +356,15 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
       )
     }
     if (p.k === 'contexto') {
-      const cor = b.tokens !== null ? corDoContexto(b.tokens, regua) : null
+      const palavra = b.tokens !== null ? palavraDoContexto(b.tokens, regua) : ''
+      const numeros = palavra ? p.t.slice(0, -palavra.length) : p.t
 
-      return cor === 'aviso' ? (
-        <Text key="contexto" color="warning">{p.t}</Text>
-      ) : cor === 'teto' ? (
-        <Text key="contexto" color="error" bold>{p.t}</Text>
-      ) : (
-        <Text key="contexto" dimColor>{p.t}</Text>
+      // O número fica sempre apagado; só a palavra leva cor.
+      return (
+        <Text key="contexto">
+          <Text dimColor>{numeros}</Text>
+          {palavra === PALAVRA_ALTO ? <Text color="warning">{palavra}</Text> : palavra === PALAVRA_LIMPAR ? <Text color="error" bold>{palavra}</Text> : null}
+        </Text>
       )
     }
 
@@ -305,6 +372,30 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
   }
 
   const botaoDir = (p: Pecas['dir'][number]) => {
+    if (p.k === 'pedido') {
+      return (
+        <Text key="pedido">
+          <Text color={pedido === 'enviado' ? 'success' : 'warning'}>{p.t.slice(0, 1)}</Text>
+          {p.t.slice(1)}
+        </Text>
+      )
+    }
+    if (p.k === 'limpar-pedido' && b.limpeza) {
+      const lim = b.limpeza
+
+      return (
+        <Button key="limpar-pedido" variant="primary" onPress={() => acoes.darOk(lim)}>
+          {p.t}
+        </Button>
+      )
+    }
+    if (p.k === 'limpar-antes') {
+      return (
+        <Button key="limpar-antes" variant="secondary" onPress={acoes.rascunho}>
+          {p.t}
+        </Button>
+      )
+    }
     if (p.k === 'perguntas') {
       return (
         <Button key="perguntas" variant="secondary" onPress={acoes.abrirPainel}>
@@ -334,51 +425,10 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
     )
   }
 
-  // A linha do pedido, acima da barra: o pedido de limpeza vale para toda sessão do projeto; sem ele, "limpar antes de vencer".
-  let linhaDoPedido = null
-  if (b.limpeza) {
-    const lim = b.limpeza
-    const enviado = b.okEnviado === lim.id
-    const frase = colunas < 61 ? 'Orquestradora pede limpeza' : colunas >= 94 ? `${FRASE_DO_PEDIDO} · ${lim.id}` : FRASE_DO_PEDIDO
-    linhaDoPedido = (
-      <Box key="linha-do-pedido" flexDirection="row" flexWrap="wrap" columnGap={2} alignItems="center">
-        {enviado ? (
-          <Text>
-            <Text color="success">✓</Text>
-            {' Ok enviado à orquestradora'}
-          </Text>
-        ) : (
-          <Text>
-            <Text color="warning">◆</Text>
-            {` ${frase}`}
-          </Text>
-        )}
-        {enviado ? null : (
-          <Button key="limpar-pedido" variant="primary" onPress={() => acoes.darOk(lim)}>
-            {d.enviandoQ === lim.id ? 'Enviando…' : ROTULO_LIMPAR}
-          </Button>
-        )}
-      </Box>
-    )
-  } else if (b.cache.segundos !== null && mostraLimparAntes({ ehOrquestradora: b.ehOrquestradora, segundos: b.cache.segundos, trabalhando: d.isWorking, tokens: b.tokens })) {
-    const frase = `Cache vence em ${minutosQueFaltam(b.cache.segundos)}`
-    linhaDoPedido = (
-      <Box key="linha-limpar-antes" flexDirection="row" flexWrap="wrap" columnGap={2} alignItems="center">
-        <Text>
-          <Text color="warning">◆</Text>
-          {` ${colunas >= 76 && b.tokens !== null ? `${frase} com ${mil(b.tokens)} mil no contexto` : frase}`}
-        </Text>
-        <Button key="limpar-antes" variant="secondary" onPress={acoes.rascunho}>
-          {ROTULO_LIMPAR_ANTES}
-        </Button>
-      </Box>
-    )
-  }
   const moldura = nivel ? { borderStyle: 'round' as const, borderColor: nivel === 'aviso' ? ('warning' as const) : ('error' as const) } : {}
 
   return (
     <Box flexDirection="column" paddingX={1} {...moldura}>
-      {linhaDoPedido}
       <Box flexDirection="row" flexWrap="wrap" columnGap={2} alignItems="center">
         <Box flexDirection="row" columnGap={2}>
           {esq.map(pecaEsq)}
@@ -412,7 +462,7 @@ export function desenharPedidoNoPane(
           <Text color="success">✓ Ok enviado</Text>
         ) : (
           <Button key="limpar-pedido" variant="primary" onPress={() => darOk(limpeza)}>
-            {enviandoQ === limpeza.id ? 'Enviando…' : ROTULO_LIMPAR}
+            {enviandoQ === limpeza.id ? ROTULO_ENVIANDO : ROTULO_LIMPAR}
           </Button>
         )}
       </Box>

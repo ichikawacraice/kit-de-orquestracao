@@ -40,4 +40,12 @@ describe('réguas de contexto: barra × hook', () => {
     assert.deepEqual(daBarra('orquestradora'), { aviso: doHook('PEDIR'), teto: doHook('PEDIR') });
     assert.deepEqual(daBarra('orquestradoraAusente'), daBarra('P'));
   });
+
+  it('o denominador do contexto é a janela, não a régua: textoDoContexto não usa regua.teto', () => {
+    const fn = /export function textoDoContexto\([\s\S]*?\n}\n/.exec(BARRA);
+    assert.ok(fn, 'textoDoContexto achada em barra.tsx');
+    assert.ok(fn[0].includes('janela'), 'a função usa a janela');
+    assert.ok(!fn[0].includes('regua.teto'), 'a função não lê regua.teto');
+    assert.ok(!fn[0].includes('regua.aviso'), 'a régua só entra por corDoContexto');
+  });
 });

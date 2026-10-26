@@ -138,6 +138,8 @@ export type Barra = {
   /** Quantos avisos de cache já saíram nesta resposta (0, 1 aos 10 min, 2 aos 5). */
   avisado: number
   tokens: number | null
+  /** A janela de compactação (env, `autoCompactWindow` do settings, janela do modelo); `null` = sem denominador. */
+  janela: number | null
   erros: string[]
 }
 
