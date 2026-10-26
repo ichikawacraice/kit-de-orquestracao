@@ -117,6 +117,7 @@ function contexto(raiz, documentos) {
     docs: abs(d.docs),
     estados: d.estados,
     orc: d.orcamentos,
+    vistos: 0, // quantos arquivos a regra em curso examinou (a linha de fecho)
     rel: (caminho) => relative(raiz, caminho).split("\\").join("/"),
   };
 }
@@ -125,6 +126,7 @@ function contexto(raiz, documentos) {
 const REGRAS = {
   "status-da-spec"(c) {
     const arquivos = arquivosDe(c.specs, /^SPEC-\d{3}-.*\.md$/);
+    c.vistos = arquivos.length;
     if (arquivos.length === 0) return { achados: [], nada: `nenhuma SPEC-NNN-*.md em ${c.rel(c.specs)}` };
     const achados = [];
     const readme = join(c.specs, "README.md");
@@ -167,6 +169,7 @@ const REGRAS = {
 
   "indice-de-adr"(c) {
     const arquivos = arquivosDe(c.adr, /^\d{4}-.*\.md$/);
+    c.vistos = arquivos.length;
     if (arquivos.length === 0) return { achados: [], nada: `nenhum NNNN-*.md em ${c.rel(c.adr)}` };
     const achados = [];
     const readme = join(c.adr, "README.md");
@@ -174,9 +177,9 @@ const REGRAS = {
     const linhas = ler(readme).split("\n");
     const linhasDoIndice = [];
     linhas.forEach((texto, i) => {
-      // o rótulo pode ser `0390` ou `ADR 0390`: o que vale é o arquivo linkado e, se o rótulo traz um número, que seja o do arquivo
+      // o rótulo é `NNNN` ou `ADR NNNN` e o número é o do arquivo linkado; rótulo livre reprova. `./` no link é normalizado
       const m = /^\|\s*\[([^\]]*)\]\(([^)]+\.md)\)\s*\|([^|]*)\|/.exec(texto);
-      if (m) linhasDoIndice.push({ n: i + 1, rotulo: m[1], numero: /\d{4}/.exec(m[1])?.[0] ?? null, arquivo: m[2], decisao: m[3].trim() });
+      if (m) linhasDoIndice.push({ n: i + 1, rotulo: m[1], numero: /^(?:ADR\s+)?(\d{4})$/.exec(m[1].trim())?.[1] ?? null, arquivo: m[2].replace(/^(?:\.\/)+/, ""), decisao: m[3].trim() });
     });
     const noIndice = new Set(linhasDoIndice.map((l) => l.arquivo));
     for (const arquivo of arquivos) {
@@ -184,7 +187,7 @@ const REGRAS = {
     }
     for (const l of linhasDoIndice) {
       if (!arquivos.includes(l.arquivo)) achados.push({ arquivo: c.rel(readme), linha: l.n, motivo: `o índice aponta para ${l.arquivo}, que não existe` });
-      else if (l.numero !== null && l.numero !== l.arquivo.slice(0, 4)) achados.push({ arquivo: c.rel(readme), linha: l.n, motivo: `rótulo [${l.rotulo}] para o arquivo ${l.arquivo}` });
+      else if (l.numero !== l.arquivo.slice(0, 4)) achados.push({ arquivo: c.rel(readme), linha: l.n, motivo: `rótulo [${l.rotulo}] para o arquivo ${l.arquivo}` });
       if (l.decisao.length > c.orc.decisaoDoAdr) {
         achados.push({
           arquivo: c.rel(readme),
@@ -198,6 +201,7 @@ const REGRAS = {
 
   "linha-do-roadmap"(c) {
     if (!existsSync(c.roadmap)) return { achados: [], nada: `${c.rel(c.roadmap)} não existe` };
+    c.vistos = 1;
     const texto = ler(c.roadmap);
     const linhas = texto.split("\n");
     const itens = linhas.flatMap((l, i) => (ITEM.test(l) ? [{ n: i + 1, texto: l }] : []));
@@ -259,6 +263,7 @@ const REGRAS = {
   "links-relativos"(c) {
     if (!existsSync(c.docs) || !statSync(c.docs).isDirectory()) return { achados: [], nada: `${c.rel(c.docs)} não existe` };
     const arquivos = markdownsSob(c.docs);
+    c.vistos = arquivos.length;
     if (arquivos.length === 0) return { achados: [], nada: `nenhum .md em ${c.rel(c.docs)}` };
     const achados = [];
     const cache = new Map();
@@ -271,7 +276,8 @@ const REGRAS = {
     };
     for (const arquivo of arquivos) {
       for (const l of linksDe(ler(arquivo))) {
-        const destino = l.caminho === "" ? arquivo : normalize(join(dirname(arquivo), l.caminho));
+        // `/x` resolve a partir da raiz do repositório, como o GitHub renderiza
+        const destino = l.caminho === "" ? arquivo : l.caminho.startsWith("/") ? normalize(join(c.raiz, l.caminho)) : normalize(join(dirname(arquivo), l.caminho));
         const onde = { arquivo: c.rel(arquivo), linha: l.linha };
         if (!existsSync(destino)) {
           achados.push({ ...onde, motivo: `${l.alvo}: o arquivo não existe` });
@@ -289,6 +295,7 @@ const REGRAS = {
 
   "tamanho-do-diario"(c) {
     const arquivos = arquivosDe(c.diario, /^\d{4}-\d{2}(-parte-\d+)?\.md$/);
+    c.vistos = arquivos.length;
     if (arquivos.length === 0) return { achados: [], nada: `nenhum AAAA-MM.md em ${c.rel(c.diario)}` };
     const achados = [];
     for (const arquivo of arquivos) {
@@ -307,26 +314,32 @@ const REGRAS = {
 
 /**
  * Confere as `regras` (nomes) sobre `raiz` com a seção `documentos` do kit.json.
- * Devolve `{ achados: [{ regra, arquivo, linha, motivo }], nada: [{ regra, motivo }] }`.
+ * Devolve `{ achados: [{ regra, arquivo, linha, motivo }], nada: [{ regra, motivo }], regras, arquivos }`
+ * (`arquivos`: quantos a conferência examinou, para a linha de fecho).
  */
 export function conferirDocs(raiz, documentos, regras) {
   const c = contexto(raiz, documentos);
   const achados = [];
   const nada = [];
+  let arquivos = 0;
   for (const regra of regras) {
     if (!REGRAS[regra]) throw new Error(`regra de documento desconhecida: ${JSON.stringify(regra)} — as conhecidas são ${REGRAS_DE_DOCUMENTO.join(", ")}`);
+    c.vistos = 0;
     const r = REGRAS[regra](c);
+    arquivos += c.vistos;
     for (const a of r.achados) achados.push({ regra, ...a });
     if (r.nada !== null) nada.push({ regra, motivo: r.nada });
   }
-  return { achados, nada };
+  return { achados, nada, regras: regras.length, arquivos };
 }
 
-/** Escreve o resultado (`arquivo:linha — motivo`, e o "nada a conferir" por regra) e devolve o código de saída. */
+/** Escreve o resultado (`arquivo:linha — motivo`, o "nada a conferir" por regra e, sem achado, `N regras, M arquivos, 0 achados`) e devolve o código de saída. */
 export function relatar(resultado, escrever = (t) => console.log(t)) {
   for (const { regra, motivo } of resultado.nada) escrever(`[${regra}] nada a conferir: ${motivo}`);
   for (const a of resultado.achados) escrever(`${a.arquivo}:${a.linha} — ${motivo(a)}`);
-  return resultado.achados.length === 0 ? 0 : 1;
+  if (resultado.achados.length > 0) return 1;
+  escrever(`${resultado.regras} regras, ${resultado.arquivos} arquivos, 0 achados`);
+  return 0;
 }
 const motivo = (a) => `${a.motivo} [${a.regra}]`;
 

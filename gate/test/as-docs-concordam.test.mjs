@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { carregarConfig, REGRAS_DE_DOCUMENTO } from "../config.mjs";
-import { conferirDocs, slugDeTitulo } from "../as-docs-concordam.mjs";
+import { conferirDocs, relatar, slugDeTitulo } from "../as-docs-concordam.mjs";
 import { main } from "../a-vez-do-gate.mjs";
 
 /**
@@ -196,6 +196,27 @@ describe("indice-de-adr", () => {
     }
   });
 
+  it("rótulo livre reprova (só `NNNN` ou `ADR NNNN` com o número do arquivo vale); `./` no link do índice é normalizado", () => {
+    const a = bom();
+    a["docs/adr/README.md"] = ADR_INDICE("Decide X", "[qualquer](0001-um.md)");
+    const raiz = pasta(a);
+    try {
+      const r = conferirDocs(raiz, {}, ["indice-de-adr"]);
+      assert.deepEqual(onde(r), ["docs/adr/README.md:5"]);
+      assert.match(r.achados[0].motivo, /rótulo \[qualquer\]/);
+    } finally {
+      limpar(raiz);
+    }
+    const b = bom();
+    b["docs/adr/README.md"] = ADR_INDICE("Decide X", "[0001](./0001-um.md)");
+    const raiz2 = pasta(b);
+    try {
+      assert.deepEqual(conferirDocs(raiz2, {}, ["indice-de-adr"]).achados, []);
+    } finally {
+      limpar(raiz2);
+    }
+  });
+
   it("pasta sem ADR diz 'nada a conferir'", () => {
     const raiz = pasta({ "docs/adr/README.md": "# vazio\n" });
     try {
@@ -361,6 +382,17 @@ describe("links-relativos", () => {
     }
   });
 
+  it("link que começa com / resolve a partir da raiz do repositório: existente passa, inexistente reprova", () => {
+    const raiz = pasta({ "docs/sub/a.md": "# A\n[ok](/docs/b.md)\n[mau](/docs/c.md)\n", "docs/b.md": "# B\n" });
+    try {
+      const r = conferirDocs(raiz, {}, ["links-relativos"]);
+      assert.deepEqual(onde(r), ["docs/sub/a.md:3"]);
+      assert.match(r.achados[0].motivo, /o arquivo não existe/);
+    } finally {
+      limpar(raiz);
+    }
+  });
+
   it("pasta docs ausente diz 'nada a conferir'", () => {
     const raiz = pasta({ "README.md": "x\n" });
     try {
@@ -397,6 +429,42 @@ describe("tamanho-do-diario", () => {
     const raiz = pasta({ "docs/x.md": "x\n" });
     try {
       assert.match(conferirDocs(raiz, {}, ["tamanho-do-diario"]).nada[0].motivo, /nenhum AAAA-MM/);
+    } finally {
+      limpar(raiz);
+    }
+  });
+});
+
+describe("a linha de fecho", () => {
+  it("sem achado, `N regras, M arquivos, 0 achados`; com achado, nenhuma linha de fecho", () => {
+    const raiz = pasta({
+      "docs/adr/0001-um.md": "# um\n",
+      "docs/adr/0002-dois.md": "# dois\n",
+      "docs/adr/README.md": ADR_INDICE(),
+      "docs/diario/2026-10.md": "x\n",
+    });
+    try {
+      const r = conferirDocs(raiz, {}, ["indice-de-adr", "tamanho-do-diario"]);
+      const linhas = [];
+      assert.equal(relatar(r, (t) => linhas.push(t)), 0);
+      assert.deepEqual(linhas, ["2 regras, 3 arquivos, 0 achados"]);
+
+      const ruim = conferirDocs(raiz, { orcamentos: { diarioEmBytes: 1 }, adr: "docs/adr" }, ["tamanho-do-diario"]);
+      const saida = [];
+      assert.equal(relatar(ruim, (t) => saida.push(t)), 1);
+      assert.equal(saida.length, 1);
+      assert.doesNotMatch(saida.join("\n"), /0 achados/);
+    } finally {
+      limpar(raiz);
+    }
+  });
+
+  it("pasta vazia: o 'nada a conferir' continua, e a linha de fecho conta 0 arquivos", () => {
+    const raiz = pasta({ "docs/x.md": "x\n" });
+    try {
+      const linhas = [];
+      relatar(conferirDocs(raiz, {}, ["tamanho-do-diario"]), (t) => linhas.push(t));
+      assert.deepEqual(linhas, ["[tamanho-do-diario] nada a conferir: nenhum AAAA-MM.md em docs/diario", "1 regras, 0 arquivos, 0 achados"]);
     } finally {
       limpar(raiz);
     }
