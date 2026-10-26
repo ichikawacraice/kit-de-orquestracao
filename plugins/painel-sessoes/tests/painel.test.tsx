@@ -2424,7 +2424,7 @@ test('F69 A (v): projeto sem orquestradora ativa: sem botão, e o aviso no topo 
   const { ui } = await abrirDe(pedir({ fila: FILA_TRES(), sessoesDocs: [ORQ_IZ] }), $, on)
   expect(await ui.find({ key: 'pedir:F68' }), 'precondição: o izanagi tem botão').toBeDefined()
   expect(await ui.find({ key: 'pedir:F71' }), 'o kit não tem orquestradora').toBeUndefined()
-  expect(await lerSuperficie(ui)).toMatch(/Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item/)
+  expect(await lerSuperficie(ui)).toMatch(/Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item · abra uma orquestradora para pedir/)
   expect((await ui.find({ key: 'pedir:lote' }))?.text, 'o item sem destino não conta no lote').toBe('Pedir 2 sessões')
   await ui.unmount()
 })
@@ -2860,15 +2860,15 @@ test('F82 D: o aviso sem orquestradora prende "· N item(ns)" com espaço inqueb
   const ts = (await um.ui.findAll({ type: 'Text' })).map(t => t.text)
   const aviso = ts.find(t => /^Sem orquestradora ativa em kit/.test(t))
   expect(aviso, 'precondição: o aviso existe').toBeDefined()
-  expect(aviso).toBe('Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item')
-  expect(aviso).not.toContain(' · ')
+  expect(aviso).toBe('Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item · abra uma orquestradora para pedir')
+  expect(aviso!.split(' · '), 'o espaço inquebrável prende só o "· N item"').toEqual(['Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item', 'abra uma orquestradora para pedir'])
   await um.ui.unmount()
 })
 
 test('F82 D: com dois itens o sufixo é "2 itens", também inquebrável', async ($, on) => {
   const dois = await abrirDe(pedir({ fila: { ...FILA_TRES(), F72: parado('execucao', { projeto: 'kit', titulo: 'outro do kit' }) }, sessoesDocs: [ORQ_IZ] }), $, on)
   const ts2 = (await dois.ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(ts2).toContain('Sem orquestradora ativa em kit\u00a0·\u00a02\u00a0itens')
+  expect(ts2).toContain('Sem orquestradora ativa em kit\u00a0·\u00a02\u00a0itens · abra uma orquestradora para pedir')
   await dois.ui.unmount()
 })
 
@@ -2913,5 +2913,14 @@ test('F85 B: o mesmo dono em dois cartões ganha dois botões de chave única, e
   await relogio.settle()
   expect(abertas.length, 'o clique no segundo, com o primeiro abrindo, não pede outro open_session_in').toBe(1)
   expect((await ui.find({ key: doItem1 }))?.text).toBe('Abrir P1')
+  await ui.unmount()
+})
+
+test('F85 C: o cartão do item sem orquestradora ativa diz a saída, sem a contagem', async ($, on) => {
+  const fila = { F2: { ...ESPERANDO_V().F2, projeto: 'kit' } }
+  const { ui } = await abrirDe(pedir({ fila, vivas: vivasPedir(P1), sessoesDocs: [ORQ_IZ] }), $, on)
+  expect(await ui.find({ key: 'pedir:F2' }), 'precondição: sem orquestradora não há botão').toBeUndefined()
+  const ts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect(ts).toContain('Sem orquestradora ativa em kit · abra uma orquestradora para pedir')
   await ui.unmount()
 })

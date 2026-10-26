@@ -1495,7 +1495,7 @@ export const register: Register = on => {
         ? 'Sem a lista de sessões do app · os botões de pedir voltam na próxima leitura'
         : 'varias' in d
           ? `${d.varias} orquestradoras ativas em ${projeto} · peça na conversa da certa`
-          : `Sem orquestradora ativa em ${projeto}${n === undefined ? '' : `\u00a0·\u00a0${n}\u00a0${n === 1 ? 'item' : 'itens'}`}`
+          : `Sem orquestradora ativa em ${projeto}${n === undefined ? '' : `\u00a0·\u00a0${n}\u00a0${n === 1 ? 'item' : 'itens'}`} · abra uma orquestradora para pedir`
     const botaoOrquestradora = (key: string, projeto: string, id: string) => (
       <Button
         key={key}
