@@ -8,12 +8,13 @@
 // perguntar. Vale em bypass. Bash fica de fora pelo mesmo motivo do orquestradora-nao-edita
 // (parsear shell deu 50 alertas falsos); o briefing do subagente diz que ele não grava.
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
-// fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam.
+// fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam; e o
+// designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista.
 // Erro do hook vai para o log e a ferramenta segue.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { BASE, registrar, lerEntrada, semPrefixoDoPlugin } from './hooks-crewai-comum.mjs';
+import { dirname, join, resolve } from 'node:path';
+import { BASE, registrar, lerEntrada, semPrefixoDoKit } from './hooks-crewai-comum.mjs';
 
 const HOOK = 'subagente-nao-edita';
 const H = homedir();
@@ -33,7 +34,31 @@ function tipoLiberado(tipo) {
   if (!tipo || !existsSync(lista)) return false;
   return readFileSync(lista, 'utf8').split('\n')
     .map((l) => l.replace(/#.*/, '').trim()).filter(Boolean)
-    .some((t) => [tipo, semPrefixoDoPlugin(tipo)].some((n) => (t.endsWith('*') ? n.startsWith(t.slice(0, -1)) : n === t)));
+    .some((t) => [tipo, semPrefixoDoKit(tipo)].some((n) => (t.endsWith('*') ? n.startsWith(t.slice(0, -1)) : n === t)));
+}
+
+// A raiz do projeto: a pasta mais próxima do arquivo com `.claude/kit.json` ou `.git` (arquivo ou pasta).
+function raizDoProjeto(p) {
+  for (let d = dirname(p); ; d = dirname(d)) {
+    if (existsSync(join(d, '.claude', 'kit.json')) || existsSync(join(d, '.git'))) return d;
+    if (dirname(d) === d) return null;
+  }
+}
+
+function pastaDeRevisoes(raiz) {
+  let rel = '';
+  try {
+    const kit = JSON.parse(readFileSync(join(raiz, '.claude', 'kit.json'), 'utf8').replace(/^\uFEFF/, ''));
+    rel = kit?.design?.revisoes;
+  } catch { /* sem kit.json legível: vale o padrão */ }
+  rel = typeof rel === 'string' ? rel.trim().replace(/\/+$/, '') : '';
+  return resolve(raiz, rel || 'docs/design/revisoes');
+}
+
+function designerNaRevisao(tipo, p) {
+  if (semPrefixoDoKit(tipo) !== 'designer') return false;
+  const raiz = raizDoProjeto(p);
+  return !!raiz && p.startsWith(pastaDeRevisoes(raiz) + '/');
 }
 
 function caminhoDe(entrada) {
@@ -52,6 +77,10 @@ function main() {
   const quem = `subagente ${e.agent_type || e.agent_id}`;
   if (tipoLiberado(e.agent_type)) {
     registrar(e.session_id || '-', HOOK, 'liberado-por-tipo', `${quem} ${e.tool_name} ${p}`);
+    return;
+  }
+  if (designerNaRevisao(e.agent_type, p)) {
+    registrar(e.session_id || '-', HOOK, 'liberado-por-papel', `${quem} ${e.tool_name} ${p}`);
     return;
   }
 

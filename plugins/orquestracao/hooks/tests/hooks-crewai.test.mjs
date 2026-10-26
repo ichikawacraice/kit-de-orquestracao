@@ -486,6 +486,53 @@ caso('K2 subagente-nao-edita: a lista casa `orquestracao:designer` com `designer
   igual(rodar(SN, editar(`${REPO}/docs/design/revisoes/a.md`, sub('orquestracao:designer'))), null, 'designer com prefixo');
   igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, sub('orquestracao:executor')))), 'deny', 'executor com prefixo');
 });
+// F60: o designer do kit grava a revisão sem a lista da máquina, só na pasta de revisões do projeto.
+const REV = 'docs/design/revisoes';
+const comRepo = (fn) => { mkdirSync(join(REPO, '.git'), { recursive: true }); try { fn(); } finally { rmSync(REPO, { recursive: true, force: true }); } };
+const LISTA = () => join(base, 'subagente-pode-escrever.txt');
+caso('F60.1 design:designer sem lista grava na pasta de revisões padrão', () => comRepo(() => {
+  igual(existsSync(LISTA()), false, 'precondição: sem lista');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('executor')))), 'deny', 'precondição: executor é negado no mesmo caminho');
+  igual(rodar(SN, editar(`${REPO}/${REV}/2026-10-26-a.md`, sub('design:designer'))), null, 'Edit');
+  igual(rodar(SN, pre('Write', { file_path: `${REPO}/${REV}/README.md`, content: 'x' }, sub('design:designer'))), null, 'Write');
+  igual(log().some((l) => l[3] === 'liberado-por-papel'), true, 'log');
+}));
+caso('F60.2 o designer fora da pasta de revisões continua recusado', () => comRepo(() => {
+  for (const p of [`${REPO}/web/index.html`, `${REPO}/CLAUDE.md`, `${REPO}/${REV}/../../src/a.ts`]) {
+    igual(decisao(rodar(SN, editar(p, sub('design:designer')))), 'deny', p);
+  }
+}));
+caso('F60.3 design.revisoes do kit.json manda', () => comRepo(() => {
+  mkdirSync(join(REPO, '.claude'), { recursive: true });
+  const kit = (v) => writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: v } }));
+  kit('docs/ux');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design:designer'))), null, 'docs/ux');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design:designer')))), 'deny', 'o padrão deixa de valer');
+  kit('');
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design:designer'))), null, 'vazio volta ao padrão');
+}));
+caso('F60.4 a pasta de revisões é a do projeto mais próximo', () => {
+  const solto = join(homedir(), 'solto');
+  mkdirSync(join(solto, REV), { recursive: true });
+  try {
+    igual(existsSync(join(solto, '.git')) || existsSync(join(solto, '.claude', 'kit.json')), false, 'precondição: solto não é raiz');
+    igual(decisao(rodar(SN, editar(join(solto, REV, 'a.md'), sub('design:designer')))), 'deny', 'solto');
+  } finally { rmSync(solto, { recursive: true, force: true }); }
+});
+caso('F60.5 a lista casa o prefixo de qualquer plugin do kit', () => {
+  writeFileSync(LISTA(), 'designer\n');
+  igual(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('design:designer'))), null, 'design:designer');
+  igual(decisao(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('outro:designer')))), 'deny', 'outro:designer');
+  writeFileSync(LISTA(), 'executor\n');
+  igual(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('design:executor'))), null, 'design:executor');
+  igual(decisao(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('outro:executor')))), 'deny', 'outro:executor');
+});
+caso('F60.6 os outros tipos não ganham a pasta de revisões', () => comRepo(() => {
+  igual(existsSync(LISTA()), false, 'precondição: sem lista');
+  for (const t of ['designerX', 'design:critico-de-ui', 'executor']) {
+    igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', t);
+  }
+}));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
   const f = transcript([...trabalho(), fala('Pronto, editei.')], 'exec · x');
   const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');
