@@ -20,7 +20,7 @@ Teste novo: `gate/test/o-teto-da-maquina.test.mjs`. Escreva-o primeiro; ele falh
    - `tetoDaMaquina(env, nucleos, pasta)`: `KIT_NUCLEOS_DE_TESTE=5` → 5; só `IZANAGI_NUCLEOS_DE_TESTE=4` → 4; sem env e com `<pasta>/teto.json` `{"nucleos":3}` → 3; sem nada, 15 núcleos → 7, 1 núcleo → 1; `KIT_NUCLEOS_DE_TESTE=0` e `"abc"` → lança erro que cita a variável; `teto.json` com `nucleos` inválido → lança erro que cita o arquivo; `CI=1` → `null`.
    - `tentarTomarFichas(pasta, teto, quero, eu)`: teto 3, quero 2 → leva `[1, 2]` e os arquivos `1` e `2` existem com o JSON `{pid, token, worktree, projeto, desde}`; segunda chamada com quero 2 → leva `[3]` (leva o que houver); terceira → `[]` e devolve os donos das três.
    - Ficha com PID morto (use um PID de um `spawnSync('node', ['-e', ''])` que já saiu) é retomada; ficha com conteúdo ilegível e `mtime` de 31 s atrás é retomada; ilegível recente, não.
-   - **Ficha no formato do Izanagi** (`{pid, worktree, desde}`, sem `token`) com PID vivo (`process.pid`) é respeitada, não retomada. Prove antes que a mesma ficha com PID morto é retomada.
+   - **Ficha no formato do Izanagi** (`{pid, worktree, projeto, desde}` e o antigo `{pid, cwd, desde}`, ambos sem `token`) com PID vivo (`process.pid`) é respeitada, não retomada. Prove antes que a mesma ficha com PID morto é retomada.
    - `soltarFichas(pasta, [1,2], eu)` apaga só as fichas cujo `pid` e `token` são os de `eu`; a ficha de outro dono fica.
    - `tomarFichas({ quero, pasta, teto, dormir, agora, avisar })` (async, `dormir`/`agora`/`avisar` injetáveis como em `esperarAVez`): com o teto cheio, espera; quando uma ficha é solta, leva e devolve; avisa por quem espera ao começar e a cada minuto (texto com o worktree e o PID).
    - `tomarFichasSync(...)`: mesmo contrato, dormindo com `Atomics.wait` sobre um `SharedArrayBuffer`.
@@ -97,7 +97,7 @@ Arquivos: `plugins/orquestracao/hooks/pool-comum.mjs`, `papel-do-pool.mjs`, `orq
 - `npm test` verde e rodando por `com-fichas` (o `package.json` mostra o comando).
 - O teste de concorrência prova máximo de fichas ≤ teto com três processos pedindo mais que o teto.
 - O gate, o typecheck, o `com-fichas` e o `tetoDeWorkers` tomam e soltam fichas na pasta da máquina; nenhum deixa ficha depois de sair (teste por caminho).
-- A ficha no formato do Izanagi (`{pid, worktree, desde}`) é respeitada.
+- A ficha no formato do Izanagi (`{pid, worktree, projeto, desde}` e o antigo `{pid, cwd, desde}`) é respeitada.
 - A guarda recusa `npx vitest run` e `node --test x` diretos, também em bypass, e deixa `npm test` passar.
 - A T8 recusa o `com add` de item em `validacao` com a máquina cheia; o ritual cobra a `espera` `gate` no lugar do despacho; com a máquina livre, os dois se comportam como hoje.
 - O teste que compara o teto do gate e o do plugin passa nas quatro combinações.
