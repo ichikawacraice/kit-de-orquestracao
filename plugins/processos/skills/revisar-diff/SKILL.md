@@ -9,7 +9,7 @@ Invocar esta skill é o pedido explícito para rodar o workflow — ele dispara 
 
 ## 1. Montar os args
 
-- `base`: o que a pessoa disse; senão o `guarda.tronco` do `.claude/kit.json` (com `origin/` na frente se for branch remota); sem essa chave, `origin/main`. Rode `git fetch -q origin` antes.
+- `base`: o que a pessoa disse; senão o `guarda.tronco` do `.claude/kit.json` como está (ele já traz o remoto, ex. `origin/main`); sem essa chave, `origin/main`. Rode `git fetch -q origin` antes.
 - `head`: `HEAD`, salvo pedido de outra ref.
 - `arvore`: `true` por padrão (entra o que não está commitado). `false` quando a pessoa quiser só o commitado.
 - `maxVerificacoes`: 6 por padrão; suba se a pessoa pedir revisão exaustiva.

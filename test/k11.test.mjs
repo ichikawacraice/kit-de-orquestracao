@@ -39,6 +39,7 @@ describe('plugin processos (K11)', () => {
       const fm = frontmatter(t);
       assert.ok(fm, 'sem frontmatter');
       assert.equal(fm.name, s);
+      assert.ok(fm.description, 'sem description');
       assert.ok(fm.description.length > 80, `description curta (${fm.description.length})`);
       assert.ok(t.split('\n').length > 30, 'corpo curto demais');
     });
@@ -80,6 +81,8 @@ describe('plugin processos (K11)', () => {
     assert.ok(t.includes('revisao-do-diff'));
     assert.ok(t.includes('${CLAUDE_PLUGIN_ROOT}/workflows/revisao-do-diff.js') || t.includes('processos:revisao-do-diff'));
     assert.ok(!t.includes('origin/develop'));
+    assert.ok(!t.includes('com `origin/` na frente'), 'guarda.tronco já traz o remoto');
+    assert.match(t, /guarda\.tronco[^\n]*como está/);
   });
 
   test('o workflow troca a dimensão do produto pela do CLAUDE.md do projeto', () => {
@@ -92,6 +95,24 @@ describe('plugin processos (K11)', () => {
   test('o workflow é JavaScript válido (corpo de função assíncrona)', () => {
     const src = ler('workflows/revisao-do-diff.js').replace(/^export const meta =/m, 'const meta =');
     assert.doesNotThrow(() => new Function('args', 'agent', 'parallel', 'phase', 'log', `return (async () => {${src}})`));
+  });
+
+  test('o gate só reprova quando a regra está ligada (documentos.conferir) e a spec-driven cita as chaves de ajuste', () => {
+    const sd = ler('skills/spec-driven/SKILL.md');
+    const wf = ler('workflows/revisao-do-diff.js');
+    for (const [nome, t] of [['spec-driven', sd], ['workflow', wf]]) {
+      const frases = t.split('\n').filter((l) => /(gate|suíte do projeto)[^.]*reprov/.test(l));
+      assert.ok(frases.length > 0, `${nome}: sem frase sobre o gate reprovar`);
+      for (const l of frases) assert.ok(l.includes('documentos.conferir'), `${nome}: reprova sem condicionar a documentos.conferir`);
+    }
+    for (const k of ['documentos.estados', 'documentos.orcamentos', 'documentos.docs']) assert.ok(sd.includes(k), `falta ${k}`);
+  });
+
+  test('a asserção de description falha pela asserção quando a description some (mutação)', () => {
+    const t = ler('skills/spec-driven/SKILL.md').replace(/^description:.*\n/m, '');
+    const fm = frontmatter(t);
+    assert.ok(fm);
+    assert.throws(() => assert.ok(fm.description, 'sem description'), /sem description/);
   });
 
   test('auditoria-de-clique traz o mapa do gesto e o laudo', () => {

@@ -24,6 +24,8 @@ Leia as pastas do `.claude/kit.json`, seção `documentos`. Sem a seção, valem
 | `documentos.research` | `docs/research` | pesquisa datada (snapshot) |
 | `documentos.planos` | `docs/planos` | planos por data |
 
+O vocabulário de status e os orçamentos (400 caracteres por linha do roadmap, 150 KB por mês do diário) são os padrões deste texto; `documentos.estados` e `documentos.orcamentos` do `kit.json` os trocam, e `documentos.docs` é a raiz de onde os links relativos são conferidos.
+
 Se o projeto tem orquestradora ativa, **peça a ela o número** (ADR, SPEC) antes de escrever o arquivo; sem orquestradora, confira o maior existente e some um. Número nunca é reutilizado. Número reservado sem spec escrita fica registrado no índice, de forma explícita.
 
 ## Abrir ou mudar uma SPEC
@@ -40,7 +42,7 @@ Quando status e nuance dividem o mesmo campo, aparecem estados inventados ("Parc
 
 **Spec no presente só afirma o que existe.** Mecanismo planejado e não implementado vai para `Pendências:`.
 
-Depois de criar a spec ou mudar o status, atualize a linha dela no índice (`<documentos.specs>/README.md`). Índice e cabeçalho são conferidos por `scripts/kit/as-docs-concordam.mjs` (o gate do projeto): status fora do vocabulário, ou índice discordando da spec, reprovam. Uma spec = um componente ou contrato coeso; passou de ~300 linhas, provavelmente são duas. Cite os ADRs relacionados, e faça o ADR citar a spec de volta.
+Depois de criar a spec ou mudar o status, atualize a linha dela no índice (`<documentos.specs>/README.md`). Índice e cabeçalho são conferidos por `scripts/kit/as-docs-concordam.mjs` (o gate do projeto): quando a regra está ligada (`documentos.conferir`), status fora do vocabulário, ou índice discordando da spec, reprovam. Uma spec = um componente ou contrato coeso; passou de ~300 linhas, provavelmente são duas. Cite os ADRs relacionados, e faça o ADR citar a spec de volta.
 
 ## Registrar um ADR
 
@@ -58,7 +60,7 @@ Ao concluir ou iniciar tarefa relevante, atualize o roadmap **na hora** — font
 
 A linha é curta e diz o que mudou **e por que importava**; a narrativa longa vai em `<documentos.diario>/AAAA-MM.md`, um arquivo por mês (fatiado em `AAAA-MM-parte-N.md` quando passa de 150 KB; a entrada nova vai na última parte), com âncora explícita e apontada da linha por `· [detalhe](diario/AAAA-MM.md#ancora)`.
 
-**Item que cresce faz a ENTRADA DO DIÁRIO crescer, nunca a linha.** Linha que engorda vira índice ilegível; o gate reprova a linha acima de 400 caracteres, o terceiro link e a âncora que não existe no destino.
+**Item que cresce faz a ENTRADA DO DIÁRIO crescer, nunca a linha.** Linha que engorda vira índice ilegível; com `documentos.conferir` ligado, o gate reprova a linha acima de 400 caracteres, o terceiro link e a âncora que não existe no destino.
 
 **Fraco:** `- [x] Corrigido bug na promoção — 2026-08-15`
 
