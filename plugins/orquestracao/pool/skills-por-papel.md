@@ -2,7 +2,7 @@
 
 Pedido do operador (24/10): *"cada sessão só precisa conhecer as próprias skills… se tiver uma skill de boas práticas de React, quem deve ler e quem não? se tivermos uma skill de design, quem deve ler e quem não?"*
 
-**Cada membro lê o arquivo do SEU papel** em [`papeis/`](papeis/): o papel, as skills que usa e quando, e as que não lê. Esta página é o mapa geral. **Fonte única do filtro:** [`skills-por-papel.json`](skills-por-papel.json). Esta página explica o porquê; quem aplica e quem confere leem o JSON. Skill de plugin do kit (`processos:*`, `design:*`) entra no JSON com o nome prefixado; o teste `papeis-citam-o-que-existe` reprova papel que cita skill que não existe em `plugins/*/skills/` nem no JSON. Skill nova instalada sem linha no JSON reprova o teste `~/.claude/hooks/tests/skills-do-papel.test.mjs`.
+**Cada membro lê o arquivo do SEU papel** em [`papeis/`](papeis/): o papel, as skills que usa e quando, e as que não lê. Esta página é o mapa geral. **Fonte única do filtro:** [`skills-por-papel.json`](skills-por-papel.json). Esta página explica o porquê; quem aplica e quem confere leem o JSON. Skill de plugin do kit (`processos:*`, `design:*`) entra no JSON com o nome prefixado; o teste `plugins/orquestracao/hooks/tests/papeis-citam-o-que-existe.test.mjs` reprova papel que cita skill que não existe em `plugins/*/skills/` nem no JSON. Skill nova instalada sem linha no JSON reprova o teste `plugins/orquestracao/hooks/tests/skills-do-papel.test.mjs`.
 
 <a id="como-funciona"></a>
 ## Como a sessão passa a conhecer só as suas

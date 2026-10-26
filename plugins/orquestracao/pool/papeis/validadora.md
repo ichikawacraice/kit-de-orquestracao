@@ -29,7 +29,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - `vercel-react-best-practices`, `vercel-composition-patterns`: o diff mexe em React ou Next.
 - `supabase`: o diff mexe em migration, RLS ou chamadas ao Supabase.
 - `owasp-security`: o diff mexe em auth, sessão, entrada ou segredo.
-- `processos:auditoria-de-clique`: o diff mexe em gesto ou rota que grava no `apps/web`.
+- `processos:auditoria-de-clique`: o diff mexe em gesto ou rota que grava no front.
 - `agent-browser`: abrir a tela e conferir o artefato.
 - `security-audit`, `audit-context-building`, `differential-review`, `sharp-edges`, `variant-analysis`, `fp-check`, `semgrep`, `static-analysis`, `supply-chain-risk-auditor`, `claude-security:claude-security`: quando o item é auditoria de segurança ou o diff é sensível.
 - `superpowers:using-superpowers`, `superpowers:diagnosing-superpowers`: meta.

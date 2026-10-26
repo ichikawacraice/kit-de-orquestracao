@@ -24,12 +24,13 @@ function entregues() {
   return r;
 }
 
-// Citação = os nomes entre crases que abrem um item de lista ("- `a`, `b`: …").
+// Citação = todo `plugin:nome` entre crases, em qualquer lugar da linha, mais os nomes que abrem um item de lista ("- `a`, `b`: …").
 function citacoes(texto) {
   const r = [];
   for (const linha of texto.split('\n')) {
+    for (const c of linha.matchAll(/`([a-z0-9-]+:[a-z0-9-]+)`/g)) r.push(c[1]);
     const m = linha.match(/^\s*- ((?:`[^`]+`[,\s]*(?:e\s+)?)+)/);
-    if (m) for (const c of m[1].matchAll(/`([^`]+)`/g)) r.push(c[1]);
+    if (m) for (const c of m[1].matchAll(/`([^`]+)`/g)) if (!r.includes(c[1])) r.push(c[1]);
   }
   return r;
 }
@@ -54,7 +55,10 @@ test('os papéis citam skills que existem, e o insumo não está vazio', () => {
 
 test('o detector pega citação inventada', () => {
   const t = '- `design:skill-inventada`, `processos:spec-driven`: x';
-  assert.deepEqual(citacoes(t), ['design:skill-inventada', 'processos:spec-driven']);
+  assert.deepEqual([...new Set(citacoes(t))], ['design:skill-inventada', 'processos:spec-driven']);
+  const meio = 'roda o `design:skill-no-meio` em subagente e depois `processos:spec-driven`.';
+  assert.deepEqual(citacoes(meio), ['design:skill-no-meio', 'processos:spec-driven']);
+  assert.equal(existe(citacoes(meio)[0], entregues()), false, 'a inventada no meio da frase tem de ser reprovada');
   assert.equal(existe('design:skill-inventada', entregues()), false);
   assert.equal(existe('processos:spec-driven', entregues()), true);
 });

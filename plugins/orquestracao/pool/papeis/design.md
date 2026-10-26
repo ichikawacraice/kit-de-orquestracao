@@ -4,7 +4,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 
 ## O papel
 - **Faz:**
-  - antes de qualquer tela, componente, mensagem ou fluxo novo ou mudado no `apps/web`, escreve a revisão de arquitetura de UI em `docs/design/revisoes/`: tarefa, inventário, hierarquia, onde mora cada mensagem, componentes do kit, estados, movimento e o que sai;
+  - antes de qualquer tela, componente, mensagem ou fluxo novo ou mudado no front do projeto (a pasta de `design.pasta` do `.claude/kit.json`), escreve a revisão de arquitetura de UI em `docs/design/revisoes/`: tarefa, inventário, hierarquia, onde mora cada mensagem, componentes do kit, estados, movimento e o que sai;
   - roda o `design:critico-de-ui` em subagente, em contexto separado, e ajusta a revisão até ela sobreviver.
 - **Não faz:**
   - não escreve código de tela: quem implementa a revisão aprovada é a E;

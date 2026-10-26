@@ -30,7 +30,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - `vercel-react-best-practices`, `vercel-composition-patterns`: ao escrever ou refatorar componente React ou Next.
 - `supabase`: migration, RLS, auth, chamadas ao Supabase.
 - `owasp-security`: código de auth, sessão, entrada do usuário e segredo.
-- `processos:auditoria-de-clique`: depois de mexer em gesto, rota que grava, `useAposta` ou sondagem do `apps/web`.
+- `processos:auditoria-de-clique`: depois de mexer em gesto, rota que grava, ou sondagem de tela do front.
 - `agent-browser`: ver a tela funcionando no navegador.
 - `hookify:writing-rules`: quando o plano pede uma regra de hook.
 - `superpowers:using-superpowers`, `superpowers:diagnosing-superpowers`: meta.

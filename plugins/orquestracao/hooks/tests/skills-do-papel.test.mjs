@@ -79,6 +79,17 @@ caso('2: D liga impeccable e não bloqueia critica-de-ui', () => {
   ok(s.enabledPlugins['design@kit-de-orquestracao'] === true, 'design liga em D');
   ok(s.enabledPlugins['document-skills@anthropic-agent-skills'] === false, 'document-skills em D');
 });
+caso('2b: cópia de projeto sem prefixo segue filtrada por papel (projeto que ainda tem as skills como suas)', () => {
+  aplicar('local_E3');
+  const e = settings('E3').skillOverrides;
+  ok(e['critica-de-ui'] === 'user-invocable-only', `E critica-de-ui: ${e['critica-de-ui']}`);
+  ok(e['revisao-de-arquitetura-de-ui'] === 'user-invocable-only', `E revisao: ${e['revisao-de-arquitetura-de-ui']}`);
+  ok(e['revisar-diff'] === 'user-invocable-only', `E revisar-diff: ${e['revisar-diff']}`);
+  aplicar('local_D1');
+  const d = settings('D1').skillOverrides;
+  ok(!('critica-de-ui' in d), 'D lê critica-de-ui');
+  ok(d['spec-driven'] === 'name-only', `D spec-driven: ${d['spec-driven']}`);
+});
 caso('3: checkout principal → pulado e arquivo intocado', () => {
   const f = dir('wt', 'V9', '.claude', 'settings.local.json');
   writeFileSync(f, '{"x":1}');
@@ -160,6 +171,7 @@ const PAPEIS = { O: 'orquestradora', P: 'planejadora', D: 'design', E: 'executor
 const secao = (md, titulo) => { const m = new RegExp(`^## ${titulo}[^\\n]*\\n([\\s\\S]*?)(?=^## |$(?![\\s\\S]))`, 'm').exec(md); return m ? m[1] : ''; };
 const crases = (t) => new Set([...t.matchAll(/`([^`\s]+)`/g)].map((m) => m[1]));
 // Devolve a lista de divergências entre o mapa e os cinco arquivos de papel.
+const irmaPrefixada = (mapa, nome) => ['processos', 'design'].find((p) => `${p}:${nome}` in mapa.skills);
 function divergencias(mapa, pasta) {
   const out = [];
   for (const [papel, arq] of Object.entries(PAPEIS)) {
@@ -169,6 +181,7 @@ function divergencias(mapa, pasta) {
     const usa = crases(secao(md, 'Skills que usa')); const cita = crases(secao(md, 'Skills que cita'));
     if (!usa.size || !cita.size) out.push(`${arq}.md: seção vazia (usa=${usa.size}, cita=${cita.size})`);
     for (const [nome, s] of Object.entries(mapa.skills)) {
+      if (s.origem === 'projeto' && irmaPrefixada(mapa, nome)) continue; // cópia de projeto: os papéis citam só o nome prefixado
       const v = s[papel];
       if (v === 'le' && !usa.has(nome)) out.push(`${papel} lê ${nome}: falta em "Skills que usa"`);
       if (v === 'cita' && !cita.has(nome)) out.push(`${papel} cita ${nome}: falta em "Skills que cita"`);
@@ -186,6 +199,18 @@ caso('9: arquivos de papel × JSON concordam (le→usa, cita→cita, nao fora da
   const copia = JSON.parse(JSON.stringify(mapa));
   copia.skills['superpowers:test-driven-development'].E = 'nao';
   ok(divergencias(copia, pasta).some((x) => x.includes('superpowers:test-driven-development')), 'mutação le→nao passou despercebida');
+});
+
+caso('2c: a linha de projeto sem prefixo e a prefixada têm as mesmas colunas', () => {
+  const mapa = JSON.parse(readFileSync(MAPA_REAL, 'utf8'));
+  const projeto = Object.entries(mapa.skills).filter(([, s]) => s.origem === 'projeto');
+  ok(projeto.length === 5, `linhas de projeto: ${projeto.length}`);
+  for (const [nome, s] of projeto) {
+    const par = irmaPrefixada(mapa, nome);
+    ok(par, `${nome} sem irmã prefixada`);
+    const o = mapa.skills[`${par}:${nome}`];
+    for (const papel of ['O', 'P', 'D', 'E', 'V']) ok(s[papel] === o[papel], `${nome} ${papel}: ${s[papel]} × ${o[papel]}`);
+  }
 });
 
 caso('K2: skill do plugin chega como `orquestracao:ausente` (ou sem prefixo): o mesmo aviso para papel que não a carrega', () => {
