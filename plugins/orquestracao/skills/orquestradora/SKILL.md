@@ -11,6 +11,7 @@ A regra que TODA sessão segue (como achar a orquestradora, o que as outras sess
 1. Renomeie a sessão `🎛 orquestradora — <projeto>` (`set_session_title` com `"self"`), se ainda não estiver.
 2. Leia `~/.claude/orquestracao/<nome-do-repo>.md`. Se não existir, crie com as seções: PRs abertos (de quem, estado) · Decisões acumuladas · Números reservados · Adiados (sugestões de sessão) · Próximo release · Entregas arquivadas.
 3. `list_sessions` (com `limit`) e confira o que mudou desde o arquivo: sessão nova, sessão parada, PR mergeado. Leve a diferença ao painel com `painel` (seção "Perguntas com ID e o painel"). Não releia transcrições para reconstruir o passado: o que não está no arquivo, pergunte à sessão (seção "Orçamento de contexto").
+4. As perguntas que você abriu antes da limpeza continuam suas (protocolo, âncora `perguntas-proprias`): a lista chega no início da conversa; resposta pelo painel a elas não se repassa.
 
 <a id="ritual-de-cada-turno"></a>
 ## Ritual de cada turno (antes de responder)
@@ -127,7 +128,7 @@ Sessão nova que vá consumir produção ou gastar execução de job pede o meu 
     - **Com `opcoes`** (lista `[{id, label}]`, ambos texto): um botão por item, **na ordem da lista, com a recomendação primeiro**. Item sem `id` é ignorado; sem `label`, o botão mostra o `id`. `{id: "outra", label: "…"}` não vira botão próprio: libera o **Responder**, um campo de texto livre.
     - **Sem `opcoes`:** **Sim** (resposta `sim (segue a recomendação)`), **Não** (`não`), **Adiar** (`adiar (fica o que diz o 'se não decidir')` — o estado continua `respondida`, porque o vocabulário é fechado) e **Responder** (texto livre).
     - Ao clicar, o mod relê o arquivo e só grava se a pergunta ainda está `aberta` e na versão que ele leu: `estado: "respondida"`, `resposta` (o `id` da opção ou o texto) e `atualizadoEm`. Se mudou, não grava e mostra o motivo no pane.
-    - **Depois de gravar, o mod manda a resposta à sessão que perguntou** (`send_message` para o `sessaoId`): *"Q12 — resposta do operador pelo painel: …"*. Por isso **`sessaoId` é obrigatório** em toda pergunta; sem ele a resposta fica só no arquivo. Se o envio falhar, o pane avisa que a pergunta foi gravada mas não chegou, e o operador abre a sessão pela barra lateral. Trava: o `painel` recusa pergunta `aberta` sem `sessaoId`.
+    - **Depois de gravar, o mod manda a resposta à sessão que perguntou** (`send_message` para o `sessaoId`): *"Q12 — pergunta aberta POR ESTA SESSÃO (talvez antes de uma limpeza de contexto): "<título>". Caso: …. Chegou a resposta do operador pelo painel: …"*. Por isso **`sessaoId` é obrigatório** em toda pergunta; sem ele a resposta fica só no arquivo. Se o envio falhar, o pane avisa que a pergunta foi gravada mas não chegou, e o operador abre a sessão pela barra lateral. Trava: o `painel` recusa pergunta `aberta` sem `sessaoId`.
     - A sessão que recebe a mensagem age sobre a resposta (o `id` de uma das opções dela, ou texto livre) e não regrava a pergunta: ela já está `respondida`.
     - O botão não substitui a pergunta no chat (bullet abaixo): os dois mostram a mesma pergunta, e vale a primeira resposta que chegar.
     - O desenho do pane é da sessão do mod. Mudança no formato dos dados combina-se com ela antes.

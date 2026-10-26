@@ -44,6 +44,10 @@ Título: `<ID> · <o que está fazendo, em palavras do produto>` (ex.: `P1 · ed
 - **Achar o próprio `local_…`:** `get_session` com `"self"` (campo `sessionId`).
 - PR validado vai à orquestradora como `PR N validado, HEAD Y` (ela mergeia).
 
+<a id="perguntas-proprias"></a>
+## Perguntas da própria sessão, depois de uma limpeza
+A limpeza apaga a lembrança, não as perguntas: elas ficam em `perguntas/<ID>.json` com `sessaoId` = você. No início da conversa nova, o hook `sessao-inicio.mjs` lista as abertas e as respondidas nas últimas 24 h que são suas; sem a lista (CLI fora do app), rode `painel list perguntas aberta --sessao <seu local_…>` (o `local_…` vem de `get_session` com `"self"`). Mensagem que começa com `Q<n> — pergunta aberta POR ESTA SESSÃO` é sua: retome pelo `caso` e pelo `handoff` do item, sem devolver à orquestradora nem pedir repasse. Resposta já atendida (o handoff diz) não se refaz.
+
 ## Nunca travar
 - Decisão reversível, de baixo risco ou com recomendação forte: **assuma** e siga, marcando *assumida, a confirmar* no item e no arquivo de decisões da frente; se o operador discordar depois, ajuste. Pergunta de verdade (irreversível, destrutiva, produção, gasto de job, publicar para fora) leva Q-ID (`proxima-pergunta`), vai ao painel e só a etapa que depende dela espera.
 - Membro não abre sessão nova: despacha a outro membro. Trava: `${CLAUDE_PLUGIN_ROOT}/hooks/papel-do-pool.mjs` recusa `start_session` de P/D/E/V (a orquestradora passa).

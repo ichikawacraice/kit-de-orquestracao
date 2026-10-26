@@ -4,7 +4,7 @@
 // sessões, por este script. Substitui o banco do artefato (23/10).
 //
 //   painel.mjs get    <colecao> <id>
-//   painel.mjs list   <colecao> [estado] [--projeto <nome> | --todos]   (sem flag lista tudo)
+//   painel.mjs list   <colecao> [estado] [--projeto <nome> | --todos] [--sessao <local_…>]   (sem flag lista tudo; --sessao filtra pelo `sessaoId` do documento)
 //   painel.mjs set    <colecao> <id> '<json>'            substitui o documento
 //   painel.mjs update <colecao> <id> '<json>' [--se-versao N]   mescla os campos (null apaga)
 //   painel.mjs batch  '[{"op":"set|update|delete","colecao":"…","id":"…","data":{…},"seVersao":N}]'   (seVersao opcional por op)
@@ -734,6 +734,9 @@ function main(argv) {
       const ip = resto.indexOf('--projeto');
       const projeto = ip >= 0 ? String(resto.splice(ip, 2)[1] ?? '').toLowerCase() : null;
       if (ip >= 0 && !projeto) throw new Error('--projeto pede o nome do projeto');
+      const is = resto.indexOf('--sessao');
+      const sessao = is >= 0 ? String(resto.splice(is, 2)[1] ?? '') : null;
+      if (is >= 0 && !sessao) throw new Error('--sessao pede o local_… da sessão');
       const it = resto.indexOf('--todos'); if (it >= 0) resto.splice(it, 1);
       let prazoMin = null;
       if (a === 'fila') {
@@ -757,6 +760,7 @@ function main(argv) {
             .map((n) => JSON.parse(readFileSync(join(dir, n), 'utf8')))
             .filter((d) => (prazoMin !== null ? ehVencido(d.data, prazoMin * 60_000, Date.now()) : !b || filtraPorEstado(a, d.data, b)))
             .filter((d) => !projeto || String(d.data?.projeto ?? '').toLowerCase() === projeto)
+            .filter((d) => !sessao || d.data?.sessaoId === sessao)
         : [];
       break;
     }

@@ -14,6 +14,10 @@ import { decidir } from '../segredo-sai.mjs';
 import { avisoDoPrompt } from '../injecao-entre-sessoes.mjs';
 
 const HOOKS = join(dirname(fileURLToPath(import.meta.url)), '..');
+// A1 (F51): o sessao-inicio lê o painel real pelo id da sessão hospedeira; os casos que o rodam isolam HOME, PAINEL_DIR e esse id.
+const VAZIO = mkdtempSync(join(tmpdir(), 'varredura-vazio-'));
+process.on('exit', () => rmSync(VAZIO, { recursive: true, force: true }));
+const ISOLADO = { ...process.env, HOME: VAZIO, PAINEL_DIR: VAZIO, CLAUDE_CODE_HOST_SESSION_ID: '' };
 const x = (n, c = 'x') => c.repeat(n);
 const A36 = 'aB3dE5gH7jK9mN1pQ3sT5vX7zA9cE1gH3jK5'; // 36 caracteres variados
 
@@ -189,7 +193,7 @@ test('injecao-entre-sessoes: avisa só em mensagem de outra sessão com padrão'
 });
 
 test('sessao-inicio: o resumo das regras não dispara o próprio aviso', () => {
-  const out = execFileSync('node', [join(HOOKS, 'sessao-inicio.mjs')], { input: '{}', encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  const out = execFileSync('node', [join(HOOKS, 'sessao-inicio.mjs')], { input: '{}', encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', env: ISOLADO });
   const t = JSON.parse(out).hookSpecificOutput.additionalContext;
   assert.ok(t.length > 200);
   assert.ok(!t.startsWith('⚠'), 'as regras do kit casaram com injeção');
@@ -245,7 +249,7 @@ test('V4-4 baixa: sem o módulo de varredura, sessao-inicio e fila-do-item segue
   const dir = mkdtempSync(join(tmpdir(), 'varredura-falta-'));
   try {
     for (const f of ['sessao-inicio.mjs', 'fila-do-item.mjs', 'regras-globais.md']) copyFileSync(join(HOOKS, f), join(dir, f));
-    const inicio = execFileSync('node', [join(dir, 'sessao-inicio.mjs')], { input: '{}', encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    const inicio = execFileSync('node', [join(dir, 'sessao-inicio.mjs')], { input: '{}', encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', env: ISOLADO });
     assert.ok(JSON.parse(inicio).hookSpecificOutput.additionalContext.includes('Q-ID'), 'as regras saem sem o módulo');
     const fila = execFileSync('node', [join(dir, 'fila-do-item.mjs')], { input: '{}', encoding: 'utf8', env: { ...process.env, FILA_LOG: join(dir, 'fila.log') }, timeout: 10000, killSignal: 'SIGKILL' });
     assert.equal(fila, '');
