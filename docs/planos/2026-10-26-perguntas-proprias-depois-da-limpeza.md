@@ -11,7 +11,7 @@
 2. **Mensagem do mod** (`painel-sessoes`, `entregar`): passa a dizer que a pergunta foi aberta POR ESTA SESSÃO, com título e caso.
 3. **Texto dos papéis**: uma seção nova no protocolo (âncora `perguntas-proprias`) e uma frase em cada `papeis/*.md` e na skill `orquestradora` ("Ao assumir"), com o caminho manual `painel list perguntas aberta --sessao <local_…>` (filtro novo no `painel`).
 
-**Versões:** `orquestracao` 0.1.24 (F48 = 0.1.21, F49 = 0.1.22, F50 = 0.1.23); `painel-sessoes` 0.6.1 (a F48 leva a 0.6.0). Quem entra por último rebaseia; se a F48 ainda não entrou quando esta for a merge, a versão do painel sobe para a seguinte à da `main` — *assumida, a confirmar com a P1*.
+**Versões:** `orquestracao` 0.1.26 (F50, F49 e F48 entraram antes); `painel-sessoes` 0.6.1 (a F48 leva a 0.6.0). Quem entra por último rebaseia; se a F48 ainda não entrou quando esta for a merge, a versão do painel sobe para a seguinte à da `main` — *assumida, a confirmar com a P1*.
 
 ## Regras globais (valem para toda tarefa)
 - Node ≥ 20, ESM, só módulos nativos. Testes em `node:test`; o mod em `claude plugin test plugins/painel-sessoes`.
@@ -114,7 +114,7 @@ Sem `caso`, o trecho `Caso: …. ` some. O trecho `resposta do operador pelo pai
 ### Tarefa 4: o texto dos papéis e a versão do plugin
 
 **Arquivos:**
-- Modificar: `plugins/orquestracao/pool/protocolo.md` (seção nova antes de `## Nunca travar`), `plugins/orquestracao/pool/papeis/{planejadora,executora,validadora,design,orquestradora}.md` (linha 3), `plugins/orquestracao/skills/orquestradora/SKILL.md` (seção "Ao assumir (e ao voltar de uma limpeza)", passo novo 4), `plugins/orquestracao/.claude-plugin/plugin.json` (0.1.24) e onde mais a versão aparecer (`grep -rn '0\.1\.20' plugins/orquestracao .claude-plugin` — siga o que as PRs de versão anteriores mexeram).
+- Modificar: `plugins/orquestracao/pool/protocolo.md` (seção nova antes de `## Nunca travar`), `plugins/orquestracao/pool/papeis/{planejadora,executora,validadora,design,orquestradora}.md` (linha 3), `plugins/orquestracao/skills/orquestradora/SKILL.md` (seção "Ao assumir (e ao voltar de uma limpeza)", passo novo 4), `plugins/orquestracao/.claude-plugin/plugin.json` (0.1.26) e onde mais a versão aparecer (`grep -rn '0\.1\.20' plugins/orquestracao .claude-plugin` — siga o que as PRs de versão anteriores mexeram).
 - Teste: `plugins/orquestracao/hooks/tests/skills-do-papel.test.mjs` (ou novo `perguntas-proprias-doc.test.mjs`)
 
 Texto da seção nova do protocolo (exato):
@@ -129,7 +129,7 @@ Linha 3 de cada papel ganha, no fim: ` Depois de uma limpeza, as perguntas que v
 
 - [ ] **Passo 1: teste que falha** `cada papel e a skill orquestradora apontam para a âncora perguntas-proprias, e ela existe no protocolo` — lê os cinco `papeis/*.md` e o `SKILL.md` (afirma antes que a lista de arquivos não é vazia e tem 5 papéis), e `protocolo.md` contém `<a id="perguntas-proprias"></a>`.
 - [ ] **Passo 2:** roda → falha.
-- [ ] **Passo 3:** escrever os textos e subir a versão para 0.1.24.
+- [ ] **Passo 3:** escrever os textos e subir a versão para 0.1.26.
 - [ ] **Passo 4:** `npm test` verde; `claude plugin validate .` e `claude plugin validate plugins/orquestracao --strict` e `plugins/painel-sessoes --strict` sem erro.
 - [ ] **Passo 5:** commit `docs(pool): perguntas da própria sessão depois de uma limpeza` (a versão vai junto ou em `chore(orquestracao): 0.1.24`).
 
