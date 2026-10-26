@@ -11,7 +11,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BASE, gravaNoPainel, modoAusente } from './hooks-crewai-comum.mjs';
 import { esperandoPapel } from './esperando-papel.mjs';
-import { filaDir, gitCommonDir, membrosLivres, chaveDoPiso } from './pool-comum.mjs';
+import { filaDir, gitCommonDir, membrosLivres, chaveDoPiso, maquinaCheia } from './pool-comum.mjs';
 import { pendente, projetoDoRepo } from '../skills/orquestradora/scripts/ausencia.mjs';
 
 const AUSENCIA = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'orquestradora', 'scripts', 'ausencia.mjs');
@@ -41,6 +41,8 @@ function itensEsperando(nomeProjeto) {
   return itens;
 }
 
+const textoDaMaquina = (m) => `${m.tomadas} de ${m.teto} fichas${m.carga >= m.nucleos ? `, carga ${m.carga.toFixed(1)}` : ''}`;
+
 // O que falta por item esperando (F58): despachar (há membro livre do papel), pedir a vaga (não há), cobrar a dona de avançar a
 // etapa (a parte já foi entregue) ou confirmar com a dona (validação sem V, sem registro de quem validou).
 function cobrancaDeEspera(cwd, nomeProjeto, comandos, usadas, mensagens) {
@@ -51,6 +53,9 @@ function cobrancaDeEspera(cwd, nomeProjeto, comandos, usadas, mensagens) {
   const pediuVaga = [...usadas].some((n) => n.endsWith('start_session')) || Boolean(modoAusente());
   const comAdd = (id) => comandos.some((c) => new RegExp(`\\bcom\\s+add\\s+${id}\\b`).test(c));
   const citou = (id) => mensagens.some((m) => new RegExp(`\\b${id}\\b`).test(m));
+  const gravouEspera = (id) => comandos.some((c) => new RegExp(`\\b${id}\\b`).test(c) && /espera/.test(c));
+  // Máquina cheia (ADR 0005): não se despacha V nem se pede vaga de E ou V; a cobrança é gravar `espera` `gate` no item. Vale no modo ausente também.
+  const maquina = maquinaCheia();
   const faltas = [];
   for (const it of itens) {
     const dona = it.data.donoApelido ? ` (${it.data.donoApelido})` : '';
@@ -60,13 +65,18 @@ function cobrancaDeEspera(cwd, nomeProjeto, comandos, usadas, mensagens) {
       faltas.push(`${it.id} entregue pela ${por} há ${it.minutos} min: cobre a dona${dona} para avançar a etapa`);
       continue;
     }
+    if (maquina.cheia && it.papel === 'V') {
+      if (gravouEspera(it.id)) continue;
+      faltas.push(`${it.id} esperando V com a máquina cheia (${textoDaMaquina(maquina)}): grave espera {"motivo":"gate","texto":"máquina cheia"} no item`);
+      continue;
+    }
     const doPapel = livres.filter((m) => m.papel === it.papel);
     const base = `${it.id} esperando ${it.papel} há ${it.minutos} min`;
     const confirma = it.papel === 'V';
     const frase = confirma ? `${it.id} sem V no item há ${it.minutos} min: confirme com a dona${dona} se a validação já voltou antes de despachar` : base;
     if (comAdd(it.id) || (confirma && citou(it.id))) continue;
     if (doPapel.length > 0) faltas.push(`${frase} — livres: ${doPapel.map((m) => m.apelido).join(', ')}: despache (título + painel com add + mensagem)`);
-    else if (!pediuVaga) faltas.push(`${frase} — sem ${it.papel} livre: peça a vaga (start_session; fora do turno do operador, cartão)`);
+    else if (!pediuVaga && !maquina.cheia) faltas.push(`${frase} — sem ${it.papel} livre: peça a vaga (start_session; fora do turno do operador, cartão)`);
   }
   return faltas;
 }
@@ -90,6 +100,7 @@ function apagarMarca(repo) { try { unlinkSync(marcaDoPiso(repo)); } catch { /* j
 // Piso de uma E livre (ADR 0004): sem E livre e sem start_session no turno cobra a vaga; o start_session de E grava uma marca
 // em BASE/piso que dispensa nova cobrança por PISO_VAGA_MIN min ou até aparecer E livre (a marca some).
 function faltaPiso(cwd, usadas, startsDeE, sessao) {
+  if (maquinaCheia().cheia) return null; // máquina cheia (ADR 0005): pedir vaga agora só pesa mais
   if (modoAusente()) return null;
   const repo = gitCommonDir(cwd);
   if (!repo) return null;
