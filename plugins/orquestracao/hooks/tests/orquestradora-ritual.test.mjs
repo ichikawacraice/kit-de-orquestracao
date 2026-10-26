@@ -36,6 +36,8 @@ function cenario({ bandeira, entregue = false, cwdGit = true } = {}) {
   // uma E livre do projeto, para o piso do pool (ADR 0004) não entrar nestes casos
   const app = join(raiz, 'app'); mkdirSync(app);
   writeFileSync(join(app, 'local_E1.json'), JSON.stringify({ sessionId: 'local_E1', isArchived: false, title: 'E1 · livre', cwd: repo }));
+  mkdirSync(join(base, 'batida'), { recursive: true });
+  writeFileSync(join(base, 'batida', 'meuprojeto.json'), JSON.stringify({ em: new Date().toISOString(), merge: [], vagas: [], excedentes: [] }));
   const tr = join(raiz, 't.jsonl'); writeFileSync(tr, linhas.map((l) => JSON.stringify(l)).join('\n'));
   const rodar = (extra = {}) => execFileSync('node', [HOOK], {
     input: JSON.stringify({ session_id: sid, transcript_path: tr, cwd: cwdGit ? repo : join(raiz, 'fora'), ...extra }),
@@ -90,7 +92,12 @@ beforeEach(() => {
   repoA = join(base, 'proj-a'); repoB = join(base, 'proj-b');
   git(repoA); git(repoB);
   registro('local_ORQ', { cliSessionId: SID, title: '🎛 orquestradora — proj-a', cwd: repoA });
+  batidaRodou('proj-a', 1);
 });
+const batidaRodou = (projeto, minutos) => {
+  mkdirSync(join(base, 'orq', 'batida'), { recursive: true });
+  writeFileSync(join(base, 'orq', 'batida', `${projeto}.json`), JSON.stringify({ em: new Date(Date.now() - minutos * 60_000).toISOString(), merge: [], vagas: [], excedentes: [] }));
+};
 afterEach(() => rmSync(base, { recursive: true, force: true }));
 
 const LIST = ['mcp__ccd_session_mgmt__list_sessions', { linked: true }];
@@ -117,11 +124,11 @@ function rodar(ferramentas, { extra = {}, env = {} } = {}) {
 }
 const livre = (nome, titulo, extra = {}) => registro(nome, { cliSessionId: `cli-${nome}`, title: titulo, cwd: repoA, ...extra });
 
-test('(i) item esperando E há 10 min + E1 livre, sem despacho → bloqueia citando F, minutos e E1', () => {
-  item('F7'); livre('local_E1', 'E1 · livre');
-  const r = rodar([LIST, GRAVA]);
-  assert.equal(r?.decision, 'block');
-  assert.match(r.reason, /F7/); assert.match(r.reason, /esperando E há 10 min/); assert.match(r.reason, /E1/);
+test('(i) item esperando E há 10 min com E1 livre: não bloqueia (a batida avisa o livre); sem o livre, bloqueia pedindo a vaga', () => {
+  item('F7');
+  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'prova: sem livre a cobrança existe');
+  livre('local_E1', 'E1 · livre');
+  assert.equal(rodar([LIST, GRAVA]), null);
 });
 
 test('(ii) o mesmo turno com painel com add F7 → passa', () => {
@@ -137,11 +144,10 @@ test('(iii) sem E livre, ausente desligado, sem start_session → bloqueia pedin
 });
 
 const planejando = (F) => item(F, { etapa: 'planejamento', donoApelido: null, com: [], historico: [{ em: minAtras(10), etapa: 'planejamento', dono: null }] });
-test('(iii-P) item em planejamento sem P + P2 livre → bloqueia citando esperando P e P2', () => {
+test('(iii-P) item em planejamento sem P + P2 livre → não bloqueia (a batida avisa a P2)', () => {
   planejando('F9'); livre('local_P2', 'P2 · livre');
-  const r = rodar([LIST, GRAVA]);
-  assert.equal(r?.decision, 'block');
-  assert.match(r.reason, /F9/); assert.match(r.reason, /esperando P há 10 min/); assert.match(r.reason, /livres: P2/);
+  livre('local_E1', 'E1 · livre');
+  assert.equal(rodar([LIST, GRAVA]), null);
 });
 test('(iii-P2) item em planejamento sem P e sem P livre → pede a vaga de P', () => {
   planejando('F9');
@@ -187,20 +193,29 @@ test('(viii) E1 livre arquivado ou de outro projeto não conta como livre', () =
   assert.doesNotMatch(r.reason, /livres: E/);
 });
 
-test('(ix) sem list_sessions: o bloqueio antigo continua e as duas faltas saem na mesma razão', () => {
-  item('F7'); livre('local_E1', 'E1 · livre');
-  const r = rodar([GRAVA]);
-  assert.equal(r?.decision, 'block');
-  assert.match(r.reason, /Falta: list_sessions/);
-  assert.match(r.reason, /F7/); assert.match(r.reason, /esperando E há 10 min/);
-  // e sem item esperando, só o bloqueio antigo
-  rmSync(join(base, 'painel', 'fila', 'F7.json'));
-  const r2 = rodar([GRAVA]);
-  assert.match(r2.reason, /Falta: list_sessions/); assert.doesNotMatch(r2.reason, /esperando/);
+test('(ix) o ritual não cobra mais list_sessions nem gravação no painel (o estado mecânico é do pane e a batida solta o parado)', () => {
+  livre('local_E1', 'E1 · livre');
+  assert.equal(rodar([]), null, 'turno sem list_sessions e sem gravar passa');
+  livre('local_E1', 'E1 · livre', { isArchived: true });
+  item('F7');
+  const r = rodar([]);
+  assert.equal(r?.decision, 'block', 'prova: a cobrança que resta (vaga) segue detectada');
+  assert.doesNotMatch(r.reason, /list_sessions|Ritual da orquestradora/);
+});
+test('(ix-b) batida parada: sem o relatório do projeto, ou com mais de 30 min, o ritual avisa; recente, não', () => {
+  livre('local_E1', 'E1 · livre');
+  assert.equal(rodar([]), null, 'precondição: com a batida de 1 min atrás não cobra');
+  batidaRodou('proj-a', 45);
+  const velha = rodar([]);
+  assert.equal(velha?.decision, 'block');
+  assert.match(velha.reason, /A batida não roda há 45 min: confira se o mod painel-sessoes está ligado/);
+  assert.equal(rodar([], { extra: { stop_hook_active: true } }), null, 'só uma vez por turno');
+  rmSync(join(base, 'orq', 'batida', 'proj-a.json'));
+  assert.match(rodar([]).reason, /nunca escreveu o relatório de proj-a/);
 });
 
 test('(x) stop_hook_active → passa', () => {
-  item('F7'); livre('local_E1', 'E1 · livre');
+  item('F7');
   assert.equal(rodar([LIST, GRAVA], { extra: { stop_hook_active: true } }), null);
 });
 
@@ -223,15 +238,15 @@ test('(xi) item entregue pela E: não pede despacho nem vaga; cobra a dona avan�
   assert.equal(rodar([LIST, GRAVA, MSG('F8')])?.decision, 'block', 'mensagem que não cita o F');
 });
 
-test('(xii) validacao sem V e sem entregue: pede confirmar com a dona; com V livre satisfaz com com add OU mensagem', () => {
+test('(xii) validacao sem V e sem entregue: com V livre a batida avisa; sem V livre pede confirmar com a dona antes da vaga', () => {
   livre('local_E1', 'E1 · livre');
   item('F7', { etapa: 'validacao', historico: [{ em: minAtras(20), etapa: 'validacao', dono: 'P1' }] });
-  livre('local_V1', 'V1 · livre');
   const r = rodar([LIST, GRAVA]);
   assert.equal(r?.decision, 'block');
   assert.match(r.reason, /F7 sem V no item há 20 min: confirme com a dona \(P1\) se a validação já voltou antes de despachar/);
-  assert.equal(rodar([LIST, GRAVA, ['Bash', { command: 'painel com add F7 local_V1 V1 "valida"' }]]), null);
-  assert.equal(rodar([LIST, GRAVA, MSG('F7')]), null);
+  assert.equal(rodar([LIST, GRAVA, MSG('F7')]), null, 'a mensagem à dona satisfaz');
+  livre('local_V1', 'V1 · livre');
+  assert.equal(rodar([LIST, GRAVA]), null, 'com V livre: a batida avisa');
 });
 
 test('(xiii) só item parado (ritual feito, sem período) → o bloqueio existe e traz só a razão do item', () => {
@@ -251,11 +266,12 @@ test('(xiv) resumo do ausente pendente + item esperando, ritual feito → as dua
   assert.doesNotMatch(r.reason, /Ritual da orquestradora não feito/);
 });
 
-test('(xv) as três: resumo + ritual não feito + item esperando na mesma razão', () => {
+test('(xv) resumo + item esperando + batida parada na mesma razão', () => {
   item('F7');
   writeFileSync(join(base, 'orq', 'operador-ausente.json'), JSON.stringify({ ligado: false, desde: minAtras(12 * 60), desligadoEm: minAtras(120), por: 'painel' }));
+  batidaRodou('proj-a', 90);
   const r = rodar([GRAVA]);
-  assert.match(r.reason, /resumo/); assert.match(r.reason, /Falta: list_sessions/); assert.match(r.reason, /F7 esperando E/);
+  assert.match(r.reason, /A batida não roda/); assert.match(r.reason, /resumo/); assert.doesNotMatch(r.reason, /Falta: list_sessions/); assert.match(r.reason, /F7 esperando E/);
 });
 
 // ADR 0004: piso de uma E livre por projeto fora do modo ausente.
@@ -363,7 +379,7 @@ test('(gate-1) V esperando com a máquina cheia: não cobra despacho nem confirm
   assert.doesNotMatch(r.reason, /despache|confirme com a dona|peça a vaga/);
 });
 test('(gate-2) com a máquina livre a cobrança é a de sempre (o contraste do caso anterior)', () => {
-  validando('F7'); livre('local_V1', 'V1 · livre'); livre('local_E1', 'E1 · livre');
+  validando('F7'); livre('local_E1', 'E1 · livre');
   const r = rodar([LIST, GRAVA], { env: maquinaDoTeste(1, 2) });
   assert.equal(r?.decision, 'block');
   assert.match(r.reason, /sem V no item há 10 min: confirme com a dona/);
@@ -384,14 +400,12 @@ test('(gate-4) cheia por carga também; o texto diz a carga', () => {
   assert.equal(r?.decision, 'block');
   assert.match(r.reason, /máquina cheia \(0 de 7 fichas, carga 99\.0\)/);
 });
-test('(gate-5) máquina cheia: sem E livre não cobra o pedido de vaga de E nem o piso; E livre continua cobrando o despacho', () => {
+test('(gate-5) máquina cheia: sem E livre não cobra o pedido de vaga de E nem o piso; com E livre, a batida avisa', () => {
   item('F7');
   assert.equal(rodar([LIST, GRAVA], { env: maquinaDoTeste(2, 2) }), null, 'sem E livre: nada de vaga');
   assert.equal(rodar([LIST, GRAVA], { env: maquinaDoTeste(1, 2) })?.decision, 'block', 'prova: máquina livre pede a vaga');
   livre('local_E1', 'E1 · livre');
-  const r = rodar([LIST, GRAVA], { env: maquinaDoTeste(2, 2) });
-  assert.equal(r?.decision, 'block');
-  assert.match(r.reason, /F7 esperando E há 10 min — livres: E1: despache/);
+  assert.equal(rodar([LIST, GRAVA], { env: maquinaDoTeste(2, 2) }), null, 'com E livre a batida avisa: nada a cobrar');
 });
 test('(gate-6) modo ausente ligado: a mesma cobrança, sem exceção', () => {
   validando('F7'); livre('local_E1', 'E1 · livre');

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Stop hook (Q14, opção b): numa sessão de projeto que TEM orquestradora ativa,
+// Stop hook (Q14, opção b): numa sessão de projeto (com ou sem orquestradora ativa, ADR 0007),
 // o turno não termina se a sessão mudou de estado no painel (abriu/mergeou PR,
 // tirou ID de pergunta, abriu/arquivou sessão, recebeu resposta a um Qnn) e não
 // gravou nada no painel (painel.mjs set|update|batch|delete) no mesmo turno.
@@ -15,7 +15,7 @@ import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { gravaNoPainel } from './hooks-crewai-comum.mjs';
-import { BASE as BASE_DO_POOL, registroDaSessao, projetoTemOrquestradora, gitCommonDir } from './pool-comum.mjs';
+import { BASE as BASE_DO_POOL, registroDaSessao, gitCommonDir } from './pool-comum.mjs';
 
 const BASE = join(homedir(), '.claude', 'orquestracao');
 const ATIVAS = join(BASE_DO_POOL, 'ativas'); // o mesmo `ativas/` que projetoTemOrquestradora lê
@@ -118,9 +118,7 @@ function main() {
     return;
   }
 
-  // `null` (não consegui medir) aqui vale "não": o hook só cobra gravação no painel de quem sabe ter orquestradora.
-  if (projetoTemOrquestradora(session_id, meuRepo) !== true) return;
-
+  // Cada sessão cuida do próprio item (ADR 0007): vale com ou sem orquestradora ativa.
   const inicio = inicioDoTurno(entradas);
   if (inicio < 0) return;
 

@@ -329,3 +329,14 @@ test('batida: sessão de outro projeto não entra na conta', () => {
   assert.equal(msgs(r, 'cutucada').length, 1, 'o item do outro projeto é tratado no projeto dele');
   assert.deepEqual(Object.keys(r.json().projetos).sort(), ['outro']);
 });
+test('ensaio do plano: uma sessão parada com três itens → 3 mensagens a ela; 21 min depois, 3 itens soltos', () => {
+  for (const F of ['F1', 'F2', 'F3']) item(F, { donoLocalId: lid(8), donoApelido: 'P8', com: [{ localId: lid(8), apelido: 'P8', oQue: 'planeja' }], etapa: 'planejamento', historico: [{ em: iso(T - 40 * MIN), etapa: 'planejamento', dono: 'P8' }] });
+  const arq = sessoes(sessao(8, 'P8 · planos'));
+  const a = batida(arq);
+  const m = msgs(a, 'cutucada');
+  assert.equal(m.length, 3, a.out);
+  assert.ok(m.every((x) => x.para === lid(8)));
+  const b = batida(arq, T + 21 * MIN);
+  assert.deepEqual(b.json().soltos.sort(), ['F1', 'F2', 'F3'], b.out);
+  for (const F of ['F1', 'F2', 'F3']) assert.deepEqual(lerItem(F).data.com, []);
+});
