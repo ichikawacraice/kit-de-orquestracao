@@ -86,7 +86,7 @@ describe('c14 — nome do agente com e sem o prefixo do plugin', () => {
       const m = matriz(join(tmp, 'hooks'));
       assert.equal(m['orquestracao:executor'].criterio, 'passou');
       assert.equal(m['orquestracao:executor'].anuncia, 'passou');
-      assert.equal(m['orquestracao:executor'].nao_edita, 'deny');
+      assert.equal(m['orquestracao:executor'].nao_edita, 'passou'); // a trava de escrita usa semPrefixoDoKit, que a mutação não toca
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   });
   it('a skill papeis-e-modelos manda lançar o subagente com o nome do plugin (orquestracao:<papel>)', () => {

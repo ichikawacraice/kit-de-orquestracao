@@ -11,6 +11,10 @@ export const LOG = join(BASE, 'hooks-crewai.log');
 // nome aceitam as duas formas. Só este prefixo sai: `impeccable:x` e outros ficam como chegam.
 export const semPrefixoDoPlugin = (nome) => String(nome ?? '').replace(/^\/?orquestracao:/, '');
 
+// Os plugins do kit (`design:designer`, `processos:x`): a trava de escrita casa o papel sem o prefixo de qualquer um deles.
+// Só ela usa esta forma; as travas do pool seguem com `semPrefixoDoPlugin`, que só tira `orquestracao:`.
+export const semPrefixoDoKit = (nome) => String(nome ?? '').replace(/^\/?(?:orquestracao|design|processos|painel-sessoes):/, '');
+
 // Uma linha por evento: data, sessão, hook, desfecho, detalhe (TSV).
 export function registrar(sessao, hook, desfecho, detalhe = '') {
   try {

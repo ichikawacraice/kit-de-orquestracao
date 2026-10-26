@@ -8,16 +8,13 @@
 // perguntar. Vale em bypass. Bash fica de fora pelo mesmo motivo do orquestradora-nao-edita
 // (parsear shell deu 50 alertas falsos); o briefing do subagente diz que ele não grava.
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
-// fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam. A lista
-// casa o tipo inteiro e o tipo sem o prefixo `orquestracao:` ou `design:` (os plugins do kit):
-// `designer` libera `design:designer`, mas `outro:designer` e `outro:executor` não ganham a exceção.
-// `design:designer` vem liberado mesmo sem a lista: só grava doc, e a guarda do plugin design já
-// lhe nega o código de tela.
+// fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam; e o
+// designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista.
 // Erro do hook vai para o log e a ferramenta segue.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { BASE, registrar, lerEntrada, semPrefixoDoPlugin } from './hooks-crewai-comum.mjs';
+import { dirname, join, resolve } from 'node:path';
+import { BASE, registrar, lerEntrada, semPrefixoDoKit } from './hooks-crewai-comum.mjs';
 
 const HOOK = 'subagente-nao-edita';
 const H = homedir();
@@ -32,18 +29,36 @@ const LIVRES = [
   (p) => p.startsWith(resolve(tmpdir()) + '/'),
 ];
 
-// Valem sem a lista: o designer do próprio kit grava a revisão de design.
-const LIBERADOS_DO_KIT = ['design:designer'];
-
 function tipoLiberado(tipo) {
-  if (!tipo) return false;
-  if (LIBERADOS_DO_KIT.includes(tipo)) return true;
   const lista = join(BASE, 'subagente-pode-escrever.txt');
-  if (!existsSync(lista)) return false;
-  const nomes = [tipo, semPrefixoDoPlugin(tipo), tipo.replace(/^design:/, '')];
+  if (!tipo || !existsSync(lista)) return false;
   return readFileSync(lista, 'utf8').split('\n')
     .map((l) => l.replace(/#.*/, '').trim()).filter(Boolean)
-    .some((t) => nomes.some((n) => (t.endsWith('*') ? n.startsWith(t.slice(0, -1)) : n === t)));
+    .some((t) => [tipo, semPrefixoDoKit(tipo)].some((n) => (t.endsWith('*') ? n.startsWith(t.slice(0, -1)) : n === t)));
+}
+
+// A raiz do projeto: a pasta mais próxima do arquivo com `.claude/kit.json` ou `.git` (arquivo ou pasta).
+function raizDoProjeto(p) {
+  for (let d = dirname(p); ; d = dirname(d)) {
+    if (existsSync(join(d, '.claude', 'kit.json')) || existsSync(join(d, '.git'))) return d;
+    if (dirname(d) === d) return null;
+  }
+}
+
+function pastaDeRevisoes(raiz) {
+  let rel = '';
+  try {
+    const kit = JSON.parse(readFileSync(join(raiz, '.claude', 'kit.json'), 'utf8').replace(/^\uFEFF/, ''));
+    rel = kit?.design?.revisoes;
+  } catch { /* sem kit.json legível: vale o padrão */ }
+  rel = typeof rel === 'string' ? rel.trim().replace(/\/+$/, '') : '';
+  return resolve(raiz, rel || 'docs/design/revisoes');
+}
+
+function designerNaRevisao(tipo, p) {
+  if (semPrefixoDoKit(tipo) !== 'designer') return false;
+  const raiz = raizDoProjeto(p);
+  return !!raiz && p.startsWith(pastaDeRevisoes(raiz) + '/');
 }
 
 function caminhoDe(entrada) {
@@ -62,6 +77,10 @@ function main() {
   const quem = `subagente ${e.agent_type || e.agent_id}`;
   if (tipoLiberado(e.agent_type)) {
     registrar(e.session_id || '-', HOOK, 'liberado-por-tipo', `${quem} ${e.tool_name} ${p}`);
+    return;
+  }
+  if (designerNaRevisao(e.agent_type, p)) {
+    registrar(e.session_id || '-', HOOK, 'liberado-por-papel', `${quem} ${e.tool_name} ${p}`);
     return;
   }
 
