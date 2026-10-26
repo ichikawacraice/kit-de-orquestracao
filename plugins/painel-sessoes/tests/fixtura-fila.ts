@@ -108,3 +108,40 @@ export const TEMAS_REAIS = [
   { id: 'orquestracao', rotulo: 'Sessões e painel', projeto: 'izanagi' },
   { id: 'kit', rotulo: 'Kit de orquestração', projeto: 'izanagi' },
 ]
+
+const TEMAS_DOS_SINTETICOS = ['editor', 'motor', 'gate', 'orquestracao', 'kit']
+
+/**
+ * A fila de 44 itens (F1 a F44): os 9 reais acima e 35 sintéticos, quase todos feitos há dias (só o F13 e o F42 vivem
+ * e o F43 e o F44 são do kit). Serve ao pane que lista todos os itens, inclusive os que a leitura de 24 h descarta.
+ */
+export function filaCompleta(): Record<string, Record<string, unknown>> {
+  const fila: Record<string, Record<string, unknown>> = {}
+  for (let n = 1; n <= 44; n++) {
+    const id = `F${n}`
+    if (FILA_REAL[id]) {
+      fila[id] = { ...FILA_REAL[id] }
+      continue
+    }
+    const kit = n >= 43
+    fila[id] = {
+      titulo: `item sintético ${n}`,
+      tema: kit ? 'orquestracao' : TEMAS_DOS_SINTETICOS[n % TEMAS_DOS_SINTETICOS.length],
+      etapa: n === 42 ? 'planejamento' : n === 44 ? 'design' : n === 43 ? 'execucao' : n % 7 === 0 ? 'descartado' : 'feito',
+      feitoEm: n >= 42 ? undefined : '2026-10-20T10:00:00.000Z',
+      atualizadoEm: '2026-10-25T13:34:28.409Z',
+      projeto: kit ? 'kit-de-orquestracao' : 'izanagi',
+      ...(n === 43 ? { donoApelido: 'E1', donoLocalId: 'local_9862c732-e6a6-4cff-bb2d-cc9087f9d50d' } : {}),
+    }
+  }
+  fila.F43!.titulo = 'o painel diz o que é cada item citado pelo número'
+  fila.F13!.depois = [{ texto: 'fatia 7: produção', item: 'F22' }]
+
+  return fila
+}
+
+/** Dois projetos com o mesmo tema de orquestração: o rótulo repete e o projeto desempata. */
+export const TEMAS_DOIS_PROJETOS = [
+  ...TEMAS_REAIS,
+  { id: 'orquestracao', rotulo: 'Sessões e painel', projeto: 'kit-de-orquestracao' },
+]

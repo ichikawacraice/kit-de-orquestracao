@@ -3,7 +3,9 @@ import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { cartaoSvg, faixaSvg, filaSvg, itemSvg, largura, perguntaSvg, resumoSvg, secaoSvg } from '../hooks/desenho.js'
 import { contarSecoes, desmarcar, deveFechar, fechamentoDesmarca, marcar, vencidas, esperaOperadorSemPergunta, leituraParada, montarItens, papelDe, porTema, secoes, situacaoDe } from '../hooks/register.js'
-import { FILA_REAL, TEMAS_REAIS } from './fixtura-fila.js'
+import * as R from '../hooks/register.js'
+import * as D from '../hooks/desenho.js'
+import { FILA_REAL, TEMAS_DOIS_PROJETOS, TEMAS_REAIS, filaCompleta } from './fixtura-fila.js'
 
 const PANE = {
   plugin: 'painel-sessoes',
@@ -104,6 +106,7 @@ type Opcoes = {
   /** ui.copy: não copiou (o que o app faz sem área de transferência). */
   copiaFalha?: boolean
   semTemas?: boolean
+  temas?: typeof TEMAS_REAIS
   /** A pasta deixa de responder (a leitura fica pendurada) quando `.on` vira true: a leitura que não renova. */
   parar?: { on: boolean }
   /** send_message e open_session_in só voltam quando esta promessa se resolve: o gesto em curso. */
@@ -167,7 +170,7 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   for (const d of opc.perguntas ?? PERGUNTAS) arquivos.set(`${PASTA}/perguntas/${d.id}.json`, JSON.stringify(d))
   // a foto da fila não traz o `projeto`, mas os 29 itens reais têm `izanagi`: sem ele o item legado cai em "Sem tema" (c19)
   for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, { projeto: 'izanagi', ...data })))
-  if (!opc.semTemas) arquivos.set(`${PASTA}/temas.json`, JSON.stringify(TEMAS_REAIS))
+  if (!opc.semTemas) arquivos.set(`${PASTA}/temas.json`, JSON.stringify(opc.temas ?? TEMAS_REAIS))
   const escritas: Escrita[] = []
   on('fs.list', async (_, e) => {
     if (falhaPasta) return { deny: 'sem acesso à pasta do painel' }
@@ -346,8 +349,8 @@ test('item com pergunta: o selo vem do item e da pergunta, e só de pergunta abe
     expect(lido[surface]).toMatch(/aguarda você · Q8/)
     expect(lido[surface]).not.toMatch(/aguarda você · Q5/)
   }
-  // O cartão da pergunta com item leva o tema e o título do item no lugar da sessão.
-  expect(lido.desktop).toMatch(/Q8 · Editor da loja · builder: fatias 1 a 8/)
+  // O cartão da pergunta com item leva o número e o título do item no lugar da sessão (F43: sem o tema).
+  expect(lido.desktop).toMatch(/Q8 · F1 · builder: fatias 1 a 8/)
   expect(lido.desktop).toMatch(/Q7 · P2 · qual caminho/)
   expect(lido.desktop).toMatch(/2 Esperam você, 0 Travados, 3 Executando, 0 Na fila/)
 })
@@ -1255,7 +1258,7 @@ const itemCheio = (extra: Partial<Linha> = {}): Linha =>
     titulo: LONGO,
     prs: [1128, 1129, 1130],
     perguntas: ['Q225'],
-    depois: ['validação das duas fatias com o painel real', 'merge'],
+    depois: [{ texto: 'validação das duas fatias com o painel real' }, { texto: 'merge' }],
     agora: 'travas (E4) e desenho do painel (E1) em execução no kit, com a leitura de cada sessão conferida',
     atualizadoEm: new Date(AGORA - 5 * 3600e3).toISOString(),
     com: [COM_VIVO, COM_VIVO2, { ...COM_VIVO, apelido: 'E22', localId: 'local_e22' }, { ...COM_VIVO, apelido: 'P7', localId: 'local_p7' }, { ...COM_VIVO, apelido: 'c20', localId: 'local_c20', vivo: false }],
@@ -1515,7 +1518,7 @@ test('F34-3: "Abrindo…" até o open_session_in voltar', async ($, on) => {
 })
 
 test('F34-2 R4: tirar as pessoas excedentes do alt é visto: o +1 é o das pessoas', () => {
-  const r = cartaoSvg(360, itemCheio({ depois: ['só um'] }), AGORA, { situacao: situacaoDoTeste })
+  const r = cartaoSvg(360, itemCheio({ depois: [{ texto: 'só um' }] }), AGORA, { situacao: situacaoDoTeste })
   expect(r.alt, 'com um só item em depois não há "(+1)" para confundir').not.toMatch(/\(\+1\)/)
   expect(r.alt).toMatch(/ — \+1 — /)
 })
@@ -1621,4 +1624,152 @@ test('F34-3 R10: no máximo 3 "Abrir" por cartão', async ($, on) => {
   const abrir = (await ui.findAll({ type: 'Button' })).map(chaveDe).filter(k => k.startsWith('abrir:'))
   expect(abrir.length, 'cinco vivas, e o cartão mostra o teto').toBe(3)
   await ui.unmount()
+})
+
+// ---- F43: o painel diz o que é cada item citado pelo número ----
+
+const numeroDe = (id: string) => Number(id.slice(1))
+
+test('F43-1: a fixtura de 44 itens não está vazia e todo cartão, linha de fila e feito traz F<n> no alt e no source', async ($, on) => {
+  const filaTodos = filaCompleta()
+  expect(Object.keys(filaTodos).length).toBe(44)
+  const { lido } = await lerPane($, on, { fila: filaTodos, vivas: vivasDe(P1, P2, P7, E8), perguntas: [] })
+  const docs = Object.entries(filaTodos).map(([id, data]) => doc(id, { projeto: 'izanagi', ...data }))
+  const itens = montarItens(docs, TEMAS_REAIS, null, undefined, [], AGORA)
+  expect(itens.filter(x => x.situacao !== 'feito').length, 'os itens vivos existem').toBeGreaterThan(3)
+  for (const i of itens.filter(x => x.situacao !== 'feito')) {
+    const r = i.situacao === 'fila' ? filaSvg(300, i, AGORA) : cartaoSvg(300, i, AGORA, { situacao: () => undefined })
+    expect(r.alt, `alt de ${i.id}`).toMatch(new RegExp(`^${i.id} · `))
+    expect(r.source, `source de ${i.id}`).toContain(`>${i.id}<`)
+    expect(lido.desktop, `o pane desenha ${i.id}`).toMatch(new RegExp(`${i.id} · `))
+  }
+})
+
+const indiceDe = (...itens: Array<[string, string]>) => new Map(itens.map(([id, titulo]) => [id, { id, titulo, tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'feito', projeto: 'izanagi' }]))
+
+test('F43-2: citadosDe — um número, repetido e o próprio item', () => {
+  const idx = indiceDe(['F13', 'SPEC-155 fatia 2'], ['F7', 'sobras'])
+  expect(R.citadosDe(['espera o F13'], [], 'F43', idx)).toEqual([{ id: 'F13', titulo: 'SPEC-155 fatia 2', ligado: false }])
+  expect(R.citadosDe(['o F13', 'de novo o F13'], [], 'F43', idx), 'repetido fica uma vez').toHaveLength(1)
+  expect(R.citadosDe(['é o F43 mesmo'], [], 'F43', idx), 'o próprio não entra').toEqual([])
+})
+
+test('F43-2: citadosDe — número fora da fila, já nomeado com " · ", e F<n> ligado vem primeiro', () => {
+  const idx = indiceDe(['F13', 'SPEC-155 fatia 2'], ['F7', 'sobras'])
+  expect(R.citadosDe(['bate no F99'], [], 'F43', idx)).toEqual([{ id: 'F99', titulo: undefined, ligado: false }])
+  expect(R.citadosDe(['F13 · SPEC-155 fatia 2 parou'], [], 'F43', idx), 'quem escreveu já disse o que é').toEqual([])
+  const r = R.citadosDe(['antes o F13'], ['F7'], 'F43', idx)
+  expect(r.map(c => c.id)).toEqual(['F7', 'F13'])
+  expect(r[0]!.ligado).toBe(true)
+})
+
+test('F43-2: citadosDe — número no fim de um agora longo que o desenho corta ainda entra', () => {
+  const idx = indiceDe(['F13', 'SPEC-155 fatia 2'])
+  const longo = `${'texto longo '.repeat(30)}e por fim o F13`
+  const item = { ...linha('F44'), agora: longo }
+  expect(cartaoSvg(300, item, AGORA, { situacao: () => undefined }).source, 'o desenho cortou o número').not.toContain('por fim o F13')
+  expect(R.citadosDe([longo], [], 'F44', idx).map(c => c.id)).toEqual(['F13'])
+})
+
+test('F43-2: citadosDe — 3 números viram 3 linhas com título; 4 ou mais, 2 com título e "também"', () => {
+  const idx = indiceDe(['F2', 'a'], ['F3', 'b'], ['F4', 'c'], ['F5', 'd'], ['F6', 'e'])
+  const tres = D.citadosSvg(0, 0, 300, R.citadosDe(['F2 F3 F4'.replace(/F(\d)/g, 'o F$1')], [], 'F43', idx))
+  expect(tres.partes.join('')).toMatch(/Citados/)
+  expect(tres.partes.join('')).toContain('b')
+  const cinco = R.citadosDe(['o F2, o F3, o F4, o F5, o F6'], [], 'F43', idx)
+  expect(cinco).toHaveLength(5)
+  const desenho = D.citadosSvg(0, 0, 300, cinco).partes.join('')
+  expect(desenho).toContain('também F4, F5, F6')
+  expect(desenho).not.toContain('>c<')
+})
+
+test('F43-2: a linha depois com item termina em " → F<n>" e o item ligado entra em Citados', () => {
+  const idx = indiceDe(['F3', 'sobras do painel'])
+  const item = { ...linha('F7'), depois: [{ texto: 'sobras deste item', item: 'F3' }] }
+  const cit = R.citadosDe([item.depois[0]!.texto], ['F3'], 'F7', idx)
+  const r = cartaoSvg(300, item, AGORA, { situacao: () => undefined, citados: cit })
+  expect(r.source).toMatch(/depois: sobras deste item.*→ F3/)
+  expect(r.source).toContain('sobras do painel')
+  expect(r.alt).toMatch(/Citado: F3 · sobras do painel/)
+})
+
+test('F43-3: citadosDe e a recusa do painel classificam do mesmo jeito (marca no código)', () => {
+  expect(R.ITEM_SOLTO.flags, 'a regex é global').toContain('g')
+  const soltas = ['a executora do F13 está parada', 'espera o F42']
+  const nomeadas = ['a executora do F13 · SPEC-155 fatia 2 está parada']
+  for (const f of soltas) expect(f.match(R.ITEM_SOLTO), f).not.toBeNull()
+  for (const f of nomeadas) expect(f.match(R.ITEM_SOLTO), f).toBeNull()
+})
+
+test('F43-4: a leitura guarda o índice com feito antigo e descartado; os itens visíveis seguem só com os feitos de 24 h', async ($, on) => {
+  const filaTodos = filaCompleta()
+  const docs = Object.entries(filaTodos).map(([id, data]) => doc(id, { projeto: 'izanagi', ...data }))
+  const indice = R.montarIndice(docs, TEMAS_REAIS)
+  expect(indice).toHaveLength(44)
+  expect(indice.find(i => i.id === 'F7')?.etapa, 'descartado antigo está no índice').toBe('descartado')
+  expect(indice.find(i => i.id === 'F2')?.etapa, 'feito antigo está no índice').toBe('feito')
+  const visiveis = montarItens(docs, TEMAS_REAIS, null, undefined, [], AGORA)
+  expect(visiveis.find(i => i.id === 'F2'), 'a leitura de 24 h continua descartando F2').toBeUndefined()
+  expect(visiveis.find(i => i.id === 'F4'), 'o feito de 22 h continua visível').toBeDefined()
+  expect(visiveis.length).toBeLessThan(indice.length)
+})
+
+const LISTA = () => {
+  const docs = Object.entries(filaCompleta()).map(([id, data]) => doc(id, { projeto: 'izanagi', ...data }))
+  return R.montarIndice(docs, TEMAS_DOIS_PROJETOS)
+}
+
+test('F43-5: Todos os itens · N com N do índice; grupos na ordem de temas.json, vivos antes dos feitos, número decrescente', async ($, on) => {
+  const { lido } = await lerPane($, on, { fila: filaCompleta(), vivas: vivasDe(P1, P2, P7, E8), perguntas: [], temas: TEMAS_DOIS_PROJETOS })
+  for (const surface of ['terminal', 'desktop'] as const) expect(lido[surface]).toMatch(/Todos os itens · 44/)
+  const grupos = R.gruposDoIndice(LISTA(), TEMAS_DOIS_PROJETOS)
+  expect(grupos.length).toBeGreaterThan(2)
+  const ordemDosTemas = TEMAS_DOIS_PROJETOS.map(t => `${t.id}:${t.projeto}`)
+  const vistos = grupos.map(g => `${g.id}:${g.projeto}`)
+  expect(vistos.filter(v => ordemDosTemas.includes(v))).toEqual(ordemDosTemas.filter(v => vistos.includes(v)))
+  const editor = grupos.find(g => g.id === 'editor')!
+  const etapas = editor.itens.map(i => (i.etapa === 'feito' ? 1 : i.etapa === 'descartado' ? 2 : 0))
+  expect(etapas, 'vivos → feitos → descartados').toEqual([...etapas].sort((a, b) => a - b))
+  for (const bloco of [0, 1, 2]) {
+    const ns = editor.itens.filter((_, k) => etapas[k] === bloco).map(i => numeroDe(i.id))
+    expect(ns, `bloco ${bloco} em número decrescente`).toEqual([...ns].sort((a, b) => b - a))
+  }
+})
+
+test('F43-5: o projeto aparece no cabeçalho com dois projetos e some com um', () => {
+  const grupos = R.gruposDoIndice(LISTA(), TEMAS_DOIS_PROJETOS)
+  const dois = D.todosSvg(300, grupos[0]!, { comProjeto: true })
+  expect(dois.source).toMatch(/izanagi|kit-de-orquestracao/)
+  const um = D.todosSvg(300, grupos[0]!, { comProjeto: false })
+  expect(um.source).not.toMatch(/izanagi|kit-de-orquestracao/)
+  expect(dois.alt).toMatch(/F\d+ · /)
+})
+
+test('F43-6: filtro — 13, F13 e f13 acham só o F13; palavra sem acento acha título com acento; 99 não acha nada', () => {
+  const lista = [...LISTA(), { id: 'F90', titulo: 'validação do painel', tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'feito', projeto: 'izanagi' }]
+  for (const f of ['13', 'F13', 'f13']) expect(R.filtrarIndice(lista, f).map(i => i.id), f).toEqual(['F13'])
+  expect(R.filtrarIndice(lista, 'validacao').map(i => i.id)).toContain('F90')
+  expect(R.filtrarIndice(lista, '99')).toEqual([])
+  expect(R.filtrarIndice(lista, '  ').length, 'sem texto, a lista vem inteira').toBe(lista.length)
+})
+
+test('F43-7: pergunta com item: o rótulo é "F<n> · <título do item>", sem o tema', async ($, on) => {
+  const perguntas = banco(doc('Q238', { projeto: 'izanagi', sessao: 's', sessaoId: 'local_b', titulo: 'qual', estado: 'aberta', item: 'F34' }))
+  const filaTodos = filaCompleta()
+  const { lido } = await lerPane($, on, { fila: filaTodos, perguntas, vivas: vivasDe(P1, P2, P7, E8) })
+  expect(lido.desktop).toMatch(/Q238 · F34 · item sintético 34/)
+  expect(lido.desktop).not.toMatch(/Q238 · [^\n]*Editor da loja · item sintético 34/)
+})
+
+test('F43-8: terminal — a primeira linha do item começa por F<n> · e há a linha Citados', async ($, on) => {
+  const fila2 = { ...fila('F13'), F13: { ...FILA_REAL.F13, agora: 'espera o F22', depois: [] }, F22: { titulo: 'produção do editor', tema: 'editor', etapa: 'feito', feitoEm: '2026-10-20T10:00:00.000Z', atualizadoEm: '2026-10-20T10:00:00.000Z' } }
+  const { lido } = await lerPane($, on, { fila: fila2, vivas: vivasDe(P2), perguntas: [] })
+  expect(lido.terminal).toMatch(/F13 · SPEC-155 fatia 2/)
+  expect(lido.terminal).toMatch(/Citado: F22 · produção do editor/)
+})
+
+test('F43-10: com Todos os itens e Feitos hoje abertos, a lista inteira vem depois dos feitos; sem feitos o botão novo aparece', async ($, on) => {
+  const semFeitos = await lerPane($, on, { fila: fila('F8'), vivas: vivasDe(), perguntas: [] })
+  expect(semFeitos.lido.desktop).toMatch(/Todos os itens · 1/)
+  expect(R.ordemDoRodape({ todos: true, feitos: true, anteriores: true })).toEqual(['botoes', 'feitos', 'anteriores', 'todos'])
 })
