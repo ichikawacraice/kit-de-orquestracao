@@ -479,7 +479,9 @@ describe("a configuração e o script", () => {
     assert.throws(() => carregarConfig("/x", { documentos: { conferir: "links-relativos" } }), /precisa ser uma lista/);
     assert.throws(() => carregarConfig("/x", { documentos: { orcamentos: { diarioEmBytes: 0 } } }), /inteiro ≥ 1/);
     assert.throws(() => carregarConfig("/x", { documentos: { orcamentos: { inventado: 5 } } }), /não existe/);
-    assert.deepEqual(carregarConfig("/x", {}).documentos.conferir, []); // sem a seção, nada é conferido
+    const casa = { home: pasta({}) }; // casa vazia: sem opção gravada, vale o padrão do plugin
+    assert.deepEqual(carregarConfig("/x", {}, casa).documentos.conferir, REGRAS_DE_DOCUMENTO); // sem a chave, as cinco rodam (A7)
+    assert.deepEqual(carregarConfig("/x", { documentos: { conferir: [] } }, casa).documentos.conferir, []); // [] explícito = nenhuma
   });
 
   it("o script sai 1 e escreve `arquivo:linha — motivo`; --regra escolhe a regra; sem achado sai 0", () => {

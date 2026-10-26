@@ -70,7 +70,7 @@ export function remover({ destino, simular = false }) {
     let v;
     try { v = JSON.parse(semBom(texto)); } catch (e) { ilegiveis.push(`${rel} ilegível: ${e.message}`); return; }
     fn(v);
-    const restante = Object.keys(v).filter((k) => !(vazioAposRemover.includes(k)));
+    const restante = Object.keys(v).filter((k) => !vazioAposRemover.includes(k) || ((ehObjeto(v[k]) || Array.isArray(v[k])) && !vazio(v[k]))); // chave do kit que ficou com valor (o projeto mexeu) segura o arquivo
     if (criado && restante.length === 0) { apagar.push(rel); tirou(`${rel} (criado pelo kit, sem mais nada)`); return; }
     // o que sobrou é o que o projeto tinha antes do kit: devolve os bytes dele, não os do JSON.stringify
     let antes; try { antes = original ? JSON.parse(semBom(original)) : undefined; } catch { antes = undefined; }
@@ -87,14 +87,20 @@ export function remover({ destino, simular = false }) {
       tirou('hook da guarda (settings.json)');
     }
     if (cs.marketplace && s.extraKnownMarketplaces?.[MARKETPLACE]) { delete s.extraKnownMarketplaces[MARKETPLACE]; tirou('marketplace do kit (settings.json)'); }
+    for (const nome of cs.marketplaces ?? []) {
+      if (s.extraKnownMarketplaces?.[nome] !== undefined) { delete s.extraKnownMarketplaces[nome]; tirou(`marketplace ${nome} (settings.json)`); }
+    }
+    for (const [nome, valor] of Object.entries(cs.env ?? {})) {
+      if (s.env?.[nome] === valor) { delete s.env[nome]; tirou(`env ${nome} (settings.json)`); } else if (s.env && nome in s.env) deixou(`env ${nome} (settings.json)`);
+    }
     for (const nome of cs.plugins ?? []) {
       if (s.enabledPlugins?.[nome] === true) { delete s.enabledPlugins[nome]; tirou(`plugin ${nome} (settings.json)`); } else if (s.enabledPlugins && nome in s.enabledPlugins) deixou(`plugin ${nome} (settings.json)`);
     }
-    for (const [pai, filho] of [['hooks', 'PreToolUse'], [null, 'hooks'], [null, 'extraKnownMarketplaces'], [null, 'enabledPlugins']]) {
+    for (const [pai, filho] of [['hooks', 'PreToolUse'], [null, 'hooks'], [null, 'extraKnownMarketplaces'], [null, 'enabledPlugins'], [null, 'env']]) {
       const alvo = pai ? s[pai] : s;
       if (alvo && vazio(alvo[filho])) delete alvo[filho];
     }
-  }, ['hooks', 'extraKnownMarketplaces', 'enabledPlugins'], cs.original);
+  }, ['hooks', 'extraKnownMarketplaces', 'enabledPlugins', 'env'], cs.original);
 
   const cp = c.package ?? {};
   editarJson('package.json', cp.criado, (pkg) => {

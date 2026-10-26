@@ -37,7 +37,9 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       const claude = ler(d, 'CLAUDE.md');
       assert.ok(claude.startsWith(`# ${basename(d)}\n`), 'o título leva o nome da pasta');
       assert.equal((claude.match(/<!-- kit:[a-z-]+ v\d+ -->/g) || []).length, 8);
-      assert.deepEqual(json(d, '.claude/kit.json'), { gate: { comandoCompleto: 'npm run test:suite' } });
+      const kj = json(d, '.claude/kit.json');
+      assert.deepEqual(kj.gate, { comandoCompleto: 'npm run test:suite' });
+      assert.deepEqual(Object.keys(kj).sort(), ['design', 'documentos', 'gate'], 'as seções documentos e design (K14) entram sem o conferir');
       const gate = readdirSync(join(RAIZ, 'gate')).filter((f) => f.endsWith('.mjs')).sort();
       assert.ok(gate.length >= 7, 'insumo vazio: gate/ sem scripts');
       assert.deepEqual(readdirSync(join(d, 'scripts', 'kit')).sort(), gate, 'scripts/kit = cópia do gate/ (só os .mjs, sem test/)');
@@ -59,7 +61,7 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       assert.equal(hooks[0].matcher, 'Bash');
       assert.equal(hooks[0].hooks[0].command, 'node "$CLAUDE_PROJECT_DIR/scripts/kit/guarda-de-operacao.mjs"');
       assert.equal(s.extraKnownMarketplaces['kit-de-orquestracao'].source.repo, 'ichikawacraice/kit-de-orquestracao');
-      assert.deepEqual(s.enabledPlugins, { 'orquestracao@kit-de-orquestracao': true, 'painel-sessoes@kit-de-orquestracao': true });
+      assert.deepEqual(s.enabledPlugins, { 'orquestracao@kit-de-orquestracao': true, 'painel-sessoes@kit-de-orquestracao': true, 'processos@kit-de-orquestracao': true, 'design@kit-de-orquestracao': true });
     } finally { limpar(d); }
   });
 

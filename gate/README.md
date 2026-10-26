@@ -41,7 +41,7 @@ Sem `gate.comandoCompleto` o gate recusa alto — não adivinha o comando.
   },
   "guarda": {
     "regras": ["build-com-dev-no-ar", "psql-f", "migration-fora-do-tronco", "merge-commit", "stash-sem-u", "staging-amplo", "kill-por-nome", "destrutivos"],
-    "tronco": "origin/develop", "frontend": "apps/web", "migrations": "supabase/migrations",
+    "tronco": "origin/main", "frontend": "apps/web", "migrations": "supabase/migrations",
     "buildFiltrado": "pnpm --filter @escopo/a --filter @escopo/b build",
     "descartaveis": ["dist", ".next", "node_modules", "coverage", ".turbo", ".vitest"]
   }
@@ -58,8 +58,12 @@ O perfil `pnpm-workspace` com `pacotes: "auto"` reproduz o gate do Izanagi (`pnp
 
 ## As docs concordam (`documentos`)
 
-Seção opcional do `kit.json`. Sem `documentos.conferir` (o padrão, lista vazia) o gate não confere nada; com a lista, `a-vez-do-gate.mjs`
-confere ANTES da suíte (no CI também), sai 1 no primeiro achado e nem toma a vez nem guarda verde. Cada regra se liga à parte:
+Seção opcional do `kit.json`. O gate confere ANTES da suíte (no CI também), sai 1 no primeiro achado e nem toma a vez nem guarda verde.
+Quais regras rodam (A7): `documentos.conferir` no `kit.json` vence — a lista é a que roda e `[]` explícito não confere nada, para o time inteiro;
+sem a chave, valem as opções `conferir_*` do plugin `processos` (todas ligadas por padrão), que cada pessoa liga ou desliga na própria conta;
+o plugin `processos` desligado em `enabledPlugins` não roda regra nenhuma. A opção do plugin vale só para a sua conta (o app grava em
+`~/.claude/settings.json`; o gate lê de lá): para valer para o time, escreva `documentos.conferir` no `kit.json`. Se o app não mostrar a opção, o caminho é `/plugin` no terminal.
+Cada regra se liga à parte:
 
 | Regra | Reprova |
 |---|---|
@@ -79,7 +83,7 @@ confere ANTES da suíte (no CI também), sai 1 no primeiro achado e nem toma a v
 ```
 
 Pasta ausente ou sem documento escreve `[regra] nada a conferir: …` — nunca um verde calado. Rodando o script à mão
-(`node gate/as-docs-concordam.mjs`) sem `--regra`, vale `documentos.conferir`; com a lista vazia, valem as cinco.
+(`node scripts/kit/as-docs-concordam.mjs` no projeto instalado) sem `--regra`, valem as regras que o gate rodaria (a precedência acima); `--regra <nome>` confere uma à mão.
 `documentos.conferir` com nome que não é regra é erro (`carregarConfig`).
 
 ## A raiz do projeto

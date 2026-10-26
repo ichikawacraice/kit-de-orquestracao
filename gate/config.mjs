@@ -12,12 +12,22 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
+import { booleanoDaOpcao, opcoesDoPlugin, pluginLigado } from "./opcoes-do-plugin.mjs";
 
 /** As regras de conferência de documento (`documentos.conferir`), na ordem em que rodam. */
 export const REGRAS_DE_DOCUMENTO = ["status-da-spec", "indice-de-adr", "linha-do-roadmap", "links-relativos", "tamanho-do-diario"];
 
-/** As pastas e os orçamentos dos documentos; `conferir` vazio = o gate não confere nada. */
+/** O nome da opção do plugin `processos` que liga cada regra (`status-da-spec` → `conferir_status_da_spec`). */
+export const opcaoDaRegra = (regra) => `conferir_${regra.replace(/-/g, "_")}`;
+/** As opções do plugin `processos`: uma por regra de conferência. */
+export const OPCOES_DO_PROCESSOS = REGRAS_DE_DOCUMENTO.map(opcaoDaRegra);
+
+/**
+ * As pastas e os orçamentos dos documentos. `conferir`: o padrão do plugin (as cinco regras, cada uma desligável na opção do plugin);
+ * `carregarConfig` só o usa quando o `kit.json` não traz a chave — `conferir: []` explícito não confere nada.
+ */
 export const DOCUMENTOS_PADRAO = {
   adr: "docs/adr",
   specs: "docs/specs",
@@ -26,7 +36,7 @@ export const DOCUMENTOS_PADRAO = {
   docs: "docs",
   estados: ["Rascunho", "Em revisão", "Aprovada", "Implementada", "Substituída"],
   orcamentos: { decisaoDoAdr: 200, linhaDoRoadmap: 400, linksDoRoadmap: 2, diarioEmBytes: 150_000 },
-  conferir: [],
+  conferir: REGRAS_DE_DOCUMENTO,
 };
 
 const PADRAO = {
@@ -53,7 +63,7 @@ const PADRAO = {
   },
   guarda: {
     regras: ["build-com-dev-no-ar", "psql-f", "migration-fora-do-tronco", "merge-commit", "stash-sem-u", "staging-amplo", "kill-por-nome", "destrutivos"],
-    tronco: "origin/develop",
+    tronco: "origin/main",
     frontend: "apps/web",
     migrations: "supabase/migrations",
     buildFiltrado: null,
@@ -110,8 +120,20 @@ export function lerKitJson(raiz) {
   }
 }
 
-/** A configuração efetiva (gate, árvore e guarda) para a raiz: padrão ← perfil ← kit.json. */
-export function carregarConfig(raiz, kit = lerKitJson(raiz)) {
+/**
+ * Quais regras de documento rodam (A7): `documentos.conferir` no `kit.json` vence; sem a chave valem as opções do plugin `processos`
+ * (ligadas por padrão); plugin desligado em `enabledPlugins` não roda nada, diga o `kit.json` o que disser.
+ * Devolve `{ regras, origem }`, com `origem` em "kit.json", "plugin" ou "plugin-desligado".
+ */
+export function regrasQueRodam(raiz, kit, { home = homedir() } = {}) {
+  if (pluginLigado("processos", raiz, home) === false) return { regras: [], origem: "plugin-desligado" };
+  if (Array.isArray(kit?.documentos?.conferir)) return { regras: kit.documentos.conferir, origem: "kit.json" };
+  const opcoes = opcoesDoPlugin("processos", home);
+  return { regras: REGRAS_DE_DOCUMENTO.filter((r) => booleanoDaOpcao(opcoes[opcaoDaRegra(r)])), origem: "plugin" };
+}
+
+/** A configuração efetiva (gate, árvore e guarda) para a raiz: padrão ← perfil ← kit.json. `ambiente.home` troca o `~` (testes). */
+export function carregarConfig(raiz, kit = lerKitJson(raiz), ambiente = {}) {
   const perfil = kit?.gate?.perfil ?? PADRAO.gate.perfil;
   if (perfil !== "comando" && perfil !== "pnpm-workspace") {
     throw new Error(`gate.perfil "${perfil}" desconhecido — use "comando" ou "pnpm-workspace"`);
@@ -120,7 +142,10 @@ export function carregarConfig(raiz, kit = lerKitJson(raiz)) {
   validarDocumentos(kit.documentos);
   validarExtras(kit.arvore?.extras);
   const base = perfil === "pnpm-workspace" ? mesclar(PADRAO, PERFIL_PNPM) : PADRAO;
-  return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: objeto(kit.guarda) ? kit.guarda : {}, documentos: objeto(kit.documentos) ? kit.documentos : {} });
+  const efetiva = mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: objeto(kit.guarda) ? kit.guarda : {}, documentos: objeto(kit.documentos) ? kit.documentos : {} });
+  const { regras, origem } = regrasQueRodam(raiz, kit, ambiente);
+  efetiva.documentos = { ...efetiva.documentos, conferir: regras, origemDoConferir: origem };
+  return efetiva;
 }
 
 /**

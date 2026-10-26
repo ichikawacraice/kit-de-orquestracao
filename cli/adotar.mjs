@@ -3,15 +3,17 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffTexto, linhasApagadas } from './diff.mjs';
 import { LOCK } from './lock.mjs';
-import { FRASE_TRAVA_COBRE, aplicarOperador, arquivosDoGate, esqueletoDe, gravar, lerModelo, lerTexto, planejar, planejarOperador, semBom, semOsBlocos, sugestaoDePerfil } from './pacote.mjs';
+import { FRASE_TRAVA_COBRE, caminhosDosModelos, aplicarOperador, arquivosDoGate, esqueletoDe, gravar, lerModelo, lerTexto, pastaDoFront, planejar, planejarOperador, semBom, semOsBlocos, sugestaoDePerfil } from './pacote.mjs';
 
 /** Devolve { codigo, saida, erro }. */
-export function adotar({ destino, perfil: perfilPedido, versao, simular = false, trocarTest = false, parcial = false }) {
+export function adotar({ destino, perfil: perfilPedido, versao, simular = false, trocarTest = false, parcial = false, design: designPedido }) {
   const perfil = perfilPedido ?? 'simples';
+  const front = designPedido === undefined ? {} : pastaDoFront(designPedido);
+  if (front.erro) return { codigo: 2, saida: '', erro: `kit adotar: ${front.erro}` };
   if (!existsSync(join(destino, 'CLAUDE.md'))) return { codigo: 2, saida: '', erro: 'kit adotar: não há CLAUDE.md aqui — para um projeto novo, use `kit iniciar`' };
   if (existsSync(join(destino, LOCK))) return { codigo: 2, saida: '', erro: `kit adotar: já existe ${LOCK} — o kit já foi adotado; para trazer a versão nova use \`kit atualizar\`` };
   // Instalação interrompida (processo morto no meio): `.kit-tmp` órfão ou `test` que já é o gate, sem lock. O `adotar` reconhece, conclui e grava o lock.
-  const candidatos = ['CLAUDE.md', 'package.json', '.claude/settings.json', '.claude/kit.json', LOCK, ...arquivosDoGate().map((f) => `scripts/kit/${f}`)];
+  const candidatos = ['CLAUDE.md', 'package.json', '.claude/settings.json', '.claude/kit.json', LOCK, ...arquivosDoGate().map((f) => `scripts/kit/${f}`), ...caminhosDosModelos(front.pasta)];
   const orfaos = candidatos.filter((rel) => existsSync(join(destino, `${rel}.kit-tmp`)));
   let testJaEhGate = false;
   try { testJaEhGate = JSON.parse(semBom(lerTexto(destino, 'package.json') ?? '{}')).scripts?.test === lerModelo().perfis[perfil]?.scripts?.test; } catch { /* JSON ilegível: o planejador recusa abaixo */ }
@@ -19,7 +21,7 @@ export function adotar({ destino, perfil: perfilPedido, versao, simular = false,
   // o esqueleto do iniciar no CLAUDE.md diz que quem morreu foi o `iniciar`, que troca o `test` e guarda a suíte em test:suite
   const claudeAtual = lerTexto(destino, 'CLAUDE.md');
   const viaIniciar = recuperando && claudeAtual !== null && semOsBlocos(claudeAtual) === esqueletoDe(destino);
-  const plano = planejar({ destino, perfil, trocarTest: trocarTest || viaIniciar, nomeScript: viaIniciar ? 'test:suite' : 'test:projeto', recuperando });
+  const plano = planejar({ destino, perfil, trocarTest: trocarTest || viaIniciar, nomeScript: viaIniciar ? 'test:suite' : 'test:projeto', recuperando, design: front.pasta });
   if (plano.erro) return { codigo: 2, saida: '', erro: `kit adotar: ${plano.erro}` };
   const linhas = [];
   if (recuperando) linhas.push(`recuperado: instalação interrompida${orfaos.length ? ` (${orfaos.length} .kit-tmp órfão(s) ${simular ? 'seriam apagados' : 'apagados'})` : ''}; o que já estava lá foi reconhecido e o resto é concluído.`);
@@ -43,6 +45,7 @@ export function adotar({ destino, perfil: perfilPedido, versao, simular = false,
   }
   for (const t of plano.avisos) linhas.push(`trocado: ${t}`);
   for (const a of plano.avisosProjeto) linhas.push(`aviso: ${a}`);
+  if (plano.docsExistentes.length) linhas.push(`aviso: o projeto já tem ${plano.docsExistentes.join(', ')} e o plugin processos liga as cinco regras de conferência de documento por padrão: elas podem reprovar o primeiro gate com os documentos de hoje. Para desligar uma regra só na sua conta, use a aba de plugins do app (opções do processos; no terminal, /plugin); para valer para o time, escreva documentos.conferir no .claude/kit.json (lista vazia não confere nada).`);
   for (const c of plano.conflitos) linhas.push(`conflito: ${c}`);
   for (const p of plano.pendencias) linhas.push(`pendente: ${p}`);
   if (barrado) linhas.push(`kit adotar${simular ? ' --simular' : ''}: ${plano.conflitos.length} conflito(s); nada foi gravado. Resolva e rode de novo, ou use --parcial para gravar o resto e deixar os conflitos registrados no lock como pendentes.`);

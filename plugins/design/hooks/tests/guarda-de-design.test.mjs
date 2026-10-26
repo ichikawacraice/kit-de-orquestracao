@@ -120,10 +120,21 @@ describe('lerConfig — o kit.json do projeto', () => {
   it('A2: só design.pasta deriva o padrão visual por extensão; negado = o mesmo', () => {
     kit({ design: { pasta: 'web/' } });
     const c = lerConfig(pasta);
-    assert.deepEqual(c.visual, ['tsx', 'jsx', 'vue', 'svelte', 'css', 'scss'].map((e) => `web/**/*.${e}`));
-    assert.deepEqual(c.negadoAoDesigner, c.visual);
+    assert.deepEqual(c.visual.filter((g) => !g.startsWith('!')), ['tsx', 'jsx', 'vue', 'svelte', 'css', 'scss'].map((e) => `web/**/*.${e}`));
+    assert.deepEqual(c.negadoAoDesigner, c.visual.filter((g) => !g.startsWith('!')));
     assert.equal(eCodigoDeTela('/r/web/src/a/B.tsx', c.visual), true);
     assert.equal(eCodigoDeTela('/r/web/README.md', c.visual), false);
+  });
+  it('K14: o padrão derivado de design.pasta não conta teste como tela (*.test.*, *.spec.*, __tests__/)', () => {
+    kit({ design: { pasta: 'web' } });
+    const c = lerConfig(pasta);
+    assert.equal(eCodigoDeTela('/r/web/src/a/B.tsx', c.visual), true); // controle: tela de verdade entra
+    for (const t of ['web/src/B.test.tsx', 'web/src/B.spec.jsx', 'web/src/__tests__/B.tsx', 'web/src/B.test.css', 'web/B.test.tsx']) {
+      assert.equal(eCodigoDeTela(`/r/${t}`, c.visual), false, t);
+    }
+    assert.ok(c.visual.some((g) => g.startsWith('!')));
+    assert.ok(c.negadoAoDesigner.length > 0);
+    assert.equal(eCodigoDeTela('/r/web/src/B.test.tsx', c.negadoAoDesigner), true); // o designer não escreve código nem de teste: o negado segue sem as exclusões
   });
   it('A2: design.visual explícito vence o derivado de design.pasta', () => {
     kit({ design: { pasta: 'web', visual: ['outra/**/*.tsx'] } });
@@ -209,6 +220,19 @@ describe('decidir — o turno que mexe no visual chama o crítico', () => {
     const { ctx, estados } = ctxDuble();
     decidir(prompt('roda o gate'), null, ctx);
     assert.deepEqual(estados.get('s1'), INICIO);
+  });
+  it('K14: cobrar_critica desligada não cobra o Stop nem guarda foto, e o lembrete de design continua', () => {
+    const { ctx, estados, duble } = ctxDuble('f0');
+    const sem = { ...ctx, config: () => ({ ...CONFIG, cobrarCritica: false }) };
+    decidir(prompt('roda o gate'), null, ctx); // controle: com a cobrança ligada o começo do turno é guardado
+    assert.deepEqual(estados.get('s1'), INICIO);
+    duble.foto = 'f1';
+    assert.equal(decidir(parar(), null, ctx)?.decision, 'block'); // e o visual que mudou é cobrado
+    estados.clear(); duble.foto = 'f0';
+    assert.match(decidir(prompt('redesenha a barra do builder'), null, sem).hookSpecificOutput.additionalContext, /designer/);
+    assert.equal(estados.size, 0, 'sem cobrança não há foto a guardar');
+    estados.set('s1', { ...INICIO }); duble.foto = 'f1';
+    assert.equal(decidir(parar(), null, sem), null);
   });
   it('a foto que falha não leva o lembrete junto', () => {
     const { ctx } = ctxDuble();
@@ -481,7 +505,9 @@ describe('o hook de ponta a ponta: um projeto de rascunho com `design` no kit.js
   const proj = realpathSync(mkdtempSync(join(tmpdir(), 'kit-design-e2e-')));
   const estado = realpathSync(mkdtempSync(join(tmpdir(), 'kit-design-estado-')));
   after(() => { rmSync(proj, { recursive: true, force: true }); rmSync(estado, { recursive: true, force: true }); });
-  const env = { ...process.env, KIT_DESIGN_ESTADO: estado };
+  const casa = realpathSync(mkdtempSync(join(tmpdir(), 'kit-design-casa-'))); // HOME vazio: a opção do plugin da conta de quem roda o teste não entra
+  after(() => rmSync(casa, { recursive: true, force: true }));
+  const env = { ...process.env, KIT_DESIGN_ESTADO: estado, HOME: casa };
   const hook = (evento) => {
     const r = spawnSync('node', [SCRIPT], { input: JSON.stringify({ session_id: 'e2e', cwd: proj, ...evento }), encoding: 'utf-8', timeout: 15_000, killSignal: 'SIGKILL', env });
     assert.equal(r.status, 0, r.stderr);
@@ -520,14 +546,6 @@ describe('o hook de ponta a ponta: um projeto de rascunho com `design` no kit.js
       assert.equal(r.status, 0);
       assert.equal(r.stdout, '');
       assert.equal(r.stderr, '');
-      // Com o git em alemão a mensagem muda: a guarda não pode depender do idioma.
-      const alemao = { ...env, LC_ALL: 'de_DE.UTF-8', GIT_CEILING_DIRECTORIES: dirname(fora) };
-      const prova = spawnSync('git', ['-C', fora, 'rev-parse', '--show-toplevel'], { encoding: 'utf-8', timeout: 10_000, killSignal: 'SIGKILL', env: alemao });
-      assert.match(prova.stderr, /Kein Git-Repository/, 'precondição: o locale de_DE tem de traduzir o git, senão o teste não mede nada');
-      const rd = spawnSync('node', [SCRIPT], { input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'x', cwd: fora }), encoding: 'utf-8', timeout: 15_000, killSignal: 'SIGKILL', env: alemao });
-      assert.equal(rd.status, 0);
-      assert.equal(rd.stdout, '');
-      assert.equal(rd.stderr, '', 'git em alemão não pode vazar para o stderr');
       mkdirSync(join(proj, '.claude'), { recursive: true });
       const kitJson = join(proj, '.claude', 'kit.json');
       const bom = readFileSync(kitJson, 'utf-8');
@@ -536,6 +554,20 @@ describe('o hook de ponta a ponta: um projeto de rascunho com `design` no kit.js
       writeFileSync(kitJson, bom);
       assert.equal(q.status, 0);
       assert.match(q.stderr, /ilegível/);
+    } finally {
+      rmSync(fora, { recursive: true, force: true });
+    }
+  });
+  it('A4: com o git em alemão a guarda também sai 0 calado (não depende do idioma)', (t) => {
+    const fora = realpathSync(mkdtempSync(join(tmpdir(), 'kit-design-fora-')));
+    try {
+      const alemao = { ...env, LC_ALL: 'de_DE.UTF-8', GIT_CEILING_DIRECTORIES: dirname(fora) };
+      const prova = spawnSync('git', ['-C', fora, 'rev-parse', '--show-toplevel'], { encoding: 'utf-8', timeout: 10_000, killSignal: 'SIGKILL', env: alemao });
+      if (!/Kein Git-Repository/.test(prova.stderr)) { t.skip('a máquina não tem o locale de_DE.UTF-8: o git não traduz a mensagem e o caso não mediria nada'); return; }
+      const rd = spawnSync('node', [SCRIPT], { input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'x', cwd: fora }), encoding: 'utf-8', timeout: 15_000, killSignal: 'SIGKILL', env: alemao });
+      assert.equal(rd.status, 0);
+      assert.equal(rd.stdout, '');
+      assert.equal(rd.stderr, '', 'git em alemão não pode vazar para o stderr');
     } finally {
       rmSync(fora, { recursive: true, force: true });
     }

@@ -73,7 +73,7 @@ const REGRA_DO_SUBCOMANDO = { merge: "merge-commit", pull: "merge-commit", stash
 /** A regra está ligada? Sem `ctx.regras` (um contexto de teste simples), todas. */
 const ativa = (ctx, regra) => !ctx.regras || ctx.regras.has(regra);
 const FRONT_PADRAO = "apps/web";
-const TRONCO_PADRAO = "origin/develop";
+const TRONCO_PADRAO = "origin/main";
 const MIGRATIONS_PADRAO = "supabase/migrations";
 
 const OPERADORES = new Set(["&&", "||", ";", "|", "&", "\n"]);

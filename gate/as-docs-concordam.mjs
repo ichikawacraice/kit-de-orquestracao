@@ -14,7 +14,7 @@
  *   tamanho-do-diario cada parte do diário ≤ 150 KB
  *
  * Pasta que não existe, ou existe sem documento, diz "nada a conferir" — nunca um verde calado.
- * Uso: `node as-docs-concordam.mjs [--regra x]…` (sem `--regra`: as de `documentos.conferir`; lista vazia: todas).
+ * Uso: `node as-docs-concordam.mjs [--regra x]…` (sem `--regra`: as de `documentos.conferir`; lista vazia: nenhuma).
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, normalize, relative } from "node:path";
@@ -353,7 +353,11 @@ export function main(argv = process.argv.slice(2), raiz = raizDoProjeto()) {
     }
   }
   const cfg = carregarConfig(raiz);
-  const escolhidas = regras.length > 0 ? regras : cfg.documentos.conferir.length > 0 ? cfg.documentos.conferir : REGRAS_DE_DOCUMENTO;
+  const escolhidas = regras.length > 0 ? regras : cfg.documentos.conferir;
+  if (escolhidas.length === 0) {
+    console.log(`[docs] nenhuma regra ligada (${cfg.documentos.origemDoConferir === "plugin-desligado" ? "o plugin processos está desligado" : cfg.documentos.origemDoConferir === "kit.json" ? "documentos.conferir está vazio no kit.json" : "todas as opções do plugin processos estão desligadas"}); passe --regra <nome> para conferir uma à mão`);
+    return 0;
+  }
   const codigo = relatar(conferirDocs(raiz, cfg.documentos, escolhidas));
   if (codigo !== 0) console.error(`[docs] as docs não concordam — conserte no arquivo apontado, não na regra`);
   return codigo;

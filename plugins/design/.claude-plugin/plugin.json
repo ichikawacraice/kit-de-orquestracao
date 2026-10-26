@@ -1,8 +1,34 @@
 {
   "name": "design",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Processo de design: designer (revisão de arquitetura de UI), crítico (seis eixos, teto 24/30) e a guarda que cobra a crítica do trabalho visual.",
   "author": {
     "name": "ichikawacraice"
+  },
+  "userConfig": {
+    "guarda": {
+      "type": "boolean",
+      "title": "Guarda de design",
+      "description": "Liga a guarda: lembrete de design, designer sem escrever tela e a cobrança da crítica. Vale só para a sua conta; para o time, use design.guarda no kit.json.",
+      "default": true
+    },
+    "cobrar_critica": {
+      "type": "boolean",
+      "title": "Cobrar a crítica ao encerrar",
+      "description": "Quando o visual do front muda no turno, o Stop pede o crítico de UI uma vez. Para o time, use design.cobrarCritica no kit.json.",
+      "default": true
+    },
+    "pasta_do_front": {
+      "type": "string",
+      "title": "Pasta do front",
+      "description": "Pasta das telas (ex.: web). Vazio usa design.pasta do kit.json; se o kit.json diz a pasta, ele vence.",
+      "default": ""
+    },
+    "largura": {
+      "type": "number",
+      "title": "Largura de referência (px)",
+      "description": "Largura em que o crítico olha a tela. design.largura do kit.json vence esta opção.",
+      "default": 1280
+    }
   }
 }

@@ -3,9 +3,10 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { avisoDeLaco, carregarConfig } from '../gate/config.mjs';
+import { avisoDeLaco, carregarConfig, opcaoDaRegra, REGRAS_DE_DOCUMENTO } from '../gate/config.mjs';
+import { booleanoDaOpcao, opcoesDoPlugin } from '../gate/opcoes-do-plugin.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
@@ -44,6 +45,8 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
 
   // kit.json
   try { const cfg = carregarConfig(destino); ok('.claude/kit.json válido'); const laco = avisoDeLaco(cfg.gate?.comandoCompleto); if (laco) linhas.push(`aviso: ${laco}`); } catch (e) { falha(`.claude/kit.json: ${e.message}`); }
+
+  processos(destino, home, configs, linhas);
 
   // versões, Node e git
   if (lock.versao === versao) ok(`versão do lock (${lock.versao}) igual à do CLI`);
@@ -87,3 +90,51 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   linhas.push(falhas ? `${falhas} falha(s)` : 'tudo em dia');
   return { codigo: falhas ? 1 : 0, saida: `${linhas.join('\n')}\n`, erro: '' };
 }
+
+/** O que `enabledPlugins` diz do plugin: a camada mais próxima (local > projeto > conta); `undefined` se ninguém diz. */
+function ligadoEm(id, configs) {
+  for (const s of [configs[2], configs[1], configs[0]]) if (typeof s?.enabledPlugins?.[id] === 'boolean') return s.enabledPlugins[id];
+  return undefined;
+}
+
+/** Os processos do kit (plugins `processos` e `design`): o que o kit.json e o settings dizem, e onde um sobrepõe o outro. Só aviso e info: nada aqui reprova. */
+function processos(destino, home, configs, linhas) {
+  const kj = lerJson(join(destino, '.claude', 'kit.json')) ?? {};
+  const ligado = { processos: ligadoEm(`processos@${MARKETPLACE}`, configs), design: ligadoEm(`design@${MARKETPLACE}`, configs) };
+  const secao = { processos: 'documentos', design: 'design' };
+  for (const nome of ['processos', 'design']) {
+    if (ligado[nome] === false && kj[secao[nome]] !== undefined) linhas.push(`aviso: plugin ${nome} desligado, mas o .claude/kit.json tem a seção ${secao[nome]}: o kit.json não o religa (plugin desligado não roda, diga o arquivo o que disser); para religar, enabledPlugins "${nome}@${MARKETPLACE}": true`);
+    else if (ligado[nome] === false) linhas.push(`info: plugin ${nome} desligado neste projeto`);
+    else if (ligado[nome] === true && kj[secao[nome]] === undefined) linhas.push(`aviso: plugin ${nome} ligado, mas o .claude/kit.json está sem a seção ${secao[nome]}: valem os caminhos e os padrões do plugin; o \`kit atualizar\` não a acrescenta, copie-a do modelo do kit`);
+  }
+  // design: a guarda só age com pasta do front (design.pasta, design.visual ou a opção pasta_do_front do plugin)
+  const opDesign = opcoesDoPlugin('design', home);
+  const pasta = typeof kj.design?.pasta === 'string' ? kj.design.pasta.replace(/\/+$/, '') : '';
+  const pastaDaOpcao = typeof opDesign.pasta_do_front === 'string' ? opDesign.pasta_do_front.replace(/\/+$/, '') : '';
+  const front = pasta || pastaDaOpcao;
+  const temDesign = ligado.design !== false && (kj.design !== undefined || ligado.design === true);
+  if (temDesign && !front && !(Array.isArray(kj.design?.visual) && kj.design.visual.length)) {
+    linhas.push('info: design: sem design.pasta (nem design.visual) a guarda de design fica inerte e o crítico não é cobrado; para ligá-la, ponha design.pasta no .claude/kit.json (ou a opção pasta_do_front do plugin design)');
+  }
+  if (temDesign && front) {
+    for (const f of ['PRODUCT.md', 'DESIGN.md']) if (!existsSync(join(destino, front, f))) linhas.push(`aviso: design: ${front}/${f} não existe; o designer e o crítico leem dele o que o produto é e como a tela parece (modelo em modelos/front do kit)`);
+    const imp = ligadoEm(IMPECCABLE.plugin, configs);
+    if (imp !== true) linhas.push(`aviso: design: o Impeccable é recomendado para este front e não está ligado (${IMPECCABLE.plugin}); \`kit adotar --design ${front}\` só vale em projeto novo, então ponha "${IMPECCABLE.plugin}": true em enabledPlugins e o marketplace ${IMPECCABLE.marketplace} em extraKnownMarketplaces do .claude/settings.json`);
+    else ok_(linhas, 'Impeccable ligado no projeto');
+  }
+  // onde o kit.json sobrepõe uma opção do plugin (A7: o kit.json com a chave vence)
+  const opProc = opcoesDoPlugin('processos', home);
+  if (Array.isArray(kj.documentos?.conferir) && ligado.processos !== false) {
+    const diferentes = REGRAS_DE_DOCUMENTO.filter((r) => booleanoDaOpcao(opProc[opcaoDaRegra(r)]) !== kj.documentos.conferir.includes(r)).map(opcaoDaRegra);
+    if (diferentes.length) linhas.push(`info: o kit.json sobrepõe a opção do plugin processos (${diferentes.join(', ')}): documentos.conferir vale para o time e vence a opção de cada conta`);
+  }
+  if (ligado.design !== false) {
+    const sobrepostas = [];
+    if (typeof kj.design?.guarda === 'boolean' && kj.design.guarda !== booleanoDaOpcao(opDesign.guarda)) sobrepostas.push('guarda');
+    if (typeof kj.design?.cobrarCritica === 'boolean' && kj.design.cobrarCritica !== booleanoDaOpcao(opDesign.cobrar_critica)) sobrepostas.push('cobrar_critica');
+    if (pasta && pastaDaOpcao && pasta !== pastaDaOpcao) sobrepostas.push('pasta_do_front');
+    if (kj.design?.largura !== undefined && kj.design.largura !== (opDesign.largura ?? 1280)) sobrepostas.push('largura');
+    if (sobrepostas.length) linhas.push(`info: o kit.json sobrepõe a opção do plugin design (${sobrepostas.join(', ')}): a chave do kit.json vale para o time e vence a opção de cada conta`);
+  }
+}
+const ok_ = (linhas, m) => linhas.push(`ok: ${m}`);

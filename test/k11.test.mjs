@@ -18,10 +18,10 @@ const frontmatter = (t) => {
 };
 
 describe('plugin processos (K11)', () => {
-  test('plugin.json: nome, versão 0.1.0 e descrição', () => {
+  test('plugin.json: nome, versão 0.2.0 e descrição', () => {
     const p = JSON.parse(ler('.claude-plugin/plugin.json'));
     assert.equal(p.name, 'processos');
-    assert.equal(p.version, '0.1.0');
+    assert.equal(p.version, '0.2.0');
     assert.ok(p.description.length > 20);
   });
 

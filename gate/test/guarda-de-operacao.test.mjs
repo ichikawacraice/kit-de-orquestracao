@@ -379,7 +379,7 @@ describe("em bypass a guarda avisa e não pergunta", () => {
   });
 });
 
-describe("migration de fora da develop no banco local", () => {
+describe("migration de fora da main no banco local", () => {
   // Dublê ESPIÃO: conta as chamadas e guarda a raiz, para provar que o ramo MEDIU
   // (e que os comandos que não são do banco local nem chegaram a medir).
   const espiao = (fora, cwd = RAIZ) => {
@@ -400,7 +400,7 @@ describe("migration de fora da develop no banco local", () => {
     const motivos = avaliar("supabase migration up --local", c);
     expect(motivos).toHaveLength(1);
     expect(motivos[0]).toMatch(/20261022130000_x\.sql/);
-    expect(motivos[0]).toMatch(/origin\/develop/);
+    expect(motivos[0]).toMatch(/origin\/main/);
     expect(motivos[0]).toMatch(/um só para todos os worktrees/);
     expect(chamadas).toEqual(["/repo"]);
   });
@@ -412,11 +412,11 @@ describe("migration de fora da develop no banco local", () => {
   });
 
   it("git que falha pergunta, com a causa e o conserto", () => {
-    const { c } = espiao({ fora: null, causa: "fatal: Not a valid object name origin/develop" });
+    const { c } = espiao({ fora: null, causa: "fatal: Not a valid object name origin/main" });
     const motivos = avaliar("supabase migration up --local", c);
     expect(motivos).toHaveLength(1);
     expect(motivos[0]).toMatch(/Not a valid object name/);
-    expect(motivos[0]).toMatch(/git fetch origin develop/);
+    expect(motivos[0]).toMatch(/git fetch origin main/);
   });
 
   cada([
@@ -459,7 +459,7 @@ describe("migration de fora da develop no banco local", () => {
   });
 });
 
-describe("a lista real de migrations lê o disco e a origin/develop", () => {
+describe("a lista real de migrations lê o disco e a origin/main", () => {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "guarda-mig-")));
   after(() => rmSync(dir, { recursive: true, force: true }));
   const git = (...args) =>
@@ -472,40 +472,40 @@ describe("a lista real de migrations lê o disco e a origin/develop", () => {
     });
   const mig = (nome) => writeFileSync(join(dir, "supabase/migrations", nome), "select 1;\n");
 
-  it("compara o disco (commitado ou não) com a origin/develop, só `.sql`", () => {
+  it("compara o disco (commitado ou não) com a origin/main, só `.sql`", () => {
     git("init", "-q");
     mkdirSync(join(dir, "supabase/migrations"), { recursive: true });
     mig("a.sql");
     mig("b.sql");
     git("add", "supabase");
     git("commit", "-q", "-m", "base");
-    git("update-ref", "refs/remotes/origin/develop", "HEAD");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
     mig("d.sql");
     git("add", "supabase");
     git("commit", "-q", "-m", "so na branch");
     mig("c.sql");
     writeFileSync(join(dir, "supabase/migrations/notas.txt"), "x");
 
-    // Precondição: sem a origin/develop a medida seria `null`, não a lista.
-    expect(git("rev-parse", "origin/develop").trim()).toMatch(/^[0-9a-f]{40}$/);
+    // Precondição: sem a origin/main a medida seria `null`, não a lista.
+    expect(git("rev-parse", "origin/main").trim()).toMatch(/^[0-9a-f]{40}$/);
     expect(migracoesForaDoTronco(dir)).toEqual({ fora: ["c.sql", "d.sql"] });
   });
 
-  it("nome com acento na develop não sai como fora", () => {
-    git("checkout", "-q", "--detach", "origin/develop");
+  it("nome com acento na main não sai como fora", () => {
+    git("checkout", "-q", "--detach", "origin/main");
     mig("ação 1.sql");
     git("add", "supabase/migrations/ação 1.sql");
     git("commit", "-q", "-m", "acento");
-    git("update-ref", "refs/remotes/origin/develop", "HEAD");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
     expect(migracoesForaDoTronco(dir).fora).not.toContain("ação 1.sql");
   });
 
-  it("sem origin/develop o resultado é `null`, com a causa", () => {
-    git("update-ref", "-d", "refs/remotes/origin/develop");
+  it("sem origin/main o resultado é `null`, com a causa", () => {
+    git("update-ref", "-d", "refs/remotes/origin/main");
     const r = migracoesForaDoTronco(dir);
     expect(r.fora).toBeNull();
     // A causa é a do GIT, não só o prefixo fixo que a função escreve.
-    expect(r.causa).toMatch(/^git ls-tree origin\/develop: fatal: /);
+    expect(r.causa).toMatch(/^git ls-tree origin\/main: fatal: /);
   });
 
   it("pasta sem supabase/migrations não tem o que conferir", () => {
@@ -606,7 +606,7 @@ describe("o kit.json de um repositório real chega até a decisão do hook", () 
       encoding: "utf-8",
     });
   /** Repo npm simples (sem `pnpm-workspace.yaml`, sem front) com `a.sql` no tronco e `b.sql` só no disco. */
-  const repoNpm = ({ kit, tronco = "origin/develop" }) => {
+  const repoNpm = ({ kit, tronco = "origin/main" }) => {
     const raiz = realpathSync(mkdtempSync(join(tmpdir(), "guarda-real-")));
     dirs.push(raiz);
     git(raiz, "init", "-q");
