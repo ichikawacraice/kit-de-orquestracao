@@ -122,6 +122,20 @@ const VIA_COM = Symbol('via-com');
 const MOTIVOS_DA_ESPERA = ['operador', 'gate'];
 const LOCAL_ID = /^local_[0-9a-f-]{36}$/;
 const CITA_NUMERO = /\bF\d+\b|#\d+/;
+// F43: o texto que o operador lê cita item como "F13 · <título>" na primeira menção; as seguintes podem ser só "F13".
+const CAMPOS_LIDOS_PELO_OPERADOR = ['titulo', 'caso', 'seNaoDecidir', 'recomendacao'];
+function itemSoltoNaPergunta(novo) {
+  const nomeados = new Set();
+  for (const campo of CAMPOS_LIDOS_PELO_OPERADOR) {
+    if (typeof novo[campo] !== 'string') continue;
+    for (const m of novo[campo].matchAll(/\bF\d+\b( · )?/g)) {
+      const numero = m[0].replace(' · ', '');
+      if (m[1]) nomeados.add(numero);
+      else if (!nomeados.has(numero)) return { campo, numero };
+    }
+  }
+  return null;
+}
 const ARQUIVO_DE_TEMAS = () => join(BASE, 'temas.json');
 // temas.json: lista de { id, rotulo, projeto? }. Tema com `projeto` vale só nele; sem `projeto` (instalação antiga) vale para todos.
 // Sem `projeto` no pedido (list fora de git), enxerga tudo; quem VALIDA item passa por `temasDoItem`, que não deixa o item sem projeto usar tema alheio.
@@ -232,7 +246,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   // O pane já mostra o número do item e os PRs: um número no título envelhece (o PR fecha, o item muda de nome) e repete o que está ao lado.
   if (typeof novo.titulo === 'string') {
     const citado = novo.titulo.match(/\bF\d+\b/) || novo.titulo.match(/#\d+/);
-    if (citado) throw new Error(`${chave}: o título não cita item nem PR ("${citado[0]}") — o pane já mostra o número do item e os PRs; use \`depois\`/\`prs\` (a regra recusa também a tecla "F5": descreva-a por extenso)`);
+    if (citado) throw new Error(`${chave}: o título não cita item nem PR ("${citado[0]}") — o pane mostra o número do item ao lado do tema e os PRs; use \`depois\`/\`prs\` (a regra recusa também a tecla "F5": descreva-a por extenso)`);
   }
   if (tem('etapa') && !ETAPAS.includes(novo.etapa)) {
     throw new Error(`${chave}: etapa "${novo.etapa}" fora da lista (${ETAPAS.join(' · ')})`);
@@ -264,7 +278,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
       if (!textoNaoVazio(e.apelido)) throw new Error(`${chave}: ${k}.apelido não pode ser vazio`);
       if (!textoNaoVazio(e.oQue)) throw new Error(`${chave}: ${k}.oQue não pode ser vazio`);
       const citado = String(e.oQue).match(CITA_NUMERO);
-      if (citado) throw new Error(`${chave}: ${k}.oQue não cita item nem PR ("${citado[0]}"); o pane já mostra o número`);
+      if (citado) throw new Error(`${chave}: ${k}.oQue não cita item nem PR ("${citado[0]}"); o pane mostra o número ao lado do tema`);
       if (vistos.has(e.localId)) throw new Error(`${chave}: ${k} repete ${e.localId}`);
       vistos.add(e.localId);
       extra?.(e);
@@ -323,6 +337,10 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
 function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom, antes) {
   const chave = `${colecao}/${id}`;
   if (colecao === 'fila') validarItemDaFila(chave, novo, base, op, existia, viaCom, antes);
+  if (colecao === 'perguntas' && base.estado !== 'respondida' && base.estado !== 'cancelada') {
+    const solto = itemSoltoNaPergunta(novo);
+    if (solto) throw new Error(`${chave}: ${solto.campo} cita "${solto.numero}" solto — na primeira menção escreva "${solto.numero} · <título do item>" (painel get fila ${solto.numero}); o operador não sabe o que é o número (a tecla F5 se descreve por extenso)`);
+  }
   if (colecao === 'perguntas' && base.estado === 'aberta' && !base.sessaoId) {
     throw new Error(`${chave}: pergunta aberta sem sessaoId — a resposta do painel não teria para onde voltar`);
   }
@@ -597,7 +615,7 @@ function comandoSoltar(args) {
   if (sobra.length) throw new Error('uso: painel.mjs soltar <F> "<motivo>" (o motivo vai entre aspas)');
   if (!textoNaoVazio(motivo)) throw new Error('soltar: falta o "<motivo>" (vira o `agora` do item)');
   const citado = motivo.match(CITA_NUMERO);
-  if (citado) throw new Error(`soltar: o motivo não cita item nem PR ("${citado[0]}"); o pane já mostra o número`);
+  if (citado) throw new Error(`soltar: o motivo não cita item nem PR ("${citado[0]}"); o pane mostra o número ao lado do tema`);
   return comTrava(() => {
     const atual = ler('fila', F);
     if (!atual) throw new Error(`fila/${F} não existe`);

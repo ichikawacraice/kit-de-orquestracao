@@ -251,6 +251,7 @@ describe('R4 — o caso c4 R1 do painel decide pelo caminho e pega a volta do fa
       const plug = join(raiz, 'plugins', 'orquestracao');
       cpSync(join(RAIZ, 'plugins', 'orquestracao', 'hooks'), join(plug, 'hooks'), { recursive: true });
       cpSync(join(RAIZ, 'plugins', 'orquestracao', 'skills'), join(plug, 'skills'), { recursive: true });
+      cpSync(join(RAIZ, 'plugins', 'orquestracao', 'pool'), join(plug, 'pool'), { recursive: true });
       const roda = () => spawnSync('node', [join(plug, 'hooks', 'tests', 'painel-validacao.test.mjs')], {
         encoding: 'utf8', timeout: 120000, killSignal: 'SIGKILL', env: { ...process.env, SCRIPTS_DIR: join(plug, 'skills', 'orquestradora', 'scripts') },
       });

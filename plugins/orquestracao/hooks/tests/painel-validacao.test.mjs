@@ -215,5 +215,42 @@ caso('c4 R2: git respondeu que não é repositório → "cwd fora de git"', () =
   ok(!/git não respondeu/.test(r.err), `confundiu fora de git com timeout: ${r.err}`);
 });
 
+// F43 · regra de texto: a pergunta que o operador lê cita item como "F13 · <título>", nunca solto.
+const PROTOCOLO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'pool', 'protocolo.md');
+const pergunta = (campos) => JSON.stringify({ estado: 'aberta', sessaoId: 'local_a', ...campos });
+caso('F43: pergunta com "executora do F13" solto é recusada, com campo e número', () => {
+  const r = painel('set', 'perguntas', 'Q1', pergunta({ titulo: 'x', caso: 'a executora do F13 está parada' }));
+  recusa(r, 'caso', 'perguntas', 'Q1');
+  ok(r.err.includes('F13'), `a recusa não diz o número: ${r.err}`);
+});
+caso('F43: recusa solto em titulo, seNaoDecidir e recomendacao', () => {
+  for (const campo of ['titulo', 'seNaoDecidir', 'recomendacao']) {
+    const r = painel('set', 'perguntas', 'Q1', pergunta({ [campo]: 'espera o F42 fechar' }));
+    recusa(r, campo, 'perguntas', 'Q1');
+  }
+});
+caso('F43: aceita "F13 · SPEC-155 fatia 2" e a menção seguinte só com F13', () => {
+  const r = painel('set', 'perguntas', 'Q1', pergunta({ titulo: 'x', caso: 'F13 · SPEC-155 fatia 2 está parado; o F13 espera a V' }));
+  igual(r.exit, 0, `exit (${r.err})`);
+  ok(existsSync(arq('perguntas', 'Q1')), 'não gravou');
+});
+caso('F43: pergunta respondida com texto antigo solto não é recusada', () => {
+  igual(painel('set', 'perguntas', 'Q2', '{"estado":"respondida","caso":"o F13 parou"}').exit, 0, 'exit');
+});
+caso('F43: o campo `item` e a fila não ganham a trava (D-b2)', () => {
+  igual(painel('set', 'fila', 'F1', '{"titulo":"x","etapa":"execucao","tema":"editor","agora":"espera o F13"}').exit, 0, 'fila');
+});
+caso('F43: o exemplo do protocolo concorda com a regra do painel', () => {
+  const doc = readFileSync(PROTOCOLO, 'utf8');
+  const m = doc.match(/<!-- exemplo-item-citado: (.+?) -->/);
+  ok(m && m[1].trim().length > 0, 'protocolo sem a marca exemplo-item-citado');
+  const certo = m[1].trim();
+  ok(/F\d+ · \S/.test(certo), `exemplo não está no formato "F<n> · <título>": ${certo}`);
+  igual(painel('set', 'perguntas', 'Q1', pergunta({ caso: certo })).exit, 0, 'o exemplo do protocolo é recusado');
+  const solto = certo.replace(/ · [^;.]*/, '');
+  ok(solto !== certo && /F\d+/.test(solto), `não montou a versão solta: ${solto}`);
+  ok(painel('set', 'perguntas', 'Q3', pergunta({ caso: solto })).exit === 1, 'a versão solta do exemplo foi aceita');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;
