@@ -2,8 +2,8 @@
 // Testes da F6 (24/10): aplicar-skills-do-papel.mjs e hooks/skill-do-papel.mjs.
 // Rodar: node ~/.claude/hooks/tests/skills-do-papel.test.mjs
 // Env para a prova de mutação: HOOKS_DIR (hook), APLICAR (script aplicar).
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { renameSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,7 @@ const POOL = join(PLUGIN, 'pool');
 const APLICAR = process.env.APLICAR || join(POOL, 'aplicar-skills-do-papel.mjs');
 const MAPA_REAL = join(POOL, 'skills-por-papel.json');
 let base; let falhas = 0;
+const ACC = 'acc-atual'; const ORG = 'org-x'; // pasta da conta, como o app grava: claude-code-sessions/<conta>/<org>/
 const dir = (...p) => join(base, ...p);
 const ok = (c, m) => { if (!c) throw new Error(m); };
 
@@ -29,15 +30,15 @@ const S = { // chave → [cliId, título, git]; git: 'wt' (arquivo .git) | 'prin
 function novoBase() {
   base = mkdtempSync(join(tmpdir(), 'skills-papel-'));
   mkdirSync(dir('orq')); mkdirSync(dir('home', '.claude', 'projects', 'proj'), { recursive: true });
-  mkdirSync(dir('app', 'conta'), { recursive: true }); mkdirSync(dir('bk'));
+  mkdirSync(dir('app', ACC, ORG), { recursive: true }); mkdirSync(dir('bk'));
   copyFileSync(MAPA_REAL, dir('mapa.json'));
   for (const [k, [cli, titulo, git]] of Object.entries(S)) {
     const wt = dir('wt', k); mkdirSync(join(wt, '.claude'), { recursive: true });
     if (git === 'principal') mkdirSync(join(wt, '.git')); else writeFileSync(join(wt, '.git'), 'gitdir: /x\n');
-    writeFileSync(dir('app', 'conta', `local_${k}.json`), JSON.stringify({ sessionId: `local_${k}`, cliSessionId: cli, priorCliSessionIds: [], title: titulo, isArchived: false, cwd: wt, worktreePath: wt }));
+    writeFileSync(dir('app', ACC, ORG, `local_${k}.json`), JSON.stringify({ sessionId: `local_${k}`, cliSessionId: cli, priorCliSessionIds: [], title: titulo, isArchived: false, cwd: wt, worktreePath: wt }));
   }
 }
-const env = (extra = {}) => ({ ...process.env, HOME: dir('home'), HOOKS_CREWAI_BASE: dir('orq'), POOL_APP_SESSOES_DIR: dir('app'), SKILLS_MAPA: dir('mapa.json'), SKILLS_BACKUP_DIR: dir('bk'), ...extra });
+const env = (extra = {}) => ({ ...process.env, HOME: dir('home'), HOOKS_CREWAI_BASE: dir('orq'), POOL_APP_SESSOES_DIR: dir('app'), CLAUDE_CODE_ACCOUNT_UUID: ACC, CLAUDE_CODE_ORGANIZATION_UUID: ORG, SKILLS_MAPA: dir('mapa.json'), SKILLS_BACKUP_DIR: dir('bk'), ...extra });
 const aplicar = (...args) => execFileSync('node', [APLICAR, ...args], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: env() });
 const settings = (k) => JSON.parse(readFileSync(dir('wt', k, '.claude', 'settings.local.json'), 'utf8'));
 const log = () => (existsSync(dir('orq', 'hooks-crewai.log')) ? readFileSync(dir('orq', 'hooks-crewai.log'), 'utf8') : '');
@@ -132,7 +133,7 @@ caso('7: hook avisa só para nao/desligada e loga fora-do-mapa', () => {
 caso('7a: apelido de skill de plugin (name: do frontmatter) também avisa', () => {
   S.V1 = ['aaaaaaaa-0000-0000-0000-0000000000b1', 'V1 · validadora · livre', 'wt'];
   const wt = dir('wt', 'V1'); mkdirSync(join(wt, '.claude'), { recursive: true }); writeFileSync(join(wt, '.git'), 'gitdir: /x\n');
-  writeFileSync(dir('app', 'conta', 'local_V1.json'), JSON.stringify({ sessionId: 'local_V1', cliSessionId: S.V1[0], priorCliSessionIds: [], title: S.V1[1], isArchived: false, cwd: wt, worktreePath: wt }));
+  writeFileSync(dir('app', ACC, ORG, 'local_V1.json'), JSON.stringify({ sessionId: 'local_V1', cliSessionId: S.V1[0], priorCliSessionIds: [], title: S.V1[1], isArchived: false, cwd: wt, worktreePath: wt }));
   const r = hook('V1', 'hookify:writing-hookify-rules');
   ok(r?.additionalContext?.includes('hookify:writing-hookify-rules'), `V apelido: ${JSON.stringify(r)}`);
   ok(/avisou\tV hookify:writing-hookify-rules nao/.test(log()), `log: ${log()}`);
@@ -220,6 +221,73 @@ caso('K2: skill do plugin chega como `orquestracao:ausente` (ou sem prefixo): o 
   }
   ok(hook('E3', 'orquestracao:orquestradora') === null, 'orquestradora é `cita` para E: cala, com ou sem prefixo');
   ok(hook('E3', 'orquestracao:nao-existe') === null, 'fora do mapa cala');
+});
+
+// F70: a conta vem do ambiente do app, e `<local_…>` não depende dela.
+const VELHA = 'acc-velha';
+function contaVelha() {
+  const wt = dir('wt', 'E9'); mkdirSync(join(wt, '.claude'), { recursive: true }); writeFileSync(join(wt, '.git'), 'gitdir: /x\n');
+  mkdirSync(dir('app', VELHA, ORG), { recursive: true });
+  writeFileSync(dir('app', VELHA, ORG, 'local_VELHO.json'), JSON.stringify({ sessionId: 'local_VELHO', cliSessionId: 'aaaaaaaa-0000-0000-0000-0000000000e9', priorCliSessionIds: [], title: 'E9 · livre', isArchived: false, cwd: wt, worktreePath: wt }));
+}
+// Roda o script e devolve status/stdout/stderr. `semApp`: sem POOL_APP_SESSOES_DIR e sem as envs da conta (caminho de produção, HOME temporário).
+function rodar(args, { semEnv = [], extra = {}, script = APLICAR } = {}) {
+  const e = env(extra);
+  for (const k of semEnv) delete e[k];
+  const r = spawnSync('node', [script, ...args], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: e });
+  return { status: r.status, out: r.stdout, err: r.stderr };
+}
+const SEM_CONTA = ['CLAUDE_CODE_ACCOUNT_UUID', 'CLAUDE_CODE_ORGANIZATION_UUID'];
+const EM_VELHA = { CLAUDE_CODE_ACCOUNT_UUID: VELHA };
+const gravarContaAtual = (pasta, conteudo) => { mkdirSync(pasta, { recursive: true }); writeFileSync(join(pasta, 'conta-atual.txt'), conteudo); };
+
+caso('F70.1: <local_…> acha a sessão sem conta nenhuma, no caminho de produção (sem POOL_APP_SESSOES_DIR)', () => {
+  const reais = dir('home', 'Library', 'Application Support', 'Claude');
+  mkdirSync(join(reais, 'claude-code-sessions'), { recursive: true });
+  rmSync(join(reais, 'claude-code-sessions'), { recursive: true }); renameSync(dir('app'), join(reais, 'claude-code-sessions'));
+  const r = rodar(['local_E3'], { semEnv: ['POOL_APP_SESSOES_DIR', ...SEM_CONTA] });
+  ok(r.status === 0, `exit ${r.status}: ${r.err}`);
+  ok(/E3 local_E3 .* aplicado/.test(r.out), `saída: ${r.out}`);
+});
+caso('F70.2: <local_…> de outra conta também acha', () => {
+  contaVelha();
+  const r = rodar(['local_VELHO', '--dry-run']);
+  ok(r.status === 0 && /E9 local_VELHO .* aplicaria/.test(r.out), `exit ${r.status} saída: ${r.out} ${r.err}`);
+});
+caso('F70.3: --todos lê só a conta das envs (e a velha seria lida se fosse a atual)', () => {
+  contaVelha();
+  const velha = rodar(['--todos', '--conferir'], { extra: EM_VELHA });
+  ok(velha.status === 0 && /^E9 /m.test(velha.out) && !/^E3 /m.test(velha.out), `precondição: ${velha.out} ${velha.err}`);
+  const r = rodar(['--todos', '--conferir']);
+  ok(r.status === 0, `exit ${r.status}: ${r.err}`);
+  ok(/^E3 /m.test(r.out), `sem E3: ${r.out}`);
+  ok(!/^E9 /m.test(r.out), `listou a conta velha: ${r.out}`);
+});
+caso('F70.4: --todos fora do app usa <BASE>/pool/conta-atual.txt, não a pasta do script', () => {
+  contaVelha();
+  gravarContaAtual(dir('orq', 'pool'), `${VELHA}/${ORG}\n`);
+  const r = rodar(['--todos', '--conferir'], { semEnv: SEM_CONTA });
+  ok(r.status === 0 && /^E9 /m.test(r.out) && !/^E3 /m.test(r.out), `exit ${r.status} saída: ${r.out} ${r.err}`);
+  // o arquivo ao lado do script (lugar antigo) não vale mais
+  rmSync(dir('orq', 'pool'), { recursive: true, force: true });
+  const copia = dir('copia'); mkdirSync(join(copia, 'pool'), { recursive: true }); mkdirSync(join(copia, 'hooks'));
+  for (const f of readdirSync(POOL).filter((n) => n.endsWith('.mjs') || n.endsWith('.json'))) copyFileSync(join(POOL, f), join(copia, 'pool', f));
+  for (const f of readdirSync(HOOKS).filter((n) => n.endsWith('.mjs'))) copyFileSync(join(HOOKS, f), join(copia, 'hooks', f));
+  gravarContaAtual(join(copia, 'pool'), `${VELHA}/${ORG}\n`);
+  const r2 = rodar(['--todos', '--conferir'], { semEnv: SEM_CONTA, script: join(copia, 'pool', 'aplicar-skills-do-papel.mjs') });
+  ok(r2.status === 2, `deveria recusar (exit 2), deu ${r2.status}: ${r2.out} ${r2.err}`);
+});
+caso('F70.5: sem envs e sem arquivo, --todos recusa e diz as duas fontes', () => {
+  const r = rodar(['--todos'], { semEnv: SEM_CONTA });
+  ok(r.status === 2, `exit ${r.status}: ${r.out}`);
+  ok(/CLAUDE_CODE_ACCOUNT_UUID/.test(r.err) && /conta-atual\.txt/.test(r.err), `stderr: ${r.err}`);
+});
+caso('F70.6: env e arquivo discordam: vale a env, com aviso em stderr', () => {
+  contaVelha();
+  gravarContaAtual(dir('orq', 'pool'), `${VELHA}/${ORG}\n`);
+  const r = rodar(['--todos', '--conferir']);
+  ok(r.status === 0 && /^E3 /m.test(r.out) && !/^E9 /m.test(r.out), `exit ${r.status} saída: ${r.out}`);
+  ok(/conta-atual\.txt aponta/.test(r.err) && r.err.includes(VELHA) && r.err.includes(ACC), `stderr: ${r.err}`);
 });
 
 console.log(falhas ? `\n${falhas} caso(s) falharam` : '\ntudo ok');

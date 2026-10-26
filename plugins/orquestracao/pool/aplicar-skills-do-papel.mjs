@@ -2,12 +2,13 @@
 // F6 (24/10): grava em <worktree>/.claude/settings.local.json as skills que o PAPEL do membro lê.
 // Fonte: skills-por-papel.json (mapa). Troca só `skillOverrides` e `enabledPlugins`; o resto do arquivo fica.
 //   node aplicar-skills-do-papel.mjs <local_…> | --todos   [--dry-run | --conferir]
-// Env (testes): POOL_APP_SESSOES_DIR (registro do app), SKILLS_MAPA (JSON), SKILLS_BACKUP_DIR.
+// Env (testes): POOL_APP_SESSOES_DIR (raiz do registro do app), SKILLS_MAPA (JSON), SKILLS_BACKUP_DIR.
 import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, statSync, mkdirSync, copyFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { membroDoPool } from '../hooks/pool-comum.mjs';
+import { BASE } from '../hooks/hooks-crewai-comum.mjs';
 
 const H = homedir();
 const AQUI = dirname(fileURLToPath(import.meta.url));
@@ -15,11 +16,22 @@ const MAPA = process.env.SKILLS_MAPA || join(AQUI, 'skills-por-papel.json');
 const BACKUPS = process.env.SKILLS_BACKUP_DIR || join(H, '.claude', 'orquestracao', 'backups');
 const SESSOES = process.env.POOL_APP_SESSOES_DIR || join(H, 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
 // Só a conta atual do app: as sessões de conta antiga seguem no disco, mas não recebem trabalho daqui (operador, 24/10).
-// `conta-atual.txt` guarda o caminho relativo `<conta>/<org>` dentro de claude-code-sessions; troque ao mudar de conta.
-// Com POOL_APP_SESSOES_DIR (teste) o filtro não se aplica.
-const CONTA = process.env.POOL_APP_SESSOES_DIR ? null : (() => {
-  try { return readFileSync(join(AQUI, 'conta-atual.txt'), 'utf8').trim() || null; } catch { return null; }
-})();
+// `--todos` lê `claude-code-sessions/<conta>/<org>`; a pasta vem do ambiente do app (CLAUDE_CODE_ACCOUNT_UUID e
+// CLAUDE_CODE_ORGANIZATION_UUID, que não envelhecem). Fora do app, vale `<BASE>/pool/conta-atual.txt` (`<conta>/<org>`),
+// com BASE = HOOKS_CREWAI_BASE ou ~/.claude/orquestracao: o estado mora lá, nunca na pasta do plugin (o cache é trocado a cada update).
+// `<local_…>` é único entre contas: acha o registro em toda a raiz, sem conta. POOL_APP_SESSOES_DIR só troca a raiz.
+function contaAtual() {
+  const { CLAUDE_CODE_ACCOUNT_UUID: acc, CLAUDE_CODE_ORGANIZATION_UUID: org } = process.env;
+  const arq = join(BASE, 'pool', 'conta-atual.txt');
+  let doArquivo = null;
+  try { doArquivo = readFileSync(arq, 'utf8').trim() || null; } catch { /* sem arquivo */ }
+  if (acc && org) {
+    const doApp = `${acc}/${org}`;
+    if (doArquivo && doArquivo !== doApp) console.error(`conta-atual.txt aponta ${doArquivo}, o app está em ${doApp}`);
+    return doApp;
+  }
+  return doArquivo;
+}
 
 function* registros(dir) {
   let es;
@@ -92,8 +104,13 @@ function main(argv) {
   if (!todos && !id) { console.error('uso: aplicar-skills-do-papel.mjs <local_…>|--todos [--dry-run|--conferir]'); return 2; }
   const mapa = JSON.parse(readFileSync(MAPA, 'utf8'));
   let n = 0;
-  if (!process.env.POOL_APP_SESSOES_DIR && !CONTA) { console.error(`sem ${join(AQUI, 'conta-atual.txt')}: não sei qual é a conta atual`); return 2; }
-  for (const reg of registros(CONTA ? join(SESSOES, CONTA) : SESSOES)) {
+  let raiz = SESSOES;
+  if (!id) {
+    const conta = contaAtual();
+    if (!conta) { console.error(`não sei qual é a conta atual: faltam CLAUDE_CODE_ACCOUNT_UUID/CLAUDE_CODE_ORGANIZATION_UUID (fora do app) e ${join(BASE, 'pool', 'conta-atual.txt')}`); return 2; }
+    raiz = join(SESSOES, conta);
+  }
+  for (const reg of registros(raiz)) {
     if (id ? reg.sessionId !== id : (reg.isArchived || !membroDoPool(reg.title))) continue;
     n++;
     console.log(tratar(reg, mapa, modo));
