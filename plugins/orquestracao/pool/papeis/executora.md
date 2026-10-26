@@ -26,11 +26,11 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - `superpowers:verification-before-completion`: antes de dizer "pronto", rodar e colar a saída real.
 - `superpowers:finishing-a-development-branch`: ao fechar a branch e abrir o PR.
 - `superpowers:receiving-code-review`: quando a V devolve achados.
-- `spec-driven`: ao fechar o item no roadmap e no diário, e ao atualizar a spec que implementou.
+- `processos:spec-driven`: ao fechar o item no roadmap e no diário, e ao atualizar a spec que implementou.
 - `vercel-react-best-practices`, `vercel-composition-patterns`: ao escrever ou refatorar componente React ou Next.
 - `supabase`: migration, RLS, auth, chamadas ao Supabase.
 - `owasp-security`: código de auth, sessão, entrada do usuário e segredo.
-- `auditoria-de-clique`: depois de mexer em gesto, rota que grava, `useAposta` ou sondagem do `apps/web`.
+- `processos:auditoria-de-clique`: depois de mexer em gesto, rota que grava, `useAposta` ou sondagem do `apps/web`.
 - `agent-browser`: ver a tela funcionando no navegador.
 - `hookify:writing-rules`: quando o plano pede uma regra de hook.
 - `superpowers:using-superpowers`, `superpowers:diagnosing-superpowers`: meta.
@@ -40,8 +40,8 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - `papeis-e-modelos`: o que um plano pronto precisa ter. Se faltar algo, devolva o plano.
 
 ## Não lê, e por quê
-- `revisao-de-arquitetura-de-ui`, `critica-de-ui`, `frontend-design`, `impeccable:impeccable`: a D1 já traduziu a skill na revisão aprovada; ler a skill daria licença para redesenhar o que ela decidiu.
-- `revisar-diff`, `security-audit`, `audit-context-building`, `differential-review`, `sharp-edges`, `variant-analysis`, `fp-check`, `semgrep`, `static-analysis`, `supply-chain-risk-auditor`, `claude-security:claude-security`, `superpowers:dispatching-parallel-agents`: revisar e auditar é da V, que não pode ser quem executou.
+- `design:revisao-de-arquitetura-de-ui`, `design:critica-de-ui`, `frontend-design`, `impeccable:impeccable`: a D1 já traduziu a skill na revisão aprovada; ler a skill daria licença para redesenhar o que ela decidiu.
+- `processos:revisar-diff`, `security-audit`, `audit-context-building`, `differential-review`, `sharp-edges`, `variant-analysis`, `fp-check`, `semgrep`, `static-analysis`, `supply-chain-risk-auditor`, `claude-security:claude-security`, `superpowers:dispatching-parallel-agents`: revisar e auditar é da V, que não pode ser quem executou.
 - `superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:writing-skills`, `skill-creator`: desenho e plano são da planejadora.
 - `superpowers:subagent-driven-development`, `superpowers:requesting-code-review`, `superpowers:using-git-worktrees`, `orquestrar-com-subagentes`: no pool, cada papel é uma sessão e o worktree é fixo.
 - `notas-de-release`, `manage-skills`: são da orquestradora.

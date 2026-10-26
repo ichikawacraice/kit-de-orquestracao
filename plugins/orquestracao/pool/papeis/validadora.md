@@ -21,15 +21,15 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 
 ## Skills que usa (lê e aplica)
 - `handoff-de-sessao`: ao pegar e ao soltar o item.
-- `revisar-diff`: diff não trivial, antes do veredito.
+- `processos:revisar-diff`: diff não trivial, antes do veredito.
 - `superpowers:verification-before-completion`: nenhum "aprovado" sem a saída real.
 - `superpowers:systematic-debugging`: quando o teste falha e é preciso achar se o defeito é do diff.
 - `superpowers:dispatching-parallel-agents`: dividir a validação em subagentes de leitura.
-- `spec-driven`: conferir se a spec, o ADR e o roadmap acompanharam o código.
+- `processos:spec-driven`: conferir se a spec, o ADR e o roadmap acompanharam o código.
 - `vercel-react-best-practices`, `vercel-composition-patterns`: o diff mexe em React ou Next.
 - `supabase`: o diff mexe em migration, RLS ou chamadas ao Supabase.
 - `owasp-security`: o diff mexe em auth, sessão, entrada ou segredo.
-- `auditoria-de-clique`: o diff mexe em gesto ou rota que grava no `apps/web`.
+- `processos:auditoria-de-clique`: o diff mexe em gesto ou rota que grava no `apps/web`.
 - `agent-browser`: abrir a tela e conferir o artefato.
 - `security-audit`, `audit-context-building`, `differential-review`, `sharp-edges`, `variant-analysis`, `fp-check`, `semgrep`, `static-analysis`, `supply-chain-risk-auditor`, `claude-security:claude-security`: quando o item é auditoria de segurança ou o diff é sensível.
 - `superpowers:using-superpowers`, `superpowers:diagnosing-superpowers`: meta.
@@ -40,7 +40,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - `superpowers:test-driven-development`: cobrar teste para cada comportamento mudado.
 
 ## Não lê, e por quê
-- `revisao-de-arquitetura-de-ui`, `critica-de-ui`, `frontend-design`, `impeccable:impeccable`: em diff visual, confira a aderência à **revisão aprovada** em `docs/design/revisoes/`, não à skill. A crítica de design é da D1.
+- `design:revisao-de-arquitetura-de-ui`, `design:critica-de-ui`, `frontend-design`, `impeccable:impeccable`: em diff visual, confira a aderência à **revisão aprovada** em `docs/design/revisoes/`, não à skill. A crítica de design é da D1.
 - `superpowers:executing-plans`, `superpowers:finishing-a-development-branch`, `superpowers:receiving-code-review`, `hookify:writing-rules`: são da E.
 - `superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:writing-skills`, `skill-creator`: são da planejadora.
 - `superpowers:subagent-driven-development`, `superpowers:requesting-code-review`, `superpowers:using-git-worktrees`, `orquestrar-com-subagentes`: no pool, cada papel é uma sessão.

@@ -61,7 +61,8 @@ caso('1: aplicar em E grava overrides do papel, plugins e preserva chave alheia'
   ok(/E3 local_E3 .* aplicado/.test(saida), `saída: ${saida}`);
   const s = settings('E3');
   ok(!('vercel-react-best-practices' in s.skillOverrides), 'vercel-react deveria sair (on)');
-  ok(s.skillOverrides['revisao-de-arquitetura-de-ui'] === 'user-invocable-only', 'revisao-de-arquitetura-de-ui');
+  ok(!("design:revisao-de-arquitetura-de-ui" in s.skillOverrides), "skill de plugin não se grava em skillOverrides");
+  ok(s.enabledPlugins["design@kit-de-orquestracao"] === true && s.enabledPlugins["processos@kit-de-orquestracao"] === true, "design liga em E (A6), processos liga");
   ok(s.skillOverrides.orquestradora === 'name-only', 'orquestradora');
   ok(s.skillOverrides['find-skills'] === 'off', 'find-skills');
   ok(s.enabledPlugins['impeccable@impeccable'] === false, 'impeccable plugin');
@@ -74,7 +75,8 @@ caso('2: D liga impeccable e não bloqueia critica-de-ui', () => {
   aplicar('local_D1');
   const s = settings('D1');
   ok(s.enabledPlugins['impeccable@impeccable'] === true, 'impeccable');
-  ok(!('critica-de-ui' in s.skillOverrides), 'critica-de-ui deveria ser on');
+  ok(!('design:critica-de-ui' in s.skillOverrides), 'skill de plugin fora de skillOverrides');
+  ok(s.enabledPlugins['design@kit-de-orquestracao'] === true, 'design liga em D');
   ok(s.enabledPlugins['document-skills@anthropic-agent-skills'] === false, 'document-skills em D');
 });
 caso('3: checkout principal → pulado e arquivo intocado', () => {

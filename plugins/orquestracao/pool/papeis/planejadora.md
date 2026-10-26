@@ -17,7 +17,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 ## Skills que usa (lê e aplica)
 - `handoff-de-sessao`: ao soltar ou retomar um item.
 - `papeis-e-modelos`: ao despachar, para escolher o papel e o modelo e escrever as cinco coisas do briefing.
-- `spec-driven`: ao abrir SPEC, ADR, roadmap ou diário.
+- `processos:spec-driven`: ao abrir SPEC, ADR, roadmap ou diário.
 - `skill-creator`: quando o item é skill nova ou mudada (skill é doc).
 - `superpowers:brainstorming`: antes de desenhar algo novo.
 - `superpowers:writing-plans`: ao transformar a decisão em plano.
@@ -30,18 +30,18 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - `orquestradora`: a seção de perguntas com Q-ID e do painel.
 - `vercel-react-best-practices`, `vercel-composition-patterns`: o item mexe em React? Cite no briefing a regra que toca a tarefa. Quem aplica é a E, e a V confere.
 - `supabase`, `owasp-security`: migration, RLS, auth, entrada do usuário. Cite a regra; não aplique.
-- `revisao-de-arquitetura-de-ui`: saber que tela passa pela D1 antes da E. Não faça a revisão.
-- `auditoria-de-clique`: prever no plano que a E audita o gesto que mudar.
+- `design:revisao-de-arquitetura-de-ui`: saber que tela passa pela D1 antes da E. Não faça a revisão.
+- `processos:auditoria-de-clique`: prever no plano que a E audita o gesto que mudar.
 - `superpowers:test-driven-development`: exigir no plano o teste antes do código.
 - `security-audit`, `audit-context-building`, `differential-review`, `sharp-edges`, `variant-analysis`, `supply-chain-risk-auditor`, `claude-security:claude-security`: planejar uma auditoria. Quem executa é a V.
 - `hookify:writing-rules`: desenhar uma regra de hook que a E vai escrever.
 
 ## Não lê, e por quê
-- `critica-de-ui`, `frontend-design`, `impeccable:impeccable`: design é da D1.
+- `design:critica-de-ui`, `frontend-design`, `impeccable:impeccable`: design é da D1.
 - `agent-browser`: conferir a tela é da E e da V.
 - `fp-check`, `semgrep`, `static-analysis`: ferramentas da auditoria, que é da V.
 - `superpowers:executing-plans`, `superpowers:finishing-a-development-branch`, `superpowers:verification-before-completion`: execução e fechamento são da E.
-- `revisar-diff`, `superpowers:dispatching-parallel-agents`: são da V.
+- `processos:revisar-diff`, `superpowers:dispatching-parallel-agents`: são da V.
 - `superpowers:subagent-driven-development`, `superpowers:requesting-code-review`, `superpowers:using-git-worktrees`, `orquestrar-com-subagentes`: no pool, cada papel é uma sessão e o worktree é fixo.
 - `notas-de-release`, `manage-skills`: são da orquestradora.
 
@@ -53,4 +53,4 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - A mensagem final de turno e a `etapa` do painel dizem o estado real do trabalho em palavras do produto (o que funciona, o que falta, PR aberto/validado), sem narrar a passagem entre sessões ("mandei à E2", "vou chamar a V1").
 
 ## Teto da crítica de tela
-**Teto da crítica de tela (Q207, operador, 24/10).** A crítica do `critico-de-ui` dá nota de 0 a 30. **De 24/30 para cima, aprovada com ressalvas e sem ressalva alta, a revisão ou a tela está liberada** (para execução ou para merge); ressalva alta volta para conserto mesmo com nota boa (B1, assumida 24/10); ressalva média ou baixa não volta para conserto: vira item próprio na fila (`F<n>`); todo problema da crítica declara o **Peso** (alta · média · baixa). **No máximo 2 recríticas por PR ou revisão**; na terceira, o que ainda estiver abaixo de 24 sobe à planejadora, que decide ou leva ao operador. Motivo: o redesenho do editor ficou um dia parado em 11 e 15 rodadas de crítica polindo ressalva baixa.
+**Teto da crítica de tela (Q207, operador, 24/10).** A crítica do `design:critico-de-ui` dá nota de 0 a 30. **De 24/30 para cima, aprovada com ressalvas e sem ressalva alta, a revisão ou a tela está liberada** (para execução ou para merge); ressalva alta volta para conserto mesmo com nota boa (B1, assumida 24/10); ressalva média ou baixa não volta para conserto: vira item próprio na fila (`F<n>`); todo problema da crítica declara o **Peso** (alta · média · baixa). **No máximo 2 recríticas por PR ou revisão**; na terceira, o que ainda estiver abaixo de 24 sobe à planejadora, que decide ou leva ao operador. Motivo: o redesenho do editor ficou um dia parado em 11 e 15 rodadas de crítica polindo ressalva baixa.
