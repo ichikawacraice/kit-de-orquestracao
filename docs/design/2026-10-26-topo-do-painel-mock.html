@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Topo do painel — mock</title>
+<style>
+/* Base: os mocks do F34 e do F43, sem mudança. Cores = as classes do desenho.ts. */
+:root{
+  --bg:#ffffff;--t:#1f1f1f;--s:#6b6b68;--m:#6f6f6b;--av:#9a6210;--er:#b8452c;--an:#3a68c8;--ok:#2e7d4a;--li:#5b5cd6;
+  --tile:#f4f3f0;--k:#ecebe8;--ln:#e8e7e3;--ertint:#fbefeb;
+  --pt:#ffffff;--btn:#ffffff;--btnb:#d6d5d1;--btnt:#1f1f1f;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#1f1f1f;--t:#ececec;--s:#a8a8a4;--m:#93938f;--av:#d9962b;--er:#e0846b;--an:#5b8def;--ok:#4caf6e;--li:#8b8cf8;
+  --tile:#262625;--k:#2c2c2b;--ln:#2f2f2d;--ertint:#2d201c;
+  --pt:#1f1f1f;--btn:#2c2c2b;--btnb:#3d3d3b;--btnt:#ececec;
+}}
+:root[data-theme="dark"]{
+  --bg:#1f1f1f;--t:#ececec;--s:#a8a8a4;--m:#93938f;--av:#d9962b;--er:#e0846b;--an:#5b8def;--ok:#4caf6e;--li:#8b8cf8;
+  --tile:#262625;--k:#2c2c2b;--ln:#2f2f2d;--ertint:#2d201c;
+  --pt:#1f1f1f;--btn:#2c2c2b;--btnb:#3d3d3b;--btnt:#ececec;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif}
+.doc{max-width:1240px;margin:0 auto;padding:24px 16px 64px}
+.doc>h1{font-size:18px;margin:0 0 4px}
+.doc>p{color:var(--s);margin:0 0 20px;max-width:720px}
+.tema-sw{position:fixed;top:12px;right:16px;display:flex;gap:6px}
+.grade{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+.coluna{width:398px;max-width:100%}
+.coluna.w300{width:300px}
+.coluna>h2{font-size:12px;font-weight:600;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px}
+.pane{min-width:0;border:1px solid var(--ln);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:14px;background:var(--bg)}
+.legenda{font-size:11.5px;color:var(--m);margin:6px 0 0}
+
+/* Button nativo do desktop: só secondary nesta faixa. */
+.b{font:inherit;font-size:12.5px;line-height:1;padding:6px 10px;border-radius:6px;border:1px solid var(--btnb);background:var(--btn);color:var(--btnt);cursor:pointer}
+.b.ocupado{cursor:progress}
+.fileira{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fileira .esq,.fileira .dir{display:flex;align-items:center;gap:6px}
+.fileira .dir{flex-grow:1;justify-content:flex-end}
+.fileira{flex-wrap:wrap}
+.parou{font-size:12px;color:var(--er)}
+.dir .estado{min-height:0;align-items:center}
+.term.c40{width:40ch;white-space:pre}
+.topo{display:flex;flex-direction:column;gap:4px}
+
+/* modoSvg: a linha de estado. Presente: uma linha, sem fundo. Ausente: faixa k, filete li, duas linhas. */
+.estado{display:flex;justify-content:space-between;align-items:baseline;gap:12px;min-height:22px}
+.estado .md{font-size:12.5px;font-weight:600;color:var(--s)}
+.estado .md.nl{color:var(--m);font-style:italic}
+.cap{font-size:12px;color:var(--m);white-space:nowrap;font-variant-numeric:tabular-nums}
+.cap.ruim{color:var(--er)}
+.ausente{background:transparent;border:1.5px solid var(--li);border-radius:8px;padding:6px 12px;display:flex;flex-direction:column;gap:2px}
+.ausente .l1{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.ausente .md{font-size:13px;font-weight:700;color:var(--t);white-space:nowrap}
+.ausente .lua{color:var(--li);margin-right:5px}
+.ausente .l2{font-size:12px;color:var(--s);white-space:nowrap}
+.estado .hr{font-size:12px;font-weight:400;color:var(--m);font-variant-numeric:tabular-nums}
+.coluna.w300 .pane{padding:5px}
+
+/* o que vem abaixo da faixa, esmaecido: só para dar contexto */
+.resto{opacity:.45;display:flex;flex-direction:column;gap:10px}
+.resumo{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tile{background:var(--tile);border-radius:10px;padding:10px 12px 8px;height:62px;font-size:12.5px;color:var(--s)}
+.tile b{display:block;font-size:24px;font-weight:600;color:var(--t)}
+.w300 .tile{height:36px;padding:0 10px;display:flex;align-items:center;justify-content:space-between}
+.w300 .tile b{font-size:17px;display:inline}
+.cab{display:flex;align-items:center;gap:8px;padding-left:10px;border-left:3px solid var(--an);min-height:24px;font-size:15px;font-weight:600}
+
+/* faixa de avisos: faixaSvg de hoje, título novo */
+.erro{background:var(--ertint);border-radius:8px;padding:8px 10px;color:var(--er);font-size:12.5px;display:flex;flex-direction:column;gap:4px}
+.erro b{font-weight:700}
+.toast{align-self:flex-start;font-size:12px;background:var(--t);color:var(--bg);border-radius:6px;padding:5px 10px}
+
+.term{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--tile);border-radius:8px;padding:12px;white-space:pre;overflow-x:auto;color:var(--t)}
+.term .d{color:var(--m)}.term .w{color:var(--av)}.term .a{color:var(--an)}.term .inv{background:var(--t);color:var(--bg);font-weight:700}
+</style>
+</head>
+<body>
+<div class="tema-sw">
+  <button class="b" onclick="document.documentElement.dataset.theme='light'">Claro</button>
+  <button class="b" onclick="document.documentElement.dataset.theme='dark'">Escuro</button>
+</div>
+<div class="doc">
+<h1>O topo do pane diz o modo e liga o ausente (mock estático)</h1>
+<p>A fileira vem primeiro e nunca muda: o botão do modo no canto esquerdo, o ↻ com a hora no canto direito, também quando desce de fileira. No presente, a palavra fica ao lado do ↻; no ausente, uma faixa contornada em lilás, sem fundo, aparece abaixo da fileira, com as duas consequências inteiras. Colunas com a largura útil do código: W = 372 e W = 288.</p>
+
+<div class="grade">
+
+<div class="coluna">
+<h2>1 · Presente (W = 372)</h2>
+<div class="pane">
+  <div class="fileira"><div class="esq"><button class="b">Ficar ausente</button></div><div class="dir"><span class="estado"><span class="md">Presente</span></span><button class="b">↻ 18:22</button></div></div>
+  <div class="resumo"><div class="tile">Esperam você<b>1</b></div><div class="tile">Travados<b>0</b></div><div class="tile">Executando<b>2</b></div><div class="tile">Na fila<b>3</b></div></div>
+</div>
+<p class="legenda">Uma fileira, a mesma altura da barra de hoje.</p>
+</div>
+
+<div class="coluna">
+<h2>2 · Ausente, contadores a pleno</h2>
+<div class="pane">
+  <div class="topo">
+    <div class="fileira"><div class="esq"><button class="b">Estou de volta</button></div><div class="dir"><button class="b">↻ 18:22</button></div></div>
+    <div class="ausente">
+      <div class="l1"><span class="md"><span class="lua">☾</span>Ausente há 3 h</span></div>
+      <div class="l2">desde 15:20 · a orquestradora pode se limpar</div>
+      <div class="l2">sessões novas só abrem com você</div>
+    </div>
+  </div>
+  <div class="resumo"><div class="tile">Esperam você<b>1</b></div><div class="tile">Travados<b>0</b></div><div class="tile">Executando<b>2</b></div><div class="tile">Na fila<b>3</b></div></div>
+</div>
+<p class="legenda">O botão do modo está no mesmo ponto do mock 1: o clique que ligou desliga. A faixa é o único bloco contornado do topo.</p>
+</div>
+
+<div class="coluna">
+<h2>3a · Ligando (otimista)</h2>
+<div class="pane">
+  <div class="topo">
+    <div class="fileira"><div class="esq"><button class="b ocupado">Ligando…</button></div><div class="dir"><button class="b">↻ 18:22</button></div></div>
+    <div class="ausente">
+      <div class="l1"><span class="md"><span class="lua">☾</span>Ausente agora</span></div>
+      <div class="l2">desde 18:23 · a orquestradora pode se limpar</div>
+      <div class="l2">sessões novas só abrem com você</div>
+    </div>
+  </div>
+</div>
+<p class="legenda">A faixa aparece no clique; o botão diz "Ligando…" e ignora o segundo clique. Sem esmaecer: o Button do motor não tem estado desabilitado.</p>
+<h2 style="margin-top:20px">3b · Ligado</h2>
+<div class="pane">
+  <div class="topo">
+    <div class="fileira"><div class="esq"><button class="b">Estou de volta</button></div><div class="dir"><button class="b">↻ 18:22</button></div></div>
+    <div class="ausente">
+      <div class="l1"><span class="md"><span class="lua">☾</span>Ausente agora</span></div>
+      <div class="l2">desde 18:23 · a orquestradora pode se limpar</div>
+      <div class="l2">sessões novas só abrem com você</div>
+    </div>
+  </div>
+  <div class="toast">Modo ausente ligado. Para pré-abrir o pool, use /ausente on no chat.</div>
+</div>
+<p class="legenda">Gravação terminada: o rótulo vira o gesto de desfazer, no mesmo lugar, e o toast confirma e lembra que o botão não pré-abre o pool.</p>
+</div>
+
+<div class="coluna">
+<h2>4 · Falhou ao ligar</h2>
+<div class="pane">
+  <div class="fileira"><div class="esq"><button class="b">Ficar ausente</button></div><div class="dir"><span class="estado"><span class="md">Presente</span></span><button class="b">↻ 18:22</button></div></div>
+  <div class="resumo"><div class="tile">Esperam você<b>1</b></div><div class="tile">Travados<b>0</b></div><div class="tile">Executando<b>2</b></div><div class="tile">Na fila<b>3</b></div></div>
+  <div class="erro"><b>Ação não concluída</b><span>Não consegui ligar o modo ausente (sem permissão para gravar em ~/.claude/orquestracao).</span></div>
+  <div style="display:flex"><button class="b">Limpar avisos</button></div>
+</div>
+<p class="legenda">O modo volta ao anterior no mesmo render em que o aviso aparece.</p>
+</div>
+
+<div class="coluna">
+<h2>5 · Modo não lido</h2>
+<div class="pane">
+  <div class="fileira"><div class="esq"></div><div class="dir"><span class="estado"><span class="md nl">Modo não lido (vale presente)</span></span><button class="b">↻ 18:22</button></div></div>
+  <div class="resumo"><div class="tile">Esperam você<b>1</b></div><div class="tile">Travados<b>0</b></div><div class="tile">Executando<b>2</b></div><div class="tile">Na fila<b>3</b></div></div>
+  <div class="erro"><b>Não consegui ler tudo</b><span>modo ausente: o arquivo não é JSON válido; /ausente off no chat zera o modo</span></div>
+  <div style="display:flex"><button class="b">Tentar de novo</button></div>
+</div>
+<p class="legenda">Uma fileira, sem botão do modo: gravar por cima de um arquivo que não se leu esconderia o problema.</p>
+</div>
+
+<div class="coluna w300">
+<h2>6 · W = 288</h2>
+<div class="pane">
+  <div class="fileira"><div class="esq"><button class="b">Ficar ausente</button></div><div class="dir"><span class="estado"><span class="md">Presente</span></span><button class="b">↻ 18:22</button></div></div>
+  <div class="topo">
+    <div class="fileira"><div class="esq"><button class="b">Estou de volta</button></div><div class="dir"><button class="b">↻ 18:22</button></div></div>
+    <div class="ausente">
+      <div class="l1"><span class="md"><span class="lua">☾</span>Ausente há 3 h</span></div>
+      <div class="l2">desde 15:20 · a orquestradora pode se limpar</div>
+      <div class="l2">sessões novas só abrem com você</div>
+    </div>
+  </div>
+  <div class="topo">
+    <div class="fileira"><div class="esq"><button class="b">Estou de volta</button></div><div class="dir"><button class="b">↻ 18:15</button></div></div>
+    <div class="parou">⚠ Parou há 7 min</div>
+    <div class="ausente">
+      <div class="l1"><span class="md"><span class="lua">☾</span>Ausente há 40 min</span></div>
+      <div class="l2">desde ontem 22:10 ·</div>
+      <div class="l2">a orquestradora pode se limpar</div>
+      <div class="l2">sessões novas só abrem com você</div>
+    </div>
+  </div>
+</div>
+<p class="legenda">Botão futuro a 288 (abaixo): o grupo do ↻ desce para a 2ª fileira e continua no canto direito (flexGrow + flex-end).</p>
+<div class="pane" style="margin-top:8px">
+  <div class="fileira"><div class="esq"><button class="b">Ficar ausente</button><button class="b">Botão futuro</button></div><div class="dir"><span class="estado"><span class="md">Presente</span></span><button class="b">↻ 18:22</button></div></div>
+</div>
+<p class="legenda">Acima, de cima para baixo: presente numa fileira; ausente com a frase numa linha (cabe por 3 px; Svg 66); ausente desde ontem, quebrado (Svg 82), com a leitura parada.</p>
+</div>
+
+<div class="coluna">
+<h2>7 · Terminal, 72 e 40 colunas</h2>
+<div class="term">[ Estou de volta ]                                    [ ↻ 18:22 ]
+<span class="inv"> ☾ AUSENTE há 3 h </span> <span class="d">desde 14:05 · a orquestradora pode se limpar</span>
+<span class="d">· sessões novas só abrem com você</span>
+<span class="w">●</span> 1 esperam você  <span class="a">●</span> 2 executando
+
+[ Ficar ausente ]                          <span class="d">presente</span>  [ ↻ 18:22 ]
+<span class="w">●</span> 1 esperam você  <span class="a">●</span> 2 executando
+
+                       <span class="d"><i>modo não lido (vale presente)</i></span>  [ ↻ 18:22 ]
+<span class="w">●</span> 1 esperam você  <span class="a">●</span> 2 executando</div>
+<div class="term c40" style="margin-top:10px">[ Estou de volta ]         [ ↻ 18:22 ]
+<span class="inv"> ☾ AUSENTE há 3 h </span> <span class="d">desde 14:05</span>
+<span class="d">· a orquestradora pode se limpar</span>
+<span class="d">· sessões novas só abrem com você</span>
+<span class="w">●</span> 1 esperam você  <span class="a">●</span> 2 executando</div>
+<p class="legenda">A fileira dos botões vem primeiro e fica fixa, como no desktop. Sem linha em branco no topo. A 40 colunas tudo quebra e nada sai pela direita. O inverso distingue o ausente num terminal sem cor.</p>
+</div>
+
+</div>
+</div>
+</body>
+</html>
