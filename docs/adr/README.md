@@ -29,3 +29,4 @@ O que muda para quem usa; o que fica mais difícil.
 | [0003](0003-opcao-do-plugin-vale-por-conta-e-o-kit-json-e-o-caminho-do-time.md) | A opção do plugin vale por conta e se edita no /plugin do terminal; o kit.json é o caminho do time e vence a opção | Aceito |
 | [0004](0004-via-rapida-escopo-trancado-e-piso-de-uma-executora.md) | Via rápida para item simples, escopo trancado no plano e piso de uma E livre fora do modo ausente | Aceito |
 | [0005](0005-os-testes-da-maquina-dividem-um-teto-de-nucleos.md) | Os testes de todas as sessões e projetos dividem um teto de núcleos da máquina, em fichas em `~/.claude/orquestracao/nucleos-de-teste/` (padrão: metade dos núcleos) | Proposto |
+| [0006](0006-o-diario-tem-uma-entrada-por-arquivo.md) | Cada entrada nova do diário é um arquivo próprio em `diario/AAAA-MM/DD-<ancora>.md`; o acervo fica, e o gate confere o formato | Aceito |
