@@ -1,4 +1,4 @@
-# F65 — a barra mostra o contexto contra a janela, não contra a régua de limpeza (e o pedido de limpeza novo não some)
+# F65 — a barra mostra o contexto contra a janela, não contra a régua de limpeza (o pedido de limpeza novo não some nem quebra a barra)
 
 - **Data:** 2026-10-26 · **Planejadora:** P1 · **Base:** main em `69850a4`
 - **Pedido do operador (26/10):** "a janela de contexto aqui da orquestradora está errada, esta falando 198/250 mas o contexto maximo é 600".
@@ -68,6 +68,22 @@ Origem: laudo da V da F52 (delta), "Observações", primeiro item: a janela de 3
   4. `processos:auditoria-de-clique` no gesto `Pode se limpar` depois do pedido novo: o clique grava o sim na pergunta nova, a próxima leitura a esconde, e o "✓ Ok enviado" aparece (o `respondidaAgora` do `lerBarra` compara pelo `id`, então segue valendo).
 - **Critério de pronto:** os quatro casos do passo 1 e o montado do passo 2 verdes; os testes atuais de `perguntaDeLimpeza` verdes sem edição.
 - **Para a V:** tente fazer o pedido novo sumir (empate de horário, sim de outra `sessaoId`, sim com `resposta: não`, sim de 31 min) e confira que a T7 (`plugins/orquestracao`) não foi tocada.
+
+## Parte C — o pedido de limpeza não quebra a barra (pedido do operador, 26/10)
+
+Origem: print do operador, *"quebrou o layout com o botão de se limpar"*. Com `◆ A orquestradora pede para se limpar [Pode se limpar]` na tela, a barra ocupa duas linhas tortas: o relógio aparece como `⧗ …`, `253/250 mil · teto` cai para a segunda linha e os botões `● 1 pergunta` · `Ficar ausente` · `Fechar painel` ficam desalinhados à direita.
+
+- **Medido no código (sem o print em mãos, a confirmar pela E):**
+  - O pedido é uma **linha própria acima** da linha principal (`desenharBarra`, `linhaDoPedido`, `Box` coluna): a barra passa de 1 para 2 linhas por desenho, como a revisão previu (§Quem e onde, l. 33).
+  - `faixaDaBarra` escolhe a faixa só pela linha principal e estima cada botão como `rótulo + 4` células. No **desktop** o `Button` tem respiro próprio e o `bodyColumns` é convertido de pixels; se a estimativa ficar curta, o `flexWrap` da linha principal quebra o grupo da esquerda (o contexto desce) e o da direita (`flexGrow`, `justifyContent: flex-end`) fica solto. Hipótese mais provável para o "desalinhado": a quebra acontece dentro da linha principal, não por causa da linha do pedido em si.
+  - `⧗ …` **não é corte**: é o relógio enquanto o turno roda (`d.isWorking ? '…'`). A D decide se isso confunde (ex.: `⧗ em curso`), mas não é o defeito.
+- **Pedido à D (delta, junto da parte A):** o pedido de limpeza cabe **na própria barra, numa linha só**, sem quebrar nas larguras de 94 células para cima, terminal e desktop. Recomendação: o botão `Pode se limpar` entra como **primário no começo do grupo da direita** e a frase curta (`◆ pede limpeza`) toma o lugar de item e pool no grupo da esquerda enquanto o pedido estiver aberto; a linha de cima deixa de existir (vale também para `Limpar antes de vencer`, que hoje usa a mesma linha). Abaixo de 94, a D diz o que cai primeiro. A faixa do pane (D10) não muda.
+- **Passos para a E (depois do delta):**
+  1. Reproduzir antes de mexer (`superpowers:systematic-debugging` é da P, mas a E mede): teste montado no **desktop** e no terminal com o pedido aberto, `bodyColumns` 94, 114 e 140, afirmando que a árvore tem **uma** linha principal com o botão do pedido dentro dela e nenhuma `Box` `linha-do-pedido`. Se o motor de teste não mede quebra, cole o print da barra real (skill `run`) antes e depois.
+  2. `faixaDaBarra` passa a somar o botão do pedido e a frase, com os textos reais (a mesma regra de hoje), e o teste de faixas ganha os casos com pedido.
+  3. Corrigir a estimativa do botão no desktop se a reprodução mostrar que é ela (medir o respiro real, não chutar); se for, constante nomeada e teste.
+  4. `processos:auditoria-de-clique` no `Pode se limpar` na nova posição (o clique, o `Enviando…`, o `✓ Ok enviado` e a volta).
+- **Critério de pronto:** com o pedido aberto, a barra da orquestradora fica numa linha a 114 colunas no desktop e no terminal, com relógio, contexto e o botão do pedido visíveis; print real colado no PR.
 
 ## Para a V
 
