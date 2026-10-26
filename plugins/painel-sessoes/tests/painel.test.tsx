@@ -942,22 +942,22 @@ const abrirDe = async (opc: Opcoes, $: Parameters<TestBody>[0], on: On, falhas: 
 
 test('abrir: o botão só existe com dono vivo, e o endereço não aparece escrito', async ($, on) => {
   const { ui } = await abrirDe({}, $, on)
-  expect(await ui.find({ key: `abrir:${P7}` }), 'dono vivo tem botão').toBeDefined()
-  expect(await ui.find({ key: `abrir:${P1}` })).toBeDefined()
+  expect(await ui.find({ key: `abrir:F27:${P7}` }), 'dono vivo tem botão').toBeDefined()
+  expect(await ui.find({ key: `abrir:F1:${P1}` })).toBeDefined()
   expect(await lerSuperficie(ui)).not.toMatch(/claude:\/\//)
   await ui.unmount()
 })
 
 test('abrir: dono fora da lista de sessões vivas não tem botão', async ($, on) => {
   const morto = await abrirDe({ vivas: vivasDe(P1) }, $, on)
-  expect(await morto.ui.find({ key: `abrir:${P7}` }), 'dono fora da lista: sem botão').toBeUndefined()
-  expect(await morto.ui.find({ key: `abrir:${P1}` })).toBeDefined()
+  expect(await morto.ui.find({ key: `abrir:F27:${P7}` }), 'dono fora da lista: sem botão').toBeUndefined()
+  expect(await morto.ui.find({ key: `abrir:F1:${P1}` })).toBeDefined()
   await morto.ui.unmount()
 })
 
 test('abrir: o clique pede open_session_in com o localId e foco, e não copia nada quando abre', async ($, on) => {
   const { ui, abertas, copiadas, toasts } = await abrirDe({}, $, on)
-  await ui.press({ key: `abrir:${P7}` })
+  await ui.press({ key: `abrir:F27:${P7}` })
   expect(abertas.length, 'o clique chamou a tool').toBe(1)
   expect([abertas[0]?.session_id, abertas[0]?.target]).toEqual([P7, 'focus'])
   expect(copiadas).toEqual([])
@@ -967,7 +967,7 @@ test('abrir: o clique pede open_session_in com o localId e foco, e não copia na
 
 const copiaAoFalhar = (abrirFalha: string) => async ($: Parameters<TestBody>[0], on: On) => {
   const { ui, copiadas, toasts } = await abrirDe({ abrirFalha }, $, on)
-  await ui.press({ key: `abrir:${P7}` })
+  await ui.press({ key: `abrir:F27:${P7}` })
   expect(copiadas.length, `${abrirFalha}: copiou`).toBe(1)
   expect(copiadas[0]?.text).toBe(`claude://claude.ai/epitaxy/${P7}`)
   expect(toasts.join('\n')).toMatch(/não deu para abrir daqui .*endereço de P7 copiado/)
@@ -979,7 +979,7 @@ test('abrir: erro da tool copia o endereço e diz o que houve', copiaAoFalhar('s
 
 test('abrir: copia que não pegou não diz "copiado" e mostra o endereço', async ($, on) => {
   const { ui, copiadas, toasts } = await abrirDe({ abrirFalha: 'deny', copiaFalha: true }, $, on)
-  await ui.press({ key: `abrir:${P7}` })
+  await ui.press({ key: `abrir:F27:${P7}` })
   expect(copiadas.length, 'tentou copiar').toBe(1)
   const t = toasts.join('\n')
   expect(t.length, 'houve aviso').toBeGreaterThan(0)
@@ -991,8 +991,8 @@ test('abrir: copia que não pegou não diz "copiado" e mostra o endereço', asyn
 
 test('abrir: com o list_sessions falho nenhum botão aparece', async ($, on) => {
   const { ui } = await abrirDe({ listaFalha: true }, $, on)
-  expect(await ui.find({ key: `abrir:${P7}` }), 'sem a lista, sem botão').toBeUndefined()
-  expect(await ui.find({ key: `abrir:${P1}` })).toBeUndefined()
+  expect(await ui.find({ key: `abrir:F27:${P7}` }), 'sem a lista, sem botão').toBeUndefined()
+  expect(await ui.find({ key: `abrir:F1:${P1}` })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -1002,8 +1002,8 @@ const comDuas = (extra: Record<string, unknown> = {}) => ({ F27: { ...FILA_REAL.
 
 test('com: duas sessões vivas aparecem na linha 2 e cada uma ganha o seu "abrir", além do dono', async ($, on) => {
   const { ui } = await abrirDe({ fila: comDuas(), vivas: vivasDe(P7, P2, E8) }, $, on)
-  for (const id of [P2, E8, P7]) expect(await ui.find({ key: `abrir:${id}` }), `botão de ${id}`).toBeDefined()
-  expect(await ui.findAll({ key: `abrir:${P2}` }), 'um botão só por sessão').toHaveLength(1)
+  for (const id of [P2, E8, P7]) expect(await ui.find({ key: `abrir:F27:${id}` }), `botão de ${id}`).toBeDefined()
+  expect(await ui.findAll({ key: `abrir:F27:${P2}` }), 'um botão só por sessão').toHaveLength(1)
   const texto = await lerSuperficie(ui)
   expect(texto).toMatch(/P2, planejadora, trabalhando agora — E8, executora, trabalhando agora/)
   expect(texto, 'com `com` o dono deixa a linha 2').not.toMatch(/execução · P7/)
@@ -1012,8 +1012,8 @@ test('com: duas sessões vivas aparecem na linha 2 e cada uma ganha o seu "abrir
 
 test('com: quem saiu da lista vem cinza com "saiu" depois do PR, sem botão e sem virar trava', async ($, on) => {
   const { ui } = await abrirDe({ fila: comDuas(), vivas: vivasDe(P7, P2) }, $, on)
-  expect(await ui.find({ key: `abrir:${E8}` }), 'sem botão para quem saiu').toBeUndefined()
-  expect(await ui.find({ key: `abrir:${P2}` })).toBeDefined()
+  expect(await ui.find({ key: `abrir:F27:${E8}` }), 'sem botão para quem saiu').toBeUndefined()
+  expect(await ui.find({ key: `abrir:F27:${P2}` })).toBeDefined()
   const texto = await lerSuperficie(ui)
   expect(texto).toMatch(/P2, planejadora, trabalhando agora — E8 saiu/)
   expect(texto, 'sem o ponto do meio, "saiu" não vira um terceiro nome').not.toMatch(/ · saiu/)
@@ -1026,7 +1026,7 @@ test('com: quem saiu da lista vem cinza com "saiu" depois do PR, sem botão e se
 
 test('com: sem a lista de sessões não há botão nem "saiu" (não se sabe quem saiu)', async ($, on) => {
   const { ui } = await abrirDe({ fila: comDuas(), listaFalha: true }, $, on)
-  expect(await ui.find({ key: `abrir:${P2}` })).toBeUndefined()
+  expect(await ui.find({ key: `abrir:F27:${P2}` })).toBeUndefined()
   expect(await lerSuperficie(ui)).not.toMatch(/saiu/)
   await ui.unmount()
 })
@@ -1127,8 +1127,8 @@ test('com todo morto a linha 2 e o alt mostram o dono; com gente viva o dono fic
 test('abrir: o dono que também está no com ganha um botão só', async ($, on) => {
   const fila = { F27: { ...FILA_REAL.F27, com: COM(['P7', P7], ['P2', P2]) } }
   const { ui } = await abrirDe({ fila, vivas: vivasDe(P7, P2) }, $, on)
-  expect(await ui.findAll({ key: `abrir:${P7}` }), 'um botão só para o P7').toHaveLength(1)
-  expect(await ui.findAll({ key: `abrir:${P2}` })).toHaveLength(1)
+  expect(await ui.findAll({ key: `abrir:F27:${P7}` }), 'um botão só para o P7').toHaveLength(1)
+  expect(await ui.findAll({ key: `abrir:F27:${P2}` })).toHaveLength(1)
   await ui.unmount()
 })
 
@@ -1485,7 +1485,7 @@ test('F34-3: resumo e lista concordam: cada número do resumo é o da seção de
 
 test('F34-3: item sem ninguém não tem linha "quem" nem botão, e o erro de leitura não cria nenhum', async ($, on) => {
   const { ui } = await abrirDe({ fila: fila('F23'), vivas: vivasDe(P2) }, $, on)
-  expect(await ui.find({ key: `abrir:${E8}` }), 'sem botão').toBeUndefined()
+  expect(await ui.find({ key: `abrir:F23:${E8}` }), 'sem botão').toBeUndefined()
   const texto = await lerSuperficie(ui)
   expect(texto).toMatch(/Sem ninguém: E8 não está mais ativa/)
   expect(texto, 'sem linha de quem trabalha').not.toMatch(/E8, executora/)
@@ -1545,12 +1545,12 @@ test('F34-3: "Abrindo…" até o open_session_in voltar', async ($, on) => {
     soltar = res
   })
   const { ui, abertas, relogio } = await abrirDe({ segurar }, $, on)
-  await ui.press({ key: `abrir:${P7}` })
+  await ui.press({ key: `abrir:F27:${P7}` })
   await relogio.settle()
   const durante = await lerSuperficie(ui)
   expect(durante).toMatch(/Abrindo…/)
   expect(durante, 'os outros botões seguem com o nome').toMatch(/Abrir P1/)
-  await ui.press({ key: `abrir:${P7}` })
+  await ui.press({ key: `abrir:F27:${P7}` })
   soltar()
   await relogio.settle()
   expect(abertas.length, 'o segundo clique foi ignorado').toBe(1)
@@ -2266,7 +2266,7 @@ test('F69 A0: com só de sessão encerrada, ou sem a lista de sessões, continua
 test('F69 A0: no pane o item com com vivo e sem dono está em Executando, com o botão abrir', async ($, on) => {
   const { ui } = await abrirDe({ fila: { F70: SEM_DONO({ com: COM(['E8', E8]) }).data }, vivas: vivasDe(E8) }, $, on)
   expect(await lerSuperficie(ui)).toMatch(/0 Esperam você, 0 Travados, 1 Executando, 0 Na fila/)
-  expect(await ui.find({ key: `abrir:${E8}` })).toBeDefined()
+  expect(await ui.find({ key: `abrir:F70:${E8}` })).toBeDefined()
   await ui.unmount()
 })
 
@@ -2424,7 +2424,7 @@ test('F69 A (v): projeto sem orquestradora ativa: sem botão, e o aviso no topo 
   const { ui } = await abrirDe(pedir({ fila: FILA_TRES(), sessoesDocs: [ORQ_IZ] }), $, on)
   expect(await ui.find({ key: 'pedir:F68' }), 'precondição: o izanagi tem botão').toBeDefined()
   expect(await ui.find({ key: 'pedir:F71' }), 'o kit não tem orquestradora').toBeUndefined()
-  expect(await lerSuperficie(ui)).toMatch(/Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item/)
+  expect(await lerSuperficie(ui)).toMatch(/Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item · abra uma orquestradora para pedir/)
   expect((await ui.find({ key: 'pedir:lote' }))?.text, 'o item sem destino não conta no lote').toBe('Pedir 2 sessões')
   await ui.unmount()
 })
@@ -2534,7 +2534,7 @@ test('F69 A (xi): o cartão em Executando que espera V ganha "Pedir validadora" 
   const botoes = await ui.findAll({ type: 'Button' })
   const ordem = botoes.map(b => b.props.key ?? b.text).filter(k => String(k).startsWith('pedir:') || String(k).startsWith('abrir:'))
   expect(ordem[0], 'o Pedir vem primeiro na fileira').toBe('pedir:F2')
-  expect(ordem).toContain(`abrir:${P1}`)
+  expect(ordem).toContain(`abrir:F2:${P1}`)
   await ui.press({ key: 'pedir:F2' })
   await relogio.settle()
   expect(String(enviadas[0]?.message)).toContain('F2 · validar a barra (espera V)')
@@ -2860,14 +2860,178 @@ test('F82 D: o aviso sem orquestradora prende "· N item(ns)" com espaço inqueb
   const ts = (await um.ui.findAll({ type: 'Text' })).map(t => t.text)
   const aviso = ts.find(t => /^Sem orquestradora ativa em kit/.test(t))
   expect(aviso, 'precondição: o aviso existe').toBeDefined()
-  expect(aviso).toBe('Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item')
-  expect(aviso).not.toContain(' · ')
+  expect(aviso).toBe('Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item · abra uma orquestradora para pedir')
+  expect(aviso!.split(' · '), 'o espaço inquebrável prende só o "· N item"').toEqual(['Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item', 'abra uma orquestradora para pedir'])
   await um.ui.unmount()
 })
 
 test('F82 D: com dois itens o sufixo é "2 itens", também inquebrável', async ($, on) => {
   const dois = await abrirDe(pedir({ fila: { ...FILA_TRES(), F72: parado('execucao', { projeto: 'kit', titulo: 'outro do kit' }) }, sessoesDocs: [ORQ_IZ] }), $, on)
   const ts2 = (await dois.ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(ts2).toContain('Sem orquestradora ativa em kit\u00a0·\u00a02\u00a0itens')
+  expect(ts2).toContain('Sem orquestradora ativa em kit\u00a0·\u00a02\u00a0itens · abra uma orquestradora para pedir')
   await dois.ui.unmount()
+})
+
+// F85: o que o F82 deixou de sobra.
+test('F85 A: a orquestradora aberta sozinha depois do pedido acende "Abrindo…" no botão dela e o clique não abre outra vez', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurarAbrir: { p?: Promise<void> } = {}
+  const { ui, abertas, relogio } = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, segurarAbrir }), $, on)
+  segurarAbrir.p = new Promise<void>(res => (soltar = res))
+  await ui.press({ key: 'pedir:F68' })
+  await relogio.settle()
+  expect(await ui.find({ key: 'orq:izanagi' }), 'precondição: o botão da orquestradora existe').toBeDefined()
+  expect((await ui.find({ key: 'orq:izanagi' }))?.text, 'enquanto abre, o botão dela diz "Abrindo…"').toBe('Abrindo…')
+  await ui.press({ key: 'orq:izanagi' })
+  await relogio.settle()
+  soltar()
+  await relogio.settle()
+  expect(abertas.length, 'o foco automático pediu uma vez e o clique no botão que abria foi ignorado').toBe(1)
+  expect((await ui.find({ key: 'orq:izanagi' }))?.text).toBe('Abrir a orquestradora')
+  await ui.unmount()
+})
+
+test('F85 B: o mesmo dono em dois cartões ganha dois botões de chave única, e o "Abrindo…" acende só no pressionado', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurarAbrir: { p?: Promise<void> } = {}
+  const fila = { F27: { ...FILA_REAL.F27, com: COM(['P1', P1]) }, F1: { ...FILA_REAL.F1, com: COM(['P1', P1]) } }
+  const { ui, abertas, relogio } = await abrirDe({ fila, vivas: vivasDe(P7, P1), segurarAbrir }, $, on)
+  const doItem1 = `abrir:F27:${P1}`
+  const doItem2 = `abrir:F1:${P1}`
+  const chaves = (await ui.findAll({ type: 'Button' })).map(chaveDe).filter(k => k.endsWith(`:${P1}`))
+  expect(chaves.length, 'precondição: um botão do P1 em cada cartão').toBe(2)
+  expect(new Set(chaves).size, 'cada key aparece uma vez').toBe(2)
+  expect(chaves.sort()).toEqual([doItem2, doItem1].sort())
+  segurarAbrir.p = new Promise<void>(res => (soltar = res))
+  await ui.press({ key: doItem1 })
+  await relogio.settle()
+  expect((await ui.find({ key: doItem1 }))?.text, 'o pressionado acende').toBe('Abrindo…')
+  expect((await ui.find({ key: doItem2 }))?.text, 'o do outro cartão segue com o nome').toBe('Abrir P1')
+  await ui.press({ key: doItem2 })
+  await relogio.settle()
+  soltar()
+  await relogio.settle()
+  expect(abertas.length, 'o clique no segundo, com o primeiro abrindo, não pede outro open_session_in').toBe(1)
+  expect((await ui.find({ key: doItem1 }))?.text).toBe('Abrir P1')
+  await ui.unmount()
+})
+
+test('F85 C: o cartão do item sem orquestradora ativa diz a saída, sem a contagem', async ($, on) => {
+  const fila = { F2: { ...ESPERANDO_V().F2, projeto: 'kit' } }
+  const { ui } = await abrirDe(pedir({ fila, vivas: vivasPedir(P1), sessoesDocs: [ORQ_IZ] }), $, on)
+  expect(await ui.find({ key: 'pedir:F2' }), 'precondição: sem orquestradora não há botão').toBeUndefined()
+  const ts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect(ts).toContain('Sem orquestradora ativa em kit · abra uma orquestradora para pedir')
+  await ui.unmount()
+})
+
+// F85 D: a decisão que a sessão assumiu fica no painel, a confirmar.
+const ASSUMIDA = (id: string, extra: Record<string, unknown> = {}, version = 3) =>
+  doc(id, { projeto: 'izanagi', sessao: 'frente B', sessaoId: 'local_b', titulo: `decisão ${id}`, recomendacao: `seguir com ${id}`, estado: 'assumida', ...extra }, version)
+const RESPONDIDA_ANTIGA = doc('Q5', { projeto: 'izanagi', sessao: 'frente B', titulo: 'já fechada', estado: 'respondida', resposta: 'sim' }, 2)
+const comAssumidas = (extra: Partial<Opcoes> = {}): Opcoes => ({ perguntas: [ASSUMIDA('Q30'), ASSUMIDA('Q31'), RESPONDIDA_ANTIGA], fila: {}, ...extra })
+const abrirAssumidas = async ($: Parameters<TestBody>[0], on: On, surface: 'desktop' | 'terminal' = 'desktop', extra: Partial<Opcoes> = {}) => {
+  const motor = engine(on, false, {}, { agora: AGORA, vivas: vivasDe(P7), ...comAssumidas(extra) })
+  await $.session.start({ cwd: '/', surface, isInteractive: true })
+  await $.command.run(ABRIR)
+  await motor.relogio.settle()
+  const ui = await $.ui.mount({ ...PANE, surface })
+
+  return { ...motor, ui }
+}
+
+test('F85 D (1): a assumida não entra em "Perguntas respondidas" nem nas contas do topo', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on)
+  const lido = await lerTudo(ui)
+  expect(lido, 'precondição: a respondida de verdade existe').toMatch(/Perguntas respondidas · 1/)
+  expect(lido, 'só a respondida conta').not.toMatch(/Perguntas respondidas · [23]/)
+  expect(lido).toMatch(/0 Esperam você/)
+  expect(await ui.find({ key: 'Q30:confirmar' }), 'recolhida: o cartão não aparece').toBeUndefined()
+  await ui.press({ key: 'anteriores' })
+  expect(await lerTudo(ui), 'as assumidas não vão à lista das fechadas').not.toMatch(/Q30 · assumida/)
+  await ui.unmount()
+})
+
+test('F85 D (2): o botão do rodapé mostra o N e abre a lista com "Assumido:" e as ações', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on)
+  expect((await ui.find({ key: 'assumidas' }))?.text).toBe('▸ Decisões assumidas · 2')
+  await ui.press({ key: 'assumidas' })
+  expect((await ui.find({ key: 'assumidas' }))?.text).toBe('▾ Decisões assumidas · 2')
+  const lido = await lerTudo(ui)
+  expect(lido).toMatch(/Q31[^\n]*decisão Q31/)
+  expect(lido).toMatch(/Assumido: seguir com Q30/)
+  expect(lido, 'o rótulo da pergunta aberta não vaza').not.toMatch(/Recomendo: seguir com Q30/)
+  for (const q of ['Q30', 'Q31']) {
+    expect(await ui.find({ key: `${q}:confirmar` }), `${q} Confirmar`).toBeDefined()
+    expect(await ui.find({ key: `${q}:mudar` }), `${q} Mudar…`).toBeDefined()
+  }
+  expect(lido.indexOf('Q31'), 'a mais nova primeiro').toBeLessThan(lido.indexOf('Q30'))
+  await ui.unmount()
+})
+
+test('F85 D (2b): sem assumida o botão não existe (o rodapé existe, a ausência é medida)', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on, 'desktop', { perguntas: [RESPONDIDA_ANTIGA] })
+  expect(await ui.find({ key: 'anteriores' }), 'precondição: o rodapé existe').toBeDefined()
+  expect(await ui.find({ key: 'assumidas' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('F85 D (2c): o terminal tem a mesma lista e as mesmas ações', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on, 'terminal')
+  expect((await ui.find({ key: 'assumidas' }))?.text).toBe('▸ Decisões assumidas · 2')
+  await ui.press({ key: 'assumidas' })
+  expect(await lerTudo(ui)).toMatch(/Assumido: seguir com Q30/)
+  expect(await ui.find({ key: 'Q30:confirmar' })).toBeDefined()
+  expect(await ui.find({ key: 'Q30:mudar' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('F85 D (3): Confirmar grava respondida com a prova do clique e não acorda a sessão', async ($, on) => {
+  const { ui, arquivos, enviadas, prompts, toasts, relogio } = await abrirAssumidas($, on)
+  await ui.press({ key: 'assumidas' })
+  expect(await ui.find({ key: 'Q30:confirmar' }), 'precondição').toBeDefined()
+  await ui.press({ key: 'Q30:confirmar' })
+  await relogio.settle()
+  const gravado = JSON.parse(arquivos.get(`${PASTA}/perguntas/Q30.json`) as string) as Doc
+  expect(gravado.version).toBe(4)
+  expect(gravado.data).toMatchObject({ estado: 'respondida', resposta: 'confirmada pelo operador (painel)', respondidaPor: 'painel', respondidaEm: new Date(AGORA).toISOString() })
+  expect(enviadas, 'não manda nada à sessão').toEqual([])
+  expect(prompts).toEqual([])
+  expect(toasts).toContain('Q30 confirmada')
+  const lido = await lerTudo(ui)
+  expect(lido, 'a confirmada sai das assumidas').toMatch(/Decisões assumidas · 1/)
+  expect(lido, 'e entra nas respondidas').toMatch(/Perguntas respondidas · 2/)
+  await ui.unmount()
+})
+
+test('F85 D (4): Mudar… grava o texto e entrega à sessão dona com o texto da assumida', async ($, on) => {
+  const { ui, arquivos, enviadas, relogio } = await abrirAssumidas($, on)
+  await ui.press({ key: 'assumidas' })
+  expect(await ui.find({ key: 'Q30:outra' }), 'precondição: o campo começa fechado').toBeUndefined()
+  await ui.press({ key: 'Q30:mudar' })
+  await ui.input({ key: 'Q30:outra', text: 'rebasear só depois do gate' })
+  await relogio.settle()
+  const gravado = JSON.parse(arquivos.get(`${PASTA}/perguntas/Q30.json`) as string) as Doc
+  expect(gravado.data).toMatchObject({ estado: 'respondida', resposta: 'rebasear só depois do gate', respondidaPor: 'painel' })
+  expect(enviadas.length).toBe(1)
+  expect(enviadas[0]?.session_id).toBe('local_b')
+  const msg = String(enviadas[0]?.message)
+  expect(msg).toMatch(/^Q30 — decisão que ESTA sessão assumiu/)
+  expect(msg).toContain('"decisão Q30"')
+  expect(msg).toContain('O operador mudou pelo painel: rebasear só depois do gate.')
+  await ui.unmount()
+})
+
+test('F85 D (5): assumida que mudou desde a leitura não é sobrescrita e vira aviso', async ($, on) => {
+  const { ui, arquivos, escritas, enviadas, relogio } = await abrirAssumidas($, on)
+  await ui.press({ key: 'assumidas' })
+  const mudada = JSON.stringify(ASSUMIDA('Q30', { estado: 'respondida', resposta: 'outro operador' }, 4))
+  arquivos.set(`${PASTA}/perguntas/Q30.json`, mudada)
+  await ui.press({ key: 'Q30:confirmar' })
+  await relogio.settle()
+  expect(escritas.filter(e => e.doc_id === 'Q30'), 'nada gravado').toEqual([])
+  expect(arquivos.get(`${PASTA}/perguntas/Q30.json`)).toBe(mudada)
+  expect(enviadas).toEqual([])
+  expect(await lerTudo(ui)).toMatch(/Q30 não gravada: Q30 mudou desde a leitura \(agora: respondida\)/)
+  await ui.unmount()
 })

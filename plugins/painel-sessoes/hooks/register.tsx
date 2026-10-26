@@ -38,10 +38,11 @@ export const PASTA = '.claude/orquestracao/painel'
 const BASE_ORQUESTRACAO = '.claude/orquestracao'
 const BANDEIRA = 'operador-ausente.json'
 
-const VAZIA: Leitura = { lidoEm: null, lendo: false, erros: [], avisos: [], itens: [], temas: [], perguntas: [], anteriores: [] }
+const VAZIA: Leitura = { lidoEm: null, lendo: false, erros: [], avisos: [], itens: [], temas: [], perguntas: [], assumidas: [], anteriores: [] }
 export const leitura = atom({ plugin: 'painel-sessoes', key: 'leitura' } as const, VAZIA)
 const respondendoEm = atom({ plugin: 'painel-sessoes', key: 'respondendoEm' } as const, null as string | null)
 const verAnteriores = atom({ plugin: 'painel-sessoes', key: 'verAnteriores' } as const, false)
+const verAssumidas = atom({ plugin: 'painel-sessoes', key: 'verAssumidas' } as const, false)
 const verFeitos = atom({ plugin: 'painel-sessoes', key: 'verFeitos' } as const, false)
 const verTodos = atom({ plugin: 'painel-sessoes', key: 'verTodos' } as const, false)
 const filtroTodos = atom({ plugin: 'painel-sessoes', key: 'filtroTodos' } as const, '')
@@ -449,7 +450,14 @@ const respondendo = new Set<string>()
  * Responde uma pergunta pelo painel (Q67): grava `resposta` e `estado:
  * respondida`, presa à versão lida, para não sobrescrever quem respondeu antes.
  */
-export async function responder($: EngineInterface, q: PerguntaAberta, resposta: string, opcao: string): Promise<{ gravou: boolean; motivo?: string }> {
+export async function responder(
+  $: EngineInterface,
+  q: PerguntaAberta,
+  resposta: string,
+  opcao: string,
+  como: { esperado?: 'aberta' | 'assumida'; entrega?: boolean; texto?: string; toast?: string } = {},
+): Promise<{ gravou: boolean; motivo?: string }> {
+  const { esperado = 'aberta', entrega = true } = como
   if (respondendo.has(q.id) || !resposta.trim()) return { gravou: false }
   respondendo.add(q.id)
   let resultado: { gravou: boolean; motivo?: string } = { gravou: false }
@@ -461,7 +469,7 @@ export async function responder($: EngineInterface, q: PerguntaAberta, resposta:
     const arquivo = `${pasta}/perguntas/${q.id}.json`
     // Presa à versão lida: quem respondeu antes (no chat ou noutra janela) não é sobrescrito.
     const atual = lerDoc((await $.fs.read(arquivo)) as string, `${q.id}.json`)
-    if (atual.data.estado !== 'aberta' || (q.versao !== undefined && atual.version !== q.versao)) {
+    if (atual.data.estado !== esperado || (q.versao !== undefined && atual.version !== q.versao)) {
       throw new Error(`${q.id} mudou desde a leitura (agora: ${String(atual.data.estado)}); nada gravado`)
     }
     // `respondidaPor` e `respondidaEm` são a prova do clique do operador: só o pane os grava (a trava da limpeza da orquestradora os lê).
@@ -470,7 +478,8 @@ export async function responder($: EngineInterface, q: PerguntaAberta, resposta:
     resultado = { gravou: true }
     await update($, respondendoEm, atual => (atual === q.id ? null : atual))
     // "Enviando…" dura até a sessão de fora responder ao send_message; o prompt da própria sessão não se espera.
-    await entregar($, q, resposta.trim())
+    if (entrega) await entregar($, q, resposta.trim(), como.texto)
+    else if (como.toast) $.ui.toast(como.toast)
   } catch (err) {
     resultado = { gravou: resultado.gravou, motivo: mensagem(err) }
     await avisar($, `${q.id} não gravada: ${mensagem(err)}`)
@@ -500,13 +509,18 @@ export function textoDaEntrega(q: Pick<PerguntaAberta, 'id' | 'titulo' | 'caso'>
   return `${q.id} — pergunta aberta POR ESTA SESSÃO (talvez antes de uma limpeza de contexto): "${q.titulo}".${caso} Chegou a resposta do operador pelo painel: ${resposta}. A pergunta já está como respondida no painel; retome pelo caso e pelo handoff do item, sem repassar a outra sessão.`
 }
 
+/** O que a sessão dona recebe quando o operador muda, pelo painel, uma decisão que ela assumiu. */
+export function textoDaMudanca(q: Pick<PerguntaAberta, 'id' | 'titulo'>, resposta: string): string {
+  return `${q.id} — decisão que ESTA sessão assumiu (talvez antes de uma limpeza de contexto): "${q.titulo}". O operador mudou pelo painel: ${resposta}. A pergunta já está como respondida no painel; ajuste pelo caso e pelo handoff do item.`
+}
+
 /**
  * Leva a resposta ao modelo da sessão dona. Outra sessão: send_message. A
  * própria (o painel aberto nela): um prompt desta sessão, que entra quando ela
  * fica livre — por isso não se espera por ele. Falha vira erro no pane. O que se espera (send_message) a devolução cobre.
  */
-function entregar($: EngineInterface, q: PerguntaAberta, resposta: string): Promise<void> {
-  const texto = textoDaEntrega(q, resposta)
+function entregar($: EngineInterface, q: PerguntaAberta, resposta: string, textoProprio?: string): Promise<void> {
+  const texto = textoProprio ?? textoDaEntrega(q, resposta)
   if (!q.sessaoId) {
     void naoChegou($, q, 'a pergunta não tem sessaoId')
 
@@ -850,9 +864,7 @@ async function ler($: EngineInterface): Promise<void> {
     const doc = docsSessoes.find(d => (texto(d.data.sessionId) ?? d.id) === id)
     return texto(doc?.data.titulo) ?? vivas.find(v => v.sessionId === id)?.title ?? 'sessão sem nome'
   }
-  const perguntas: PerguntaAberta[] = docsPerguntas
-    .filter(d => d.data.estado === 'aberta')
-    .map(d => ({
+  const montarPergunta = (d: Doc): PerguntaAberta => ({
       id: d.id,
       projeto: (texto(d.data.projeto) ?? '?').toLowerCase(),
       sessao: nomeDaSessao(texto(d.data.sessao), texto(d.data.sessaoId)),
@@ -866,10 +878,11 @@ async function ler($: EngineInterface): Promise<void> {
       recomendacao: texto(d.data.recomendacao),
       seNaoDecidir: texto(d.data.seNaoDecidir),
       item: texto(d.data.item),
-    }))
-    .sort((a, b) => numero(a.id) - numero(b.id))
+    })
+  const perguntas = docsPerguntas.filter(d => d.data.estado === 'aberta').map(montarPergunta).sort((a, b) => numero(a.id) - numero(b.id))
+  const assumidas = docsPerguntas.filter(d => d.data.estado === 'assumida').map(montarPergunta).sort((a, b) => numero(b.id) - numero(a.id))
   const anteriores: PerguntaAnterior[] = docsPerguntas
-    .filter(d => d.data.estado !== 'aberta')
+    .filter(d => d.data.estado !== 'aberta' && d.data.estado !== 'assumida')
     .sort((a, b) => numero(b.id) - numero(a.id))
     .slice(0, ANTERIORES)
     .map(d => ({
@@ -887,7 +900,7 @@ async function ler($: EngineInterface): Promise<void> {
   const itens = montarItens(docsFila, temas, vivasLidas && proprio !== undefined ? vivas : null, proprio, perguntas, agora)
   const indice = montarIndice(docsFila, temas)
   const porId = new Map(indice.map(i => [i.id, i]))
-  for (const q of perguntas) {
+  for (const q of [...perguntas, ...assumidas]) {
     const dono = q.item ? porId.get(q.item) : undefined
     if (dono) q.rotulo = `${dono.id} · ${dono.titulo}`
   }
@@ -908,6 +921,7 @@ async function ler($: EngineInterface): Promise<void> {
     indice,
     temas,
     perguntas,
+    assumidas,
     anteriores,
     sessoes: vivas.map(({ sessionId, isRunning, lastActivityAt }) => ({ sessionId, isRunning, lastActivityAt })),
     semLista: !(vivasLidas && proprio !== undefined),
@@ -1455,7 +1469,7 @@ export const register: Register = on => {
 
       return (
         <Button
-          key={`abrir:${dono.localId}`}
+          key={botao}
           variant="secondary"
           onPress={() => {
             if (abrindoAgora?.localId !== dono.localId) void abrirSessao($, dono, e.surface, botao)
@@ -1495,7 +1509,7 @@ export const register: Register = on => {
         ? 'Sem a lista de sessões do app · os botões de pedir voltam na próxima leitura'
         : 'varias' in d
           ? `${d.varias} orquestradoras ativas em ${projeto} · peça na conversa da certa`
-          : `Sem orquestradora ativa em ${projeto}${n === undefined ? '' : `\u00a0·\u00a0${n}\u00a0${n === 1 ? 'item' : 'itens'}`}`
+          : `Sem orquestradora ativa em ${projeto}${n === undefined ? '' : `\u00a0·\u00a0${n}\u00a0${n === 1 ? 'item' : 'itens'}`} · abra uma orquestradora para pedir`
     const botaoOrquestradora = (key: string, projeto: string, id: string) => (
       <Button
         key={key}
@@ -1504,7 +1518,7 @@ export const register: Register = on => {
           if (abrindoAgora?.localId !== id) void abrirSessao($, { apelido: `orquestradora de ${projeto}`, localId: id, link: linkDe(id, []) }, e.surface, key)
         }}
       >
-        {abrindoAgora?.botao === key ? 'Abrindo…' : 'Abrir a orquestradora'}
+        {abrindoAgora?.botao === key || abrindoAgora?.botao === `auto:${id}` ? 'Abrindo…' : 'Abrir a orquestradora'}
       </Button>
     )
     // O que o item pede, em três peças: a linha de estado (acima), o botão e, no cartão, o botão da orquestradora. `curta`: na linha da fila.
@@ -1624,6 +1638,8 @@ export const register: Register = on => {
 
     const aberta = await read($, respondendoEm)
     const verVelhas = await read($, verAnteriores)
+    const verAss = await read($, verAssumidas)
+    const assumidas = l.assumidas ?? []
     const verFeitosAgora = await read($, verFeitos)
     const verTodosAgora = await read($, verTodos)
     const filtro = await read($, filtroTodos)
@@ -1685,6 +1701,42 @@ export const register: Register = on => {
       )
     }
 
+    // As ações da decisão assumida: Confirmar só grava (a sessão já agiu assim, não se acorda ninguém); Mudar… grava e entrega o texto novo.
+    const acoesAssumida = (q: PerguntaAberta) => {
+      const emCurso = enviandoAgora?.q === q.id
+
+      return (
+        <Box flexDirection="column" gap={1}>
+          <Box flexDirection="row" flexWrap="wrap" columnGap={1} alignItems="center">
+            <Button
+              key={`${q.id}:confirmar`}
+              variant="primary"
+              onPress={() => {
+                if (!emCurso) void responder($, q, 'confirmada pelo operador (painel)', 'confirmar', { esperado: 'assumida', entrega: false, toast: `${q.id} confirmada` })
+              }}
+            >
+              {emCurso && enviandoAgora?.opcao === 'confirmar' ? 'Enviando…' : 'Confirmar'}
+            </Button>
+            {Input && (
+              <Button key={`${q.id}:mudar`} variant="secondary" onPress={() => void update($, respondendoEm, atual => (atual === q.id ? null : q.id))}>
+                {aberta === q.id ? 'Fechar' : 'Mudar…'}
+              </Button>
+            )}
+          </Box>
+          {Input && aberta === q.id && (
+            <Input
+              key={`${q.id}:outra`}
+              placeholder="o que fazer no lugar, vai direto para a sessão…"
+              submitLabel={emCurso && enviandoAgora?.opcao === 'outra' ? 'Enviando…' : 'Enviar'}
+              onSubmit={(valor: string) => {
+                if (!emCurso) void responder($, q, valor, 'outra', { esperado: 'assumida', texto: textoDaMudanca(q, valor.trim()) })
+              }}
+            />
+          )}
+        </Box>
+      )
+    }
+
     // O modo da leitura: `undefined` é antes da 1ª leitura; `null`, o arquivo que não se leu; senão a bandeira.
     const modo: 'lendo' | 'presente' | 'ausente' | 'desconhecido' = l.ausente === undefined ? 'lendo' : l.ausente === null ? 'desconhecido' : l.ausente.ligado ? 'ausente' : 'presente'
     // O botão do modo fica no canto esquerdo da fileira e o rótulo é o gesto; sem ler o modo não há botão (gravar por cima esconderia o problema).
@@ -1725,6 +1777,13 @@ export const register: Register = on => {
       l.anteriores.length > 0 ? (
         <Button key="anteriores" variant="secondary" onPress={() => void update($, verAnteriores, v => !v)}>
           {`${verVelhas ? '▾' : '▸'} Perguntas respondidas · ${l.anteriores.length}`}
+        </Button>
+      ) : null
+
+    const botaoAssumidas =
+      assumidas.length > 0 ? (
+        <Button key="assumidas" variant="secondary" onPress={() => void update($, verAssumidas, v => !v)}>
+          {`${verAss ? '▾' : '▸'} Decisões assumidas · ${assumidas.length}`}
         </Button>
       ) : null
 
@@ -1898,17 +1957,36 @@ export const register: Register = on => {
               {sec.fila.map(i => linhaDaFila(i))}
             </Box>
           )}
-          {(botaoTodos || botaoFeitos || botaoAnteriores) && (
+          {(botaoTodos || botaoFeitos || botaoAssumidas || botaoAnteriores) && (
             <Box flexDirection="column" gap={1}>
               <Svg source={rodape.source} alt="" width={W} height={rodape.height} />
               <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
                 {botaoTodos}
                 {botaoFeitos}
+                {botaoAssumidas}
                 {botaoAnteriores}
               </Box>
             </Box>
           )}
           {verFeitosAgora && sec.feitos.map(i => cartao(i, 'subtle'))}
+          {verAss &&
+            assumidas.map(q => {
+              const citadosQ = citadosDaPergunta(q)
+              const card = perguntaSvg(W, q, citadosQ, 'Assumido')
+
+              return (
+                <Box key={`assumida:${q.id}`} flexDirection="column" gap={1} paddingBottom={1}>
+                  <Svg
+                    source={card.source}
+                    alt={[`${q.id} · ${q.rotulo ?? q.sessao} · ${q.titulo}`, q.caso, q.recomendacao && `Assumido: ${q.recomendacao}`, citadosQ.length > 0 && altDosCitados(citadosQ)].filter(Boolean).join(' — ')}
+                    width={W}
+                    height={card.height}
+                  />
+                  {q.sessaoId && q.link && <Box flexDirection="row">{abrir(`assumida:${q.id}`, { apelido: q.sessao, localId: q.sessaoId, link: q.link })}</Box>}
+                  {acoesAssumida(q)}
+                </Box>
+              )
+            })}
           {verVelhas &&
             l.anteriores.map(a => {
               const linha = anteriorSvg(W, a, agora)
@@ -2077,14 +2155,32 @@ export const register: Register = on => {
             {sec.fila.map(i => linhaItem(i))}
           </Box>
         )}
-        {(botaoTodos || botaoFeitos || botaoAnteriores) && (
+        {(botaoTodos || botaoFeitos || botaoAssumidas || botaoAnteriores) && (
           <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
             {botaoTodos}
             {botaoFeitos}
+            {botaoAssumidas}
             {botaoAnteriores}
           </Box>
         )}
         {verFeitosAgora && sec.feitos.map(i => linhaItem(i))}
+        {verAss &&
+          assumidas.map(q => (
+            <Box key={`assumida:${q.id}`} flexDirection="column" borderStyle="round" borderColor="inactive" paddingX={1}>
+              <Text wrap="wrap">
+                <Text bold>{q.id}</Text>{' '}
+                {q.titulo}
+              </Text>
+              <Text dimColor wrap="truncate-end">
+                {q.rotulo ?? q.sessao}
+              </Text>
+              {citadosDaPergunta(q).length > 0 && <Text dimColor wrap="wrap">{altDosCitados(citadosDaPergunta(q))}</Text>}
+              {q.caso && <Text wrap="wrap">{q.caso}</Text>}
+              {q.recomendacao && <Text color="warning" wrap="wrap">{`Assumido: ${q.recomendacao}`}</Text>}
+              {q.sessaoId && q.link && <Box flexDirection="row">{abrir(`assumida:${q.id}`, { apelido: q.sessao, localId: q.sessaoId, link: q.link })}</Box>}
+              {acoesAssumida(q)}
+            </Box>
+          ))}
         {verVelhas &&
           l.anteriores.map(a => (
             <Box flexDirection="column">
