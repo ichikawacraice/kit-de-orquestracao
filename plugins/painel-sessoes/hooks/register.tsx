@@ -609,7 +609,9 @@ export function podarPedidos(atual: Record<string, EstadoPedido>, itens: LinhaIt
     if (id === 'lote') return true
     const item = porId.get(id)
 
-    return item !== undefined && papelQueFalta(item) !== undefined && vivoDoEstado(e, agora)
+    const falta = item === undefined ? undefined : papelQueFalta(item)
+
+    return falta !== undefined && vivoDoEstado(e, agora) && (e.estado === 'enviando' || e.papel === falta)
   })
 
   return fica.length === Object.keys(atual).length ? atual : Object.fromEntries(fica)
@@ -643,18 +645,18 @@ async function pedirSessoes($: EngineInterface, ids: string[], chave: string, su
   }
   if (grupos.size === 0) return
 
-  const marcar = (alvos: Array<{ item: LinhaItem }>, estado: EstadoPedido | null) =>
+  const marcar = (alvos: Array<{ item: LinhaItem; papel: PapelPedido }>, estado: ((papel: PapelPedido) => EstadoPedido) | null) =>
     update($, pedindo, p => {
       const novo = { ...p }
-      for (const { item } of alvos) {
-        if (estado) novo[item.id] = estado
+      for (const { item, papel } of alvos) {
+        if (estado) novo[item.id] = estado(papel)
         else delete novo[item.id]
       }
 
       return novo
     })
   const todos = [...grupos.values()].flatMap(g => g.alvos)
-  await marcar(todos, { estado: 'enviando' })
+  await marcar(todos, () => ({ estado: 'enviando' }))
   if (lote) await update($, pedindo, p => ({ ...p, lote: { estado: 'enviando' } }))
 
   // Nada que escape do gesto deixa o botão em "Pedindo…" para sempre: o que ainda estiver `enviando` ao fim volta ao botão.
@@ -673,7 +675,7 @@ async function enviarPedidos(
   lote: boolean,
   agora: number,
   surface: RenderSurface,
-  marcar: (alvos: Array<{ item: LinhaItem }>, estado: EstadoPedido | null) => Promise<void>,
+  marcar: (alvos: Array<{ item: LinhaItem; papel: PapelPedido }>, estado: ((papel: PapelPedido) => EstadoPedido) | null) => Promise<void>,
 ): Promise<void> {
   const propria = await sessaoDoApp($)
   const saiu: Array<{ kind: 'prompt' | 'mensagem'; projeto: string; n: number; orq: string }> = []
@@ -695,7 +697,7 @@ async function enviarPedidos(
       erro = mensagem(err)
     }
     if (erro === undefined) {
-      await marcar(g.alvos, { estado: kind === 'prompt' ? 'prompt' : 'pedido', em: agora })
+      await marcar(g.alvos, papel => ({ estado: kind === 'prompt' ? 'prompt' : 'pedido', em: agora, papel }))
       saiu.push({ kind, projeto, n: g.alvos.length, orq: g.orq })
       continue
     }
@@ -704,7 +706,9 @@ async function enviarPedidos(
     await avisar(
       $,
       kind === 'prompt'
-        ? `Não pus o pedido na caixa do prompt (${erro}): escreva à orquestradora.`
+        ? g.alvos.length === 1
+          ? `Não pus o pedido do ${titulos[0]} na caixa do prompt (${erro}): escreva à orquestradora.`
+          : `Não pus ${g.alvos.length} pedidos na caixa do prompt (${erro}): ${titulos.join(', ')}; escreva à orquestradora.`
         : g.alvos.length === 1
           ? `Não pedi a sessão do ${titulos[0]} à orquestradora de ${projeto} (${erro}): peça na conversa dela.`
           : `Não pedi ${g.alvos.length} sessões à orquestradora de ${projeto} (${erro}): ${titulos.join(', ')}; peça na conversa dela.`,
@@ -1484,12 +1488,6 @@ export const register: Register = on => {
         : 'varias' in d
           ? `${d.varias} orquestradoras ativas em ${projeto} · peça na conversa da certa`
           : `Sem orquestradora ativa em ${projeto}${n === undefined ? '' : ` · ${n} ${n === 1 ? 'item' : 'itens'}`}`
-    // Quem espera o operador iniciar o cartão: por projeto, com a orquestradora de destino (o botão "Abrir a orquestradora").
-    const emPedido = new Map<string, { id: string; n: number }>()
-    for (const i of lidaAgora.itens) {
-      const p = pedidoDe(i)
-      if (p?.estado?.estado === 'pedido' && 'id' in p.destino) emPedido.set(p.projeto, { id: p.destino.id, n: (emPedido.get(p.projeto)?.n ?? 0) + 1 })
-    }
     const botaoOrquestradora = (key: string, projeto: string, id: string) => (
       <Button
         key={key}
@@ -1498,7 +1496,7 @@ export const register: Register = on => {
           if (abrindoAgora !== id) void abrirSessao($, { apelido: `orquestradora de ${projeto}`, localId: id, link: linkDe(id, []) }, e.surface)
         }}
       >
-        {abrindoAgora === id ? 'Abrindo…' : emPedido.size > 1 ? `Abrir a orquestradora de ${projeto}` : 'Abrir a orquestradora'}
+        {abrindoAgora === id ? 'Abrindo…' : 'Abrir a orquestradora'}
       </Button>
     )
     // O que o item pede, em três peças: a linha de estado (acima), o botão e, no cartão, o botão da orquestradora. `curta`: na linha da fila.
@@ -1530,7 +1528,7 @@ export const register: Register = on => {
 
       return { linha, botao, orq: p.estado?.estado === 'pedido' && !naFila ? botaoOrquestradora(`orq:${i.id}`, p.projeto, p.destino.id) : undefined }
     }
-    // O topo da Na fila: "Pedir n sessões", os "Abrir a orquestradora", a frase de cada projeto e os avisos de projeto.
+    // O topo da Na fila: "Pedir n sessões", um grupo por projeto em "Pedido" (a frase e, embaixo, o "Abrir a orquestradora") e os avisos de projeto.
     const topoDaFila = (naFila: LinhaItem[]) => {
       const podem = naFila.filter(i => {
         const p = pedidoDe(i)
@@ -1538,23 +1536,29 @@ export const register: Register = on => {
         return p !== undefined && 'id' in p.destino && p.estado === undefined
       })
       const loteEnviando = pedindoAgora.lote?.estado === 'enviando'
-      const botoes = [
-        ...(podem.length >= 2 || loteEnviando
-          ? [
-              <Button
-                key="pedir:lote"
-                variant="secondary"
-                onPress={() => {
-                  if (!loteEnviando) void pedirSessoes($, podem.map(i => i.id), 'lote', e.surface)
-                }}
-              >
-                {loteEnviando ? 'Pedindo…' : `Pedir ${podem.length} sessões`}
-              </Button>,
-            ]
-          : []),
-        ...[...emPedido].map(([projeto, o]) => botaoOrquestradora(`orq:${projeto}`, projeto, o.id)),
-      ]
-      const frases = [...emPedido].map(([projeto, o]) => ({ projeto, t: `${o.n} ${o.n === 1 ? 'cartão espera' : 'cartões esperam'} você na conversa da orquestradora de ${projeto}` }))
+      const lote =
+        podem.length >= 2 || loteEnviando ? (
+          <Button
+            key="pedir:lote"
+            variant="secondary"
+            onPress={() => {
+              if (!loteEnviando) void pedirSessoes($, podem.map(i => i.id), 'lote', e.surface)
+            }}
+          >
+            {loteEnviando ? 'Pedindo…' : `Pedir ${podem.length} sessões`}
+          </Button>
+        ) : undefined
+      // Só os itens da Na fila contam: o cartão em Executando tem o próprio botão.
+      const emPedido = new Map<string, { id: string; n: number }>()
+      for (const i of naFila) {
+        const p = pedidoDe(i)
+        if (p?.estado?.estado === 'pedido' && 'id' in p.destino) emPedido.set(p.projeto, { id: p.destino.id, n: (emPedido.get(p.projeto)?.n ?? 0) + 1 })
+      }
+      const grupos = [...emPedido].map(([projeto, o]) => ({
+        projeto,
+        frase: `${o.n} ${o.n === 1 ? 'cartão espera' : 'cartões esperam'} você na conversa da orquestradora de ${projeto}`,
+        botao: botaoOrquestradora(`orq:${projeto}`, projeto, o.id),
+      }))
       const avisosDeProjeto: string[] = []
       const contados = new Map<string, { d: Destino; n: number }>()
       for (const i of naFila) {
@@ -1564,8 +1568,28 @@ export const register: Register = on => {
       if ([...contados.values()].some(c => 'semLista' in c.d)) avisosDeProjeto.push(textoDoAviso('', { semLista: true }))
       else for (const [projeto, c] of contados) avisosDeProjeto.push(textoDoAviso(projeto, c.d, c.n))
 
-      return { botoes, frases, avisosDeProjeto }
+      return { lote, grupos, avisosDeProjeto }
     }
+    // O topo inteiro numa coluna recuada como a linha da fila; cada projeto é um grupo com a frase colada ao botão.
+    const desenharTopo = (t: ReturnType<typeof topoDaFila>, paddingLeft: number, paddingBottom?: number) =>
+      t.lote === undefined && t.grupos.length === 0 && t.avisosDeProjeto.length === 0 ? null : (
+        <Box flexDirection="column" gap={1} paddingLeft={paddingLeft} paddingBottom={paddingBottom}>
+          {t.lote && (
+            <Box flexDirection="row" alignItems="center">
+              {t.lote}
+            </Box>
+          )}
+          {t.grupos.map(g => (
+            <Box key={`grupo:${g.projeto}`} flexDirection="column">
+              <Text color="warning" wrap="wrap">{g.frase}</Text>
+              <Box flexDirection="row" alignItems="center">
+                {g.botao}
+              </Box>
+            </Box>
+          ))}
+          {t.avisosDeProjeto.map(a => <Text key={`aviso:${a}`} dimColor wrap="wrap">{a}</Text>)}
+        </Box>
+      )
     // Campo de texto só onde a superfície tem um; sem ele, a opção "outra" fica sem campo.
     const Input = 'Input' in elementos ? elementos.Input : undefined
     const agora = await $.clock.now()
@@ -1862,21 +1886,7 @@ export const register: Register = on => {
             <Box flexDirection="column" gap={1}>
               {faixa({ titulo: 'Na fila', n: contagem.fila, tom: 'm', legenda: 'não começaram', tracejado: true })}
               {contagem.fila === 0 && <Text dimColor>Nada na fila.</Text>}
-              {(() => {
-                const t = topoDaFila(sec.fila)
-
-                return (
-                  <>
-                    {t.botoes.length > 0 && (
-                      <Box flexDirection="row" alignItems="center" flexWrap="wrap" columnGap={1}>
-                        {t.botoes}
-                      </Box>
-                    )}
-                    {t.frases.map(f => <Text key={`frase:${f.projeto}`} color="warning" wrap="wrap">{f.t}</Text>)}
-                    {t.avisosDeProjeto.map(a => <Text key={`aviso:${a}`} dimColor wrap="wrap">{a}</Text>)}
-                  </>
-                )
-              })()}
+              {desenharTopo(topoDaFila(sec.fila), 3, 1)}
               {sec.fila.map(i => linhaDaFila(i))}
             </Box>
           )}
@@ -2055,21 +2065,7 @@ export const register: Register = on => {
           <Box flexDirection="column" gap={1}>
             {tituloDaSecao('Na fila', contagem.fila, 'inactive')}
             {contagem.fila === 0 && <Text dimColor>Nada na fila.</Text>}
-            {(() => {
-              const t = topoDaFila(sec.fila)
-
-              return (
-                <>
-                  {t.botoes.length > 0 && (
-                    <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-                      {t.botoes}
-                    </Box>
-                  )}
-                  {t.frases.map(f => <Text key={`frase:${f.projeto}`} color="warning" wrap="wrap">{f.t}</Text>)}
-                  {t.avisosDeProjeto.map(a => <Text key={`aviso:${a}`} dimColor wrap="wrap">{a}</Text>)}
-                </>
-              )
-            })()}
+            {desenharTopo(topoDaFila(sec.fila), 2)}
             {sec.fila.map(i => linhaItem(i))}
           </Box>
         )}

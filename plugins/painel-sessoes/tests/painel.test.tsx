@@ -2320,12 +2320,12 @@ test('F69 A: podarPedidos — item que ganhou o papel, prompt de mais de 5 min e
   const sem = linhaDe('execucao')
   const com = monta([SEM_DONO({ com: COM(['E8', E8]) })], [{ sessionId: E8 }])[0]!
   const min = (n: number) => AGORA - n * 60_000
-  const pedindo = { F70: { estado: 'prompt' as const, em: min(2) } }
+  const pedindo = { F70: { estado: 'prompt' as const, em: min(2), papel: 'E' as const } }
   expect(R.podarPedidos(pedindo, [sem], AGORA), 'o recente fica').toEqual(pedindo)
   expect(R.podarPedidos(pedindo, [com], AGORA), 'o item ganhou E: sai').toEqual({})
-  expect(R.podarPedidos({ F70: { estado: 'prompt', em: min(6) } }, [sem], AGORA), 'prompt vence em 5 min').toEqual({})
-  expect(R.podarPedidos({ F70: { estado: 'pedido', em: min(29) } }, [sem], AGORA), 'pedido de 29 min fica').toEqual({ F70: { estado: 'pedido', em: min(29) } })
-  expect(R.podarPedidos({ F70: { estado: 'pedido', em: min(31) } }, [sem], AGORA), 'pedido vence em 30 min').toEqual({})
+  expect(R.podarPedidos({ F70: { estado: 'prompt', em: min(6), papel: 'E' } }, [sem], AGORA), 'prompt vence em 5 min').toEqual({})
+  expect(R.podarPedidos({ F70: { estado: 'pedido', em: min(29), papel: 'E' } }, [sem], AGORA), 'pedido de 29 min fica').toEqual({ F70: { estado: 'pedido', em: min(29), papel: 'E' } })
+  expect(R.podarPedidos({ F70: { estado: 'pedido', em: min(31), papel: 'E' } }, [sem], AGORA), 'pedido vence em 30 min').toEqual({})
   expect(R.podarPedidos({ F70: { estado: 'enviando' } }, [sem], AGORA), 'enviando não vence por tempo').toEqual({ F70: { estado: 'enviando' } })
 })
 
@@ -2401,7 +2401,7 @@ test('F69 A (iv): "Pedir n sessões" faz um pedido por orquestradora e não põe
   expect(lido.match(/Pedido às \d\d:\d\d · inicie o cartão/g)?.length, 'um estado por item').toBeGreaterThanOrEqual(3)
   expect(await ui.find({ key: 'pedir:lote' }), 'com todos pedidos o lote some').toBeUndefined()
   expect(await ui.find({ key: 'orq:izanagi' })).toBeDefined()
-  expect((await ui.find({ key: 'orq:kit' }))?.text, 'dois projetos em Pedido: o nome diz qual').toBe('Abrir a orquestradora de kit')
+  expect((await ui.find({ key: 'orq:kit' }))?.text, 'dois projetos em Pedido: a frase colada diz qual').toBe('Abrir a orquestradora')
   await ui.unmount()
 })
 
@@ -2479,7 +2479,7 @@ test('F69 A (vii-c): fill recusado vira aviso e o botão volta', async ($, on) =
   const { ui, relogio } = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, host: 'local_orq_iz', fillRecusa: true }), $, on)
   await ui.press({ key: 'pedir:F68' })
   await relogio.settle()
-  expect(await lerSuperficie(ui)).toMatch(/Não pus o pedido na caixa do prompt \(.*\): escreva à orquestradora\./)
+  expect(await lerSuperficie(ui)).toMatch(/Não pus o pedido do F68 · editor da loja na caixa do prompt \(.*\): escreva à orquestradora\./)
   expect((await ui.find({ key: 'pedir:F68' }))?.text).toBe('Pedir executora')
   await ui.unmount()
 })
@@ -2706,19 +2706,22 @@ test('F76 C/E: o terminal agrupa do mesmo jeito, com recuo de 2 colunas', async 
   await ui.unmount()
 })
 
-test('F76 D: o aviso do prompt diz quais itens ficaram de fora', async ($, on) => {
-  const dois = await abrirDe(pedir({ fila: FILA_DOIS(), host: 'local_orq_iz', fillRecusa: true }), $, on)
-  await dois.ui.press({ key: 'pedir:lote' })
-  await dois.relogio.settle()
-  const lido = await lerSuperficie(dois.ui)
+test('F76 D: o aviso do prompt de um lote diz quais itens ficaram de fora', async ($, on) => {
+  const { ui, relogio } = await abrirDe(pedir({ fila: FILA_DOIS(), host: 'local_orq_iz', fillRecusa: true }), $, on)
+  await ui.press({ key: 'pedir:lote' })
+  await relogio.settle()
+  const lido = await lerSuperficie(ui)
   expect(lido).toMatch(/Não pus 2 pedidos na caixa do prompt \(.*\): .*F68 · .*; escreva à orquestradora\./)
   expect(lido).toContain('F63 · ')
-  await dois.ui.unmount()
-  const um = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, host: 'local_orq_iz', fillRecusa: true }), $, on)
-  await um.ui.press({ key: 'pedir:F68' })
-  await um.relogio.settle()
-  expect(await lerSuperficie(um.ui)).toMatch(/Não pus o pedido do F68 · editor da loja na caixa do prompt \(.*\): escreva à orquestradora\./)
-  await um.ui.unmount()
+  await ui.unmount()
+})
+
+test('F76 D: o aviso do prompt de um item cita o item', async ($, on) => {
+  const { ui, relogio } = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, host: 'local_orq_iz', fillRecusa: true }), $, on)
+  await ui.press({ key: 'pedir:F68' })
+  await relogio.settle()
+  expect(await lerSuperficie(ui)).toMatch(/Não pus o pedido do F68 · editor da loja na caixa do prompt \(.*\): escreva à orquestradora\./)
+  await ui.unmount()
 })
 
 test('F76 F: o pedido guarda o papel e a poda o solta quando o papel que falta muda', async ($, on) => {
