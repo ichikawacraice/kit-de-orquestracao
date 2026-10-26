@@ -19,7 +19,7 @@
 - **D4 · Sem nova crítica:** são correções de texto e uma frase; a D decide se a P2 pede recrítica (teto Q207).
 - **D5 · Versão:** patch do `plugins/painel-sessoes/.claude-plugin/plugin.json` sobre a main na hora do PR.
 
-## Para a D (antes da E)
+## Para a D (em paralelo com a E: só `docs/design/`)
 
 Delta curto na revisão e no mock, na branch deste plano:
 1. **D1-F65-7** (P2), com as somas 133/106/85 e o quadro da barra de uma E com pedido aberto a 114 e a 94.
@@ -27,9 +27,9 @@ Delta curto na revisão e no mock, na branch deste plano:
 3. **P4:** §5 item 1 diz `flexWrap="wrap"` no grupo da direita; §Quem e onde: "3 linhas com 79 ou mais (81 com moldura; 100 e 102 no ausente com pedido)", pior caso 6 linhas; teste novo a 40 colunas afirmando o wrap.
 4. Conferir que os números citados batem com a `faixaDaBarra` da main (os do F65 já com P1 e P5).
 
-## Para a E (depois do delta da D)
+## Para a E (em paralelo com a D: só código e testes)
 
-Regras: Node ≥ 20, ESM, sem dependência; teste antes do código; `claude plugin test plugins/painel-sessoes` e `npm test`; commit conventional em PT-BR; não mergear. Partir do HEAD que a D deixar nesta branch.
+Regras: Node ≥ 20, ESM, sem dependência; teste antes do código; `claude plugin test plugins/painel-sessoes` e `npm test`; commit conventional em PT-BR; não mergear. Partir de `3882f92` (branch `f71-barra-cabe`); a D mexe só em `docs/design/`, então não há arquivo em comum: quem chegar depois rebaseia. A D1-F65-7 está decidida neste plano (D1, recomendação do crítico), a E não espera a D para escrever.
 
 1. **Teste vermelho (mod):** `pecasDaBarra` com pedido aberto e `propria: false` → `FRASE_NA_BARRA` nas faixas 0, 1 e 2; com `propria: true` → longa na 0 e curta na 1 e 2 (como hoje). `faixaDaBarra` para a E2 a 142 mil com pedido → 133/106/85 (a 133 → 0, a 132 → 1; a 106 → 1, a 105 → 2). Teste montado a 40 colunas: o `Box` do grupo da direita tem `flexWrap: 'wrap'`.
 2. **Código:** `EstadoBarra` ganha `pedidoProprio: boolean` (de `b.limpeza.propria` em `desenharBarra`); `pecasDaBarra` usa a longa quando `!pedidoProprio`; `flexWrap="wrap"` no `Box` da direita; apagar `minutosQueFaltam`.
