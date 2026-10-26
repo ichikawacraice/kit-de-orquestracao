@@ -2744,3 +2744,18 @@ test('F76 F: o pedido guarda o papel e a poda o solta quando o papel que falta m
   expect(await lerSuperficie(ui)).not.toMatch(/Pedido às/)
   await ui.unmount()
 })
+
+test('F76 F: lote com papéis diferentes guarda o papel de cada item e sobrevive à releitura', async ($, on) => {
+  const { ui, relogio } = await abrirDe(pedir({ fila: FILA_DOIS() }), $, on)
+  expect((await ui.find({ key: 'pedir:F68' }))?.text).toBe('Pedir executora')
+  expect((await ui.find({ key: 'pedir:F63' }))?.text).toBe('Pedir planejadora')
+  await ui.press({ key: 'pedir:lote' })
+  await relogio.settle()
+  const antes = [(await ui.find({ key: 'pedir:F68' }))?.text, (await ui.find({ key: 'pedir:F63' }))?.text]
+  await ui.press({ key: 'atualizar' })
+  await relogio.settle()
+  const depois = [(await ui.find({ key: 'pedir:F68' }))?.text, (await ui.find({ key: 'pedir:F63' }))?.text]
+  expect(depois).toEqual(antes)
+  expect(depois.includes('Pedir executora') || depois.includes('Pedir planejadora'), 'o item pedido não volta como pendente').toBe(false)
+  await ui.unmount()
+})
