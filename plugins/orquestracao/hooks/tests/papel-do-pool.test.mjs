@@ -52,7 +52,9 @@ function novoBase() {
 function rodar(hook, evento, extraEnv = {}) {
   const out = execFileSync('node', [join(HOOKS, hook)], {
     input: typeof evento === 'string' ? evento : JSON.stringify(evento), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
-    env: { ...process.env, HOME: dir('home'), HOOKS_CREWAI_BASE: BASE_ORQ(), POOL_APP_SESSOES_DIR: dir('app'), PAINEL_DIR: dir('painel'), ...(FILA ? { FILA_DIR: FILA } : {}), ...extraEnv },
+    env: { ...process.env, HOME: dir('home'), HOOKS_CREWAI_BASE: BASE_ORQ(), POOL_APP_SESSOES_DIR: dir('app'), PAINEL_DIR: dir('painel'), ...(FILA ? { FILA_DIR: FILA } : {}),
+      // a máquina do teste nunca está cheia por acaso (ADR 0005): sem fichas e com carga zero, a menos que o caso diga o contrário
+      KIT_NUCLEOS_DIR: dir('nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', KIT_CARGA_1MIN: '0', ...extraEnv },
   });
   return out ? JSON.parse(out).hookSpecificOutput : null;
 }
