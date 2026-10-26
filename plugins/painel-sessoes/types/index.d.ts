@@ -22,7 +22,8 @@ export type LinhaItem = {
   /** Esperando o operador ou o gate: não é trava, e o item fica no bloco do tema. */
   espera?: { motivo: 'operador' | 'gate'; texto: string }
   prs: number[]
-  depois: string[]
+  /** O que fica para depois; `item` é o F<n> quando o documento o liga a outro item. */
+  depois: Array<{ texto: string; item?: string }>
   agora?: string
   /** `sem-ninguem` só o mod produz, ao desenhar. */
   trava?: { motivo: string; texto: string }
@@ -35,6 +36,20 @@ export type LinhaItem = {
   foraDoContrato?: string
 }
 
+/** Um item de qualquer etapa e idade, para resolver número citado e listar todos os itens. */
+export type ItemDoIndice = {
+  id: string
+  titulo: string
+  tema: string
+  temaProjeto?: string
+  temaRotulo: string
+  etapa: string
+  projeto?: string
+}
+
+/** Um F<n> citado num texto: `titulo` ausente quer dizer que a fila não tem o número; `ligado` vem de `depois[].item`. */
+export type Citado = { id: string; titulo?: string; ligado: boolean }
+
 export type PerguntaAberta = {
   id: string
   projeto: string
@@ -42,7 +57,7 @@ export type PerguntaAberta = {
   titulo: string
   /** O item da fila a que a pergunta se liga (F<n>), quando ela traz. */
   item?: string
-  /** `<tema> · <título do item>`, quando a pergunta tem item; senão vale `sessao`. */
+  /** `F<n> · <título do item>`, quando a pergunta tem item; senão vale `sessao`. */
   rotulo?: string
   /** A versão lida, que a resposta usa como `if_version`. */
   versao?: number
@@ -82,6 +97,8 @@ export type Leitura = {
   itens: LinhaItem[]
   /** A lista fechada de temas, na ordem de `temas.json`. */
   temas: Tema[]
+  /** Todos os itens da fila, de qualquer etapa e idade (a leitura de 24 h só alcança `itens`). Ausente no estado de antes desta versão. */
+  indice?: ItemDoIndice[]
   perguntas: PerguntaAberta[]
   /** As últimas respondidas e canceladas, da mais nova para a mais velha. */
   anteriores: PerguntaAnterior[]
@@ -99,6 +116,12 @@ declare module 'claude-code' {
       respondendoEm: string | null
       verAnteriores: boolean
       verFeitos: boolean
+      /** A lista de todos os itens aberta. */
+      verTodos: boolean
+      /** O texto do campo Achar da lista de todos os itens. */
+      filtroTodos: string
+      /** Sobe a cada Limpar: o campo nasce vazio (o motor não diz se o Input é controlado). */
+      limpezas: number
       /** A resposta em curso: a pergunta e a opção pressionada; null quando nenhuma. */
       enviando: { q: string; opcao: string } | null
       /** O localId da sessão que o botão "abrir" está abrindo; null quando nenhuma. */

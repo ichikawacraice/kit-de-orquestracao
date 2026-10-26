@@ -1,8 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
-import type { LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { papelDe as papelDeDesenho, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, secaoSvg, seloDaEspera, textoDaTrava } from './desenho'
+import type { Citado, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
+import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, secaoSvg, seloDaEspera, textoDaTrava, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -20,6 +20,9 @@ const leitura = atom({ plugin: 'painel-sessoes', key: 'leitura' } as const, VAZI
 const respondendoEm = atom({ plugin: 'painel-sessoes', key: 'respondendoEm' } as const, null as string | null)
 const verAnteriores = atom({ plugin: 'painel-sessoes', key: 'verAnteriores' } as const, false)
 const verFeitos = atom({ plugin: 'painel-sessoes', key: 'verFeitos' } as const, false)
+const verTodos = atom({ plugin: 'painel-sessoes', key: 'verTodos' } as const, false)
+const filtroTodos = atom({ plugin: 'painel-sessoes', key: 'filtroTodos' } as const, '')
+const limpezas = atom({ plugin: 'painel-sessoes', key: 'limpezas' } as const, 0)
 // A resposta em curso (a pergunta e a opção pressionada) e a sessão que o botão "abrir" está abrindo; null = nenhuma.
 const enviando = atom({ plugin: 'painel-sessoes', key: 'enviando' } as const, null as { q: string; opcao: string } | null)
 const abrindo = atom({ plugin: 'painel-sessoes', key: 'abrindo' } as const, null as string | null)
@@ -100,10 +103,38 @@ export function montarItens(
   perguntasAbertas: Array<{ id: string; item?: string }>,
   agora: number,
 ): LinhaItem[] {
+  return montarTodos(docs, temas, vivas, proprio, perguntasAbertas, agora)
+    .filter(t => !t.antigo)
+    .map(t => t.linha)
+}
+
+/** O índice de todos os itens, de qualquer etapa e idade: a mesma regra de tema da leitura (F43). */
+export function montarIndice(docs: Doc[], temas: Tema[]): ItemDoIndice[] {
+  return montarTodos(docs, temas, null, undefined, [], 0).map(({ linha, projeto }) => ({
+    id: linha.id,
+    titulo: linha.titulo,
+    tema: linha.tema,
+    temaProjeto: linha.temaProjeto,
+    temaRotulo: linha.temaRotulo,
+    etapa: linha.etapa,
+    projeto,
+  }))
+}
+
+/** Todos os itens montados; `antigo` marca o feito ou descartado de mais de 24 h, que a leitura não desenha mas o índice guarda. */
+function montarTodos(
+  docs: Doc[],
+  temas: Tema[],
+  vivas: Vivo[] | null,
+  proprio: string | undefined,
+  perguntasAbertas: Array<{ id: string; item?: string }>,
+  agora: number,
+): Array<{ linha: LinhaItem; antigo: boolean; projeto?: string }> {
   const vivos = vivas === null ? null : new Set([...vivas.filter(v => v.isArchived !== true).map(v => v.sessionId), ...(proprio ? [proprio] : [])])
   const abertas = new Set(perguntasAbertas.map(q => q.id))
-  const itens: LinhaItem[] = []
+  const itens: Array<{ linha: LinhaItem; antigo: boolean; projeto?: string }> = []
   for (const d of docs) {
+    let antigo = false
     const etapaCrua = texto(d.data.etapa)
     const etapaOk = etapaCrua !== undefined && ETAPAS.includes(etapaCrua)
     const temaId = texto(d.data.tema)
@@ -145,7 +176,7 @@ export function montarItens(
     const travaGravada = t && texto(t.motivo) && texto(t.texto) ? { motivo: texto(t.motivo) as string, texto: texto(t.texto) as string } : undefined
     if (final) {
       const quando = Date.parse(feitoEm ?? texto(d.data.atualizadoEm) ?? '')
-      if (Number.isNaN(quando) || agora - quando > FEITOS_MS) continue
+      antigo = Number.isNaN(quando) || agora - quando > FEITOS_MS
       situacao = 'feito'
     } else if (dono) {
       if (vivos && !vivos.has(dono.localId)) {
@@ -156,7 +187,7 @@ export function montarItens(
         trava = travaGravada
       }
     } else situacao = 'fila'
-    itens.push({
+    itens.push({ antigo, projeto: projetoDoItem, linha: {
       id: d.id,
       titulo: texto(d.data.titulo) ?? d.id,
       resumo: texto(d.data.resumo),
@@ -171,7 +202,14 @@ export function montarItens(
       // Trava vence espera: o item travado já diz o que o prende, e o selo de espera seria um segundo recado.
       espera: final || situacao === 'travado' ? undefined : esperaGravada,
       prs: inteiros(d.data.prs),
-      depois: Array.isArray(d.data.depois) ? d.data.depois.flatMap(x => (texto((x as Record<string, unknown> | null)?.texto) ? [texto((x as Record<string, unknown>).texto) as string] : [])) : [],
+      depois: Array.isArray(d.data.depois)
+        ? d.data.depois.flatMap(x => {
+            const o = x as Record<string, unknown> | null
+            const item = texto(o?.item)
+
+            return texto(o?.texto) ? [{ texto: texto(o?.texto) as string, ...(item && /^F\d+$/.test(item) ? { item } : {}) }] : []
+          })
+        : [],
       agora: texto(d.data.agora),
       trava,
       perguntas: [
@@ -184,7 +222,7 @@ export function montarItens(
       paradoDesde: texto(historico[historico.length - 1]?.em) ?? texto(d.data.atualizadoEm),
       feitoEm,
       foraDoContrato: motivos.length > 0 ? motivos.join('; ') : undefined,
-    })
+    } })
   }
 
   return itens
@@ -195,7 +233,7 @@ export function montarItens(
  * Um grupo por (projeto, id): dois projetos com o tema `geral` são dois grupos, e quando os visíveis repetem o rótulo
  * o título vira `Rótulo · projeto`.
  */
-export function porTema(itens: LinhaItem[], temas: Tema[], ordenar: (a: LinhaItem, b: LinhaItem) => number): Array<{ id: string; rotulo: string; projeto?: string; itens: LinhaItem[] }> {
+export function porTema<T extends { tema: string; temaProjeto?: string }>(itens: T[], temas: Tema[], ordenar: (a: T, b: T) => number): Array<{ id: string; rotulo: string; projeto?: string; itens: T[] }> {
   const ordem = [...temas.map(t => ({ id: t.id, rotulo: t.rotulo, projeto: t.projeto?.toLowerCase() })), { id: SEM_TEMA, rotulo: 'Sem tema', projeto: undefined }]
   const grupos = ordem.flatMap(t => {
     const meus = itens.filter(i => i.tema === t.id && i.temaProjeto === t.projeto).sort(ordenar)
@@ -245,6 +283,51 @@ export function secoes(itens: LinhaItem[], temas: Tema[]) {
 }
 
 export const papelDe = papelDeDesenho
+
+/**
+ * O F<n> que o texto cita sem dizer o que é: não seguido de ` · ` (a regra de texto do painel, que recusa a pergunta nesse caso).
+ * A tecla F5 também casa: descreve-se por extenso.
+ */
+export const ITEM_SOLTO = /\bF\d+\b(?! · )/g
+
+/**
+ * Os números que os textos citam, resolvidos pelo índice. Primeiro os ligados por `depois[].item`, depois os achados nos
+ * textos, na ordem; ignora o próprio item, o repetido e o que já veio escrito como `F<n> · …`. Os textos são lidos inteiros:
+ * o desenho pode cortá-los, e é o número que o corte escondeu que a legenda precisa dizer.
+ */
+export function citadosDe(textos: string[], ligados: string[], proprio: string, indice: Map<string, { titulo: string }>): Citado[] {
+  const nomeados = new Set(textos.flatMap(t => [...t.matchAll(/\b(F\d+) · /g)].map(m => m[1]!)))
+  const achados = textos.flatMap(t => t.match(ITEM_SOLTO) ?? [])
+  const vistos = new Set<string>([proprio])
+  const ordem: Array<{ id: string; ligado: boolean }> = []
+  for (const id of ligados) if (!vistos.has(id)) (vistos.add(id), ordem.push({ id, ligado: true }))
+  for (const id of achados) if (!vistos.has(id) && !nomeados.has(id)) (vistos.add(id), ordem.push({ id, ligado: false }))
+
+  return ordem.map(({ id, ligado }) => ({ id, titulo: indice.get(id)?.titulo, ligado }))
+}
+
+const semAcento = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+/** O campo Achar: número exato (`13`, `F13`, `f13`) ou palavra do título, sem caixa e sem acento; vazio devolve tudo. */
+export function filtrarIndice(indice: ItemDoIndice[], filtro: string): ItemDoIndice[] {
+  const f = filtro.trim()
+  if (!f) return indice
+  if (/^f?\d+$/i.test(f)) return indice.filter(i => numero(i.id) === numero(f))
+
+  return indice.filter(i => semAcento(i.titulo).includes(semAcento(f)))
+}
+
+const bloco = (i: ItemDoIndice) => (i.etapa === 'descartado' ? 2 : i.etapa === 'feito' ? 1 : 0)
+
+/** Um grupo por tema na ordem de `temas.json`; dentro, os vivos, os feitos e os descartados, cada bloco do número maior para o menor. */
+export function gruposDoIndice(indice: ItemDoIndice[], temas: Tema[]) {
+  return porTema(indice, temas, (a, b) => bloco(a) - bloco(b) || numero(b.id) - numero(a.id))
+}
+
+/** O que o rodapé desenha, de cima para baixo: os botões e, abertas, as listas; a lista de todos os itens por último (é a mais comprida). */
+export function ordemDoRodape(abertas: { todos: boolean; feitos: boolean; anteriores: boolean }): string[] {
+  return ['botoes', ...(abertas.feitos ? ['feitos'] : []), ...(abertas.anteriores ? ['anteriores'] : []), ...(abertas.todos ? ['todos'] : [])]
+}
 
 /**
  * O que a sessão faz agora, do `list_sessions`: "trabalhando agora" (isRunning), "parada há X" (da última atividade) ou
@@ -574,10 +657,11 @@ async function ler($: EngineInterface): Promise<void> {
   const agora = await $.clock.now()
   // Sem a lista ao vivo ou sem saber quem sou, o dono "sumido" pode ser só falha de leitura: nenhum item vira "sem ninguém".
   const itens = montarItens(docsFila, temas, vivasLidas && proprio !== undefined ? vivas : null, proprio, perguntas, agora)
-  const porId = new Map(itens.map(i => [i.id, i]))
+  const indice = montarIndice(docsFila, temas)
+  const porId = new Map(indice.map(i => [i.id, i]))
   for (const q of perguntas) {
     const dono = q.item ? porId.get(q.item) : undefined
-    if (dono) q.rotulo = `${dono.temaRotulo} · ${dono.titulo}`
+    if (dono) q.rotulo = `${dono.id} · ${dono.titulo}`
   }
   await update($, leitura, l => ({
     avisos: l.avisos ?? [],
@@ -585,6 +669,7 @@ async function ler($: EngineInterface): Promise<void> {
     lendo: false,
     erros,
     itens,
+    indice,
     temas,
     perguntas,
     anteriores,
@@ -704,6 +789,19 @@ export const register: Register = on => {
     const aberta = await read($, respondendoEm)
     const verVelhas = await read($, verAnteriores)
     const verFeitosAgora = await read($, verFeitos)
+    const verTodosAgora = await read($, verTodos)
+    const filtro = await read($, filtroTodos)
+    const limpezasAgora = await read($, limpezas)
+    // O índice de todos os itens; o estado de antes desta versão não o tem, e os itens da leitura de 24 h valem no lugar dele.
+    const indice: ItemDoIndice[] = l.indice ?? l.itens.map(i => ({ id: i.id, titulo: i.titulo, tema: i.tema, temaProjeto: i.temaProjeto, temaRotulo: i.temaRotulo, etapa: i.etapa }))
+    const mapa = new Map(indice.map(i => [i.id, i]))
+    const ligadosDe = (i: LinhaItem) => i.depois.flatMap(d => (d.item ? [d.item] : []))
+    // Só os campos que o bloco desenha, lidos inteiros: o desenho pode cortá-los.
+    const citadosDoCartao = (i: LinhaItem) => citadosDe([i.titulo, i.trava?.texto ?? '', i.situacao !== 'travado' ? (i.espera?.texto ?? '') : '', i.agora ?? '', ...i.depois.map(d => d.texto)], ligadosDe(i), i.id, mapa)
+    const citadosDaFila = (i: LinhaItem) => citadosDe([i.titulo, i.resumo ?? ''], ligadosDe(i), i.id, mapa)
+    const citadosDaPergunta = (q: PerguntaAberta) => citadosDe([q.titulo, q.caso ?? '', q.seNaoDecidir ?? '', q.recomendacao ?? ''], [], q.item ?? '', mapa)
+    const achados = filtrarIndice(indice, filtro)
+    const comProjeto = new Set(indice.flatMap(i => (i.projeto ? [i.projeto] : []))).size > 1
 
     // Os botões de uma pergunta: as opções dela (Q67) ou Sim/Não/Adiar/Responder, que vão à sessão que perguntou.
     // Só o botão pressionado vira "Enviando…"; enquanto a resposta da pergunta está em curso, os irmãos ignoram o clique.
@@ -777,6 +875,30 @@ export const register: Register = on => {
         </Button>
       ) : null
 
+    const botaoTodos =
+      indice.length > 0 ? (
+        <Button key="todos" variant="secondary" onPress={() => void update($, verTodos, v => !v)}>
+          {`${verTodosAgora ? '▾' : '▸'} Todos os itens · ${indice.length}`}
+        </Button>
+      ) : null
+
+    const limparFiltro = () => {
+      void update($, filtroTodos, () => '')
+      void update($, limpezas, n => n + 1)
+    }
+    const campoAchar = Input ? (
+      <Box key="achar" flexDirection="row" columnGap={1} alignItems="center" flexWrap="wrap">
+        <Input key={`achar:${limpezasAgora}`} placeholder="número (13 ou F13) ou palavra" submitLabel="Achar" onSubmit={(v: string) => void update($, filtroTodos, () => v.trim())} />
+        {filtro && (
+          <Button key="achar:limpar" variant="secondary" onPress={limparFiltro}>
+            Limpar
+          </Button>
+        )}
+      </Box>
+    ) : null
+    const resultadoDoFiltro = filtro ? <Text dimColor>{`${achados.length} de ${indice.length} · “${filtro}”`}</Text> : null
+    const nenhum = <Text>{`Nenhum item com “${filtro}”.`}</Text>
+
     const botaoFeitos =
       sec.feitos.length > 0 ? (
         <Button key="feitos" variant="secondary" onPress={() => void update($, verFeitos, v => !v)}>
@@ -797,12 +919,12 @@ export const register: Register = on => {
       }
       // A moldura é do `Box round`, na cor do tom; o desenho e os botões ficam dentro dela.
       const cartao = (i: LinhaItem, tom: 'subtle' | 'error' | 'warning') => {
-        const r = cartaoSvg(Wc, i, agora, { situacao })
+        const r = cartaoSvg(Wc, i, agora, { situacao, citados: citadosDoCartao(i) })
         const botoes = botoesAbrir(i)
 
         return (
           <Box key={`item:${i.id}`} flexDirection="column" borderStyle="round" borderColor={tom} paddingX={1}>
-            <Svg source={r.source} alt={`${i.temaRotulo} — ${r.alt}`} width={Wc} height={r.height} />
+            <Svg source={r.source} alt={r.alt} width={Wc} height={r.height} />
             {botoes.length > 0 && (
               <Box flexDirection="row" columnGap={1} flexWrap="wrap">
                 {botoes}
@@ -813,11 +935,11 @@ export const register: Register = on => {
         )
       }
       const linhaDaFila = (i: LinhaItem) => {
-        const r = filaSvg(W, i, agora)
+        const r = filaSvg(W, i, agora, { citados: citadosDaFila(i) })
 
         return (
           <Box key={`item:${i.id}`} flexDirection="column">
-            <Svg source={r.source} alt={`${i.temaRotulo} — ${r.alt}`} width={W} height={r.height} />
+            <Svg source={r.source} alt={r.alt} width={W} height={r.height} />
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
           </Box>
         )
@@ -853,13 +975,14 @@ export const register: Register = on => {
             <Box flexDirection="column" gap={1}>
               {faixa({ titulo: 'Esperam você', n: contagem.esperam, tom: 'av', legenda: 'responda aqui' })}
               {l.perguntas.map(q => {
-                const card = perguntaSvg(W, q)
+                const citadosQ = citadosDaPergunta(q)
+                const card = perguntaSvg(W, q, citadosQ)
 
                 return (
                   <Box key={`pergunta:${q.id}`} flexDirection="column" gap={1} paddingBottom={1}>
                     <Svg
                       source={card.source}
-                      alt={[`${q.id} · ${q.rotulo ?? q.sessao} · ${q.titulo}`, q.caso, q.seNaoDecidir && `Se não decidir: ${q.seNaoDecidir}`, q.recomendacao && `Recomendo: ${q.recomendacao}`].filter(Boolean).join(' — ')}
+                      alt={[`${q.id} · ${q.rotulo ?? q.sessao} · ${q.titulo}`, q.caso, q.seNaoDecidir && `Se não decidir: ${q.seNaoDecidir}`, q.recomendacao && `Recomendo: ${q.recomendacao}`, citadosQ.length > 0 && altDosCitados(citadosQ)].filter(Boolean).join(' — ')}
                       width={W}
                       height={card.height}
                     />
@@ -891,10 +1014,11 @@ export const register: Register = on => {
               {sec.fila.map(i => linhaDaFila(i))}
             </Box>
           )}
-          {(botaoFeitos || botaoAnteriores) && (
+          {(botaoTodos || botaoFeitos || botaoAnteriores) && (
             <Box flexDirection="column" gap={1}>
               <Svg source={rodape.source} alt="" width={W} height={rodape.height} />
               <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+                {botaoTodos}
                 {botaoFeitos}
                 {botaoAnteriores}
               </Box>
@@ -907,6 +1031,18 @@ export const register: Register = on => {
 
               return <Svg key={`anterior:${a.id}`} source={linha.source} alt={linha.alt} width={W} height={linha.height} />
             })}
+          {verTodosAgora && (
+            <Box flexDirection="column" gap={1}>
+              {campoAchar}
+              {resultadoDoFiltro}
+              {achados.length === 0
+                ? nenhum
+                : gruposDoIndice(achados, l.temas).map(g => {
+                    const r = todosSvg(W, g, { comProjeto })
+                    return <Svg key={`todos:${g.projeto ?? ''}:${g.id}`} source={r.source} alt={r.alt} width={W} height={r.height} />
+                  })}
+            </Box>
+          )}
         </Box>
       )
     }
@@ -929,8 +1065,13 @@ export const register: Register = on => {
         <Box key={`item:${i.id}`} flexDirection="row" columnGap={1}>
           <Text color={cor}>●</Text>
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-            <Text wrap="truncate-end">{i.titulo}</Text>
+            <Text wrap="truncate-end">{`${i.id} · ${i.titulo}`}</Text>
             <Text dimColor wrap="wrap">{info}</Text>
+            {(() => {
+              const c = i.situacao === 'fila' ? citadosDaFila(i) : citadosDoCartao(i)
+
+              return c.length > 0 ? <Text dimColor wrap="wrap">{altDosCitados(c)}</Text> : null
+            })()}
             {botoesAbrir(i)}
             {i.trava && <Text color="error" wrap="wrap">{textoDaTrava(i.trava)}</Text>}
             {i.espera && <Text color={i.espera.motivo === 'operador' ? 'warning' : undefined} dimColor={i.espera.motivo !== 'operador'} wrap="wrap">{i.espera.texto}</Text>}
@@ -992,6 +1133,7 @@ export const register: Register = on => {
                 <Text dimColor wrap="truncate-end">
                   {q.rotulo ?? q.sessao}
                 </Text>
+                {citadosDaPergunta(q).length > 0 && <Text dimColor wrap="wrap">{altDosCitados(citadosDaPergunta(q))}</Text>}
                 {q.caso && <Text wrap="wrap">{q.caso}</Text>}
                 {q.seNaoDecidir && <Text dimColor wrap="wrap">{`Se não decidir: ${q.seNaoDecidir}`}</Text>}
                 {q.recomendacao && <Text color="warning" wrap="wrap">{`Recomendo: ${q.recomendacao}`}</Text>}
@@ -1021,8 +1163,9 @@ export const register: Register = on => {
             {sec.fila.map(i => linhaItem(i))}
           </Box>
         )}
-        {(botaoFeitos || botaoAnteriores) && (
+        {(botaoTodos || botaoFeitos || botaoAnteriores) && (
           <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+            {botaoTodos}
             {botaoFeitos}
             {botaoAnteriores}
           </Box>
@@ -1039,6 +1182,22 @@ export const register: Register = on => {
               <Text color="success" wrap="wrap">{`Resposta: ${a.resposta ?? a.estado}`}</Text>
             </Box>
           ))}
+        {verTodosAgora && (
+          <Box flexDirection="column">
+            {campoAchar}
+            {resultadoDoFiltro}
+            {achados.length === 0
+              ? nenhum
+              : gruposDoIndice(achados, l.temas).map(g => (
+                  <Box key={`todos:${g.projeto ?? ''}:${g.id}`} flexDirection="column">
+                    <Text bold>{comProjeto ? `${g.rotulo} · ${g.projeto ?? g.itens[0]?.projeto ?? ''}` : g.rotulo}</Text>
+                    {g.itens.map(i => (
+                      <Text key={i.id} wrap="truncate-end" dimColor={i.etapa === 'feito' || i.etapa === 'descartado'}>{`${i.id}  ${i.titulo}  · ${ROTULO_ETAPA_TERMINAL[i.etapa] ?? i.etapa}`}</Text>
+                    ))}
+                  </Box>
+                ))}
+          </Box>
+        )}
       </Box>
     )
   })
