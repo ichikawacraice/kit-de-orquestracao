@@ -2,7 +2,7 @@
 
 - **Data:** 2026-10-26
 - **Autora:** D2, designer do pool
-- **Estado:** em crítica
+- **Estado:** aprovada com ressalvas (crítica 1, 24/30; as cinco ressalvas aplicadas nesta versão, §Crítica)
 - **Mock:** [`2026-10-26-barra-de-status-mock.html`](2026-10-26-barra-de-status-mock.html), estático, claro e escuro: o terminal em 114, 94, 72 e 40 células (pior caso de largura) e o desktop numa coluna de chat, mais a faixa do pedido no pane a W = 288
 - **Plano de origem:** [`docs/planos/2026-10-26-barra-de-status-do-kit.md`](../../planos/2026-10-26-barra-de-status-do-kit.md). O comportamento (o que cada clique grava, quando cada coisa aparece, as réguas) é do plano; esta revisão decide a ordem, o agrupamento, os rótulos exatos, o que cai quando a largura aperta, como o pedido de limpeza e o cache em alerta se distinguem sem depender só de cor, o terminal e a linha do pedido no pane (D10).
 - **Base:** o topo do pane da F48 ([`2026-10-26-topo-do-painel.md`](https://github.com/ichikawacraice/kit-de-orquestracao/blob/claude/f48-limpeza-e-header/docs/design/2026-10-26-topo-do-painel.md), branch `claude/f48-limpeza-e-header`): rótulos do modo ausente, `key="modo"`, otimista com geração. O que esta revisão não cita do pane continua como lá.
@@ -30,7 +30,7 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 
 - **O operador**, no desktop (a coluna da conversa, com ou sem o pane encaixado ao lado) e no terminal. A barra aparece em **toda sessão** do Claude Code com o plugin, não só nas do pool: fora do pool ela mostra o que não depende do título (relógio, contexto sem régua, selo, painel).
 - **A largura se mede em células** (`bodyColumns`). As contas abaixo usam a **célula do terminal**, onde um botão é `[ rótulo ]` (rótulo + 4); no desktop o botão nativo é mais estreito que isso, então o que cabe no terminal cabe no desktop. Larguras de referência: **114** (terminal largo; desktop sem pane), **94** (terminal comum de 100 colunas; desktop com o pane encaixado), **72**, e **40** como pior caso.
-- A altura disponível é `maxRows` (no terminal em tela cheia, o que sobra acima do prompt, até metade da tela). A barra usa **1 linha** no caso comum, **2** com o pedido de limpeza, e +2 de moldura quando o cache está em aviso (§Estados): no máximo 4, abaixo de qualquer `maxRows` real.
+- A altura disponível é `maxRows` (no terminal em tela cheia, o que sobra acima do prompt, até metade da tela). A barra usa **1 linha** no caso comum, **2** com o pedido de limpeza, e +2 de moldura quando o cache está em aviso (§Estados): no máximo **4** com 66 células ou mais. Abaixo disso o pedido e o grupo da direita quebram, e o pior caso (40 células, ausente, pedido aberto, moldura) chega a **6** linhas, ainda abaixo da metade da tela que o `maxRows` dá.
 
 ## Inventário
 
@@ -67,6 +67,8 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 
 ### O que cai quando aperta (`bodyColumns`, contas na célula do terminal)
 
+**A faixa é a mais rica cuja soma cabe**, medida com os textos reais do momento, e não um corte fixo de `bodyColumns`: `faixaDaBarra(bodyColumns, pecas)` soma, para cada faixa (0, 1, 2), a esquerda (peças + `columnGap` 2), o vão de 2, a direita (botões + `columnGap` 1), os 2 do `paddingX` e, com moldura (§4), mais 2; devolve a primeira que cabe, e a 2 quando nenhuma cabe (aí o `flexWrap` quebra). Assim a palavra `· alto` / `· teto`, a moldura, `● 12 perguntas` e `Fechar painel` derrubam uma faixa sozinhos, em vez de quebrar a barra justo no aviso. A tabela abaixo é o estado comum de referência (≤ 9 perguntas, sem palavra, sem moldura):
+
 | Faixa | Esquerda | Direita | Soma no pior estado comum |
 |---|---|---|---|
 | **≥ 114** | relógio · `contexto 142/300 mil` · `F52 · design` · `E 2 · V 1` | selo · modo (`Ficar ausente` ou `☾ Estou de volta`) · painel | esq. 7+20+12+9 + 3×2 = 54; dir. 17+20+17 + 2 = 56; + 2 de vão + 2 de margem = **114** |
@@ -76,14 +78,14 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 - **Nunca caem:** o relógio, o selo (enquanto houver pergunta) e a linha do pedido com o seu botão. No ausente, o `☾ Estou de volta` também não cai: esquecer o ausente ligado é o risco que a F48 combate.
 - **O painel cai antes do selo, e só quando o selo está à mostra:** o selo também abre o painel, e o pane se fecha pela própria marca ou pelo `/painel`. Sem pergunta aberta, o botão do painel volta.
 - **`Ficar ausente` cai antes de tudo na direita:** é clicado uma vez por dia, e quem quer sair tem o pane e o `/ausente on`.
-- **A rede de segurança é o `flexWrap` do motor**, como no topo da F48: quando os números crescem (`12 perguntas`, `F152 · planejamento`, `contexto 287/300 mil · teto`) e a soma passa da faixa, o grupo da direita desce inteiro para uma 2ª linha e fica no canto direito (`flexGrow={1}` + `justifyContent="flex-end"` no grupo). A 40 células, no ausente com selo, é o que acontece (mock, quadro 4). Nada é cortado com reticências, exceto o item (`wrap="truncate-end"`), que é o menos importante.
+- **A rede de segurança é o `flexWrap` do motor**, como no topo da F48: quando nem a faixa 2 cabe (abaixo de ~66 células, ou um glifo que o terminal desenha com 2 células), o grupo da direita desce inteiro para uma 2ª linha e fica no canto direito (`flexGrow={1}` + `justifyContent="flex-end"` no grupo). A 40 células, no ausente com selo, é o que acontece (mock, quadro 4). Nada é cortado com reticências, exceto o item (`wrap="truncate-end"`), que é o menos importante.
 
 ## 1. A leitura (grupo da esquerda)
 
 | Peça | Texto | Peso e cor | Quando |
 |---|---|---|---|
-| **Relógio** | `⧗ 47:12` (mm:ss); `⧗ —` antes da 1ª resposta; `⧗ …` enquanto `isWorking`; `⧗ venceu` no zero | normal; aviso `warning` + negrito; alerta e venceu `inverse` + negrito (§4) | sempre |
-| **Contexto** | `contexto 142/300 mil` · `142/300 mil` · `142 mil`, conforme a faixa; com papel desconhecido, sem a régua: `contexto 142 mil` · `142 mil` | apagado no normal; no aviso, `warning` e ` · alto` no fim; no teto, `error`, negrito e ` · teto` | quando `tokens` existe |
+| **Relógio** | `⧗ 47:12` (mm:ss); `⧗ —` antes da 1ª resposta; `⧗ …` enquanto `isWorking`; `⧗ venceu` no zero | normal; aviso negrito (a moldura já é o âmbar); alerta e venceu `inverse` + negrito (§4) | sempre |
+| **Contexto** | `contexto 142/300 mil` · `142/300 mil` · `142 mil`, conforme a faixa (a palavra `· alto` / `· teto` fica em todas, e conta na soma da faixa); com papel desconhecido, sem a régua: `contexto 142 mil` · `142 mil` | apagado no normal; no aviso, `warning` e ` · alto` no fim; no teto, `error`, negrito e ` · teto` | quando `tokens` existe |
 | **Item** | `F52 · design` (o `F<n>` e o rótulo da etapa do `ROTULO_ETAPA` do pane) | apagado | com item e ≥ 94 |
 | **Pool** | `E 2 · V 1`; com zero dos dois, `E 0 · V 0` | apagado | com projeto e ≥ 114 |
 
@@ -103,6 +105,7 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 
 - **O rótulo é o gesto, e o estado vem junto quando importa:** `☾ Estou de volta` diz "você está ausente" e "clique para voltar" de uma vez, sem uma peça de estado a mais.
 - **`key` fixa nos botões que trocam de rótulo** (`modo`, `painel`, `perguntas`): o motor reencontra o botão depois do redesenho, e o foco de teclado não pula.
+- **`key` diferente para ação diferente:** `Pode se limpar` é `limpar-pedido` e `Limpar antes de vencer` é `limpar-antes`. Quando o pedido abre na barra da orquestradora, a linha troca de ação e o foco **não** deve passar de um rascunho reversível para o ok que dispara a limpeza.
 - **Modo não lido** (bandeira inválida): **sem** botão do modo, como no pane (F48, D1-4). O pane diz o motivo.
 - **Antes da 1ª leitura** da barra: só o relógio. Nada à direita até ler (evita o selo piscar `0` → `3`).
 - **Os toasts** são os do pane: ligar diz `Modo ausente ligado. Para pré-abrir o pool, use /ausente on no chat.`; desligar, `Modo ausente desligado`. Falha: o modo volta ao anterior no mesmo render e um toast `Não consegui ligar o modo ausente (<motivo>).` (a barra não tem faixa de avisos; o aviso vai também para a do pane, pelo `avisar` de sempre).
@@ -113,11 +116,11 @@ Uma linha **acima** da barra, só quando há o que pedir. É a única coisa da b
 
 | Caso | Texto (largo · estreito) | Botão |
 |---|---|---|
-| **Pedido aberto** (`limpar · orquestradora` do projeto), em **toda sessão** do projeto | `◆ A orquestradora pede para se limpar · Q290` (o Q-ID só com ≥ 94) · `◆ Orquestradora pede limpeza` (< 61) | `Pode se limpar`, **primário**, `key="limpar"` |
+| **Pedido aberto** (`limpar · orquestradora` do projeto), em **toda sessão** do projeto | `◆ A orquestradora pede para se limpar · Q290` (o Q-ID só com ≥ 94) · `◆ Orquestradora pede limpeza` (< 61) | `Pode se limpar`, **primário**, `key="limpar-pedido"` |
 | enviando | o mesmo texto | `Enviando…`, clique ignorado (o `enviando` da F48) |
 | enviado | `✓ Ok enviado à orquestradora`, sem botão, até a próxima leitura não ver mais a pergunta aberta; então a linha sai | — |
 | falhou | o texto volta; o botão volta a `Pode se limpar` | toast `Não consegui mandar o ok de limpar (<motivo>).` |
-| **Limpar antes de vencer**, só na barra da orquestradora, sem pedido aberto (D4 do plano) | `◆ Cache vence em 8 min com 212 mil no contexto` · `◆ Cache vence em 8 min` (< 76) | `Limpar antes de vencer`, **secundário**, `key="limpar"` |
+| **Limpar antes de vencer**, só na barra da orquestradora, sem pedido aberto (D4 do plano) | `◆ Cache vence em 8 min com 212 mil no contexto` · `◆ Cache vence em 8 min` (< 76) | `Limpar antes de vencer`, **secundário**, `key="limpar-antes"` |
 
 - **Com pedido aberto, a orquestradora vê o pedido, não o "limpar antes":** é o mesmo gesto (D4 do plano), uma linha só.
 - **Por que primário num e secundário no outro:** `Pode se limpar` manda a resposta e a orquestradora age; `Limpar antes de vencer` só põe um rascunho na caixa do prompt, logo abaixo, onde o operador o vê e decide com Enter. O efeito visível do segundo é o próprio rascunho; o toast `Rascunho na caixa do prompt: aperte Enter para mandar.` confirma.
@@ -133,7 +136,7 @@ Só com o turno parado (`isWorking` falso). Enquanto o turno anda, o relógio mo
 | Nível | Quando | Moldura | Relógio | Sem cor, o que diz |
 |---|---|---|---|---|
 | normal | > 20 min | nenhuma | `⧗ 47:12` normal | — |
-| **aviso** | ≤ 20 min | `borderStyle="round"` `borderColor="warning"`, em volta de **tudo** (pedido e barra) | negrito, `warning` | a **moldura** (forma) e o negrito |
+| **aviso** | ≤ 20 min | `borderStyle="round"` `borderColor="warning"`, em volta de **tudo** (pedido e barra) | negrito, sem cor: a moldura já carrega o âmbar, e o `warning` de texto fica para o que espera o operador (`●`, `◆`, `· alto`) | a **moldura** (forma) e o negrito |
 | **alerta** | ≤ 10 min | a mesma, `borderColor="error"` | **`inverse`** + negrito: ` ⧗ 08:12 ` em bloco | o **bloco invertido** no relógio |
 | **venceu** | 0 | a mesma, `error` | ` ⧗ venceu ` invertido | a palavra |
 
@@ -149,19 +152,19 @@ Só com o turno parado (`isWorking` falso). Enquanto o turno anda, o relógio mo
   1. a linha do pedido (quando há): `Box row flexWrap="wrap" columnGap={2} alignItems="center"`: `Text` com `◆` + frase, o `Button`;
   2. a barra: `Box row flexWrap="wrap" columnGap={2} alignItems="center"`: o grupo da esquerda `Box row columnGap={2}`; o da direita `Box row columnGap={1} flexGrow={1} justifyContent="flex-end"`.
 - **O desktop** desenha os botões nativos (mais estreitos que `[ ]`), e as faixas de largura valem do mesmo jeito, pelo `bodyColumns`. Com o pane encaixado ao lado, a coluna do chat estreita, e a barra cai de faixa sozinha.
-- **Acessibilidade:** os nomes acessíveis vão no `label` dos botões: selo `Abrir o painel: 3 perguntas abertas`; modo `Ligar o modo ausente` / `Desligar o modo ausente`; painel `Abrir o painel` / `Fechar o painel`; limpar `Dar o ok para a orquestradora se limpar` / `Pôr na caixa do prompt o ok para limpar antes de o cache vencer`.
+- **Acessibilidade:** o rótulo visível (a constante `ROTULO_*`) vai sempre como **filho** `Text` do botão, e o nome acessível no `label`. No `Button` do motor, `label` sem filhos é o texto desenhado: pôr o nome acessível nele sem o filho troca o rótulo visível e estoura a soma da faixa. Os nomes acessíveis: selo `Abrir o painel: 3 perguntas abertas`; modo `Ligar o modo ausente` / `Desligar o modo ausente`; painel `Abrir o painel` / `Fechar o painel`; limpar `Dar o ok para a orquestradora se limpar` / `Pôr na caixa do prompt o ok para limpar antes de o cache vencer`.
 
 Terminal, 114 células, presente, uma pergunta de limpeza aberta:
 
 ```
 ◆ A orquestradora pede para se limpar · Q290  [ Pode se limpar ]
-⧗ 47:12  contexto 142/300 mil  F52 · design  E 2 · V 1   [ ● 3 perguntas ] [ Ficar ausente ] [ Abrir painel ]
+⧗ 47:12  contexto 142/300 mil  F52 · design  E 2 · V 1      [ ● 3 perguntas ] [ Ficar ausente ] [ Abrir painel ]
 ```
 
-94 células, ausente, contexto alto:
+94 células, ausente, contexto alto (a faixa 1 somaria 101: cai para a 2, sem item e sem o painel, porque o selo está à mostra):
 
 ```
-⧗ 47:12  142/300 mil · alto  F52 · design        [ ● 3 perguntas ] [ ☾ Estou de volta ] [ Abrir painel ]
+⧗ 47:12  142 mil · alto                               [ ● 3 perguntas ] [ ☾ Estou de volta ]
 ```
 
 72 células, presente, alerta do cache (com moldura):
@@ -172,13 +175,13 @@ Terminal, 114 células, presente, uma pergunta de limpeza aberta:
 ╰──────────────────────────────────────────────────────────────────────╯
 ```
 
-40 células, ausente, com pedido (o botão do pedido e o grupo da direita descem):
+40 células, ausente, com pedido (o botão do pedido e o grupo da direita descem; o grupo ocupa as 38 células úteis inteiras). Os blocos desta seção mostram só as células úteis (largura − 2 do `paddingX`):
 
 ```
 ◆ Orquestradora pede limpeza
 [ Pode se limpar ]
 ⧗ 47:12  142 mil
-     [ ● 3 perguntas ] [ ☾ Estou de volta ]
+[ ● 3 perguntas ] [ ☾ Estou de volta ]
 ```
 
 ## 6. A linha do pedido no pane (D10)
@@ -188,7 +191,7 @@ Na faixa do topo do pane (F48), **depois da linha `⚠ Parou há…` e antes da 
 - **Montagem:** `Box column borderStyle="round" borderColor="warning" paddingX={1}`, nos dois motores (o botão precisa ficar **dentro** do contorno, e um `Svg` não leva botão dentro). Linhas:
   1. `Text bold`: `◆` (`warning`) + `A orquestradora pede para se limpar`;
   2. `Text dimColor`: `Q290 · há 3 min` (o `desde()` do pane);
-  3. `Box row justifyContent="flex-end"`: `Button variant="primary" key="limpar"` `Pode se limpar` → `Enviando…` → a faixa sai na leitura seguinte; antes disso, `✓ Ok enviado` no lugar do botão.
+  3. `Box row justifyContent="flex-end"`: `Button variant="primary" key="limpar-pedido"` `Pode se limpar` → `Enviando…` → a faixa sai na leitura seguinte; antes disso, `✓ Ok enviado` no lugar do botão.
 - **Distingue-se da faixa do ausente** por contorno âmbar (o ausente é lilás), `◆` (o ausente é `☾`) e por ter botão.
 - **Primário no pane:** a ação primária do pane é responder pergunta, e isto é responder pergunta. A mesma pergunta continua em "Esperam você" com os botões dela (plano).
 - **A W = 288** (33 células): a linha 1, 13/700, mede ~260 px com o contorno: cabe; a W = 240, quebra em duas (texto, não corte).
@@ -219,7 +222,7 @@ Texto de UI sem plano, ADR nem nome de arquivo. O `F52` e o `Q290` são dados (o
 | Barra (`AbovePrompt`) | `Box column` + moldura condicional; `Box row flexWrap`; `Text` (`dimColor`, `bold`, `inverse`, `color` por `ThemeKey`); `Button` | **sim**, em `hooks/barra.tsx` (D1 do plano) |
 | Linha do pedido | `Box row flexWrap` + `Text` + `Button variant="primary"` | **sim**, a mesma função desenha a da barra; o pane usa a mesma frase e o mesmo rótulo |
 | Faixa do pedido no pane | `Box column borderStyle="round" borderColor="warning"` + `Text` + `Button` | **sim**, em `register.tsx` (topo do pane) |
-| Faixa de largura | uma função pura `faixaDaBarra(bodyColumns) → 0 \| 1 \| 2` (≥ 114, 94–113, < 94) | **sim**, exportada para teste |
+| Faixa de largura | uma função pura `faixaDaBarra(bodyColumns, pecas) → 0 \| 1 \| 2`: a faixa mais rica cuja soma cabe (§O que cai quando aperta) | **sim**, exportada para teste |
 | Rótulos | constantes exportadas (`ROTULO_LIMPAR = 'Pode se limpar'`, …) usadas pela barra e pelo pane | **sim**: os dois lugares não podem divergir |
 
 ## Estados
@@ -262,25 +265,37 @@ Nenhum. O relógio troca o texto a cada segundo e só; a moldura e a linha do pe
 - **D2-6 · O denominador do contexto é o teto do papel**, com `alto` a partir do aviso. Recomendo: fica.
 - **D2-7 · A revisão mora em `docs/design/revisoes/`** (padrão da skill e do `CLAUDE.md`), e não em `docs/design/` como as anteriores e o briefing citavam. Recomendo: fica; o padrão do projeto é este, e o plano diz à E só `docs/design/<revisão da D1>`.
 
+## Crítica
+
+- **Rodada 1** (crítico de UI em contexto separado, 26/10, sobre d5b7b5e): **24/30**, hierarquia 5 · densidade 3 · consistência 4 · ruído 4 · ação primária 4 · aderência 4. **Aprovada com ressalvas**, nenhuma alta. As cinco ressalvas foram aplicadas nesta versão, e não viraram item de fila:
+  - **P1 · densidade (média):** as faixas fechavam em 114 e 94 sem folga e sem contar `· alto`, a moldura nem `● 12 perguntas`; a barra quebrava justo no aviso. → a faixa passa a ser a mais rica cuja soma cabe, com os textos reais (§O que cai quando aperta); o teto de altura foi corrigido (§Quem e onde).
+  - **P2 · aderência (média):** o mock desenhava linhas mais largas que a borda que ele marca (quadros 3, 5, 6 e 7). → redesenhados no número exato de células; quadro 3b novo, com `● 12 perguntas` a 94.
+  - **P3 · ação primária (média):** a mesma `key="limpar"` em `Pode se limpar` e `Limpar antes de vencer` deixava o foco atravessar de um rascunho para o ok que dispara a limpeza. → `limpar-pedido` e `limpar-antes`.
+  - **P4 · ruído (baixa):** no aviso, o âmbar pintava até cinco peças. → dentro da moldura de aviso o relógio é só negrito.
+  - **P5 · consistência (baixa):** a revisão não dizia que o `label` só é nome acessível com o rótulo visível como filho. → §5, gotcha e testes 2 e 8.
+- **Fica como está** (a crítica pediu para não desfazer): relógio na ponta esquerda e painel na ponta direita; a linha do pedido acima da barra com o único primário e quatro sinais além da cor; `☾ Estou de volta` nunca cai e `Ficar ausente` é o primeiro a cair.
+- A rodada 1 conta como a crítica desta revisão; não há recrítica pendente (sem ressalva alta).
+
 ## Gotchas para a E
 
-- **Largura dos glifos:** `⧗`, `●`, `☾`, `◆` e `✓` são de 1 célula nos terminais comuns; o `🎛` não aparece na barra (o apelido saiu). Se um terminal desenhar algum com 2, o `flexWrap` absorve; não meça com `length` de string.
+- **Largura dos glifos:** `⧗`, `●`, `☾`, `◆` e `✓` são de 1 célula nos terminais comuns; o `🎛` não aparece na barra (o apelido saiu). A soma da faixa conta por ponto de código (`[...texto].length`), não por `length` (UTF-16); se um terminal desenhar algum glifo com 2, o `flexWrap` absorve.
+- **O rótulo visível é filho, o nome acessível é `label`** (§5): os testes 2 e 8 conferem o filho.
 - **`gap` no motor é linha:** a linha do pedido e a barra usam `gap` 0 no `Box column`; o espaço entre peças é `columnGap`.
 - **A moldura só com o turno parado:** sem isso, a barra pisca a moldura a cada turno que cruza os 20 min.
-- **`key` fixa** em `perguntas`, `modo`, `painel` e `limpar`, para o foco não se perder quando o rótulo muda.
+- **`key` fixa** em `perguntas`, `modo` e `painel`, para o foco não se perder quando o rótulo muda; **`limpar-pedido` e `limpar-antes` separadas**, para o foco não atravessar de uma ação para a outra.
 - **Antes da 1ª leitura, nada à direita:** o selo não pisca `0` → `3`.
 - **O otimista do modo** é o do pane (geração, escrever o modo antes de soltar o `trocandoModo`): a barra e o pane leem o mesmo atom; um não desfaz o outro.
 
 ## Para a E
 
 Testes visuais, além dos do plano:
-1. `faixaDaBarra`: 114 → 0; 113 e 94 → 1; 93 e 40 → 2.
-2. Faixa 0, presente, 3 perguntas: a ordem dos filhos à esquerda é relógio, contexto, item, pool; à direita, os `Button` `perguntas`, `modo`, `painel`, nesta ordem.
+1. `faixaDaBarra`, estado comum de referência: 114 → 0; 113 e 94 → 1; 93 e 40 → 2. Com `· alto` a 114 → 1, e a 94 → 2; com moldura a 114 → 1; com `● 12 perguntas`, ausente e `Fechar painel` a 114 → 1; nenhuma faixa cabe a 40 → 2.
+2. Faixa 0, presente, 3 perguntas: a ordem dos filhos à esquerda é relógio, contexto, item, pool; à direita, os `Button` `perguntas`, `modo`, `painel`, nesta ordem; o rótulo de cada um é o filho (a constante), e o `label` é o nome acessível.
 3. Faixa 1: sem pool; contexto `142/300 mil`. Faixa 2: sem item; contexto `142 mil`; presente com selo → não há `modo` nem `painel`; ausente com selo → há `modo` (`☾ Estou de volta`) e não há `painel`; sem selo → há `painel`.
 4. A linha do pedido vem **antes** da barra no `Box column`; tem o único `Button` com `variant="primary"`; o texto tem `◆`; o Q-ID só nas faixas 0 e 1.
-5. Orquestradora com pedido aberto e cache a 8 min: **uma** linha do pedido, a do pedido (primário), não a do "limpar antes".
-6. Cache: 1 201 s → sem `borderStyle`; 1 200 s → `round` + `warning`, relógio `bold`; 600 s → `error`, relógio `inverse`; `isWorking` em qualquer valor → sem borda e `⧗ …`.
+5. Orquestradora com pedido aberto e cache a 8 min: **uma** linha do pedido, a do pedido (primário), não a do "limpar antes"; o único `Button` dela tem `key` `limpar-pedido`.
+6. Cache: 1 201 s → sem `borderStyle`; 1 200 s → `round` + `warning`, relógio `bold` e sem `color`; 600 s → `error`, relógio `inverse`; `isWorking` em qualquer valor → sem borda e `⧗ …`.
 7. Contexto no aviso termina em ` · alto`; no teto, ` · teto` e `bold`; papel desconhecido → sem `/`.
-8. Pane: a faixa do pedido vem depois da linha `⚠ Parou` (quando há) e antes da faixa do ausente; tem `borderColor="warning"` e o `Button` `limpar` primário; os rótulos são as mesmas constantes da barra.
+8. Pane: a faixa do pedido vem depois da linha `⚠ Parou` (quando há) e antes da faixa do ausente; tem `borderColor="warning"` e o `Button` `limpar-pedido` primário; os rótulos (filhos) são as mesmas constantes da barra.
 
 **Gestos que a V audita** (`auditoria-de-clique`): o selo abre o pane e, aberto, não fecha; o painel abre e fecha do mesmo ponto; `Ficar ausente` → `☾ Estou de volta` no mesmo lugar, e de volta; `Pode se limpar` com uma pergunta de teste, olhando `Enviando…` antes do `✓`; `Limpar antes de vencer` deixa o rascunho na caixa; a barra a 94 e a 40 células sem nada sair pela direita; a moldura em claro e escuro.
