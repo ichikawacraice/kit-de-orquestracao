@@ -7,8 +7,8 @@ import type { Citado, ItemDoIndice, LinhaItem, PerguntaAberta, PerguntaAnterior 
 const FONTE = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif"
 
 const CSS = `<style>
-.t{fill:#1f1f1f}.s{fill:#6b6b68}.m{fill:#6f6f6b}.av{fill:#9a6210}.er{fill:#b8452c}.an{fill:#3a68c8}.ok{fill:#2e7d4a}.li{fill:#5b5cd6}.pt{fill:#ffffff}.es{stroke:#b8452c}.oks{stroke:#2e7d4a}.ms{stroke:#6f6f6b}.ln{stroke:#e8e7e3}.tile{fill:#f4f3f0}.k{fill:#ecebe8}.card{fill:#fbf6ec;stroke:#efdcb6}.et{fill:#fdf0ed}.avs{stroke:#9a6210}.ans{stroke:#3a68c8}
-@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}.m{fill:#93938f}.av{fill:#d9962b}.er{fill:#e0846b}.an{fill:#5b8def}.ok{fill:#4caf6e}.li{fill:#8b8cf8}.pt{fill:#1f1f1f}.es{stroke:#e0846b}.oks{stroke:#4caf6e}.ms{stroke:#93938f}.ln{stroke:#2f2f2d}.tile{fill:#262625}.k{fill:#2c2c2b}.card{fill:#2a251b;stroke:#4a3d22}.et{fill:#3a2320}.avs{stroke:#d9962b}.ans{stroke:#5b8def}}
+.t{fill:#1f1f1f}.s{fill:#6b6b68}.m{fill:#6f6f6b}.av{fill:#9a6210}.er{fill:#b8452c}.an{fill:#3a68c8}.ok{fill:#2e7d4a}.li{fill:#5b5cd6}.lis{stroke:#5b5cd6}.pt{fill:#ffffff}.es{stroke:#b8452c}.oks{stroke:#2e7d4a}.ms{stroke:#6f6f6b}.ln{stroke:#e8e7e3}.tile{fill:#f4f3f0}.k{fill:#ecebe8}.card{fill:#fbf6ec;stroke:#efdcb6}.et{fill:#fdf0ed}.avs{stroke:#9a6210}.ans{stroke:#3a68c8}
+@media (prefers-color-scheme: dark){.t{fill:#ececec}.s{fill:#a8a8a4}.m{fill:#93938f}.av{fill:#d9962b}.er{fill:#e0846b}.an{fill:#5b8def}.ok{fill:#4caf6e}.li{fill:#8b8cf8}.lis{stroke:#8b8cf8}.pt{fill:#1f1f1f}.es{stroke:#e0846b}.oks{stroke:#4caf6e}.ms{stroke:#93938f}.ln{stroke:#2f2f2d}.tile{fill:#262625}.k{fill:#2c2c2b}.card{fill:#2a251b;stroke:#4a3d22}.et{fill:#3a2320}.avs{stroke:#d9962b}.ans{stroke:#5b8def}}
 .vivo{animation:p 1.6s ease-in-out infinite}@keyframes p{50%{opacity:.35}}
 @media (prefers-reduced-motion: reduce){.vivo{animation:none}}
 </style>`
@@ -817,4 +817,71 @@ export function faixaSvg(W: number, f: Faixa): { source: string; height: number;
     alt: [f.titulo, f.detalhe].filter(Boolean).join(' — '),
     source: svg(W, altura, `<rect class="${erro ? 'et' : 'card'}" x=".5" y=".5" width="${W - 1}" height="${altura - 1}" rx="8"/>${partes.join('')}`),
   }
+}
+
+const dois_ = (n: number) => String(n).padStart(2, '0')
+
+/** "desde": a hora local `HH:MM` quando é hoje, `ontem HH:MM`, ou `DD/MM HH:MM` antes disso. */
+function desdeEscrito(iso: string, agora: number): string {
+  const d = new Date(iso)
+  const hm = `${dois_(d.getHours())}:${dois_(d.getMinutes())}`
+  const dia = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const dias = Math.round((dia(new Date(agora)) - dia(d)) / 86_400_000)
+  if (dias <= 0) return hm
+
+  return dias === 1 ? `ontem ${hm}` : `${dois_(d.getDate())}/${dois_(d.getMonth() + 1)} ${hm}`
+}
+
+/**
+ * Há quanto tempo e desde quando o modo está ligado. `desde` no futuro (relógio torto) ou menos de 1 min: `agora`; o `desde()` dos
+ * cartões não muda, a troca fica aqui.
+ */
+export function modoDescrito(iso: string | undefined, agora: number): { ha: string; quando?: string } {
+  const t = iso ? Date.parse(iso) : NaN
+
+  return {
+    ha: Number.isNaN(t) || t > agora + 60_000 ? 'agora' : (desde(iso, agora) ?? 'agora'),
+    quando: Number.isNaN(t) ? undefined : desdeEscrito(iso as string, agora),
+  }
+}
+
+/**
+ * A faixa do modo ausente: contorno lilás de 1,5 px, sem fundo, três linhas (o que o modo é, desde quando e o que libera,
+ * o que trava). A frase do meio quebra no " · " quando não cabe, nunca no meio nem cortada. O `Svg` leva 4 px de respiro em cima.
+ */
+export function modoSvg(W: number, o: { modo: 'ausente'; desde?: string; agora: number }): { source: string; height: number; alt: string } {
+  const { ha, quando } = modoDescrito(o.desde, o.agora)
+  const titulo = `Ausente ${ha}`
+  const util = W - 24
+  const frase = 'a orquestradora pode se limpar'
+  const linhaDesde = quando ? `desde ${quando} · ${frase}` : frase
+  const meio = largura(linhaDesde, 12) <= util || !quando ? [linhaDesde] : [`desde ${quando} ·`, frase]
+  const linhas = [...meio, 'sessões novas só abrem com você']
+  const altura = 24 + 16 * linhas.length + 10
+  const partes = [`<text x="12" y="24" font-family="${FONTE}" font-size="13" font-weight="700"><tspan class="${LILAS}">☾</tspan><tspan class="t"> ${xml(titulo)}</tspan></text>`]
+  linhas.forEach((l, k) => partes.push(texto(12, 40 + 16 * k, 12, 's', xml(l))))
+
+  return {
+    height: altura,
+    alt: `Modo ausente ${ha}${quando ? `, desde ${quando}` : ''}: a orquestradora pode se limpar sozinha, e sessão nova só abre num turno seu.`,
+    source: svg(W, altura, `<rect class="lis" fill="none" stroke-width="1.5" x=".75" y="4.75" width="${W - 1.5}" height="${altura - 5.5}" rx="8"/>${partes.join('')}`),
+  }
+}
+
+/** A palavra estreita da fileira: `Presente`, ou `Modo não lido (vale presente)` (em itálico) quando o arquivo não se leu. */
+export function rotuloModoSvg(modo: 'presente' | 'desconhecido'): { source: string; alt: string; width: number } {
+  const dito = modo === 'presente' ? 'Presente' : 'Modo não lido (vale presente)'
+  const width = Math.ceil(largura(dito, 12.5) * 1.1) + 4
+  const extra = ` font-weight="600"${modo === 'desconhecido' ? ' font-style="italic"' : ''}`
+
+  return {
+    width,
+    alt: modo === 'presente' ? 'Modo presente.' : 'Não consegui ler o modo ausente; para as travas, vale presente.',
+    source: svg(width, 20, texto(0, 14, 12.5, modo === 'presente' ? 's' : 'm', xml(dito), extra)),
+  }
+}
+
+/** A linha `⚠ Parou há 7 min`, em vermelho, de 20 px. */
+export function parouSvg(W: number, dito: string): { source: string; height: number; alt: string } {
+  return { height: 20, alt: dito, source: svg(W, 20, texto(0, 14, 12, ERRO, xml(caber(dito, 12, W)))) }
 }

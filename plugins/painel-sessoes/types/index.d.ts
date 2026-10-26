@@ -108,6 +108,8 @@ export type Leitura = {
   sessoes?: SessaoViva[]
   /** A lista de sessões, ou a própria sessão, não veio: a situação de cada sessão é "sem leitura da sessão". */
   semLista?: boolean
+  /** O modo ausente da última leitura; `null` = o arquivo não se leu (JSON inválido); ausente (undefined) antes da 1ª leitura e no estado de antes desta versão. */
+  ausente?: { ligado: boolean; desde?: string; por?: string } | null
 }
 
 declare module 'claude-code' {
@@ -130,6 +132,8 @@ declare module 'claude-code' {
       abrindo: string | null
       /** A hora do último tique do relógio que achou a leitura em curso: faz a tela redesenhar enquanto ela pendura. */
       tique: number
+      /** O botão do modo está gravando a bandeira: o clique é ignorado até acabar. */
+      trocandoModo: boolean
     }
   }
 }
