@@ -25,6 +25,16 @@ Recomendações (a)–(d) da orquestradora, com o que este plano muda nelas:
   - **Ausente on: o pool padrão.** O `/ausente on` pré-cria o **pool padrão** (o que hoje se chama "teto previsto": 4 E, 3 V, uma D se alguma frente viva toca tela, uma P por frente viva mais uma livre). Com o modo ligado **não se pede vaga nova** (nem cartão: não há quem aceite) e **nada se arquiva**; item além do pool espera na fila o primeiro membro do papel que liberar.
   - Some de todo texto: "Teto (Q214…)", "dentro do teto", "acima do teto ela pergunta", "o que passa do teto", "teto previsto". O "Teto da crítica de tela (Q207)" é outra regra e fica.
   - Sem hook: nenhum hook conta o teto hoje (`grep -n Q214 plugins/orquestracao/hooks/*.mjs` vazio). O `papel-do-pool.mjs` segue deixando passar o cartão no modo ausente; não pedir é regra de texto.
+- **D8. Com o modo ausente desligado, a orquestradora arquiva sozinha (complemento da Q277, operador, 25/10).** Nas palavras dele: *"eu não preciso dar comando para as sessões não necessárias serem arquivadas, você comanda no modo ausente desligado, de acordo com o que temos na fila"*. Substitui a Q245 nesse modo.
+  - **Ausente off:** a orquestradora arquiva, **sem perguntar e em qualquer turno**, o membro que não está no `com`, no `fez` nem é dono (`donoLocalId`) de item vivo (etapa ≠ `feito`/`descartado`), conforme o que a fila pede. As condições da seção "Arquivar sessão que terminou" continuam (worktree limpo, sem decisão pendente, não fixada nem aberta na tela; membro do pool não tem PR próprio). Mesmo projeto ou projeto sem orquestradora (F23) continua.
+  - **Ausente on:** nada se arquiva fora do turno do operador. Pedido digitado pelo operador no turno dele vale em qualquer modo (*assumida, a confirmar*: comando explícito dele é ele presente).
+  - **Trava (`papel-do-pool.mjs`, T2), orquestradora arquivando membro (não `self`):**
+    1. turno `human` → como hoje (só a checagem de projeto), log `deixou-arquivar-por-comando`;
+    2. senão, bandeira `operador-ausente.json` presente → `deny`, motivo: *"Modo ausente ligado: nada se arquiva (Q277). O membro fica no pool para o que surgir."*;
+    3. senão, alvo no `com`/`fez`/dono de item vivo → `deny`, motivo cita os itens: *"<ID> ainda está em <F…> (com/fez/dono): só se arquiva membro sem item vivo."*; fila ilegível (pasta que não se lê) → `deny` (*"não consegui ler a fila: por segurança, não arquivo"*);
+    4. senão, a mesma checagem de projeto do item 1; passando, log `arquivou-sozinha` com `<ID> <alvo>`.
+    Para o item 3 a leitura não pode tratar erro como lista vazia: em `pool-comum.mjs` crie `ocupacaoDaSessao(localId)` → `{ com:[], fez:[], dono:[] }` com `fez` de **qualquer** etapa viva, ou `null` se `readdirSync` da fila falha. `itensDaSessao` e `itensDonosDaSessao` não mudam. O alvo é o `localId` do registro (`reg.localId`).
+  - Comentário do topo (linha 9) e o motivo da linha 156 (quem não é orquestradora) passam a dizer: *"Só a orquestradora arquiva: com o modo ausente desligado, sozinha, o membro sem item vivo; com ele ligado, só por pedido do operador no turno dele (Q277)."* `origem === 'plugin'` deixa de ter motivo próprio (cai no item 2/3/4).
 - **D6.** Versão do plugin `0.1.22` (a F48 leva a `0.1.21`); quem entrar por último rebaseia e acerta.
 
 ## Contratos
@@ -61,6 +71,11 @@ A F48 (P1, branch `claude/f48-limpeza-e-header`) mexe nos mesmos arquivos em out
 | D7 — `skills/orquestradora/SKILL.md` | 25: sai "e, em qualquer modo, o que passa do teto" e o parêntese "(acima do teto…)". 27: sai a frase "**Teto (Q214…)**…esperando a fila."; "teto previsto" vira "pool padrão"; "Item esperando sem membro livre → peça a vaga" ganha "com o modo ausente desligado; ligado, o item espera o primeiro que liberar". |
 | D7 — `pool/papeis/orquestradora.md` | 54: o mesmo da linha 27 acima. |
 | D7 — `skills/ausente/SKILL.md` | description e passo 2: "teto previsto"/"o teto da Q214" viram "pool padrão"; passo 4: acrescenta que, ligado o modo, não se pede vaga nova nem cartão. `off`: volta ao pool sem teto, com o arquivamento por comando. |
+| D8 — `hooks/pool-comum.mjs`, `hooks/papel-do-pool.mjs` | `ocupacaoDaSessao`; T2 pelas regras da D8. |
+| D8 — `skills/orquestradora/SKILL.md` | passo 2 do ritual (25) e "Arquivar sessão que terminou" (84): com ausente off, arquiva sozinha quem cumpre as condições e não tem item vivo, e lista as arquivadas numa linha no relatório; sem Q-ID; com ausente on, nada se arquiva. Sai "arquive só quando ele mandar". A frase da trava diz a regra nova. |
+| D8 — `pool/protocolo.md` | 9 (`sob-demanda`) e 55 ("Quem arquiva membro"): o mesmo; Q245 passa a valer só como "pedido do operador no turno dele vale sempre". |
+| D8 — `pool/papeis/orquestradora.md` | 54: "entra na lista de candidatas a arquivar que você leva ao operador" vira "você o arquiva (ausente off)". |
+| D8 — `skills/ausente/SKILL.md` | `off`: "a orquestradora lista os livres … e pergunta se arquiva" vira "arquiva sozinha o membro sem item vivo". |
 | `plugins/orquestracao/.claude-plugin/plugin.json` | `0.1.22`. |
 
 ## Regras exatas
@@ -105,6 +120,15 @@ A F48 (P1, branch `claude/f48-limpeza-e-header`) mexe nos mesmos arquivos em out
 `hooks/tests/pool-comum.test.mjs`
 - `tituloAguardando('E2 · aguardando validação')` → true; `'E2 · livre'` → false; `'E2 · aguardando validação do X'` → false.
 - `declarouLivre` com `set_session_title "self"` aguardando → `{ como: 'título aguardando', aguardando: true, propria: true }`; com livre → `aguardando: false`.
+
+`hooks/tests/papel-do-pool.test.mjs` (D8; fila em `FILA_DIR` temporária)
+- O caso `T2: archive/delete de membro` muda: `ORQ` em turno `peer`, sem bandeira, alvo `local_E1` fora de todo item → **passa**, log `arquivou-sozinha` (era `nega`). Idem `{}` (transcript ausente) e origem `plugin`.
+- `D8.1` mesmo cenário com `operador-ausente.json` presente → `deny`, motivo casa `/ausente/`; turno `human` com a bandeira → passa.
+- `D8.2` sem bandeira, turno `peer`, alvo `local_E3` no `com` de F5 vivo → `deny`, motivo casa `/F5/`; o mesmo com F5 em `feito` → passa (prova de que a presença é detectada). Idem para `fez` (etapa `planejamento` também conta) e para `donoLocalId`.
+- `D8.3` `FILA_DIR` apontando para arquivo (não pasta) → `deny`, motivo casa `/fila/`.
+- `D8.4` projeto: turno `peer`, sem bandeira, alvo livre de B com orquestradora própria → `deny` "outro projeto" (a checagem vale também na arquivada sozinha).
+- `P1` (planejadora) em turno `peer` continua `nega`.
+- Doc × código: `skills/orquestradora/SKILL.md` e `pool/protocolo.md` contêm `Q277` e não contêm "arquive só quando ele mandar".
 
 ## Critério de pronto
 
