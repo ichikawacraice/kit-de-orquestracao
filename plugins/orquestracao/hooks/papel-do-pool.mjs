@@ -141,8 +141,9 @@ function main() {
         // cuja orquestradora não deu para medir (`projetoTemOrquestradora` → null) → não arquiva.
         const meu = projetoDaSessao(quemChama)?.repo; const dele = projetoDaSessao(reg)?.repo;
         const dela = meu && dele && meu !== dele ? projetoTemOrquestradora(alvo, dele) : undefined;
-        // Piso de uma E livre (ADR 0004): fora do turno do operador, a última E livre do projeto da orquestradora não se arquiva.
-        if (!porComando && meu && meu === dele && m.papel === 'E' && !membrosLivres(dele).some((x) => x.papel === 'E' && x.localId !== reg.localId)) {
+        // Piso de uma E livre (ADR 0004): fora do turno do operador, a última E livre (o alvo livre e nenhuma outra) do projeto da orquestradora não se arquiva.
+        const livresE = meu && meu === dele && m.papel === 'E' ? membrosLivres(dele).filter((x) => x.papel === 'E') : [];
+        if (!porComando && meu && meu === dele && m.papel === 'E' && livresE.some((x) => x.localId === reg.localId) && !livresE.some((x) => x.localId !== reg.localId)) {
           return nega('T2', m.id, String(alvo), `${m.id} é a última E livre do projeto: fora do modo ausente o pool mantém pelo menos uma (ADR 0004). Só o operador, no turno dele, manda arquivá-la.`);
         }
         if (meu && dele && (meu === dele || dela === false)) {

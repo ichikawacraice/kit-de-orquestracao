@@ -2,6 +2,7 @@
 // orquestradora, início do turno e "este repositório tem orquestradora ativa".
 // Fonte das regras: ~/.claude/orquestracao/pool/protocolo.md. Log e BASE: hooks-crewai-comum.mjs.
 import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join, basename, dirname } from 'node:path';
@@ -254,6 +255,9 @@ export function inicioDoTurno(transcriptPath) {
 
 // --- Repositório com orquestradora ativa: mesma regra de painel-das-sessoes.mjs; mude nos dois. ---
 const VALIDADE_MS = 7 * 24 * 3600 * 1000;
+
+// Chave da marca de vaga de E já pedida (`BASE/piso/<chave>.json`): 16 primeiros caracteres do sha1 do git common dir.
+export function chaveDoPiso(repo) { return createHash('sha1').update(String(repo)).digest('hex').slice(0, 16); }
 
 export function gitCommonDir(cwd) {
   if (!cwd || !existsSync(cwd)) return null;

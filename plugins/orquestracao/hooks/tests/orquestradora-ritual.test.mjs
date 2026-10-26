@@ -8,7 +8,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { beforeEach, afterEach } from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { rmSync, existsSync, readFileSync } from 'node:fs';
+import { gitCommonDir, chaveDoPiso } from '../pool-comum.mjs';
 
 const HOOK = join(dirname(fileURLToPath(import.meta.url)), '..', 'orquestradora-ritual.mjs');
 const haH = (h) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -280,6 +281,62 @@ test('(piso-5) E livre de outro projeto não conta; livre de outro papel (P) tam
 });
 test('(piso-6) repo que não resolve → não cobra o piso', () => {
   assert.equal(rodar([LIST, GRAVA], { extra: { cwd: join(base, 'fora') } }), null);
+});
+
+// Marca de vaga de E já pedida: vale por PISO_VAGA_MIN minutos ou até aparecer E livre; só o hook do ritual a grava.
+const pisoDir = () => join(base, 'orq', 'piso');
+const marcaArq = (repo) => join(pisoDir(), `${chaveDoPiso(gitCommonDir(repo))}.json`);
+function marca(repo, minutos, conteudo) {
+  mkdirSync(pisoDir(), { recursive: true });
+  writeFileSync(marcaArq(repo), conteudo ?? JSON.stringify({ repo: gitCommonDir(repo), em: minAtras(minutos), sessao: 'x' }));
+}
+const PRECOND = () => { const r = rodar([LIST, GRAVA]); assert.equal(r?.decision, 'block', 'precondição: sem marca a cobrança aparece'); assert.match(r.reason, /sem E livre/); };
+test('(piso-7) start_session de E sem E livre → passa e grava a marca do projeto', () => {
+  assert.equal(rodar([LIST, GRAVA, START]), null);
+  assert.ok(existsSync(marcaArq(repoA)), 'a marca tem de existir');
+  const m = JSON.parse(readFileSync(marcaArq(repoA), 'utf8'));
+  assert.ok(m.repo && m.repo === gitCommonDir(repoA), 'repo gravado');
+  assert.ok(Number.isFinite(Date.parse(m.em)), 'em parseável');
+});
+test('(piso-8) marca recente → turno seguinte sem start_session não cobra', () => {
+  PRECOND();
+  marca(repoA, 30);
+  assert.equal(rodar([LIST, GRAVA]), null);
+});
+test('(piso-9) marca vencida (61 min, prazo 60) → cobra de novo', () => {
+  marca(repoA, 61);
+  const r = rodar([LIST, GRAVA], { env: { PISO_VAGA_MIN: '60' } });
+  assert.equal(r?.decision, 'block'); assert.match(r.reason, /sem E livre/);
+  marca(repoA, 59);
+  assert.equal(rodar([LIST, GRAVA], { env: { PISO_VAGA_MIN: '60' } }), null, 'dentro do prazo passa');
+});
+test('(piso-10) aparece E livre → a marca some; sem a E, cobra de novo', () => {
+  marca(repoA, 30);
+  assert.ok(existsSync(marcaArq(repoA)), 'precondição: marca existe');
+  livre('local_E2', 'E2 · livre');
+  assert.equal(rodar([LIST, GRAVA]), null);
+  assert.ok(!existsSync(marcaArq(repoA)), 'a marca tem de sumir');
+  rmSync(join(base, 'app', 'local_E2.json'));
+  const r = rodar([LIST, GRAVA]);
+  assert.equal(r?.decision, 'block'); assert.match(r.reason, /sem E livre/);
+});
+test('(piso-11) marca de outro projeto não vale', () => {
+  marca(repoB, 30);
+  assert.ok(existsSync(marcaArq(repoB)), 'precondição: marca de B existe');
+  const r = rodar([LIST, GRAVA]);
+  assert.equal(r?.decision, 'block'); assert.match(r.reason, /sem E livre/);
+});
+test('(piso-12) start_session que não é de E passa no turno mas não grava marca', () => {
+  assert.equal(rodar([LIST, GRAVA, ['mcp__ccd_session__start_session', { title: 'P3 · livre' }]]), null);
+  assert.ok(!existsSync(marcaArq(repoA)), 'nenhuma marca');
+  const r = rodar([LIST, GRAVA]);
+  assert.equal(r?.decision, 'block'); assert.match(r.reason, /sem E livre/);
+});
+test('(piso-13) marca ilegível conta como ausente e o hook sai com status 0', () => {
+  marca(repoA, 0, '{não é json');
+  assert.ok(existsSync(marcaArq(repoA)), 'precondição: arquivo ruim existe');
+  const r = rodar([LIST, GRAVA]); // rodar() já afirma status 0
+  assert.equal(r?.decision, 'block'); assert.match(r.reason, /sem E livre/);
 });
 
 test('sem item esperando e ritual feito → passa', () => {
