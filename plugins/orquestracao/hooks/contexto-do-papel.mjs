@@ -3,6 +3,8 @@
 // lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain) e não grava estado nenhum.
 //   orquestradora (F48): com o modo ausente ligado segue a régua da planejadora abaixo; com o operador presente ela não limpa
 //     sozinha: ≥ 250 mil cobra PEDIR (pergunta `limpar · orquestradora` aberta, ou respondida há ≤ 2 h; ou limpou), abaixo disso nada.
+//     F53: se o turno termina esperando o operador, cobra também a JANELA (AskUserQuestion com a mesma pergunta) antes de parar;
+//     janela aberta neste turno, ou respondida há ≤ 2 h, satisfaz.
 //   planejadora / design: ≥ 500 mil cobra limpar (só `clear_session` "self" satisfaz); ≥ 350 mil cobra limpar OU
 //     a linha `Contexto: sigo — <o que falta na unidade>`; ≥ 250 mil com o turno terminando esperando o operador (`?` ou `Q<n>` no
 //     último parágrafo) cobra limpar antes.
@@ -13,7 +15,7 @@
 // `CONTEXTO_LIMITE_<NOME>` só para teste. Fonte da regra: skills/papeis-e-modelos/SKILL.md, seção "Contexto".
 import { readFileSync } from 'node:fs';
 import { registrar, textoDe, modoAusente } from './hooks-crewai-comum.mjs';
-import { registroDaSessao, membroDoPool, ehOrquestradora, ehExecutora, inicioDoTurno, contextoDoTranscript, perguntasDeLimpeza } from './pool-comum.mjs';
+import { registroDaSessao, membroDoPool, ehOrquestradora, ehExecutora, inicioDoTurno, contextoDoTranscript, perguntasDeLimpeza, janelasDeLimpeza } from './pool-comum.mjs';
 
 const HOOK = 'contexto-do-papel';
 const limite = (nome, padrao) => { const v = Number(process.env[`CONTEXTO_LIMITE_${nome}`]); return Number.isFinite(v) && v > 0 ? v : padrao; };
@@ -54,18 +56,43 @@ function doTurno(transcript, inicio, ultimaMensagem) {
   return { limpou, texto };
 }
 
+// O turno termina esperando o operador: `?` ou `Q<n>` no último parágrafo. O `?` de uma URL com query (`…/a?b=1`) não é pergunta
+// (O3 do F35); o `?` solto, mesmo colado numa URL, continua valendo.
+function terminaEsperando(texto) {
+  const ultimoParagrafo = (texto.split(/\n\s*\n/).pop() || '').replace(/https?:\/\/\S*\?\S+/g, '');
+  return /\?|\bQ\d+\b/.test(ultimoParagrafo);
+}
+
 // Orquestradora com o operador presente (F48): a limpeza inteira é dele; ela PEDE a partir de 250 mil.
 function orquestradora(e, sid, transcript, ativo, t, det, reg) {
   if (t < PEDIR) return;
-  const { limpou } = doTurno(transcript, inicioDoTurno(transcript) ?? 0, e.last_assistant_message);
+  const inicio = inicioDoTurno(transcript) ?? 0;
+  const { limpou, texto } = doTurno(transcript, inicio, e.last_assistant_message);
   if (limpou) { registrar(sid, HOOK, 'limpou', det); return; }
   // A trégua conta da hora do clique (`respondidaEm`, senão `atualizadoEm`); data no futuro (> agora + 1 min) não vale.
   const dentro = (iso) => { const d = Date.now() - Date.parse(iso); return d >= -60_000 && d <= SEGURA_MS; };
-  const pediu = perguntasDeLimpeza(reg?.localId).some((d) => d.estado === 'aberta' || dentro(Number.isNaN(Date.parse(d.respondidaEm)) ? d.atualizadoEm : d.respondidaEm));
-  if (pediu) { registrar(sid, HOOK, 'satisfeito-pediu', det); return; }
-  if (ativo) { registrar(sid, HOOK, 'deixou-passar', `cobrou-pedir ${det}`); return; }
-  registrar(sid, HOOK, 'cobrou-pedir', det);
-  process.stdout.write(JSON.stringify({ decision: 'block', reason: `Contexto em ${mil(t)} mil. Não limpe sozinha (o operador pode estar lendo): escreva o estado, abra a pergunta \`limpar · orquestradora\` no painel (Q-ID de proxima-pergunta, sessaoId, recomendação: limpar) e siga; limpe só com o sim dele. Com o modo ausente ligado, pode limpar sozinha.` }));
+  const perguntas = perguntasDeLimpeza(reg?.localId);
+  const pediu = perguntas.some((d) => d.estado === 'aberta' || dentro(Number.isNaN(Date.parse(d.respondidaEm)) ? d.atualizadoEm : d.respondidaEm));
+  const espera = terminaEsperando(texto);
+  if (!pediu) {
+    if (ativo) { registrar(sid, HOOK, 'deixou-passar', `cobrou-pedir ${det}`); return; }
+    registrar(sid, HOOK, 'cobrou-pedir', det);
+    process.stdout.write(JSON.stringify({ decision: 'block', reason: `Contexto em ${mil(t)} mil. Não limpe sozinha (o operador pode estar lendo): escreva o estado, abra a pergunta \`limpar · orquestradora\` no painel (Q-ID de proxima-pergunta, sessaoId, recomendação: limpar) e siga; limpe só com o sim dele. Com o modo ausente ligado, pode limpar sozinha.` + (espera ? ' E, como o turno termina esperando por ele, abra também a janela (AskUserQuestion) com a mesma pergunta antes de parar.' : '') }));
+    return;
+  }
+  // Pedido feito: se o turno termina esperando e a pergunta do painel ainda está aberta (nenhuma em trégua), falta a janela.
+  const emTregua = perguntas.some((d) => d.estado !== 'aberta' && dentro(Number.isNaN(Date.parse(d.respondidaEm)) ? d.atualizadoEm : d.respondidaEm));
+  if (espera && !emTregua) {
+    const janelas = janelasDeLimpeza(transcript);
+    // Janela aberta neste turno, ou respondida há ≤ 2 h (sim ou não), satisfaz: não fica reabrindo.
+    const satisfaz = janelas.some((j) => j.abertaEm >= inicio || (Number.isFinite(j.respondidaEm) && dentro(new Date(j.respondidaEm).toISOString())));
+    if (satisfaz) { registrar(sid, HOOK, 'satisfeito-janela', det); return; }
+    if (ativo) { registrar(sid, HOOK, 'deixou-passar', `cobrou-janela ${det}`); return; }
+    registrar(sid, HOOK, 'cobrou-janela', det);
+    process.stdout.write(JSON.stringify({ decision: 'block', reason: `Contexto em ${mil(t)} mil e o turno termina esperando por ele: antes de parar, abra a janela (AskUserQuestion) com a pergunta \`Qnn · limpar · orquestradora\` (o Q-ID da pergunta do painel; opções \`Sim, pode limpar\` (Recommended) e \`Não, agora não\`). Sim → marque a pergunta do painel respondida e limpe. Não → marque respondida e siga.` }));
+    return;
+  }
+  registrar(sid, HOOK, 'satisfeito-pediu', det);
 }
 
 function main() {
@@ -102,9 +129,7 @@ function main() {
 
   const inicio = inicioDoTurno(transcript) ?? 0;
   const { limpou, texto } = doTurno(transcript, inicio, e.last_assistant_message);
-  // O `?` de uma URL com query (`…/a?b=1`) não é pergunta (O3 do F35); o `?` solto, mesmo colado numa URL, continua valendo.
-  const ultimoParagrafo = (texto.split(/\n\s*\n/).pop() || '').replace(/https?:\/\/\S*\?\S+/g, '');
-  if (cobranca.esperando && !/\?|\bQ\d+\b/.test(ultimoParagrafo)) return; // não termina esperando o operador
+  if (cobranca.esperando && !terminaEsperando(texto)) return; // não termina esperando o operador
   if (limpou) { registrar(sid, HOOK, 'limpou', det); return; }
   if (cobranca.sigoVale && /^\s*Contexto:\s*sigo\s*—\s*\S.{8,}/m.test(texto)) { registrar(sid, HOOK, 'satisfeito-sigo', det); return; }
   if (ativo) { registrar(sid, HOOK, 'deixou-passar', `${cobranca.desfecho} ${det}`); return; }

@@ -23,7 +23,7 @@ git(A, 'worktree', 'add', '-q', join(base, 'alfa-wt'), '-b', 'wt');
 const SEM = join(base, 'semgit'); mkdirSync(SEM);
 
 process.env.HOME = join(base, 'home'); mkdirSync(join(base, 'home', '.claude', 'projects', 'p'), { recursive: true });
-const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre, ocupacaoDaSessao } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
+const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre, ocupacaoDaSessao, janelasDeLimpeza, ehPerguntaDeLimpeza } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
 function reg(k, campos) {
   writeFileSync(join(base, 'app', 'conta', `local_${k}.json`), JSON.stringify({ sessionId: `local_${k}`, cliSessionId: `cli-${k}`, title: `E1 · x`, ...campos }));
   return registroDaSessao(`cli-${k}`, { fresco: true });
@@ -191,6 +191,32 @@ caso_repoDoMarcador();
     const arq = join(base, 'fila-arquivo'); writeFileSync(arq, 'x'); process.env.FILA_DIR = arq;
     eq(ocupacaoDaSessao('local_X'), null, 'arquivo no lugar da pasta');
     if (antes === undefined) delete process.env.FILA_DIR; else process.env.FILA_DIR = antes;
+    console.log(`ok   ${nome}`);
+  } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
+}
+caso_janelas();
+function caso_janelas() {
+  const nome = 'F53: ehPerguntaDeLimpeza (termo inteiro) e janelasDeLimpeza (lê o par tool_use/tool_result do transcript)';
+  try {
+    const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${m}: esperava ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
+    for (const t of ['Q9 · limpar · orquestradora: posso?', 'q9 · LIMPAR  ·  orquestradora', 'limpar · orquestradora', 'x limpar · orquestradora?']) eq(ehPerguntaDeLimpeza(t), true, t);
+    for (const t of ['limpar · worktrees órfãos', 'limpar · orquestradora-velha', 'Q9 · merge do PR 7?', '', undefined]) eq(ehPerguntaDeLimpeza(t), false, String(t));
+    const P = 'Q9 · limpar · orquestradora: posso me limpar?';
+    const t0 = new Date(Date.now() - 120_000).toISOString(); const t1 = new Date(Date.now() - 60_000).toISOString();
+    const f = join(base, 'janela.jsonl');
+    writeFileSync(f, [
+      { type: 'assistant', timestamp: t0, message: { content: [{ type: 'tool_use', id: 'a', name: 'AskUserQuestion', input: { questions: [{ question: P }] } }] } },
+      { type: 'user', timestamp: t1, message: { content: [{ type: 'tool_result', tool_use_id: 'a', content: 'x' }] }, toolUseResult: { answers: { [P]: 'Sim, pode limpar' } } },
+      { type: 'assistant', timestamp: t1, message: { content: [{ type: 'tool_use', id: 'b', name: 'AskUserQuestion', input: { questions: [{ question: P }] } }] } },
+      { type: 'user', timestamp: t1, message: { content: [{ type: 'tool_result', tool_use_id: 'b', is_error: true, content: 'rej' }] }, toolUseResult: 'User rejected tool use' },
+      { type: 'assistant', timestamp: t1, message: { content: [{ type: 'tool_use', id: 'c', name: 'AskUserQuestion', input: { questions: [{ question: P }] } }] } },
+      { type: 'assistant', timestamp: t1, message: { content: [{ type: 'tool_use', id: 'd', name: 'AskUserQuestion', input: { questions: [{ question: 'Q1 · merge?' }] } }] } },
+    ].map((x) => JSON.stringify(x)).join('\n') + '\n');
+    const j = janelasDeLimpeza(f);
+    if (j.length !== 3) throw new Error(`precondição: esperava 3 janelas de limpeza, veio ${j.length}`);
+    eq(j[0].resposta, 'Sim, pode limpar', 'resposta'); eq(j[0].recusada, false, 'recusada'); eq(j[0].respondidaEm, Date.parse(t1), 'respondidaEm'); eq(j[0].abertaEm, Date.parse(t0), 'abertaEm');
+    eq(j[1].recusada, true, 'fechada sem resposta'); eq(j[2].respondidaEm, null, 'sem resposta ainda');
+    eq(janelasDeLimpeza(join(base, 'nao-existe.jsonl')), [], 'arquivo ausente');
     console.log(`ok   ${nome}`);
   } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
 }

@@ -10,7 +10,7 @@
 //       (sem com, fez nem dono); com ele ligado, só por pedido do operador no turno dele (Q277). Sempre membro do MESMO projeto ou de projeto sem orquestradora.
 //   T3  start_session: negado em turno que não é do operador com o modo ausente ligado (/ausente on) e a membro do pool.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava).
-//   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente ou o sim do painel, F48).
+//   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o sim do painel ou o da janela, F48/F53).
 //   T6  Bash `gh pr merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
 // Limites conhecidos: o cache do registro (pool-comum.mjs, 2 min) atrasa em até 2 min a troca de título, nos dois
 // sentidos (acerto e ausência). Orquestradora reconhecida só por título (sem marcador em ativas/) não ativa o T6; projeto não medido (null) pergunta
@@ -21,7 +21,7 @@
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { registrar, lerEntrada, semPrefixoDoPlugin, modoAusente } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, perguntasDeLimpeza } from './pool-comum.mjs';
+import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, perguntasDeLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS } from './pool-comum.mjs';
 
 const HOOK = 'papel-do-pool';
 const H = homedir();
@@ -170,7 +170,14 @@ function main() {
     const ok = perguntasDeLimpeza(reg?.localId).find((d) => d.estado === 'respondida' && d.respondidaPor === 'painel'
       && /^\s*sim/i.test(String(d.resposta ?? '')) && noPrazo(d.respondidaEm));
     if (ok) return libera('sim do painel');
-    return nega('T7', 'orquestradora', alvoReal, 'Limpeza inteira só com o ok do operador (F48): ele pode estar lendo. Escreva o estado, abra a pergunta `limpar · orquestradora` (Q-ID, sessaoId, recomendação: limpar) e siga; limpe quando ele disser sim no chat ou no painel. Com o modo ausente ligado, pode.');
+    // O sim dado na janela (AskUserQuestion, F53): o app escreve o tool_result no transcript; vale 30 min, nunca no futuro.
+    let janelas = [];
+    try { janelas = e.transcript_path ? janelasDeLimpeza(e.transcript_path) : []; } catch { /* sem transcript */ }
+    // Decide só a janela mais recente com desfecho (maior `respondidaEm`, a fechada sem resposta conta): um "não" depois do "sim" o cancela.
+    const dif = (j) => Date.now() - j.respondidaEm;
+    const ultima = janelas.filter((j) => Number.isFinite(j.respondidaEm)).sort((a, b) => b.respondidaEm - a.respondidaEm)[0];
+    if (ultima && !ultima.recusada && typeof ultima.resposta === 'string' && /^\s*sim\b/i.test(ultima.resposta) && dif(ultima) >= -60_000 && dif(ultima) <= SIM_DA_JANELA_MS) return libera('sim da janela');
+    return nega('T7', 'orquestradora', alvoReal, 'Limpeza inteira só com o ok do operador (F48): ele pode estar lendo. Escreva o estado, abra a pergunta `limpar · orquestradora` (Q-ID, sessaoId, recomendação: limpar) e siga; limpe quando ele disser sim no chat, na janela ou no painel. Com o modo ausente ligado, pode.');
   }
 
   if (tool === 'mcp__ccd_session__start_session') {
