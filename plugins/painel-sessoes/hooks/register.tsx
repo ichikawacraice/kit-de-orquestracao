@@ -473,7 +473,7 @@ export async function responder($: EngineInterface, q: PerguntaAberta, resposta:
     respondendo.delete(q.id)
     await update($, enviando, atual => (atual?.q === q.id ? null : atual))
   }
-  await atualizar($)
+  await relerDepoisDoClique($)
 
   return resultado
 }
@@ -711,7 +711,10 @@ async function ler($: EngineInterface): Promise<void> {
     const dono = q.item ? porId.get(q.item) : undefined
     if (dono) q.rotulo = `${dono.id} · ${dono.titulo}`
   }
+  const projetoDaLeitura = (await read($, barra)).projeto ?? (await projetoDoCwd($))
+  const limpeza = perguntaDeLimpeza(docsPerguntas, orquestradorasDoProjeto(docsSessoes, projetoDaLeitura), proprio, agora)
   await update($, leitura, l => ({
+    limpeza,
     avisos: l.avisos ?? [],
     lidoEm: agora,
     lendo: false,
@@ -745,6 +748,12 @@ async function lerBandeira($: EngineInterface): Promise<NonNullable<Leitura['aus
 // A cada troca do modo a geração sobe: a leitura que começou antes dela não escreve o campo `ausente` (escreve o resto).
 let geracaoModo = 0
 let trocandoAgora = false
+
+/** Depois de um clique: com o pane aberto, a leitura dele; senão só a da barra (a leve, sem `list_sessions`). */
+async function relerDepoisDoClique($: EngineInterface): Promise<void> {
+  if (deveFechar(await $.ui.panes())) await atualizar($)
+  else await lerBarra($, true)
+}
 
 /**
  * O botão do modo: o efeito entra na hora (`leitura.ausente` já é o modo novo) e a recusa desfaz, dizendo o motivo.
@@ -786,7 +795,7 @@ export async function alternarModo($: EngineInterface): Promise<void> {
     trocandoAgora = false
     await update($, trocandoModo, () => false)
   }
-  await atualizar($)
+  await relerDepoisDoClique($)
 }
 
 /**
@@ -964,11 +973,11 @@ async function projetoDoCwd($: EngineInterface): Promise<string | null> {
 }
 
 /** O título desta sessão no registro do app; fora do app (ou sem o arquivo), `null`. */
-async function tituloDoApp($: EngineInterface, home: string, id: string): Promise<string | null> {
+async function tituloDoApp($: EngineInterface, home: string | undefined, id: string): Promise<string | null> {
   try {
     const conta = await $.env.get('CLAUDE_CODE_ACCOUNT_UUID')
     const org = await $.env.get('CLAUDE_CODE_ORGANIZATION_UUID')
-    if (!conta || !org) return null
+    if (!home || !conta || !org) return null
     const reg = JSON.parse((await $.fs.read(`${home}/${BANDEIRA_DO_APP}/${conta}/${org}/${id}.json`)) as string) as Record<string, unknown>
 
     return texto(reg.title) ?? null
@@ -978,7 +987,7 @@ async function tituloDoApp($: EngineInterface, home: string, id: string): Promis
 }
 
 /** Uma leitura por vez; falha vira linha em `erros`, nunca exceção solta. Só arquivos: o `list_sessions` fica para o pane aberto. */
-async function lerBarra($: EngineInterface): Promise<void> {
+async function lerBarra($: EngineInterface, depoisDoClique = false): Promise<void> {
   if (lendoBarra) return
   lendoBarra = true
   try {
@@ -1010,7 +1019,8 @@ async function lerBarra($: EngineInterface): Promise<void> {
     const item = host ? meuItem(docsFila, host) : null
     const projeto = item?.projeto ?? (await projetoDoCwd($))
     const orquestradoras = orquestradorasDoProjeto(docsSessoes, projeto)
-    const limpeza = perguntaDeLimpeza(docsPerguntas, orquestradoras, host)
+    const agoraDaLeitura = await $.clock.now()
+    const pedida = perguntaDeLimpeza(docsPerguntas, orquestradoras, host, agoraDaLeitura)
     await atualizarModo($).catch(err => void erros.push(`modo ausente: ${mensagem(err)}`))
     let tokens: number | null = null
     try {
@@ -1019,20 +1029,26 @@ async function lerBarra($: EngineInterface): Promise<void> {
       erros.push(`contexto: ${mensagem(err)}`)
     }
     const agora = await $.clock.now()
-    await update($, barra, b => ({
-      ...b,
-      lidoEm: agora,
-      abertas: abertasDoProjeto(docsPerguntas),
-      limpeza,
-      okEnviado: limpeza && limpeza.id === b.okEnviado ? b.okEnviado : null,
-      ehOrquestradora: (host !== undefined && orquestradoras.includes(host)) || papelEApelido(titulo).papel === 'orquestradora',
-      titulo,
-      item: item ? { id: item.id, titulo: item.titulo, etapa: item.etapa } : null,
-      pool: contarPool(docsFila, projeto),
-      projeto,
-      tokens,
-      erros,
-    }))
+    await update($, barra, b => {
+      // Logo depois do clique, o pedido que acabou de ser respondido fica na tela para o "✓ Ok enviado"; a próxima leitura o tira.
+      const respondidaAgora = depoisDoClique && b.limpeza !== null && docsPerguntas.some(d => d.id === b.limpeza?.id && d.data.estado === 'respondida' && d.data.respondidaPor === 'painel')
+      const limpeza = pedida ?? (respondidaAgora ? b.limpeza : null)
+
+      return {
+        ...b,
+        lidoEm: agora,
+        abertas: abertasDoProjeto(docsPerguntas),
+        limpeza,
+        okEnviado: limpeza && limpeza.id === b.okEnviado ? b.okEnviado : null,
+        ehOrquestradora: (host !== undefined && orquestradoras.includes(host)) || papelEApelido(titulo).papel === 'orquestradora',
+        titulo,
+        item: item ? { id: item.id, titulo: item.titulo, etapa: item.etapa } : null,
+        pool: contarPool(docsFila, projeto),
+        projeto,
+        tokens,
+        erros,
+      }
+    })
   } catch (err) {
     await update($, barra, b => ({ ...b, erros: [...b.erros, `leitura: ${mensagem(err)}`] })).catch(() => {})
   } finally {
@@ -1278,7 +1294,7 @@ export const register: Register = on => {
     const lido = l.lidoEm !== null
     const parada = leituraParada(l.lidoEm, agora)
     // O pedido de limpeza da orquestradora: a mesma pergunta e o mesmo botão da barra, lidos do que ela leu.
-    const pedidoPane = desenharPedidoNoPane(elementos, { limpeza: doBarra.limpeza, okEnviado: doBarra.okEnviado, enviandoQ: enviandoAgora?.q ?? null, agora }, limpeza => void darOkDeLimpar($, limpeza))
+    const pedidoPane = desenharPedidoNoPane(elementos, { limpeza: l.limpeza ?? null, okEnviado: doBarra.okEnviado, enviandoQ: enviandoAgora?.q ?? null, agora }, limpeza => void darOkDeLimpar($, limpeza))
     const situacao = (localId: string) => situacaoDe(localId, l.sessoes ?? [], undefined, l.semLista ?? false, agora)
     const trabalhando = sec.executando.filter(i => pessoasVivas(i).some(p => situacao(p.localId) === 'trabalhando agora')).length
 

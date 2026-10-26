@@ -118,6 +118,23 @@ test('perguntaDeLimpeza: só a pedido de limpeza aberto da orquestradora do proj
   expect(perguntaDeLimpeza([limpar('Q290', { sessaoId: EU })], [EU], EU)?.propria).toBe(true)
 })
 
+test('perguntaDeLimpeza: o sim do painel há até 30 min vale para a T7 e esconde as outras abertas da mesma orquestradora', () => {
+  const ids = [ORQ]
+  const agora = Date.parse('2026-10-26T12:00:00Z')
+  const velha = limpar('Q99051', { atualizadoEm: '2026-10-26T10:00:00Z' })
+  const nova = limpar('Q99052', { atualizadoEm: '2026-10-26T11:00:00Z' })
+  const ok = (id: string, minutos: number, extra: Record<string, unknown> = {}) =>
+    limpar(id, { estado: 'respondida', resposta: RESPOSTA, respondidaPor: 'painel', respondidaEm: new Date(agora - minutos * 60_000).toISOString(), ...extra })
+  expect(perguntaDeLimpeza([velha, nova], ids, undefined, agora)?.id, 'sem ok, a mais nova').toBe('Q99052')
+  expect(perguntaDeLimpeza([velha, ok('Q99053', 5), nova], ids, undefined, agora), 'ok na mais nova: nada a pedir').toBeNull()
+  expect(perguntaDeLimpeza([velha, ok('Q99053', 30), nova], ids, undefined, agora), 'no limite dos 30 min').toBeNull()
+  expect(perguntaDeLimpeza([velha, ok('Q99053', 31), nova], ids, undefined, agora)?.id, 'há 31 min o ok venceu').toBe('Q99052')
+  expect(perguntaDeLimpeza([velha, ok('Q99053', 5, { sessaoId: 'local_outra' }), nova], ids, undefined, agora)?.id, 'sim de outra sessaoId').toBe('Q99052')
+  expect(perguntaDeLimpeza([velha, ok('Q99053', 5, { resposta: 'não' }), nova], ids, undefined, agora)?.id, 'resposta não').toBe('Q99052')
+  expect(perguntaDeLimpeza([velha, ok('Q99053', 5, { respondidaPor: 'sessao' }), nova], ids, undefined, agora)?.id, 'não foi o painel').toBe('Q99052')
+  expect(perguntaDeLimpeza([velha, ok('Q99053', 5, { titulo: 'limpar · outra-coisa' }), nova], ids, undefined, agora)?.id, 'outro título').toBe('Q99052')
+})
+
 test('abertasDoProjeto conta as abertas, todas', () => {
   const docs = [limpar('Q1'), limpar('Q2', { estado: 'respondida' }), doc('Q3', { estado: 'aberta', titulo: 'x' })]
   expect(abertasDoProjeto(docs)).toBe(2)
@@ -307,7 +324,8 @@ async function iniciar($: Parameters<TestBody>[0], on: On, opc: Opcoes = {}) {
   return motor
 }
 
-const montar = async ($: Parameters<TestBody>[0], surface: (typeof SUPERFICIES)[number], props: Partial<(typeof BARRA)['props']> = {}) =>
+type PropsDaBarra = { hasSurvey: boolean; isWorking: boolean; maxRows: number; bodyColumns: number; scroll: { offset: number; bodyRows: number }; view: Record<string, never> }
+const montar = async ($: Parameters<TestBody>[0], surface: (typeof SUPERFICIES)[number], props: Partial<PropsDaBarra> = {}) =>
   $.ui.mount({ ...BARRA, surface, props: { ...BARRA.props, ...props } })
 
 const lido = async (ui: { findAll: (q: object) => Promise<Array<{ text: string; props: Record<string, unknown> }>> }) => (await ui.findAll({})).map(el => `${el.text} ${typeof el.props.alt === 'string' ? el.props.alt : ''}`).join('\n')
@@ -479,7 +497,7 @@ test('pedido de limpeza: falha de gravação volta o botão e dá toast', async 
   await ui.press({ key: 'limpar-pedido' })
   await m.relogio.settle()
   expect(m.toasts.at(-1)).toMatch(/Não consegui mandar o ok de limpar \(/)
-  expect((await ui.find({ key: 'limpar-pedido' }))?.text).toBe('Pode se limpar')
+  expect(m.escritas.filter(e => e.path.endsWith('Q290.json')), 'nada gravado').toEqual([])
   await ui.unmount()
 })
 
@@ -607,6 +625,25 @@ test('modo ausente com o pane nunca aberto: a barra lê e o botão grava a bande
   await u2.unmount()
 })
 
+test('clique na barra com o pane nunca aberto não dispara a leitura pesada (list_sessions/get_session)', async ($, on) => {
+  const pesadas = (c: string[]) => c.filter(t => t.endsWith('__list_sessions') || t.endsWith('__get_session'))
+  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
+  const ui = await montar($, 'terminal')
+  expect(pesadas(m.chamadas), 'a leitura da barra não chama').toEqual([])
+  await ui.press({ key: 'modo' })
+  await m.relogio.settle()
+  expect(m.bandeiras.length, 'o clique do modo gravou').toBe(1)
+  await ui.press({ key: 'limpar-pedido' })
+  await m.relogio.settle()
+  expect(m.escritas.some(e => e.path.endsWith('Q290.json')), 'o clique do pedido gravou').toBe(true)
+  expect(pesadas(m.chamadas), 'nenhuma leitura pesada depois dos cliques').toEqual([])
+  await ui.unmount()
+  // prova de que o detector enxerga: com o pane aberto a leitura pesada acontece
+  await $.command.run({ command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
+  await m.relogio.settle()
+  expect(pesadas(m.chamadas).length, 'com o pane aberto o detector vê a chamada').toBeGreaterThan(0)
+})
+
 test('antes da primeira leitura só o relógio; sem a bandeira legível não há botão do modo', async ($, on) => {
   engine(on, { bandeira: '{não é json' })
   const antes = await montar($, 'terminal')
@@ -672,6 +709,17 @@ test('pane: o pedido de limpeza vem na faixa do topo, com o botão que grava com
   const gravada = m.escritas.find(e => e.path.endsWith('Q290.json'))
   expect(gravada?.data.respondidaPor).toBe('painel')
   expect(gravada?.data.resposta).toBe(RESPOSTA)
+  await ui.unmount()
+})
+
+test('pane: o ok já dado esconde a linha mesmo com outra aberta da mesma orquestradora', async ($, on) => {
+  const ok = limpar('Q290', { estado: 'respondida', resposta: RESPOSTA, respondidaPor: 'painel', respondidaEm: new Date(AGORA - 60_000).toISOString() })
+  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [ok, limpar('Q291', {}, 2)] })
+  await $.command.run({ command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
+  await m.relogio.settle()
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await lido(ui)).not.toMatch(/pede para se limpar/)
+  expect(await ui.find({ key: 'limpar-pedido' })).toBeUndefined()
   await ui.unmount()
 })
 

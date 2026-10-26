@@ -15,6 +15,8 @@ const ALERTA_MIN = 10 * 60
 const LIMPAR_ANTES_SEG = 10 * 60
 const LIMPAR_ANTES_TOKENS = 150_000
 export const PEDIDO_TITULO = 'limpar · orquestradora'
+/** A janela em que o ok do painel vale para a T7 (a trava da limpeza da orquestradora). */
+const OK_VALE_MS = 30 * 60_000
 export const RESPOSTA_DO_OK = 'sim (segue a recomendação)'
 export const RASCUNHO = 'Pode se limpar agora, antes do cache vencer.'
 export const BANDEIRA_DO_APP = 'Library/Application Support/Claude/claude-code-sessions'
@@ -93,7 +95,19 @@ export function orquestradorasDoProjeto(docs: Doc[], projeto: string | null): st
  * O pedido `limpar · orquestradora` aberto de uma orquestradora do projeto (o `sessaoId` está em `ids`); com vários, o de
  * `atualizadoEm` mais recente. Não filtra pelo `projeto` da pergunta: a skill não obriga a gravá-lo.
  */
-export function perguntaDeLimpeza(docs: Doc[], ids: string[], proprio?: string): PerguntaAberta | null {
+export function perguntaDeLimpeza(docs: Doc[], ids: string[], proprio?: string, agora?: number): PerguntaAberta | null {
+  const doOk = (d: Doc) => (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? '')
+  // O sim do painel dado há até 30 min (a janela da T7) atende o pedido: as outras abertas da mesma orquestradora não voltam à tela.
+  if (
+    agora !== undefined &&
+    docs.some(d => {
+      const quando = Date.parse(texto(d.data.respondidaEm) ?? '')
+
+      return d.data.estado === 'respondida' && doOk(d) && d.data.respondidaPor === 'painel' && (texto(d.data.resposta) ?? '').trim().toLowerCase().startsWith('sim') && agora - quando <= OK_VALE_MS
+    })
+  ) {
+    return null
+  }
   const achadas = docs.filter(d => d.data.estado === 'aberta' && (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? ''))
   const quando = (d: Doc) => Date.parse(texto(d.data.atualizadoEm) ?? '') || 0
   const d = achadas.sort((a, b) => quando(b) - quando(a) || numero(b.id) - numero(a.id))[0]
