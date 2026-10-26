@@ -49,7 +49,7 @@ function novoBase() {
 function rodar(hook, evento, extraEnv = {}) {
   const out = execFileSync('node', [join(HOOKS, hook)], {
     input: typeof evento === 'string' ? evento : JSON.stringify(evento), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
-    env: { ...process.env, HOME: dir('home'), HOOKS_CREWAI_BASE: BASE_ORQ(), POOL_APP_SESSOES_DIR: dir('app'), ...extraEnv },
+    env: { ...process.env, HOME: dir('home'), HOOKS_CREWAI_BASE: BASE_ORQ(), POOL_APP_SESSOES_DIR: dir('app'), PAINEL_DIR: dir('painel'), ...extraEnv },
   });
   return out ? JSON.parse(out).hookSpecificOutput : null;
 }
@@ -325,6 +325,45 @@ caso('operador-ausente: outra sessão, notificação, compactação e lembrete n
   ent('<system-reminder>x</system-reminder>\n/ausente on'); ok(existsSync(bandeiraArq()), 'lembrete escondeu o humano');
   ent('<task-notification>/ausente off</task-notification>'); ok(existsSync(bandeiraArq()), 'notificação desligou');
   ent('This session is being continued from a previous conversation… /ausente off'); ok(existsSync(bandeiraArq()), 'compactação desligou');
+});
+
+
+// F48 · T7: a orquestradora só se limpa inteira com o ok do operador (turno humano, modo ausente ou o sim do painel).
+const limpa = (quem, extra, alvo = 'self') => pre(quem, 'mcp__ccd_session_mgmt__clear_session', { session_id: alvo }, extra);
+const perguntaLimpar = (data) => { mkdirSync(dir('painel', 'perguntas'), { recursive: true }); writeFileSync(dir('painel', 'perguntas', 'Q9.json'), JSON.stringify({ id: 'Q9', data })); };
+const haMin = (m) => new Date(Date.now() - m * 60_000).toISOString();
+const OKP = (extra = {}) => ({ titulo: 'limpar · orquestradora', sessaoId: 'local_ORQ', estado: 'respondida', respondidaPor: 'painel', resposta: 'sim (segue a recomendação)', atualizadoEm: haMin(10), ...extra });
+const nega7 = (r, msg) => { nega(r, msg); ok(/T7/.test(JSON.stringify(r)) || /Limpeza inteira/.test(r.permissionDecisionReason), `${msg}: negou, mas não pelo T7: ${r.permissionDecisionReason}`); };
+caso('T7: orquestradora clear_session "self" em turno peer, sem bandeira nem pergunta → nega; em turno humano passa', () => {
+  nega7(limpa('ORQ', depeer()), 'peer');
+  passa(limpa('ORQ', humano()), 'humano');
+  ok(log().includes('liberou-limpeza'), 'sem o log liberou-limpeza');
+});
+caso('T7: modo ausente ligado libera; {ligado:false} nega', () => {
+  bandeira(Date.now() - 3600_000);
+  passa(limpa('ORQ', depeer()), 'bandeira ligada');
+  writeFileSync(join(BASE_ORQ(), 'operador-ausente.json'), JSON.stringify({ ligado: false, desligadoEm: new Date().toISOString(), por: 'painel' }));
+  nega7(limpa('ORQ', depeer()), 'bandeira ligado:false');
+});
+caso('T7: o sim do painel libera (≤ 30 min, respondidaPor painel, resposta sim, sessaoId dela); o resto nega', () => {
+  perguntaLimpar(OKP());
+  passa(limpa('ORQ', depeer()), 'sim do painel');
+  perguntaLimpar(OKP({ respondidaPor: undefined })); nega7(limpa('ORQ', depeer()), 'sem respondidaPor');
+  perguntaLimpar(OKP({ atualizadoEm: haMin(40) })); nega7(limpa('ORQ', depeer()), 'há 40 min');
+  perguntaLimpar(OKP({ resposta: 'não' })); nega7(limpa('ORQ', depeer()), 'resposta não');
+  perguntaLimpar(OKP({ sessaoId: 'local_P1' })); nega7(limpa('ORQ', depeer()), 'sessaoId de outra');
+  perguntaLimpar(OKP({ titulo: 'outra coisa' })); nega7(limpa('ORQ', depeer()), 'título que não é de limpeza');
+});
+caso('T7: orquestradora limpando um membro passa; P1 limpando "self" passa', () => {
+  passa(limpa('ORQ', depeer(), 'local_E1'), 'orquestradora limpa membro');
+  passa(limpa('P1', depeer()), 'P1 self');
+});
+caso('T3a: bandeira {ligado:false} vale como desligada → start_session em turno peer passa', () => {
+  writeFileSync(join(BASE_ORQ(), 'operador-ausente.json'), JSON.stringify({ ligado: false, desligadoEm: new Date().toISOString(), por: 'painel', desde: new Date().toISOString() }));
+  passa(start('ORQ', transcriptCom(Date.now() - 60_000, 'peer')), 'desligada');
+});
+caso('operador-ausente: /ausente on grava por:"comando"', () => {
+  ent('/ausente on'); ok(JSON.parse(readFileSync(bandeiraArq(), 'utf8')).por === 'comando', 'sem por:comando');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

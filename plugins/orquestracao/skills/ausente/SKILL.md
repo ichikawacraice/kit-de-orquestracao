@@ -9,10 +9,10 @@ disable-model-invocation: true
 
 Argumento: `$ARGUMENTS`.
 
-**Só este comando liga e desliga o modo** (operador, 24/10: *"mesmo que eu escreva, não sair do modo, pq posso vir, dar um comando e sair novamente"*). O hook `${CLAUDE_PLUGIN_ROOT}/hooks/operador-ausente.mjs` grava a bandeira `~/.claude/orquestracao/operador-ausente.json` no `on` e a apaga no `off`; frase ("vou dormir") e prompt comum não mexem, e não há prazo. Com o modo ligado, o operador pode mandar comandos normalmente: o turno dele abre sessão (é ele ali), e o de notificação ou de outra sessão só propõe cartão (trava T3a do `papel-do-pool.mjs`).
+**Só este comando liga e desliga o modo** (operador, 24/10: *"mesmo que eu escreva, não sair do modo, pq posso vir, dar um comando e sair novamente"*). O hook `${CLAUDE_PLUGIN_ROOT}/hooks/operador-ausente.mjs` grava a bandeira `~/.claude/orquestracao/operador-ausente.json` no `on` e a apaga no `off`. O botão do topo do painel é a segunda via humana: liga e desliga a mesma bandeira (o desligar do painel grava `{ligado:false}`, porque o pane não apaga arquivo; a bandeira só vale ligada quando existe, tem `desde` válido e `ligado` não é `false`). Com o modo ligado a orquestradora pode se limpar inteira sozinha (ninguém está lendo); frase ("vou dormir") e prompt comum não mexem, e não há prazo. Com o modo ligado, o operador pode mandar comandos normalmente: o turno dele abre sessão (é ele ali), e o de notificação ou de outra sessão só propõe cartão (trava T3a do `papel-do-pool.mjs`).
 
 - **`off`:** responda numa linha que o modo ausente foi desligado. Daí em diante vale o pool sob demanda: no próximo ritual, a orquestradora lista os livres sem trabalho previsto e pergunta se arquiva. Grave a etapa no painel e uma linha no `~/.claude/orquestracao/<projeto>.md` (o da orquestradora deste projeto). Não faça os passos abaixo.
-- **Sem argumento:** diga se o modo está ligado (a bandeira existe, e desde quando) e como ligar/desligar. Não mude nada.
+- **Sem argumento:** diga se o modo está ligado (a bandeira existe, tem `desde` válido e não traz `ligado:false`; e desde quando) e como ligar/desligar. Não mude nada.
 - **`on`:** os passos abaixo.
 
 O operador digitou `/ausente on`: vai ficar fora ou dormir. Este turno é dele, então `start_session` abre sessão. Depois dele, só sai cartão. Regra em `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`, âncora `sob-demanda`.

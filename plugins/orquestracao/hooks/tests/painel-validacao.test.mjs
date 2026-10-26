@@ -252,5 +252,18 @@ caso('F43: o exemplo do protocolo concorda com a regra do painel', () => {
   ok(painel('set', 'perguntas', 'Q3', pergunta({ caso: solto })).exit === 1, 'a versão solta do exemplo foi aceita');
 });
 
+caso('respondidaPor é prova do clique no painel: set/update/batch pela linha de comando são recusados', () => {
+  igual(painel('set', 'perguntas', 'Q1', '{"estado":"aberta","titulo":"x","sessaoId":"local_a"}').exit, 0, 'preparo');
+  for (const args of [['update', 'perguntas', 'Q1', '{"respondidaPor":"painel"}'], ['set', 'perguntas', 'Q2', '{"estado":"respondida","respondidaPor":"painel"}']]) {
+    const r = painel(...args);
+    igual(r.exit, 1, `exit (${r.out})`); ok(r.err.includes('respondidaPor'), `stderr sem respondidaPor: ${r.err}`);
+  }
+  ok(!existsSync(arq('perguntas', 'Q2')), 'Q2 foi gravada');
+  igual(JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data.respondidaPor, undefined, 'Q1 ganhou respondidaPor');
+  const b = painel('batch', JSON.stringify([{ op: 'update', colecao: 'perguntas', id: 'Q1', data: { respondidaPor: 'painel' } }]));
+  igual(b.exit, 1, `batch exit (${b.out}${b.err})`); ok(b.err.includes('respondidaPor'), `batch stderr: ${b.err}`);
+  igual(painel('update', 'perguntas', 'Q1', '{"estado":"respondida","resposta":"sim"}').exit, 0, 'resposta normal deve passar');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Stop hook (F35): cobra a regra de contexto por papel da skill `papeis-e-modelos` ("Contexto"), que só valia se a sessão
 // lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain) e não grava estado nenhum.
-//   planejadora / design / orquestradora: ≥ 300 mil cobra limpar (só `clear_session` "self" satisfaz); ≥ 200 mil cobra limpar OU
+//   orquestradora (F48): com o modo ausente ligado segue a régua da planejadora abaixo; com o operador presente ela não limpa
+//     sozinha: ≥ 250 mil cobra PEDIR (pergunta `limpar · orquestradora` aberta, ou respondida há ≤ 2 h; ou limpou), abaixo disso nada.
+//   planejadora / design: ≥ 300 mil cobra limpar (só `clear_session` "self" satisfaz); ≥ 200 mil cobra limpar OU
 //     a linha `Contexto: sigo — <o que falta na unidade>`; ≥ 150 mil com o turno terminando esperando o operador (`?` ou `Q<n>` no
 //     último parágrafo) cobra limpar antes.
 //   executora: ≥ 150 mil cobra `Parei em: <passo exato>` no texto (ou limpar).
@@ -9,17 +11,18 @@
 // Uma cobrança por turno (`stop_hook_active` deixa passar). Erro nunca prende o turno. Limites: constantes abaixo, com override
 // `CONTEXTO_LIMITE_<NOME>` só para teste. Fonte da regra: skills/papeis-e-modelos/SKILL.md, seção "Contexto".
 import { readFileSync } from 'node:fs';
-import { registrar, textoDe } from './hooks-crewai-comum.mjs';
-import { registroDaSessao, membroDoPool, ehOrquestradora, ehExecutora, inicioDoTurno, contextoDoTranscript } from './pool-comum.mjs';
+import { registrar, textoDe, modoAusente } from './hooks-crewai-comum.mjs';
+import { registroDaSessao, membroDoPool, ehOrquestradora, ehExecutora, inicioDoTurno, contextoDoTranscript, perguntasDeLimpeza } from './pool-comum.mjs';
 
 const HOOK = 'contexto-do-papel';
 const limite = (nome, padrao) => { const v = Number(process.env[`CONTEXTO_LIMITE_${nome}`]); return Number.isFinite(v) && v > 0 ? v : padrao; };
 const ESPERA = limite('ESPERA', 150_000); const ALTO = limite('ALTO', 200_000); const TETO = limite('TETO', 300_000); const EXEC = limite('EXEC', 150_000);
+const PEDIR = limite('PEDIR', 250_000); const SEGURA_MS = 2 * 3600_000;
 const mil = (t) => Math.round(t / 1000);
 
 // Papel pela ordem: orquestradora, executora, membro do pool (P e D = planejadora, V = validadora, E = executora). Sem papel → null.
 function papelDe(e, transcript, reg) {
-  if (ehOrquestradora(e.session_id, reg?.titulo)) return 'planejadora';
+  if (ehOrquestradora(e.session_id, reg?.titulo)) return modoAusente() ? 'planejadora' : 'orquestradora';
   if (ehExecutora(e, transcript)) return 'executora';
   const m = membroDoPool(reg?.titulo);
   if (!m) return null;
@@ -44,6 +47,18 @@ function doTurno(transcript, inicio, ultimaMensagem) {
   return { limpou, texto };
 }
 
+// Orquestradora com o operador presente (F48): a limpeza inteira é dele; ela PEDE a partir de 250 mil.
+function orquestradora(e, sid, transcript, ativo, t, det, reg) {
+  if (t < PEDIR) return;
+  const { limpou } = doTurno(transcript, inicioDoTurno(transcript) ?? 0, e.last_assistant_message);
+  if (limpou) { registrar(sid, HOOK, 'limpou', det); return; }
+  const pediu = perguntasDeLimpeza(reg?.localId).some((d) => d.estado === 'aberta' || Date.now() - Date.parse(d.atualizadoEm) <= SEGURA_MS);
+  if (pediu) { registrar(sid, HOOK, 'satisfeito-pediu', det); return; }
+  if (ativo) { registrar(sid, HOOK, 'deixou-passar', `cobrou-pedir ${det}`); return; }
+  registrar(sid, HOOK, 'cobrou-pedir', det);
+  process.stdout.write(JSON.stringify({ decision: 'block', reason: `Contexto em ${mil(t)} mil. Não limpe sozinha (o operador pode estar lendo): escreva o estado, abra a pergunta \`limpar · orquestradora\` no painel (Q-ID de proxima-pergunta, sessaoId, recomendação: limpar) e siga; limpe só com o sim dele. Com o modo ausente ligado, pode limpar sozinha.` }));
+}
+
 function main() {
   const e = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id: sid, transcript_path: transcript, stop_hook_active: ativo } = e;
@@ -57,6 +72,7 @@ function main() {
   const t = ctx.tokens; const det = `${papel} ${mil(t)} mil`;
 
   if (papel === 'validadora') { if (t >= ALTO) registrar(sid, HOOK, `validadora-${mil(t)}`, det); return; }
+  if (papel === 'orquestradora') return orquestradora(e, sid, transcript, ativo, t, det, reg);
   // O que cobraria, nesta ordem de gravidade. `sigoVale`: a linha de escape não vale no teto.
   let cobranca = null;
   if (papel === 'executora') {
