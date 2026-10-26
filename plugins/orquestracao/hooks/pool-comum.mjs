@@ -104,6 +104,26 @@ export function itensDonosDaSessao(localId) {
   return saida;
 }
 
+// F49/D8: tudo o que prende a sessão a item vivo (etapa ≠ feito/descartado): `com`, `fez` (de QUALQUER etapa viva) e dono. Quem decide arquivar
+// não pode tratar erro como "sem item": pasta da fila ilegível, ou item que não se lê, → null (quem chama nega). Os outros helpers não mudam.
+export function ocupacaoDaSessao(localId) {
+  const saida = { com: [], fez: [], dono: [] };
+  if (!localId) return saida;
+  let nomes; try { nomes = readdirSync(filaDir()); } catch { return null; }
+  for (const nome of nomes) {
+    if (!nome.endsWith('.json')) continue;
+    try {
+      const doc = JSON.parse(readFileSync(join(filaDir(), nome), 'utf8'));
+      const d = doc?.data; const id = doc?.id ?? nome.replace(/\.json$/, '');
+      if (!d || d.etapa === 'feito' || d.etapa === 'descartado') continue;
+      if (Array.isArray(d.com) && d.com.some((c) => c?.localId === localId)) saida.com.push(id);
+      if (Array.isArray(d.fez) && d.fez.some((c) => c?.localId === localId)) saida.fez.push(id);
+      if (d.donoLocalId === localId) saida.dono.push(id);
+    } catch { return null; }
+  }
+  return saida;
+}
+
 // Só o prefixo `<P|D|E|V><n> · ` do título vale: sem ele, não é membro (outro projeto, sessão avulsa).
 export function membroDoPool(titulo) {
   const m = /^(P|D|E|V)(\d+) · /.exec(titulo || '');
