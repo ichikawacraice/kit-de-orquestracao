@@ -87,6 +87,47 @@ export function perguntasDeLimpeza(localId) {
   return saida;
 }
 
+// Janela de limpeza (F53): o operador responde à pergunta `limpar · orquestradora` pela janela (AskUserQuestion). Só o termo inteiro vale
+// (sem caixa, espaços em volta do `·` à vontade, seguido de `:`, `?`, `.`, `,`, espaço ou fim): `limpar · orquestradora-velha` não casa.
+export const SIM_DA_JANELA_MS = 30 * 60_000;
+export const ehPerguntaDeLimpeza = (texto) => /limpar\s*·\s*orquestradora(?=$|[\s:?.,])/i.test(String(texto ?? ''));
+
+// Janelas de limpeza do transcript: cada `tool_use` AskUserQuestion (fora de subagente) com pergunta de limpeza, pareado com o
+// `tool_result` do mesmo `tool_use_id` (escrito pelo app: `toolUseResult.answers[<pergunta>]`, `timestamp` = hora da resposta).
+// `recusada` = janela fechada sem resposta (`is_error` ou sem `answers`). Sem resposta ainda: `respondidaEm: null`. Erro de leitura = [].
+export function janelasDeLimpeza(transcriptPath) {
+  const janelas = [];
+  try {
+    const porId = new Map(); const respostas = [];
+    for (const l of readFileSync(transcriptPath, 'utf8').split('\n')) {
+      if (!l) continue;
+      let x; try { x = JSON.parse(l); } catch { continue; }
+      if (x.isSidechain === true) continue;
+      const c = x.message?.content;
+      if (!Array.isArray(c)) continue;
+      if (x.type === 'assistant') {
+        for (const b of c) {
+          if (b?.type !== 'tool_use' || b.name !== 'AskUserQuestion' || !b.id) continue;
+          const pergunta = (Array.isArray(b.input?.questions) ? b.input.questions : []).map((q) => q?.question).find(ehPerguntaDeLimpeza);
+          if (pergunta === undefined) continue;
+          const j = { abertaEm: Date.parse(x.timestamp), respondidaEm: null, resposta: undefined, recusada: false };
+          porId.set(b.id, { j, pergunta }); janelas.push(j);
+        }
+      } else if (x.type === 'user') {
+        for (const b of c) if (b?.type === 'tool_result' && porId.has(b.tool_use_id)) respostas.push({ b, x });
+      }
+    }
+    for (const { b, x } of respostas) {
+      const { j, pergunta } = porId.get(b.tool_use_id);
+      const a = x.toolUseResult?.answers;
+      if (b.is_error === true || !a || typeof a !== 'object') { j.recusada = true; continue; }
+      j.respondidaEm = Date.parse(x.timestamp); j.resposta = a[pergunta];
+      if (typeof j.resposta !== 'string') j.recusada = true;
+    }
+  } catch { return []; }
+  return janelas;
+}
+
 export function itensDaSessao(localId) {
   const saida = { com: [], fez: [] };
   if (!localId) return saida;

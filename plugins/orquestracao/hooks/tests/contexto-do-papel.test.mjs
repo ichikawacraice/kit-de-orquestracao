@@ -27,7 +27,7 @@ function transcript(base, { tokens, texto = 'feito', ferramentas = [], anterior 
   const L = [{ type: 'user', origin: { kind: 'human' }, timestamp: new Date(t0).toISOString(), message: { content: 'antes' } }];
   anterior.forEach(([name, input], k) => L.push({ type: 'assistant', timestamp: new Date(t0 + 1000 + k).toISOString(), message: { content: [{ type: 'tool_use', name, input }] } }));
   L.push({ type: 'user', origin: { kind: 'human' }, timestamp: new Date(T1).toISOString(), message: { content: 'agora' } });
-  ferramentas.forEach(([name, input], k) => L.push({ type: 'assistant', timestamp: new Date(T1 + 1000 + k).toISOString(), message: { content: [{ type: 'tool_use', name, input }] } }));
+  ferramentas.forEach(([name, input], k) => L.push({ type: 'assistant', timestamp: new Date(T1 + 1000 + k).toISOString(), message: { content: [{ type: 'tool_use', id: `tu${k}`, name, input }] } }));
   if (tokens !== null) L.push({ type: 'assistant', timestamp: new Date(T1 + 5000).toISOString(), message: { content: [{ type: 'text', text: texto }], usage: usage(tokens) } });
   else L.push({ type: 'assistant', timestamp: new Date(T1 + 5000).toISOString(), message: { content: [{ type: 'text', text: texto }] } });
   L.push(...extra);
@@ -230,6 +230,58 @@ test('B1. trégua conta do respondidaEm: "não" do painel há 3 h com atualizado
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
   pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', respondidaPor: 'painel', respondidaEm: haMin(60), atualizadoEm: agora() }));
   assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null); // contraste: "não" de 1 h segura
+}));
+
+// F53: com o turno terminando esperando o operador, a orquestradora abre a janela (AskUserQuestion) com a pergunta de limpeza.
+const PJ = 'Q9 · limpar · orquestradora: estou com 260 mil de contexto e o estado está salvo. Posso me limpar?';
+const ABRE = [['AskUserQuestion', { questions: [{ question: PJ, header: 'Q9 limpar', options: [{ label: 'Sim, pode limpar (Recommended)' }, { label: 'Não, agora não' }] }] }]];
+// Janela respondida como entrada `user` com o tool_result (forma medida), `quando` em ms.
+const respondida = (quando, resposta) => [
+  { type: 'assistant', timestamp: new Date(quando - 1000).toISOString(), message: { content: [{ type: 'tool_use', id: 'tu1', name: 'AskUserQuestion', input: { questions: [{ question: PJ }] } }] } },
+  { type: 'user', timestamp: new Date(quando).toISOString(), message: { content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'ok' }] }, toolUseResult: { questions: [{ question: PJ }], answers: { [PJ]: resposta } } },
+];
+const ESPERA_Q = 'pronto.\n\nQ9: posso seguir?';
+test('F53-1. ORQ 260 mil, pergunta aberta, turno termina esperando e sem janela: cobra a janela (cobrou-janela)', () => com((b) => {
+  pergunta(b, 'Q9', LIMPAR());
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q })), /AskUserQuestion/);
+  assert.match(log(b), /\tcobrou-janela\t/);
+  const b2 = novo(); try { // contraste: com a janela aberta neste turno a mesma entrada passa
+    pergunta(b2, 'Q9', LIMPAR());
+    assert.equal(rodar(b2, 'ORQ', transcript(b2, { tokens: 260_000, texto: ESPERA_Q, ferramentas: ABRE })), null);
+    assert.match(log(b2), /\tsatisfeito-janela\t/); assert.doesNotMatch(log(b2), /cobrou/);
+  } finally { rmSync(b2, { recursive: true, force: true }); }
+}));
+test('F53-2. janela respondida "Não" há 1 h segura; há 3 h cobra de novo', () => com((b) => {
+  pergunta(b, 'Q9', LIMPAR());
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q, extra: respondida(Date.now() - 3600_000, 'Não, agora não') })), null);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q, extra: respondida(Date.now() - 3 * 3600_000, 'Não, agora não') })), /AskUserQuestion/);
+  assert.match(log(b), /\tcobrou-janela\t/);
+}));
+test('F53-3. turno que não termina esperando (sem ? nem Q-ID) com pergunta aberta: satisfeito-pediu, sem cobrar janela', () => com((b) => {
+  pergunta(b, 'Q9', LIMPAR());
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'feito.' })), null);
+  assert.match(log(b), /\tsatisfeito-pediu\t/); assert.doesNotMatch(log(b), /janela/);
+}));
+test('F53-4. sem pergunta no painel: cobrou-pedir; o motivo cita a janela só quando o turno termina esperando', () => com((b) => {
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /janela/);
+  assert.match(log(b), /\tcobrou-pedir\t/);
+  const r = rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'feito.' }));
+  cobrou(r, /limpar · orquestradora/); assert.doesNotMatch(r.reason, /janela/);
+}));
+test('F53-5. stop_hook_active no cobrou-janela: deixa passar (deixou-passar)', () => com((b) => {
+  pergunta(b, 'Q9', LIMPAR());
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q }), { stop_hook_active: true }), null);
+  assert.match(log(b), /\tdeixou-passar\tcobrou-janela/);
+}));
+test('F53-6. com a bandeira ligada, 160 mil e "?": segue cobrou-150-espera (a janela não entra no modo ausente)', () => com((b) => {
+  ligar(b); pergunta(b, 'Q9', LIMPAR());
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 160_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
+  assert.match(log(b), /\tcobrou-150-espera\t/); assert.doesNotMatch(log(b), /janela/);
+}));
+test('F53-7. janela de outra pergunta (merge) não satisfaz: cobra a janela', () => com((b) => {
+  pergunta(b, 'Q9', LIMPAR());
+  const outra = [['AskUserQuestion', { questions: [{ question: 'Q10 · merge do PR 7?' }] }]];
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q, ferramentas: outra })), /AskUserQuestion/);
 }));
 
 // F49: executora cheia termina com a limpeza.

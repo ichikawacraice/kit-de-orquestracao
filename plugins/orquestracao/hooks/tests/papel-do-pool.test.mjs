@@ -423,6 +423,45 @@ caso('T7: orquestradora limpando um membro passa; P1 limpando "self" passa', () 
   passa(limpa('ORQ', depeer(), 'local_E1'), 'orquestradora limpa membro');
   passa(limpa('P1', depeer()), 'P1 self');
 });
+// F53 · T7: o sim dado na janela (AskUserQuestion) vale como ok. A forma é a medida em transcript real (Q287/Q290, 26/10).
+const PJ = 'Q9 · limpar · orquestradora: estou com 260 mil de contexto e o estado está salvo. Posso me limpar?';
+function transcriptJanela({ pergunta = PJ, outras = [], resposta = 'Sim, pode limpar (Recommended)', haMinutos = 5, semResposta = false, recusada = false, sidechain = false, sidechainResposta = false, futuro = false } = {}) {
+  const t0 = Date.now() - 3600_000 * 2;
+  const quando = futuro ? Date.now() + 3600_000 : Date.now() - haMinutos * 60_000;
+  const questions = [{ question: pergunta, header: 'Q9 limpar', options: [{ label: 'Sim, pode limpar (Recommended)' }, { label: 'Não, agora não' }] }, ...outras.map((o) => ({ question: o.question, header: 'x', options: [{ label: 'Sim' }, { label: 'Não' }] }))];
+  const L = [linhaDeTurno(t0, 'peer')];
+  L.push({ type: 'assistant', ...(sidechain ? { isSidechain: true } : {}), timestamp: new Date(quando - 30_000).toISOString(), message: { content: [{ type: 'tool_use', id: 'tu1', name: 'AskUserQuestion', input: { questions } }] } });
+  if (!semResposta) {
+    const answers = { [pergunta]: resposta, ...Object.fromEntries(outras.map((o) => [o.question, o.resposta])) };
+    L.push({ type: 'user', ...(sidechainResposta ? { isSidechain: true } : {}), timestamp: new Date(quando).toISOString(),
+      message: { content: [{ type: 'tool_result', tool_use_id: 'tu1', ...(recusada ? { is_error: true, content: 'User rejected tool use' } : { content: 'Your questions have been answered' }) }] },
+      toolUseResult: recusada ? 'User rejected tool use' : { questions, answers } });
+  }
+  const f = dir('t.jsonl'); writeFileSync(f, L.map((x) => JSON.stringify(x)).join('\n') + '\n');
+  return { transcript_path: f };
+}
+caso('F53 T7: o sim da janela libera em turno peer; sem a resposta (só o tool_use) nega; "não" nega; "sim, pode" digitado passa', () => {
+  passa(limpa('ORQ', transcriptJanela()), 'sim da janela');
+  ok(/liberou-limpeza.*sim da janela/.test(log()), `log sem "sim da janela": ${log()}`);
+  nega7(limpa('ORQ', transcriptJanela({ semResposta: true })), 'contraste: janela aberta sem resposta');
+  nega7(limpa('ORQ', transcriptJanela({ resposta: 'Não, agora não' })), 'resposta não');
+  passa(limpa('ORQ', transcriptJanela({ resposta: 'sim, pode' })), 'texto digitado que começa com sim');
+  nega7(limpa('ORQ', transcriptJanela({ resposta: 'simplesmente não' })), 'sim colado em outra palavra');
+});
+caso('F53 T7: janela velha (40 min), no futuro, recusada ou de subagente → nega', () => {
+  passa(limpa('ORQ', transcriptJanela({ haMinutos: 25 })), 'contraste: 25 min passa');
+  nega7(limpa('ORQ', transcriptJanela({ haMinutos: 40 })), '40 min');
+  nega7(limpa('ORQ', transcriptJanela({ futuro: true })), 'timestamp no futuro');
+  nega7(limpa('ORQ', transcriptJanela({ recusada: true })), 'janela fechada sem resposta');
+  nega7(limpa('ORQ', transcriptJanela({ sidechain: true })), 'tool_use de subagente');
+  nega7(limpa('ORQ', transcriptJanela({ sidechainResposta: true })), 'tool_result de subagente');
+});
+caso('F53 T7: a janela precisa ser de limpeza e a resposta da pergunta de limpeza (não de outra na mesma janela)', () => {
+  nega7(limpa('ORQ', transcriptJanela({ pergunta: 'Q9 · merge do PR 7?', resposta: 'Sim' })), 'outra pergunta');
+  nega7(limpa('ORQ', transcriptJanela({ pergunta: 'Q9 · limpar · orquestradora-velha: posso?', resposta: 'Sim' })), 'título parecido');
+  nega7(limpa('ORQ', transcriptJanela({ resposta: 'Não, agora não', outras: [{ question: 'Q10 · merge do PR 7?', resposta: 'Sim' }] })), 'limpeza não, outra sim');
+  passa(limpa('ORQ', transcriptJanela({ resposta: 'Sim, pode limpar', outras: [{ question: 'Q10 · merge do PR 7?', resposta: 'Não' }] })), 'contraste: limpeza sim, outra não');
+});
 // Ponta a ponta (V2): o painel.mjs de verdade grava e o papel-do-pool.mjs de verdade decide.
 const PAINEL_MJS = join(HOOKS, '..', 'skills', 'orquestradora', 'scripts', 'painel.mjs');
 const painelCli = (...args) => spawnSync('node', [PAINEL_MJS, ...args], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', env: { ...process.env, PAINEL_DIR: dir('painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: dir('app'), HOOKS_CREWAI_BASE: BASE_ORQ(), HOME: dir('home') } });
