@@ -46,7 +46,8 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       for (const f of gate) assert.equal(ler(d, 'scripts/kit', f), readFileSync(join(RAIZ, 'gate', f), 'utf8'), `${f} difere do gate/`);
       const p = json(d, 'package.json');
       assert.equal(p.scripts.test, 'node scripts/kit/a-vez-do-gate.mjs');
-      assert.equal(p.scripts['test:suite'], 'node --test');
+      assert.equal(p.scripts['test:suite'], 'node --test --test-concurrency=${KIT_FICHAS_TOMADAS:-2}');
+      for (const f of ['o-teto-da-maquina.mjs', 'com-fichas.mjs']) assert.ok(existsSync(join(d, 'scripts', 'kit', f)), `falta scripts/kit/${f}: a guarda e o gate dependem do teto da máquina`);
       assert.equal(p.scripts.typecheck, undefined, 'o perfil simples não tem typecheck');
     } finally { limpar(d); }
   });
