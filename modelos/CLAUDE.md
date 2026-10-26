@@ -30,13 +30,13 @@ Lidos de `.claude/kit.json`:
 - Teste antes do código quando o comportamento muda.
 <!-- /kit:regras-de-trabalho -->
 
-<!-- kit:documentos v1 -->
+<!-- kit:documentos v2 -->
 ## Documentos: onde moram e como se escrevem
 As pastas são as de `.claude/kit.json` (seção `documentos`); sem a seção valem estes padrões.
 - **ADR** em `docs/adr/NNNN-título.md`, 4 dígitos, com a seção `Alternativas consideradas`. Imutável depois do merge: reverter é escrever outro que o substitui. Índice em `docs/adr/README.md`, célula de decisão com até 200 caracteres.
 - **Spec** em `docs/specs/SPEC-NNN-título.md`, 3 dígitos. Status é UMA palavra de Rascunho · Em revisão · Aprovada · Implementada · Substituída; a nuance vai em `Pendências:`. A spec no presente só afirma o que existe.
 - **Número de documento** (ADR, SPEC) é pedido à orquestradora antes de escrever o arquivo, quando há uma; sem ela, o próximo da sequência.
-- **Roadmap** em `docs/roadmap.md`: uma linha por item, até 400 caracteres e no máximo 2 links. A narrativa vai para o **diário** em `docs/diario/AAAA-MM.md`, um arquivo por mês, partido em `-parte-N` quando passa de 150 KB.
+- **Roadmap** em `docs/roadmap.md`: uma linha por item, até 400 caracteres e no máximo 2 links. A narrativa vai para o **diário**, uma entrada por arquivo em `docs/diario/AAAA-MM/DD-<ancora>.md` com `<a id="<ancora>">`; dois PRs nunca escrevem no mesmo arquivo. Os `AAAA-MM.md` antigos ficam como estão.
 - **Pesquisa** em `docs/research/AAAA-MM-DD-assunto.md` é snapshot datada e não se edita; pesquisa envelhece, confira a data antes de confiar.
 - **Plano** em `docs/planos/AAAA-MM-DD-assunto.md`, inclusive quando a ferramenta que o escreve sugere outra pasta.
 - **Link para seção cita âncora explícita** (`<a id="…"></a>`): título renomeado quebra link que aponta para o slug dele.
