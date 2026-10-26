@@ -222,7 +222,7 @@ describe('baixos — modelo e prosa', () => {
         const p = join(dir, n);
         if (statSync(p).isDirectory()) { varre(p); continue; }
         if (!/\.(md|mjs|tsx|ts|json|sh)$/.test(n) && n !== 'painel' && n !== 'proxima-pergunta' && n !== 'proximo-item') continue;
-        ler(RAIZ, relative(RAIZ, p)).split('\n').forEach((l, i) => { if (/izanagi/i.test(l.replace(/IZANAGI_PAINEL\w*/g, ''))) achados.push(`${relative(RAIZ, p)}:${i + 1}`); });
+        ler(RAIZ, relative(RAIZ, p)).split('\n').forEach((l, i) => { if (/izanagi/i.test(l.replace(/IZANAGI_(?:PAINEL|NUCLEOS_DE_TESTE)\w*/g, ''))) achados.push(`${relative(RAIZ, p)}:${i + 1}`); });
       }
     };
     for (const d of ['plugins', 'modelos', 'cli']) varre(join(RAIZ, d));

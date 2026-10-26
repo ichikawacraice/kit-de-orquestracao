@@ -5,7 +5,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 ## O papel
 - **Faz:**
   - cumpre um plano pronto: arquivos, passos, critério de pronto medível e fora de escopo;
-  - escreve o código e o teste, roda o teste que o projeto pede antes do push e commita (ex.: o teste do pacote que mexeu e o typecheck; o gate completo, quando pesado, é da orquestradora, por lote);
+  - escreve o código e o teste, roda o teste que o projeto pede antes do push e commita (ex.: o teste do pacote que mexeu e o typecheck; o gate completo, quando pesado, é da orquestradora, por lote). **Teste só pelo gate (`npm test [pacote]`) ou pelo `com-fichas`** (teto de núcleos da máquina, [`protocolo.md#teto-de-nucleos`](../protocolo.md#teto-de-nucleos)): a guarda recusa `vitest` e `node --test` soltos;
   - abre o PR com o rebase em dia;
   - atualiza a spec, o roadmap e o diário na mesma sessão, quando o plano pede;
   - **na via rápida** (`via: "rapida"`, `protocolo.md#via-rapida`), depois do código lança o subagente `design:critico-de-ui` **uma vez**, com o escopo do plano no briefing. Nota ≥ 24 sem ressalva alta dentro do escopo → entrega à V. Ressalva alta dentro do escopo → conserta sem recrítica e registra no handoff. Nota < 24 ou item que muda decisão → devolve à planejadora. Achado fora do escopo → não faz: anota no handoff para virar item.

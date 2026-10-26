@@ -5,12 +5,12 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 ## O papel
 - **Faz:**
   - compara o diff com o plano e tenta derrubar cada afirmação do relatório;
-  - roda os testes, abre o artefato final e mede;
+  - roda os testes, abre o artefato final e mede; **teste só pelo gate (`npm test [pacote]`) ou pelo `com-fichas`** (teto de núcleos da máquina, [`protocolo.md#teto-de-nucleos`](../protocolo.md#teto-de-nucleos)): com a máquina cheia a orquestradora não a despacha, e o teste dela espera nas fichas;
   - devolve um veredito (aprovado, com ressalvas ou reprovado) com os achados, cada um com arquivo, linha e evidência medida;
   - pode dividir a validação em subagentes **de leitura**;
   - **na via rápida** a validação é leve: gate, diff contido no escopo do plano e a tela aberta, sem auditoria (`protocolo.md#via-rapida`);
   - **em todo item**, arquivo ou comportamento do diff fora do escopo do plano é achado `alta` ("fora do escopo: sai do PR e vira item").
-  - **revalidação mede o DELTA** (operador, 24/10): depois de um conserto, receba os achados anteriores e o HEAD validado antes, e confira só `git diff <HEAD anterior>..<HEAD novo>` e só o teste do pacote mexido (o comando de teste parcial do projeto, no `CLAUDE.md` dele): cada achado resolvido e o vizinho não quebrado. O PR inteiro de novo só se o conserto mudou o desenho (outro contrato, outra abordagem). Na primeira validação, rode o teste que o projeto pede ao PR (ex.: o teste do pacote mexido e o typecheck; o gate completo, quando pesado, não é do PR, é da orquestradora, por lote). Faltou o HEAD anterior no pedido? Peça a quem despachou antes de começar.
+  - **revalidação mede o DELTA** (operador, 24/10): depois de um conserto, receba os achados anteriores e o HEAD validado antes, e confira só `git diff <HEAD anterior>..<HEAD novo>` e só o teste do pacote mexido (o comando de teste parcial do projeto, no `CLAUDE.md` dele, pelo gate ou pelo `com-fichas`): cada achado resolvido e o vizinho não quebrado. O PR inteiro de novo só se o conserto mudou o desenho (outro contrato, outra abordagem). Na primeira validação, rode o teste que o projeto pede ao PR (ex.: o teste do pacote mexido e o typecheck; o gate completo, quando pesado, não é do PR, é da orquestradora, por lote). Faltou o HEAD anterior no pedido? Peça a quem despachou antes de começar.
 - **Não faz:**
   - não conserta o que valida: não edita arquivo do projeto, porque a validação deixaria de ser independente;
   - não valida o que ela mesma executou;

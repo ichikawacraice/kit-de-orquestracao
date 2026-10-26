@@ -9,6 +9,7 @@ Kit de orquestração de sessões do Claude Code (pool de papéis, travas por ho
 Regras do código (valem para toda fatia):
 - Node ≥ 20, ESM, só módulos nativos: o kit não traz dependência npm. Testes em `node:test` (`node --test`), nunca vitest.
 - Script termina por `process.exitCode`, nunca `process.exit()`.
+- Teste isolado: `node gate/com-fichas.mjs -- <comando>` (teto de núcleos da máquina, somando todas as sessões); `vitest` e `node --test` soltos a guarda recusa.
 - Testes nunca tocam `~/.claude` real: `HOME` e as envs de pasta apontam para diretório temporário.
 - Commits conventional em PT-BR, sem citar ADR no título. `main` com push direto enquanto não houver outro colaborador.
 - Nada neste repo grava em `~/.claude/` antes da fatia K7/K8; nada no repositório Izanagi.
