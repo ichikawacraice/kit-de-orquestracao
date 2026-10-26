@@ -11,7 +11,8 @@
  *   indice-de-adr     todo ADR está no índice e toda linha do índice aponta para um ADR; a célula Decisão cabe
  *   linha-do-roadmap  linha de item ≤ 400 caracteres, ≤ 2 links de spec/ADR e âncora EXPLÍCITA no destino
  *   links-relativos   todo link relativo em `docs/` resolve, e o `#slug` existe (`<a id>` ou título)
- *   tamanho-do-diario cada parte do diário ≤ 150 KB
+ *   tamanho-do-diario cada parte do diário ≤ 150 KB; cada entrada `AAAA-MM/DD-<ancora>.md` no formato, não vazia, com `<a id>` igual à âncora;
+ *                     mês depois da primeira pasta não nasce como arquivo único
  *
  * Pasta que não existe, ou existe sem documento, diz "nada a conferir" — nunca um verde calado.
  * Uso: `node as-docs-concordam.mjs [--regra x]…` (sem `--regra`: as de `documentos.conferir`; lista vazia: nenhuma).
@@ -25,6 +26,8 @@ const PASTAS_IGNORADAS = new Set(["node_modules", "worktrees", ".git", "vendor",
 const ANCORA_EXPLICITA = /<a\s+(?:id|name)=["']([^"']+)["']/gi;
 const TITULO = /^(#{1,6})\s+(.+?)\s*$/gm;
 const LINK = /\[[^\]]*\]\(\s*(<[^>\s]*>|[^)\s]+)/g;
+const MES_VALIDO = /^\d{4}-(0[1-9]|1[0-2])$/;
+const NOME_DE_ENTRADA = /^(0[1-9]|[12]\d|3[01])-([a-z0-9]+(?:-[a-z0-9]+)*)\.md$/;
 const ITEM = /^(\s*)- \[[x ~]\] (.*)$/;
 const STATUS = /\*\*Status:\*\*\s*(.*?)(?=\s*·\s*\*\*|\s*$)/m;
 
@@ -294,18 +297,34 @@ const REGRAS = {
   },
 
   "tamanho-do-diario"(c) {
-    const arquivos = arquivosDe(c.diario, /^\d{4}-\d{2}(-parte-\d+)?\.md$/);
-    c.vistos = arquivos.length;
-    if (arquivos.length === 0) return { achados: [], nada: `nenhum AAAA-MM.md em ${c.rel(c.diario)}` };
+    const acervo = arquivosDe(c.diario, /^\d{4}-\d{2}(-parte-\d+)?\.md$/);
+    const subpastas = existsSync(c.diario) && statSync(c.diario).isDirectory() ? readdirSync(c.diario).filter((f) => statSync(join(c.diario, f)).isDirectory()).sort() : [];
+    const entradas = subpastas.filter(MES_VALIDO.test.bind(MES_VALIDO)).flatMap((mes) => arquivosDe(join(c.diario, mes), /\.md$/).map((f) => `${mes}/${f}`));
+    c.vistos = acervo.length + entradas.length;
+    if (c.vistos === 0 && subpastas.length === 0) return { achados: [], nada: `nenhum AAAA-MM.md nem AAAA-MM/DD-*.md em ${c.rel(c.diario)}` };
     const achados = [];
-    for (const arquivo of arquivos) {
+    const acha = (arquivo, motivo) => achados.push({ arquivo: c.rel(join(c.diario, arquivo)), linha: 1, motivo });
+    const sobre = (bytes) => `${bytes} bytes (+${bytes - c.orc.diarioEmBytes} sobre ${c.orc.diarioEmBytes})`;
+    for (const arquivo of acervo) {
       const bytes = statSync(join(c.diario, arquivo)).size;
-      if (bytes > c.orc.diarioEmBytes) {
-        achados.push({
-          arquivo: c.rel(join(c.diario, arquivo)),
-          linha: 1,
-          motivo: `${bytes} bytes (+${bytes - c.orc.diarioEmBytes} sobre ${c.orc.diarioEmBytes}); o mês que passa do orçamento fatia em AAAA-MM-parte-N.md`,
-        });
+      if (bytes > c.orc.diarioEmBytes) acha(arquivo, `${sobre(bytes)}; o mês que passa do orçamento fatia em AAAA-MM-parte-N.md`);
+    }
+    for (const nome of subpastas) {
+      if (!MES_VALIDO.test(nome)) acha(nome, `pasta do mês fora de AAAA-MM: "${nome}"`);
+    }
+    for (const entrada of entradas) {
+      const texto = ler(join(c.diario, entrada));
+      const bytes = statSync(join(c.diario, entrada)).size;
+      const m = NOME_DE_ENTRADA.exec(entrada.split("/")[1]);
+      if (!m) acha(entrada, `nome fora do formato DD-<ancora>.md (dia 01-31, âncora em minúsculas, dígitos e hífen)`);
+      if (texto.trim() === "") acha(entrada, "arquivo vazio");
+      if (bytes > c.orc.diarioEmBytes) acha(entrada, `${sobre(bytes)}; a entrada passa do orçamento; divida em duas entradas`);
+      if (m && texto.trim() !== "" && !ancorasDe(texto).explicitas.has(m[2])) acha(entrada, `falta <a id="${m[2]}">: a âncora do nome tem de estar declarada no arquivo`);
+    }
+    const primeira = subpastas.find((n) => MES_VALIDO.test(n));
+    if (primeira) {
+      for (const arquivo of acervo) {
+        if (arquivo.slice(0, 7) > primeira) acha(arquivo, `mês depois da primeira pasta (${primeira}) vira pasta: use ${arquivo.slice(0, 7)}/DD-<ancora>.md`);
       }
     }
     return { achados, nada: null };

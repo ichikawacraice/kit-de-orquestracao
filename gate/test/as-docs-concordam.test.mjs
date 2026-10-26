@@ -248,6 +248,25 @@ describe("linha-do-roadmap", () => {
     }
   });
 
+  it("o link para a entrada do diário na pasta do mês passa com <a id>; sem <a id> reprova", () => {
+    const item = "fez a coisa · [detalhe](diario/2026-11/03-x.md#x)";
+    const raiz = pasta({ "docs/roadmap.md": ROADMAP(item), "docs/diario/2026-11/03-x.md": '<a id="x"></a>\n# x\n' });
+    try {
+      const r = conferirDocs(raiz, {}, ["linha-do-roadmap"]);
+      assert.deepEqual(r.achados, []);
+    } finally {
+      limpar(raiz);
+    }
+    const raiz2 = pasta({ "docs/roadmap.md": ROADMAP(item), "docs/diario/2026-11/03-x.md": "# x\n" });
+    try {
+      const r = conferirDocs(raiz2, {}, ["linha-do-roadmap"]);
+      assert.equal(r.achados.length, 1);
+      assert.match(r.achados[0].motivo, /âncora explícita/);
+    } finally {
+      limpar(raiz2);
+    }
+  });
+
   it("linha de 401 caracteres reprova na linha do item; 400 exatos passam", () => {
     const base = "- [x] ";
     const exata = base + "a".repeat(400 - base.length);
@@ -428,10 +447,97 @@ describe("tamanho-do-diario", () => {
   it("pasta sem diário diz 'nada a conferir'", () => {
     const raiz = pasta({ "docs/x.md": "x\n" });
     try {
-      assert.match(conferirDocs(raiz, {}, ["tamanho-do-diario"]).nada[0].motivo, /nenhum AAAA-MM/);
+      assert.match(conferirDocs(raiz, {}, ["tamanho-do-diario"]).nada[0].motivo, /nenhum AAAA-MM\.md nem AAAA-MM\/DD-\*\.md/);
     } finally {
       limpar(raiz);
     }
+  });
+
+  describe("a entrada por arquivo (AAAA-MM/DD-<ancora>.md)", () => {
+    const entrada = (ancora, corpo = "") => `<a id="${ancora}"></a>\n# 03/11 · ${ancora}\n${corpo}`;
+    const rodar = (arquivos, documentos = {}) => {
+      const raiz = pasta(arquivos);
+      try {
+        return conferirDocs(raiz, documentos, ["tamanho-do-diario"]);
+      } finally {
+        limpar(raiz);
+      }
+    };
+
+    it("a entrada boa passa e a linha de fecho conta 1 arquivo", () => {
+      const r = rodar({ "docs/diario/2026-11/03-cache-frio.md": entrada("cache-frio") });
+      assert.deepEqual(r.achados, []);
+      assert.deepEqual(r.nada, []);
+      assert.equal(r.arquivos, 1);
+    });
+
+    it("nome fora do formato reprova, um achado por arquivo, citando DD-<ancora>.md", () => {
+      for (const nome of ["3-x.md", "03-Cache.md", "03_x.md", "x.md"]) {
+        const r = rodar({ [`docs/diario/2026-11/${nome}`]: entrada("x") });
+        assert.equal(r.arquivos, 1, nome);
+        assert.equal(r.achados.length, 1, nome);
+        assert.match(r.achados[0].motivo, /DD-<ancora>\.md/, nome);
+      }
+    });
+
+    it("âncora diferente do nome, ou ausente, reprova", () => {
+      const diferente = rodar({ "docs/diario/2026-11/03-a.md": entrada("b") });
+      assert.equal(diferente.achados.length, 1);
+      assert.match(diferente.achados[0].motivo, /a âncora do nome/);
+      const ausente = rodar({ "docs/diario/2026-11/03-a.md": "# só título\n" });
+      assert.equal(ausente.achados.length, 1);
+      assert.match(ausente.achados[0].motivo, /a âncora do nome/);
+    });
+
+    it("arquivo vazio ou só de espaços reprova", () => {
+      for (const corpo of ["", "  \n \t\n"]) {
+        const r = rodar({ "docs/diario/2026-11/03-a.md": corpo });
+        assert.equal(r.arquivos, 1);
+        assert.equal(r.achados.length, 1);
+        assert.match(r.achados[0].motivo, /vazio/);
+      }
+    });
+
+    it("entrada acima do orçamento reprova; no limite passa", () => {
+      const cabeca = entrada("a");
+      const limite = 150_000;
+      const exata = cabeca + "x".repeat(limite - Buffer.byteLength(cabeca));
+      assert.deepEqual(rodar({ "docs/diario/2026-11/03-a.md": exata }).achados, []);
+      const r = rodar({ "docs/diario/2026-11/03-a.md": exata + "x" });
+      assert.deepEqual(onde(r), ["docs/diario/2026-11/03-a.md:1"]);
+      assert.match(r.achados[0].motivo, /150001 bytes \(\+1 sobre 150000\)/);
+      assert.match(r.achados[0].motivo, /divida em duas entradas/);
+    });
+
+    it("pasta com nome que não é AAAA-MM reprova; README e solto na raiz são ignorados", () => {
+      for (const nome of ["2026-13", "nov"]) {
+        const r = rodar({ [`docs/diario/${nome}/01-x.md`]: entrada("x") });
+        assert.equal(r.achados.length, 1, nome);
+        assert.match(r.achados[0].motivo, /pasta do mês fora de AAAA-MM/, nome);
+      }
+      const ok = rodar({ "docs/diario/2026-11/03-x.md": entrada("x"), "docs/diario/README.md": "i\n", "docs/diario/notas.txt": "n\n" });
+      assert.deepEqual(ok.achados, []);
+    });
+
+    it("mês depois da primeira pasta como arquivo único reprova; o mês da transição e as partes antigas não", () => {
+      const r = rodar({ "docs/diario/2026-10/01-x.md": entrada("x"), "docs/diario/2026-11.md": "a\n" });
+      assert.deepEqual(onde(r), ["docs/diario/2026-11.md:1"]);
+      assert.match(r.achados[0].motivo, /mês depois da primeira pasta \(2026-10\) vira pasta/);
+      const transicao = rodar({ "docs/diario/2026-10/01-x.md": entrada("x"), "docs/diario/2026-10.md": "a\n", "docs/diario/2026-09-parte-2.md": "a\n" });
+      assert.deepEqual(transicao.achados, []);
+    });
+
+    it("sem pasta nenhuma, o acervo de arquivos únicos segue valendo (vem depois do caso que reprova)", () => {
+      const r = rodar({ "docs/diario/2026-11.md": "a\n", "docs/diario/2026-12.md": "a\n" });
+      assert.deepEqual(r.achados, []);
+      assert.equal(r.arquivos, 2);
+    });
+
+    it("só o README na pasta: 'nada a conferir' cita os dois formatos", () => {
+      const r = rodar({ "docs/diario/README.md": "i\n" });
+      assert.equal(r.nada.length, 1);
+      assert.match(r.nada[0].motivo, /nenhum AAAA-MM\.md nem AAAA-MM\/DD-\*\.md/);
+    });
   });
 });
 
@@ -464,7 +570,7 @@ describe("a linha de fecho", () => {
     try {
       const linhas = [];
       relatar(conferirDocs(raiz, {}, ["tamanho-do-diario"]), (t) => linhas.push(t));
-      assert.deepEqual(linhas, ["[tamanho-do-diario] nada a conferir: nenhum AAAA-MM.md em docs/diario", "1 regras, 0 arquivos, 0 achados"]);
+      assert.deepEqual(linhas, ["[tamanho-do-diario] nada a conferir: nenhum AAAA-MM.md nem AAAA-MM/DD-*.md em docs/diario", "1 regras, 0 arquivos, 0 achados"]);
     } finally {
       limpar(raiz);
     }
