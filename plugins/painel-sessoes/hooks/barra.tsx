@@ -276,8 +276,8 @@ export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
 
 /** A largura que a faixa pede, com os textos reais: peça à esquerda com 2 de vão, botão com `[ ]` (+4), texto sem, a moldura +2. */
 export function larguraDaFaixa(e: EstadoBarra, faixa: 0 | 1 | 2): number {
-  // Com pedido a largura é a do repouso (frase + botão), também no `Enviando…` e no `✓ ok enviado`: a barra não se rearruma debaixo do clique.
-  const { esq, dir } = pecasDaBarra(e.pedido === null ? e : { ...e, pedido: 'aberto' }, faixa)
+  // Com pedido a largura é a do repouso (frase + botão + o selo que o conta), também no `Enviando…` e no `✓ ok enviado`: a barra não se rearruma debaixo do clique, nem quando o ok zera as abertas.
+  const { esq, dir } = pecasDaBarra(e.pedido === null ? e : { ...e, pedido: 'aberto', abertas: Math.max(e.abertas, 1) }, faixa)
   const ladoEsq = esq.reduce((n, p) => n + largura(p.t), 0) + 2 * (esq.length - 1)
   const ladoDir = dir.reduce((n, p) => n + largura(p.t) + (p.k === 'pedido' ? 0 : 4), 0) + Math.max(0, dir.length - 1)
 

@@ -272,6 +272,14 @@ test('faixaDaBarra: a barra de uma E com pedido aberto a 142 mil soma 133, 106 e
   expect([f(133), f(132), f(106), f(105)]).toEqual([0, 1, 1, 2])
 })
 
+test('faixaDaBarra: o ok que zera as abertas (o pedido era a única) não muda a faixa a 120 colunas', () => {
+  const unica = { ...DE_OUTRA, abertas: 1 }
+  const antes = faixaDaBarra(120, { ...unica, pedido: 'aberto' })
+  expect(antes, 'a 120 a barra de uma E com o pedido como única pergunta não cabe na faixa 0').toBe(1)
+  for (const pedido of ['enviando', 'enviado'] as const) expect(faixaDaBarra(120, { ...unica, abertas: 0, pedido }), `${pedido} com abertas 1→0`).toBe(antes)
+  expect([0, 1, 2].map(f => larguraDaFaixa({ ...unica, abertas: 0, pedido: 'enviado' }, f as 0 | 1 | 2))).toEqual([0, 1, 2].map(f => larguraDaFaixa({ ...unica, pedido: 'aberto' }, f as 0 | 1 | 2)))
+})
+
 test('barra: o grupo da direita quebra a linha a 40 colunas, com pedido aberto', async ($, on) => {
   await iniciar($, on, { titulo: 'E1 · x', perguntas: [limpar('Q290')] })
   const ui = await montar($, 'terminal', { bodyColumns: 40 })
