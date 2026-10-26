@@ -166,9 +166,17 @@ test('O3c. precondição: sem URL, o `?` sozinho dispara (o teste mede a URL, n�
   cobrou(rodar(b, 'P', transcript(b, { tokens: 260_000, texto: 'pronto\n\nposso seguir?' })), /260 mil/);
 }));
 
-// F48: a orquestradora com o operador presente só pede o ok (250 mil); com o modo ausente ligado vale a régua de antes.
+// F48: a orquestradora com o operador presente só pede o ok (150 mil); com o modo ausente ligado vale a régua de antes.
 const agora = () => new Date().toISOString(); const haMin = (m) => new Date(Date.now() - m * 60_000).toISOString();
 const LIMPAR = (extra = {}) => ({ titulo: 'limpar · orquestradora', sessaoId: 'local_ORQ', estado: 'aberta', atualizadoEm: agora(), ...extra });
+test('F118-1. ORQ com 160 mil, sem bandeira nem pergunta: cobra pedir (PEDIR em 150 mil)', () => com((b) => {
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 160_000 })), /limpar · orquestradora/);
+  assert.match(log(b), /\tcobrou-pedir\t/);
+}));
+test('F118-2. ORQ com 140 mil: não é cobrada', () => com((b) => {
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 140_000 })), null);
+  assert.doesNotMatch(log(b), /cobrou-pedir/);
+}));
 test('F48-1. ORQ com 260 mil, sem bandeira nem pergunta: cobra pedir (cobrou-pedir)', () => com((b) => {
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
   assert.match(log(b), /\tcobrou-pedir\t/);
