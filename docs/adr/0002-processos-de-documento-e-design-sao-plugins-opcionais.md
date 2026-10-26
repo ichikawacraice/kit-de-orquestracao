@@ -1,7 +1,7 @@
 # ADR 0002 — Os processos de documento e de design são plugins próprios, ligados por padrão
 
 - Data: 2026-10-25
-- Status: Aceito (Q259 e Q260 respondidas pelo operador em 2026-10-25)
+- Status: Aceito, substituído em parte pelo [ADR 0003](0003-opcao-do-plugin-vale-por-conta-e-o-kit-json-e-o-caminho-do-time.md) (Q259 e Q260 respondidas pelo operador em 2026-10-25)
 - Autor: P2 (planejadora do pool)
 - Relacionados: [plano da fase 3](../planos/2026-10-25-fase-3-processos-de-documento-e-design.md) · [ADR 0001](0001-plugin-para-o-nucleo-cli-para-o-projeto.md)
 
