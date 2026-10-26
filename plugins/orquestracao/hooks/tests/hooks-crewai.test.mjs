@@ -3,7 +3,7 @@
 // transcripts sintéticos no formato real (.jsonl), log e estado num diretório temporário.
 // Rodar: node ~/.claude/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir, homedir, userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -531,6 +531,19 @@ caso('F60.6 os outros tipos não ganham a pasta de revisões', () => comRepo(() 
   igual(existsSync(LISTA()), false, 'precondição: sem lista');
   for (const t of ['designerX', 'design:critico-de-ui', 'executor']) {
     igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', t);
+  }
+}));
+// F61: a pasta de revisões é cercada: valor inválido vale o padrão e symlink não leva a escrita para fora.
+caso('F61.1 valor inválido de design.revisoes vale o padrão', () => comRepo(() => {
+  mkdirSync(join(REPO, '.claude'), { recursive: true });
+  const kit = (v) => writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: v } }));
+  kit('docs/ux');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design:designer'))), null, 'precondição: docs/ux libera a.md');
+  igual(decisao(rodar(SN, editar(`${REPO}/src/a.ts`, sub('design:designer')))), 'deny', 'precondição: docs/ux nega src');
+  for (const v of ['.', './', '..', 'docs/..', 'docs/../..', REPO, homedir(), '/']) {
+    kit(v);
+    igual(decisao(rodar(SN, editar(`${REPO}/src/a.ts`, sub('design:designer')))), 'deny', `src/a.ts com revisoes=${v}`);
+    igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design:designer'))), null, `o padrão vale com revisoes=${v}`);
   }
 }));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {

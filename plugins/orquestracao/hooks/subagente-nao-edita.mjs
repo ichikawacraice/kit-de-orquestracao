@@ -13,7 +13,7 @@
 // Erro do hook vai para o log e a ferramenta segue.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { BASE, registrar, lerEntrada, semPrefixoDoKit } from './hooks-crewai-comum.mjs';
 
 const HOOK = 'subagente-nao-edita';
@@ -52,13 +52,16 @@ function pastaDeRevisoes(raiz) {
     rel = kit?.design?.revisoes;
   } catch { /* sem kit.json legível: vale o padrão */ }
   rel = typeof rel === 'string' ? rel.trim().replace(/\/+$/, '') : '';
-  return resolve(raiz, rel || 'docs/design/revisoes');
+  const PADRAO = 'docs/design/revisoes';
+  // Inválido (absoluto, com `..` ou a própria raiz) vale o padrão: o designer segue com uma pasta que funciona.
+  if (!rel || isAbsolute(rel) || rel.split(/[\\/]+/).includes('..') || resolve(raiz, rel) === raiz) return PADRAO;
+  return rel;
 }
 
 function designerNaRevisao(tipo, p) {
   if (semPrefixoDoKit(tipo) !== 'designer') return false;
   const raiz = raizDoProjeto(p);
-  return !!raiz && p.startsWith(pastaDeRevisoes(raiz) + '/');
+  return !!raiz && p.startsWith(resolve(raiz, pastaDeRevisoes(raiz)) + '/');
 }
 
 function caminhoDe(entrada) {
