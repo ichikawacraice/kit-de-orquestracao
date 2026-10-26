@@ -1779,7 +1779,7 @@ test('projeto no título: o cartão e a linha da fila abrem com "PROJETO · TEMA
   expect(com.source, 'o desenho não pode vir vazio').toBeTruthy()
   expect(com.source).toContain('IZANAGI · EDITOR DA LOJA')
   const fila = filaSvg(360, itemCheio({ situacao: 'fila', com: [], projeto: 'kit-de-orquestracao' }), AGORA)
-  expect(fila.source).toContain('KIT-DE-ORQUESTRACAO · EDITOR DA LOJA')
+  expect(fila.source, 'a 360 px o tema pode encurtar; o projeto vem antes').toContain('KIT-DE-ORQUESTRACAO · EDITOR DA')
   const sem = cartaoSvg(360, itemCheio({ projeto: undefined }), AGORA, { situacao: situacaoDoTeste })
   expect(sem.source).toContain('EDITOR DA LOJA')
   expect(sem.source, 'sem projeto, nada de projeto no rótulo').not.toMatch(/IZANAGI|KIT-DE-ORQUESTRACAO/)
