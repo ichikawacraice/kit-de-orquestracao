@@ -2,7 +2,7 @@
 // porque o desktop desenha SVG com a fonte do sistema e o tema claro/escuro.
 // Funções puras, sem `$`: recebem os dados e a largura, devolvem o markup.
 
-import type { LinhaItem, PerguntaAberta, PerguntaAnterior } from '../types'
+import type { Citado, ItemDoIndice, LinhaItem, PerguntaAberta, PerguntaAnterior } from '../types'
 
 const FONTE = "-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif"
 
@@ -142,7 +142,7 @@ ${texto(x + 26, y + 23.5, 13, 's', xml(caber(c.rotulo, 13, tw - 32)))}
   return { height, source: svg(W, height, blocos.join('')) }
 }
 
-export function perguntaSvg(W: number, q: PerguntaAberta): { source: string; height: number } {
+export function perguntaSvg(W: number, q: PerguntaAberta, citados: Citado[] = []): { source: string; height: number } {
   const pilula = largura(q.id, 13) + 18
   // Sem teto de linhas: o operador responde pelo card, e frase cortada não se responde (pedido de 23/10).
   const titulo = quebrar(q.titulo, 15, W - 32, Infinity)
@@ -169,6 +169,12 @@ export function perguntaSvg(W: number, q: PerguntaAberta): { source: string; hei
   for (const l of reco) {
     partes.push(texto(16, y, 13, AVISO, xml(l)))
     y += 18
+  }
+  if (citados.length > 0) {
+    const topo = y - 6
+    const c = citadosSvg(16, topo, W - 32, citados)
+    partes.push(...c.partes)
+    y = topo + c.altura + 13
   }
   const H = y
 
@@ -413,7 +419,7 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   }
   if (item.depois.length > 0) {
     const mais = item.depois.length > 1 ? ` (+${item.depois.length - 1})` : ''
-    const depois = `depois: ${item.depois[0]}${mais}`
+    const depois = `depois: ${item.depois[0]!.texto}${mais}`
     y += 19
     partes.push(texto(30, y, 13, 'm', xml(caber(depois, 13, tw))))
     alt.push(depois)
@@ -521,6 +527,8 @@ function pessoasDoItem(item: LinhaItem): Pessoa[] {
 export const MAX_LINHAS_QUEM = 3
 
 export type OpcoesDoCartao = {
+  /** Os F<n> citados nos textos do cartão, já resolvidos (`citadosDe`); sem eles, a linha "Citados" não aparece. */
+  citados?: Citado[]
   /** O que a sessão faz agora ("trabalhando agora", "parada há X", "sem leitura da sessão"); `undefined` é a sessão fora da lista. */
   situacao: (localId: string) => string | undefined
 }
@@ -558,7 +566,7 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   const partes: string[] = []
   const tempo = tempoDoItem(item, agora)
   const tempoW = tempo ? largura(tempo, 12) + 10 : 0
-  partes.push(texto(0, 11, 11, 'm', xml(caber(upper(item.temaRotulo), 11, W - tempoW)), ' font-weight="600"'))
+  partes.push(sobreSvg(0, 11, W - tempoW, item))
   if (tempo) partes.push(texto(W, 11.5, 12, 'm', xml(tempo), ' text-anchor="end" font-variant-numeric="tabular-nums"'))
 
   let y = 11
@@ -577,7 +585,7 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   partes.push(...linhaDeChips.partes)
   y += 9 + linhaDeChips.altura
 
-  const alt = [item.titulo, chips.map(c => c.t).join(' · ')]
+  const alt = [`${item.id} · ${item.temaRotulo}`, item.titulo, chips.map(c => c.t).join(' · ')]
 
   if (item.trava) {
     const sem = item.trava.motivo === 'sem-ninguem'
@@ -639,10 +647,17 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   }
   if (item.depois.length > 0) {
     const mais = item.depois.length > 1 ? ` (+${item.depois.length - 1})` : ''
-    const depois = `depois: ${item.depois[0]}${mais}`
+    const ligado = item.depois[0]!.item
+    const depois = `depois: ${item.depois[0]!.texto}${mais}`
     y += 17
-    partes.push(texto(0, y, 12, 'm', xml(caber(depois, 12, W))))
-    alt.push(depois)
+    partes.push(depoisSvg(0, y, W, depois, ligado))
+    alt.push(ligado ? `${depois} → ${ligado}` : depois)
+  }
+  if (opcoes.citados && opcoes.citados.length > 0) {
+    const c = citadosSvg(0, y + 6, W, opcoes.citados)
+    partes.push(...c.partes)
+    y = y + 6 + c.altura - 5
+    alt.push(altDosCitados(opcoes.citados))
   }
   if (tempo) alt.push(tempo)
   const altura = y + 6
@@ -653,13 +668,13 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
 const X_FILA = 22
 
 /** A linha da fila (§3): anel tracejado, tema e "parado há", título, resumo, chips; sem botão, porque não há sessão. */
-export function filaSvg(W: number, item: LinhaItem, agora: number): { source: string; height: number; alt: string } {
+export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { citados?: Citado[] } = {}): { source: string; height: number; alt: string } {
   const tw = W - X_FILA
   const tempo = tempoDoItem(item, agora)
   const tempoW = tempo ? largura(tempo, 12) + 10 : 0
   const partes: string[] = [
     `<circle cx="9" cy="9" r="5" fill="none" stroke="${NEUTRO}" stroke-width="1.3" stroke-dasharray="2 2"/>`,
-    texto(X_FILA, 11, 11, 'm', xml(caber(upper(item.temaRotulo), 11, tw - tempoW)), ' font-weight="600"'),
+    sobreSvg(X_FILA, 11, tw - tempoW, item),
   ]
   if (tempo) partes.push(texto(W, 11.5, 12, 'm', xml(tempo), ' text-anchor="end" font-variant-numeric="tabular-nums"'))
 
@@ -669,7 +684,7 @@ export function filaSvg(W: number, item: LinhaItem, agora: number): { source: st
     y += 19
     partes.push(texto(X_FILA, y, 14, 't', xml(l), ' font-weight="600"'))
   }
-  const alt = [item.titulo]
+  const alt = [`${item.id} · ${item.temaRotulo}`, item.titulo]
   if (item.resumo) {
     y += 3
     for (const l of quebrar(item.resumo, 12.5, tw, 2)) {
@@ -683,11 +698,100 @@ export function filaSvg(W: number, item: LinhaItem, agora: number): { source: st
   partes.push(...linhaDeChips.partes)
   y += 8 + linhaDeChips.altura
   alt.push(chips.map(c => c.t).join(' · '))
+  if (opcoes.citados && opcoes.citados.length > 0) {
+    const c = citadosSvg(X_FILA, y + 6, tw, opcoes.citados)
+    partes.push(...c.partes)
+    y = y + 6 + c.altura
+    alt.push(altDosCitados(opcoes.citados))
+  }
   if (tempo) alt.push(tempo)
   const altura = y + 10
   partes.push(`<line class="ln" x1="0" y1="${altura - 0.5}" x2="${W}" y2="${altura - 0.5}"/>`)
 
   return { height: altura, alt: alt.join(' — '), source: svg(W, altura, partes.join('')) }
+}
+
+/** `F13 · TEMA`: o número em `t` 11/700, nunca cortado (o corte vale só para o tema); o tempo à direita já está fora de `max`. */
+function sobreSvg(x: number, y: number, max: number, item: { id: string; temaRotulo: string }): string {
+  const prefixo = ' · '
+  const reserva = largura(item.id, 11) * 1.1 + largura(prefixo, 11)
+  const tema = caber(upper(item.temaRotulo), 11, Math.max(0, max - reserva))
+
+  return `<text x="${x}" y="${y}" font-family="${FONTE}" font-size="11" font-variant-numeric="tabular-nums"><tspan class="t" font-weight="700">${xml(item.id)}</tspan><tspan class="m" font-weight="600">${xml(prefixo + tema)}</tspan></text>`
+}
+
+/** A linha `depois:`; quando o primeiro `depois` liga um item, termina em ` → F3` e o corte come o texto, nunca o número. */
+function depoisSvg(x: number, y: number, max: number, depois: string, ligado: string | undefined): string {
+  if (!ligado) return texto(x, y, 12, 'm', xml(caber(depois, 12, max)))
+  const seta = ` → ${ligado}`
+  const corte = caber(depois, 12, Math.max(0, max - largura(seta, 12) * 1.1))
+
+  return `<text x="${x}" y="${y}" font-family="${FONTE}" font-size="12"><tspan class="m">${xml(corte)}</tspan><tspan class="s" font-weight="700" font-variant-numeric="tabular-nums">${xml(seta)}</tspan></text>`
+}
+
+const COLUNA_CITADOS = 52
+const LINHA_CITADOS = 17
+
+/** As linhas do que se desenha: até 3 com título; com 4 ou mais, as 2 primeiras e uma linha "também F7, F9". */
+function linhasDosCitados(citados: Citado[]): Array<Citado | string> {
+  return citados.length >= 4 ? [citados[0]!, citados[1]!, `também ${citados.slice(2).map(c => c.id).join(', ')}`] : citados
+}
+
+/** O que o leitor de tela lê da legenda: tudo, inclusive os números que o desenho resume em "também". */
+export function altDosCitados(citados: Citado[]): string {
+  return `${citados.length === 1 ? 'Citado' : 'Citados'}: ${citados.map(c => (c.titulo === undefined ? `${c.id} · fora da fila` : `${c.id} · ${c.titulo}`)).join('; ')}`
+}
+
+/** A legenda "Citados" sob o bloco: rótulo pendurado numa coluna de 52 px e uma linha por número (§2 do desenho). */
+export function citadosSvg(x0: number, yTopo: number, larguraLinha: number, citados: Citado[]): { partes: string[]; altura: number } {
+  if (citados.length === 0) return { partes: [], altura: 0 }
+  const linhas = linhasDosCitados(citados)
+  const tw = Math.max(0, larguraLinha - COLUNA_CITADOS)
+  const partes: string[] = [texto(x0, yTopo + 12, 12, 'm', citados.length === 1 ? 'Citado' : 'Citados', ' font-weight="600"')]
+  linhas.forEach((l, k) => {
+    const y = yTopo + 12 + k * LINHA_CITADOS
+    const x = x0 + COLUNA_CITADOS
+    if (typeof l === 'string') {
+      partes.push(texto(x, y, 12, 'm', xml(caber(l, 12, tw))))
+
+      return
+    }
+    const cabeca = `${l.id} · `
+    const resto = l.titulo === undefined ? 'fora da fila' : caber(l.titulo, 12, Math.max(0, tw - largura(cabeca, 12) * 1.1))
+    partes.push(
+      `<text x="${x}" y="${y}" font-family="${FONTE}" font-size="12"><tspan class="s" font-weight="700" font-variant-numeric="tabular-nums">${xml(l.id)}</tspan><tspan class="m"${l.titulo === undefined ? ' font-style="italic"' : ''}>${xml(` · ${resto}`)}</tspan></text>`,
+    )
+  })
+
+  return { partes, altura: linhas.length * LINHA_CITADOS }
+}
+
+export type GrupoDoIndice = { id: string; rotulo: string; projeto?: string; itens: ItemDoIndice[] }
+const LINHA_TODOS = 22
+const COLUNA_NUMERO = 40
+
+/** Um tema da lista de todos os itens: cabeçalho (com o projeto à direita quando há mais de um) e uma linha de 22 px por item. */
+export function todosSvg(W: number, grupo: GrupoDoIndice, opcoes: { comProjeto: boolean }): { source: string; height: number; alt: string } {
+  const projeto = opcoes.comProjeto ? (grupo.projeto ?? grupo.itens[0]?.projeto) : undefined
+  const partes: string[] = [texto(0, 14, 11, 'm', xml(caber(upper(grupo.rotulo), 11, W - (projeto ? largura(projeto, 11) + 16 : 0))), ' font-weight="600"')]
+  if (projeto) partes.push(texto(W, 14, 11, 'm', xml(caber(projeto, 11, W / 2)), ' text-anchor="end"'))
+  grupo.itens.forEach((i, k) => {
+    const y = 14 + LINHA_TODOS * (k + 1)
+    const vivo = i.etapa !== 'feito' && i.etapa !== 'descartado'
+    const etapa = ROTULO_ETAPA[i.etapa] ?? i.etapa
+    const etapaW = largura(etapa, 11.5)
+    partes.push(texto(0, y, 12.5, vivo ? 's' : 'm', xml(i.id), ' font-weight="700" font-variant-numeric="tabular-nums"'))
+    partes.push(texto(COLUNA_NUMERO, y, 12.5, vivo ? 't' : 'm', xml(caber(i.titulo, 12.5, W - COLUNA_NUMERO - etapaW - 10))))
+    partes.push(texto(W, y, 11.5, vivo ? (COR_ETAPA[i.etapa] ?? 'm') : 'm', xml(etapa), ' text-anchor="end"'))
+  })
+  const altura = 14 + LINHA_TODOS * grupo.itens.length + 10
+  partes.push(`<line class="ln" x1="0" y1="${altura - 0.5}" x2="${W}" y2="${altura - 0.5}"/>`)
+
+  return {
+    height: altura,
+    alt: `${grupo.rotulo}${projeto ? ` · ${projeto}` : ''}: ${grupo.itens.map(i => `${i.id} · ${i.titulo} · ${ROTULO_ETAPA[i.etapa] ?? i.etapa}`).join('; ')}`,
+    source: svg(W, altura, partes.join('')),
+  }
 }
 
 export type Faixa = { titulo: string; detalhe?: string; tom: 'er' | 'av' }
