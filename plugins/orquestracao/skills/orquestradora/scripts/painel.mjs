@@ -38,7 +38,6 @@ import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { esperandoPapel } from '../../../hooks/esperando-papel.mjs';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
@@ -77,6 +76,11 @@ const pool = MEU_CLI
     process.stderr.write(`painel.mjs: aviso: não consegui importar ${POOL_COMUM} (${e.message}); a proteção das linhas de outras sessões ficou desligada\n`);
     return null;
   })
+  : null;
+// `esperando` da `list fila` (F58): a regra mora em hooks/esperando-papel.mjs; só `list fila` a carrega (as outras
+// invocações não dependem do módulo, nem a cópia do script solta numa pasta sem `hooks/`).
+const esperandoPapel = process.argv[2] === 'list' && process.argv.slice(3).includes('fila')
+  ? (await import(pathToFileURL(join(HOOKS_DIR, 'esperando-papel.mjs')).href)).esperandoPapel
   : null;
 let meusIds; // Set de ids que contam como "a própria sessão"; null = não resolvido
 function ehMinha(id) {

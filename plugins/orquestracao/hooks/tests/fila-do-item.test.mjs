@@ -220,7 +220,7 @@ caso('F27-3e: com etapa nova, o estado antigo que sobrou não decide (etapa feit
   igual(bloqueia({ etapa: 'execucao', estado: 'feito', donoLocalId: LOCAL, atualizadoEm: ANTES })?.decision, 'block', 'execucao vence');
 });
 caso('F27-3f: item com dono e etapa, gravado DEPOIS do início do turno: passa', () => {
-  igual(bloqueia({ etapa: 'validacao', donoLocalId: LOCAL, atualizadoEm: DEPOIS }), null, 'passa');
+  igual(bloqueia({ etapa: 'validacao', donoLocalId: LOCAL, com: [{ apelido: 'V1' }], atualizadoEm: DEPOIS }), null, 'passa');
 });
 
 const livreNoTurno = () => [...turno(), { type: 'assistant', uuid: 'a2', timestamp: '2026-10-24T12:01:00.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'mcp__ccd_session_mgmt__set_session_title', input: { session_id: 'self', title: 'P1 · livre' } }] } }];
