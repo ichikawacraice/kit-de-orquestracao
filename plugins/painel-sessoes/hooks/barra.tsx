@@ -97,19 +97,18 @@ export function orquestradorasDoProjeto(docs: Doc[], projeto: string | null): st
  */
 export function perguntaDeLimpeza(docs: Doc[], ids: string[], proprio?: string, agora?: number): PerguntaAberta | null {
   const doOk = (d: Doc) => (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? '')
-  // O sim do painel dado há até 30 min (a janela da T7) atende o pedido: as outras abertas da mesma orquestradora não voltam à tela.
-  if (
-    agora !== undefined &&
-    docs.some(d => {
-      const quando = Date.parse(texto(d.data.respondidaEm) ?? '')
-
-      return d.data.estado === 'respondida' && doOk(d) && d.data.respondidaPor === 'painel' && (texto(d.data.resposta) ?? '').trim().toLowerCase().startsWith('sim') && agora - quando <= OK_VALE_MS
-    })
-  ) {
-    return null
-  }
-  const achadas = docs.filter(d => d.data.estado === 'aberta' && (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? ''))
+  // O sim do painel dado há até 30 min (a janela da T7) atende só as abertas com `atualizadoEm` até o `respondidaEm` dele (o mais recente);
+  // a aberta depois do ok volta, e `atualizadoEm` ilegível conta como anterior.
+  const oks =
+    agora === undefined
+      ? []
+      : docs
+          .filter(d => d.data.estado === 'respondida' && doOk(d) && d.data.respondidaPor === 'painel' && (texto(d.data.resposta) ?? '').trim().toLowerCase().startsWith('sim'))
+          .map(d => Date.parse(texto(d.data.respondidaEm) ?? ''))
+          .filter(q => Number.isFinite(q) && agora - q <= OK_VALE_MS)
+  const okDoPainel = oks.length > 0 ? Math.max(...oks) : -Infinity
   const quando = (d: Doc) => Date.parse(texto(d.data.atualizadoEm) ?? '') || 0
+  const achadas = docs.filter(d => d.data.estado === 'aberta' && (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? '') && quando(d) > okDoPainel)
   const d = achadas.sort((a, b) => quando(b) - quando(a) || numero(b.id) - numero(a.id))[0]
   if (!d) return null
   const sessaoId = texto(d.data.sessaoId)
