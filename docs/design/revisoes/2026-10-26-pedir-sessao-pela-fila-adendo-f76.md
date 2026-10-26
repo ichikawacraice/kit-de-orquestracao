@@ -2,7 +2,7 @@
 
 - **Data:** 2026-10-26
 - **Autora:** D1, designer do pool
-- **Estado:** rascunho, à espera da crítica (§Crítica)
+- **Estado:** **aprovada com ressalvas** — crítica 1 em 25/30, sem ressalva alta (§Crítica)
 - **Revisão de origem:** [`2026-10-26-pedir-sessao-pela-fila.md`](2026-10-26-pedir-sessao-pela-fila.md), §Regiões, "O topo da Na fila". O que este adendo não cita continua como lá.
 - **Mock:** [`2026-10-26-pedir-sessao-pela-fila-adendo-f76-mock.html`](2026-10-26-pedir-sessao-pela-fila-adendo-f76-mock.html), a 300 px, claro e escuro, com a coluna "Antes" para comparar.
 - **Plano que o aplica:** F76, pontos C e E (`~/.claude/orquestracao/pool/handoffs/F76-plano.md`, seção "Layout").
@@ -65,7 +65,7 @@ O "Pedir n sessões" sai da fileira dos "Abrir": pede vários projetos de uma ve
 
 ### 4. O recuo: `paddingLeft={3}` no topo inteiro
 
-Todo o topo (o "Pedir n sessões", os grupos e os avisos) fica dentro de **um** `Box flexDirection="column" gap={1} paddingLeft={3}`. O valor é o mesmo da fileira da linha da fila (`paddingLeft={3}`, ≈ 26 px).
+Todo o topo (o "Pedir n sessões", os grupos e os avisos) fica dentro de **um** `Box flexDirection="column" gap={1} paddingLeft={3} paddingBottom={1}`. O `paddingBottom` separa o fim do topo da primeira linha (~18 px) mais do que um grupo se separa do outro (~9 px): o topo e as linhas usam a mesma coluna e a mesma forma, e sem ele o último grupo se lê como parte do primeiro item. Sem filete. No terminal não há `paddingBottom`: o "●" de cada linha já marca o início. O valor é o mesmo da fileira da linha da fila (`paddingLeft={3}`, ≈ 26 px).
 
 - **Por que 3 e não os 13 px do mock de origem:** 13 px alinhava o texto ao título da seção (x = 14 na `secaoSvg`). Em unidades do pane, 13 px fica entre 1 (~9 px) e 2 (~17 px), e qualquer um dos dois cria uma terceira coluna, que não é a do título nem a da linha. Com 3, a Na fila inteira tem uma coluna só abaixo da faixa: "Pedir n sessões", "Abrir a orquestradora", os avisos, o título de cada linha (x = 22) e o "Pedir planejadora" de cada linha (x = 26) começam no mesmo lugar, ±4 px. No mock, todos medem x = 26.
 - **Custo:** 26 px a menos para as frases. "2 cartões esperam você na conversa da orquestradora de izanagi" quebra em 2 linhas a 300 px com o recuo **e sem ele** (35 px de altura nos dois casos, no mock), então o recuo não acrescenta linha. "Sem orquestradora ativa em loja-velha · 1 item" passa de 1 para 2 linhas a 300 px (+17 px); a 380 px cabe numa linha.
@@ -103,8 +103,8 @@ Teste **F76 C/E** (`plugins/painel-sessoes/tests/painel.test.tsx`, prefixo `F76`
 
 1. **Presença antes da ordem:** os nós `pedir:lote`, `orq:izanagi`, `orq:kit-de-orquestracao`, o `Text` "1 cartão espera você na conversa da orquestradora de izanagi" e o de kit existem, cada um uma vez.
 2. **Ordem dos nós no topo** (a sequência de `Button` e `Text` entre a faixa da Na fila e a primeira linha da fila): `pedir:lote` → frase de izanagi → `orq:izanagi` → frase de kit → `orq:kit-de-orquestracao` → aviso de projeto, se houver. Em particular, o índice de `orq:izanagi` é o da frase de izanagi + 1, e o da frase de kit é o de `orq:izanagi` + 1.
-3. **Agrupamento:** a frase de izanagi e `orq:izanagi` têm o mesmo `Box` pai, e esse pai não contém nenhum nó de kit.
-4. **Recuo:** o ancestral comum dos nós do topo tem `paddingLeft` 3 (desktop) e 2 (terminal), e nenhum nó do topo fica fora dele.
+3. **Agrupamento:** o ancestral comum mais próximo da frase de izanagi e de `orq:izanagi` é o `Box` column do grupo; esse `Box` não contém nenhum nó de kit; e o pai direto de `orq:izanagi` é um `Box` row (a forma de todo botão do pane).
+4. **Recuo:** o ancestral comum dos nós do topo tem `paddingLeft` 3 e `paddingBottom` 1 (desktop) e `paddingLeft` 2 (terminal), e nenhum nó do topo fica fora dele.
 5. **Rótulo:** os dois `orq:<projeto>` têm o texto exato `Abrir a orquestradora` (ajuste do F76 B, §2).
 6. Com **1** projeto: a mesma ordem sem o segundo grupo, e o botão com o texto exato `Abrir a orquestradora`.
 
@@ -117,7 +117,7 @@ A E confere no app, a 300 px, que o "Abrir a orquestradora" começa na coluna do
 1. **O botão do topo perde o nome do projeto, também com dois projetos.**
    - O caso: com o grupo, a frase colada acima de cada botão já diz o projeto. Com o nome, "Abrir a orquestradora de kit-de-orquestracao" não cabe numa linha a 300 px com o recuo.
    - Se não decidir: fica sem o nome, e o F76 B muda como no §2.
-   - Recomendação: sem o nome, porque o projeto continua escrito a 2 px do botão e o botão cabe numa linha em qualquer projeto. *Assumida, a confirmar.*
+   - Recomendação: sem o nome, porque o projeto continua escrito a 2 px do botão e o botão cabe numa linha em qualquer projeto. *Assumida, a confirmar.* A alternativa do crítico (P2 da §Crítica) é "Abrir <projeto>" com 2 projetos ou mais: tira a ambiguidade entre os dois botões, mas põe no pane um "Abrir X" em que X é um projeto, e não uma sessão como em "Abrir E2".
 2. **O recuo é o da linha (26 px), não o do título da seção (13 px do mock).**
    - O caso: o mock de origem alinhava os textos do topo ao título da seção; as unidades do pane não chegam a 13 px.
    - Se não decidir: 26 px.
@@ -125,4 +125,8 @@ A E confere no app, a 300 px, que o "Abrir a orquestradora" começa na coluna do
 
 ## Crítica
 
-*A preencher.*
+- **Rodada 1 (`design:critico-de-ui`, 25/30, aprovada com ressalvas):** hierarquia 4 · densidade 4 · consistência 4 · ruído 4 · ação primária 4 · aderência 5. Conferiu no mock a 300 px: topo de 215,5 px com dois projetos e o lote (216 antes), tudo em x = 26, frase a 2 px do botão e a 9 px do grupo seguinte.
+  - **P1 (média), aplicada:** o teste 3 pedia o mesmo `Box` pai para frase e botão, o que obrigaria a tirar o `Box` row do botão → o teste 3 afirma o ancestral comum (o `Box` column do grupo) e o `Box` row como pai direto do botão.
+  - **P3 (baixa), aplicada:** o fim do topo ficava a ~9 px da primeira linha, o mesmo respiro entre grupos → `paddingBottom={1}` no `Box` do topo (desktop).
+  - **P2 (média), não aplicada:** com dois projetos, dois botões "Abrir a orquestradora" idênticos; quem os distingue é a última palavra da frase acima. O crítico recomenda "Abrir <projeto>" com 2 projetos ou mais ("Abrir kit-de-orquestracao" mede 172 px e cabe). Fica com a Decisão 1, *assumida, a confirmar*: se o operador escolher "Abrir <projeto>", o F76 B volta a ter dois casos e o critério `grep "emPedido.size > 1"` passa a valer só para o cartão.
+  - Medidas da E no app, não no mock: a área útil do mock a 300 px é 248 px (274 − 26); a do pane, 266 px.
