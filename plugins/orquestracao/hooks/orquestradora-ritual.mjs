@@ -5,19 +5,22 @@
 // F59: e, havendo período do modo ausente desligado (≤ 7 dias) sem entrega registrada para o projeto, o resumo
 // (skills/orquestradora/scripts/ausencia.mjs, seção `resumo-da-ausencia`).
 // A sessão é orquestradora quando existe ~/.claude/orquestracao/ativas/<session_id>.
-import { readFileSync, existsSync, appendFileSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, appendFileSync, readdirSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gravaNoPainel, modoAusente } from './hooks-crewai-comum.mjs';
+import { BASE, gravaNoPainel, modoAusente } from './hooks-crewai-comum.mjs';
 import { esperandoPapel } from './esperando-papel.mjs';
-import { filaDir, gitCommonDir, membrosLivres } from './pool-comum.mjs';
+import { filaDir, gitCommonDir, membrosLivres, chaveDoPiso } from './pool-comum.mjs';
 import { pendente, projetoDoRepo } from '../skills/orquestradora/scripts/ausencia.mjs';
 
 const AUSENCIA = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'orquestradora', 'scripts', 'ausencia.mjs');
 
 // Minutos de espera a partir dos quais o ritual cobra o item parado sem o papel da etapa (F58, D3).
 const ESPERA_MIN = (() => { const n = Number(process.env.ESPERA_MIN); return Number.isInteger(n) && n > 0 ? n : 5; })();
+
+// Minutos em que o cartão de vaga de E já proposto dispensa um novo (marca em BASE/piso).
+const PISO_VAGA_MIN = (() => { const n = Number(process.env.PISO_VAGA_MIN); return Number.isInteger(n) && n > 0 ? n : 720; })();
 
 const LOG = join(homedir(), '.claude', 'orquestracao', 'ritual-hook.log');
 
@@ -68,12 +71,31 @@ function cobrancaDeEspera(cwd, nomeProjeto, comandos, usadas, mensagens) {
   return faltas;
 }
 
-// Piso de uma E livre (ADR 0004): fora do modo ausente, o projeto resolve, nenhuma E livre e o turno sem start_session.
-function faltaPiso(cwd, usadas) {
-  if (modoAusente() || [...usadas].some((n) => n.endsWith('start_session'))) return null;
+const marcaDoPiso = (repo) => join(BASE, 'piso', `${chaveDoPiso(repo)}.json`);
+function marcaNoPrazo(repo) {
+  try {
+    const m = JSON.parse(readFileSync(marcaDoPiso(repo), 'utf8'));
+    const em = Date.parse(m?.em);
+    return m?.repo === repo && Number.isFinite(em) && Date.now() - em < PISO_VAGA_MIN * 60_000;
+  } catch { return false; }
+}
+function gravarMarca(repo, sessao) {
+  try {
+    mkdirSync(join(BASE, 'piso'), { recursive: true });
+    writeFileSync(marcaDoPiso(repo), JSON.stringify({ repo, em: new Date().toISOString(), sessao }));
+  } catch { /* sem marca: o piso cobra de novo */ }
+}
+function apagarMarca(repo) { try { unlinkSync(marcaDoPiso(repo)); } catch { /* já não existe */ } }
+
+// Piso de uma E livre (ADR 0004): sem E livre e sem start_session no turno cobra a vaga; o start_session de E grava uma marca
+// em BASE/piso que dispensa nova cobrança por PISO_VAGA_MIN min ou até aparecer E livre (a marca some).
+function faltaPiso(cwd, usadas, startsDeE, sessao) {
+  if (modoAusente()) return null;
   const repo = gitCommonDir(cwd);
   if (!repo) return null;
-  if (membrosLivres(repo).some((m) => m.papel === 'E')) return null;
+  if (membrosLivres(repo).some((m) => m.papel === 'E')) { apagarMarca(repo); return null; }
+  if ([...usadas].some((n) => n.endsWith('start_session'))) { if (startsDeE) gravarMarca(repo, sessao); return null; }
+  if (marcaNoPrazo(repo)) return null;
   return 'Piso do pool (ADR 0004): sem E livre no projeto: peça a vaga (start_session; fora do turno do operador, cartão).';
 }
 
@@ -101,6 +123,7 @@ function main() {
   const comandos = [];
   const mensagens = [];
   let gravou = false;
+  let startsDeE = false;
   for (const e of entradas.slice(inicio + 1)) {
     if (e.type !== 'assistant') continue;
     const c = e.message?.content;
@@ -108,6 +131,7 @@ function main() {
     for (const item of c) {
       if (item.type !== 'tool_use') continue;
       usadas.add(item.name);
+      if (item.name.endsWith('start_session') && /^E\d+\b/.test(String(item.input?.title ?? ''))) startsDeE = true;
       if (item.name === 'Bash') {
         const cmd = String(item.input?.command ?? '');
         comandos.push(cmd);
@@ -123,7 +147,7 @@ function main() {
   const projeto = projetoDoRepo(input.cwd || process.cwd());
   const periodo = projeto ? pendente(projeto) : null;
   const espera = cobrancaDeEspera(input.cwd || process.cwd(), projeto, comandos, usadas, mensagens);
-  const piso = projeto ? faltaPiso(input.cwd || process.cwd(), usadas) : null;
+  const piso = projeto ? faltaPiso(input.cwd || process.cwd(), usadas, startsDeE, session_id) : null;
   if (faltam.length === 0 && !periodo && espera.length === 0 && !piso) return;
   const resumo = periodo
     ? `O operador desligou o modo ausente (período de ${periodo.desde} a ${periodo.ate}) e o resumo ainda não foi entregue: ` +
