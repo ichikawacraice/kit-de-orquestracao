@@ -47,68 +47,68 @@ const ligar = (b, extra = {}) => writeFileSync(join(b, 'orq', 'operador-ausente.
 const pergunta = (b, id, data) => { mkdirSync(join(b, 'painel', 'perguntas'), { recursive: true }); writeFileSync(join(b, 'painel', 'perguntas', `${id}.json`), JSON.stringify({ id, data })); };
 const cobrou = (r, re) => { assert.equal(r?.decision, 'block', `esperava block, veio ${JSON.stringify(r)}`); assert.match(r.reason, re); };
 
-test('1. P com 210 mil sem a linha de escape: cobra (cobrou-200)', () => com((b) => {
-  const r = rodar(b, 'P', transcript(b, { tokens: 210_000 }));
-  cobrou(r, /210 mil.*clear_session "self".*Contexto: sigo/s);
-  assert.match(log(b), /\tcontexto-do-papel\tcobrou-200\tplanejadora 210 mil/);
+test('1. P com 360 mil sem a linha de escape: cobra (cobrou-200)', () => com((b) => {
+  const r = rodar(b, 'P', transcript(b, { tokens: 360_000 }));
+  cobrou(r, /360 mil.*clear_session "self".*Contexto: sigo/s);
+  assert.match(log(b), /\tcontexto-do-papel\tcobrou-200\tplanejadora 360 mil/);
 }));
-test('2. P com 210 mil e a linha "Contexto: sigo — …": passa (satisfeito-sigo)', () => com((b) => {
-  const r = rodar(b, 'P', transcript(b, { tokens: 210_000, texto: 'pronto\nContexto: sigo — falta o passo 3 do plano' }));
+test('2. P com 360 mil e a linha "Contexto: sigo — …": passa (satisfeito-sigo)', () => com((b) => {
+  const r = rodar(b, 'P', transcript(b, { tokens: 360_000, texto: 'pronto\nContexto: sigo — falta o passo 3 do plano' }));
   assert.equal(r, null);
   assert.match(log(b), /\tsatisfeito-sigo\t/); assert.doesNotMatch(log(b), /cobrou/);
 }));
 test('2b. a linha de escape curta demais (< 10 caracteres) não vale', () => com((b) => {
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 210_000, texto: 'Contexto: sigo — sim' })), /210 mil/);
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000, texto: 'Contexto: sigo — sim' })), /360 mil/);
 }));
-test('3. P com 310 mil e a linha "Contexto: sigo — …": cobra mesmo assim (cobrou-300)', () => com((b) => {
-  const r = rodar(b, 'P', transcript(b, { tokens: 310_000, texto: 'Contexto: sigo — falta o passo 3 do plano' }));
-  cobrou(r, /310 mil.*Não pegue trabalho novo/s);
+test('3. P com 510 mil e a linha "Contexto: sigo — …": cobra mesmo assim (cobrou-300)', () => com((b) => {
+  const r = rodar(b, 'P', transcript(b, { tokens: 510_000, texto: 'Contexto: sigo — falta o passo 3 do plano' }));
+  cobrou(r, /510 mil.*Não pegue trabalho novo/s);
   assert.match(log(b), /\tcobrou-300\t/);
 }));
-test('4. P com 160 mil: cobra só se o último parágrafo espera o operador (? ou Q<n>)', () => com((b) => {
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'plano pronto.\n\nQuer que eu abra a executora?' })), /160 mil.*esperando resposta/s);
+test('4. P com 260 mil: cobra só se o último parágrafo espera o operador (? ou Q<n>)', () => com((b) => {
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 260_000, texto: 'plano pronto.\n\nQuer que eu abra a executora?' })), /260 mil.*esperando resposta/s);
   assert.match(log(b), /\tcobrou-150-espera\t/);
 }));
 test('4b. o mesmo P com Q-ID no último parágrafo cobra; sem ? nem Q-ID passa sem log de cobrança', () => com((b) => {
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'plano pronto.\n\nAguardo o Q231.' })), /esperando resposta/);
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 260_000, texto: 'plano pronto.\n\nAguardo o Q231.' })), /esperando resposta/);
   const b2 = novo();
   try {
-    assert.equal(rodar(b2, 'P', transcript(b2, { tokens: 160_000, texto: 'plano pronto, segue o trabalho.' })), null);
+    assert.equal(rodar(b2, 'P', transcript(b2, { tokens: 260_000, texto: 'plano pronto, segue o trabalho.' })), null);
     assert.equal(log(b2), '', 'sem cobrança não há linha de log');
   } finally { rmSync(b2, { recursive: true, force: true }); }
 }));
-test('5. P com 250 mil que chamou clear_session "self" no turno: passa (limpou); só no turno anterior, cobra', () => com((b) => {
-  assert.equal(rodar(b, 'P', transcript(b, { tokens: 250_000, ferramentas: [LIMPA] })), null);
+test('5. P com 360 mil que chamou clear_session "self" no turno: passa (limpou); só no turno anterior, cobra', () => com((b) => {
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 360_000, ferramentas: [LIMPA] })), null);
   assert.match(log(b), /\tlimpou\t/);
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 250_000, anterior: [LIMPA] })), /250 mil/);
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000, anterior: [LIMPA] })), /360 mil/);
   assert.match(log(b), /\tcobrou-200\t/); // O1: a segunda metade também deixa a linha de cobrança no log
 }));
 test('5b. clear_session de OUTRA sessão não vale', () => com((b) => {
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 250_000, ferramentas: [['mcp__ccd_session_mgmt__clear_session', { session_id: 'local_X' }]] })), /250 mil/);
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000, ferramentas: [['mcp__ccd_session_mgmt__clear_session', { session_id: 'local_X' }]] })), /360 mil/);
 }));
-test('6. E com 160 mil sem limpar: cobra (cobrou-exec-150) mesmo com "Parei em:"; só a limpeza satisfaz', () => com((b) => {
-  const r = rodar(b, 'E', transcript(b, { tokens: 160_000, texto: 'Parei em: passo 4, falta o teste' }));
+test('6. E com 310 mil sem limpar: cobra (cobrou-exec-150) mesmo com "Parei em:"; só a limpeza satisfaz', () => com((b) => {
+  const r = rodar(b, 'E', transcript(b, { tokens: 310_000, texto: 'Parei em: passo 4, falta o teste' }));
   cobrou(r, /clear_session.*"self"/s); cobrou(r, /quem despachou/); cobrou(r, /recebido; limpo antes de começar/);
-  assert.match(log(b), /\tcobrou-exec-150\texecutora 160 mil/);
+  assert.match(log(b), /\tcobrou-exec-150\texecutora 310 mil/);
 }));
-test('6b. E abaixo de 150 mil não é cobrada', () => com((b) => { assert.equal(rodar(b, 'E', transcript(b, { tokens: 149_000 })), null); }));
+test('6b. E abaixo de 300 mil não é cobrada', () => com((b) => { assert.equal(rodar(b, 'E', transcript(b, { tokens: 299_000 })), null); }));
 test('7. V com 400 mil: não cobra e registra validadora-400', () => com((b) => {
   assert.equal(rodar(b, 'V', transcript(b, { tokens: 400_000 })), null);
   assert.match(log(b), /\tvalidadora-400\tvalidadora 400 mil/);
 }));
-test('7b. V com 150 mil não registra nada', () => com((b) => { assert.equal(rodar(b, 'V', transcript(b, { tokens: 150_000 })), null); assert.equal(log(b), ''); }));
+test('7b. V com 349.999 não registra nada; com 350.000 registra', () => com((b) => { assert.equal(rodar(b, 'V', transcript(b, { tokens: 349_999 })), null); assert.equal(log(b), ''); rodar(b, 'V', transcript(b, { tokens: 350_000 })); assert.match(log(b), /\tvalidadora-350\t/); }));
 test('8. sessão avulsa com 400 mil: não cobra e não registra', () => com((b) => {
   assert.equal(rodar(b, 'AV', transcript(b, { tokens: 400_000 })), null);
   assert.equal(log(b), '');
 }));
 test('8b. D segue a régua da planejadora; a orquestradora (título) também', () => com((b) => {
-  cobrou(rodar(b, 'D', transcript(b, { tokens: 210_000 })), /210 mil/);
+  cobrou(rodar(b, 'D', transcript(b, { tokens: 360_000 })), /360 mil/);
   ligar(b);
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 210_000 })), /210 mil/);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /360 mil/);
 }));
-test('9. stop_hook_active com P a 210 mil: passa (deixou-passar)', () => com((b) => {
-  assert.equal(rodar(b, 'P', transcript(b, { tokens: 210_000 }), { stop_hook_active: true }), null);
-  assert.match(log(b), /\tdeixou-passar\tcobrou-200 planejadora 210 mil/);
+test('9. stop_hook_active com P a 360 mil: passa (deixou-passar)', () => com((b) => {
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 360_000 }), { stop_hook_active: true }), null);
+  assert.match(log(b), /\tdeixou-passar\tcobrou-200 planejadora 360 mil/);
 }));
 test('10. a última entrada com usage é de subagente (400 mil) e a da sessão tem 50 mil: não cobra', () => com((b) => {
   const lado = { type: 'assistant', isSidechain: true, timestamp: new Date(T1 + 6000).toISOString(), message: { content: [{ type: 'text', text: 'sub' }], usage: usage(400_000) } };
@@ -133,37 +133,37 @@ test('13. depois de compactar vale a última leitura, não a maior', () => com((
   writeFileSync(f, JSON.stringify(antes) + '\n' + readFileSync(f, 'utf8'));
   assert.equal(rodar(b, 'P', f), null); assert.equal(log(b), '');
 }));
-test('14. os limites são inclusivos: 200.000 cobra e 199.999 não; 300.000 já é o teto', () => com((b) => {
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 200_000 })), /200 mil/);
+test('14. os limites são inclusivos: 350.000 cobra e 349.999 não; 500.000 já é o teto; E cobra em 300.000', () => com((b) => {
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 350_000 })), /350 mil/);
   assert.match(log(b), /\tcobrou-200\t/);
   const b2 = novo();
-  try { assert.equal(rodar(b2, 'P', transcript(b2, { tokens: 199_999 })), null); assert.equal(log(b2), ''); } finally { rmSync(b2, { recursive: true, force: true }); }
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 300_000, texto: 'Contexto: sigo — falta o passo 3 do plano' })), /Não pegue trabalho novo/);
-  cobrou(rodar(b, 'E', transcript(b, { tokens: 150_000 })), /Parei em:/);
+  try { assert.equal(rodar(b2, 'P', transcript(b2, { tokens: 349_999 })), null); assert.equal(log(b2), ''); } finally { rmSync(b2, { recursive: true, force: true }); }
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 500_000, texto: 'Contexto: sigo — falta o passo 3 do plano' })), /Não pegue trabalho novo/);
+  cobrou(rodar(b, 'E', transcript(b, { tokens: 300_000 })), /Parei em:/);
 }));
 
 // O2 (F35): a entrada sintética do assistant (`model: "<synthetic>"`, usage zerado) não vira a última leitura.
 const SINTETICA = { type: 'assistant', timestamp: new Date(T1 + 9000).toISOString(), message: { model: '<synthetic>', content: [{ type: 'text', text: 'No response requested.' }], usage: { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 } } };
 test('O2. transcript que termina em "No response requested." (sintética, usage zerado): o hook ainda cobra pela leitura real', () => com((b) => {
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 210_000, extra: [SINTETICA] })), /210 mil/);
-  assert.match(log(b), /\tcobrou-200\tplanejadora 210 mil/);
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000, extra: [SINTETICA] })), /360 mil/);
+  assert.match(log(b), /\tcobrou-200\tplanejadora 360 mil/);
 }));
 test('O2b. precondição: sem pular a sintética o hook leria 0 e calaria (a fixture tem a entrada zerada como ÚLTIMA)', () => com((b) => {
-  const f = transcript(b, { tokens: 210_000, extra: [SINTETICA] });
+  const f = transcript(b, { tokens: 360_000, extra: [SINTETICA] });
   const ultima = JSON.parse(readFileSync(f, 'utf8').trim().split('\n').pop());
   assert.equal(ultima.message.model, '<synthetic>'); assert.equal(ultima.message.usage.cache_read_input_tokens, 0);
 }));
 // O3 (F35): o `?` dentro de uma URL com query não conta como pergunta no último parágrafo.
-test('O3a. P com 160 mil e o último parágrafo com só uma URL com query: não dispara a regra dos 150 mil', () => com((b) => {
-  assert.equal(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'pronto\n\nveja https://exemplo.com/a?b=1&c=2 depois' })), null);
+test('O3a. P com 260 mil e o último parágrafo com só uma URL com query: não dispara a regra dos 250 mil', () => com((b) => {
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 260_000, texto: 'pronto\n\nveja https://exemplo.com/a?b=1&c=2 depois' })), null);
   assert.doesNotMatch(log(b), /cobrou/);
 }));
 test('O3b. o mesmo parágrafo com uma pergunta de verdade ao lado da URL dispara', () => com((b) => {
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'pronto\n\nveja https://exemplo.com/a?b=1 — posso seguir?' })), /160 mil/);
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 260_000, texto: 'pronto\n\nveja https://exemplo.com/a?b=1 — posso seguir?' })), /260 mil/);
   assert.match(log(b), /\tcobrou-150-espera\t/);
 }));
 test('O3c. precondição: sem URL, o `?` sozinho dispara (o teste mede a URL, não um hook que nunca cobra)', () => com((b) => {
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'pronto\n\nposso seguir?' })), /160 mil/);
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 260_000, texto: 'pronto\n\nposso seguir?' })), /260 mil/);
 }));
 
 // F48: a orquestradora com o operador presente só pede o ok (250 mil); com o modo ausente ligado vale a régua de antes.
@@ -194,24 +194,24 @@ test('F48-5. ORQ com 260 mil que chamou clear_session "self" no turno: passa (li
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/); // sem a chamada no turno a mesma entrada cobra: o teste mede a limpeza
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, anterior: [LIMPA] })), /limpar · orquestradora/);
 }));
-test('F48-6. ORQ com 160 mil terminando em "?": sem bandeira passa; com bandeira cobra cobrou-150-espera', () => com((b) => {
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 160_000, texto: 'pronto.\n\nPosso seguir?' })), null);
+test('F48-6. ORQ com 240 mil terminando em "?": sem bandeira passa; com bandeira, a 260 mil, cobra cobrou-150-espera', () => com((b) => {
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 240_000, texto: 'pronto.\n\nPosso seguir?' })), null);
   ligar(b);
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 160_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
   assert.match(log(b), /\tcobrou-150-espera\t/);
 }));
-test('F48-7. ORQ com 210 mil: sem bandeira passa; com bandeira cobra cobrou-200', () => com((b) => {
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 210_000 })), null);
+test('F48-7. ORQ: sem bandeira, a 240 mil passa; com bandeira, a 360 mil cobra cobrou-200', () => com((b) => {
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 240_000 })), null);
   ligar(b);
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 210_000 })), /210 mil/);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /360 mil/);
   assert.match(log(b), /\tcobrou-200\t/);
 }));
-test('F48-8. bandeira {ligado:false} vale como desligada: ORQ com 210 mil passa', () => com((b) => {
+test('F48-8. bandeira {ligado:false} vale como desligada: ORQ com 240 mil passa', () => com((b) => {
   ligar(b, { ligado: false, desligadoEm: agora(), por: 'painel' });
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 210_000 })), null);
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 240_000 })), null);
 }));
-test('F48-9. planejadora com 210 mil segue cobrando sem bandeira (a mudança é só da orquestradora)', () => com((b) => {
-  cobrou(rodar(b, 'P', transcript(b, { tokens: 210_000 })), /210 mil/);
+test('F48-9. planejadora com 360 mil segue cobrando sem bandeira (a mudança é só da orquestradora)', () => com((b) => {
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
 }));
 test('M1. pergunta `limpar · worktrees órfãos` aberta não satisfaz o pedido: cobra (cobrou-pedir)', () => com((b) => {
   pergunta(b, 'Q1', LIMPAR({ titulo: 'limpar · worktrees órfãos' }));
@@ -230,15 +230,30 @@ test('B1. trégua conta do respondidaEm: "não" do painel há 3 h com atualizado
 }));
 
 // F49: executora cheia termina com a limpeza.
-test('F49.1 E com 160 mil e clear_session "self" no turno: passa (limpou)', () => com((b) => {
-  assert.equal(rodar(b, 'E', transcript(b, { tokens: 160_000, ferramentas: [LIMPA] })), null);
-  assert.match(log(b), /\tlimpou\texecutora 160 mil/);
+test('F49.1 E com 310 mil e clear_session "self" no turno: passa (limpou)', () => com((b) => {
+  assert.equal(rodar(b, 'E', transcript(b, { tokens: 310_000, ferramentas: [LIMPA] })), null);
+  assert.match(log(b), /\tlimpou\texecutora 310 mil/);
 }));
-test('F49.2 E com 160 mil e a limpeza só no turno anterior: cobra', () => com((b) => {
-  cobrou(rodar(b, 'E', transcript(b, { tokens: 160_000, anterior: [LIMPA] })), /160 mil/);
+test('F49.2 E com 310 mil e a limpeza só no turno anterior: cobra', () => com((b) => {
+  cobrou(rodar(b, 'E', transcript(b, { tokens: 310_000, anterior: [LIMPA] })), /310 mil/);
 }));
-test('F49.3 E com 160 mil e stop_hook_active: passa (deixou-passar)', () => com((b) => {
-  assert.equal(rodar(b, 'E', transcript(b, { tokens: 160_000 }), { stop_hook_active: true }), null);
-  assert.match(log(b), /\tdeixou-passar\tcobrou-exec-150 executora 160 mil/);
+test('F49.3 E com 310 mil e stop_hook_active: passa (deixou-passar)', () => com((b) => {
+  assert.equal(rodar(b, 'E', transcript(b, { tokens: 310_000 }), { stop_hook_active: true }), null);
+  assert.match(log(b), /\tdeixou-passar\tcobrou-exec-150 executora 310 mil/);
   assert.doesNotMatch(log(b), /satisfeito-parei/);
+}));
+
+// F54: `clear_session` "self" recusado (tool_result com is_error) não é limpeza.
+const resultado = (id, erro) => ({ type: 'user', timestamp: new Date(T1 + 2000).toISOString(), message: { content: [{ type: 'tool_result', tool_use_id: id, is_error: erro, content: erro ? 'This session was not cleared: a message the user sent is waiting in the queue' : 'ok' }] } });
+const limpaCom = (id) => ({ type: 'assistant', timestamp: new Date(T1 + 1500).toISOString(), message: { content: [{ type: 'tool_use', id, name: 'mcp__ccd_session_mgmt__clear_session', input: { session_id: 'self' } }] } });
+test('F54.1 precondição: clear_session "self" com tool_result de sucesso continua contando (limpou)', () => com((b) => {
+  const f = transcript(b, { tokens: 360_000, extra: [limpaCom('tu1'), resultado('tu1', false)] });
+  assert.equal(rodar(b, 'P', f), null);
+  assert.match(log(b), /\tlimpou\t/);
+}));
+test('F54.2 clear_session "self" com tool_result is_error: não conta como limpou e cobra', () => com((b) => {
+  const f = transcript(b, { tokens: 360_000, extra: [limpaCom('tu2'), resultado('tu2', true)] });
+  cobrou(rodar(b, 'P', f), /360 mil/);
+  assert.doesNotMatch(log(b), /\tlimpou\t/);
+  assert.match(log(b), /\tcobrou-200\t/);
 }));

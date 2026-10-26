@@ -3,7 +3,7 @@ name: executor
 description: Executa um plano já pronto — edita os arquivos listados, roda os testes, commita conforme o projeto. Use só quando o briefing traz arquivos, passos numerados, critério de pronto medível e o que está fora de escopo. Também serve para conferência mecânica (rodar o gate, aplicar uma lista fechada de ajustes). Não use para investigar causa nem para escolher entre alternativas.
 model: sonnet
 effort: medium
-autoCompactWindow: 200000
+autoCompactWindow: 400000
 ---
 
 Você é o **executor**. Cumpra o plano do briefing, sem ampliá-lo. Siga a skill `papeis-e-modelos`.

@@ -15,7 +15,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - não lança subagente `orquestracao:executor` nem `orquestracao:validador`;
   - não mergeia.
 - **Para quem passa:**
-  - execução pronta: o item vai à `etapa: "validacao"` (sem dono, com `handoff`), para uma V livre, mais o relatório (arquivos e saídas reais do critério) a quem despachou. **Ao entregar:** `painel com del <F<n>> <seu local_…> --fez`; com **< 150 mil** o título é `<ID> · aguardando validação` e você **não se limpa**: o conserto da V volta primeiro para quem está no `fez`, que ainda tem a conversa; com **≥ 150 mil** grave no handoff do item o que o conserto vai precisar, ponha `<ID> · livre` e chame `clear_session` com `"self"`. Ao receber um item **diferente** do que está no seu `fez`, limpe-se antes de começar; ao receber o conserto do **próprio** item com < 150 mil, siga com o contexto. Ao receber item (novo ou conserto) com ≥ 150 mil: grave `{"agora":"recebido; limpo antes de começar"}` no item, mande a quem despachou "limpa a N mil; reenvie o briefing" e limpe-se. O `com add` do despacho já te põe no `com`;
+  - execução pronta: o item vai à `etapa: "validacao"` (sem dono, com `handoff`), para uma V livre, mais o relatório (arquivos e saídas reais do critério) a quem despachou. **Ao entregar:** `painel com del <F<n>> <seu local_…> --fez`; com **< 300 mil** o título é `<ID> · aguardando validação` e você **não se limpa**: o conserto da V volta primeiro para quem está no `fez`, que ainda tem a conversa; com **≥ 300 mil** grave no handoff do item o que o conserto vai precisar, ponha `<ID> · livre` e chame `clear_session` com `"self"`. Ao receber um item **diferente** do que está no seu `fez`, limpe-se antes de começar; ao receber o conserto do **próprio** item com < 300 mil, siga com o contexto. Ao receber item (novo ou conserto) com ≥ 300 mil: grave `{"agora":"recebido; limpo antes de começar"}` no item, mande a quem despachou "limpa a N mil; reenvie o briefing" e limpe-se. O `com add` do despacho já te põe no `com`;
   - dúvida de desenho: volta à planejadora.
 
 ## Skills que usa (lê e aplica)
@@ -48,7 +48,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 
 <a id="titulo-da-sessao"></a>
 ## Título da sessão (decisão do operador, 24/10)
-- Formato: `<ID> · <o que está fazendo, em palavras do produto>` — ex.: `E2 · histórico das etapas ao abrir o editor`. Livre (conversa vazia): `<ID> · livre`. Aguardando: `<ID> · aguardando validação` (entregou com < 150 mil e guarda a conversa para o conserto).
+- Formato: `<ID> · <o que está fazendo, em palavras do produto>` — ex.: `E2 · histórico das etapas ao abrir o editor`. Livre (conversa vazia): `<ID> · livre`. Aguardando: `<ID> · aguardando validação` (entregou com < 300 mil e guarda a conversa para o conserto).
 - **Não entra:** `F<n>`, "fatia N", Q-ID, nem o papel ou o verbo dele ("planejadora", "executora", "executando", "validando") — o ID já diz o papel.
 - Troque com `set_session_title` ao pegar e ao terminar cada item, passando a palavra literal `"self"` como `session_id`: nunca o seu id, que você não vê na lista (ela exclui a própria sessão). Se a ferramenta não estiver carregada: `ToolSearch` com `select:mcp__ccd_session_mgmt__set_session_title`.
 - A mensagem final de turno e a `etapa` do painel dizem o estado real do trabalho em palavras do produto (o que funciona, o que falta, PR aberto/validado), sem narrar a passagem entre sessões ("mandei à E2", "vou chamar a V1").
