@@ -162,6 +162,8 @@ Cada turno relê a conversa inteira, e depois de mais de 1 hora parada o cache e
 2. Me avise numa linha (*"limpando o contexto em 270 mil tokens; estado salvo"*).
 3. `clear_session` com `"self"`. O título sobrevive, e o `CLAUDE.md` global manda a sessão com título de orquestradora carregar esta skill antes de qualquer outra coisa — que recomeça pelo "Ao assumir".
 
+Ao marcar `respondida` a pergunta `limpar · orquestradora` que o operador respondeu pelo painel, não reescreva `resposta` nem `estado` com outro texto (ex.: resumir "sim (segue a recomendação)" para "sim"): isso apaga a prova do clique e o T7 recusa. Só a pergunta de título exato `limpar · orquestradora` vale como pedido e como ok.
+
 A trava: o T7 em `hooks/papel-do-pool.mjs` recusa `clear_session "self"` da orquestradora sem o ok (turno do operador, modo ausente ou sim do painel); a cobrança em `hooks/contexto-do-papel.mjs` pede a pergunta a partir de 250 mil. Prefira `clear_session` a `/compact`: o resumo da compactação fica na conversa e é relido de novo a cada turno; o arquivo de estado é lido uma vez.
 
 **Ler pouco — a orquestradora não lê o que pode perguntar.**

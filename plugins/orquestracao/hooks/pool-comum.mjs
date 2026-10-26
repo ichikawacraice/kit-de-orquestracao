@@ -70,7 +70,7 @@ function varrerRegistro(id) {
 // validação, conserto ou merge. Pasta: FILA_DIR, ou <PAINEL_DIR>/fila. Erro de leitura = lista vazia (o hook deixa passar).
 const ETAPAS_DO_FEZ = ['execucao', 'validacao', 'merge'];
 const filaDir = () => process.env.FILA_DIR || join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'fila');
-// Perguntas `limpar · …` da sessão (F48): documentos de <PAINEL_DIR>/perguntas. Erro de leitura = lista vazia.
+// Perguntas `limpar · orquestradora` da sessão (F48; só o título exato vale, outra `limpar · …` não é pedido nem ok): documentos de <PAINEL_DIR>/perguntas. Erro de leitura = lista vazia.
 const perguntasDir = () => join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'perguntas');
 export function perguntasDeLimpeza(localId) {
   const saida = [];
@@ -81,7 +81,7 @@ export function perguntasDeLimpeza(localId) {
     if (!n.endsWith('.json')) continue;
     try {
       const d = JSON.parse(readFileSync(join(perguntasDir(), n), 'utf8'))?.data;
-      if (d && typeof d.titulo === 'string' && d.titulo.startsWith('limpar · ') && d.sessaoId === localId) saida.push(d);
+      if (d && typeof d.titulo === 'string' && d.titulo.trim() === 'limpar · orquestradora' && d.sessaoId === localId) saida.push(d);
     } catch { /* documento ilegível */ }
   }
   return saida;

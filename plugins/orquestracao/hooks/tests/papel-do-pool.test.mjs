@@ -410,6 +410,8 @@ caso('T7: o sim do painel libera (≤ 30 min, respondidaPor painel, resposta sim
   perguntaLimpar(OKP({ resposta: 'não' })); nega7(limpa('ORQ', depeer()), 'resposta não');
   perguntaLimpar(OKP({ sessaoId: 'local_P1' })); nega7(limpa('ORQ', depeer()), 'sessaoId de outra');
   perguntaLimpar(OKP({ titulo: 'outra coisa' })); nega7(limpa('ORQ', depeer()), 'título que não é de limpeza');
+  perguntaLimpar(OKP({ titulo: 'limpar · worktrees órfãos' })); nega7(limpa('ORQ', depeer()), 'M1: outra pergunta `limpar · …`');
+  perguntaLimpar(OKP({ titulo: ' limpar · orquestradora ' })); passa(limpa('ORQ', depeer()), 'título exato com espaços nas pontas');
 });
 caso('T7: orquestradora limpando um membro passa; P1 limpando "self" passa', () => {
   passa(limpa('ORQ', depeer(), 'local_E1'), 'orquestradora limpa membro');
