@@ -14,8 +14,8 @@ for (const c of CASOS) {
   });
 }
 
-test('PAPEL_DA_ETAPA mapeia design, execucao e validacao', () => {
-  assert.deepEqual(PAPEL_DA_ETAPA, { design: 'D', execucao: 'E', validacao: 'V' });
+test('PAPEL_DA_ETAPA mapeia planejamento, design, execucao e validacao', () => {
+  assert.deepEqual(PAPEL_DA_ETAPA, { planejamento: 'P', design: 'D', execucao: 'E', validacao: 'V' });
 });
 
 test('data inválida ou ausente não quebra', () => {

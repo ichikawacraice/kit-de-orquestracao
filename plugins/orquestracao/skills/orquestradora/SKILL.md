@@ -62,6 +62,13 @@ Os itens `F<n>` do pool moram na coleção `fila` do painel; o protocolo inteiro
 - Número de item novo: `proximo-item`.
 - Membro novo aberto (E3, V2, P4…): logo depois do `start_session`, `node "${CLAUDE_PLUGIN_ROOT}/pool/aplicar-skills-do-papel.mjs" <local_…>`, e no prompt dele a linha *"Leia ${CLAUDE_PLUGIN_ROOT}/pool/papeis/<papel>.md ao começar e depois de cada limpeza de contexto"*. Skill instalada nova entra no `skills-por-papel.json` (a planejadora decide a coluna).
 
+<a id="vaga-pelo-painel"></a>
+**Pedido de vaga vindo do painel (F69).** O pane tem o botão "Pedir sessão" por item que espera papel (e "pedir para todos"). Ele chega a você como texto que começa com *"Pedido do operador pelo painel (HH:MM): abra ou despache a sessão de cada item que espera papel em <projeto> — F68 · <título> (espera E); …"*, de dois jeitos, e o que você faz depende da origem do turno:
+- **Turno do operador** (`human`: o pane preencheu o campo da sua própria conversa e ele apertou Enter): para cada item, com membro livre do papel, despache (título + `painel com add` + mensagem); sem livre, abra o membro novo com `start_session` e o ritual de sempre (número livre, prompt do papel, `aplicar-skills-do-papel.mjs`, título `<ID> · <o quê>`, `painel com add`, mensagem). Todos os itens do pedido, de uma vez.
+- **Turno de outra sessão ou do plugin** (`peer`/`plugin`: o pane mandou por `send_message`): o app recusa `start_session` aqui, então proponha **um cartão `own_initiative` por vaga**, título `<ID> · livre`, e despache já os itens que têm membro livre. Retire com `dismiss_task` o cartão cuja vaga um membro livre resolver antes do clique.
+- **Modo ausente ligado:** não se pede vaga nova (regra acima). Responda ao pane por mensagem curta dizendo isso e que os itens esperam o primeiro membro do papel que liberar.
+- Item do pedido que já tem o papel (dono, `com` ou `esperando` nulo) não recebe nada: diga na resposta que já estava coberto.
+
 ## Responsabilidades
 
 **O que a orquestradora faz:**
