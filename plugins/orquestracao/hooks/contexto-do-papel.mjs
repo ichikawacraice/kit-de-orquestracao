@@ -2,7 +2,7 @@
 // Stop hook (F35): cobra a regra de contexto por papel da skill `papeis-e-modelos` ("Contexto"), que só valia se a sessão
 // lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain) e não grava estado nenhum.
 //   orquestradora (F48): com o modo ausente ligado segue a régua da planejadora abaixo; com o operador presente ela não limpa
-//     sozinha: ≥ 250 mil cobra PEDIR (pergunta `limpar · orquestradora` aberta, ou respondida há ≤ 2 h; ou limpou), abaixo disso nada.
+//     sozinha: ≥ 150 mil cobra PEDIR (pergunta `limpar · orquestradora` aberta, ou respondida há ≤ 2 h; ou limpou), abaixo disso nada.
 //     F53: se o turno termina esperando o operador, cobra também a JANELA (AskUserQuestion com a mesma pergunta) antes de parar;
 //     janela aberta neste turno, ou respondida há ≤ 2 h, satisfaz.
 //   planejadora / design: ≥ 500 mil cobra limpar (só `clear_session` "self" satisfaz); ≥ 350 mil cobra limpar OU
@@ -20,7 +20,7 @@ import { registroDaSessao, membroDoPool, ehOrquestradora, ehExecutora, inicioDoT
 const HOOK = 'contexto-do-papel';
 const limite = (nome, padrao) => { const v = Number(process.env[`CONTEXTO_LIMITE_${nome}`]); return Number.isFinite(v) && v > 0 ? v : padrao; };
 const ESPERA = limite('ESPERA', 250_000); const ALTO = limite('ALTO', 350_000); const TETO = limite('TETO', 500_000); const EXEC = limite('EXEC', 300_000);
-const PEDIR = limite('PEDIR', 250_000); const SEGURA_MS = 2 * 3600_000;
+const PEDIR = limite('PEDIR', 150_000); const SEGURA_MS = 2 * 3600_000;
 const mil = (t) => Math.round(t / 1000);
 
 // Papel pela ordem: orquestradora, executora, membro do pool (P e D = planejadora, V = validadora, E = executora). Sem papel → null.
@@ -63,7 +63,7 @@ function terminaEsperando(texto) {
   return /\?|\bQ\d+\b/.test(ultimoParagrafo);
 }
 
-// Orquestradora com o operador presente (F48): a limpeza inteira é dele; ela PEDE a partir de 250 mil.
+// Orquestradora com o operador presente (F48): a limpeza inteira é dele; ela PEDE a partir de 150 mil.
 function orquestradora(e, sid, transcript, ativo, t, det, reg) {
   if (t < PEDIR) return;
   const inicio = inicioDoTurno(transcript) ?? 0;

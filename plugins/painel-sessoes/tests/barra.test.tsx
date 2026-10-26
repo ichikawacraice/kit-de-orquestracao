@@ -331,7 +331,7 @@ test('pecasDaBarra: o limpar antes é só o botão, com as mesmas quedas e sem f
 test('textoDoContexto: a janela é o denominador; a régua só dá a palavra', () => {
   expect(PALAVRA_ALTO).toBe(' · alto')
   expect(PALAVRA_LIMPAR).toBe(' · limpar')
-  expect(textoDoContexto(198_000, REGUAS.orquestradora, 600_000, 0)).toBe('contexto 198/600 mil')
+  expect(textoDoContexto(98_000, REGUAS.orquestradora, 600_000, 0)).toBe('contexto 98/600 mil')
   expect(textoDoContexto(260_000, REGUAS.orquestradora, 600_000, 0)).toBe('contexto 260/600 mil · limpar')
   expect(textoDoContexto(360_000, REGUAS.P, 600_000, 0)).toBe('contexto 360/600 mil · alto')
   expect(textoDoContexto(510_000, REGUAS.P, 600_000, 0)).toBe('contexto 510/600 mil · limpar')
@@ -340,12 +340,12 @@ test('textoDoContexto: a janela é o denominador; a régua só dá a palavra', (
   expect(textoDoContexto(260_000, REGUAS.orquestradora, 600_000, 1)).toBe('260/600 mil · limpar')
   expect(textoDoContexto(260_000, REGUAS.orquestradora, 600_000, 2)).toBe('260 mil · limpar')
   expect(textoDoContexto(142_000, null, 600_000, 0), 'papel desconhecido: com a janela, sem palavra').toBe('contexto 142/600 mil')
-  expect(textoDoContexto(198_000, REGUAS.orquestradora, null, 0), 'sem janela, sem /').toBe('contexto 198 mil')
+  expect(textoDoContexto(98_000, REGUAS.orquestradora, null, 0), 'sem janela, sem /').toBe('contexto 98 mil')
   expect(textoDoContexto(510_000, REGUAS.P, null, 0)).toBe('contexto 510 mil · limpar')
-  expect(textoDoContexto(198_000, REGUAS.orquestradora, null, 1)).toBe('198 mil')
+  expect(textoDoContexto(98_000, REGUAS.orquestradora, null, 1)).toBe('98 mil')
   // a ausência mede: o mesmo estado, só a janela muda, e o `/` aparece
-  expect(textoDoContexto(198_000, REGUAS.orquestradora, 600_000, 0)).toContain('/')
-  expect(textoDoContexto(198_000, REGUAS.orquestradora, null, 0)).not.toContain('/')
+  expect(textoDoContexto(98_000, REGUAS.orquestradora, 600_000, 0)).toContain('/')
+  expect(textoDoContexto(98_000, REGUAS.orquestradora, null, 0)).not.toContain('/')
 })
 
 test('janelaDeCompactacao: env, depois autoCompactWindow do settings, depois a janela do modelo; o modelo limita', () => {
@@ -616,13 +616,13 @@ test('ordem: à esquerda relógio e contexto; à direita selo, modo e painel', a
 
 const textosDe = async (ui: Awaited<ReturnType<typeof montar>>) => (await ui.findAll({ type: 'Text' })).map(t => t.text)
 
-test('contexto contra a janela do settings: a orquestradora a 198 mil mostra 198/600 mil, sem palavra, nas duas superfícies', async ($, on) => {
-  const m = await iniciar($, on, { tokens: 198_000 })
+test('contexto contra a janela do settings: a orquestradora a 98 mil mostra 98/600 mil, sem palavra, nas duas superfícies', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 98_000 })
   expect(m.arquivos.get(SETTINGS), 'o fixture devolve o settings').toContain('"autoCompactWindow": 600000')
   for (const surface of SUPERFICIES) {
     const ui = await montar($, surface)
     const t = await lido(ui)
-    expect(t).toMatch(/contexto 198\/600 mil/)
+    expect(t).toMatch(/contexto 98\/600 mil/)
     expect(t).not.toMatch(/limpar|alto/)
     await ui.unmount()
   }

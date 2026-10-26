@@ -43,7 +43,7 @@ export const REGUAS = {
   P: { aviso: 350_000, teto: 500_000 },
   D: { aviso: 350_000, teto: 500_000 },
   V: { aviso: 350_000, teto: 500_000 },
-  orquestradora: { aviso: 250_000, teto: 250_000 },
+  orquestradora: { aviso: 150_000, teto: 150_000 },
   orquestradoraAusente: { aviso: 350_000, teto: 500_000 },
 } as const satisfies Record<string, Regua>
 
