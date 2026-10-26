@@ -265,22 +265,35 @@ caso('respondidaPor é prova do clique no painel: set/update/batch pela linha de
   igual(painel('update', 'perguntas', 'Q1', '{"estado":"respondida","resposta":"sim"}').exit, 0, 'resposta normal deve passar');
 });
 
-caso('A1: resposta trocada pela linha de comando apaga o respondidaPor do clique anterior', () => {
-  mkdirSync(join(base, 'painel', 'perguntas'), { recursive: true });
-  writeFileSync(arq('perguntas', 'Q1'), JSON.stringify({ id: 'Q1', version: 1, data: { estado: 'respondida', titulo: 'limpar · orquestradora', sessaoId: 'local_a', resposta: 'não', respondidaPor: 'painel' } }));
-  const ant = JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data;
-  igual(ant.respondidaPor, 'painel', 'precondição: o documento nasce com o clique do painel');
-  const r = painel('update', 'perguntas', 'Q1', '{"resposta":"sim"}');
-  igual(r.exit, 0, `exit (${r.err})`);
-  const d = JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data;
-  igual(d.resposta, 'sim', 'a resposta nova foi gravada');
-  igual(d.respondidaPor, undefined, 'o respondidaPor antigo sobreviveu à troca da resposta');
+const RESP = { estado: 'respondida', titulo: 'limpar · orquestradora', sessaoId: 'local_a', resposta: 'não', respondidaPor: 'painel', respondidaEm: '2026-10-26T01:00:00.000Z', atualizadoEm: '2026-10-26T01:00:00.000Z' };
+const gravaComoOPane = (extra = {}) => { mkdirSync(join(base, 'painel', 'perguntas'), { recursive: true }); writeFileSync(arq('perguntas', 'Q1'), JSON.stringify({ id: 'Q1', version: 1, data: { ...RESP, ...extra } })); };
+const dado = () => JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data;
+caso('respondidaEm também só o pane grava: set/update/batch pela linha de comando são recusados', () => {
+  gravaComoOPane();
+  const r = painel('update', 'perguntas', 'Q1', '{"respondidaEm":"2099-01-01T00:00:00.000Z"}');
+  igual(r.exit, 1, `exit (${r.out})`); ok(r.err.includes('respondidaPor'), `stderr: ${r.err}`);
+  igual(dado().respondidaEm, RESP.respondidaEm, 'o respondidaEm mudou');
+  igual(painel('set', 'perguntas', 'Q2', '{"estado":"respondida","respondidaEm":"2026-10-26T01:00:00.000Z"}').exit, 1, 'set aceitou');
 });
-caso('A1b: update que não mexe em resposta nem estado preserva o respondidaPor do painel', () => {
-  mkdirSync(join(base, 'painel', 'perguntas'), { recursive: true });
-  writeFileSync(arq('perguntas', 'Q1'), JSON.stringify({ id: 'Q1', version: 1, data: { estado: 'respondida', titulo: 'x', sessaoId: 'local_a', resposta: 'sim', respondidaPor: 'painel' } }));
-  igual(painel('update', 'perguntas', 'Q1', '{"nota":"y"}').exit, 0, 'update');
-  igual(JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data.respondidaPor, 'painel', 'apagou sem motivo');
+for (const [campo, valor] of [['resposta', 'sim'], ['estado', 'aberta'], ['titulo', 'limpar · orquestradora (outra)'], ['sessaoId', 'local_b']]) {
+  caso(`A1/R2: trocar ${campo} pela linha de comando apaga respondidaPor e respondidaEm`, () => {
+    gravaComoOPane(); igual(dado().respondidaPor, 'painel', 'precondição: o documento nasce com a prova');
+    const r = painel('update', 'perguntas', 'Q1', JSON.stringify({ [campo]: valor }));
+    igual(r.exit, 0, `exit (${r.err})`);
+    igual(dado()[campo], valor, 'o valor novo foi gravado');
+    igual(dado().respondidaPor, undefined, 'respondidaPor sobreviveu'); igual(dado().respondidaEm, undefined, 'respondidaEm sobreviveu');
+  });
+}
+caso('L: regravar estado e resposta com o MESMO valor (fluxo da skill) mantém a prova', () => {
+  gravaComoOPane();
+  igual(painel('update', 'perguntas', 'Q1', '{"estado":"respondida","resposta":"não"}').exit, 0, 'update');
+  igual(dado().respondidaPor, 'painel', 'perdeu respondidaPor'); igual(dado().respondidaEm, RESP.respondidaEm, 'mexeu no respondidaEm');
+});
+caso('A1b/R1/R3: nota e atualizadoEm não apagam a prova nem mexem no respondidaEm', () => {
+  gravaComoOPane();
+  igual(painel('update', 'perguntas', 'Q1', '{"nota":"y"}').exit, 0, 'nota');
+  igual(painel('update', 'perguntas', 'Q1', '{"atualizadoEm":"2099-01-01T00:00:00.000Z"}').exit, 0, 'atualizadoEm');
+  igual(dado().respondidaPor, 'painel', 'apagou sem motivo'); igual(dado().respondidaEm, RESP.respondidaEm, 'o respondidaEm andou');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

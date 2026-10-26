@@ -2,7 +2,7 @@
 // Testes das travas do pool (hooks/papel-do-pool.mjs e hooks/operador-ausente.mjs, F5/24-10).
 // Tudo em pasta temporária: HOME, HOOKS_CREWAI_BASE (BASE) e POOL_APP_SESSOES_DIR (registro do app).
 // Rodar: node ~/.claude/hooks/tests/papel-do-pool.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -332,7 +332,7 @@ caso('operador-ausente: outra sessão, notificação, compactação e lembrete n
 const limpa = (quem, extra, alvo = 'self') => pre(quem, 'mcp__ccd_session_mgmt__clear_session', { session_id: alvo }, extra);
 const perguntaLimpar = (data) => { mkdirSync(dir('painel', 'perguntas'), { recursive: true }); writeFileSync(dir('painel', 'perguntas', 'Q9.json'), JSON.stringify({ id: 'Q9', data })); };
 const haMin = (m) => new Date(Date.now() - m * 60_000).toISOString();
-const OKP = (extra = {}) => ({ titulo: 'limpar · orquestradora', sessaoId: 'local_ORQ', estado: 'respondida', respondidaPor: 'painel', resposta: 'sim (segue a recomendação)', atualizadoEm: haMin(10), ...extra });
+const OKP = (extra = {}) => ({ titulo: 'limpar · orquestradora', sessaoId: 'local_ORQ', estado: 'respondida', respondidaPor: 'painel', resposta: 'sim (segue a recomendação)', respondidaEm: haMin(10), atualizadoEm: haMin(10), ...extra });
 const nega7 = (r, msg) => { nega(r, msg); ok(/T7/.test(JSON.stringify(r)) || /Limpeza inteira/.test(r.permissionDecisionReason), `${msg}: negou, mas não pelo T7: ${r.permissionDecisionReason}`); };
 caso('T7: orquestradora clear_session "self" em turno peer, sem bandeira nem pergunta → nega; em turno humano passa', () => {
   nega7(limpa('ORQ', depeer()), 'peer');
@@ -356,7 +356,10 @@ caso('T7: o sim do painel libera (≤ 30 min, respondidaPor painel, resposta sim
   perguntaLimpar(OKP());
   passa(limpa('ORQ', depeer()), 'sim do painel');
   perguntaLimpar(OKP({ respondidaPor: undefined })); nega7(limpa('ORQ', depeer()), 'sem respondidaPor');
-  perguntaLimpar(OKP({ atualizadoEm: haMin(40) })); nega7(limpa('ORQ', depeer()), 'há 40 min');
+  perguntaLimpar(OKP({ respondidaEm: haMin(40), atualizadoEm: new Date().toISOString() })); nega7(limpa('ORQ', depeer()), 'respondidaEm há 40 min com atualizadoEm de agora');
+  perguntaLimpar(OKP({ respondidaEm: undefined })); nega7(limpa('ORQ', depeer()), 'sem respondidaEm');
+  perguntaLimpar(OKP({ respondidaEm: new Date(Date.now() + 3600_000).toISOString() })); nega7(limpa('ORQ', depeer()), 'respondidaEm no futuro');
+  perguntaLimpar(OKP({ atualizadoEm: '2099-01-01T00:00:00.000Z', respondidaEm: haMin(180) })); nega7(limpa('ORQ', depeer()), 'atualizadoEm no futuro');
   perguntaLimpar(OKP({ resposta: 'não' })); nega7(limpa('ORQ', depeer()), 'resposta não');
   perguntaLimpar(OKP({ sessaoId: 'local_P1' })); nega7(limpa('ORQ', depeer()), 'sessaoId de outra');
   perguntaLimpar(OKP({ titulo: 'outra coisa' })); nega7(limpa('ORQ', depeer()), 'título que não é de limpeza');
@@ -364,6 +367,26 @@ caso('T7: o sim do painel libera (≤ 30 min, respondidaPor painel, resposta sim
 caso('T7: orquestradora limpando um membro passa; P1 limpando "self" passa', () => {
   passa(limpa('ORQ', depeer(), 'local_E1'), 'orquestradora limpa membro');
   passa(limpa('P1', depeer()), 'P1 self');
+});
+// Ponta a ponta (V2): o painel.mjs de verdade grava e o papel-do-pool.mjs de verdade decide.
+const PAINEL_MJS = join(HOOKS, '..', 'skills', 'orquestradora', 'scripts', 'painel.mjs');
+const painelCli = (...args) => spawnSync('node', [PAINEL_MJS, ...args], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', env: { ...process.env, PAINEL_DIR: dir('painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: dir('app'), HOOKS_CREWAI_BASE: BASE_ORQ(), HOME: dir('home') } });
+const viaCli = (...args) => { const r = painelCli(...args); ok(r.status === 0, `painel ${args.join(' ')} saiu ${r.status}: ${r.stderr}`); };
+caso('T7 ponta a ponta: "sim" de 3 h + nota → nega; "sim" de outra pergunta + troca de título → nega; atualizadoEm futuro → nega; "sim" de 5 min + regravação da skill → passa', () => {
+  perguntaLimpar(OKP({ respondidaEm: haMin(180), atualizadoEm: haMin(180) }));
+  nega7(limpa('ORQ', depeer()), 'precondição: sim de 3 h nega');
+  viaCli('update', 'perguntas', 'Q9', '{"nota":"x"}');
+  nega7(limpa('ORQ', depeer()), 'sim de 3 h + nota');
+  viaCli('update', 'perguntas', 'Q9', '{"atualizadoEm":"2099-01-01T00:00:00.000Z"}');
+  nega7(limpa('ORQ', depeer()), 'atualizadoEm no futuro');
+  perguntaLimpar(OKP({ titulo: 'merge · PR 9', respondidaEm: haMin(5), atualizadoEm: haMin(5) }));
+  nega7(limpa('ORQ', depeer()), 'precondição: sim de outra pergunta nega');
+  viaCli('update', 'perguntas', 'Q9', '{"titulo":"limpar · orquestradora"}');
+  nega7(limpa('ORQ', depeer()), 'sim de outra pergunta + troca de título');
+  perguntaLimpar(OKP({ respondidaEm: haMin(5), atualizadoEm: haMin(5) }));
+  passa(limpa('ORQ', depeer()), 'contraste: sim de 5 min');
+  viaCli('update', 'perguntas', 'Q9', '{"estado":"respondida","resposta":"sim (segue a recomendação)"}');
+  passa(limpa('ORQ', depeer()), 'sim de 5 min + regravação da skill');
 });
 caso('T3a: bandeira {ligado:false} vale como desligada → start_session em turno peer passa', () => {
   writeFileSync(join(BASE_ORQ(), 'operador-ausente.json'), JSON.stringify({ ligado: false, desligadoEm: new Date().toISOString(), por: 'painel', desde: new Date().toISOString() }));

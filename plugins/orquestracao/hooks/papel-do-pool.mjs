@@ -49,7 +49,9 @@ function decisao(tipo, motivo) {
 }
 
 const bandeiraDeAusencia = modoAusente;
+// O sim do painel vale 30 min a partir de `respondidaEm` (a hora do clique); `atualizadoEm` não conta (qualquer update o renova).
 const OK_DO_PAINEL_MS = 30 * 60_000;
+const noPrazo = (iso) => { const t = Date.parse(iso); const d = Date.now() - t; return !Number.isNaN(t) && d >= 0 && d <= OK_DO_PAINEL_MS; };
 
 function main() {
   const e = lerEntrada();
@@ -162,7 +164,7 @@ function main() {
     try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
     if (origem === 'human') return libera('turno do operador');
     const ok = perguntasDeLimpeza(reg?.localId).find((d) => d.estado === 'respondida' && d.respondidaPor === 'painel'
-      && /^\s*sim/i.test(String(d.resposta ?? '')) && Date.now() - Date.parse(d.atualizadoEm) <= OK_DO_PAINEL_MS);
+      && /^\s*sim/i.test(String(d.resposta ?? '')) && noPrazo(d.respondidaEm));
     if (ok) return libera('sim do painel');
     return nega('T7', 'orquestradora', alvoReal, 'Limpeza inteira só com o ok do operador (F48): ele pode estar lendo. Escreva o estado, abra a pergunta `limpar · orquestradora` (Q-ID, sessaoId, recomendação: limpar) e siga; limpe quando ele disser sim no chat ou no painel. Com o modo ausente ligado, pode.');
   }
