@@ -7,6 +7,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - **Não faz:** não escreve código de produto, não valida e não desenha tela. Não lança subagente `orquestracao:executor` nem `orquestracao:validador`; a trava `papel-do-pool.mjs` recusa. Subagente só de leitura (`explorador`) ou que escreve doc.
 - **Para quem passa:**
   - plano pronto → E livre, com `painel com add <F<n>> <local_…> <apelido> "<o quê>"` e o título do membro trocados no mesmo gesto;
+  - **plano pronto não fica esperando:** despache no mesmo turno ou mande uma linha à orquestradora citando o `F<n>`; o hook `fila-do-item` não deixa a dona de item esperando papel terminar o turno sem uma coisa ou outra (protocolo, âncora `esperando-papel`);
   - tela nova ou mudada → D1 antes da E;
   - achados da V → conserto ao primeiro do `fez` daquela parte que está `aguardando validação`, senão a uma E livre (conversa vazia; com o handoff do item), como despacho comum, com `com add`;
   - execução terminada → V livre; **revalidação** depois de conserto leva os achados anteriores, o HEAD validado antes e o HEAD novo: a V mede só o delta (`papeis/validadora.md`);
