@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { pastaDoTeto, tetoDaMaquina } from "../o-teto-da-maquina.mjs";
@@ -13,6 +13,8 @@ import { pastaDoTeto, tetoDaMaquina } from "../o-teto-da-maquina.mjs";
  */
 const base = mkdtempSync(join(tmpdir(), "kit-teto-concorda-"));
 process.env.HOOKS_CREWAI_BASE = join(base, "orq"); // o pool-comum nunca escreve na BASE de verdade
+process.env.HOME = join(base, "home"); // nem o HOME real entra: a pasta padrão e o teto.json nunca são os da máquina
+mkdirSync(process.env.HOME, { recursive: true });
 const { maquinaCheia, pastaDoTeto: pastaDoPlugin } = await import(pathToFileURL(join(import.meta.dirname, "..", "..", "plugins", "orquestracao", "hooks", "pool-comum.mjs")).href);
 
 const NUCLEOS = 15;
@@ -39,8 +41,25 @@ describe("o teto do gate e o do plugin", () => {
     }
   });
 
-  it("a pasta padrão é a mesma (HOME real, só comparada; nada é lido ou escrito nela)", () => {
-    const padrao = join(homedir(), ".claude", "orquestracao", "nucleos-de-teste");
+  it("a ordem: o env vence o teto.json, e KIT vence IZANAGI — nos dois lados", () => {
+    const pasta = join(base, "ordem");
+    mkdirSync(pasta);
+    writeFileSync(join(pasta, "teto.json"), JSON.stringify({ nucleos: 3 }));
+    const env = (extra) => ({ KIT_NUCLEOS_DIR: pasta, ...extra });
+    const casos = [
+      ["env × teto.json", env({ IZANAGI_NUCLEOS_DE_TESTE: "6" }), 6],
+      ["KIT × IZANAGI", env({ KIT_NUCLEOS_DE_TESTE: "5", IZANAGI_NUCLEOS_DE_TESTE: "6" }), 5],
+    ];
+    for (const [nome, e, esperado] of casos) {
+      const { gate, plugin } = lido(e, pasta);
+      assert.equal(gate, esperado, `${nome}: o gate`);
+      assert.equal(plugin, esperado, `${nome}: o plugin`);
+    }
+    assert.equal(lido(env({}), pasta).gate, 3, "prova: sem env o teto.json vale, então o env acima mudou o número");
+  });
+
+  it("a pasta padrão é a mesma (HOME temporário, só comparada; nada é lido ou escrito nela)", () => {
+    const padrao = join(process.env.HOME, ".claude", "orquestracao", "nucleos-de-teste");
     assert.ok(padrao.length > 0);
     assert.equal(pastaDoTeto({}), padrao);
     assert.equal(pastaDoPlugin({}), padrao);

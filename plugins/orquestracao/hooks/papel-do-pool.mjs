@@ -84,9 +84,9 @@ function main() {
   }
 
   if (tool === 'Bash') {
-    // T8: a orquestradora não despacha V (`painel com add` de item em validação) com a máquina cheia (ADR 0005).
+    // T8: a orquestradora não despacha V (`painel com add` de uma V em item em validação; o de E é o conserto e passa) com a máquina cheia (ADR 0005).
     const normal = separadoresDeAspasNeutros(semHeredoc(ti.command || ''));
-    const itensDeV = [...normal.matchAll(new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+com\s+add\s+(F\d+)\b`, 'g'))].map((m) => m[1]).filter((F) => {
+    const itensDeV = [...normal.matchAll(new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+com\s+add\s+(F\d+)\s+\S+\s+["']?(\S+?)["']?(?:\s|$)`, 'g'))].filter((m) => /^V/i.test(m[2])).map((m) => m[1]).filter((F) => {
       try { return JSON.parse(readFileSync(join(filaDir(), `${F}.json`), 'utf8'))?.data?.etapa === 'validacao'; } catch { return false; }
     });
     if (itensDeV.length > 0 && ehOrquestradora(e.session_id, registroDaSessao(e.session_id)?.titulo)) {

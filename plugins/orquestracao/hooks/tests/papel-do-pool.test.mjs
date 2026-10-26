@@ -54,7 +54,7 @@ function rodar(hook, evento, extraEnv = {}) {
     input: typeof evento === 'string' ? evento : JSON.stringify(evento), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
     env: { ...process.env, HOME: dir('home'), HOOKS_CREWAI_BASE: BASE_ORQ(), POOL_APP_SESSOES_DIR: dir('app'), PAINEL_DIR: dir('painel'), ...(FILA ? { FILA_DIR: FILA } : {}),
       // a máquina do teste nunca está cheia por acaso (ADR 0005): sem fichas e com carga zero, a menos que o caso diga o contrário
-      KIT_NUCLEOS_DIR: dir('nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', KIT_CARGA_1MIN: '0', ...extraEnv },
+      KIT_NUCLEOS_DIR: dir('nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', IZANAGI_NUCLEOS_DE_TESTE: '', CI: '', KIT_CARGA_1MIN: '0', ...extraEnv },
   });
   return out ? JSON.parse(out).hookSpecificOutput : null;
 }
@@ -378,7 +378,7 @@ const maquina = (fichas, teto, carga = '0') => {
   for (let k = 1; k <= fichas; k++) writeFileSync(join(pasta, String(k)), JSON.stringify({ pid: process.pid, token: 't', worktree: '/w', projeto: 'p', desde: new Date().toISOString() }));
   return { KIT_NUCLEOS_DIR: pasta, KIT_NUCLEOS_DE_TESTE: String(teto), KIT_CARGA_1MIN: carga };
 };
-const comAddComEnv = (quem, F, env) => rodar('papel-do-pool.mjs', { session_id: S[quem][0], hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: `painel com add ${F} local_V1 V1 "valida"` }, cwd: dir('alfa') }, env);
+const comAddComEnv = (quem, F, env, apelido = 'V1') => rodar('papel-do-pool.mjs', { session_id: S[quem][0], hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: `painel com add ${F} local_${apelido} ${apelido} "valida"` }, cwd: dir('alfa') }, env);
 caso('T8: máquina cheia + item em validação → a orquestradora não faz o com add; o motivo diz fichas, carga e a espera gate', () => {
   fila('F7', { etapa: 'validacao' });
   const r = comAddComEnv('ORQ', 'F7', maquina(2, 2));
@@ -392,6 +392,11 @@ caso('T8: item em execução passa com a máquina cheia; máquina livre passa co
   passa(comAddComEnv('ORQ', 'F8', maquina(2, 2)), 'execução com a máquina cheia');
   passa(comAddComEnv('ORQ', 'F7', maquina(1, 2)), 'validação com a máquina livre');
   nega(comAddComEnv('ORQ', 'F7', maquina(2, 2)), 'prova: a mesma validação com a máquina cheia nega');
+});
+caso('T8: o com add de E em item em validação (o conserto) passa com a máquina cheia; o de V segue negado', () => {
+  fila('F7', { etapa: 'validacao' });
+  nega(comAddComEnv('ORQ', 'F7', maquina(2, 2), 'V1'), 'prova: a V com a máquina cheia nega');
+  passa(comAddComEnv('ORQ', 'F7', maquina(2, 2), 'E1'), 'o conserto da E');
 });
 caso('T8: só vale para a orquestradora e para `com add` de item que existe; com del e leitura passam', () => {
   fila('F7', { etapa: 'validacao' });

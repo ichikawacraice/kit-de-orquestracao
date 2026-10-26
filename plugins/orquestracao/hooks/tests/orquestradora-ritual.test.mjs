@@ -110,7 +110,7 @@ function rodar(ferramentas, { extra = {}, env = {} } = {}) {
     env: { ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'),
       PAINEL_DIR: join(base, 'painel'), FILA_DIR: '', ESPERA_MIN: '',
       // a máquina do teste nunca está cheia por acaso: sem fichas e com carga zero, a menos que o caso diga o contrário (ADR 0005)
-      KIT_NUCLEOS_DIR: join(base, 'nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', KIT_CARGA_1MIN: '0', ...env },
+      KIT_NUCLEOS_DIR: join(base, 'nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', IZANAGI_NUCLEOS_DE_TESTE: '', CI: '', KIT_CARGA_1MIN: '0', ...env },
   });
   assert.equal(r.status, 0, r.stderr);
   return r.stdout ? JSON.parse(r.stdout) : null;
@@ -399,5 +399,32 @@ test('(gate-6) modo ausente ligado: a mesma cobrança, sem exceção', () => {
   const r = rodar([LIST, GRAVA], { env: maquinaDoTeste(2, 2) });
   assert.equal(r?.decision, 'block');
   assert.match(r.reason, /esperando V com a máquina cheia/);
+});
+// F114, conserto da V2: a espera `gate` sai por cobrança do ritual quando a máquina volta; P e D seguem pedindo vaga com ela cheia.
+const APAGA_ESPERA = (F) => ['Bash', { command: `painel update fila ${F} '{"espera":null}'` }];
+test('(gate-7) espera gate com a máquina livre: cobra apagar a espera e despachar; com a máquina cheia não cobra', () => {
+  validando('F7', { espera: { motivo: 'gate', texto: 'máquina cheia' } }); livre('local_V1', 'V1 · livre'); livre('local_E1', 'E1 · livre');
+  const r = rodar([LIST, GRAVA], { env: maquinaDoTeste(1, 2) });
+  assert.equal(r?.decision, 'block', 'precondição: a cobrança tem de ser detectada');
+  assert.match(r.reason, /F7 com espera "máquina cheia" e a máquina livre: apague a espera \(painel update fila F7 '\{"espera":null\}'\) e despache/);
+  assert.equal(rodar([LIST, GRAVA], { env: maquinaDoTeste(2, 2) }), null, 'cheia: segue sem cobrar');
+});
+test('(gate-8) apagar a espera no turno satisfaz a cobrança; espera de outro motivo não é cobrada', () => {
+  livre('local_E1', 'E1 · livre');
+  validando('F7', { espera: { motivo: 'gate', texto: 'máquina cheia' } });
+  assert.equal(rodar([LIST, GRAVA, APAGA_ESPERA('F7')], { env: maquinaDoTeste(1, 2) }), null);
+  rmSync(join(base, 'painel', 'fila', 'F7.json'));
+  validando('F7', { espera: { motivo: 'operador', texto: 'aguarda' } });
+  assert.equal(rodar([LIST, GRAVA], { env: maquinaDoTeste(1, 2) }), null, 'outro motivo: fora');
+});
+test('(gate-9) máquina cheia suspende o pedido de vaga só de E e V; P e D continuam cobrados', () => {
+  livre('local_E1', 'E1 · livre');
+  for (const [etapa, papel] of [['planejamento', 'P'], ['design', 'D']]) {
+    item('F7', { etapa, donoApelido: null, com: [], historico: [{ em: minAtras(10), etapa, dono: null }] });
+    const r = rodar([LIST, GRAVA], { env: maquinaDoTeste(2, 2) });
+    assert.equal(r?.decision, 'block', `${papel}: segue cobrado com a máquina cheia`);
+    assert.match(r.reason, new RegExp(`sem ${papel} livre: peça a vaga`));
+    rmSync(join(base, 'painel', 'fila', 'F7.json'));
+  }
 });
 }

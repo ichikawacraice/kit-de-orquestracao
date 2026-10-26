@@ -103,6 +103,7 @@ Todo teste da máquina (o gate, o typecheck do gate, o `com-fichas` e o `vitest`
 `KIT_GATE_TRAVA`, `KIT_CONSERTO_TRAVA`, `KIT_GATE_VAGAS`, `KIT_CONSERTO_VAGAS`, `KIT_GATE_PACOTES`,
 `KIT_GATE_SEM_CACHE=1`, `KIT_GATE_VERDE_DIR`, `KIT_TESTE_WORKERS`, `KIT_CONSERTO_WORKERS`, `KIT_NUCLEOS_DIR`,
 `KIT_NUCLEOS_DE_TESTE`, `KIT_FICHAS_TOMADAS`.
+`KIT_CARGA_1MIN` fixa a carga de 1 min que a orquestradora lê para dizer "máquina cheia"; é só para testes.
 Os nomes `IZANAGI_*` equivalentes valem como reserva (`KIT_*` vence). No CI (`CI` definido) não há fila, teto nem verde.
 
 ## Testes

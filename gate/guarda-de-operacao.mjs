@@ -414,6 +414,8 @@ function segmentosBrutos(comando) {
 const RUNNERS_DE_TESTE = new Set(["vitest", "jest"]);
 const ehRunner = (t) => t !== undefined && RUNNERS_DE_TESTE.has(basename(t));
 
+const OPCOES_DO_NODE_COM_VALOR = new Set(["--import", "-r", "--require", "--loader", "--experimental-loader"]);
+
 /** `true` se o segmento sobe um runner de teste direto (`vitest`, `jest`, `node --test`) sem as fichas do teto. */
 function testeSolto(bruto) {
   let i = 0;
@@ -438,9 +440,12 @@ function testeSolto(bruto) {
   }
   if (base === "node") {
     // só as opções do node antes do script contam: `node script.mjs --test` passa `--test` ao script
-    for (const a of args) {
+    // `--import tsx`, `-r X` e afins levam o valor no argumento seguinte: ele não é o script
+    for (let k = 0; k < args.length; k++) {
+      const a = args[k];
       if (!a.startsWith("-")) break;
       if (a === "--test" || a.startsWith("--test-")) return true;
+      if (OPCOES_DO_NODE_COM_VALOR.has(a)) k++;
     }
   }
   return false;
