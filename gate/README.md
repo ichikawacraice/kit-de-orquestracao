@@ -9,6 +9,7 @@ Portado do Izanagi (`188f37fb8`) e parametrizado por `.claude/kit.json` do proje
 | `o-typecheck-do-gate.mjs` | o mesmo para `gate.typecheck`, etapa `typecheck` do verde |
 | `o-verde-da-arvore.mjs` | imprime a chave e o que a árvore atual já passou |
 | `o-dist-que-o-gate-le.mjs` | só no perfil `pnpm-workspace`: confere o `pnpm-lock.yaml` e constrói os pacotes consumidos compilados |
+| `as-docs-concordam.mjs [--regra x]…` | confere as docs (spec, ADR, roadmap, links, diário) e sai 1 com `arquivo:linha — motivo`; o gate roda antes da suíte |
 | `o-teto-de-workers.mjs` | `tetoDeWorkers()` para o `vitest.config.*` importar |
 | `guarda-de-operacao.mjs` | hook `PreToolUse` (Bash): pede confirmação antes de comando que já custou caro; só avisa em bypass |
 
@@ -54,6 +55,32 @@ valor que não é lista, é erro (`carregarConfig`), e `arvore.extras` exige `no
 
 O perfil `pnpm-workspace` com `pacotes: "auto"` reproduz o gate do Izanagi (`pnpm -r --workspace-concurrency=2 test`,
 `pnpm --filter <pacote> test`, `pnpm -r typecheck`).
+
+## As docs concordam (`documentos`)
+
+Seção opcional do `kit.json`. Sem `documentos.conferir` (o padrão, lista vazia) o gate não confere nada; com a lista, `a-vez-do-gate.mjs`
+confere ANTES da suíte (no CI também), sai 1 no primeiro achado e nem toma a vez nem guarda verde. Cada regra se liga à parte:
+
+| Regra | Reprova |
+|---|---|
+| `status-da-spec` | `**Status:**` fora de `documentos.estados`; spec fora do índice da pasta de specs; índice que diz outro status que o cabeçalho |
+| `indice-de-adr` | ADR fora do índice, linha do índice para arquivo ausente, rótulo com número que não é o do arquivo, célula Decisão acima de `orcamentos.decisaoDoAdr` (200) |
+| `linha-do-roadmap` | linha de item acima de `orcamentos.linhaDoRoadmap` (400), mais de `orcamentos.linksDoRoadmap` (2) links para spec/ADR, âncora que o destino não declara (spec, ADR e diário exigem `<a id>`; outro doc aceita o slug do título) |
+| `links-relativos` | link relativo em `documentos.docs` para arquivo ou âncora inexistente (código e crases não contam) |
+| `tamanho-do-diario` | parte do diário acima de `orcamentos.diarioEmBytes` (150000) |
+
+```jsonc
+{ "documentos": {
+    "conferir": ["status-da-spec", "indice-de-adr", "linha-do-roadmap", "links-relativos", "tamanho-do-diario"],
+    "adr": "docs/adr", "specs": "docs/specs", "roadmap": "docs/roadmap.md", "diario": "docs/diario", "docs": "docs",
+    "estados": ["Rascunho", "Em revisão", "Aprovada", "Implementada", "Substituída"],
+    "orcamentos": { "decisaoDoAdr": 200, "linhaDoRoadmap": 400, "linksDoRoadmap": 2, "diarioEmBytes": 150000 }
+} }
+```
+
+Pasta ausente ou sem documento escreve `[regra] nada a conferir: …` — nunca um verde calado. Rodando o script à mão
+(`node gate/as-docs-concordam.mjs`) sem `--regra`, vale `documentos.conferir`; com a lista vazia, valem as cinco.
+`documentos.conferir` com nome que não é regra é erro (`carregarConfig`).
 
 ## A raiz do projeto
 

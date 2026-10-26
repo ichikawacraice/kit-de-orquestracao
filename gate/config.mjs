@@ -14,6 +14,21 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+/** As regras de conferência de documento (`documentos.conferir`), na ordem em que rodam. */
+export const REGRAS_DE_DOCUMENTO = ["status-da-spec", "indice-de-adr", "linha-do-roadmap", "links-relativos", "tamanho-do-diario"];
+
+/** As pastas e os orçamentos dos documentos; `conferir` vazio = o gate não confere nada. */
+export const DOCUMENTOS_PADRAO = {
+  adr: "docs/adr",
+  specs: "docs/specs",
+  roadmap: "docs/roadmap.md",
+  diario: "docs/diario",
+  docs: "docs",
+  estados: ["Rascunho", "Em revisão", "Aprovada", "Implementada", "Substituída"],
+  orcamentos: { decisaoDoAdr: 200, linhaDoRoadmap: 400, linksDoRoadmap: 2, diarioEmBytes: 150_000 },
+  conferir: [],
+};
+
 const PADRAO = {
   gate: {
     perfil: "comando",
@@ -29,6 +44,7 @@ const PADRAO = {
     workersConserto: 2,
     prazos: { vezMin: 60, verdeHoras: 24, retencaoDias: 7, typecheckMin: 15, buildMin: 10, ilegivelSeg: 30 },
   },
+  documentos: DOCUMENTOS_PADRAO,
   arvore: {
     prefixosEnv: ["KIT_"],
     avulsas: ["CI", "TZ", "NODE_OPTIONS"],
@@ -101,9 +117,10 @@ export function carregarConfig(raiz, kit = lerKitJson(raiz)) {
     throw new Error(`gate.perfil "${perfil}" desconhecido — use "comando" ou "pnpm-workspace"`);
   }
   validarGuarda(kit.guarda);
+  validarDocumentos(kit.documentos);
   validarExtras(kit.arvore?.extras);
   const base = perfil === "pnpm-workspace" ? mesclar(PADRAO, PERFIL_PNPM) : PADRAO;
-  return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: objeto(kit.guarda) ? kit.guarda : {} });
+  return mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: objeto(kit.guarda) ? kit.guarda : {}, documentos: objeto(kit.documentos) ? kit.documentos : {} });
 }
 
 /**
@@ -125,6 +142,36 @@ function validarGuarda(guarda) {
   for (const regra of guarda.regras) {
     if (!PADRAO.guarda.regras.includes(regra)) {
       throw new Error(`guarda.regras: ${JSON.stringify(regra)} não é uma regra — as conhecidas são ${PADRAO.guarda.regras.join(", ")}`);
+    }
+  }
+}
+
+/** `documentos.conferir`: lista de regras conhecidas; pasta é texto; orçamento é inteiro ≥ 1. Um typo desligaria a regra calado. */
+function validarDocumentos(documentos) {
+  if (documentos === undefined) return;
+  if (!objeto(documentos)) throw new Error(`documentos precisa ser um objeto, e veio ${JSON.stringify(documentos)}`);
+  const { conferir, orcamentos, estados } = documentos;
+  if (conferir !== undefined) {
+    if (!Array.isArray(conferir)) throw new Error(`documentos.conferir precisa ser uma lista, e veio ${JSON.stringify(conferir)}`);
+    for (const regra of conferir) {
+      if (!REGRAS_DE_DOCUMENTO.includes(regra)) {
+        throw new Error(`documentos.conferir: ${JSON.stringify(regra)} não é uma regra — as conhecidas são ${REGRAS_DE_DOCUMENTO.join(", ")}`);
+      }
+    }
+  }
+  for (const campo of ["adr", "specs", "roadmap", "diario", "docs"]) {
+    if (documentos[campo] !== undefined && (typeof documentos[campo] !== "string" || documentos[campo] === "")) {
+      throw new Error(`documentos.${campo} precisa ser um caminho (texto), e veio ${JSON.stringify(documentos[campo])}`);
+    }
+  }
+  if (estados !== undefined && (!Array.isArray(estados) || estados.length === 0 || estados.some((e) => typeof e !== "string"))) {
+    throw new Error(`documentos.estados precisa ser uma lista de textos, e veio ${JSON.stringify(estados)}`);
+  }
+  if (orcamentos !== undefined) {
+    if (!objeto(orcamentos)) throw new Error(`documentos.orcamentos precisa ser um objeto, e veio ${JSON.stringify(orcamentos)}`);
+    for (const [nome, valor] of Object.entries(orcamentos)) {
+      if (!(nome in DOCUMENTOS_PADRAO.orcamentos)) throw new Error(`documentos.orcamentos: "${nome}" não existe — os conhecidos são ${Object.keys(DOCUMENTOS_PADRAO.orcamentos).join(", ")}`);
+      if (!Number.isInteger(valor) || valor < 1) throw new Error(`documentos.orcamentos.${nome} precisa ser inteiro ≥ 1, e veio ${JSON.stringify(valor)}`);
     }
   }
 }

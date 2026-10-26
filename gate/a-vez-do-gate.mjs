@@ -39,6 +39,7 @@ import { randomUUID } from "node:crypto";
 import { closeSync, openSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
+import { conferirDocs, relatar } from "./as-docs-concordam.mjs";
 import { carregarConfig, envKit, inteiroDoEnv, partirComando } from "./config.mjs";
 import { RAIZ, conferirInstalacao, constroi, projetosDoWorkspace } from "./o-dist-que-o-gate-le.mjs";
 import { consultar, guardarSeAArvoreNaoMudou, linhaDoPulo } from "./o-verde-da-arvore.mjs";
@@ -486,6 +487,18 @@ function rodarASuite({ cmd, args }, prazoMs, env = process.env, raiz = RAIZ) {
   });
 }
 
+/**
+ * A conferência das docs (`documentos.conferir`): 0 sem regra ligada ou com tudo de acordo, 1 com achado (as linhas
+ * `arquivo:linha — motivo` vão para o stderr, que é onde o gate fala).
+ */
+export function conferirDocsDoGate(raiz = RAIZ, cfg = carregarConfig(raiz)) {
+  const regras = cfg.documentos.conferir;
+  if (regras.length === 0) return 0;
+  const codigo = relatar(conferirDocs(raiz, cfg.documentos, regras), (t) => console.error(t));
+  if (codigo !== 0) console.error("[gate] as docs não concordam — conserte no arquivo apontado; a suíte nem começou");
+  return codigo;
+}
+
 /** O gate inteiro. Devolve o código de saída. */
 export async function main(env = process.env, argv = process.argv.slice(2), raiz = RAIZ, cfg = carregarConfig(raiz)) {
   // só o gate DESTE worktree que chamou a suíte é laço; o de outro repositório ou worktree tem outra trava (ou outra vaga) e segue
@@ -493,6 +506,9 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
     console.error(MENSAGEM_DO_LACO(`o gate de ${env[DENTRO]} chamou a suíte`));
     return 2;
   }
+  // As docs concordam ANTES da suíte, no CI também: é barato, e doc que diverge não vale esperar a vez nem guardar o verde.
+  const docs = conferirDocsDoGate(raiz, cfg);
+  if (docs !== 0) return docs;
   const comando = comandoDaSuite(env, argv, raiz, cfg);
   const pacote = pacoteDoArgv(argv, raiz, cfg);
   const prazoMs = cfg.gate.prazos.vezMin * 60_000;
