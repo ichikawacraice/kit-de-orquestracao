@@ -97,6 +97,18 @@ test('textoDasPerguntas', () => {
   assert.ok(!t2.includes('Respondidas nas últimas 24 h'));
 });
 
+test('textoDasPerguntas corta titulo em 120 e resposta em 200 caracteres, com …', () => {
+  const t = textoDasPerguntas({
+    abertas: [{ id: 'Q1', titulo: 't'.repeat(300) }],
+    respondidas: [{ id: 'Q2', titulo: 'u'.repeat(300), resposta: 'r'.repeat(500) }],
+  }, 'A');
+  assert.ok(t.includes(`${'t'.repeat(120)}…`) && !t.includes('t'.repeat(121)), 'titulo aberta');
+  assert.ok(t.includes(`${'u'.repeat(120)}…`) && !t.includes('u'.repeat(121)), 'titulo respondida');
+  assert.ok(t.includes(`${'r'.repeat(200)}…`) && !t.includes('r'.repeat(201)), 'resposta');
+  const curto = textoDasPerguntas({ abertas: [{ id: 'Q3', titulo: 'T'.repeat(120) }], respondidas: [{ id: 'Q4', titulo: 'x', resposta: 'R'.repeat(200) }] }, 'A');
+  assert.ok(!curto.includes('…'), 'no limite exato não corta');
+});
+
 function painel(base, ...args) {
   return spawnSync('node', [PAINEL_MJS, ...args], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', env: { ...process.env, PAINEL_DIR: base, CLAUDE_CODE_SESSION_ID: '' } });
 }

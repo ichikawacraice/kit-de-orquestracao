@@ -60,8 +60,12 @@ caso('todo script do hooks.json existe, e todo hook de hooks/ (fora os comuns) e
   const soltos = readdirSync(HOOKS).filter((f) => f.endsWith('.mjs') && !comuns.has(f) && !doJson.has(f));
   ok(soltos.length === 0, `hooks sem entrada no hooks.json: ${soltos.join(', ')}`);
 });
+// A1 (F51): o hook lê o painel real pelo id da sessão hospedeira; os casos antigos isolam HOME, PAINEL_DIR e esse id.
+const VAZIO = mkdtempSync(join(tmpdir(), 'sessao-inicio-vazio-'));
+process.on('exit', () => rmSync(VAZIO, { recursive: true, force: true }));
+const semPainel = (dir) => ({ ...process.env, HOME: dir, PAINEL_DIR: dir, CLAUDE_CODE_HOST_SESSION_ID: '' });
 caso('SessionStart injeta as regras globais (Q-ID, papéis e modelos, achar a orquestradora) e termina em 0', () => {
-  const out = execFileSync('node', [join(HOOKS, 'sessao-inicio.mjs')], { input: JSON.stringify({ session_id: 'x', hook_event_name: 'SessionStart', source: 'startup' }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
+  const out = execFileSync('node', [join(HOOKS, 'sessao-inicio.mjs')], { input: JSON.stringify({ session_id: 'x', hook_event_name: 'SessionStart', source: 'startup' }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: semPainel(VAZIO) });
   const r = JSON.parse(out).hookSpecificOutput;
   ok(r.hookEventName === 'SessionStart', `evento: ${r.hookEventName}`);
   const t = r.additionalContext;
@@ -76,7 +80,7 @@ caso('SessionStart sem o .md das regras: não escreve nada e não falha (nunca t
     cpSync(HOOKS, join(tmp, 'hooks'), { recursive: true });
     rmSync(join(tmp, 'hooks', 'regras-globais.md'), { force: true });
     ok(!existsSync(join(tmp, 'hooks', 'regras-globais.md')), 'precondição: o .md saiu');
-    const out = execFileSync('node', [join(tmp, 'hooks', 'sessao-inicio.mjs')], { input: '{}', encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' });
+    const out = execFileSync('node', [join(tmp, 'hooks', 'sessao-inicio.mjs')], { input: '{}', encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: semPainel(tmp) });
     ok(out === '', `esperava vazio: ${out}`);
   } finally { rmSync(tmp, { recursive: true, force: true }); }
 });

@@ -7,6 +7,8 @@ import { join } from 'node:path';
 const JANELA_PADRAO_MS = 86_400_000;
 const LIMITE_POR_GRUPO = 10;
 const CASO_NO_HOOK = 200;
+const TITULO_NO_HOOK = 120;
+const RESPOSTA_NO_HOOK = 200;
 
 const painelDir = () => process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 const texto = (v) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
@@ -50,11 +52,11 @@ export function textoDasPerguntas({ abertas, respondidas }, localId) {
   const caso = (p) => (p.caso ? ` — ${corta(p.caso, CASO_NO_HOOK)}` : '');
   const linhas = [`Perguntas que ESTA sessão (${localId}) abriu no painel — são suas, mesmo que você não lembre (pode ter havido uma limpeza de contexto):`];
   if (abertas.length) {
-    linhas.push('Abertas (esperam o operador):', ...grupo(abertas, (p) => `- ${p.id} · ${p.titulo}${caso(p)}`));
+    linhas.push('Abertas (esperam o operador):', ...grupo(abertas, (p) => `- ${p.id} · ${corta(p.titulo, TITULO_NO_HOOK)}${caso(p)}`));
   }
   if (respondidas.length) {
     linhas.push('Respondidas nas últimas 24 h (confira no handoff do item se já agiu; não repasse a outra sessão):',
-      ...grupo(respondidas, (p) => `- ${p.id} · ${p.titulo} — resposta: ${p.resposta ?? ''}${caso(p)}`));
+      ...grupo(respondidas, (p) => `- ${p.id} · ${corta(p.titulo, TITULO_NO_HOOK)} — resposta: ${corta(String(p.resposta ?? ''), RESPOSTA_NO_HOOK)}${caso(p)}`));
   }
   return linhas.join('\n');
 }
