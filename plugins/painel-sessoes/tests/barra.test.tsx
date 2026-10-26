@@ -490,7 +490,7 @@ test('pedido de limpeza: o ok enviado troca o botão por ✓ e o clique repetido
   await u2.unmount()
 })
 
-test('pedido de limpeza: falha de gravação volta o botão e dá toast', async ($, on) => {
+test('pedido de limpeza: pergunta apagada antes do clique dá toast e não grava nada', async ($, on) => {
   const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
   m.arquivos.delete(`${PASTA}/perguntas/Q290.json`)
   const ui = await montar($, 'terminal')
@@ -499,6 +499,25 @@ test('pedido de limpeza: falha de gravação volta o botão e dá toast', async 
   expect(m.toasts.at(-1)).toMatch(/Não consegui mandar o ok de limpar \(/)
   expect(m.escritas.filter(e => e.path.endsWith('Q290.json')), 'nada gravado').toEqual([])
   await ui.unmount()
+})
+
+test('pedido de limpeza: versão mudada entre a leitura e o clique dá toast, não grava e o botão volta', async ($, on) => {
+  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
+  const ui = await montar($, 'terminal')
+  expect((await ui.find({ key: 'limpar-pedido' }))?.text, 'o botão existe antes do clique').toBe('Pode se limpar')
+  m.arquivos.set(`${PASTA}/perguntas/Q290.json`, JSON.stringify(limpar('Q290', {}, 5)))
+  await ui.press({ key: 'limpar-pedido' })
+  await m.relogio.settle()
+  expect(m.toasts.at(-1)).toMatch(/Não consegui mandar o ok de limpar \(/)
+  expect(m.escritas.filter(e => e.path.endsWith('Q290.json')), 'nada gravado').toEqual([])
+  expect(m.enviadas).toEqual([])
+  expect((await ui.find({ key: 'limpar-pedido' }))?.text, 'o botão volta na mesma montagem').toBe('Pode se limpar')
+  const u2 = await montar($, 'terminal')
+  expect((await u2.find({ key: 'limpar-pedido' }))?.text, 'e numa montagem nova').toBe('Pode se limpar')
+  expect(await lido(ui)).not.toMatch(/✓ Ok enviado/)
+  expect(await lido(u2)).not.toMatch(/✓ Ok enviado/)
+  await ui.unmount()
+  await u2.unmount()
 })
 
 test('a linha do pedido vem antes da barra e o Q-ID some nas faixas estreitas', async ($, on) => {
