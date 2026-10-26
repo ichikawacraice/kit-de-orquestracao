@@ -9,11 +9,12 @@
 // (parsear shell deu 50 alertas falsos); o briefing do subagente diz que ele não grava.
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
 // fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam; e o
-// designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista.
+// designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista; a pasta é
+// cercada: valor inválido (absoluto, `..`, a própria raiz) vale o padrão e symlink não libera.
 // Erro do hook vai para o log e a ferramenta segue.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { BASE, registrar, lerEntrada, semPrefixoDoKit } from './hooks-crewai-comum.mjs';
 
 const HOOK = 'subagente-nao-edita';
@@ -52,13 +53,36 @@ function pastaDeRevisoes(raiz) {
     rel = kit?.design?.revisoes;
   } catch { /* sem kit.json legível: vale o padrão */ }
   rel = typeof rel === 'string' ? rel.trim().replace(/\/+$/, '') : '';
-  return resolve(raiz, rel || 'docs/design/revisoes');
+  const PADRAO = 'docs/design/revisoes';
+  // Inválido (absoluto, com `..` ou a própria raiz) vale o padrão: o designer segue com uma pasta que funciona.
+  if (!rel || isAbsolute(rel) || rel.split(/[\\/]+/).includes('..') || resolve(raiz, rel) === raiz) return PADRAO;
+  return rel;
 }
 
+// Caminho real de `p` mesmo sem ele existir: resolve o primeiro ancestral que existe (symlink quebrado
+// existe, por isso lstat) e junta o resto. Pode lançar (ex.: symlink quebrado).
+function caminhoReal(p) {
+  let a = p;
+  for (;;) {
+    try { lstatSync(a); break; } catch { /* sobe */ }
+    if (dirname(a) === a) break;
+    a = dirname(a);
+  }
+  return join(realpathSync(a), relative(a, p));
+}
+
+// Na dúvida, nega: qualquer erro aqui vale `false`, não falha aberta.
 function designerNaRevisao(tipo, p) {
   if (semPrefixoDoKit(tipo) !== 'designer') return false;
-  const raiz = raizDoProjeto(p);
-  return !!raiz && p.startsWith(pastaDeRevisoes(raiz) + '/');
+  try {
+    const raiz = raizDoProjeto(p);
+    if (!raiz) return false;
+    const rel = pastaDeRevisoes(raiz);
+    const esperada = resolve(realpathSync(raiz), rel);
+    return caminhoReal(resolve(raiz, rel)) === esperada && caminhoReal(p).startsWith(esperada + '/');
+  } catch {
+    return false;
+  }
 }
 
 function caminhoDe(entrada) {

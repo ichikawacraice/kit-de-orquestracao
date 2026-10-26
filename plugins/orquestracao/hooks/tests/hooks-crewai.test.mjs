@@ -3,7 +3,7 @@
 // transcripts sintéticos no formato real (.jsonl), log e estado num diretório temporário.
 // Rodar: node ~/.claude/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
 import { tmpdir, homedir, userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -532,6 +532,39 @@ caso('F60.6 os outros tipos não ganham a pasta de revisões', () => comRepo(() 
   for (const t of ['designerX', 'design:critico-de-ui', 'executor']) {
     igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', t);
   }
+}));
+// F61: a pasta de revisões é cercada: valor inválido vale o padrão e symlink não leva a escrita para fora.
+caso('F61.1 valor inválido de design.revisoes vale o padrão', () => comRepo(() => {
+  mkdirSync(join(REPO, '.claude'), { recursive: true });
+  const kit = (v) => writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: v } }));
+  kit('docs/ux');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design:designer'))), null, 'precondição: docs/ux libera a.md');
+  igual(decisao(rodar(SN, editar(`${REPO}/src/a.ts`, sub('design:designer')))), 'deny', 'precondição: docs/ux nega src');
+  for (const v of ['.', './', '..', 'docs/..', 'docs/../..', REPO, homedir(), '/']) {
+    kit(v);
+    igual(decisao(rodar(SN, editar(`${REPO}/src/a.ts`, sub('design:designer')))), 'deny', `src/a.ts com revisoes=${v}`);
+    igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design:designer'))), null, `o padrão vale com revisoes=${v}`);
+  }
+}));
+caso('F61.2 symlink não tira o designer da pasta de revisões', () => comRepo(() => {
+  mkdirSync(join(REPO, 'src'), { recursive: true });
+  mkdirSync(join(REPO, REV), { recursive: true });
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design:designer'))), null, 'precondição: arquivo comum em pasta real');
+  symlinkSync(join(REPO, 'src'), join(REPO, REV, 'link'));
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/link/a.ts`, sub('design:designer')))), 'deny', 'symlink de pasta');
+  symlinkSync(join(REPO, 'src', 'novo.ts'), join(REPO, REV, 'novo.ts'));
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/novo.ts`, sub('design:designer')))), 'deny', 'symlink quebrado');
+  rmSync(join(REPO, REV), { recursive: true, force: true });
+  symlinkSync(join(REPO, 'src'), join(REPO, REV));
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.ts`, sub('design:designer')))), 'deny', 'a pasta é symlink');
+}));
+caso('F61.3 o projeto aberto por um caminho com symlink continua liberado', () => comRepo(() => {
+  const alias = join(homedir(), 'alias');
+  symlinkSync(REPO, alias);
+  try {
+    igual(rodar(SN, editar(`${alias}/${REV}/a.md`, sub('design:designer'))), null, 'revisão pelo alias');
+    igual(decisao(rodar(SN, editar(`${alias}/src/a.ts`, sub('design:designer')))), 'deny', 'src pelo alias');
+  } finally { unlinkSync(alias); }
 }));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
   const f = transcript([...trabalho(), fala('Pronto, editei.')], 'exec · x');
