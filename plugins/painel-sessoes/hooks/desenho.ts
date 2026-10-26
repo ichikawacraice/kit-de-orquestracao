@@ -357,7 +357,10 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   // O que gera decisão (etapa, selo) vem antes do que só informa (dono, PR): o corte com reticências come o fim da linha.
   const ultimoPr = item.prs.length > 0 ? `#${item.prs[item.prs.length - 1]}${item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''}` : ''
   const montar = (quem: Trecho[]): Trecho[] => [
-    item.situacao === 'fila' ? { t: `espera ${rotulo}`, classe: 's', peso: true } : { t: rotulo, classe: cor, peso: true },
+    item.situacao === 'fila'
+      ? { t: `espera ${rotulo}${item.esperando ? textoEsperando(item.esperando, agora).replace(/^esperando \S+/, '') : ''}`, classe: 's', peso: true }
+      : { t: rotulo, classe: cor, peso: true },
+    ...(item.esperando && item.situacao !== 'fila' ? [{ t: textoEsperando(item.esperando, agora), classe: 's', peso: true }] : []),
     ...(opcoes.noTravados ? [{ t: tituloDoTema(item), classe: 's' }] : []),
     ...(item.perguntas.length > 0 ? [{ t: `aguarda você · ${item.perguntas[0]}`, classe: AVISO, peso: true }] : []),
     ...(seloDaEspera(item) ? [{ t: seloDaEspera(item) as string, classe: item.espera?.motivo === 'operador' ? AVISO : 's', peso: true }] : []),
@@ -516,6 +519,10 @@ const chipDoPr = (item: LinhaItem): Chip[] => {
 /** O `Chip` tem a classe do texto em `texto`; a pílula da etapa leva o fundo `tile`, onde as quatro cores de etapa passam de 4,5:1. */
 const chipDaEtapa = (item: LinhaItem): Chip => ({ t: ROTULO_ETAPA[item.etapa] ?? item.etapa, texto: COR_ETAPA[item.etapa] ?? 's', fundo: 'tile' })
 
+/** `esperando E · 35 min`: falta alguém do papel da etapa no item (F58). Os minutos saem de `desde` e da hora do desenho. */
+export const textoEsperando = (e: NonNullable<LinhaItem['esperando']>, agora: number): string =>
+  `esperando ${e.papel} · ${Math.max(0, Math.floor((agora - Date.parse(e.desde)) / 60000))} min`
+
 const upper = (s: string): string => s.toLocaleUpperCase('pt-BR')
 
 type Pessoa = { apelido: string; localId: string }
@@ -580,6 +587,7 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   }
 
   const chips: Chip[] = [chipDaEtapa(item)]
+  if (item.esperando) chips.push({ t: textoEsperando(item.esperando, agora), texto: 's', traco: 'ms' })
   if (item.perguntas.length > 0) chips.push({ t: `aguarda você · ${item.perguntas[0]}`, texto: 'pt', fundo: AVISO })
   const selo = seloDaEspera(item)
   if (selo && item.espera?.motivo === 'gate') chips.push({ t: selo, texto: 's', traco: 'ms' })
@@ -696,7 +704,8 @@ export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { cit
     }
     alt.push(item.resumo)
   }
-  const chips: Chip[] = [{ t: `espera ${ROTULO_ETAPA[item.etapa] ?? item.etapa}`, texto: 's', traco: 'ms', tracejado: true }, ...chipDoPr(item)]
+  const minutosNaFila = item.esperando ? ` · ${Math.max(0, Math.floor((agora - Date.parse(item.esperando.desde)) / 60000))} min` : ''
+  const chips: Chip[] = [{ t: `espera ${ROTULO_ETAPA[item.etapa] ?? item.etapa}${minutosNaFila}`, texto: 's', traco: 'ms', tracejado: true }, ...chipDoPr(item)]
   const linhaDeChips = chipsSvg(X_FILA, y + 8, tw, chips)
   partes.push(...linhaDeChips.partes)
   y += 8 + linhaDeChips.altura

@@ -1,10 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
+import { esperandoPapel } from './esperando'
 import type { Citado, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
 import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, LEITURA_MS, RASCUNHO, RESPOSTA_DO_OK, abertasDoProjeto, contarPool, desenharBarra, desenharPedidoNoPane, meuItem, orquestradorasDoProjeto, papelEApelido, perguntaDeLimpeza, relogio as relogioDoCache } from './barra'
 import type { Barra } from '../types'
-import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, tituloDoTema, todosSvg } from './desenho'
+import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -226,6 +227,8 @@ function montarTodos(
       com,
       // Trava vence espera: o item travado já diz o que o prende, e o selo de espera seria um segundo recado.
       espera: final || situacao === 'travado' ? undefined : esperaGravada,
+      // Sem E (ou D, ou V) no item há tempo: some quando o item está final ou travado (a trava já diz o que o prende).
+      esperando: final || situacao === 'travado' ? undefined : (e => (e ? { papel: e.papel, desde: e.desde } : undefined))(esperandoPapel(d.data, agora)),
       prs: inteiros(d.data.prs),
       depois: Array.isArray(d.data.depois)
         ? d.data.depois.flatMap(x => {
@@ -1235,7 +1238,7 @@ export const register: Register = on => {
       perguntas: l.perguntas.map(q => q.id),
       itens: (() => {
         const sec = secoes(l.itens, l.temas)
-        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.apelido).join(', ')}` : ''}`
+        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${i.esperando ? ` · ${textoEsperando(i.esperando, Date.now())}` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.apelido).join(', ')}` : ''}`
 
         return { esperam: sec.esperam.map(dizer), travados: sec.travados.map(dizer), executando: sec.executando.map(dizer), fila: sec.fila.map(dizer), feitos: sec.feitos.map(dizer) }
       })(),
