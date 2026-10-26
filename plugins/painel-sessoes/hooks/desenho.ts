@@ -682,7 +682,7 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
 const X_FILA = 22
 
 /** A linha da fila (§3): anel tracejado, tema e "parado há", título, resumo, chips; sem botão, porque não há sessão. */
-export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { citados?: Citado[] } = {}): { source: string; height: number; alt: string } {
+export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { citados?: Citado[]; filete?: boolean } = {}): { source: string; height: number; alt: string } {
   const tw = W - X_FILA
   const tempo = tempoDoItem(item, agora)
   const tempoW = tempo ? largura(tempo, 12) + 10 : 0
@@ -721,7 +721,7 @@ export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { cit
   }
   if (tempo) alt.push(tempo)
   const altura = y + 10
-  partes.push(`<line class="ln" x1="0" y1="${altura - 0.5}" x2="${W}" y2="${altura - 0.5}"/>`)
+  if (opcoes.filete !== false) partes.push(`<line class="ln" x1="0" y1="${altura - 0.5}" x2="${W}" y2="${altura - 0.5}"/>`)
 
   return { height: altura, alt: alt.join(' — '), source: svg(W, altura, partes.join('')) }
 }

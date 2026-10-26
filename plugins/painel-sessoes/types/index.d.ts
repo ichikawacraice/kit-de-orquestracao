@@ -23,8 +23,8 @@ export type LinhaItem = {
   com: Array<{ apelido: string; localId: string; oQue: string; vivo: boolean | null; link?: string }>
   /** Esperando o operador ou o gate: não é trava, e o item fica no bloco do tema. */
   espera?: { motivo: 'operador' | 'gate'; texto: string }
-  /** Esperando alguém do papel da etapa (D, E ou V) desde `desde`; ausente quando há quem trabalhe, ou o item espera de propósito. `entregue`: o papel já entregou a parte; falta a dona avançar a etapa. */
-  esperando?: { papel: 'D' | 'E' | 'V'; desde: string; entregue: boolean }
+  /** Esperando alguém do papel da etapa (P, D, E ou V) desde `desde`; ausente quando há quem trabalhe, ou o item espera de propósito. `entregue`: o papel já entregou a parte; falta a dona avançar a etapa. */
+  esperando?: { papel: 'P' | 'D' | 'E' | 'V'; desde: string; entregue: boolean }
   prs: number[]
   /** O que fica para depois; `item` é o F<n> quando o documento o liga a outro item. */
   depois: Array<{ texto: string; item?: string }>
@@ -114,9 +114,14 @@ export type Leitura = {
   semLista?: boolean
   /** O pedido de limpeza da orquestradora, achado nas perguntas e sessões desta leitura (a linha do topo do pane). */
   limpeza?: PerguntaAberta | null
+  /** As orquestradoras do painel (`papel: "orquestradora"`, estado fora de `concluida`), com o projeto em minúsculas: para onde vai o pedido de sessão. Ausente no estado de antes desta versão. */
+  orquestradoras?: Array<{ id: string; projeto: string }>
   /** O modo ausente da última leitura; `null` = o arquivo não se leu (JSON inválido); ausente (undefined) antes da 1ª leitura e no estado de antes desta versão. */
   ausente?: { ligado: boolean; desde?: string; por?: string } | null
 }
+
+/** Onde está o pedido de sessão de um item: saindo, no campo do prompt (esperando o Enter), ou enviado à orquestradora (esperando o operador iniciar o cartão). */
+export type EstadoPedido = { estado: 'enviando' } | { estado: 'prompt'; em: number } | { estado: 'pedido'; em: number }
 
 /** O que a barra de status lê, de leve, a cada 30 s e a cada turno: só arquivos, nunca `list_sessions`. */
 export type Barra = {
@@ -161,6 +166,8 @@ declare module 'claude-code' {
       enviando: { q: string; opcao: string } | null
       /** O localId da sessão que o botão "abrir" está abrindo; null quando nenhuma. */
       abrindo: string | null
+      /** Os pedidos de sessão em curso, por id de item (e `lote` para o botão da seção); só em memória. */
+      pedindo: Record<string, EstadoPedido>
       /** A hora do último tique do relógio que achou a leitura em curso: faz a tela redesenhar enquanto ela pendura. */
       tique: number
       /** O botão do modo está gravando a bandeira: o clique é ignorado até acabar. */
