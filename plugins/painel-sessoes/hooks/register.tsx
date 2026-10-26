@@ -740,8 +740,9 @@ let trocandoAgora = false
 
 /**
  * O botão do modo: o efeito entra na hora (`leitura.ausente` já é o modo novo) e a recusa desfaz, dizendo o motivo.
- * Liga gravando `{desde, frase, sessionId, por: "painel"}`; desliga gravando `{ligado: false, desligadoEm, por: "painel"}`
- * (o pane não apaga arquivo). Não abre sessão nem pré-abre o pool: isso é do `/ausente on`.
+ * Liga gravando `{desde, frase, sessionId, por: "painel"}`; desliga gravando `{ligado: false, desde, desligadoEm, por: "painel"}`
+ * (o pane não apaga arquivo; o `desde` do período fica para o resumo da ausência) e pede a cada orquestradora ativa o resumo
+ * (skill orquestradora, seção resumo-da-ausencia). Não abre sessão nem pré-abre o pool: isso é do `/ausente on`.
  */
 async function alternarModo($: EngineInterface): Promise<void> {
   if (trocandoAgora) return
@@ -760,10 +761,15 @@ async function alternarModo($: EngineInterface): Promise<void> {
     await update($, leitura, l => ({ ...l, ausente: ligando ? { ligado: true, desde: agora, por: 'painel' } : { ligado: false, por: 'painel' } }))
     const conteudo = ligando
       ? { desde: agora, frase: 'botão do painel', sessionId: (await sessaoDoApp($)) ?? null, por: 'painel' }
-      : { ligado: false, desligadoEm: agora, por: 'painel' }
+      : { ligado: false, ...(antes.desde ? { desde: antes.desde } : {}), desligadoEm: agora, por: 'painel' }
     await $.fs.write(`${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/${BANDEIRA}`, `${JSON.stringify(conteudo, null, 2)}\n`)
     geracaoModo++
-    $.ui.toast(ligando ? 'Modo ausente ligado. Para pré-abrir o pool, use /ausente on no chat.' : 'Modo ausente desligado')
+    if (ligando) {
+      $.ui.toast('Modo ausente ligado. Para pré-abrir o pool, use /ausente on no chat.')
+    } else {
+      const pedidas = await pedirResumo($, antes.desde, agora)
+      $.ui.toast(pedidas > 0 ? 'Modo ausente desligado. A orquestradora traz o resumo.' : 'Modo ausente desligado')
+    }
   } catch (err) {
     geracaoModo++
     await update($, leitura, l => ({ ...l, ausente: antes }))
@@ -773,6 +779,52 @@ async function alternarModo($: EngineInterface): Promise<void> {
     await update($, trocandoModo, () => false)
   }
   await atualizar($)
+}
+
+/**
+ * Pede o resumo do período a cada orquestradora ativa (`papel: "orquestradora"` em `sessoes`, estado fora de `concluida`).
+ * A própria sessão recebe um prompt; outra, send_message. Falha no envio vira aviso no pane e não desfaz o modo.
+ * Devolve quantas orquestradoras receberam o pedido.
+ */
+async function pedirResumo($: EngineInterface, desde: string | undefined, ate: string): Promise<number> {
+  let ativas: string[] = []
+  try {
+    const pasta = `${await $.env.get('HOME')}/${PASTA}/sessoes`
+    for (const e of await $.fs.list(pasta)) {
+      if (e.kind !== 'file' || !e.name.endsWith('.json')) continue
+      try {
+        const d = lerDoc((await $.fs.read(`${pasta}/${e.name}`)) as string, e.name)
+        if (d.data.papel === 'orquestradora' && d.data.estado !== 'concluida') ativas.push(d.id)
+      } catch {
+        /* documento ilegível não é orquestradora */
+      }
+    }
+  } catch (err) {
+    ativas = []
+    await avisar($, `Modo ausente desligado, mas não li as sessões para pedir o resumo (${mensagem(err)}).`)
+  }
+  const mensagemDoPedido = `O operador desligou o modo ausente pelo painel (${desde ? `desde ${desde}` : 'sem início registrado'} até ${ate}). Traga a ele o resumo do período: skill orquestradora, seção resumo-da-ausencia.`
+  const propria = await sessaoDoApp($)
+  let pedidas = 0
+  for (const id of ativas) {
+    if (id === propria) {
+      pedidas++
+      void $.prompt.submit({ text: mensagemDoPedido }).then(
+        r => (r.drop !== undefined ? avisar($, `Não pedi o resumo à orquestradora (${r.drop || 'o prompt foi recusado'}).`) : undefined),
+        err => avisar($, `Não pedi o resumo à orquestradora (${mensagem(err)}).`),
+      ).catch(() => {})
+      continue
+    }
+    try {
+      const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: id, message: mensagemDoPedido })
+      if (r.deny !== undefined || r.isError) await avisar($, `Não pedi o resumo à orquestradora ${id} (${r.deny || r.text || 'erro sem texto'}); peça a ela na conversa dela.`)
+      else pedidas++
+    } catch (err) {
+      await avisar($, `Não pedi o resumo à orquestradora ${id} (${mensagem(err)}); peça a ela na conversa dela.`)
+    }
+  }
+
+  return pedidas
 }
 
 // A sessão do app (`local_…`) que roda este processo; o CLI no terminal não tem, e então o mod não grava nem reabre.

@@ -122,6 +122,8 @@ type Opcoes = {
   semLugar?: boolean
   /** O texto cru da bandeira do modo ausente (`operador-ausente.json`); sem ele o arquivo não existe. */
   bandeira?: string
+  /** Documentos da coleção `sessoes` do painel (a orquestradora ativa é a de `papel: "orquestradora"` e estado fora de `concluida`). */
+  sessoesDocs?: Doc[]
   /** A gravação da bandeira falha com este motivo. */
   bandeiraFalha?: string
   /** A gravação da bandeira só termina quando esta promessa se resolve: o clique em curso. */
@@ -182,6 +184,7 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   // a foto da fila não traz o `projeto`, mas os 29 itens reais têm `izanagi`: sem ele o item legado cai em "Sem tema" (c19)
   for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, { projeto: 'izanagi', ...data })))
   if (opc.bandeira !== undefined) arquivos.set(BANDEIRA, opc.bandeira)
+  for (const d of opc.sessoesDocs ?? []) arquivos.set(`${PASTA}/sessoes/${d.id}.json`, JSON.stringify(d))
   const bandeiras: Escrita[] = []
   if (!opc.semTemas) arquivos.set(`${PASTA}/temas.json`, JSON.stringify(opc.temas ?? TEMAS_REAIS))
   const escritas: Escrita[] = []
@@ -913,8 +916,8 @@ test('c19: tema que existe, mas é de outro projeto, diz "tema de outro projeto"
   expect(por.F2!.foraDoContrato, 'tema que não existe em lugar nenhum continua "fora da lista"').toMatch(/tema 'nada' fora da lista/)
 })
 
-const abrirDe = async (opc: Opcoes, $: Parameters<TestBody>[0], on: On) => {
-  const motor = engine(on, false, {}, { agora: AGORA, fila: fila('F27', 'F1'), vivas: vivasDe(P7, P1), perguntas: [], ...opc })
+const abrirDe = async (opc: Opcoes, $: Parameters<TestBody>[0], on: On, falhas: Falhas = {}) => {
+  const motor = engine(on, false, falhas, { agora: AGORA, fila: fila('F27', 'F1'), vivas: vivasDe(P7, P1), perguntas: [], ...opc })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.command.run(ABRIR)
   await motor.relogio.settle()
@@ -1985,10 +1988,62 @@ test('F48 B8: desligar grava {ligado:false, desligadoEm, por:"painel"}, volta ao
   const { ui, bandeiras, relogio, toasts } = await abrirDe({ bandeira: LIGADA(HA_3H) }, $, on)
   await ui.press({ key: 'modo' })
   await relogio.settle()
-  expect(bandeiras).toEqual([{ ligado: false, desligadoEm: new Date(AGORA).toISOString(), por: 'painel' }])
+  expect(bandeiras).toEqual([{ ligado: false, desde: HA_3H, desligadoEm: new Date(AGORA).toISOString(), por: 'painel' }])
   expect(await lerSuperficie(ui)).toMatch(/Modo presente\./)
   expect((await ui.find({ key: 'modo' }))?.text).toBe('Ficar ausente')
   expect(toasts.at(-1)).toBe('Modo ausente desligado')
+  await ui.unmount()
+})
+
+// F59: o botão "Estou de volta" guarda o período e avisa cada orquestradora ativa; falha no envio avisa e não desfaz o modo.
+const ORQ_ATIVA = doc('local_orq_ativa', { projeto: 'izanagi', titulo: '🎛 orquestradora — izanagi', papel: 'orquestradora', estado: 'trabalhando' })
+const ORQ_ARQUIVADA = doc('local_orq_velha', { projeto: 'izanagi', titulo: '🎛 orquestradora — izanagi', papel: 'orquestradora', estado: 'concluida' })
+const MEMBRO = doc('local_e1', { projeto: 'izanagi', titulo: 'E1 · livre', papel: 'executor', estado: 'parada' })
+
+test('F59 B12: desligar manda o pedido do resumo só à orquestradora ativa', async ($, on) => {
+  const { ui, enviadas, relogio, toasts, bandeiras } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ATIVA, ORQ_ARQUIVADA, MEMBRO] }, $, on)
+  expect(bandeiras, 'precondição: ainda não gravou').toEqual([])
+  await ui.press({ key: 'modo' })
+  await relogio.settle()
+  expect(enviadas.length, 'uma mensagem, só à ativa').toBe(1)
+  expect(enviadas[0]?.session_id).toBe('local_orq_ativa')
+  const msg = String(enviadas[0]?.message)
+  expect(msg).toContain(HA_3H)
+  expect(msg).toContain(new Date(AGORA).toISOString())
+  expect(msg).toContain('resumo-da-ausencia')
+  expect(toasts.at(-1)).toBe('Modo ausente desligado. A orquestradora traz o resumo.')
+  await ui.unmount()
+})
+
+test('F59 B13: sem orquestradora ativa não envia nada e o toast é o curto', async ($, on) => {
+  const { ui, enviadas, prompts, relogio, toasts } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ARQUIVADA, MEMBRO] }, $, on)
+  await ui.press({ key: 'modo' })
+  await relogio.settle()
+  expect([enviadas, prompts]).toEqual([[], []])
+  expect(toasts.at(-1)).toBe('Modo ausente desligado')
+  await ui.unmount()
+})
+
+test('F59 B14: envio que falha vira aviso no pane e o modo continua desligado', async ($, on) => {
+  const { ui, relogio, bandeiras, toasts } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ATIVA] }, $, on, { envio: 'sessão não achada' })
+  await ui.press({ key: 'modo' })
+  await relogio.settle()
+  expect(bandeiras.length, 'a bandeira foi gravada antes do envio').toBe(1)
+  expect(bandeiras[0]?.ligado).toBe(false)
+  const lido = await lerSuperficie(ui)
+  expect(lido).toMatch(/Modo presente\./)
+  expect(lido).toMatch(/resumo.*sessão não achada|sessão não achada/)
+  expect(toasts.at(-1)).toBe('Modo ausente desligado')
+  await ui.unmount()
+})
+
+test('F59 B15: a orquestradora é a própria sessão do pane: o pedido entra como prompt dela, não por send_message', async ($, on) => {
+  const { ui, enviadas, prompts, relogio } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ATIVA], host: 'local_orq_ativa' }, $, on)
+  await ui.press({ key: 'modo' })
+  await relogio.settle()
+  expect(enviadas).toEqual([])
+  expect(prompts.length).toBe(1)
+  expect(prompts[0]).toContain('resumo-da-ausencia')
   await ui.unmount()
 })
 
