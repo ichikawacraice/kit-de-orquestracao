@@ -117,6 +117,10 @@ describe('lerConfig — o kit.json do projeto', () => {
     kit({ design: { visual: ['src/**/*.tsx'], negadoAoDesigner: ['app/**'] } });
     assert.deepEqual(lerConfig(pasta).negadoAoDesigner, ['app/**']);
   });
+  it('F60: com só design.pasta, o designer não grava web/index.html', () => {
+    kit({ design: { pasta: 'web' } });
+    assert.equal(eCodigoDeTela('/r/web/index.html', lerConfig(pasta).negadoAoDesigner), true);
+  });
   it('A2: só design.pasta deriva o padrão visual por extensão; negado = o mesmo', () => {
     kit({ design: { pasta: 'web/' } });
     const c = lerConfig(pasta);
@@ -125,6 +129,7 @@ describe('lerConfig — o kit.json do projeto', () => {
     assert.equal(eCodigoDeTela('/r/web/src/a/B.tsx', c.visual), true);
     assert.equal(eCodigoDeTela('/r/web/README.md', c.visual), false);
     assert.equal(eCodigoDeTela('/r/web/index.html', c.visual), true, 'F60: .html é tela');
+    assert.equal(eCodigoDeTela('/r/web/index.html.md', c.visual), false);
     assert.equal(eCodigoDeTela('/r/web/index.html', c.negadoAoDesigner), true, 'F60: o designer não grava .html da pasta');
   });
   it('K14: o padrão derivado de design.pasta não conta teste como tela (*.test.*, *.spec.*, __tests__/)', () => {
@@ -650,5 +655,39 @@ describe('os arquivos do plugin concordam entre si', () => {
     assert.ok(p, 'design ausente do marketplace');
     assert.equal(p.source, './plugins/design');
     assert.equal(JSON.parse(ler('.claude-plugin/plugin.json')).name, 'design');
+  });
+});
+
+describe('F60: o hook de ponta a ponta com só design.pasta — .html é tela', () => {
+  const proj = realpathSync(mkdtempSync(join(tmpdir(), 'kit-design-html-')));
+  const estado = realpathSync(mkdtempSync(join(tmpdir(), 'kit-design-html-estado-')));
+  const casa = realpathSync(mkdtempSync(join(tmpdir(), 'kit-design-html-casa-')));
+  after(() => { for (const d of [proj, estado, casa]) rmSync(d, { recursive: true, force: true }); });
+  const env = { ...process.env, KIT_DESIGN_ESTADO: estado, HOME: casa };
+  const hook = (evento) => {
+    const r = spawnSync('node', [SCRIPT], { input: JSON.stringify({ session_id: 'html', cwd: proj, ...evento }), encoding: 'utf-8', timeout: 15_000, killSignal: 'SIGKILL', env });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout ? JSON.parse(r.stdout) : null;
+  };
+  sh(proj, 'init', '-q', '-b', 'main');
+  sh(proj, 'config', 'user.email', 't@t');
+  sh(proj, 'config', 'user.name', 't');
+  mkdirSync(join(proj, '.claude'), { recursive: true });
+  writeFileSync(join(proj, '.claude', 'kit.json'), JSON.stringify({ design: { pasta: 'web' }, guarda: { tronco: 'origin/main' } }));
+  writeFileSync(join(proj, 'README.md'), 'x\n');
+  sh(proj, 'add', '-A');
+  sh(proj, 'commit', '-qm', 'base');
+  sh(proj, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
+  mkdirSync(join(proj, 'web'), { recursive: true });
+
+  it('a cerca: um turno que só grava web/LEIAME.md não é cobrado', () => {
+    hook({ hook_event_name: 'UserPromptSubmit', prompt: 'cria uma tela' });
+    writeFileSync(join(proj, 'web', 'LEIAME.md'), 'x\n');
+    assert.equal(hook({ hook_event_name: 'Stop' }), null);
+  });
+  it('só web/index.html mudou e o Stop cobra a crítica', () => {
+    hook({ hook_event_name: 'UserPromptSubmit', prompt: 'cria uma tela' });
+    writeFileSync(join(proj, 'web', 'index.html'), '<!doctype html><title>x</title>\n');
+    assert.equal(hook({ hook_event_name: 'Stop' })?.decision, 'block');
   });
 });
