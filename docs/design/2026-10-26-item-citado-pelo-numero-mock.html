@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Item citado pelo número — mock</title>
+<style>
+/* Base: o mock do F34 (2026-10-25-painel-redesenho-mock.html), sem mudança. Cores = as classes do desenho.ts. */
+:root{
+  --bg:#ffffff;--t:#1f1f1f;--s:#6b6b68;--m:#6f6f6b;--av:#9a6210;--er:#b8452c;--an:#3a68c8;--ok:#2e7d4a;--li:#5b5cd6;
+  --tile:#f4f3f0;--k:#ecebe8;--ln:#e8e7e3;--card:#fbf6ec;--cardb:#efdcb6;--ertint:#fbefeb;
+  --pt:#ffffff;--btn:#ffffff;--btnb:#d6d5d1;--btnt:#1f1f1f;--pri:#3a68c8;--prit:#ffffff;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#1f1f1f;--t:#ececec;--s:#a8a8a4;--m:#93938f;--av:#d9962b;--er:#e0846b;--an:#5b8def;--ok:#4caf6e;--li:#8b8cf8;
+  --tile:#262625;--k:#2c2c2b;--ln:#2f2f2d;--card:#2a251b;--cardb:#4a3d22;--ertint:#2d201c;
+  --pt:#1f1f1f;--btn:#2c2c2b;--btnb:#3d3d3b;--btnt:#ececec;--pri:#5b8def;--prit:#ffffff;
+}}
+:root[data-theme="dark"]{
+  --bg:#1f1f1f;--t:#ececec;--s:#a8a8a4;--m:#93938f;--av:#d9962b;--er:#e0846b;--an:#5b8def;--ok:#4caf6e;--li:#8b8cf8;
+  --tile:#262625;--k:#2c2c2b;--ln:#2f2f2d;--card:#2a251b;--cardb:#4a3d22;--ertint:#2d201c;
+  --pt:#1f1f1f;--btn:#2c2c2b;--btnb:#3d3d3b;--btnt:#ececec;--pri:#5b8def;--prit:#ffffff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif}
+.doc{max-width:1240px;margin:0 auto;padding:24px 16px 64px}
+.doc>h1{font-size:18px;margin:0 0 4px}
+.doc>p{color:var(--s);margin:0 0 20px;max-width:720px}
+.tema-sw{position:fixed;top:12px;right:16px;display:flex;gap:6px}
+.grade{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+.coluna{width:380px;max-width:100%}
+.coluna>h2{font-size:12px;font-weight:600;color:var(--m);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px}
+.pane{min-width:0;border:1px solid var(--ln);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:14px;background:var(--bg)}
+
+/* barra do topo: hora da leitura + Atualizar (Button secondary nativo) */
+.topo{display:flex;justify-content:space-between;align-items:center}
+.cap{font-size:12px;color:var(--m)}
+.cap.ruim{color:var(--er)}
+
+/* Button nativo do desktop: secondary e primary. Nenhum botão "plain" sobra. */
+.b{font:inherit;font-size:12.5px;line-height:1;padding:6px 10px;border-radius:6px;border:1px solid var(--btnb);background:var(--btn);color:var(--btnt);cursor:pointer}
+.b.pri{background:var(--pri);border-color:var(--pri);color:var(--prit);font-weight:600}
+.b.ocupado{opacity:.6;cursor:progress}
+.acoes{display:flex;flex-wrap:wrap;gap:6px}
+
+/* resumoSvg: 2×2 abaixo de 500 px, como hoje; rótulo = nome da seção */
+.resumo{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tile{background:var(--tile);border-radius:10px;padding:10px 12px 8px;height:62px}
+.tile .r{display:flex;align-items:center;gap:7px;color:var(--s)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--m);opacity:.45;flex:none}
+.tile .n{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--m);margin-top:2px}
+.tile.av .dot{background:var(--av);opacity:1}.tile.av .n{color:var(--av)}
+.tile.er .dot{background:var(--er);opacity:1}.tile.er .n{color:var(--er)}
+.tile.an .dot{background:var(--an);opacity:1}.tile.an .n{color:var(--an)}
+.tile.t .dot{background:var(--t);opacity:1}.tile.t .n{color:var(--t)}
+
+/* secaoSvg: a faixa que abre cada seção — filete da cor da seção, título, contagem, legenda */
+.secao{display:flex;flex-direction:column;gap:8px}
+.cab{display:flex;align-items:center;gap:8px;padding-left:10px;border-left:3px solid var(--m);min-height:24px}
+.cab .ti{font-size:15px;font-weight:600}
+.cab .ct{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;padding:1px 7px;border-radius:9px;background:var(--k);color:var(--s)}
+.cab .lg{font-size:12px;color:var(--m);margin-left:auto}
+.cab.av{border-color:var(--av)}.cab.av .ct{background:var(--av);color:var(--pt)}
+.cab.er{border-color:var(--er)}.cab.er .ct{background:var(--er);color:var(--pt)}
+.cab.an{border-color:var(--an)}.cab.an .ct{background:var(--an);color:var(--pt)}
+.cab.fi{border-left-style:dashed}
+.vazio{font-size:12.5px;color:var(--m);padding:2px 0 2px 13px}
+
+/* cartão do item executando: Box com borda arredondada (a medir no desktop — §7 da revisão) */
+.cartao{border:1px solid var(--btnb);border-radius:10px;background:transparent;padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px}
+.cartao.trav{border-color:var(--er)}
+.sobre{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.tema{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--m)}
+.tempo{font-size:12px;color:var(--m);font-variant-numeric:tabular-nums;white-space:nowrap}
+.titulo{font-size:15px;font-weight:600;line-height:1.3}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:9px;background:var(--k);color:var(--s)}
+.chip.an{color:var(--an)}.chip.li{color:var(--li)}.chip.ok{color:var(--ok)}
+.chip.av{background:var(--av);color:var(--bg)}
+.chip.pr{color:var(--an);background:transparent;border:1px solid var(--btnb)}
+.chip.fila{background:transparent;border:1px dashed var(--m);color:var(--s)}
+.quem{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--s)}
+.quem+.quem{margin-top:-2px}
+.sel{position:relative;flex:none;min-width:30px;height:22px;padding:0 6px;border-radius:6px;background:var(--k);color:var(--t);font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.sel i{position:absolute;right:-3px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--an);border:2px solid var(--bg)}
+.sel i.vivo{animation:p 1.6s ease-in-out infinite}
+@keyframes p{50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){.sel i.vivo{animation:none}}
+.quem b{color:var(--t);font-weight:600}
+.agora{font-size:12.5px;color:var(--s)}
+.depois{font-size:12px;color:var(--m)}
+.trava{background:var(--ertint);border-radius:6px;padding:6px 8px;font-size:12.5px;color:var(--er)}
+.trava b{font-weight:700}
+.acoes.cartao-acoes{margin-top:4px}
+.acoes.sob{padding-left:16px;margin-top:-6px}
+.cartao.esp{border-color:var(--av)}
+.espera{font-size:12.5px;color:var(--av)}
+.coluna.w300{width:300px}
+.w300 .tile{height:36px;padding:0 10px;display:flex;align-items:center;justify-content:space-between}
+.w300 .tile .n{font-size:17px;margin:0}
+
+/* linha da fila: sem cartão, sem botão (ninguém para abrir); anel tracejado */
+.fila{display:flex;flex-direction:column}
+.lin{display:grid;grid-template-columns:18px 1fr;gap:0 8px;padding:9px 0 10px;border-bottom:1px solid var(--ln)}
+.lin:last-child{border-bottom:0}
+.anel{width:11px;height:11px;border-radius:50%;border:1.3px dashed var(--m);margin-top:4px;justify-self:center}
+.lin .sobre{grid-column:2}
+.lin .titulo{font-size:14px}
+.lin .resumo-l{font-size:12.5px;color:var(--s);margin-top:3px}
+.lin .chips{margin-top:4px}
+
+/* pergunta: o perguntaSvg de hoje, que já é cartão; só o "abrir" vira botão */
+.perg{background:var(--card);border:1px solid var(--cardb);border-radius:10px;padding:12px 14px 12px 16px;box-shadow:inset 4px 0 0 var(--av);display:flex;flex-direction:column;gap:6px}
+.perg .id{display:inline-flex;align-items:center;gap:8px;color:var(--s);font-size:12.5px}
+.perg .id b{background:var(--av);color:var(--bg);border-radius:12px;padding:3px 9px;font-size:12.5px}
+.perg .pt{font-size:15px;font-weight:600}
+.perg .tx{font-size:12.5px;color:var(--s)}
+.perg .rec{font-size:12.5px;color:var(--av)}
+
+/* faixa de erro de leitura */
+.erro{background:var(--ertint);border-radius:8px;padding:8px 10px;color:var(--er);font-size:12.5px;display:flex;flex-direction:column;gap:6px}
+.erro .acoes{margin-top:2px}
+
+.rodape{display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid var(--ln);padding-top:10px}
+.nota{font-size:11.5px;color:var(--m);margin:6px 0 0}
+</style>
+</head>
+<body>
+<div class="tema-sw">
+  <button class="b" onclick="document.documentElement.dataset.theme='light'">Claro</button>
+  <button class="b" onclick="document.documentElement.dataset.theme='dark'">Escuro</button>
+</div>
+<div class="doc">
+<h1>O pane diz o que é cada item citado pelo número (F43, mock estático)</h1>
+<p>Sobre o redesenho do F34, que não muda. Novo: o número ao lado do tema em todo bloco, a linha "Citados" sob o bloco, e o botão "Todos os itens" com o campo Achar. Colunas de 380 px e 300 px; o terminal em texto. Dados: a fila real de 26/10, com textos de <code>agora</code> e trava inventados para mostrar cada estado.</p>
+<style>
+/* F43: o número, a linha "Citados", a lista "Todos os itens". Nenhuma cor nova: s, m, t e as das etapas. */
+.num{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--s);letter-spacing:0;text-transform:none}
+.sep{color:var(--m);font-size:11px}
+.sobre .esq{display:flex;align-items:baseline;gap:0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cit{display:grid;grid-template-columns:52px 1fr;gap:1px 0;font-size:12px;color:var(--m);margin-top:2px}
+.cit .rot{font-weight:600;grid-row:1 / span 4}
+.cit .l{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.cit .l b{color:var(--s);font-weight:700;font-variant-numeric:tabular-nums}
+.cit .l i{font-style:italic}
+.perg .cit{margin-top:4px}
+.lin .cit{margin-top:6px}
+.achar{display:flex;gap:6px;align-items:center}
+.achar input{flex:1;min-width:0;font:inherit;font-size:12.5px;padding:6px 8px;border-radius:6px;border:1px solid var(--btnb);background:var(--bg);color:var(--t)}
+.contagem{font-size:12px;color:var(--m)}
+.todos{display:flex;flex-direction:column}
+.grupo{padding:8px 0;border-bottom:1px solid var(--ln)}
+.grupo:last-child{border-bottom:0}
+.gcab{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--m);margin-bottom:3px}
+.gcab .tema{white-space:nowrap}
+.gcab .proj{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row{display:grid;grid-template-columns:40px 1fr auto;gap:0 8px;height:22px;align-items:center;font-size:12.5px}
+.row .n{font-weight:700;font-variant-numeric:tabular-nums;color:var(--s)}
+.row .tt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.row .et{font-size:11.5px;white-space:nowrap}
+.row.fech .n,.row.fech .tt,.row.fech .et{color:var(--m)}
+.et.an{color:var(--an)}.et.li{color:var(--li)}.et.ok{color:var(--ok)}
+.term{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--tile);border-radius:8px;padding:12px;white-space:pre;overflow-x:auto;color:var(--t)}
+.term .d{color:var(--m)}.term .w{color:var(--av)}.term .e{color:var(--er)}.term .a{color:var(--an)}.term .b{font-weight:700}
+.legenda{font-size:11.5px;color:var(--m);margin:4px 0 0;max-width:380px}
+</style>
+
+<div class="grade">
+
+<!-- ===================== 1 ===================== -->
+<div class="coluna">
+<h2>1 · Número em todo bloco; Citados com 1 e 3; fora da fila</h2>
+<div class="pane">
+  <div class="topo"><span class="cap">Atualizado 18:22</span><button class="b">↻ Atualizar</button></div>
+  <div class="resumo">
+    <div class="tile av"><div class="r"><span class="dot"></span>Esperam você</div><div class="n">1</div></div>
+    <div class="tile er"><div class="r"><span class="dot"></span>Travados</div><div class="n">1</div></div>
+    <div class="tile an"><div class="r"><span class="dot"></span>Executando</div><div class="n">2</div></div>
+    <div class="tile t"><div class="r"><span class="dot"></span>Na fila</div><div class="n">1</div></div>
+  </div>
+
+  <div class="secao">
+    <div class="cab av"><span class="ti">Esperam você</span><span class="ct">1</span><span class="lg">responda aqui</span></div>
+    <div class="perg">
+      <div class="id"><b>Q260</b><span>F42 · Prévia VTEX · prévia VTEX: o que cada tipo…</span></div>
+      <div class="pt">A prévia da PLP entra antes da page list?</div>
+      <div class="tx">A page list depende do mesmo ambiente de edição que a F12 consertou para a Wake.</div>
+      <div class="rec">Recomendo: sim, a PLP primeiro; é a que o cliente mais abre.</div>
+      <div class="cit"><span class="rot">Citado</span><span class="l"><b>F12</b> · login da Wake vencido vira modal que bloqueia o editor</span></div>
+    </div>
+    <div class="acoes sob"><button class="b">Abrir P2</button></div>
+    <div class="acoes sob"><button class="b pri">Sim</button><button class="b">Não</button><button class="b">Adiar</button><button class="b">Responder…</button></div>
+  </div>
+
+  <div class="secao">
+    <div class="cab er"><span class="ti">Travados</span><span class="ct">1</span><span class="lg">pedem alguém agir</span></div>
+    <div class="cartao trav">
+      <div class="sobre"><span class="esq"><span class="num">F44</span><span class="sep">&nbsp;·&nbsp;</span><span class="tema">Processos</span></span><span class="tempo">há 12 min</span></div>
+      <div class="titulo">processos completos de desenvolvimento no kit, trazidos do Izanagi</div>
+      <div class="chips"><span class="chip li">planejamento</span></div>
+      <div class="trava"><b>Conflito:</b> a branch mexe no mesmo arquivo que a F19 deixou pela metade.</div>
+      <div class="quem"><span class="sel">P2</span><span><b>planejadora</b> · parada há 12 min</span></div>
+      <div class="cit"><span class="rot">Citado</span><span class="l"><b>F19</b> · <i>fora da fila</i></span></div>
+      <div class="acoes cartao-acoes"><button class="b">Abrir P2</button></div>
+    </div>
+  </div>
+
+  <div class="secao">
+    <div class="cab an"><span class="ti">Executando</span><span class="ct">2</span><span class="lg">2 trabalhando</span></div>
+    <div class="cartao">
+      <div class="sobre"><span class="esq"><span class="num">F43</span><span class="sep">&nbsp;·&nbsp;</span><span class="tema">Painel</span></span><span class="tempo">agora</span></div>
+      <div class="titulo">o painel diz o que é cada item citado pelo número</div>
+      <div class="chips"><span class="chip li">design</span></div>
+      <div class="quem"><span class="sel">D1<i class="vivo"></i></span><span><b>designer</b> · trabalhando agora</span></div>
+      <div class="agora">desenhando a parte A; a parte B corre com a E3, sem disputar arquivo com a F44</div>
+      <div class="cit"><span class="rot">Citado</span><span class="l"><b>F44</b> · processos completos de desenvolvimento no kit, trazidos do Izanagi</span></div>
+      <div class="acoes cartao-acoes"><button class="b">Abrir D1</button></div>
+    </div>
+    <div class="cartao">
+      <div class="sobre"><span class="esq"><span class="num">F13</span><span class="sep">&nbsp;·&nbsp;</span><span class="tema">Editor</span></span><span class="tempo">há 2 min</span></div>
+      <div class="titulo">SPEC-155 fatia 2 (o container) e fatia 5 (o caminho do navegador e o canal)</div>
+      <div class="chips"><span class="chip an">execução</span><span class="chip pr">#1131</span></div>
+      <div class="quem"><span class="sel">E2<i class="vivo"></i></span><span><b>executora</b> · trabalhando agora</span></div>
+      <div class="agora">container verde no ensaio; o canal espera o login da F12, o histórico vem do worker da F2 e o teste da F25 segue instável</div>
+      <div class="depois">depois: limpar as Pendências velhas da SPEC-155 (+1)</div>
+      <div class="cit"><span class="rot">Citados</span><span class="l"><b>F12</b> · login da Wake vencido vira modal que bloqueia…</span><span class="l"><b>F2</b> · motor: Q173, o worker grava o histórico das fases…</span><span class="l"><b>F25</b> · teste instável: o-alvo-que-nasce-na-rolagem…</span></div>
+      <div class="acoes cartao-acoes"><button class="b">Abrir E2</button></div>
+    </div>
+  </div>
+
+  <div class="secao">
+    <div class="cab fi"><span class="ti">Na fila</span><span class="ct">1</span><span class="lg">não começaram</span></div>
+    <div class="fila">
+      <div class="lin">
+        <span class="anel"></span>
+        <div>
+          <div class="sobre"><span class="esq"><span class="num">F45</span><span class="sep">&nbsp;·&nbsp;</span><span class="tema">Painel</span></span><span class="tempo">parado há 9 min</span></div>
+          <div class="titulo">o painel reabre sozinho depois que a orquestradora se limpa</div>
+          <div class="resumo-l">O pane volta aberto depois da limpeza de contexto (seguimento da F43).</div>
+          <div class="chips"><span class="chip fila">espera planejamento</span></div>
+          <div class="cit"><span class="rot">Citado</span><span class="l"><b>F43</b> · o painel diz o que é cada item citado pelo número</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rodape"><button class="b">▸ Todos os itens · 44</button><button class="b">▸ Feitos hoje · 2</button><button class="b">▸ Perguntas respondidas · 15</button></div>
+</div>
+<p class="legenda">"Citado(s)" é a última linha do bloco, com o rótulo pendurado à esquerda. O F19 não existe na fila (é um buraco real: F18 → F20). A pergunta ganha o número do item no rótulo e, para o "F12" solto no caso, a linha "Citado" dentro do tingido.</p>
+</div>
+
+<!-- ===================== 2 ===================== -->
+<div class="coluna">
+<h2>2 · Todos os itens aberto, dois projetos</h2>
+<div class="pane">
+  <div class="rodape" style="border-top:0;padding-top:0"><button class="b">▾ Todos os itens · 44</button><button class="b">▸ Feitos hoje · 2</button><button class="b">▸ Perguntas respondidas · 15</button></div>
+  <div class="achar"><input placeholder="número (13 ou F13) ou palavra"><button class="b">Achar</button></div>
+  <div class="todos" data-todos="380"></div>
+</div>
+<p class="legenda">Um grupo por tema, na ordem de <code>temas.json</code>; o projeto à direita porque a lista tem dois. Dentro do tema: vivos, depois feitos (apagados), depois descartados; do número maior para o menor. O F31 aparece descartado só para mostrar esse estado (na fila real ele é feito).</p>
+</div>
+
+<!-- ===================== 3 ===================== -->
+<div class="coluna w300">
+<h2>3 · 300 px: cartão, 4+ citados, filtro</h2>
+<div class="pane">
+  <div class="topo"><span class="cap">Atualizado 18:22</span><button class="b">↻ Atualizar</button></div>
+  <div class="secao">
+    <div class="cab an"><span class="ti">Executando</span><span class="ct">1</span></div>
+    <div class="cartao">
+      <div class="sobre"><span class="esq"><span class="num">F7</span><span class="sep">&nbsp;·&nbsp;</span><span class="tema">Orquestração</span></span><span class="tempo">há 4 min</span></div>
+      <div class="titulo">sobras: três consertos pequenos nos hooks do pool</div>
+      <div class="chips"><span class="chip an">execução</span></div>
+      <div class="quem"><span class="sel">E4<i class="vivo"></i></span><span><b>executora</b> · trabalhando agora</span></div>
+      <div class="agora">junta as sobras da F30, F32 e F39 com a da F41</div>
+      <div class="depois">depois: sobras deste item</div>
+      <div class="cit"><span class="rot">Citados</span><span class="l"><b>F3</b> · estudo: fila do pool (passos 1–3…</span><span class="l"><b>F30</b> · executora livre durante a vali…</span><span class="l">também F32, F39, F41</span></div>
+      <div class="acoes cartao-acoes"><button class="b">Abrir E4</button></div>
+    </div>
+  </div>
+  <div class="rodape"><button class="b">▾ Todos os itens · 44</button><button class="b">▸ Feitos hoje · 2</button><button class="b">▸ Perguntas respondidas · 15</button></div>
+  <div class="achar"><input value="13"><button class="b">Achar</button><button class="b">Limpar</button></div>
+  <div class="contagem">1 de 44 · “13”</div>
+  <div class="todos" data-todos="300" data-filtro="13"></div>
+  <div class="achar" style="margin-top:8px"><input value="99"><button class="b">Achar</button><button class="b">Limpar</button></div>
+  <div class="vazio" style="padding-left:0">Nenhum item com “99”.</div>
+  <div class="contagem" style="margin-top:8px">a lista inteira a 300 px:</div>
+  <div class="todos" data-todos="300"></div>
+</div>
+<p class="legenda">O F3 vem primeiro porque é o <code>depois[].item</code> gravado; os outros, na ordem do texto. Com 4 ou mais, os 2 primeiros com título e o resto só pelo número.</p>
+</div>
+
+<!-- ===================== 4 ===================== -->
+<div class="coluna">
+<h2>4 · Terminal</h2>
+<div class="term"><span class="b w">Esperam você · 1</span>
+╭──────────────────────────────────────╮
+│ <span class="b w">Q260</span> A prévia da PLP entra antes da │
+│ page list?                           │
+│ <span class="d">F42 · Prévia VTEX · prévia VTEX: o…</span>  │
+│ <span class="d">Citado: F12 · login da Wake vencido</span>  │
+│ <span class="d">vira modal que bloqueia o editor</span>     │
+╰──────────────────────────────────────╯
+
+<span class="b a">Executando · 2</span>
+<span class="a">●</span> F13 · SPEC-155 fatia 2 (o container)…
+  <span class="d">execução · Editor · E2 · #1131</span>
+  <span class="d">container verde no ensaio; o canal</span>
+  <span class="d">espera o login da F12, o histórico…</span>
+  <span class="d">Citados: F12 · login da Wake vencido…;</span>
+  <span class="d">F2 · motor: Q173, o worker grava…;</span>
+  <span class="d">F25 · teste instável: o-alvo-que-…</span>
+
+<span class="b">Na fila · 1</span>
+<span class="d">●</span> F45 · o painel reabre sozinho depois…
+  <span class="d">espera planejamento · Painel</span>
+  <span class="d">Citado: F43 · o painel diz o que é…</span>
+
+[▾ Todos os itens · 44] [▸ Feitos hoje · 2]
+[Achar: número ou palavra       ]
+
+<span class="b">Editor · izanagi</span>
+  F13  SPEC-155 fatia 2 (o conta… · <span class="a">execução</span>
+<span class="d">  F26  Notas baixas da entrega 2…  · feito</span>
+<span class="d">  F18  comCodigo sem teste de li…  · feito</span>
+<span class="d">  …</span>
+<span class="b">Painel · kit-de-orquestracao</span>
+  F45  o painel reabre sozinho…    · <span class="a">planejamento</span>
+  F43  o painel diz o que é cada…  · <span class="a">design</span></div>
+<p class="legenda">No terminal o número abre a 1ª linha do item; o corte é no fim (<code>truncate-end</code>), então o número nunca some.</p>
+</div>
+
+</div>
+
+<script>
+// A fila real de 26/10 (44 itens, sem o F19), para a lista "Todos os itens".
+const TEMAS=[['editor','Editor','izanagi'],['motor','Motor','izanagi'],['gate','Gate','izanagi'],['orquestracao','Orquestração','izanagi'],['kit','Kit','izanagi'],['previa-vtex','Prévia VTEX','izanagi'],['painel','Painel','kit-de-orquestracao'],['processos','Processos','kit-de-orquestracao']];
+const F=`1|editor|feito|builder: fatias 1 a 8 do editor da loja, até os PRs validados
+2|motor|feito|motor: Q173, o worker grava o histórico das fases da abertura (SPEC-155 §3)
+3|orquestracao|feito|estudo: fila do pool (passos 1–3: coleção fila + proximo-item.sh…)
+4|editor|feito|builder fatia 1 (peças do kit): aplicar a crítica ao detalhe do designer
+5|orquestracao|feito|Travas por hook para os padrões da orquestração e do pool
+6|orquestracao|feito|cada papel conhece as próprias skills
+7|orquestracao|feito|sobras: três consertos pequenos nos hooks do pool
+8|editor|feito|painel do componente da loja: mesmo padrão do DS, menos texto
+9|editor|feito|o schema declara que vazio é válido num campo (alt decorativo)
+10|gate|feito|regras de shell na guarda de operação do repositório
+11|editor|feito|conversa da loja: 3 ajustes médios da recrítica
+12|editor|feito|login da Wake vencido vira modal que bloqueia o editor
+13|editor|execucao|SPEC-155 fatia 2 (o container) e fatia 5 (o caminho do navegador e o canal)
+14|editor|feito|Foco no componente: conserto da cópia e funções puras
+15|orquestracao|feito|limpador automático de worktrees
+16|editor|feito|?jeito= sai da URL quando o diálogo do login fecha
+17|editor|feito|aviso de leitura falha fala de "descarte" que ninguém pediu
+18|editor|feito|comCodigo sem teste de ligação
+20|gate|feito|gate mais curto
+21|gate|feito|vagas do gate (padrão 1) + fila própria do teste de um pacote
+22|gate|feito|teste de pacote/arquivo fora da fila do gate completo
+23|kit|feito|kit de orquestração: fase 1 (generalizar em ~/.claude)
+24|gate|feito|tirar as variáveis de vagas da chave do verde
+25|gate|feito|teste instável: o-alvo-que-nasce-na-rolagem.test.ts:56 sob carga
+26|editor|feito|Notas baixas da entrega 2 do login vencido (N1–N3, N5)
+27|orquestracao|feito|painel mostra a fila por tema, não as sessões
+28|orquestracao|feito|executora que termina o turno dizendo "volto a X" sem fazer é cobrada
+29|orquestracao|feito|Painel da fila: abrir a sessão pelo item e arrumar o bloco Na fila
+30|orquestracao|feito|executora livre durante a validação e o conserto volta à fila
+31|orquestracao|descartado|estudo: o ruflo serve para a nossa orquestração?
+32|orquestracao|feito|o fim de turno solta o item e marca a sessão livre sozinho
+33|orquestracao|feito|segunda passada no ruflo: mais ideias para o nosso sistema
+34|kit|feito|o painel das sessões ganha cara de painel
+35|orquestracao|feito|a trava mede o contexto de cada sessão
+36|orquestracao|feito|validador derruba os próprios achados
+37|orquestracao|feito|trava de segredo e de injeção entre sessões
+38|orquestracao|feito|conselheiro de cota no medir_tokens.py
+39|orquestracao|feito|sobras baixas da validadora e da trava de segredo
+40|orquestracao|feito|membro do pool só se arquiva por comando do operador
+41|orquestracao|feito|sobras do fim de turno que solta o item e a paridade vermelha
+42|previa-vtex|planejamento|prévia VTEX: o que cada tipo de conteúdo mostra
+43|painel|design|o painel diz o que é cada item citado pelo número
+44|processos|planejamento|processos completos de desenvolvimento no kit, trazidos do Izanagi
+45|painel|planejamento|o painel reabre sozinho depois que a orquestradora se limpa`.split('\n').map(l=>{const[n,t,e,ti]=l.split('|');return{n:+n,t,e,ti}});
+const ROT={planejamento:'planejamento',design:'design',execucao:'execução',validacao:'validação',merge:'merge',feito:'feito',descartado:'descartado'};
+const COR={planejamento:'li',design:'li',execucao:'an',validacao:'an',merge:'ok'};
+const peso=e=>e==='feito'?1:e==='descartado'?2:0;
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+for(const el of document.querySelectorAll('[data-todos]')){
+  const filtro=el.dataset.filtro;
+  const casa=i=>!filtro||(/^f?\d+$/i.test(filtro)?i.n===+filtro.replace(/\D/g,''):i.ti.toLowerCase().includes(filtro.toLowerCase()));
+  el.innerHTML=TEMAS.map(([id,rot,proj])=>{
+    const its=F.filter(i=>i.t===id&&casa(i)).sort((a,b)=>peso(a.e)-peso(b.e)||b.n-a.n);
+    if(!its.length)return'';
+    return`<div class="grupo"><div class="gcab"><span class="tema">${rot}</span><span class="proj">${proj}</span></div>${its.map(i=>`<div class="row${peso(i.e)?' fech':''}"><span class="n">F${i.n}</span><span class="tt">${esc(i.ti)}</span><span class="et ${COR[i.e]||''}">${ROT[i.e]}</span></div>`).join('')}</div>`;
+  }).join('');
+}
+</script>
+</div></body></html>
