@@ -27,9 +27,14 @@ export function esperandoPapel(data, agoraMs) {
   }
   if (desde === null && hist.length === 0) desde = ms(data.atualizadoEm);
   if (desde === null) return null;
+  // `entregue`: alguém do papel já entregou a parte (`fez`) nesta etapa; o item não pede despacho, pede à dona avançar a etapa.
+  const entrada = desde;
+  let entregue = false;
   for (const f of Array.isArray(data.fez) ? data.fez : []) {
     const t = ms(f?.em);
-    if (doPapel(f?.apelido, papel) && t !== null && t > desde) desde = t;
+    if (!doPapel(f?.apelido, papel) || t === null || t < entrada) continue;
+    entregue = true;
+    if (t > desde) desde = t;
   }
-  return { papel, desde: new Date(desde).toISOString(), minutos: Math.max(0, Math.floor((agoraMs - desde) / 60000)) };
+  return { papel, desde: new Date(desde).toISOString(), minutos: Math.max(0, Math.floor((agoraMs - desde) / 60000)), entregue };
 }

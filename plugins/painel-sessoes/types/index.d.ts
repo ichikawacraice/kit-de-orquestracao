@@ -23,8 +23,8 @@ export type LinhaItem = {
   com: Array<{ apelido: string; localId: string; oQue: string; vivo: boolean | null; link?: string }>
   /** Esperando o operador ou o gate: não é trava, e o item fica no bloco do tema. */
   espera?: { motivo: 'operador' | 'gate'; texto: string }
-  /** Esperando alguém do papel da etapa (D, E ou V) desde `desde`; ausente quando há quem trabalhe, ou o item espera de propósito. */
-  esperando?: { papel: 'D' | 'E' | 'V'; desde: string }
+  /** Esperando alguém do papel da etapa (D, E ou V) desde `desde`; ausente quando há quem trabalhe, ou o item espera de propósito. `entregue`: o papel já entregou a parte; falta a dona avançar a etapa. */
+  esperando?: { papel: 'D' | 'E' | 'V'; desde: string; entregue: boolean }
   prs: number[]
   /** O que fica para depois; `item` é o F<n> quando o documento o liga a outro item. */
   depois: Array<{ texto: string; item?: string }>

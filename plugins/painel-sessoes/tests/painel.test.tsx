@@ -2215,3 +2215,13 @@ test('F58: o item sem dono na fila leva os minutos no chip "espera execução"',
   expect(item?.esperando?.papel).toBe('E')
   expect(filaSvg(360, item as never, AGORA).source).toContain('espera execução · 12 min')
 })
+
+test('F58: item entregue pela E mostra "entregue · avance a etapa · N min" no cartão, na linha e no alt, não "esperando E"', () => {
+  const [item] = monta([ESPERA_DOC({ fez: [{ localId: 'local_E', apelido: 'E4', oQue: 'x', em: new Date(AGORA - 15 * 60_000).toISOString() }] })], [{ sessionId: 'local_P' }])
+  expect(item?.esperando?.entregue, 'o item tem de sair entregue').toBe(true)
+  const cartao = cartaoSvg(360, item as never, AGORA, { situacao: situacaoDoTeste })
+  expect(cartao.source).toContain('entregue · avance a etapa · 15 min')
+  expect(cartao.alt).toContain('entregue · avance a etapa · 15 min')
+  expect(cartao.source).not.toContain('esperando E')
+  expect(itemSvg(360, item as never, AGORA).source).toContain('entregue · avance a etapa · 15 min')
+})

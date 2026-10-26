@@ -37,6 +37,7 @@ const LOG = process.env.FILA_LOG || join(homedir(), '.claude', 'orquestracao', '
 const PROTOCOLO = '~/.claude/orquestracao/pool/protocolo.md#fila-do-pool';
 const PROTOCOLO_ESPERA = '~/.claude/orquestracao/pool/protocolo.md#esperando-papel';
 const NOME_DA_ETAPA = { D: 'design', E: 'execução', V: 'validação' };
+const PROXIMA_ETAPA = { D: 'execucao', E: 'validacao com uma V no com', V: 'merge' };
 
 function registrar(sessionId, localId, desfecho, detalhe = '') {
   try {
@@ -141,7 +142,7 @@ function semDespacho(meus, transcriptPath) {
     const desde = Date.parse(e.desde);
     const cita = new RegExp(`\\b${i.id}\\b`);
     return !feitos.some((f) => f.t > desde && cita.test(f.texto) && (f.tipo === 'msg' || new RegExp(`\\bcom\\s+add\\s+${i.id}\\b`).test(f.texto)));
-  }).map(({ i, e }) => ({ id: i.id, papel: e.papel }));
+  }).map(({ i, e }) => ({ id: i.id, papel: e.papel, entregue: e.entregue }));
 }
 
 let sessaoAtual = '';
@@ -190,7 +191,14 @@ function main() {
     partes.push(`Você é dona ${lista} e não o atualizou neste turno. Grave o estado antes de terminar: ${cmds}, ou solte o item (protocolo em ${PROTOCOLO}).`);
   }
   for (const p of parados) {
-    partes.push(`${p.id} está em ${NOME_DA_ETAPA[p.papel]} sem nenhuma ${p.papel} no item. Antes de terminar: despache (título da sessão livre, \`painel com add ${p.id} <local_> <apelido> "<oQue>"\` e mensagem a ela) ou mande mensagem (SendMessage) que cite ${p.id} à orquestradora pedindo a vaga (protocolo em ${PROTOCOLO_ESPERA}).`);
+    const ref = `(protocolo em ${PROTOCOLO_ESPERA})`;
+    if (p.entregue) {
+      partes.push(`${p.id}: a ${p.papel} entregou; avance a etapa (${PROXIMA_ETAPA[p.papel]}) ou mande uma linha à orquestradora citando ${p.id} ${ref}.`);
+    } else if (p.papel === 'V') {
+      partes.push(`${p.id} sem V no item: se o laudo já voltou, avance a etapa (merge) ou mande o conserto; senão, despache uma V (\`painel com add ${p.id} <local_> <apelido> "<oQue>"\` e mensagem a ela) ou mande uma linha à orquestradora citando ${p.id} ${ref}.`);
+    } else {
+      partes.push(`${p.id} está em ${NOME_DA_ETAPA[p.papel]} sem nenhuma ${p.papel} no item. Antes de terminar: despache (título da sessão livre, \`painel com add ${p.id} <local_> <apelido> "<oQue>"\` e mensagem a ela) ou mande mensagem (SendMessage) que cite ${p.id} à orquestradora pedindo a vaga ${ref}.`);
+    }
   }
   process.stdout.write(JSON.stringify({
     decision: 'block',

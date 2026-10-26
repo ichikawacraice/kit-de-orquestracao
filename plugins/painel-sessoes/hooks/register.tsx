@@ -228,7 +228,7 @@ function montarTodos(
       // Trava vence espera: o item travado já diz o que o prende, e o selo de espera seria um segundo recado.
       espera: final || situacao === 'travado' ? undefined : esperaGravada,
       // Sem E (ou D, ou V) no item há tempo: some quando o item está final ou travado (a trava já diz o que o prende).
-      esperando: final || situacao === 'travado' ? undefined : (e => (e ? { papel: e.papel, desde: e.desde } : undefined))(esperandoPapel(d.data, agora)),
+      esperando: final || situacao === 'travado' ? undefined : (e => (e ? { papel: e.papel, desde: e.desde, entregue: e.entregue } : undefined))(esperandoPapel(d.data, agora)),
       prs: inteiros(d.data.prs),
       depois: Array.isArray(d.data.depois)
         ? d.data.depois.flatMap(x => {

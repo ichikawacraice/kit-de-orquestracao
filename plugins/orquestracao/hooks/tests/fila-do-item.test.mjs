@@ -359,5 +359,20 @@ caso('F58-4g: item com E no com não é cobrado; as duas faltas (não gravou + e
   ok(r.reason.includes('não o atualizou neste turno') && r.reason.includes('sem nenhuma E no item'), `as duas faltas: ${r.reason}`);
 });
 
+caso('F58-4h: item entregue pela E: a dona é cobrada a avançar a etapa, não a despachar', () => {
+  const r = esperando(turno(), esperaE({ fez: [{ apelido: 'E4', localId: 'local_e4', oQue: 'x', em: '2026-10-24T11:55:00.000Z' }] }));
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('F58: a E entregou; avance a etapa (validacao com uma V no com) ou mande uma linha à orquestradora'), `texto: ${r.reason}`);
+  ok(!r.reason.includes('despache'), `não manda despachar: ${r.reason}`);
+  rmSync(join(filaDir(), 'F58.json'));
+  const msg = esperando([...turno(), tool('a5', '2026-10-24T12:01:00.000Z', 'SendMessage', { to: 'local_x', message: 'F58 entregue, avance' })], esperaE({ fez: [{ apelido: 'E4', localId: 'local_e4', oQue: 'x', em: '2026-10-24T11:55:00.000Z' }] }));
+  igual(msg, null, 'mensagem citando o item satisfaz');
+});
+caso('F58-4i: validacao sem V: a dona é lembrada de avançar a etapa (merge) ou despachar uma V', () => {
+  const r = esperando(turno(), esperaE({ etapa: 'validacao', historico: [{ em: DESDE, etapa: 'validacao', dono: 'P1' }] }));
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('F58 sem V no item: se o laudo já voltou, avance a etapa (merge) ou mande o conserto; senão, despache uma V'), `texto: ${r.reason}`);
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;
