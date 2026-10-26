@@ -290,5 +290,42 @@ caso('F70.6: env e arquivo discordam: vale a env, com aviso em stderr', () => {
   ok(/conta-atual\.txt aponta/.test(r.err) && r.err.includes(VELHA) && r.err.includes(ACC), `stderr: ${r.err}`);
 });
 
+// F79: env parcial não vale como conta; o script avisa qual falta e segue para o arquivo.
+const ACC_ENV = 'CLAUDE_CODE_ACCOUNT_UUID'; const ORG_ENV = 'CLAUDE_CODE_ORGANIZATION_UUID';
+const AVISA_FALTA = /falta/;
+caso('F79.1: só ACCOUNT definida, com arquivo: avisa que falta ORGANIZATION e a conta sai do arquivo', () => {
+  contaVelha();
+  gravarContaAtual(dir('orq', 'pool'), `${VELHA}/${ORG}\n`);
+  const r = rodar(['--todos', '--conferir'], { semEnv: [ORG_ENV] });
+  ok(r.status === 0, `exit ${r.status}: ${r.err}`);
+  ok(/^E9 /m.test(r.out) && !/^E3 /m.test(r.out), `saída: ${r.out}`);
+  ok(r.err.includes(ORG_ENV) && r.err.includes('conta-atual.txt') && AVISA_FALTA.test(r.err), `stderr: ${r.err}`);
+});
+caso('F79.2: só ORGANIZATION definida, com arquivo: avisa que falta ACCOUNT', () => {
+  contaVelha();
+  gravarContaAtual(dir('orq', 'pool'), `${VELHA}/${ORG}\n`);
+  const r = rodar(['--todos', '--conferir'], { semEnv: [ACC_ENV] });
+  ok(r.status === 0, `exit ${r.status}: ${r.err}`);
+  ok(/^E9 /m.test(r.out) && !/^E3 /m.test(r.out), `saída: ${r.out}`);
+  ok(r.err.includes(ACC_ENV) && r.err.includes('conta-atual.txt') && AVISA_FALTA.test(r.err), `stderr: ${r.err}`);
+});
+caso('F79.3: só ACCOUNT definida, sem arquivo: recusa dizendo que falta ORGANIZATION', () => {
+  const r = rodar(['--todos'], { semEnv: [ORG_ENV] });
+  ok(r.status === 2, `exit ${r.status}: ${r.out}`);
+  ok(r.err.includes(ORG_ENV) && AVISA_FALTA.test(r.err), `stderr: ${r.err}`);
+  ok(!r.err.includes(`faltam ${ACC_ENV}/`), `ainda diz que faltam as duas: ${r.err}`);
+});
+caso('F79.4: as duas envs, sem arquivo: sem aviso de falta', () => {
+  contaVelha();
+  // precondição: o aviso, quando existe, é detectado pela mesma regex
+  gravarContaAtual(dir('orq', 'pool'), `${VELHA}/${ORG}\n`);
+  const parcial = rodar(['--todos', '--conferir'], { semEnv: [ORG_ENV] });
+  ok(parcial.err.trim() && AVISA_FALTA.test(parcial.err), `precondição: ${parcial.err}`);
+  rmSync(dir('orq', 'pool'), { recursive: true, force: true });
+  const r = rodar(['--todos', '--conferir']);
+  ok(r.status === 0 && /^E3 /m.test(r.out), `exit ${r.status} saída: ${r.out} ${r.err}`);
+  ok(!AVISA_FALTA.test(r.err), `stderr: ${r.err}`);
+});
+
 console.log(falhas ? `\n${falhas} caso(s) falharam` : '\ntudo ok');
 process.exitCode = falhas ? 1 : 0;

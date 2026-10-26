@@ -19,6 +19,8 @@ const SESSOES = process.env.POOL_APP_SESSOES_DIR || join(H, 'Library', 'Applicat
 // `--todos` lê `claude-code-sessions/<conta>/<org>`; a pasta vem do ambiente do app (CLAUDE_CODE_ACCOUNT_UUID e
 // CLAUDE_CODE_ORGANIZATION_UUID, que não envelhecem). Fora do app, vale `<BASE>/pool/conta-atual.txt` (`<conta>/<org>`),
 // com BASE = HOOKS_CREWAI_BASE ou ~/.claude/orquestracao: o estado mora lá, nunca na pasta do plugin (o cache é trocado a cada update).
+// Env parcial (só uma das duas) não vale como conta: o script avisa qual falta e segue para o arquivo.
+// Devolve `{ conta, presente, falta, arq }`: `presente`/`falta` dizem qual env existe e qual não (vazios com 0 ou 2 envs).
 // `<local_…>` é único entre contas: acha o registro em toda a raiz, sem conta. POOL_APP_SESSOES_DIR só troca a raiz.
 function contaAtual() {
   const { CLAUDE_CODE_ACCOUNT_UUID: acc, CLAUDE_CODE_ORGANIZATION_UUID: org } = process.env;
@@ -28,9 +30,11 @@ function contaAtual() {
   if (acc && org) {
     const doApp = `${acc}/${org}`;
     if (doArquivo && doArquivo !== doApp) console.error(`conta-atual.txt aponta ${doArquivo}, o app está em ${doApp}`);
-    return doApp;
+    return { conta: doApp, arq };
   }
-  return doArquivo;
+  const [presente, falta] = acc ? ['CLAUDE_CODE_ACCOUNT_UUID', 'CLAUDE_CODE_ORGANIZATION_UUID'] : org ? ['CLAUDE_CODE_ORGANIZATION_UUID', 'CLAUDE_CODE_ACCOUNT_UUID'] : ['', ''];
+  if (falta && doArquivo) console.error(`só ${presente} está definida, falta ${falta}: a conta sai de ${arq}`);
+  return { conta: doArquivo, presente, falta, arq };
 }
 
 function* registros(dir) {
@@ -106,8 +110,13 @@ function main(argv) {
   let n = 0;
   let raiz = SESSOES;
   if (!id) {
-    const conta = contaAtual();
-    if (!conta) { console.error(`não sei qual é a conta atual: faltam CLAUDE_CODE_ACCOUNT_UUID/CLAUDE_CODE_ORGANIZATION_UUID (fora do app) e ${join(BASE, 'pool', 'conta-atual.txt')}`); return 2; }
+    const { conta, presente, falta, arq } = contaAtual();
+    if (!conta) {
+      console.error(falta
+        ? `não sei qual é a conta atual: falta ${falta} (${presente} está definida) e não há ${arq}`
+        : `não sei qual é a conta atual: faltam CLAUDE_CODE_ACCOUNT_UUID/CLAUDE_CODE_ORGANIZATION_UUID (fora do app) e ${arq}`);
+      return 2;
+    }
     raiz = join(SESSOES, conta);
   }
   for (const reg of registros(raiz)) {
