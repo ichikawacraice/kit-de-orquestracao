@@ -386,6 +386,13 @@ caso('T7: orquestradora clear_session "self" em turno peer, sem bandeira nem per
   passa(limpa('ORQ', humano()), 'humano');
   ok(log().includes('liberou-limpeza'), 'sem o log liberou-limpeza');
 });
+caso('T7: o alvo é a própria sessão por qualquer nome (local_ e session_id); o log grava o alvo real', () => {
+  nega7(limpa('ORQ', depeer(), 'local_ORQ'), 'alvo local_ORQ');
+  ok(/T7 .*local_ORQ/.test(log()), `log sem o alvo real: ${log()}`);
+  nega7(limpa('ORQ', depeer(), S.ORQ[0]), 'alvo session_id');
+  nega7(limpa('ORQ', depeer(), 'self'), 'alvo self');
+  passa(limpa('ORQ', depeer(), 'local_E1'), 'membro (o contraste: o teste mede a presença)');
+});
 caso('T7: modo ausente ligado libera; {ligado:false} nega', () => {
   bandeira(Date.now() - 3600_000);
   passa(limpa('ORQ', depeer()), 'bandeira ligada');

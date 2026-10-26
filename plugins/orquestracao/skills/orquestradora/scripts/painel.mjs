@@ -418,6 +418,8 @@ function planejar(o, seVersao, vista) {
   }
   // `set` monta o documento do zero, mas `com` não é de quem o substitui: o gravado fica (só `com add|del` o muda),
   // e a trava de fechamento abaixo o lê. Sem isto, `set --se-versao` sem o campo apagaria quem trabalha no item.
+  // O clique do painel vale só para a resposta que ele gravou: trocar `resposta` ou `estado` pela linha de comando apaga a prova.
+  if (colecao === 'perguntas' && ('resposta' in novo || 'estado' in novo)) delete base.respondidaPor;
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.com) && atual.data.com.length) base.com = atual.data.com;
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.fez)) base.fez = atual.data.fez;
   if ((colecao === 'sessoes' || colecao === 'fila') && !base.projeto && (op === 'set' || !atual)) {

@@ -159,7 +159,8 @@ function main() {
     const alvo = ti.session_id;
     const ehEu = [undefined, null, 'self', e.session_id, reg?.localId].includes(alvo);
     if (!ehEu || !ehOrquestradora(e.session_id, reg?.titulo)) return;
-    const libera = (motivo) => registrar(sid, HOOK, 'liberou-limpeza', motivo);
+    const alvoReal = String(alvo ?? 'self');
+    const libera = (motivo) => registrar(sid, HOOK, 'liberou-limpeza', `${alvoReal} ${motivo}`);
     if (modoAusente()) return libera('modo ausente ligado');
     let origem = null;
     try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
@@ -167,7 +168,7 @@ function main() {
     const ok = perguntasDeLimpeza(reg?.localId).find((d) => d.estado === 'respondida' && d.respondidaPor === 'painel'
       && /^\s*sim/i.test(String(d.resposta ?? '')) && Date.now() - Date.parse(d.atualizadoEm) <= OK_DO_PAINEL_MS);
     if (ok) return libera('sim do painel');
-    return nega('T7', 'orquestradora', 'self', 'Limpeza inteira só com o ok do operador (F48): ele pode estar lendo. Escreva o estado, abra a pergunta `limpar · orquestradora` (Q-ID, sessaoId, recomendação: limpar) e siga; limpe quando ele disser sim no chat ou no painel. Com o modo ausente ligado, pode.');
+    return nega('T7', 'orquestradora', alvoReal, 'Limpeza inteira só com o ok do operador (F48): ele pode estar lendo. Escreva o estado, abra a pergunta `limpar · orquestradora` (Q-ID, sessaoId, recomendação: limpar) e siga; limpe quando ele disser sim no chat ou no painel. Com o modo ausente ligado, pode.');
   }
 
   if (tool === 'mcp__ccd_session__start_session') {
