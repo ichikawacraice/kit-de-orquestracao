@@ -11,6 +11,7 @@ A regra que TODA sessão segue (como achar a orquestradora, o que as outras sess
 1. Renomeie a sessão `🎛 orquestradora — <projeto>` (`set_session_title` com `"self"`), se ainda não estiver.
 2. Leia `~/.claude/orquestracao/<nome-do-repo>.md`. Se não existir, crie com as seções: PRs abertos (de quem, estado) · Decisões acumuladas · Números reservados · Adiados (sugestões de sessão) · Próximo release · Entregas arquivadas.
 3. `list_sessions` (com `limit`) e confira o que mudou desde o arquivo: sessão nova, sessão parada, PR mergeado. Leve a diferença ao painel com `painel` (seção "Perguntas com ID e o painel"). Não releia transcrições para reconstruir o passado: o que não está no arquivo, pergunte à sessão (seção "Orçamento de contexto").
+4. As perguntas que você abriu antes da limpeza continuam suas (protocolo, âncora `perguntas-proprias`): a lista chega no início da conversa; resposta pelo painel a elas não se repassa.
 
 <a id="ritual-de-cada-turno"></a>
 ## Ritual de cada turno (antes de responder)

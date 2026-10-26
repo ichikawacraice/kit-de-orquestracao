@@ -1,6 +1,6 @@
 # Executora (E1, E2, E3…) — Sonnet 5.5, medium
 
-Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do pool: `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`. Mapa de todas as skills: `../skills-por-papel.md`. A lista que você recebe já vem filtrada para o papel.
+Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do pool: `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`. Mapa de todas as skills: `../skills-por-papel.md`. A lista que você recebe já vem filtrada para o papel. Depois de uma limpeza, as perguntas que você abriu continuam suas: [protocolo](../protocolo.md#perguntas-proprias).
 
 ## O papel
 - **Faz:**

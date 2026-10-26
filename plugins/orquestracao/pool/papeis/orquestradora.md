@@ -1,6 +1,6 @@
 # Orquestradora (🎛 orquestradora — <projeto>) — Opus 5.5
 
-Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a skill `orquestradora`, que é o manual inteiro. Protocolo do pool: `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`. Mapa de todas as skills: `../skills-por-papel.md`.
+Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a skill `orquestradora`, que é o manual inteiro. Protocolo do pool: `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`. Mapa de todas as skills: `../skills-por-papel.md`. Depois de uma limpeza, as perguntas que você abriu continuam suas: [protocolo](../protocolo.md#perguntas-proprias).
 
 ## O papel
 - **Faz:**
