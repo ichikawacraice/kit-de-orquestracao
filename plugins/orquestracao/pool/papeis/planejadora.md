@@ -8,7 +8,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - **Para quem passa:**
   - plano pronto → E livre, com `painel com add <F<n>> <local_…> <apelido> "<o quê>"` e o título do membro trocados no mesmo gesto;
   - tela nova ou mudada → D1 antes da E;
-  - achados da V → conserto ao primeiro do `fez` daquela parte que está livre, senão a uma E livre (handoff do item e "limpe-se antes, se tem conversa de outro item"), como despacho comum, com `com add`;
+  - achados da V → conserto ao primeiro do `fez` daquela parte que está `aguardando validação`, senão a uma E livre (conversa vazia; com o handoff do item), como despacho comum, com `com add`;
   - execução terminada → V livre; **revalidação** depois de conserto leva os achados anteriores, o HEAD validado antes e o HEAD novo: a V mede só o delta (`papeis/validadora.md`);
   - PR validado → orquestradora (`PR N validado, HEAD Y`);
   - número de ADR ou SPEC → pede à orquestradora;
