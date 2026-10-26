@@ -788,13 +788,16 @@ async function alternarModo($: EngineInterface): Promise<void> {
  */
 async function pedirResumo($: EngineInterface, desde: string | undefined, ate: string): Promise<number> {
   let ativas: string[] = []
+  // só vale a orquestradora que o app lista agora (não arquivada): o documento em `sessoes` envelhece
+  const lida = await read($, leitura)
+  const vivasIds = lida.semLista ? null : new Set((lida.sessoes ?? []).map(v => v.sessionId))
   try {
     const pasta = `${await $.env.get('HOME')}/${PASTA}/sessoes`
     for (const e of await $.fs.list(pasta)) {
       if (e.kind !== 'file' || !e.name.endsWith('.json')) continue
       try {
         const d = lerDoc((await $.fs.read(`${pasta}/${e.name}`)) as string, e.name)
-        if (d.data.papel === 'orquestradora' && d.data.estado !== 'concluida') ativas.push(d.id)
+        if (d.data.papel === 'orquestradora' && d.data.estado !== 'concluida' && (vivasIds === null || vivasIds.has(d.id))) ativas.push(d.id)
       } catch {
         /* documento ilegível não é orquestradora */
       }

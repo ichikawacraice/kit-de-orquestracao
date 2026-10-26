@@ -2001,7 +2001,7 @@ const ORQ_ARQUIVADA = doc('local_orq_velha', { projeto: 'izanagi', titulo: '🎛
 const MEMBRO = doc('local_e1', { projeto: 'izanagi', titulo: 'E1 · livre', papel: 'executor', estado: 'parada' })
 
 test('F59 B12: desligar manda o pedido do resumo só à orquestradora ativa', async ($, on) => {
-  const { ui, enviadas, relogio, toasts, bandeiras } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ATIVA, ORQ_ARQUIVADA, MEMBRO] }, $, on)
+  const { ui, enviadas, relogio, toasts, bandeiras } = await abrirDe({ bandeira: LIGADA(HA_3H), vivas: vivasDe(P7, P1, 'local_orq_ativa'), sessoesDocs: [ORQ_ATIVA, ORQ_ARQUIVADA, MEMBRO] }, $, on)
   expect(bandeiras, 'precondição: ainda não gravou').toEqual([])
   await ui.press({ key: 'modo' })
   await relogio.settle()
@@ -2025,7 +2025,7 @@ test('F59 B13: sem orquestradora ativa não envia nada e o toast é o curto', as
 })
 
 test('F59 B14: envio que falha vira aviso no pane e o modo continua desligado', async ($, on) => {
-  const { ui, relogio, bandeiras, toasts } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ATIVA] }, $, on, { envio: 'sessão não achada' })
+  const { ui, relogio, bandeiras, toasts } = await abrirDe({ bandeira: LIGADA(HA_3H), vivas: vivasDe(P7, P1, 'local_orq_ativa'), sessoesDocs: [ORQ_ATIVA] }, $, on, { envio: 'sessão não achada' })
   await ui.press({ key: 'modo' })
   await relogio.settle()
   expect(bandeiras.length, 'a bandeira foi gravada antes do envio').toBe(1)
@@ -2038,12 +2038,22 @@ test('F59 B14: envio que falha vira aviso no pane e o modo continua desligado', 
 })
 
 test('F59 B15: a orquestradora é a própria sessão do pane: o pedido entra como prompt dela, não por send_message', async ($, on) => {
-  const { ui, enviadas, prompts, relogio } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ATIVA], host: 'local_orq_ativa' }, $, on)
+  const { ui, enviadas, prompts, relogio } = await abrirDe({ bandeira: LIGADA(HA_3H), vivas: vivasDe(P7, P1, 'local_orq_ativa'), sessoesDocs: [ORQ_ATIVA], host: 'local_orq_ativa' }, $, on)
   await ui.press({ key: 'modo' })
   await relogio.settle()
   expect(enviadas).toEqual([])
   expect(prompts.length).toBe(1)
   expect(prompts[0]).toContain('resumo-da-ausencia')
+  await ui.unmount()
+})
+
+test('F59 B16: orquestradora de sessoes que não está nas vivas do app não recebe pedido nem gera aviso', async ($, on) => {
+  const { ui, enviadas, prompts, relogio, toasts } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ATIVA, doc('local_orq_fantasma', { projeto: 'izanagi', papel: 'orquestradora', estado: 'trabalhando' })] }, $, on)
+  await ui.press({ key: 'modo' })
+  await relogio.settle()
+  expect([enviadas, prompts], 'nenhuma das duas está nas vivas').toEqual([[], []])
+  expect(toasts.at(-1)).toBe('Modo ausente desligado')
+  expect(await lerSuperficie(ui)).not.toMatch(/Não pedi o resumo/)
   await ui.unmount()
 })
 

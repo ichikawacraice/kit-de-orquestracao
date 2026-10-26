@@ -110,15 +110,20 @@ export function montarResumo({ projeto, desde, ate, repo, branch = 'main' }) {
     }
   }
 
-  const perguntas = lerColecao('perguntas', avisos).filter((q) => mesmo(q.projeto ?? projetoDaSessao.get(q.sessaoId)));
+  // Pergunta sem projeto cuja sessão também não resolve não some: assumida e aberta vão em `semProjeto` (quem lê decide).
+  const todasPerguntas = lerColecao('perguntas', avisos);
+  const projetoDe = (q) => q.projeto ?? projetoDaSessao.get(q.sessaoId);
+  const perguntas = todasPerguntas.filter((q) => mesmo(projetoDe(q)));
   const resumoDe = (q) => ({ id: q.id, titulo: q.titulo, recomendacao: q.recomendacao ?? null, sessaoId: q.sessaoId ?? null });
   const assumidas = perguntas.filter((q) => q.estado === 'assumida').map((q) => ({ ...resumoDe(q), noPeriodo: dentro(q.criadaEm) || dentro(q.atualizadoEm) }));
   const abertas = perguntas.filter((q) => q.estado === 'aberta').map(resumoDe);
+  const semProjeto = todasPerguntas.filter((q) => !projetoDe(q) && (q.estado === 'assumida' || q.estado === 'aberta')).map((q) => ({ ...resumoDe(q), estado: q.estado }));
   const sessoesArquivadas = sessoes.filter((s) => mesmo(s.projeto) && s.estado === 'concluida' && dentro(s.atualizadoEm)).map((s) => ({ id: s.id, titulo: s.titulo }));
 
   const pedeAcao = [
     ...abertas.map((q) => ({ tipo: 'pergunta', id: q.id, texto: q.titulo })),
     ...assumidas.map((q) => ({ tipo: 'pergunta', id: q.id, texto: q.titulo })),
+    ...semProjeto.map((q) => ({ tipo: 'pergunta', id: q.id, texto: q.titulo })),
     ...itens.filter((i) => !FECHADAS.has(i.etapa)).flatMap((i) => {
       const l = [];
       if (i.espera?.motivo === 'operador') l.push({ tipo: 'espera', id: i.id, texto: i.espera.texto ?? i.titulo });
@@ -126,7 +131,7 @@ export function montarResumo({ projeto, desde, ate, repo, branch = 'main' }) {
       return l;
     }),
   ];
-  return { projeto, periodo: { desde, ate }, main, itens: { feitos, andaram, parados }, perguntas: { assumidas, abertas }, sessoesArquivadas, pedeAcao, avisos };
+  return { projeto, periodo: { desde, ate }, main, itens: { feitos, andaram, parados }, perguntas: { assumidas, abertas, semProjeto }, sessoesArquivadas, pedeAcao, avisos };
 }
 
 export function emMarkdown(r) {
@@ -138,6 +143,7 @@ export function emMarkdown(r) {
   sec('Itens parados', r.itens.parados.map((i) => `- ${i.id} · ${i.titulo}: ${i.motivo}`));
   sec('Decisões assumidas (a confirmar)', r.perguntas.assumidas.map((q) => `- ${q.id} · ${q.titulo}${q.noPeriodo ? ' (dentro do período)' : ''}${q.recomendacao ? ` — assumi: ${q.recomendacao}` : ''}`));
   sec('Perguntas abertas', r.perguntas.abertas.map((q) => `- ${q.id} · ${q.titulo}`));
+  sec('Perguntas sem projeto', r.perguntas.semProjeto.map((q) => `- ${q.id} · ${q.titulo} (${q.estado})`));
   sec('Sessões arquivadas', r.sessoesArquivadas.map((s) => `- ${s.titulo} (${s.id})`));
   sec('Pede ação do operador', r.pedeAcao.map((p) => `- ${p.tipo} ${p.id}: ${p.texto}`));
   if (r.avisos.length) sec('Avisos', r.avisos.map((a) => `- ${a}`));

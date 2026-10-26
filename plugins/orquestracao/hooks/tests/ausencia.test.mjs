@@ -22,7 +22,7 @@ function ambiente() {
   mkdirSync(repo); execFileSync('git', ['init', '-q', '-b', 'main', repo], { timeout: 15000, killSignal: 'SIGKILL' });
   GIT(repo, ['remote', 'add', 'origin', bare]);
   const commit = (msg, quando) => GIT(repo, ['commit', '-q', '--allow-empty', '-m', msg], { GIT_AUTHOR_DATE: quando, GIT_COMMITTER_DATE: quando });
-  commit('feat: antigo (#1)', haH(30)); commit('feat(a): dentro do período (#7)', haH(8)); commit('chore: sem número de PR', haH(6));
+  commit('feat: antigo (#1)', haH(30)); commit('feat(a): dentro do período (#7)', haH(8)); commit('chore: sem número de PR', haH(6)); commit('feat: depois do período (#9)', haH(1));
   GIT(repo, ['push', '-q', 'origin', 'main']);
   const grava = (colecao, id, data) => writeFileSync(join(painel, colecao, `${id}.json`), JSON.stringify({ id, version: 1, data }));
   const env = { ...process.env, HOOKS_CREWAI_BASE: base, PAINEL_DIR: painel, HOME: join(raiz, 'home') };
@@ -64,6 +64,9 @@ test('resumo: cada seção traz o de dentro do período e deixa de fora o de for
   a.grava('perguntas', 'Q2', { sessaoId: 'local_S3', titulo: 'assumida antiga, projeto pela sessão', estado: 'assumida', criadaEm: fora, atualizadoEm: fora });
   a.grava('perguntas', 'Q3', { projeto: 'proj', titulo: 'aberta', estado: 'aberta', criadaEm: dentro });
   a.grava('perguntas', 'Q4', { projeto: 'proj', titulo: 'respondida', estado: 'respondida', criadaEm: dentro });
+  a.grava('perguntas', 'Q6', { sessaoId: 'local_inexistente', titulo: 'assumida sem projeto', estado: 'assumida', criadaEm: dentro });
+  a.grava('perguntas', 'Q7', { titulo: 'aberta sem projeto nem sessão', estado: 'aberta', criadaEm: dentro });
+  a.grava('perguntas', 'Q8', { titulo: 'respondida sem projeto', estado: 'respondida', criadaEm: dentro });
   a.grava('perguntas', 'Q5', { projeto: 'outro', titulo: 'assumida de outro', estado: 'assumida', criadaEm: dentro });
   writeFileSync(join(a.painel, 'fila', 'F99.json'), '{quebrado');
   const r = a.rodar('resumo', '--repo', a.repo);
@@ -73,6 +76,7 @@ test('resumo: cada seção traz o de dentro do período e deixa de fora o de for
   assert.deepEqual(j.periodo, { desde: periodo.desde, ate: periodo.ate });
   // main: o commit antigo fica fora, o com (#7) traz o pr, o sem número traz null
   assert.deepEqual(j.main.map((m) => m.pr).sort(), [7, null].sort());
+  assert.ok(!j.main.some((m) => /depois do período/.test(m.titulo) || m.pr === 9), 'commit depois do ate apareceu em main');
   assert.ok(j.main.every((m) => m.sha && m.titulo));
   assert.deepEqual(ids(j.itens.feitos), ['F1']);
   assert.deepEqual(ids(j.itens.andaram), ['F3', 'F8']);
@@ -88,11 +92,14 @@ test('resumo: cada seção traz o de dentro do período e deixa de fora o de for
   assert.equal(j.perguntas.assumidas.find((q) => q.id === 'Q1').noPeriodo, true);
   assert.equal(j.perguntas.assumidas.find((q) => q.id === 'Q2').noPeriodo, false);
   assert.deepEqual(ids(j.perguntas.abertas), ['Q3']);
+  assert.deepEqual(ids(j.perguntas.semProjeto), ['Q6', 'Q7'], 'só assumida e aberta, sem projeto resolvido');
+  assert.ok(j.perguntas.semProjeto.every((q) => q.estado === 'assumida' || q.estado === 'aberta'));
   assert.deepEqual(j.sessoesArquivadas.map((s) => s.id), ['local_S1']);
   const pede = j.pedeAcao.map((p) => `${p.tipo}:${p.id}`).sort();
-  assert.deepEqual(pede, ['espera:F5', 'pergunta:Q1', 'pergunta:Q2', 'pergunta:Q3', 'trava:F4'].sort());
+  assert.deepEqual(pede, ['espera:F5', 'pergunta:Q1', 'pergunta:Q2', 'pergunta:Q3', 'pergunta:Q6', 'pergunta:Q7', 'trava:F4'].sort());
   assert.ok(j.avisos.some((x) => /F99/.test(x)), `JSON quebrado devia ir a avisos: ${j.avisos}`);
   const md = a.rodar('resumo', '--repo', a.repo, '--md').stdout;
+  assert.ok(/sem projeto/i.test(md) && md.includes('Q6'), `o --md não mostra o bloco sem projeto: ${md}`);
   assert.ok(md.includes('feito dentro') && md.includes('Q1') && md.includes('dentro do período'), md);
 });
 

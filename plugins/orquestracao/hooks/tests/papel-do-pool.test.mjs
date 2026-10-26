@@ -385,7 +385,9 @@ caso('operador-ausente F59: off sem bandeira não cria arquivo; ilegível ou já
   ent('/ausente on'); ent('/ausente off');
   const antes = readFileSync(bandeiraArq(), 'utf8');
   ent('/ausente off');
-  ok(!existsSync(bandeiraArq()) || readFileSync(bandeiraArq(), 'utf8') === antes, 'segundo off reescreveu o período');
+  ok(existsSync(bandeiraArq()), 'segundo off apagou o período');
+  ok(readFileSync(bandeiraArq(), 'utf8') === antes, 'segundo off reescreveu o período');
+  ok(JSON.parse(antes).desde, 'o período guardado tem o desde');
 });
 caso('operador-ausente: prompt comum e frase de ausência NÃO mexem', () => {
   ent('vou dormir'); ok(!existsSync(bandeiraArq()), 'frase ligou');
