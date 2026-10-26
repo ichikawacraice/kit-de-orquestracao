@@ -7,7 +7,7 @@
 //   T1  Agent/Task: P, D ou orquestradora não lança `executor`/`validador`; E não lança `validador`
 //       nem `executor`; V não lança `executor`.            T1c V não edita arquivo do projeto.
 //   T2  archive_session / delete_session de membro do pool. Só a orquestradora arquiva: com o modo ausente desligado, sozinha, o membro sem item vivo
-//       (sem com, fez nem dono); com ele ligado, só por pedido do operador no turno dele (Q277). Sempre membro do MESMO projeto ou de projeto sem orquestradora.
+//       (sem com, fez nem dono) e que não seja a última E livre do projeto (piso, ADR 0004); com ele ligado, só por pedido do operador no turno dele (Q277). Sempre membro do MESMO projeto ou de projeto sem orquestradora.
 //   T3  start_session: negado em turno que não é do operador com o modo ausente ligado (/ausente on) e a membro do pool.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava).
 //   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o sim do painel ou o da janela, F48/F53).
@@ -21,7 +21,7 @@
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { registrar, lerEntrada, semPrefixoDoPlugin, modoAusente } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, perguntasDeLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS } from './pool-comum.mjs';
+import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, membrosLivres, perguntasDeLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS } from './pool-comum.mjs';
 
 const HOOK = 'papel-do-pool';
 const H = homedir();
@@ -141,6 +141,10 @@ function main() {
         // cuja orquestradora não deu para medir (`projetoTemOrquestradora` → null) → não arquiva.
         const meu = projetoDaSessao(quemChama)?.repo; const dele = projetoDaSessao(reg)?.repo;
         const dela = meu && dele && meu !== dele ? projetoTemOrquestradora(alvo, dele) : undefined;
+        // Piso de uma E livre (ADR 0004): fora do turno do operador, a última E livre do projeto da orquestradora não se arquiva.
+        if (!porComando && meu && meu === dele && m.papel === 'E' && !membrosLivres(dele).some((x) => x.papel === 'E' && x.localId !== reg.localId)) {
+          return nega('T2', m.id, String(alvo), `${m.id} é a última E livre do projeto: fora do modo ausente o pool mantém pelo menos uma (ADR 0004). Só o operador, no turno dele, manda arquivá-la.`);
+        }
         if (meu && dele && (meu === dele || dela === false)) {
           registrar(sid, HOOK, porComando ? 'deixou-arquivar-por-comando' : 'arquivou-sozinha', `${m.id} ${alvo}`);
           continue;
