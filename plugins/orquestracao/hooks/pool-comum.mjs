@@ -69,7 +69,7 @@ function varrerRegistro(id) {
 // Itens vivos da fila em que a sessão aparece (F30): `com` = trabalhando agora; `fez` = executou parte e o item ainda espera
 // validação, conserto ou merge. Pasta: FILA_DIR, ou <PAINEL_DIR>/fila. Erro de leitura = lista vazia (o hook deixa passar).
 const ETAPAS_DO_FEZ = ['execucao', 'validacao', 'merge'];
-const filaDir = () => process.env.FILA_DIR || join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'fila');
+export const filaDir = () => process.env.FILA_DIR || join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'fila');
 // Perguntas `limpar · orquestradora` da sessão (F48; só o título exato vale, outra `limpar · …` não é pedido nem ok): documentos de <PAINEL_DIR>/perguntas. Erro de leitura = lista vazia.
 const perguntasDir = () => join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'perguntas');
 export function perguntasDeLimpeza(localId) {
@@ -197,6 +197,22 @@ export function projetoDaSessao(reg) {
   if (!repo) return null;
   const raiz = basename(repo) === '.git' ? dirname(repo) : repo;
   return { repo, nome: basename(raiz).replace(/\.git$/, '').toLowerCase() };
+}
+
+// Membros do pool livres do projeto (F58): sessões NÃO arquivadas com título `<P|D|E|V><n> · livre` cujo projeto é o `repo`
+// (git common dir). Varre o registro do app uma vez. → [{ apelido, papel, localId }]
+export function membrosLivres(repo) {
+  const livres = [];
+  if (!repo) return livres;
+  for (const f of arquivosLocal(SESSOES_DIR())) {
+    let r;
+    try { r = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
+    if (!r || r.isArchived || !/^[PDEV]\d+ · livre\s*$/.test(r.title || '')) continue;
+    if (projetoDaSessao({ cwd: r.cwd, originCwd: r.originCwd })?.repo !== repo) continue;
+    const m = membroDoPool(r.title);
+    livres.push({ apelido: m.id, papel: m.papel, localId: r.sessionId || null });
+  }
+  return livres;
 }
 
 export function ehOrquestradora(sessionId, titulo) {
