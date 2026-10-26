@@ -44,6 +44,7 @@ import { carregarConfig, envKit, inteiroDoEnv, partirComando } from "./config.mj
 import { RAIZ, conferirInstalacao, constroi, projetosDoWorkspace } from "./o-dist-que-o-gate-le.mjs";
 import { consultar, guardarSeAArvoreNaoMudou, linhaDoPulo } from "./o-verde-da-arvore.mjs";
 import { rodarSePrincipal } from "./o-script-principal.mjs";
+import { processoVivo } from "./o-teto-da-maquina.mjs";
 
 /** Quanto uma vez vale por padrão (`gate.prazos.vezMin`). O gate leva minutos; isto só existe para que um dono travado não segure a fila para sempre. */
 export const PRAZO_DA_VEZ_MS = 60 * 60 * 1000;
@@ -207,16 +208,8 @@ export function caminhoDaTrava(env = process.env, raiz = RAIZ, fila = "gate", cf
   };
 }
 
-/** `true` se o PID existe. `EPERM` é processo vivo de outro usuário — vivo. */
-export function processoVivo(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return e?.code === "EPERM";
-  }
-}
+/** `true` se o PID existe. Mora em `o-teto-da-maquina.mjs` (o teto não importa o gate: evita o ciclo); reexportada aqui. */
+export { processoVivo };
 
 /** A raiz do worktree, como o gate a conhece: `git rev-parse --show-toplevel` com `realpath` (sem git, a `raiz` dada). Vai em `KIT_GATE_DENTRO`. */
 export function raizDoWorktree(raiz = RAIZ) {
