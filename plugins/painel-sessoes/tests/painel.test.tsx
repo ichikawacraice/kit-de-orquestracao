@@ -2871,3 +2871,22 @@ test('F82 D: com dois itens o sufixo é "2 itens", também inquebrável', async 
   expect(ts2).toContain('Sem orquestradora ativa em kit\u00a0·\u00a02\u00a0itens')
   await dois.ui.unmount()
 })
+
+// F85: o que o F82 deixou de sobra.
+test('F85 A: a orquestradora aberta sozinha depois do pedido acende "Abrindo…" no botão dela e o clique não abre outra vez', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurarAbrir: { p?: Promise<void> } = {}
+  const { ui, abertas, relogio } = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, segurarAbrir }), $, on)
+  segurarAbrir.p = new Promise<void>(res => (soltar = res))
+  await ui.press({ key: 'pedir:F68' })
+  await relogio.settle()
+  expect(await ui.find({ key: 'orq:izanagi' }), 'precondição: o botão da orquestradora existe').toBeDefined()
+  expect((await ui.find({ key: 'orq:izanagi' }))?.text, 'enquanto abre, o botão dela diz "Abrindo…"').toBe('Abrindo…')
+  await ui.press({ key: 'orq:izanagi' })
+  await relogio.settle()
+  soltar()
+  await relogio.settle()
+  expect(abertas.length, 'o foco automático pediu uma vez e o clique no botão que abria foi ignorado').toBe(1)
+  expect((await ui.find({ key: 'orq:izanagi' }))?.text).toBe('Abrir a orquestradora')
+  await ui.unmount()
+})

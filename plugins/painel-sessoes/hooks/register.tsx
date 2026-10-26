@@ -1504,7 +1504,7 @@ export const register: Register = on => {
           if (abrindoAgora?.localId !== id) void abrirSessao($, { apelido: `orquestradora de ${projeto}`, localId: id, link: linkDe(id, []) }, e.surface, key)
         }}
       >
-        {abrindoAgora?.botao === key ? 'Abrindo…' : 'Abrir a orquestradora'}
+        {abrindoAgora?.botao === key || abrindoAgora?.botao === `auto:${id}` ? 'Abrindo…' : 'Abrir a orquestradora'}
       </Button>
     )
     // O que o item pede, em três peças: a linha de estado (acima), o botão e, no cartão, o botão da orquestradora. `curta`: na linha da fila.
