@@ -94,7 +94,7 @@ export const ehPerguntaDeLimpeza = (texto) => /limpar\s*·\s*orquestradora(?=$|[
 
 // Janelas de limpeza do transcript: cada `tool_use` AskUserQuestion (fora de subagente) com pergunta de limpeza, pareado com o
 // `tool_result` do mesmo `tool_use_id` (escrito pelo app: `toolUseResult.answers[<pergunta>]`, `timestamp` = hora da resposta).
-// `recusada` = janela fechada sem resposta (`is_error` ou sem `answers`). Sem resposta ainda: `respondidaEm: null`. Erro de leitura = [].
+// `recusada` = janela fechada sem resposta (`is_error` ou sem `answers`; `respondidaEm` é a hora do fechamento). Sem desfecho ainda: `respondidaEm: null`. Erro de leitura = [].
 export function janelasDeLimpeza(transcriptPath) {
   const janelas = [];
   try {
@@ -120,8 +120,9 @@ export function janelasDeLimpeza(transcriptPath) {
     for (const { b, x } of respostas) {
       const { j, pergunta } = porId.get(b.tool_use_id);
       const a = x.toolUseResult?.answers;
+      j.respondidaEm = Date.parse(x.timestamp); // também da janela fechada sem resposta: é o desfecho dela
       if (b.is_error === true || !a || typeof a !== 'object') { j.recusada = true; continue; }
-      j.respondidaEm = Date.parse(x.timestamp); j.resposta = a[pergunta];
+      j.resposta = a[pergunta];
       if (typeof j.resposta !== 'string') j.recusada = true;
     }
   } catch { return []; }

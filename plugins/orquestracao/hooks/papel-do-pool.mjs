@@ -173,8 +173,10 @@ function main() {
     // O sim dado na janela (AskUserQuestion, F53): o app escreve o tool_result no transcript; vale 30 min, nunca no futuro.
     let janelas = [];
     try { janelas = e.transcript_path ? janelasDeLimpeza(e.transcript_path) : []; } catch { /* sem transcript */ }
+    // Decide só a janela mais recente com desfecho (maior `respondidaEm`, a fechada sem resposta conta): um "não" depois do "sim" o cancela.
     const dif = (j) => Date.now() - j.respondidaEm;
-    if (janelas.some((j) => !j.recusada && typeof j.resposta === 'string' && /^\s*sim\b/i.test(j.resposta) && Number.isFinite(j.respondidaEm) && dif(j) >= -60_000 && dif(j) <= SIM_DA_JANELA_MS)) return libera('sim da janela');
+    const ultima = janelas.filter((j) => Number.isFinite(j.respondidaEm)).sort((a, b) => b.respondidaEm - a.respondidaEm)[0];
+    if (ultima && !ultima.recusada && typeof ultima.resposta === 'string' && /^\s*sim\b/i.test(ultima.resposta) && dif(ultima) >= -60_000 && dif(ultima) <= SIM_DA_JANELA_MS) return libera('sim da janela');
     return nega('T7', 'orquestradora', alvoReal, 'Limpeza inteira só com o ok do operador (F48): ele pode estar lendo. Escreva o estado, abra a pergunta `limpar · orquestradora` (Q-ID, sessaoId, recomendação: limpar) e siga; limpe quando ele disser sim no chat, na janela ou no painel. Com o modo ausente ligado, pode.');
   }
 

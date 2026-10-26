@@ -81,7 +81,7 @@ function orquestradora(e, sid, transcript, ativo, t, det, reg) {
     return;
   }
   // Pedido feito: se o turno termina esperando e a pergunta do painel ainda está aberta (nenhuma em trégua), falta a janela.
-  const emTregua = perguntas.some((d) => d.estado !== 'aberta');
+  const emTregua = perguntas.some((d) => d.estado !== 'aberta' && dentro(Number.isNaN(Date.parse(d.respondidaEm)) ? d.atualizadoEm : d.respondidaEm));
   if (espera && !emTregua) {
     const janelas = janelasDeLimpeza(transcript);
     // Janela aberta neste turno, ou respondida há ≤ 2 h (sim ou não), satisfaz: não fica reabrindo.

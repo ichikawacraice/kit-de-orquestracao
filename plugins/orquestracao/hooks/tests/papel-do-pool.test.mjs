@@ -462,6 +462,22 @@ caso('F53 T7: a janela precisa ser de limpeza e a resposta da pergunta de limpez
   nega7(limpa('ORQ', transcriptJanela({ resposta: 'Não, agora não', outras: [{ question: 'Q10 · merge do PR 7?', resposta: 'Sim' }] })), 'limpeza não, outra sim');
   passa(limpa('ORQ', transcriptJanela({ resposta: 'Sim, pode limpar', outras: [{ question: 'Q10 · merge do PR 7?', resposta: 'Não' }] })), 'contraste: limpeza sim, outra não');
 });
+// B1 (V4): vale a janela de limpeza mais recente com desfecho; um "não" ou uma janela fechada depois do "sim" cancela o sim.
+function transcriptJanelas(...js) { // cada j: { resposta, haMin, recusada }
+  const L = [linhaDeTurno(Date.now() - 3 * 3600_000, 'peer')];
+  js.forEach((j, k) => {
+    const q = `Q${9 + k} · limpar · orquestradora: posso me limpar?`; const t = Date.now() - j.haMin * 60_000;
+    L.push({ type: 'assistant', timestamp: new Date(t - 5000).toISOString(), message: { content: [{ type: 'tool_use', id: `tu${k}`, name: 'AskUserQuestion', input: { questions: [{ question: q }] } }] } });
+    L.push({ type: 'user', timestamp: new Date(t).toISOString(), message: { content: [{ type: 'tool_result', tool_use_id: `tu${k}`, ...(j.recusada ? { is_error: true, content: 'rej' } : { content: 'ok' }) }] }, toolUseResult: j.recusada ? 'User rejected tool use' : { answers: { [q]: j.resposta } } });
+  });
+  const f = dir('t.jsonl'); writeFileSync(f, L.map((x) => JSON.stringify(x)).join('\n') + '\n'); return { transcript_path: f };
+}
+caso('B1 T7: sim há 20 min e depois não (ou janela fechada) há 2 min → nega; sim sozinho passa; não e depois sim passa', () => {
+  passa(limpa('ORQ', transcriptJanelas({ resposta: 'Sim, pode limpar', haMin: 20 })), 'contraste: sim sozinho');
+  nega7(limpa('ORQ', transcriptJanelas({ resposta: 'Sim, pode limpar', haMin: 20 }, { resposta: 'Não, agora não', haMin: 2 })), 'sim e depois não');
+  nega7(limpa('ORQ', transcriptJanelas({ resposta: 'Sim, pode limpar', haMin: 20 }, { recusada: true, haMin: 2 })), 'sim e depois janela fechada');
+  passa(limpa('ORQ', transcriptJanelas({ resposta: 'Não, agora não', haMin: 20 }, { resposta: 'Sim, pode limpar', haMin: 2 })), 'não e depois sim');
+});
 // Ponta a ponta (V2): o painel.mjs de verdade grava e o papel-do-pool.mjs de verdade decide.
 const PAINEL_MJS = join(HOOKS, '..', 'skills', 'orquestradora', 'scripts', 'painel.mjs');
 const painelCli = (...args) => spawnSync('node', [PAINEL_MJS, ...args], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', env: { ...process.env, PAINEL_DIR: dir('painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: dir('app'), HOOKS_CREWAI_BASE: BASE_ORQ(), HOME: dir('home') } });

@@ -284,6 +284,16 @@ test('F53-7. janela de outra pergunta (merge) não satisfaz: cobra a janela', ()
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q, ferramentas: outra })), /AskUserQuestion/);
 }));
 
+test('A1. pergunta de outra coisa respondida há 26 h não segura a janela; respondida há 1 h (trégua de limpeza) segura', () => com((b) => {
+  pergunta(b, 'Q9', LIMPAR());
+  pergunta(b, 'Q284', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: haMin(26 * 60) }));
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'Q9: posso seguir?' })), /AskUserQuestion/);
+  assert.match(log(b), /\tcobrou-janela\t/);
+  pergunta(b, 'Q284', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: haMin(60) }));
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'Q9: posso seguir?' })), null);
+  assert.match(log(b), /\tsatisfeito-pediu\t/);
+}));
+
 // F49: executora cheia termina com a limpeza.
 test('F49.1 E com 310 mil e clear_session "self" no turno: passa (limpou)', () => com((b) => {
   assert.equal(rodar(b, 'E', transcript(b, { tokens: 310_000, ferramentas: [LIMPA] })), null);
