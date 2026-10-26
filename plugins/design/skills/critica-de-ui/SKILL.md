@@ -34,7 +34,7 @@ Nota: <N>/30 (cada eixo de 0 a 5: hierarquia · densidade · consistência · ru
 Veredito: aprovada com ressalvas (24 ou mais, sem ressalva alta) | volta (abaixo de 24, ou com ressalva alta) — o teto da crítica, abaixo
 
 ### P1 · <eixo> · <título curto>
-- **Peso:** alta · média · baixa (alta = quem usa erra a tarefa ou não acha a ação; o resto é média ou baixa)
+- **Peso:** alta · média · baixa (alta = quem usa erra a tarefa ou não acha a ação; o resto é média ou baixa). Quando a crítica recebe o escopo do plano e o problema está fora dele, acrescente `Fora do escopo` nesta linha (ADR 0004): ele vira item novo e não entra no PR
 - **Onde:** arquivo:linha, ou a seção da revisão, ou a região da tela
 - **O que se vê:** o fato medido (contagem, valor, print)
 - **Por que pesa:** a consequência para quem usa

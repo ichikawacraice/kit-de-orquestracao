@@ -56,7 +56,7 @@ As pastas são as de `.claude/kit.json` (seção `documentos`); sem a seção va
 <!-- kit:design v1 -->
 ## Design de interface
 Vale para o projeto que tem front. As pastas e os globs de tela vêm de `.claude/kit.json` (seção `design`).
-- **O fluxo:** o designer escreve a revisão em `docs/design/revisoes/` antes de qualquer tela; a executora cumpre a revisão sem redesenhar; o crítico de UI julga depois. Nota abaixo de 24/30 volta para correção, com no máximo 2 recríticas.
+- **O fluxo:** o designer escreve a revisão em `docs/design/revisoes/` antes de qualquer tela; a executora cumpre a revisão sem redesenhar; o crítico de UI julga depois. Nota abaixo de 24/30 volta para correção, com no máximo 2 recríticas. Item simples (reaproveita componente que já existe e não muda decisão registrada) pode ir pela via rápida: sem revisão, com uma crítica só depois do código.
 - **`ANATOMIA.md` e `DESIGN.md` não se repetem:** o primeiro diz o que vai onde, o segundo como parece.
 - **Texto de UI não cita spec, ADR nem doc:** quem usa a tela não conhece o repositório.
 - **Ação assíncrona tem estado visível** (carregando, feito, falhou) no lugar onde a pessoa agiu.
