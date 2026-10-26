@@ -23,6 +23,8 @@ const daBarra = (papel) => {
   return { aviso: numero(m[1]), teto: numero(m[2]) };
 };
 
+const REGUA_LIDA = /regua\??\.(teto|aviso)/;
+
 describe('réguas de contexto: barra × hook', () => {
   it('os números do hook existem e não são zero', () => {
     for (const n of ['ALTO', 'TETO', 'EXEC', 'PEDIR']) assert.ok(doHook(n) > 0, n);
@@ -45,7 +47,12 @@ describe('réguas de contexto: barra × hook', () => {
     const fn = /export function textoDoContexto\([\s\S]*?\n}\n/.exec(BARRA);
     assert.ok(fn, 'textoDoContexto achada em barra.tsx');
     assert.ok(fn[0].includes('janela'), 'a função usa a janela');
-    assert.ok(!fn[0].includes('regua.teto'), 'a função não lê regua.teto');
-    assert.ok(!fn[0].includes('regua.aviso'), 'a régua só entra por corDoContexto');
+    assert.ok(!REGUA_LIDA.test(fn[0]), 'a função não lê regua.teto nem regua.aviso (com ou sem `?.`)');
+  });
+
+  it('a regex que barra a leitura da régua pega `regua?.teto` e `regua.aviso`', () => {
+    assert.ok(REGUA_LIDA.test('mil(regua?.teto ?? janela)'));
+    assert.ok(REGUA_LIDA.test('mil(regua.aviso)'));
+    assert.ok(!REGUA_LIDA.test('corDoContexto(tokens, regua)'));
   });
 });
