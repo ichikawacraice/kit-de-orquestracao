@@ -1,7 +1,9 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderSurface } from 'claude-code'
+import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import type { Citado, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, LEITURA_MS, RASCUNHO, RESPOSTA_DO_OK, abertasDoProjeto, contarPool, desenharBarra, desenharPedidoNoPane, meuItem, orquestradorasDoProjeto, papelEApelido, perguntaDeLimpeza, relogio as relogioDoCache } from './barra'
+import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
@@ -10,8 +12,8 @@ import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde
 // ao vivo só diz se o dono do item ainda existe.
 // Só escreve a resposta de uma pergunta aberta (Q67).
 
-const PANE = 'painel-sessoes'
-const TITULO = 'Sessões'
+export const PANE = 'painel-sessoes'
+export const TITULO = 'Sessões'
 /** Pixels por coluna do pane no desktop: o `bodyColumns` conta células, o `Svg` mede em px. */
 const COLUNA_PX = 8.75
 // F45: a limpeza do app mata o processo do CLI e o pane vai junto. O store guarda quais sessões do app (`local_…`) deixaram o painel aberto.
@@ -31,12 +33,12 @@ export const vencidas = (marcas: Marcas, agora: number): string[] =>
     .filter(([, em]) => !(agora - Date.parse(em) <= VALIDADE_MARCA_MS))
     .map(([id]) => id)
 const INTERVALO_MS = 60_000
-const PASTA = '.claude/orquestracao/painel'
+export const PASTA = '.claude/orquestracao/painel'
 const BASE_ORQUESTRACAO = '.claude/orquestracao'
 const BANDEIRA = 'operador-ausente.json'
 
 const VAZIA: Leitura = { lidoEm: null, lendo: false, erros: [], avisos: [], itens: [], temas: [], perguntas: [], anteriores: [] }
-const leitura = atom({ plugin: 'painel-sessoes', key: 'leitura' } as const, VAZIA)
+export const leitura = atom({ plugin: 'painel-sessoes', key: 'leitura' } as const, VAZIA)
 const respondendoEm = atom({ plugin: 'painel-sessoes', key: 'respondendoEm' } as const, null as string | null)
 const verAnteriores = atom({ plugin: 'painel-sessoes', key: 'verAnteriores' } as const, false)
 const verFeitos = atom({ plugin: 'painel-sessoes', key: 'verFeitos' } as const, false)
@@ -44,12 +46,12 @@ const verTodos = atom({ plugin: 'painel-sessoes', key: 'verTodos' } as const, fa
 const filtroTodos = atom({ plugin: 'painel-sessoes', key: 'filtroTodos' } as const, '')
 const limpezas = atom({ plugin: 'painel-sessoes', key: 'limpezas' } as const, 0)
 // A resposta em curso (a pergunta e a opção pressionada) e a sessão que o botão "abrir" está abrindo; null = nenhuma.
-const enviando = atom({ plugin: 'painel-sessoes', key: 'enviando' } as const, null as { q: string; opcao: string } | null)
+export const enviando = atom({ plugin: 'painel-sessoes', key: 'enviando' } as const, null as { q: string; opcao: string } | null)
 const abrindo = atom({ plugin: 'painel-sessoes', key: 'abrindo' } as const, null as string | null)
 // O relógio da leitura pendurada: cada tique que encontra a leitura em curso grava a hora, para a tela redesenhar e dizer "Parou".
 const tique = atom({ plugin: 'painel-sessoes', key: 'tique' } as const, 0)
 // O botão do modo está gravando a bandeira.
-const trocandoModo = atom({ plugin: 'painel-sessoes', key: 'trocandoModo' } as const, false)
+export const trocandoModo = atom({ plugin: 'painel-sessoes', key: 'trocandoModo' } as const, false)
 
 // As respostas rápidas das perguntas sem opções próprias: o texto vai ao banco e à sessão.
 const RAPIDAS = [
@@ -394,7 +396,7 @@ export function linkDe(sessaoId: string | undefined, vivas: Vivo[]): string | un
 const COR_ETAPA_TERMINAL: Record<string, string> = { planejamento: 'suggestion', design: 'suggestion', execucao: 'suggestion', validacao: 'suggestion', merge: 'success' }
 // A classe de cor que o desenho define para o claro e o escuro (hex fixo valeria para um tema só).
 const COR_RESUMO: Record<string, string> = { warning: 'av', error: 'er', suggestion: 'an', success: 'ok' }
-const ROTULO_ETAPA_TERMINAL: Record<string, string> = { planejamento: 'planejamento', design: 'design', execucao: 'execução', validacao: 'validação', merge: 'merge', feito: 'feito', descartado: 'descartado' }
+export const ROTULO_ETAPA_TERMINAL: Record<string, string> = { planejamento: 'planejamento', design: 'design', execucao: 'execução', validacao: 'validação', merge: 'merge', feito: 'feito', descartado: 'descartado' }
 
 const dois = (n: number) => String(n).padStart(2, '0')
 
@@ -442,14 +444,16 @@ const respondendo = new Set<string>()
  * Responde uma pergunta pelo painel (Q67): grava `resposta` e `estado:
  * respondida`, presa à versão lida, para não sobrescrever quem respondeu antes.
  */
-async function responder($: EngineInterface, q: PerguntaAberta, resposta: string, opcao: string): Promise<void> {
-  if (respondendo.has(q.id) || !resposta.trim()) return
+export async function responder($: EngineInterface, q: PerguntaAberta, resposta: string, opcao: string): Promise<{ gravou: boolean; motivo?: string }> {
+  if (respondendo.has(q.id) || !resposta.trim()) return { gravou: false }
   respondendo.add(q.id)
+  let resultado: { gravou: boolean; motivo?: string } = { gravou: false }
   await update($, enviando, () => ({ q: q.id, opcao }))
   try {
     const agora = new Date(await $.clock.now()).toISOString()
-    if (!pastaLida) throw new Error('a pasta do painel ainda não foi lida')
-    const arquivo = `${pastaLida}/perguntas/${q.id}.json`
+    // Com o pane nunca aberto (a barra responde sem ele) ainda não houve leitura: a pasta é a de sempre.
+    const pasta = pastaLida || `${await $.env.get('HOME')}/${PASTA}`
+    const arquivo = `${pasta}/perguntas/${q.id}.json`
     // Presa à versão lida: quem respondeu antes (no chat ou noutra janela) não é sobrescrito.
     const atual = lerDoc((await $.fs.read(arquivo)) as string, `${q.id}.json`)
     if (atual.data.estado !== 'aberta' || (q.versao !== undefined && atual.version !== q.versao)) {
@@ -458,21 +462,25 @@ async function responder($: EngineInterface, q: PerguntaAberta, resposta: string
     // `respondidaPor` e `respondidaEm` são a prova do clique do operador: só o pane os grava (a trava da limpeza da orquestradora os lê).
     const data = { ...atual.data, estado: 'respondida', resposta: resposta.trim(), atualizadoEm: agora, respondidaPor: 'painel', respondidaEm: agora }
     await $.fs.write(arquivo, `${JSON.stringify({ id: q.id, version: (atual.version ?? 0) + 1, data }, null, 2)}\n`)
+    resultado = { gravou: true }
     await update($, respondendoEm, atual => (atual === q.id ? null : atual))
     // "Enviando…" dura até a sessão de fora responder ao send_message; o prompt da própria sessão não se espera.
     await entregar($, q, resposta.trim())
   } catch (err) {
+    resultado = { gravou: resultado.gravou, motivo: mensagem(err) }
     await avisar($, `${q.id} não gravada: ${mensagem(err)}`)
   } finally {
     respondendo.delete(q.id)
     await update($, enviando, atual => (atual?.q === q.id ? null : atual))
   }
-  await atualizar($)
+  await relerDepoisDoClique($)
+
+  return resultado
 }
 
 const AVISOS = 10
 // A falha de uma resposta fica em `avisos`, que a releitura não apaga: só o botão de limpar.
-const avisar = ($: EngineInterface, aviso: string) =>
+export const avisar = ($: EngineInterface, aviso: string) =>
   update($, leitura, l => ({ ...l, avisos: [...(l.avisos ?? []), aviso].slice(-AVISOS) }))
 
 const naoChegou = ($: EngineInterface, q: PerguntaAberta, motivo: string) =>
@@ -703,7 +711,10 @@ async function ler($: EngineInterface): Promise<void> {
     const dono = q.item ? porId.get(q.item) : undefined
     if (dono) q.rotulo = `${dono.id} · ${dono.titulo}`
   }
+  const projetoDaLeitura = (await read($, barra)).projeto ?? (await projetoDoCwd($))
+  const limpeza = perguntaDeLimpeza(docsPerguntas, orquestradorasDoProjeto(docsSessoes, projetoDaLeitura), proprio, agora)
   await update($, leitura, l => ({
+    limpeza,
     avisos: l.avisos ?? [],
     lidoEm: agora,
     lendo: false,
@@ -738,13 +749,19 @@ async function lerBandeira($: EngineInterface): Promise<NonNullable<Leitura['aus
 let geracaoModo = 0
 let trocandoAgora = false
 
+/** Depois de um clique: com o pane aberto, a leitura dele; senão só a da barra (a leve, sem `list_sessions`). */
+async function relerDepoisDoClique($: EngineInterface): Promise<void> {
+  if (deveFechar(await $.ui.panes())) await atualizar($)
+  else await lerBarra($, true)
+}
+
 /**
  * O botão do modo: o efeito entra na hora (`leitura.ausente` já é o modo novo) e a recusa desfaz, dizendo o motivo.
  * Liga gravando `{desde, frase, sessionId, por: "painel"}`; desliga gravando `{ligado: false, desde, desligadoEm, por: "painel"}`
  * (o pane não apaga arquivo; o `desde` do período fica para o resumo da ausência) e pede a cada orquestradora ativa o resumo
  * (skill orquestradora, seção resumo-da-ausencia). Não abre sessão nem pré-abre o pool: isso é do `/ausente on`.
  */
-async function alternarModo($: EngineInterface): Promise<void> {
+export async function alternarModo($: EngineInterface): Promise<void> {
   if (trocandoAgora) return
   trocandoAgora = true
   const antes = (await read($, leitura)).ausente
@@ -778,7 +795,7 @@ async function alternarModo($: EngineInterface): Promise<void> {
     trocandoAgora = false
     await update($, trocandoModo, () => false)
   }
-  await atualizar($)
+  await relerDepoisDoClique($)
 }
 
 /**
@@ -830,8 +847,28 @@ async function pedirResumo($: EngineInterface, desde: string | undefined, ate: s
   return pedidas
 }
 
+/**
+ * A leitura leve do modo (a barra, a cada 30 s): só a bandeira, no mesmo campo `leitura.ausente`, com o mesmo cuidado de
+ * `ler` com uma troca em curso. Bandeira que não se lê = `null` (vale presente) e o motivo em `erros`.
+ */
+export async function atualizarModo($: EngineInterface): Promise<void> {
+  const geracao = geracaoModo
+  let ausente: Leitura['ausente'] = null
+  let erro: string | undefined
+  try {
+    ausente = await lerBandeira($)
+  } catch (err) {
+    erro = `modo ausente (${BANDEIRA}): ${mensagem(err)}`
+  }
+  await update($, leitura, l => ({
+    ...l,
+    ausente: geracao === geracaoModo && !trocandoAgora ? ausente : l.ausente,
+    erros: [...l.erros.filter(x => !x.startsWith('modo ausente (')), ...(erro ? [erro] : [])],
+  }))
+}
+
 // A sessão do app (`local_…`) que roda este processo; o CLI no terminal não tem, e então o mod não grava nem reabre.
-async function sessaoDoApp($: EngineInterface): Promise<string | undefined> {
+export async function sessaoDoApp($: EngineInterface): Promise<string | undefined> {
   try {
     return (await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')) || undefined
   } catch (erro) {
@@ -883,6 +920,279 @@ async function reabrir($: EngineInterface): Promise<void> {
   }
 }
 
+// ---- a barra de status acima do prompt (F52): leitura leve, relógio do cache e gestos; o desenho e as regras puras vivem em barra.tsx ----
+
+const BARRA_VAZIA: Barra = {
+  lidoEm: null,
+  abertas: 0,
+  limpeza: null,
+  okEnviado: null,
+  ehOrquestradora: false,
+  titulo: null,
+  item: null,
+  pool: { e: 0, v: 0 },
+  projeto: null,
+  cache: { expiraEm: null, segundos: null },
+  avisado: 0,
+  tokens: null,
+  erros: [],
+}
+export const barra = atom({ plugin: 'painel-sessoes', key: 'barra' } as const, BARRA_VAZIA)
+const barraEscondida = atom({ plugin: 'painel-sessoes', key: 'barraEscondida' } as const, false)
+
+// O turno da conversa principal está rodando: o aviso do cache só sai com ele parado.
+let trabalhandoNaBarra = false
+let timerRelogio: { cancel: () => void } | undefined
+let timerLeitura: { cancel: () => void } | undefined
+let lendoBarra = false
+let okEmCurso = false
+
+const nomeDaPasta = (p: string) => p.replace(/\/+$/, '').split('/').pop() ?? ''
+
+/** O projeto como o painel o grava: a pasta que contém o `.git`; worktree `.claude/worktrees/x` → a pasta acima de `.claude`. Minúsculo. */
+async function projetoDoCwd($: EngineInterface): Promise<string | null> {
+  let cwd: string
+  try {
+    cwd = await $.session.cwd()
+  } catch {
+    return null
+  }
+  const w = cwd.indexOf('/.claude/worktrees/')
+  if (w > 0) return nomeDaPasta(cwd.slice(0, w)).toLowerCase()
+  let dir = cwd
+  for (let i = 0; i < 12 && dir.length > 1; i++) {
+    try {
+      if ((await $.fs.list(dir)).some(x => x.name === '.git')) return nomeDaPasta(dir).toLowerCase()
+    } catch {
+      break
+    }
+    dir = dir.slice(0, dir.lastIndexOf('/')) || '/'
+  }
+
+  return nomeDaPasta(cwd).toLowerCase() || null
+}
+
+/** O título desta sessão no registro do app; fora do app (ou sem o arquivo), `null`. */
+async function tituloDoApp($: EngineInterface, home: string | undefined, id: string): Promise<string | null> {
+  try {
+    const conta = await $.env.get('CLAUDE_CODE_ACCOUNT_UUID')
+    const org = await $.env.get('CLAUDE_CODE_ORGANIZATION_UUID')
+    if (!home || !conta || !org) return null
+    const reg = JSON.parse((await $.fs.read(`${home}/${BANDEIRA_DO_APP}/${conta}/${org}/${id}.json`)) as string) as Record<string, unknown>
+
+    return texto(reg.title) ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Uma leitura por vez; falha vira linha em `erros`, nunca exceção solta. Só arquivos: o `list_sessions` fica para o pane aberto. */
+async function lerBarra($: EngineInterface, depoisDoClique = false): Promise<void> {
+  if (lendoBarra) return
+  lendoBarra = true
+  try {
+    const home = await $.env.get('HOME')
+    const pasta = `${home}/${PASTA}`
+    const erros: string[] = []
+    const colecao = async (nome: string): Promise<Doc[]> => {
+      let entradas: Awaited<ReturnType<EngineInterface['fs']['list']>> = []
+      try {
+        entradas = await $.fs.list(`${pasta}/${nome}`)
+      } catch (err) {
+        erros.push(`${nome}: ${mensagem(err)}`)
+      }
+      const docs: Doc[] = []
+      for (const e of entradas) {
+        if (e.kind !== 'file' || !e.name.endsWith('.json')) continue
+        try {
+          docs.push(lerDoc((await $.fs.read(`${pasta}/${nome}/${e.name}`)) as string, e.name))
+        } catch (err) {
+          erros.push(`${nome}/${e.name}: ${mensagem(err)}`)
+        }
+      }
+
+      return docs
+    }
+    const [docsPerguntas, docsFila, docsSessoes] = await Promise.all([colecao('perguntas'), colecao('fila'), colecao('sessoes')])
+    const host = await sessaoDoApp($)
+    const titulo = host ? await tituloDoApp($, home, host) : null
+    const item = host ? meuItem(docsFila, host) : null
+    const projeto = item?.projeto ?? (await projetoDoCwd($))
+    const orquestradoras = orquestradorasDoProjeto(docsSessoes, projeto)
+    const agoraDaLeitura = await $.clock.now()
+    const pedida = perguntaDeLimpeza(docsPerguntas, orquestradoras, host, agoraDaLeitura)
+    await atualizarModo($).catch(err => void erros.push(`modo ausente: ${mensagem(err)}`))
+    let tokens: number | null = null
+    try {
+      tokens = (await $.session.usage()).context.tokens ?? null
+    } catch (err) {
+      erros.push(`contexto: ${mensagem(err)}`)
+    }
+    const agora = await $.clock.now()
+    await update($, barra, b => {
+      // Logo depois do clique, o pedido que acabou de ser respondido fica na tela para o "✓ Ok enviado"; a próxima leitura o tira.
+      const respondidaAgora = depoisDoClique && b.limpeza !== null && docsPerguntas.some(d => d.id === b.limpeza?.id && d.data.estado === 'respondida' && d.data.respondidaPor === 'painel')
+      const limpeza = pedida ?? (respondidaAgora ? b.limpeza : null)
+
+      return {
+        ...b,
+        lidoEm: agora,
+        abertas: abertasDoProjeto(docsPerguntas),
+        limpeza,
+        okEnviado: limpeza && limpeza.id === b.okEnviado ? b.okEnviado : null,
+        ehOrquestradora: (host !== undefined && orquestradoras.includes(host)) || papelEApelido(titulo).papel === 'orquestradora',
+        titulo,
+        item: item ? { id: item.id, titulo: item.titulo, etapa: item.etapa } : null,
+        pool: contarPool(docsFila, projeto),
+        projeto,
+        tokens,
+        erros,
+      }
+    })
+  } catch (err) {
+    await update($, barra, b => ({ ...b, erros: [...b.erros, `leitura: ${mensagem(err)}`] })).catch(() => {})
+  } finally {
+    lendoBarra = false
+  }
+}
+
+async function avisarCache($: EngineInterface, minutos: number): Promise<void> {
+  const b = await read($, barra)
+  const quem = [b.projeto, b.titulo].filter(Boolean).join(' — ')
+  const aviso = `${quem ? `${quem}: ` : ''}o cache vence em ${minutos} min`
+  try {
+    const r = await $.tool.call({ tool: 'PushNotification', message: aviso, status: 'proactive' })
+    if (r.deny !== undefined || r.isError) $.ui.toast(aviso)
+  } catch {
+    $.ui.toast(aviso)
+  }
+}
+
+/** Um tique por segundo: recalcula os segundos (só grava quando o segundo muda) e dá o aviso de 10 e de 5 min, uma vez cada. */
+async function tiqueDoCache($: EngineInterface): Promise<void> {
+  const b = await read($, barra)
+  if (b.cache.expiraEm === null) return
+  const segundos = Math.max(0, Math.ceil((b.cache.expiraEm - (await $.clock.now())) / 1000))
+  const alvo = trabalhandoNaBarra ? 0 : segundos <= AVISO_MIN / 4 ? 2 : segundos <= AVISO_MIN / 2 ? 1 : 0
+  if (segundos === b.cache.segundos && alvo <= b.avisado) return
+  await update($, barra, x => ({ ...x, cache: { ...x.cache, segundos }, avisado: Math.max(x.avisado, alvo) }))
+  if (alvo > b.avisado) await avisarCache($, alvo === 2 ? 5 : 10)
+}
+
+/** O ok para a orquestradora se limpar: o `responder` do pane, que grava a prova do clique (`respondidaPor`, `respondidaEm`). */
+async function darOkDeLimpar($: EngineInterface, limpeza: PerguntaAberta): Promise<void> {
+  if (okEmCurso) return
+  okEmCurso = true
+  try {
+    const r = await responder($, limpeza, RESPOSTA_DO_OK, 'sim')
+    if (r.gravou) await update($, barra, b => ({ ...b, okEnviado: limpeza.id }))
+    else $.ui.toast(`Não consegui mandar o ok de limpar (${r.motivo ?? 'não gravou'}).`)
+  } finally {
+    okEmCurso = false
+  }
+}
+
+/** "Limpar antes de vencer" sem pedido aberto: só põe o rascunho na caixa do prompt; quem manda é o operador, com Enter. */
+async function rascunhoDeLimpar($: EngineInterface): Promise<void> {
+  try {
+    const r = await $.prompt.fill({ text: RASCUNHO })
+    $.ui.toast(r.isFilled ? 'Rascunho na caixa do prompt: aperte Enter para mandar.' : 'Não deu para pôr o rascunho na caixa do prompt.')
+  } catch (err) {
+    $.ui.toast(`Não deu para pôr o rascunho na caixa do prompt (${mensagem(err)}).`)
+  }
+}
+
+/** Do `session.start` do mod (o motor só aceita um por plugin): o comando, os dois relógios e a primeira leitura. */
+async function iniciarBarra($: EngineInterface): Promise<void> {
+  await $.command.register({ name: 'barra', description: 'Mostra ou esconde a barra de status do kit' })
+  timerRelogio?.cancel()
+  timerLeitura?.cancel()
+  timerRelogio = $.clock.every(1000, () => void tiqueDoCache($).catch(() => {}))
+  timerLeitura = $.clock.every(LEITURA_MS, () => void lerBarra($))
+  await lerBarra($)
+}
+
+function registrarBarra(on: On): void {
+  on('command.run', { command: 'barra' }, async $ => {
+    const escondida = !(await read($, barraEscondida))
+    await update($, barraEscondida, () => escondida)
+
+    return { text: escondida ? 'Barra de status escondida.' : 'Barra de status à mostra.' }
+  })
+
+  on('turn.start', async ($, e, next) => {
+    if (!(e as { agentId?: string }).agentId) trabalhandoNaBarra = true
+
+    return next(e)
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    const r = await next(e)
+    if ((e as { agentId?: string }).agentId) return r
+    trabalhandoNaBarra = false
+    const agora = await $.clock.now()
+    await update($, barra, b => ({ ...b, cache: { expiraEm: agora + CACHE_TTL_MS, segundos: Math.ceil(CACHE_TTL_MS / 1000) }, avisado: 0 }))
+    void lerBarra($)
+
+    return r
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const b = await read($, barra)
+    if (e.props.hasSurvey || (await read($, barraEscondida))) return next(e)
+    const l = await read($, leitura)
+    const trocando = await read($, trocandoModo)
+    const emCurso = await read($, enviando)
+    const elementos = $.ui.resolve(e)
+    const painelAberto = deveFechar(await $.ui.panes())
+    const modo = l.ausente === undefined || l.ausente === null ? null : l.ausente.ligado ? 'ausente' : 'presente'
+
+    return desenharBarra(
+      elementos,
+      {
+        b,
+        modo,
+        trocando,
+        enviandoQ: emCurso?.q ?? null,
+        painelAberto,
+        isWorking: e.props.isWorking,
+        bodyColumns: e.props.bodyColumns,
+        item: b.item ? `${b.item.id} · ${ROTULO_ETAPA_TERMINAL[b.item.etapa] ?? b.item.etapa}` : null,
+      },
+      {
+        abrirPainel: () => void abrirPainel($),
+        alternarPainel: () => void alternarPainel($),
+        alternarModo: () => void alternarModo($),
+        darOk: limpeza => void darOkDeLimpar($, limpeza),
+        rascunho: () => void rascunhoDeLimpar($),
+      },
+    )
+  })
+}
+
+/** O `/painel` e o botão da barra: abre o pane, ou fecha o que a pessoa vê. */
+export async function alternarPainel($: EngineInterface): Promise<{ text: string }> {
+  if (deveFechar(await $.ui.panes())) {
+    await $.ui.close({ id: PANE })
+    parar()
+    await mudarMarca($, (m, id) => desmarcar(m, id))
+
+    return { text: 'Painel das sessões fechado.' }
+  }
+  const r = await $.ui.open({ id: PANE, title: TITULO, columns: 60 })
+  ligar($)
+  await mudarMarca($, marcar)
+
+  return {
+    text: r.isPlaced ? 'Painel das sessões aberto.' : `Painel aberto, mas sem lugar agora: ${r.reason}`,
+  }
+}
+
+/** O selo da barra: abre o painel e, se ele já está à vista, não faz nada (o botão do painel é que fecha). */
+export async function abrirPainel($: EngineInterface): Promise<void> {
+  if (!deveFechar(await $.ui.panes())) await alternarPainel($)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const r = await next(e)
@@ -895,26 +1205,14 @@ export const register: Register = on => {
     // Global em toda sessão: só lê enquanto o pane está aberto, nunca de fundo.
     if ((await $.ui.panes()).some(p => p.id === PANE)) ligar($)
     else await reabrir($)
+    await iniciarBarra($)
 
     return r
   })
 
-  on('command.run', { command: 'painel' }, async $ => {
-    if (deveFechar(await $.ui.panes())) {
-      await $.ui.close({ id: PANE })
-      parar()
-      await mudarMarca($, (m, id) => desmarcar(m, id))
+  on('command.run', { command: 'painel' }, $ => alternarPainel($))
 
-      return { text: 'Painel das sessões fechado.' }
-    }
-    const r = await $.ui.open({ id: PANE, title: TITULO, columns: 60 })
-    ligar($)
-    await mudarMarca($, marcar)
-
-    return {
-      text: r.isPlaced ? 'Painel das sessões aberto.' : `Painel aberto, mas sem lugar agora: ${r.reason}`,
-    }
-  })
+  registrarBarra(on)
 
   on('ui.close', async ($, e, next) => {
     if (e.id === PANE) {
@@ -954,6 +1252,7 @@ export const register: Register = on => {
     const abrindoAgora = await read($, abrindo)
     await read($, tique)
     const trocando = await read($, trocandoModo)
+    const doBarra = await read($, barra)
     // "Abrir P2": pede ao app que ponha a sessão em foco; o que ele recusar, o botão devolve como endereço copiado.
     // O `Button` não tem `disabled`: enquanto abre, o rótulo vira "Abrindo…" e o clique é ignorado.
     const abrir = (dono: NonNullable<LinhaItem['dono']>) => (
@@ -994,6 +1293,8 @@ export const register: Register = on => {
     const resumo4 = resumo.map(r => ({ ...r, cor: COR_RESUMO[r.cor] ?? 'm' }))
     const lido = l.lidoEm !== null
     const parada = leituraParada(l.lidoEm, agora)
+    // O pedido de limpeza da orquestradora: a mesma pergunta e o mesmo botão da barra, lidos do que ela leu.
+    const pedidoPane = desenharPedidoNoPane(elementos, { limpeza: l.limpeza ?? null, okEnviado: doBarra.okEnviado, enviandoQ: enviandoAgora?.q ?? null, agora }, limpeza => void darOkDeLimpar($, limpeza))
     const situacao = (localId: string) => situacaoDe(localId, l.sessoes ?? [], undefined, l.semLista ?? false, agora)
     const trabalhando = sec.executando.filter(i => pessoasVivas(i).some(p => situacao(p.localId) === 'trabalhando agora')).length
 
@@ -1195,6 +1496,7 @@ export const register: Register = on => {
               </Box>
             </Box>
             {linhaParou && <Svg source={linhaParou.source} alt={linhaParou.alt} width={W} height={linhaParou.height} />}
+            {pedidoPane}
             {faixaModo && <Svg source={faixaModo.source} alt={faixaModo.alt} width={W} height={faixaModo.height} />}
           </Box>
           <Svg source={cartaoResumo.source} alt={resumo4.map(r => `${r.n} ${r.rotulo}`).join(', ')} width={W} height={cartaoResumo.height} />
@@ -1338,6 +1640,7 @@ export const register: Register = on => {
               {botaoAtualizar(parada ? '⚠ ler' : l.lidoEm === null ? '↻ ler' : `↻ ${hora(l.lidoEm)}`, 'atualizar', { autoFocus: true })}
             </Box>
           </Box>
+          {pedidoPane}
           {modo === 'ausente' && (
             <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
               <Text inverse bold>{` ☾ AUSENTE ${modoDescrito(l.ausente?.desde, agora).ha} `}</Text>

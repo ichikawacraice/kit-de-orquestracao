@@ -74,6 +74,8 @@ export type PerguntaAberta = {
   caso?: string
   recomendacao?: string
   seNaoDecidir?: string
+  /** Quando a pergunta foi gravada pela última vez (ISO). */
+  atualizadoEm?: string
 }
 
 export type PerguntaAnterior = {
@@ -108,8 +110,33 @@ export type Leitura = {
   sessoes?: SessaoViva[]
   /** A lista de sessões, ou a própria sessão, não veio: a situação de cada sessão é "sem leitura da sessão". */
   semLista?: boolean
+  /** O pedido de limpeza da orquestradora, achado nas perguntas e sessões desta leitura (a linha do topo do pane). */
+  limpeza?: PerguntaAberta | null
   /** O modo ausente da última leitura; `null` = o arquivo não se leu (JSON inválido); ausente (undefined) antes da 1ª leitura e no estado de antes desta versão. */
   ausente?: { ligado: boolean; desde?: string; por?: string } | null
+}
+
+/** O que a barra de status lê, de leve, a cada 30 s e a cada turno: só arquivos, nunca `list_sessions`. */
+export type Barra = {
+  lidoEm: number | null
+  /** As perguntas com `estado: "aberta"` (todas, como o selo do pane). */
+  abertas: number
+  /** O pedido `limpar · orquestradora` aberto da orquestradora do projeto, o mais recente. */
+  limpeza: PerguntaAberta | null
+  /** O Q-ID cujo ok já foi enviado por esta barra; a linha diz "Ok enviado" até a leitura não ver mais a pergunta aberta. */
+  okEnviado: string | null
+  /** Esta sessão é a orquestradora do projeto. */
+  ehOrquestradora: boolean
+  titulo: string | null
+  item: { id: string; titulo: string; etapa: string } | null
+  pool: { e: number; v: number }
+  projeto: string | null
+  /** `expiraEm` é o fim do cache de 1 h desde a última resposta; `segundos` o que falta (null sem resposta ainda). */
+  cache: { expiraEm: number | null; segundos: number | null }
+  /** Quantos avisos de cache já saíram nesta resposta (0, 1 aos 10 min, 2 aos 5). */
+  avisado: number
+  tokens: number | null
+  erros: string[]
 }
 
 declare module 'claude-code' {
@@ -134,6 +161,10 @@ declare module 'claude-code' {
       tique: number
       /** O botão do modo está gravando a bandeira: o clique é ignorado até acabar. */
       trocandoModo: boolean
+      /** A leitura leve da barra de status acima do prompt. */
+      barra: Barra
+      /** O `/barra` escondeu a barra nesta sessão. */
+      barraEscondida: boolean
     }
   }
 }
