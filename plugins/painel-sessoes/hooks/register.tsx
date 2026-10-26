@@ -46,9 +46,9 @@ const verFeitos = atom({ plugin: 'painel-sessoes', key: 'verFeitos' } as const, 
 const verTodos = atom({ plugin: 'painel-sessoes', key: 'verTodos' } as const, false)
 const filtroTodos = atom({ plugin: 'painel-sessoes', key: 'filtroTodos' } as const, '')
 const limpezas = atom({ plugin: 'painel-sessoes', key: 'limpezas' } as const, 0)
-// A resposta em curso (a pergunta e a opção pressionada) e a sessão que o botão "abrir" está abrindo; null = nenhuma.
+// A resposta em curso (a pergunta e a opção pressionada) e a sessão que o botão "abrir" está abrindo, com o botão pressionado; null = nenhuma.
 export const enviando = atom({ plugin: 'painel-sessoes', key: 'enviando' } as const, null as { q: string; opcao: string } | null)
-const abrindo = atom({ plugin: 'painel-sessoes', key: 'abrindo' } as const, null as string | null)
+const abrindo = atom({ plugin: 'painel-sessoes', key: 'abrindo' } as const, null as { localId: string; botao: string } | null)
 // Os pedidos de sessão em curso, por id de item (e `lote`); só em memória (F69 D6): recarregar o pane traz os botões de volta.
 export const pedindo = atom({ plugin: 'painel-sessoes', key: 'pedindo' } as const, {} as Record<string, EstadoPedido>)
 // O relógio da leitura pendurada: cada tique que encontra a leitura em curso grava a hora, para a tela redesenhar e dizer "Parou".
@@ -541,7 +541,7 @@ function entregar($: EngineInterface, q: PerguntaAberta, resposta: string): Prom
  * "abrir <apelido>": o app põe a sessão em foco (só aceita as que esta sessão iniciou). Recusa ou erro viram o
  * endereço copiado e um aviso que diz o que houve; nunca fica calado.
  */
-async function abrirSessao($: EngineInterface, dono: NonNullable<LinhaItem['dono']>, surface: RenderSurface): Promise<void> {
+async function abrirSessao($: EngineInterface, dono: NonNullable<LinhaItem['dono']>, surface: RenderSurface, botao: string): Promise<void> {
   const naoDeu = async (porque: string) => {
     try {
       const c = dono.link ? await $.ui.copy({ text: dono.link, surface }) : undefined
@@ -551,16 +551,19 @@ async function abrirSessao($: EngineInterface, dono: NonNullable<LinhaItem['dono
       $.ui.toast(`não deu para abrir ${dono.apelido} nem copiar o endereço: ${mensagem(err)}`)
     }
   }
-  await update($, abrindo, () => dono.localId)
+  await update($, abrindo, () => ({ localId: dono.localId, botao }))
   try {
     const r = await $.tool.call({ tool: 'mcp__ccd_window__open_session_in', session_id: dono.localId, target: 'focus' })
     if (r.deny !== undefined || r.isError) await naoDeu(r.deny || r.text || 'erro sem texto')
   } catch (err) {
     await naoDeu(mensagem(err))
   } finally {
-    await update($, abrindo, atual => (atual === dono.localId ? null : atual))
+    await update($, abrindo, atual => (atual?.botao === botao ? null : atual))
   }
 }
+
+/** Valor gravado por versão anterior (só o id da sessão) vale nenhum. */
+const normalizarAbrindo = (v: unknown): { localId: string; botao: string } | null => (v !== null && typeof v === 'object' ? (v as { localId: string; botao: string }) : null)
 
 // ── F69: pedir a sessão que falta a um item ────────────────────────────────────────────────────────────────────────────
 
@@ -731,7 +734,7 @@ async function enviarPedidos(
   }
   // Com um destino só e a mensagem enviada, a conversa da orquestradora vai a foco; com dois ou mais, o toast diz onde estão os cartões.
   const unico = saiu.length === 1 && grupos.size === 1 ? saiu[0] : undefined
-  if (unico?.kind === 'mensagem') await abrirSessao($, { apelido: `orquestradora de ${unico.projeto}`, localId: unico.orq, link: linkDe(unico.orq, []) }, surface)
+  if (unico?.kind === 'mensagem') await abrirSessao($, { apelido: `orquestradora de ${unico.projeto}`, localId: unico.orq, link: linkDe(unico.orq, []) }, surface, `auto:${unico.orq}`)
 }
 
 // O último lugar onde uma superfície desenhou o pane: o que a tool de diagnóstico relata.
@@ -1440,30 +1443,35 @@ export const register: Register = on => {
     const elementos = $.ui.resolve(e)
     const { Box, Text, Button } = elementos
     const enviandoAgora = await read($, enviando)
-    const abrindoAgora = await read($, abrindo)
+    const abrindoAgora = normalizarAbrindo(await read($, abrindo))
     await read($, tique)
     const trocando = await read($, trocandoModo)
     const doBarra = await read($, barra)
     // "Abrir P2": pede ao app que ponha a sessão em foco; o que ele recusar, o botão devolve como endereço copiado.
     // O `Button` não tem `disabled`: enquanto abre, o rótulo vira "Abrindo…" e o clique é ignorado.
-    const abrir = (dono: NonNullable<LinhaItem['dono']>) => (
-      <Button
-        key={`abrir:${dono.localId}`}
-        variant="secondary"
-        onPress={() => {
-          if (abrindoAgora !== dono.localId) void abrirSessao($, dono, e.surface)
-        }}
-      >
-        {abrindoAgora === dono.localId ? 'Abrindo…' : `Abrir ${dono.apelido}`}
-      </Button>
-    )
+    // O rótulo "Abrindo…" acende só no botão pressionado (`botao`); o clique repetido é ignorado em qualquer botão da mesma sessão.
+    const abrir = (itemId: string, dono: NonNullable<LinhaItem['dono']>) => {
+      const botao = `abrir:${itemId}:${dono.localId}`
+
+      return (
+        <Button
+          key={`abrir:${dono.localId}`}
+          variant="secondary"
+          onPress={() => {
+            if (abrindoAgora?.localId !== dono.localId) void abrirSessao($, dono, e.surface, botao)
+          }}
+        >
+          {abrindoAgora?.botao === botao ? 'Abrindo…' : `Abrir ${dono.apelido}`}
+        </Button>
+      )
+    }
     // Um botão por sessão viva do item: as de `com` e o dono, sem repetir quem está nas duas listas; no máximo 3.
     const botoesAbrir = (i: LinhaItem) => {
       if (i.situacao === 'feito') return []
       const vistos = new Set<string>()
       const quem = [...(i.com ?? []).map(c => ({ apelido: c.apelido, localId: c.localId, link: c.link })), ...(i.dono ? [i.dono] : [])]
 
-      return quem.flatMap(q => (q.link && !vistos.has(q.localId) ? (vistos.add(q.localId), [abrir(q)]) : [])).slice(0, 3)
+      return quem.flatMap(q => (q.link && !vistos.has(q.localId) ? (vistos.add(q.localId), [abrir(i.id, q)]) : [])).slice(0, 3)
     }
     // F69: pedir a sessão que falta. O estado vive no átomo `pedindo`; o destino vem das orquestradoras lidas e das sessões vivas.
     const pedindoAgora = await read($, pedindo)
@@ -1487,16 +1495,16 @@ export const register: Register = on => {
         ? 'Sem a lista de sessões do app · os botões de pedir voltam na próxima leitura'
         : 'varias' in d
           ? `${d.varias} orquestradoras ativas em ${projeto} · peça na conversa da certa`
-          : `Sem orquestradora ativa em ${projeto}${n === undefined ? '' : ` · ${n} ${n === 1 ? 'item' : 'itens'}`}`
+          : `Sem orquestradora ativa em ${projeto}${n === undefined ? '' : `\u00a0·\u00a0${n}\u00a0${n === 1 ? 'item' : 'itens'}`}`
     const botaoOrquestradora = (key: string, projeto: string, id: string) => (
       <Button
         key={key}
         variant="secondary"
         onPress={() => {
-          if (abrindoAgora !== id) void abrirSessao($, { apelido: `orquestradora de ${projeto}`, localId: id, link: linkDe(id, []) }, e.surface)
+          if (abrindoAgora?.localId !== id) void abrirSessao($, { apelido: `orquestradora de ${projeto}`, localId: id, link: linkDe(id, []) }, e.surface, key)
         }}
       >
-        {abrindoAgora === id ? 'Abrindo…' : 'Abrir a orquestradora'}
+        {abrindoAgora?.botao === key ? 'Abrindo…' : 'Abrir a orquestradora'}
       </Button>
     )
     // O que o item pede, em três peças: a linha de estado (acima), o botão e, no cartão, o botão da orquestradora. `curta`: na linha da fila.
@@ -1521,9 +1529,9 @@ export const register: Register = on => {
       )
       const linha =
         p.estado?.estado === 'prompt'
-          ? { t: `No prompt às ${hhmm(p.estado.em)} · aperte Enter`, cor: 'warning' as const }
+          ? { t: `No prompt às ${hhmm(p.estado.em)} · aperte Enter`, cor: 'warning' as 'warning' | undefined }
           : p.estado?.estado === 'pedido'
-            ? { t: naFila ? `Pedido às ${hhmm(p.estado.em)} · inicie o cartão` : `Pedido às ${hhmm(p.estado.em)} · inicie o cartão na conversa da orquestradora`, cor: 'warning' as const }
+            ? { t: naFila ? `Pedido às ${hhmm(p.estado.em)} · inicie o cartão` : `Pedido às ${hhmm(p.estado.em)} · inicie o cartão na conversa da orquestradora`, cor: (naFila ? undefined : 'warning') as 'warning' | undefined }
             : undefined
 
       return { linha, botao, orq: p.estado?.estado === 'pedido' && !naFila ? botaoOrquestradora(`orq:${i.id}`, p.projeto, p.destino.id) : undefined }
@@ -1556,7 +1564,7 @@ export const register: Register = on => {
       }
       const grupos = [...emPedido].map(([projeto, o]) => ({
         projeto,
-        frase: `${o.n} ${o.n === 1 ? 'cartão espera' : 'cartões esperam'} você na conversa da orquestradora de ${projeto}`,
+        frase: `${o.n} ${o.n === 1 ? 'cartão da fila espera' : 'cartões da fila esperam'} você na conversa da orquestradora de ${projeto}`,
         botao: botaoOrquestradora(`orq:${projeto}`, projeto, o.id),
       }))
       const avisosDeProjeto: string[] = []
@@ -1861,7 +1869,7 @@ export const register: Register = on => {
                       width={W}
                       height={card.height}
                     />
-                    {q.sessaoId && q.link && <Box flexDirection="row">{abrir({ apelido: q.sessao, localId: q.sessaoId, link: q.link })}</Box>}
+                    {q.sessaoId && q.link && <Box flexDirection="row">{abrir(`pergunta:${q.id}`, { apelido: q.sessao, localId: q.sessaoId, link: q.link })}</Box>}
                     {acoes(q)}
                   </Box>
                 )
