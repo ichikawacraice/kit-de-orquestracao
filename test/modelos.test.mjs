@@ -84,3 +84,22 @@ describe('blocos do modelos/CLAUDE.md (K10)', () => {
     assert.match(b[2], /kit:documentos/);
   });
 });
+
+describe('PRODUCT.md do front: plataforma que o Impeccable reconhece (F66)', () => {
+  // Mesma regra do Impeccable: a primeira linha não vazia depois do título, até o próximo título.
+  const plataforma = (texto) => {
+    const m = /^## Platform[ \t]*\r?\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(texto);
+    return m && m[1].split(/\r?\n/).map((l) => l.trim()).find(Boolean);
+  };
+
+  test('o leitor enxerga o comentário como valor no texto antigo (a regra mede de verdade)', () => {
+    assert.equal(plataforma('## Platform\n\n<!-- web | mobile | desktop -->\n\n## Users\n'), '<!-- web | mobile | desktop -->');
+  });
+
+  test('a primeira linha da seção existe, não é comentário e é uma plataforma válida', () => {
+    const valor = plataforma(ler('front/PRODUCT.md'));
+    assert.ok(valor, 'seção `## Platform` ausente ou vazia');
+    assert.ok(!valor.startsWith('<!--'), `o valor é comentário: ${valor}`);
+    assert.ok(['web', 'ios', 'android', 'adaptive'].includes(valor), `plataforma desconhecida: ${valor}`);
+  });
+});

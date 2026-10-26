@@ -6,7 +6,9 @@
 
 ## Platform
 
-<!-- web | mobile | desktop -->
+web
+
+<!-- Um de: web · ios · android · adaptive (iOS e Android de uma base só). O Impeccable lê a primeira linha desta seção. -->
 
 ## Users
 

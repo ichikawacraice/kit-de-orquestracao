@@ -566,6 +566,43 @@ caso('F61.3 o projeto aberto por um caminho com symlink continua liberado', () =
     igual(decisao(rodar(SN, editar(`${alias}/src/a.ts`, sub('design:designer')))), 'deny', 'src pelo alias');
   } finally { unlinkSync(alias); }
 }));
+// F66: a recusa por symlink diz o motivo e grava `recusou-symlink`; a recusa comum não muda.
+caso('F66.1 symlink que leva para fora da pasta de revisões recusa com o motivo e o log próprio', () => comRepo(() => {
+  const MOTIVO_SYMLINK = /link simb[oó]lico/i;
+  const ultimo = () => log().at(-1)[3];
+  const recusa = (p) => {
+    const r = rodar(SN, editar(p, sub('design:designer')));
+    igual(decisao(r), 'deny', `deny de ${p}`);
+    return r.hookSpecificOutput.permissionDecisionReason;
+  };
+  const confere = (p, onde) => {
+    const motivo = recusa(p);
+    igual(MOTIVO_SYMLINK.test(motivo), true, `${onde}: o motivo cita link simbólico (${motivo})`);
+    igual(motivo.includes(REV), true, `${onde}: o motivo cita a pasta de revisões`);
+    igual(ultimo(), 'recusou-symlink', `${onde}: log`);
+  };
+  mkdirSync(join(REPO, 'outra', 'design', 'revisoes'), { recursive: true });
+  symlinkSync(join(REPO, 'outra'), join(REPO, 'docs'));
+  confere(`${REPO}/${REV}/x.md`, 'docs em symlink para dentro do repo');
+  unlinkSync(join(REPO, 'docs'));
+
+  mkdirSync(join(REPO, 'src'), { recursive: true });
+  mkdirSync(join(REPO, REV), { recursive: true });
+  symlinkSync(join(REPO, 'src'), join(REPO, REV, 'link'));
+  confere(`${REPO}/${REV}/link/a.ts`, 'symlink de pasta dentro da revisão');
+  symlinkSync(join(REPO, 'src', 'novo.ts'), join(REPO, REV, 'novo.ts'));
+  confere(`${REPO}/${REV}/novo.ts`, 'symlink quebrado');
+  rmSync(join(REPO, REV), { recursive: true, force: true });
+  symlinkSync(join(REPO, 'src'), join(REPO, REV));
+  confere(`${REPO}/${REV}/a.ts`, 'a pasta é symlink');
+  unlinkSync(join(REPO, REV));
+
+  // Cerca: fora da pasta, sem symlink, segue o motivo genérico e o log `recusou`.
+  const motivo = recusa(`${REPO}/src/a.ts`);
+  igual(MOTIVO_SYMLINK.test(motivo), false, 'src/a.ts não cita link simbólico');
+  igual(/não grava arquivo do projeto/.test(motivo), true, 'src/a.ts: motivo genérico');
+  igual(ultimo(), 'recusou', 'src/a.ts: log');
+}));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
   const f = transcript([...trabalho(), fala('Pronto, editei.')], 'exec · x');
   const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');
