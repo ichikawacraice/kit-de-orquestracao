@@ -3,7 +3,8 @@
 // (operador, 24/10: "só assim entrar e sair do modo ausente, mesmo que eu escreva não sair do modo, pq posso vir,
 // dar um comando e sair novamente"). Frase solta ("vou dormir") e prompt comum NÃO mexem; não há prazo de validade.
 // `/ausente` sem argumento só mostra o estado (a skill responde). Mensagem de outra sessão não liga nem desliga.
-// Bandeira: <BASE>/operador-ausente.json = { desde, frase, sessionId }. Quem lê: papel-do-pool.mjs (T3a).
+// O botão do painel é a segunda via humana: liga gravando `por:"painel"` e desliga gravando `{ligado:false}` (o pane não apaga arquivo).
+// Bandeira: <BASE>/operador-ausente.json = { desde, frase, sessionId, por }. Quem lê: `modoAusente()` (T3a, T7, contexto-do-papel).
 import { existsSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { BASE, registrar, lerEntrada } from './hooks-crewai-comum.mjs';
@@ -35,7 +36,7 @@ function main() {
   const arq = join(BASE, 'operador-ausente.json');
   if (cmd === 'on') {
     mkdirSync(BASE, { recursive: true });
-    writeFileSync(arq, `${JSON.stringify({ desde: new Date().toISOString(), frase: '/ausente on', sessionId: e.session_id || null })}\n`);
+    writeFileSync(arq, `${JSON.stringify({ desde: new Date().toISOString(), frase: '/ausente on', sessionId: e.session_id || null, por: 'comando' })}\n`);
     registrar(sid, HOOK, 'ausente-on');
   } else {
     rmSync(arq, { force: true });

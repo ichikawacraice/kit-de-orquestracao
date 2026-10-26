@@ -36,13 +36,15 @@ function transcript(base, { tokens, texto = 'feito', ferramentas = [], anterior 
 function rodar(base, quem, f, extra = {}) {
   const out = execFileSync('node', [HOOK], {
     input: JSON.stringify({ session_id: ID[quem], transcript_path: f, hook_event_name: 'Stop', ...extra }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
-    env: { ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app') },
+    env: { ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'), PAINEL_DIR: join(base, 'painel') },
   });
   return out ? JSON.parse(out) : null;
 }
 const log = (base) => { const p = join(base, 'orq', 'hooks-crewai.log'); return existsSync(p) ? readFileSync(p, 'utf8') : ''; };
 const com = (fn) => { const base = novo(); try { fn(base); } finally { rmSync(base, { recursive: true, force: true }); } };
 const LIMPA = ['mcp__ccd_session_mgmt__clear_session', { session_id: 'self' }];
+const ligar = (b, extra = {}) => writeFileSync(join(b, 'orq', 'operador-ausente.json'), JSON.stringify({ desde: new Date().toISOString(), frase: '/ausente on', sessionId: 'x', por: 'comando', ...extra }));
+const pergunta = (b, id, data) => { mkdirSync(join(b, 'painel', 'perguntas'), { recursive: true }); writeFileSync(join(b, 'painel', 'perguntas', `${id}.json`), JSON.stringify({ id, data })); };
 const cobrou = (r, re) => { assert.equal(r?.decision, 'block', `esperava block, veio ${JSON.stringify(r)}`); assert.match(r.reason, re); };
 
 test('1. P com 210 mil sem a linha de escape: cobra (cobrou-200)', () => com((b) => {
@@ -101,6 +103,7 @@ test('8. sessão avulsa com 400 mil: não cobra e não registra', () => com((b) 
 }));
 test('8b. D segue a régua da planejadora; a orquestradora (título) também', () => com((b) => {
   cobrou(rodar(b, 'D', transcript(b, { tokens: 210_000 })), /210 mil/);
+  ligar(b);
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 210_000 })), /210 mil/);
 }));
 test('9. stop_hook_active com P a 210 mil: passa (deixou-passar)', () => com((b) => {
@@ -161,6 +164,52 @@ test('O3b. o mesmo parágrafo com uma pergunta de verdade ao lado da URL dispara
 }));
 test('O3c. precondição: sem URL, o `?` sozinho dispara (o teste mede a URL, não um hook que nunca cobra)', () => com((b) => {
   cobrou(rodar(b, 'P', transcript(b, { tokens: 160_000, texto: 'pronto\n\nposso seguir?' })), /160 mil/);
+}));
+
+// F48: a orquestradora com o operador presente só pede o ok (250 mil); com o modo ausente ligado vale a régua de antes.
+const agora = () => new Date().toISOString(); const haMin = (m) => new Date(Date.now() - m * 60_000).toISOString();
+const LIMPAR = (extra = {}) => ({ titulo: 'limpar · orquestradora', sessaoId: 'local_ORQ', estado: 'aberta', atualizadoEm: agora(), ...extra });
+test('F48-1. ORQ com 260 mil, sem bandeira nem pergunta: cobra pedir (cobrou-pedir)', () => com((b) => {
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
+  assert.match(log(b), /\tcobrou-pedir\t/);
+}));
+test('F48-2. ORQ com 260 mil e pergunta de limpeza aberta dela: passa (satisfeito-pediu)', () => com((b) => {
+  pergunta(b, 'Q1', LIMPAR());
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null);
+  assert.match(log(b), /\tsatisfeito-pediu\t/);
+}));
+test('F48-3. a pergunta de limpeza é de outra sessão: cobra', () => com((b) => {
+  pergunta(b, 'Q1', LIMPAR({ sessaoId: 'local_P' }));
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
+}));
+test('F48-4. pergunta respondida "não" há 1 h segura a cobrança; há 3 h não', () => com((b) => {
+  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: haMin(60) }));
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null);
+  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: haMin(180) }));
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
+}));
+test('F48-5. ORQ com 260 mil que chamou clear_session "self" no turno: passa (limpou)', () => com((b) => {
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, ferramentas: [LIMPA] })), null);
+  assert.match(log(b), /\tlimpou\t/);
+}));
+test('F48-6. ORQ com 160 mil terminando em "?": sem bandeira passa; com bandeira cobra cobrou-150-espera', () => com((b) => {
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 160_000, texto: 'pronto.\n\nPosso seguir?' })), null);
+  ligar(b);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 160_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
+  assert.match(log(b), /\tcobrou-150-espera\t/);
+}));
+test('F48-7. ORQ com 210 mil: sem bandeira passa; com bandeira cobra cobrou-200', () => com((b) => {
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 210_000 })), null);
+  ligar(b);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 210_000 })), /210 mil/);
+  assert.match(log(b), /\tcobrou-200\t/);
+}));
+test('F48-8. bandeira {ligado:false} vale como desligada: ORQ com 210 mil passa', () => com((b) => {
+  ligar(b, { ligado: false, desligadoEm: agora(), por: 'painel' });
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 210_000 })), null);
+}));
+test('F48-9. planejadora com 210 mil segue cobrando sem bandeira (a mudança é só da orquestradora)', () => com((b) => {
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 210_000 })), /210 mil/);
 }));
 
 // F49: executora cheia termina com a limpeza.
