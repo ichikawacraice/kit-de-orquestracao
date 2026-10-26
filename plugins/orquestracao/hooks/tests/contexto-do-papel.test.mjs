@@ -192,6 +192,8 @@ test('F48-4. pergunta respondida "não" há 1 h segura a cobrança; há 3 h não
 test('F48-5. ORQ com 260 mil que chamou clear_session "self" no turno: passa (limpou)', () => com((b) => {
   assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, ferramentas: [LIMPA] })), null);
   assert.match(log(b), /\tlimpou\t/);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/); // sem a chamada no turno a mesma entrada cobra: o teste mede a limpeza
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, anterior: [LIMPA] })), /limpar · orquestradora/);
 }));
 test('F48-6. ORQ com 160 mil terminando em "?": sem bandeira passa; com bandeira cobra cobrou-150-espera', () => com((b) => {
   assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 160_000, texto: 'pronto.\n\nPosso seguir?' })), null);

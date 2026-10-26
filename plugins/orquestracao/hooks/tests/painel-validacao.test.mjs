@@ -265,5 +265,23 @@ caso('respondidaPor é prova do clique no painel: set/update/batch pela linha de
   igual(painel('update', 'perguntas', 'Q1', '{"estado":"respondida","resposta":"sim"}').exit, 0, 'resposta normal deve passar');
 });
 
+caso('A1: resposta trocada pela linha de comando apaga o respondidaPor do clique anterior', () => {
+  mkdirSync(join(base, 'painel', 'perguntas'), { recursive: true });
+  writeFileSync(arq('perguntas', 'Q1'), JSON.stringify({ id: 'Q1', version: 1, data: { estado: 'respondida', titulo: 'limpar · orquestradora', sessaoId: 'local_a', resposta: 'não', respondidaPor: 'painel' } }));
+  const ant = JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data;
+  igual(ant.respondidaPor, 'painel', 'precondição: o documento nasce com o clique do painel');
+  const r = painel('update', 'perguntas', 'Q1', '{"resposta":"sim"}');
+  igual(r.exit, 0, `exit (${r.err})`);
+  const d = JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data;
+  igual(d.resposta, 'sim', 'a resposta nova foi gravada');
+  igual(d.respondidaPor, undefined, 'o respondidaPor antigo sobreviveu à troca da resposta');
+});
+caso('A1b: update que não mexe em resposta nem estado preserva o respondidaPor do painel', () => {
+  mkdirSync(join(base, 'painel', 'perguntas'), { recursive: true });
+  writeFileSync(arq('perguntas', 'Q1'), JSON.stringify({ id: 'Q1', version: 1, data: { estado: 'respondida', titulo: 'x', sessaoId: 'local_a', resposta: 'sim', respondidaPor: 'painel' } }));
+  igual(painel('update', 'perguntas', 'Q1', '{"nota":"y"}').exit, 0, 'update');
+  igual(JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data.respondidaPor, 'painel', 'apagou sem motivo');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;
