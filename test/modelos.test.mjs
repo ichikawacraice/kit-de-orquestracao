@@ -62,9 +62,9 @@ describe('modelos de documento (K10)', () => {
 describe('blocos do modelos/CLAUDE.md (K10)', () => {
   const t = ler('CLAUDE.md');
 
-  test('kit:documentos v1 existe, fechado e com as regras de doc', () => {
+  test('kit:documentos v2 existe, fechado e com as regras de doc', () => {
     const b = bloco(t, 'documentos');
-    assert.ok(b, 'bloco kit:documentos ausente'); assert.equal(b[1], '1');
+    assert.ok(b, 'bloco kit:documentos ausente'); assert.equal(b[1], '2');
     for (const frase of ['4 dígitos', 'imutável', '400 caracteres', 'diário', 'datada', 'âncora', 'mergeado', '3 dígitos', 'Pendências:', 'A spec no presente só afirma o que existe', 'no máximo 2 links']) {
       assert.ok(b[2].toLowerCase().includes(frase.toLowerCase()), `kit:documentos não diz "${frase}"`);
     }

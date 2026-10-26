@@ -73,7 +73,7 @@ Cada regra se liga à parte:
 | `indice-de-adr` | ADR fora do índice, linha do índice para arquivo ausente, rótulo com número que não é o do arquivo, célula Decisão acima de `orcamentos.decisaoDoAdr` (200) |
 | `linha-do-roadmap` | linha de item acima de `orcamentos.linhaDoRoadmap` (400), mais de `orcamentos.linksDoRoadmap` (2) links para spec/ADR, âncora que o destino não declara (spec, ADR e diário exigem `<a id>`; outro doc aceita o slug do título) |
 | `links-relativos` | link relativo em `documentos.docs` para arquivo ou âncora inexistente (código e crases não contam) |
-| `tamanho-do-diario` | parte do diário acima de `orcamentos.diarioEmBytes` (150000) |
+| `tamanho-do-diario` | parte do acervo ou entrada acima de `orcamentos.diarioEmBytes` (150000); entrada fora de `AAAA-MM/DD-<ancora>.md`, vazia ou sem `<a id>` igual à âncora; mês depois da primeira pasta como arquivo único |
 
 ```jsonc
 { "documentos": {

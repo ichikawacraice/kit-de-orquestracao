@@ -1,6 +1,6 @@
 {
   "name": "processos",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Processos de desenvolvimento: spec-driven (SPEC, ADR, roadmap, diário), revisar-diff com cético e auditoria de clique.",
   "author": {
     "name": "ichikawacraice"
@@ -33,7 +33,7 @@
     "conferir_tamanho_do_diario": {
       "type": "boolean",
       "title": "Conferir o tamanho do diário",
-      "description": "O gate reprova parte do diário acima do orçamento em bytes.",
+      "description": "O gate reprova parte ou entrada do diário acima do orçamento e entrada fora do formato AAAA-MM/DD-<ancora>.md.",
       "default": true
     }
   }

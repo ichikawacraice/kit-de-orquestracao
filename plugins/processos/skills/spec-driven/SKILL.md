@@ -20,11 +20,11 @@ Leia as pastas do `.claude/kit.json`, seção `documentos`. Sem a seção, valem
 | `documentos.adr` | `docs/adr` | decisões, `NNNN-slug.md` |
 | `documentos.specs` | `docs/specs` | contratos, `SPEC-NNN-slug.md` |
 | `documentos.roadmap` | `docs/roadmap.md` | índice do progresso, uma linha por item |
-| `documentos.diario` | `docs/diario` | narrativa, um arquivo por mês |
+| `documentos.diario` | `docs/diario` | narrativa, uma entrada por arquivo em `AAAA-MM/DD-<ancora>.md` |
 | `documentos.research` | `docs/research` | pesquisa datada (snapshot) |
 | `documentos.planos` | `docs/planos` | planos por data |
 
-O vocabulário de status e os orçamentos (400 caracteres por linha do roadmap, 150 KB por mês do diário) são os padrões deste texto; `documentos.estados` e `documentos.orcamentos` do `kit.json` os trocam, e `documentos.docs` é a raiz de onde os links relativos são conferidos.
+O vocabulário de status e os orçamentos (400 caracteres por linha do roadmap, 150 KB por entrada do diário (e por parte do acervo antigo)) são os padrões deste texto; `documentos.estados` e `documentos.orcamentos` do `kit.json` os trocam, e `documentos.docs` é a raiz de onde os links relativos são conferidos.
 
 Se o projeto tem orquestradora ativa, **peça a ela o número** (ADR, SPEC) antes de escrever o arquivo; sem orquestradora, confira o maior existente e some um. Número nunca é reutilizado. Número reservado sem spec escrita fica registrado no índice, de forma explícita.
 
@@ -58,9 +58,9 @@ Em **Contexto**, escreva fatos verificáveis — commit, arquivo, medição, err
 
 Ao concluir ou iniciar tarefa relevante, atualize o roadmap **na hora** — fonte de verdade do progresso, uma linha por item, com a data, **em até 400 caracteres e no máximo 2 links de rastro** (a spec e o ADR principais). Tarefa nova relevante entra na fase certa.
 
-A linha é curta e diz o que mudou **e por que importava**; a narrativa longa vai em `<documentos.diario>/AAAA-MM.md`, um arquivo por mês (fatiado em `AAAA-MM-parte-N.md` quando passa de 150 KB; a entrada nova vai na última parte), com âncora explícita e apontada da linha por `· [detalhe](diario/AAAA-MM.md#ancora)`.
+A linha é curta e diz o que mudou **e por que importava**; a narrativa longa vai em `<documentos.diario>/AAAA-MM/DD-<ancora>.md`, um arquivo novo por entrada (âncora `[a-z0-9-]+`, declarada com `<a id>` na linha acima do título), apontada da linha por `· [detalhe](diario/AAAA-MM/DD-<ancora>.md#<ancora>)`. Item que cresce depois do merge ganha entrada nova (outro dia, outra âncora); a entrada mergeada não se reescreve. Sem índice por pasta. O acervo `AAAA-MM.md`/`-parte-N.md` fica, mas não cresce: mês novo é pasta.
 
-**Item que cresce faz a ENTRADA DO DIÁRIO crescer, nunca a linha.** Linha que engorda vira índice ilegível; com `documentos.conferir` ligado, o gate reprova a linha acima de 400 caracteres, o terceiro link e a âncora que não existe no destino.
+**Item que cresce ganha ENTRADA NOVA no diário, nunca a linha mais longa.** Linha que engorda vira índice ilegível; com `documentos.conferir` ligado, o gate reprova a linha acima de 400 caracteres, o terceiro link e a âncora que não existe no destino.
 
 **Fraco:** `- [x] Corrigido bug na promoção — 2026-08-15`
 
