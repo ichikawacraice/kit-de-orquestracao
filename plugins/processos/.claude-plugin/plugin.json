@@ -1,8 +1,40 @@
 {
   "name": "processos",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Processos de desenvolvimento: spec-driven (SPEC, ADR, roadmap, diário), revisar-diff com cético e auditoria de clique.",
   "author": {
     "name": "ichikawacraice"
+  },
+  "userConfig": {
+    "conferir_status_da_spec": {
+      "type": "boolean",
+      "title": "Conferir o status da spec",
+      "description": "O gate reprova spec com status fora do vocabulário fechado ou fora do índice. Vale só para a sua conta; para o time, use documentos.conferir no kit.json.",
+      "default": true
+    },
+    "conferir_indice_de_adr": {
+      "type": "boolean",
+      "title": "Conferir o índice de ADR",
+      "description": "O gate reprova ADR fora do índice, linha do índice sem arquivo e célula de decisão acima do orçamento.",
+      "default": true
+    },
+    "conferir_linha_do_roadmap": {
+      "type": "boolean",
+      "title": "Conferir a linha do roadmap",
+      "description": "O gate reprova linha de item acima do orçamento, com links demais ou com âncora que o destino não declara.",
+      "default": true
+    },
+    "conferir_links_relativos": {
+      "type": "boolean",
+      "title": "Conferir os links relativos",
+      "description": "O gate reprova link relativo em docs/ para arquivo ou âncora que não existe.",
+      "default": true
+    },
+    "conferir_tamanho_do_diario": {
+      "type": "boolean",
+      "title": "Conferir o tamanho do diário",
+      "description": "O gate reprova parte do diário acima do orçamento em bytes.",
+      "default": true
+    }
   }
 }

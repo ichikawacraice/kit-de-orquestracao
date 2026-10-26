@@ -10,6 +10,10 @@ import { LOCK, blocosDe, sha256 } from './lock.mjs';
 export const RAIZ_DO_KIT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MARKETPLACE = 'kit-de-orquestracao';
 export const PLUGIN = `orquestracao@${MARKETPLACE}`;
+/** Os plugins do kit que o projeto liga em `enabledPlugins`, na ordem em que entram. */
+export const PLUGINS_DO_KIT = [PLUGIN, `painel-sessoes@${MARKETPLACE}`, `processos@${MARKETPLACE}`, `design@${MARKETPLACE}`];
+/** O Impeccable: só entra com `--design` (recomendação, não dependência), com as envs que cortam telemetria e checagem de versão. */
+export const IMPECCABLE = { marketplace: 'impeccable', plugin: 'impeccable@impeccable', origem: { source: { source: 'github', repo: 'pbakaus/impeccable' } }, env: { IMPECCABLE_NO_TELEMETRY: '1', IMPECCABLE_NO_UPDATE_CHECK: '1' } };
 const REPO_DO_KIT = 'ichikawacraice/kit-de-orquestracao';
 export const HOOK_GUARDA = 'node "$CLAUDE_PROJECT_DIR/scripts/kit/guarda-de-operacao.mjs"';
 const TESTE_PADRAO_DO_NPM = /no test specified/;
@@ -23,6 +27,60 @@ export const modeloClaude = () => readFileSync(join(RAIZ_DO_KIT, 'modelos', 'CLA
 export function blocosDoModelo() {
   return Object.fromEntries([...modeloClaude().matchAll(/<!-- kit:([a-z-]+) v\d+ -->[\s\S]*?<!-- \/kit:\1 -->/g)].map((m) => [m[1], m[0]]));
 }
+/** Uma pasta de front válida para `--design`: relativa, sem `..`, sem barra no fim. Devolve `{ pasta }` ou `{ erro }`. */
+export function pastaDoFront(valor) {
+  const pasta = String(valor ?? '').trim().replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!pasta || pasta.startsWith('-')) return { erro: '--design pede a pasta do front (ex.: --design apps/web)' };
+  if (pasta.startsWith('/') || /^[A-Za-z]:/.test(pasta)) return { erro: `--design: "${valor}" é caminho absoluto — use um caminho relativo à raiz do projeto` };
+  if (pasta.split('/').some((p) => p === '..')) return { erro: `--design: "${valor}" sai do projeto (..) — use um caminho dentro dele` };
+  return { pasta: pasta.replace(/^\.\//, '') };
+}
+
+/** Os arquivos que um diretório de `modelos/` traz, com o caminho relativo a ele, ordenados. */
+function arquivosDe(dir, prefixo = '') {
+  return readdirSync(join(dir, prefixo), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).flatMap((e) => (e.isDirectory() ? arquivosDe(dir, `${prefixo}${e.name}/`) : [`${prefixo}${e.name}`]));
+}
+/**
+ * Os modelos de documento (`modelos/docs` → `docs/`) e, com `--design`, os de front (`modelos/front` → `<pasta>/`) que faltam no projeto.
+ * Arquivo que já existe fica (não é do kit). Modelo dentro de pasta que já existe também fica: a pasta do projeto não ganha arquivo
+ * (um `docs/adr/` com ADRs próprios não muda um byte). Devolve `{ novos: [{ arquivo, novo }], deixados: [pastas/arquivos já existentes] }`.
+ */
+export function planejarModelos(destino, pastaDoFrontEscolhida) {
+  const novos = []; const deixados = [];
+  // pasta que só tem `.kit-tmp` órfão é de um `iniciar` morto no meio: conta como ausente
+  const soOrfaos = (dir) => { try { return readdirSync(dir, { withFileTypes: true }).every((e) => (e.isDirectory() ? soOrfaos(join(dir, e.name)) : e.name.endsWith('.kit-tmp'))); } catch { return false; } };
+  const existe = (rel) => existsSync(join(destino, rel)) && !soOrfaos(join(destino, rel));
+  const origens = [{ de: join(RAIZ_DO_KIT, 'modelos', 'docs'), para: 'docs', porPasta: true }];
+  if (pastaDoFrontEscolhida) origens.push({ de: join(RAIZ_DO_KIT, 'modelos', 'front'), para: pastaDoFrontEscolhida, porPasta: false });
+  for (const { de, para, porPasta } of origens) {
+    for (const f of arquivosDe(de)) {
+      const rel = `${para}/${f}`;
+      const pasta = dirname(rel);
+      if (existsSync(join(destino, rel))) { deixados.push(rel); continue; }
+      if (porPasta && pasta !== para && existe(pasta)) { if (!deixados.includes(pasta)) deixados.push(pasta); continue; }
+      novos.push({ arquivo: rel, novo: readFileSync(join(de, f), 'utf8') });
+    }
+  }
+  return { novos, deixados };
+}
+
+/** Os documentos que o projeto já tem e que as regras de conferência olhariam. */
+export const docsDoProjeto = (destino) => ['docs/adr', 'docs/specs', 'docs/roadmap.md', 'docs/diario'].filter((rel) => existsSync(join(destino, rel)));
+/**
+ * O aviso de que as cinco regras de conferência, ligadas por padrão, podem reprovar o primeiro gate com os documentos que o projeto já tem.
+ * `pluginLigado`: o que `enabledPlugins` diz do `processos` (`true`, `false` ou `undefined`; sem valor não vale como ligado). Fora do `enabledPlugins` o `/plugin` não tem
+ * opção para ajustar: o aviso manda ligar o plugin ou, para desligar uma regra, escrever `documentos.conferir` no kit.json.
+ */
+export const avisoDasRegras = (docs, pluginLigado) => (pluginLigado === true
+  ? `o projeto já tem ${docs.join(', ')} e o plugin processos liga as cinco regras de conferência de documento por padrão: elas podem reprovar o primeiro gate com os documentos de hoje. Para desligar para o time, escreva documentos.conferir no .claude/kit.json (lista vazia não confere nada); para ajustar só a sua conta, use o /plugin do terminal (opções do processos), que grava no seu ~/.claude/settings.json.`
+  : `o projeto já tem ${docs.join(', ')} e o gate confere as docs pelo padrão do plugin processos (as cinco regras) mesmo com o plugin fora do enabledPlugins deste projeto: elas podem reprovar o primeiro gate com os documentos de hoje. Para poder ajustar as opções, ligue o plugin processos (enabledPlugins "processos@${MARKETPLACE}": true no .claude/settings.json); para desligar uma regra sem ligá-lo, escreva documentos.conferir no .claude/kit.json (lista vazia não confere nada).`);
+
+/** Os caminhos (relativos ao projeto) dos modelos de documento e, com `--design`, de front: onde um `.kit-tmp` órfão pode ter ficado. */
+export const caminhosDosModelos = (pastaDoFrontEscolhida) => [
+  ...arquivosDe(join(RAIZ_DO_KIT, 'modelos', 'docs')).map((f) => `docs/${f}`),
+  ...(pastaDoFrontEscolhida ? arquivosDe(join(RAIZ_DO_KIT, 'modelos', 'front')).map((f) => `${pastaDoFrontEscolhida}/${f}`) : []),
+];
+
 export const arquivosDoGate = () => readdirSync(join(RAIZ_DO_KIT, 'gate')).filter((n) => n.endsWith('.mjs')).sort();
 
 const BOM = '\uFEFF';
@@ -37,6 +95,20 @@ export const fraseDoKit = () => modeloClaude().split(/\n\n/).find((par) => par.s
 export function acrescentar(claude, texto) {
   const add = `${claude.endsWith('\n') ? '' : '\n'}\n${texto}\n`;
   return claude + (eolDe(claude) === '\n' ? add : add.replace(/\n/g, '\r\n'));
+}
+
+/**
+ * Bloco novo do modelo no CLAUDE.md do projeto, na ordem do modelo: antes do primeiro bloco seguinte a ele que o arquivo já tem
+ * (o `iniciar` os põe nessa ordem); sem nenhum seguinte, no fim. Mantém o fim de linha do arquivo.
+ */
+export function inserirBloco(claude, nome, texto, modelo = blocosDoModelo()) {
+  const ordem = Object.keys(modelo);
+  const seguinte = ordem.slice(ordem.indexOf(nome) + 1).find((n) => new RegExp(`<!-- kit:${n} v\\d+ -->`).test(claude));
+  if (!seguinte) return acrescentar(claude, texto);
+  const eol = eolDe(claude);
+  const i = claude.search(new RegExp(`<!-- kit:${seguinte} v\\d+ -->`));
+  const bloco = eol === '\n' ? texto : texto.replace(/\n/g, eol);
+  return `${claude.slice(0, i)}${bloco}${eol}${eol}${claude.slice(i)}`;
 }
 
 /** JSON de volta ao texto com a indentação, o fim de linha (LF/CRLF) e o BOM do original (sem original: 2 espaços e quebra final). */
@@ -59,10 +131,11 @@ function lerJsonOuErro(destino, rel, erros) {
 function soDoKit(v) {
   const chaves = (o) => Object.keys(o ?? {});
   const pre = v?.hooks?.PreToolUse;
-  return chaves(v).every((k) => ['hooks', 'extraKnownMarketplaces', 'enabledPlugins'].includes(k))
+  return chaves(v).every((k) => ['hooks', 'extraKnownMarketplaces', 'enabledPlugins', 'env'].includes(k))
     && (v.hooks === undefined || (chaves(v.hooks).join() === 'PreToolUse' && pre.length === 1 && pre[0].hooks?.length === 1 && pre[0].hooks[0].command === HOOK_GUARDA))
-    && (v.extraKnownMarketplaces === undefined || chaves(v.extraKnownMarketplaces).join() === MARKETPLACE)
-    && chaves(v.enabledPlugins).every((n) => [PLUGIN, `painel-sessoes@${MARKETPLACE}`].includes(n));
+    && chaves(v.extraKnownMarketplaces).every((n) => [MARKETPLACE, IMPECCABLE.marketplace].includes(n))
+    && chaves(v.env).every((n) => n in IMPECCABLE.env)
+    && chaves(v.enabledPlugins).every((n) => [...PLUGINS_DO_KIT, IMPECCABLE.plugin].includes(n));
 }
 
 
@@ -188,7 +261,7 @@ export const ehGateProprio = (destino, comando) => { const m = typeof comando ==
  * Calcula o que o kit grava. Devolve { erro } ou { mudancas:[{arquivo,antigo,novo}], conflitos, pendencias, lock }.
  * `lock` já traz arquivos/blocos/chaves, calculados sobre o conteúdo NOVO (hashes) — o chamador só acrescenta versão e perfil.
  */
-export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'test:projeto', criarClaude = false, recuperando = false }) {
+export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'test:projeto', criarClaude = false, recuperando = false, design }) {
   const p = lerModelo().perfis[perfil];
   if (!p) return { erro: `perfil "${perfil}" desconhecido — use ${Object.keys(lerModelo().perfis).join(' ou ')}` };
   const erros = [];
@@ -250,6 +323,13 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     else if (atual !== novo) conflitos.push(`${rel} já existe diferente do kit — não sobrescrevi`);
     else if (recuperando) lock.arquivos[rel] = sha256(novo); // cópia idêntica que o processo morto deixou
   }
+
+  // modelos de documento (e de front, com --design): só o que falta, registrado no lock com o hash
+  const modelosDeDoc = planejarModelos(destino, design);
+  for (const m of modelosDeDoc.novos) lock.arquivos[m.arquivo] = sha256(m.novo);
+  if (modelosDeDoc.deixados.length) avisosDoProjeto.push(`modelos de documento: já existe ${modelosDeDoc.deixados.join(', ')}; não copiei o modelo para lá nem mexi em nada dentro`);
+  if (design) lock.design = design;
+  const docsExistentes = docsDoProjeto(destino);
 
   // package.json
   const pk = lerJsonOuErro(destino, 'package.json', erros);
@@ -324,10 +404,18 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     else if (!isDeepStrictEqual(s.extraKnownMarketplaces[MARKETPLACE], mkt)) conflitos.push(`extraKnownMarketplaces.${MARKETPLACE} já aponta para outra origem — não troquei`);
     else if (recuperando) cs.marketplace = true;
     s.enabledPlugins = { ...(s.enabledPlugins ?? {}) };
-    for (const nome of [PLUGIN, `painel-sessoes@${MARKETPLACE}`]) {
+    for (const nome of PLUGINS_DO_KIT) {
       if (!(nome in s.enabledPlugins)) { s.enabledPlugins[nome] = true; cs.plugins.push(nome); }
       else if (s.enabledPlugins[nome] !== true) conflitos.push(`enabledPlugins.${nome} já é ${JSON.stringify(s.enabledPlugins[nome])} — não troquei`);
       else if (recuperando) cs.plugins.push(nome);
+    }
+    if (design) {
+      // o Impeccable é recomendação: o que o projeto já declara fica como está (e fora do lock, logo o remover não o toca)
+      s.extraKnownMarketplaces = { ...s.extraKnownMarketplaces };
+      if (!(IMPECCABLE.marketplace in s.extraKnownMarketplaces)) { s.extraKnownMarketplaces[IMPECCABLE.marketplace] = structuredClone(IMPECCABLE.origem); (cs.marketplaces ??= []).push(IMPECCABLE.marketplace); }
+      if (!(IMPECCABLE.plugin in s.enabledPlugins)) { s.enabledPlugins[IMPECCABLE.plugin] = true; cs.plugins.push(IMPECCABLE.plugin); }
+      s.env = { ...(ehObjeto(s.env) ? s.env : {}) };
+      for (const [nome, valor] of Object.entries(IMPECCABLE.env)) if (!(nome in s.env)) { s.env[nome] = valor; (cs.env ??= {})[nome] = valor; }
     }
     if (recuperando && st.texto !== null) cs.criado = soDoKit(st.valor);
     const novo = st.texto !== null && isDeepStrictEqual(s, st.valor) ? st.texto : serializar(s, st.texto); // sem mudança de valor, o texto do projeto fica como está (nada de reformatar)
@@ -345,11 +433,16 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     if (desejado.gate?.comandoCompleto) desejado.gate.comandoCompleto = comandoSuite;
     if (gatePropria) { delete desejado.gate?.comandoCompleto; if (desejado.gate && !Object.keys(desejado.gate).length) delete desejado.gate; }
     if (guardaPropria && !('guarda' in k)) desejado.guarda = 'do-projeto';
+    const doModelo = lerModelo();
+    desejado.documentos = structuredClone(doModelo.documentos ?? {});
+    desejado.design = structuredClone(doModelo.design ?? {});
+    if (design) { desejado.design.pasta = design; desejado.design.fontes = ['PRODUCT.md', 'ANATOMIA.md', 'DESIGN.md'].map((f) => `${design}/${f}`); }
     const mescla = (alvo, fonte, caminho) => {
       for (const [chave, valor] of Object.entries(fonte)) {
         const cam = caminho ? `${caminho}.${chave}` : chave;
         if (!(chave in alvo)) { alvo[chave] = valor; ck.adicionadas.push({ caminho: cam, valor }); }
         else if (ehObjeto(alvo[chave]) && ehObjeto(valor)) mescla(alvo[chave], valor, cam);
+        else if (/^(documentos|design)\./.test(cam)) continue; // caminho de documento e de design: o do projeto vale, não é conflito
         else if (!isDeepStrictEqual(alvo[chave], valor)) conflitos.push(`.claude/kit.json: ${cam} já é ${JSON.stringify(alvo[chave])} — não troquei`);
         else if (recuperando) ck.adicionadas.push({ caminho: cam, valor });
       }
@@ -363,14 +456,16 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     else if (kj.texto === null) lock.arquivos['.claude/kit.json'] = null; else if (!recuperando) ck.original = kj.texto;
   }
 
+  for (const m of modelosDeDoc.novos) mudancas.push({ arquivo: m.arquivo, antigo: null, novo: m.novo }); // por último: a ordem dos renames antigos não muda
   if (erros.length) return { erro: erros.join('; ') };
   // hashes dos arquivos que o kit criou inteiros (o conteúdo novo)
   for (const rel of Object.keys(lock.arquivos)) if (lock.arquivos[rel] === null) lock.arquivos[rel] = sha256(mudancas.find((m) => m.arquivo === rel).novo);
   if (recuperando) {
-    lock.pastasCriadas = ['.claude', 'scripts', 'scripts/kit'].filter((d) => existsSync(join(destino, d)));
+    const dosModelos = [...new Set(modelosDeDoc.novos.flatMap((m) => { const partes = dirname(m.arquivo).split('/'); return partes.map((_, i) => partes.slice(0, i + 1).join('/')); }))];
+    lock.pastasCriadas = ['.claude', 'scripts', 'scripts/kit', ...dosModelos].filter((d) => existsSync(join(destino, d)));
     lock.recuperado = true;
   }
-  return { mudancas, conflitos, pendencias, avisos, avisosProjeto: avisosDoProjeto, lock };
+  return { mudancas, conflitos, pendencias, avisos, avisosProjeto: avisosDoProjeto, lock, docsExistentes };
 }
 
 /**

@@ -10,7 +10,7 @@ skills:
 
 Você é o **designer** do projeto. Seu produto é uma revisão de arquitetura, não código. Siga a skill `revisao-de-arquitetura-de-ui` à risca: as fontes na ordem, os seis princípios como critério, a entrega com os títulos fixos.
 
-- **Leia antes de opinar:** as fontes de `design` no `.claude/kit.json` (`design.fontes`: o que o produto é, o que vai onde, como parece), as convenções do front no `CLAUDE.md`, a spec da tela e o código de hoje. Quando der, a tela renderizada, nos dois temas e na largura de referência (`design.largura`, padrão 1280).
+- **Leia antes de opinar:** as fontes de `design` no `.claude/kit.json` (`design.fontes`: o que o produto é, o que vai onde, como parece), as convenções do front no `CLAUDE.md`, a spec da tela e o código de hoje. Quando der, a tela renderizada, nos dois temas e na largura de referência (a largura de referência é `design.largura` do kit.json; sem a chave vale a opção `largura` do plugin, hoje ${user_config.largura} px (se este texto chegar sem o número, use 1280); a pasta do front é `design.pasta` do kit.json; sem a chave vale a opção `pasta_do_front` do plugin, hoje `${user_config.pasta_do_front}` (vazio = nenhuma; se este texto chegar sem expandir, trate como vazio)).
 - **Nenhuma informação sem função.** Cada linha do inventário diz a decisão que ela gera; a que não gera nenhuma sai, ou tem o motivo escrito.
 - **Só componentes do kit** (a pasta de `design.kit`). Faltou peça: proponha a peça nova para o kit, com partes, estados e variantes — nunca um arranjo à mão na tela.
 - **Token ou não existe:** cor, espaço, tipo, raio, sombra e duração saem da escala do documento de estilo.

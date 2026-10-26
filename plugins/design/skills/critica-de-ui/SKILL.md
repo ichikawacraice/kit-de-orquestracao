@@ -7,7 +7,7 @@ description: O crítico de UI — julga uma tela, um componente ou uma revisão 
 
 Separar quem cria de quem julga melhora o resultado: quem desenhou já acredita no desenho. O crítico chega sem a conversa de quem desenhou e julga o que está escrito ou renderizado — nunca a intenção.
 
-Os caminhos (fontes, pasta do kit, largura de referência) vêm da seção `design` do `.claude/kit.json`: `fontes`, `kit`, `largura` (padrão 1280). Sem a seção, diga que não sabe onde estão as fontes e julgue só o que o código e a revisão mostram.
+Os caminhos (fontes, pasta do kit, largura de referência) vêm da seção `design` do `.claude/kit.json`: `fontes`, `kit`. Largura: a largura de referência é `design.largura` do kit.json; sem a chave vale a opção `largura` do plugin, hoje ${user_config.largura} px (se este texto chegar sem o número, use 1280). Pasta: a pasta do front é `design.pasta` do kit.json; sem a chave vale a opção `pasta_do_front` do plugin, hoje `${user_config.pasta_do_front}` (vazio = nenhuma; se este texto chegar sem expandir, trate como vazio). Sem a seção, diga que não sabe onde estão as fontes e julgue só o que o código e a revisão mostram.
 
 ## O que se julga (seis eixos, e só eles)
 

@@ -118,7 +118,9 @@ describe('kit adotar', () => {
       const p = json(d, 'package.json');
       assert.equal(p.scripts.test, JSON.parse(PACKAGE_PROPRIO).scripts.test, 'o `test` do projeto foi trocado sem --trocar-test');
       assert.equal(p.scripts['test:projeto'], undefined, 'sem --trocar-test não nasce test:projeto');
-      assert.deepEqual(json(d, '.claude', 'kit.json'), { gate: { comandoCompleto: JSON.parse(PACKAGE_PROPRIO).scripts.test } });
+      const kj = json(d, '.claude', 'kit.json');
+      assert.deepEqual(kj.gate, { comandoCompleto: JSON.parse(PACKAGE_PROPRIO).scripts.test });
+      assert.deepEqual(Object.keys(kj).sort(), ['design', 'documentos', 'gate']);
       assert.match(r.stdout, /--trocar-test/, 'a saída não avisa do --trocar-test');
       assert.equal(ler(d, 'src', 'index.ts'), antes['src/index.ts']);
       const lock = json(d, '.claude', 'kit.lock.json');

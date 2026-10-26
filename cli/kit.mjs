@@ -17,24 +17,25 @@ const AJUDA = `kit — orquestração de sessões do Claude Code
 uso:
   kit --version                              mostra a versão
   kit ajuda                                  mostra esta ajuda
-  kit iniciar [--perfil simples|pnpm-workspace]
+  kit iniciar [--perfil simples|pnpm-workspace] [--design <pasta do front>]
                                              prepara um projeto sem CLAUDE.md (gate, guarda, plugins, lock)
-  kit adotar [--simular] [--trocar-test] [--parcial] [--perfil …]
+  kit adotar [--simular] [--trocar-test] [--parcial] [--perfil …] [--design <pasta do front>]
                                              põe o kit num projeto em andamento, sem sobrescrever nada;
                                              com conflito não grava nada (--parcial grava o resto)
+                                             --design <pasta>: modelos de front na pasta e o Impeccable (recomendado) no settings
   kit atualizar [--simular] [--trocar-test]  troca pela versão nova o que você não editou; o resto vira conflito
   kit doutor                                 confere plugin, hooks, kit.json, versões e o disco com o lock
   kit remover [--simular]                    tira o que o kit pôs (blocos, chaves e arquivos cujo hash bate)
 `;
 
-const FLAGS = { iniciar: ['--perfil'], adotar: ['--simular', '--trocar-test', '--parcial', '--perfil'], atualizar: ['--simular', '--trocar-test'], remover: ['--simular'], doutor: [] };
+const FLAGS = { iniciar: ['--perfil', '--design'], adotar: ['--simular', '--trocar-test', '--parcial', '--perfil', '--design'], atualizar: ['--simular', '--trocar-test'], remover: ['--simular'], doutor: [] };
 
 /** Flag que o subcomando não conhece → mensagem com a lista das válidas (uma flag errada não pode virar adoção calada). */
 function flagDesconhecida(cmd, argv) {
   const validas = FLAGS[cmd];
   if (!validas) return null;
   const rest = argv.slice(1);
-  const ruins = rest.filter((a, i) => a.startsWith('-') && !validas.includes(a) && !(rest[i - 1] === '--perfil' && validas.includes('--perfil')));
+  const ruins = rest.filter((a, i) => a.startsWith('-') && !validas.includes(a) && !(['--perfil', '--design'].includes(rest[i - 1]) && validas.includes(rest[i - 1])));
   if (!ruins.length) return null;
   return `kit ${cmd}: flag desconhecida ${ruins.join(', ')} — válidas: ${validas.length ? validas.join(', ') : '(nenhuma)'}\n`;
 }
@@ -49,7 +50,9 @@ function main(argv) {
     const i = argv.indexOf('--perfil');
     const perfil = i === -1 ? undefined : argv[i + 1];
     if (i !== -1 && !perfil) { process.stderr.write('kit iniciar: --perfil pede um valor\n'); return 2; }
-    const r = iniciar({ destino: process.cwd(), perfil, versao: versao() });
+    const d = argv.indexOf('--design');
+    if (d !== -1 && (argv[d + 1] === undefined || argv[d + 1].startsWith('-'))) { process.stderr.write('kit iniciar: --design pede a pasta do front (ex.: --design apps/web)\n'); return 2; }
+    const r = iniciar({ destino: process.cwd(), perfil, versao: versao(), design: d === -1 ? undefined : argv[d + 1] });
     (r.codigo === 0 ? process.stdout : process.stderr).write(`${r.mensagem}\n`);
     return r.codigo;
   }
@@ -59,7 +62,9 @@ function main(argv) {
   if (cmd === 'adotar') {
     const i = argv.indexOf('--perfil');
     if (i !== -1 && !argv[i + 1]) { process.stderr.write('kit adotar: --perfil pede um valor\n'); return 2; }
-    return imprimir(adotar({ destino, perfil: i === -1 ? undefined : argv[i + 1], versao: versao(), simular: flag('--simular'), trocarTest: flag('--trocar-test'), parcial: flag('--parcial') }));
+    const d = argv.indexOf('--design');
+    if (d !== -1 && (argv[d + 1] === undefined || argv[d + 1].startsWith('-'))) { process.stderr.write('kit adotar: --design pede a pasta do front (ex.: --design apps/web)\n'); return 2; }
+    return imprimir(adotar({ destino, perfil: i === -1 ? undefined : argv[i + 1], versao: versao(), simular: flag('--simular'), trocarTest: flag('--trocar-test'), parcial: flag('--parcial'), design: d === -1 ? undefined : argv[d + 1] }));
   }
   if (cmd === 'atualizar') return imprimir(atualizar({ destino, versao: versao(), simular: flag('--simular'), trocarTest: flag('--trocar-test') }));
   if (cmd === 'remover') return imprimir(remover({ destino, simular: flag('--simular') }));

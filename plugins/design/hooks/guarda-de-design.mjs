@@ -24,7 +24,7 @@
  * **Configuração: `.claude/kit.json` do projeto.** `design.visual` (globs do que
  * é visual; prefixo `!` exclui; sem ele, o padrão sai de `design.pasta`: telas por
  * extensão), `design.negadoAoDesigner` (globs; padrão = `design.visual` sem as exclusões) e `guarda.tronco` (de onde a branch sai;
- * padrão `origin/develop`, depois `origin/main`). Sem `design.visual` nem
+ * padrão `origin/main`, o mesmo do gate). Sem `design.visual` nem
  * `design.pasta` o hook sai 0 sem decisão: projeto sem design não é cobrado.
  *
  * **A foto é o CONTEÚDO do trabalho próprio, não um diff contra um HEAD.** O diff
@@ -44,9 +44,10 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { booleanoDaOpcao, opcoesDoPlugin, pluginLigado } from "./opcoes-do-plugin.mjs";
 
 export const AGENTE_CRITICO = "critico-de-ui";
 export const PAPEL_DESIGNER = "designer";
@@ -54,7 +55,13 @@ export const PAPEL_DESIGNER = "designer";
 /** As extensões que o padrão derivado de `design.pasta` conta como tela. */
 const EXTENSOES_DE_TELA = ["tsx", "jsx", "vue", "svelte", "css", "scss"];
 
-const BASES_PADRAO = ["origin/develop", "origin/main"];
+/** As opções do plugin (`userConfig` do plugin.json); o teste confere que as duas listas concordam. */
+export const OPCOES_DO_DESIGN = ["guarda", "cobrar_critica", "pasta_do_front", "largura"];
+
+/** Exclusões do padrão derivado de `design.pasta`: teste não é tela. */
+const TESTES_FORA = ["*.test.*", "*.spec.*", "__tests__/**"];
+
+const BASES_PADRAO = ["origin/main"];
 
 /** Muda quando a forma do estado muda: o estado de outra versão não cobra. */
 const VERSAO_DO_ESTADO = 1;
@@ -95,24 +102,43 @@ export function nomeCurto(nome) {
 const lista = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.length > 0) : []);
 
 /**
- * A configuração da guarda, lida de `<raiz>/.claude/kit.json`. `null` quando o
- * projeto não declara `design.visual` (a guarda fica inerte). JSON ilegível é erro.
+ * O valor de uma opção do plugin: a variável `CLAUDE_PLUGIN_OPTION_<CHAVE>` que o app exporta para o hook; sem ela, o que o app gravou
+ * em `pluginConfigs` do `~/.claude/settings.json`; sem nenhum dos dois, `undefined` (vale o padrão de quem lê).
  */
-export function lerConfig(raiz) {
+function opcao(chave, { home, env }) {
+  const doEnv = env[`CLAUDE_PLUGIN_OPTION_${chave.toUpperCase()}`];
+  if (doEnv !== undefined && doEnv !== "") return doEnv;
+  return opcoesDoPlugin("design", home, env)[chave];
+}
+
+/**
+ * A configuração da guarda, lida de `<raiz>/.claude/kit.json` e das opções do plugin (A7: o `kit.json` com a chave vence a opção;
+ * plugin desligado em `enabledPlugins` não roda). `null` quando a guarda fica inerte: plugin desligado, opção `guarda` desligada,
+ * ou sem `design.visual` nem pasta do front (`design.pasta`, senão a opção `pasta_do_front`). JSON ilegível é erro.
+ * `ambiente`: `{ home, env }`, trocáveis nos testes.
+ */
+export function lerConfig(raiz, ambiente = {}) {
+  const amb = { home: ambiente.home ?? homedir(), env: ambiente.env ?? process.env };
+  if (pluginLigado("design", raiz, amb.home, amb.env) === false) return null;
   const caminho = join(raiz, ".claude", "kit.json");
-  if (!existsSync(caminho)) return null;
-  let kit;
-  try {
-    kit = JSON.parse(readFileSync(caminho, "utf-8").replace(/^\uFEFF/, ""));
-  } catch (e) {
-    throw new Error(`${caminho} ilegível: ${e.message}`);
+  let kit = {};
+  if (existsSync(caminho)) {
+    try {
+      kit = JSON.parse(readFileSync(caminho, "utf-8").replace(/^\uFEFF/, ""));
+    } catch (e) {
+      throw new Error(`${caminho} ilegível: ${e.message}`);
+    }
   }
+  const guarda = typeof kit?.design?.guarda === "boolean" ? kit.design.guarda : booleanoDaOpcao(opcao("guarda", amb));
+  if (!guarda) return null;
   let visual = lista(kit?.design?.visual);
   if (visual.length === 0) {
-    // Sem `design.visual`, o padrão sai de `design.pasta`: as telas por extensão.
-    const pasta = typeof kit?.design?.pasta === "string" ? kit.design.pasta.replace(/\/+$/, "") : "";
+    // Sem `design.visual`, o padrão sai da pasta do front: as telas por extensão, sem os testes.
+    const doKit = typeof kit?.design?.pasta === "string" ? kit.design.pasta : "";
+    const daOpcao = typeof opcao("pasta_do_front", amb) === "string" ? opcao("pasta_do_front", amb) : "";
+    const pasta = (doKit || daOpcao).replace(/\/+$/, "");
     if (!pasta) return null;
-    visual = EXTENSOES_DE_TELA.map((e) => `${pasta}/**/*.${e}`);
+    visual = [...EXTENSOES_DE_TELA.map((e) => `${pasta}/**/*.${e}`), ...TESTES_FORA.map((g) => `!${pasta}/**/${g}`)];
   }
   const negado = lista(kit?.design?.negadoAoDesigner);
   const tronco = typeof kit?.guarda?.tronco === "string" && kit.guarda.tronco ? kit.guarda.tronco : null;
@@ -120,6 +146,7 @@ export function lerConfig(raiz) {
     visual,
     negadoAoDesigner: negado.length > 0 ? negado : visual.filter((g) => !g.startsWith("!")),
     bases: tronco ? [tronco, ...BASES_PADRAO.filter((b) => b !== tronco)] : BASES_PADRAO,
+    cobrarCritica: typeof kit?.design?.cobrarCritica === "boolean" ? kit.design.cobrarCritica : booleanoDaOpcao(opcao("cobrar_critica", amb)),
   };
 }
 
@@ -332,6 +359,7 @@ export function decidir(evento, papelArg, ctx) {
     const lembrete = PEDIDO_DE_DESIGN.test(String(evento?.prompt ?? ""))
       ? { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: LEMBRETE } }
       : null;
+    if (config.cobrarCritica === false) return lembrete; // sem cobrança não há foto do começo do turno a guardar
     try {
       ctx.gravar(cwd, sessao, {
         versao: VERSAO_DO_ESTADO,
@@ -352,7 +380,7 @@ export function decidir(evento, papelArg, ctx) {
   }
 
   if (nome === "PostToolUse") {
-    if (!eCritica(evento)) return null;
+    if (config.cobrarCritica === false || !eCritica(evento)) return null;
     const estado = ctx.ler(cwd, sessao);
     if (!estado) return null;
     let criticada = CRITICA_SEM_FOTO;
@@ -366,7 +394,7 @@ export function decidir(evento, papelArg, ctx) {
   }
 
   if (nome === "Stop") {
-    if (evento?.stop_hook_active) return null;
+    if (config.cobrarCritica === false || evento?.stop_hook_active) return null;
     const estado = ctx.ler(cwd, sessao);
     if (!estado || estado.versao !== VERSAO_DO_ESTADO || estado.cobrado) return null;
     if (estado.criticada === CRITICA_SEM_FOTO) return null;

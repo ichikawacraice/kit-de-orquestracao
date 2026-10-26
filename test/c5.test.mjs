@@ -172,7 +172,8 @@ describe('N1 — o remover só apaga pasta que o kit criou', () => {
       mkdirSync(join(d, '.claude')); mkdirSync(join(d, 'scripts'));
       assert.equal(kit(d, ['iniciar']).status, 0);
       const lock = json(d, '.claude', 'kit.lock.json');
-      assert.deepEqual(lock.pastasCriadas, ['scripts/kit']);
+      assert.ok(lock.pastasCriadas.includes('scripts/kit') && !lock.pastasCriadas.includes('.claude') && !lock.pastasCriadas.includes('scripts'), 'só as pastas que o kit criou');
+      assert.ok(lock.pastasCriadas.includes('docs/adr'), 'precondição: as pastas dos modelos de documento também entram');
       assert.equal(kit(d, ['remover']).status, 0);
       assert.ok(existsSync(join(d, '.claude')) && existsSync(join(d, 'scripts')), 'apagou pasta que já existia');
       assert.ok(!existsSync(join(d, 'scripts', 'kit')), 'não apagou a pasta que o kit criou');
@@ -180,7 +181,8 @@ describe('N1 — o remover só apaga pasta que o kit criou', () => {
     const n = repoVazio();
     try {
       assert.equal(kit(n, ['iniciar']).status, 0);
-      assert.deepEqual(json(n, '.claude', 'kit.lock.json').pastasCriadas.sort(), ['.claude', 'scripts', 'scripts/kit']);
+      const criadas = json(n, '.claude', 'kit.lock.json').pastasCriadas;
+      for (const dir of ['.claude', 'scripts', 'scripts/kit', 'docs', 'docs/adr', 'docs/design/revisoes']) assert.ok(criadas.includes(dir), `falta ${dir}`);
       assert.equal(kit(n, ['remover']).status, 0);
       assert.deepEqual(readdirSync(n).filter((x) => x !== '.git'), []);
     } finally { limpar(n); }

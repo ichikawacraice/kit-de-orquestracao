@@ -25,4 +25,5 @@ O que muda para quem usa; o que fica mais difícil.
 | Nº | Decisão | Status |
 |---|---|---|
 | [0001](0001-plugin-para-o-nucleo-cli-para-o-projeto.md) | Plugin para o núcleo, CLI para o projeto | Aceito |
-| [0002](0002-processos-de-documento-e-design-sao-plugins-opcionais.md) | Processos de documento e de design são plugins próprios, ligados por padrão | Aceito |
+| [0002](0002-processos-de-documento-e-design-sao-plugins-opcionais.md) | Processos de documento e de design são plugins próprios, ligados por padrão | Aceito (decisão 5, parte da aba do app, substituída pelo [0003](0003-opcao-do-plugin-vale-por-conta-e-o-kit-json-e-o-caminho-do-time.md)) |
+| [0003](0003-opcao-do-plugin-vale-por-conta-e-o-kit-json-e-o-caminho-do-time.md) | A opção do plugin vale por conta e se edita no /plugin do terminal; o kit.json é o caminho do time e vence a opção | Aceito |

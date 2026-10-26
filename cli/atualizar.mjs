@@ -1,9 +1,11 @@
 // `kit atualizar [--simular]`: troca pela versão nova o que o projeto não editou; o que foi editado vira conflito com o diff.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { diffTexto } from './diff.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { RAIZ_DO_KIT, acrescentar, arquivosDoGate, blocosDoModelo, gravar, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
+import { RAIZ_DO_KIT, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -45,17 +47,22 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
     if (sha256(atual.conteudo) === reg.sha256) { claude = claude.replace(inteiroAtual, () => nosso); lock.blocos[nome] = { versao: novo.versao, sha256: sha256(blocosDe(nosso)[0].conteudo) }; linhas.push(`atualizado: bloco ${nome}`); }
     else conflito(`bloco ${nome} editado à mão — não troquei`, diffTexto(inteiroAtual, texto, `CLAUDE.md#${nome}`));
   }
-  // bloco que o modelo tem e o projeto nunca recebeu (novo, ou o novo nome de um renomeado) entra no fim, como no adotar
+  // bloco que o modelo tem e o projeto nunca recebeu (novo, ou o novo nome de um renomeado) entra na ordem do modelo, como no iniciar
   if (claude !== null) {
     for (const [nome, texto] of Object.entries(modelo)) {
       if (nome === 'projeto' || (lock.blocosOmitidos ?? []).includes(nome) || nome in lock.blocos || new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude)) continue;
-      claude = acrescentar(claude, texto);
+      claude = inserirBloco(claude, nome, texto, modelo);
       const b = blocosDe(texto)[0];
       lock.blocos[nome] = { versao: b.versao, sha256: sha256(b.conteudo) };
-      linhas.push(`novo: ${nome} (bloco acrescentado ao fim do CLAUDE.md)`);
+      linhas.push(`novo: ${nome} (bloco acrescentado ao CLAUDE.md, na ordem do modelo)`);
     }
   }
   if (claude !== claudeAtual) mudancas.push({ arquivo: 'CLAUDE.md', antigo: claudeAtual, novo: claude });
+
+  // o projeto instalado antes dos processos passa a ter as cinco regras ligadas pelo padrão do plugin: diz isso, uma vez por atualização
+  const kitJson = (() => { try { return JSON.parse(semBom(lerTexto(destino, '.claude/kit.json') ?? '{}')); } catch { return {}; } })();
+  const docsDoProj = docsDoProjeto(destino);
+  if (!Array.isArray(kitJson.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: ${avisoDasRegras(docsDoProj, pluginLigado('processos', destino, process.env.HOME || homedir(), process.env))}`);
 
   if (trocarTest) trocarOTest({ destino, lock, mudancas, linhas, conflito });
 
