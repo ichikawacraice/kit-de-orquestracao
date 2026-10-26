@@ -16,10 +16,15 @@ Relato do operador (25/10, Izanagi, kit 0.1.19) e caso do kit (E1 recusou o bloc
 Recomendações (a)–(d) da orquestradora, com o que este plano muda nelas:
 
 - **D1 = (a), sem mudança.** Executora que entrega com ≥ 150 mil grava no handoff do item o que o conserto vai precisar, põe o título `<ID> · livre` e chama `clear_session "self"`.
-- **D2 = (b), sem mudança.** `<ID> · livre` = conversa vazia. Quem entrega com < 150 mil fica `<ID> · aguardando validação` (no `fez` de item vivo, conversa guardada): ninguém lhe manda item de outro. Trava no `livre-se-limpa.mjs`. Detalhe acrescentado: **não conta no teto** de 4 E (está parada, como a livre).
+- **D2 = (b), sem mudança.** `<ID> · livre` = conversa vazia. Quem entrega com < 150 mil fica `<ID> · aguardando validação` (no `fez` de item vivo, conversa guardada): ninguém lhe manda item de outro. Trava no `livre-se-limpa.mjs`. (A frase "não conta no teto" saiu: o teto deixou de existir, ver D7.)
 - **D3 = (c), com duas mudanças.** (i) Avisa **quem despachou** (o remetente da mensagem), não a orquestradora: é quem tem o briefing e o reenvia; no caso de 25/10 a E1 se limpou e ninguém reenviou. (ii) Acima de 150 mil, a linha `Parei em:` sozinha **deixa de satisfazer**: em todo caso a executora termina com `clear_session "self"`, porque devolver sem limpar só adia o mesmo muro para o próximo despacho.
 - **D4 = (d), só no texto.** A orquestradora, quando o item fecha, limpa quem está `aguardando validação` nele; recusada (aberta na tela, fixada), manda a ela "o item fechou: título livre e `clear_session \"self\"`" e diz ao operador numa linha qual sessão não pôde limpar. Sem hook: não há evento confiável da recusa.
 - **D5.** O título `aguardando validação` é declaração de entrega: o hook solta a sessão do `com` (`--fez` para a E), como faz com `livre`, e grava a linha de `sessoes` com `etapa: "aguardando validação"`. Quem o põe sem estar no `fez` de item vivo é cobrado a pôr `livre` e se limpar.
+- **D7. O teto da Q214 sai (Q277, operador, 25/10).** Nas palavras dele: *"no modo ausente off podemos abrir quantas sessões quisermos, sem limite, e arquivarmos conforme não formos mais precisando. No modo ausente on, não podemos pedir que seja aberta novas, pois não vai ter quem aceitar, então deixarmos o padrão de sessões abertas, não arquivamos e aquelas regras todas, para caso precise de algo, tem la a sessão ja aberta e nenhum fluxo vire gargalo"*.
+  - **Ausente off: sem teto.** Item esperando papel sem membro livre → vaga nova no mesmo turno (turno do operador abre; fora dele, cartão), quantas forem precisas. Membro que não se precisa mais é candidato a arquivar e sai **só com o comando do operador** (Q245 continua).
+  - **Ausente on: o pool padrão.** O `/ausente on` pré-cria o **pool padrão** (o que hoje se chama "teto previsto": 4 E, 3 V, uma D se alguma frente viva toca tela, uma P por frente viva mais uma livre). Com o modo ligado **não se pede vaga nova** (nem cartão: não há quem aceite) e **nada se arquiva**; item além do pool espera na fila o primeiro membro do papel que liberar.
+  - Some de todo texto: "Teto (Q214…)", "dentro do teto", "acima do teto ela pergunta", "o que passa do teto", "teto previsto". O "Teto da crítica de tela (Q207)" é outra regra e fica.
+  - Sem hook: nenhum hook conta o teto hoje (`grep -n Q214 plugins/orquestracao/hooks/*.mjs` vazio). O `papel-do-pool.mjs` segue deixando passar o cartão no modo ausente; não pedir é regra de texto.
 - **D6.** Versão do plugin `0.1.22` (a F48 leva a `0.1.21`); quem entrar por último rebaseia e acerta.
 
 ## Contratos
@@ -34,8 +39,9 @@ Recomendações (a)–(d) da orquestradora, com o que este plano muda nelas:
 A F48 (P1, branch `claude/f48-limpeza-e-header`) mexe nos mesmos arquivos em outras regiões. Esta frente toca **só**:
 - `contexto-do-papel.mjs`: o ramo `papel === 'executora'` (linha 63), a linha do `parei` (79) e a linha 7 do comentário do topo. Não mexe em `papelDe`, nas constantes nem no ramo da orquestradora.
 - `tests/contexto-do-papel.test.mjs`: o teste 6 e um bloco novo **no fim** do arquivo, prefixo `F49.`.
-- `protocolo.md`: linhas 19, 30, 36, 45, 46, 52 (não a 9 nem a 74).
+- `protocolo.md`: linhas 19, 30, 36, 45, 46, 52 (a 9, a 55, a 72 e a 74 só pela D7).
 - `skills/orquestradora/SKILL.md`: só o passo 3 do ritual (linha 27).
+- **D7 (acréscimo de 25/10):** `protocolo.md` linhas 9, 46, 55, 72 e 74; `skills/orquestradora/SKILL.md` linha 25 (a frase "o que passa do teto") além da 27; `pool/papeis/orquestradora.md` linha 54; `skills/ausente/SKILL.md` (description, passos 2 e 4).
 - `skills/papeis-e-modelos/SKILL.md`: linha Executor da tabela (141) e, no parágrafo "A trava" (147), só a frase da executora.
 
 ## Arquivos
@@ -45,12 +51,16 @@ A F48 (P1, branch `claude/f48-limpeza-e-header`) mexe nos mesmos arquivos em out
 | `plugins/orquestracao/hooks/pool-comum.mjs` | `tituloAguardando`; `declarouLivre` reconhece o título aguardando (contrato). |
 | `plugins/orquestracao/hooks/livre-se-limpa.mjs` | regras abaixo; comentário do topo (linhas 10–11) troca a exceção F30 pela regra F49. |
 | `plugins/orquestracao/hooks/contexto-do-papel.mjs` | ramo da executora (regra abaixo); linha 7 do comentário. |
-| `plugins/orquestracao/pool/protocolo.md` | 19: o título aguardando ao lado do livre. 30: conserto vai primeiro a quem do `fez` está `aguardando validação`; se ela se limpou, a ela mesma ou à primeira E livre, com o handoff. 36: limpeza recusada → D4. 45: membro aguardando também não recebe item de outro. 46: aguardando não conta no teto. 52: passo 3 reescrito pelas D1, D2 e D3. |
+| `plugins/orquestracao/pool/protocolo.md` | 19: o título aguardando ao lado do livre. 30: conserto vai primeiro a quem do `fez` está `aguardando validação`; se ela se limpou, a ela mesma ou à primeira E livre, com o handoff. 36: limpeza recusada → D4. 45: membro aguardando também não recebe item de outro. 46: ver D7 (o teto sai). 52: passo 3 reescrito pelas D1, D2 e D3. |
 | `plugins/orquestracao/pool/papeis/executora.md` | linha 18 (ao entregar: < 150 mil aguardando, ≥ 150 mil handoff + livre + limpar; ao receber item com ≥ 150 mil: D3) e a seção do título (`Aguardando: <ID> · aguardando validação`). |
 | `plugins/orquestracao/pool/papeis/planejadora.md` | linha 11: conserto ao primeiro do `fez` que está `aguardando validação`; livre só é quem tem a conversa vazia. |
 | `plugins/orquestracao/pool/papeis/orquestradora.md` | linha 7: troca "membro livre que está no `fez`" por "membro `aguardando validação`"; D4. |
 | `plugins/orquestracao/skills/orquestradora/SKILL.md` | passo 3 do ritual (linha 27): o mesmo da linha 7 acima, mais D4. |
 | `plugins/orquestracao/skills/papeis-e-modelos/SKILL.md` | 141: "…devolve a quem despachou e se limpa (`clear_session "self"`)". 147: a frase da executora diz que só a limpeza satisfaz. |
+| D7 — `protocolo.md` | 9 (`sob-demanda`): sai "sempre dentro do teto da Q214"; "teto previsto" vira "pool padrão"; fora do modo ausente, sem limite de vagas. 46: a linha do teto é trocada por *"**Sem teto (Q277, operador, 25/10).** Fora do modo ausente abre-se quantas vagas o trabalho pedir e arquiva-se, com o comando do operador, o que não se precisa mais. Com o modo ausente ligado vale o pool padrão: não se pede vaga nova, nada se arquiva, e item além dele espera o primeiro membro do papel que liberar."* 55: sai "em qualquer modo, o que passa do teto (…)". 72: "já pede vaga nova" passa a valer só com o modo ausente desligado. 74: com o modo ligado o cartão da vaga nova **não** é proposto. |
+| D7 — `skills/orquestradora/SKILL.md` | 25: sai "e, em qualquer modo, o que passa do teto" e o parêntese "(acima do teto…)". 27: sai a frase "**Teto (Q214…)**…esperando a fila."; "teto previsto" vira "pool padrão"; "Item esperando sem membro livre → peça a vaga" ganha "com o modo ausente desligado; ligado, o item espera o primeiro que liberar". |
+| D7 — `pool/papeis/orquestradora.md` | 54: o mesmo da linha 27 acima. |
+| D7 — `skills/ausente/SKILL.md` | description e passo 2: "teto previsto"/"o teto da Q214" viram "pool padrão"; passo 4: acrescenta que, ligado o modo, não se pede vaga nova nem cartão. `off`: volta ao pool sem teto, com o arquivamento por comando. |
 | `plugins/orquestracao/.claude-plugin/plugin.json` | `0.1.22`. |
 
 ## Regras exatas
@@ -102,6 +112,7 @@ A F48 (P1, branch `claude/f48-limpeza-e-header`) mexe nos mesmos arquivos em out
 - `npm test; echo "exit=$?"` → `exit=0`.
 - `claude plugin validate . ; echo "exit=$?"` e `claude plugin validate plugins/orquestracao --strict; echo "exit=$?"` → `exit=0`.
 - `grep -rn "livre-com-contexto\|satisfeito-parei" plugins/orquestracao/hooks/*.mjs` → vazio.
+- D7: `grep -rn "Q214\|teto previsto\|passa do teto\|acima do teto\|dentro do teto" plugins/orquestracao` → vazio; `grep -c "Q277" plugins/orquestracao/pool/protocolo.md plugins/orquestracao/skills/orquestradora/SKILL.md` → nenhum zero.
 - `grep -c "aguardando validação" plugins/orquestracao/pool/protocolo.md plugins/orquestracao/pool/papeis/executora.md plugins/orquestracao/pool/papeis/planejadora.md plugins/orquestracao/pool/papeis/orquestradora.md plugins/orquestracao/skills/orquestradora/SKILL.md` → nenhum zero.
 
 ## Fora de escopo
