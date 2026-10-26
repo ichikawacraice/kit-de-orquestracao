@@ -521,7 +521,8 @@ describe("a lista real de migrations lê o disco e a origin/main", () => {
 
 describe("(c) regra desligada não pergunta", () => {
   const SO = (...regras) => ctx(true, RAIZ, { fora: ["x.sql"] }, { regras: new Set(regras) });
-  // Um comando por regra: com SÓ a regra dele ligada pergunta; com as outras sete, não.
+  // Um comando por regra que PERGUNTA: com SÓ a regra dele ligada pergunta; com as outras, não. A `teste-fora-do-teto` recusa
+  // (`avaliarFirmes`) e tem o seu `describe` abaixo.
   const UM_POR_REGRA = {
     "build-com-dev-no-ar": "pnpm build",
     "psql-f": "psql -f a.sql",
@@ -533,11 +534,14 @@ describe("(c) regra desligada não pergunta", () => {
     destrutivos: "git reset --hard",
   };
 
-  it("cada uma das oito regras tem o seu comando de prova", () => {
-    expect(Object.keys(UM_POR_REGRA).sort()).toEqual([...REGRAS].sort());
+  const QUE_PERGUNTAM = REGRAS.filter((r) => r !== "teste-fora-do-teto");
+
+  it("cada uma das oito regras que perguntam tem o seu comando de prova", () => {
+    expect(Object.keys(UM_POR_REGRA).sort()).toEqual([...QUE_PERGUNTAM].sort());
+    expect(QUE_PERGUNTAM).toHaveLength(8);
   });
 
-  for (const regra of REGRAS) {
+  for (const regra of QUE_PERGUNTAM) {
     it(`${regra}: ligada pergunta; desligada (as outras ligadas) não`, () => {
       const comando = UM_POR_REGRA[regra];
       expect(avaliar(comando, SO(regra)).length, `ligada: \`${comando}\``).toBeGreaterThan(0);

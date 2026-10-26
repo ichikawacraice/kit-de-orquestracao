@@ -170,12 +170,15 @@ describe("a configuração", () => {
   });
 
   it("o teto de workers: CI sem teto, quarto da máquina, KIT_/IZANAGI_TESTE_WORKERS manda, inválido recusado", () => {
+    // `VITEST_WORKER_ID` é o ramo de "um worker do vitest": o número de hoje, sem tomar ficha do teto da máquina (esse ramo
+    // tem o teste dele em `o-teto-de-workers.test.mjs`, com pasta temporária — aqui a pasta de verdade nunca é tocada).
+    const worker = { VITEST_WORKER_ID: "1" };
     expect(tetoDeWorkers({ CI: "1" }, 15)).toEqual({});
-    expect(tetoDeWorkers({}, 15)).toEqual({ maxWorkers: 3, minWorkers: 1 });
-    expect(tetoDeWorkers({}, 2)).toEqual({ maxWorkers: 1, minWorkers: 1 });
-    expect(tetoDeWorkers({}, 16, 0.5)).toEqual({ maxWorkers: 8, minWorkers: 1 });
-    expect(tetoDeWorkers({ KIT_TESTE_WORKERS: "5" }, 15)).toEqual({ maxWorkers: 5, minWorkers: 1 });
-    expect(tetoDeWorkers({ IZANAGI_TESTE_WORKERS: "4" }, 15)).toEqual({ maxWorkers: 4, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker }, 15)).toEqual({ maxWorkers: 3, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker }, 2)).toEqual({ maxWorkers: 1, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker }, 16, 0.5)).toEqual({ maxWorkers: 8, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker, KIT_TESTE_WORKERS: "5" }, 15)).toEqual({ maxWorkers: 5, minWorkers: 1 });
+    expect(tetoDeWorkers({ ...worker, IZANAGI_TESTE_WORKERS: "4" }, 15)).toEqual({ maxWorkers: 4, minWorkers: 1 });
     expect(() => tetoDeWorkers({ KIT_TESTE_WORKERS: "0" }, 15)).toThrow(/inteiro ≥ 1/);
     expect(() => tetoDeWorkers({ KIT_TESTE_WORKERS: "dois" }, 15)).toThrow(/inteiro ≥ 1/);
   });
