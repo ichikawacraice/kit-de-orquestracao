@@ -2,12 +2,43 @@
 
 - **Data:** 2026-10-26
 - **Autora:** D2, designer do pool
-- **Estado:** aprovada com ressalvas (crítica 1, 24/30; as cinco ressalvas aplicadas nesta versão, §Crítica)
+- **Estado:** aprovada com ressalvas (crítica 1, 24/30; as cinco ressalvas aplicadas nesta versão, §Crítica). **Delta F65** (26/10, D1): o contexto passa a ser medido contra a janela de compactação, e a palavra do teto vira `· limpar` ([§Delta F65](#delta-f65)); a D1-F65-1 substitui a D2-6.
 - **Mock:** [`2026-10-26-barra-de-status-mock.html`](2026-10-26-barra-de-status-mock.html), estático, claro e escuro: o terminal em 114, 94, 72 e 40 células (pior caso de largura) e o desktop numa coluna de chat, mais a faixa do pedido no pane a W = 288
 - **Plano de origem:** [`docs/planos/2026-10-26-barra-de-status-do-kit.md`](../../planos/2026-10-26-barra-de-status-do-kit.md). O comportamento (o que cada clique grava, quando cada coisa aparece, as réguas) é do plano; esta revisão decide a ordem, o agrupamento, os rótulos exatos, o que cai quando a largura aperta, como o pedido de limpeza e o cache em alerta se distinguem sem depender só de cor, o terminal e a linha do pedido no pane (D10).
 - **Base:** o topo do pane da F48 ([`2026-10-26-topo-do-painel.md`](https://github.com/ichikawacraice/kit-de-orquestracao/blob/claude/f48-limpeza-e-header/docs/design/2026-10-26-topo-do-painel.md), branch `claude/f48-limpeza-e-header`): rótulos do modo ausente, `key="modo"`, otimista com geração. O que esta revisão não cita do pane continua como lá.
 - **Fontes lidas:** o plano (4b7b205); os tipos do motor desta build (`AbovePrompt`: `hasSurvey`, `isWorking`, `maxRows`, `bodyColumns`, `scroll`; `Button`: `variant`, `dimColor`, `plain`, `role`, `key`, filhos `Text`; `Text`: `color` com `ThemeKey`, `inverse`, `bold`, `wrap`; `Box`: `borderStyle`, `borderColor`); a faixa de hoje do `session-band` (lida, não copiada: outro autor) para saber o que o operador perde; `plugins/painel-sessoes/hooks/desenho.ts` (`CSS`, classes de cor).
+- **Plano do delta:** [`docs/planos/2026-10-26-barra-contexto-janela.md`](../../planos/2026-10-26-barra-contexto-janela.md) (F65, P1). O comportamento (de onde vem a janela, a precedência, o limite pela janela do modelo) é do plano; o delta decide o texto, a palavra e o que muda nas faixas.
 - **Pedido do operador (26/10):** tirar o mod de terceiros acima do prompt e ter um nosso, com o selo das perguntas abertas (o clique abre o painel), o botão de abrir e fechar o painel, o botão que dá o ok para a orquestradora se limpar quando ela pedir e a contagem regressiva do cache de 1 h; mais as ideias 1, 2, 3, 4 e 7 (Q283).
+
+---
+
+<a id="delta-f65"></a>
+## Delta F65 — o contexto contra a janela de compactação
+
+**O caso.** Na orquestradora a barra dizia `contexto 198/250 mil`. O operador leu os 250 como a janela da sessão, que é de 600 mil (a compactação automática), e disse: *"a janela de contexto aqui da orquestradora está errada, esta falando 198/250 mas o contexto maximo é 600"*. A D2-6 tinha posto a régua de limpeza do papel no denominador; numa fração, quem lê de fora entende o denominador como o tamanho do recipiente, não como uma regra de quando esvaziar. A D2-6 falhou na primeira leitura do operador, e a fração passa a dizer o que ela parece dizer.
+
+**O que muda (só a peça do contexto e o que dela depende):**
+
+| | Antes (D2-6) | Agora (D1-F65-1) |
+|---|---|---|
+| Denominador | a régua do papel (`teto`) | a janela de compactação, **igual para todos os papéis** (plano, D2: env, `autoCompactWindow`, janela do modelo; nenhuma → sem `/`) |
+| Faixa 0 | `contexto 198/250 mil` | `contexto 198/600 mil` |
+| Faixa 1 | `198/250 mil` | `198/600 mil` |
+| Faixa 2 | `198 mil` | `198 mil` (igual) |
+| Aviso da régua do papel | `· alto`, `warning` | igual |
+| Teto da régua do papel | `· teto`, `error` + negrito | **`· limpar`**, `error` + negrito |
+| Papel desconhecido (fora do pool) | sem `/`: `contexto 142 mil` | **com** a janela, sem palavra: `contexto 142/600 mil` |
+| Sem janela conhecida | — | sem `/`, com a palavra se houver régua: `contexto 198 mil · limpar` |
+
+Exemplos, com `autoCompactWindow` 600 000: orquestradora a 198 mil → `contexto 198/600 mil`; a 260 mil → `contexto 260/600 mil · limpar`; P a 362 mil → `contexto 362/600 mil · alto`; P a 510 mil → `contexto 510/600 mil · limpar`; E a 312 mil → `contexto 312/600 mil · limpar` (na E e na orquestradora o aviso e o teto coincidem: passam direto para `· limpar`).
+
+**A palavra do teto é `· limpar`.** Com a janela no denominador, `260/600 · teto` diria "parou" com 340 mil sobrando, e o operador leria a mesma contradição que motivou o delta. O que acontece na régua é a hora de limpar: a E, a P e a D se limpam; a orquestradora pede o ok (e a linha do pedido, §3, aparece logo acima com o botão). O infinitivo diz *o que é hora de fazer* sem dizer *quem* faz, e por isso serve aos dois casos. Recusadas: `· teto` (diz "parou"), `· limpe` (imperativo ao operador, que não é quem limpa a E nem a P), `· limpeza` (substantivo, 1 célula a mais, e lê como estado, não como hora), `· limpa em 250` (alarga a peça mais apertada; plano, fora de escopo).
+
+**A régua some como número, fica como cor e palavra.** O operador perde o "quanto falta para a régua" (na orquestradora, 198 de 250). Aceito: a régua é do papel e o papel age nela sozinho (a E, a P e a D se limpam; a orquestradora pede), e o operador só precisa agir no pedido, que tem linha própria. O `· alto` antecipa a régua nos papéis que têm faixa intermediária (P, D, V, orquestradora no ausente).
+
+**Larguras.** `600` tem os mesmos 3 dígitos que `250`/`300`/`500`: as somas da §O que cai quando aperta não mudam. `· limpar` tem **2 células a mais** que `· teto` (9 × 7); a faixa já soma com o texto real, então a palavra derruba uma faixa sozinha quando for preciso, como já fazia com `· teto`. A janela do modelo como último recurso pode dar `/1000` (+1 célula): absorvido pelo mesmo cálculo. Os quadros 2, 3, 4, 5, 6 e o desktop do mock foram redesenhados com os números novos; o quadro 2b é novo (orquestradora no `· limpar`, 114).
+
+**Cor e peso não mudam:** `· alto` em `warning`; `· limpar` em `error` e negrito (a peça inteira, como era o `· teto`). Abaixo do aviso, apagado.
 
 ---
 
@@ -20,7 +51,7 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 | Pergunta | Onde a barra responde | Gesto |
 |---|---|---|
 | Quanto tempo de cache esta sessão tem? | o relógio `⧗ 47:12`, sempre, sempre no mesmo lugar | nenhum |
-| Esta sessão está gastando contexto demais? | `contexto 142/300 mil`, com a palavra `alto` ou `teto` quando passa da régua | nenhum |
+| Esta sessão está gastando contexto demais? | `contexto 142/600 mil` (contra a janela), com a palavra `alto` ou `limpar` quando passa da régua do papel | nenhum |
 | Tem pergunta esperando por mim? | o selo `● 3 perguntas`; sem pergunta, ele some | o clique abre o painel |
 | A orquestradora quer se limpar? | uma linha própria **acima** da barra, só enquanto o pedido estiver aberto | `Pode se limpar` |
 | Estou marcado como ausente? | o botão `☾ Estou de volta` só existe no ausente | o mesmo botão desliga |
@@ -28,7 +59,7 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 
 ## Quem e onde
 
-- **O operador**, no desktop (a coluna da conversa, com ou sem o pane encaixado ao lado) e no terminal. A barra aparece em **toda sessão** do Claude Code com o plugin, não só nas do pool: fora do pool ela mostra o que não depende do título (relógio, contexto sem régua, selo, painel).
+- **O operador**, no desktop (a coluna da conversa, com ou sem o pane encaixado ao lado) e no terminal. A barra aparece em **toda sessão** do Claude Code com o plugin, não só nas do pool: fora do pool ela mostra o que não depende do título (relógio, contexto contra a janela sem palavra, selo, painel).
 - **A largura se mede em células** (`bodyColumns`). As contas abaixo usam a **célula do terminal**, onde um botão é `[ rótulo ]` (rótulo + 4); no desktop o botão nativo é mais estreito que isso, então o que cabe no terminal cabe no desktop. Larguras de referência: **114** (terminal largo; desktop sem pane), **94** (terminal comum de 100 colunas; desktop com o pane encaixado), **72**, e **40** como pior caso.
 - A altura disponível é `maxRows` (no terminal em tela cheia, o que sobra acima do prompt, até metade da tela). A barra usa **1 linha** no caso comum, **2** com o pedido de limpeza, e +2 de moldura quando o cache está em aviso (§Estados): no máximo **4** com 66 células ou mais. Abaixo disso o pedido e o grupo da direita quebram, e o pior caso (40 células, ausente, pedido aberto, moldura) chega a **6** linhas, ainda abaixo da metade da tela que o `maxRows` dá.
 
@@ -38,7 +69,7 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 |---|---|---|---|---|
 | Relógio do cache | **nenhum lugar** (o `session-band` saiu, Q282) | mandar o próximo turno antes de vencer, ou limpar | toda olhada | **fica:** `⧗ mm:ss`, à esquerda, nunca cai (§1) |
 | Moldura do cache em aviso/alerta | idem | a mesma, com pressa | 2× por hora | **fica:** moldura na barra inteira + o relógio em negrito / invertido (§4) |
-| Contexto da sessão | idem (era `%` da janela) | limpar ou fechar o item antes do teto | toda olhada | **muda:** tokens contra a régua do papel, com palavra no aviso e no teto (§1) |
+| Contexto da sessão | idem (era `%` da janela) | limpar ou fechar o item antes do teto | toda olhada | **muda:** tokens contra a janela de compactação, com a palavra da régua do papel no aviso e no limpar (§1, §Delta F65) |
 | Selo das perguntas abertas | só no pane | abrir o painel e responder | várias por hora | **fica:** botão `● 3 perguntas`, primeiro da direita; some com zero (§2) |
 | Abrir / fechar o painel | só o `/painel` | ler o pool | várias por dia | **fica:** botão `Abrir painel` / `Fechar painel`, último da direita (§2) |
 | Pedido de limpeza da orquestradora | só na pergunta, no pane | dar o ok | 1 a 3 por dia | **novo:** linha própria acima da barra, com `Pode se limpar` (§3) |
@@ -56,7 +87,7 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 
 ```
 [pedido, só quando há]   ◆ A orquestradora pede para se limpar · Q290  [ Pode se limpar ]
-[barra, sempre]          ⧗ 47:12  contexto 142/300 mil  F52 · design  E 2 · V 1     [ ● 3 perguntas ] [ Ficar ausente ] [ Abrir painel ]
+[barra, sempre]          ⧗ 47:12  contexto 142/600 mil  F52 · design  E 2 · V 1     [ ● 3 perguntas ] [ Ficar ausente ] [ Abrir painel ]
 ```
 
 - **A ação primária da barra é `Pode se limpar`**, e é o **único** `variant="primary"` dela. Quando não há pedido, a barra não tem primário: ela é leitura, e o selo é a próxima ação.
@@ -67,13 +98,13 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 
 ### O que cai quando aperta (`bodyColumns`, contas na célula do terminal)
 
-**A faixa é a mais rica cuja soma cabe**, medida com os textos reais do momento, e não um corte fixo de `bodyColumns`: `faixaDaBarra(bodyColumns, pecas)` soma, para cada faixa (0, 1, 2), a esquerda (peças + `columnGap` 2), o vão de 2, a direita (botões + `columnGap` 1), os 2 do `paddingX` e, com moldura (§4), mais 2; devolve a primeira que cabe, e a 2 quando nenhuma cabe (aí o `flexWrap` quebra). Assim a palavra `· alto` / `· teto`, a moldura, `● 12 perguntas` e `Fechar painel` derrubam uma faixa sozinhos, em vez de quebrar a barra justo no aviso. A tabela abaixo é o estado comum de referência (≤ 9 perguntas, sem palavra, sem moldura):
+**A faixa é a mais rica cuja soma cabe**, medida com os textos reais do momento, e não um corte fixo de `bodyColumns`: `faixaDaBarra(bodyColumns, pecas)` soma, para cada faixa (0, 1, 2), a esquerda (peças + `columnGap` 2), o vão de 2, a direita (botões + `columnGap` 1), os 2 do `paddingX` e, com moldura (§4), mais 2; devolve a primeira que cabe, e a 2 quando nenhuma cabe (aí o `flexWrap` quebra). Assim a palavra `· alto` / `· limpar`, a moldura, `● 12 perguntas` e `Fechar painel` derrubam uma faixa sozinhos, em vez de quebrar a barra justo no aviso. A tabela abaixo é o estado comum de referência (≤ 9 perguntas, sem palavra, sem moldura):
 
 | Faixa | Esquerda | Direita | Soma no pior estado comum |
 |---|---|---|---|
-| **≥ 114** | relógio · `contexto 142/300 mil` · `F52 · design` · `E 2 · V 1` | selo · modo (`Ficar ausente` ou `☾ Estou de volta`) · painel | esq. 7+20+12+9 + 3×2 = 54; dir. 17+20+17 + 2 = 56; + 2 de vão + 2 de margem = **114** |
-| **94–113** | relógio · `142/300 mil` · `F52 · design` (o **pool cai**; o contexto perde a palavra) | selo · modo · painel | 7+11+12 + 2×2 = 34; 56; + 4 = **94** |
-| **< 94** | relógio · `142 mil` (o **item cai**; o contexto perde a régua) | selo · **`☾ Estou de volta` só no ausente** (`Ficar ausente` cai) · painel **só sem selo** | 7+7+2 = 16; ausente com selo 17+20+1 = 38; + 4 = **58**; presente com selo: **37** |
+| **≥ 114** | relógio · `contexto 142/600 mil` · `F52 · design` · `E 2 · V 1` | selo · modo (`Ficar ausente` ou `☾ Estou de volta`) · painel | esq. 7+20+12+9 + 3×2 = 54; dir. 17+20+17 + 2 = 56; + 2 de vão + 2 de margem = **114** |
+| **94–113** | relógio · `142/600 mil` · `F52 · design` (o **pool cai**; o contexto perde a palavra `contexto`) | selo · modo · painel | 7+11+12 + 2×2 = 34; 56; + 4 = **94** |
+| **< 94** | relógio · `142 mil` (o **item cai**; o contexto perde a janela) | selo · **`☾ Estou de volta` só no ausente** (`Ficar ausente` cai) · painel **só sem selo** | 7+7+2 = 16; ausente com selo 17+20+1 = 38; + 4 = **58**; presente com selo: **37** |
 
 - **Nunca caem:** o relógio, o selo (enquanto houver pergunta) e a linha do pedido com o seu botão. No ausente, o `☾ Estou de volta` também não cai: esquecer o ausente ligado é o risco que a F48 combate.
 - **O painel cai antes do selo, e só quando o selo está à mostra:** o selo também abre o painel, e o pane se fecha pela própria marca ou pelo `/painel`. Sem pergunta aberta, o botão do painel volta.
@@ -85,12 +116,12 @@ A barra é lida **em toda olhada para o prompt** (dezenas de vezes por hora) e c
 | Peça | Texto | Peso e cor | Quando |
 |---|---|---|---|
 | **Relógio** | `⧗ 47:12` (mm:ss); `⧗ —` antes da 1ª resposta; `⧗ …` enquanto `isWorking`; `⧗ venceu` no zero | normal; aviso negrito (a moldura já é o âmbar); alerta e venceu `inverse` + negrito (§4) | sempre |
-| **Contexto** | `contexto 142/300 mil` · `142/300 mil` · `142 mil`, conforme a faixa (a palavra `· alto` / `· teto` fica em todas, e conta na soma da faixa); com papel desconhecido, sem a régua: `contexto 142 mil` · `142 mil` | apagado no normal; no aviso, `warning` e ` · alto` no fim; no teto, `error`, negrito e ` · teto` | quando `tokens` existe |
+| **Contexto** | `contexto 142/600 mil` · `142/600 mil` · `142 mil`, conforme a faixa (a palavra `· alto` / `· limpar` fica em todas, e conta na soma da faixa); sem janela conhecida, sem `/`: `contexto 142 mil` · `142 mil`; com papel desconhecido, com a janela e sem palavra | apagado no normal; no aviso, `warning` e ` · alto` no fim; no teto da régua, `error`, negrito e ` · limpar` | quando `tokens` existe |
 | **Item** | `F52 · design` (o `F<n>` e o rótulo da etapa do `ROTULO_ETAPA` do pane) | apagado | com item e ≥ 94 |
 | **Pool** | `E 2 · V 1`; com zero dos dois, `E 0 · V 0` | apagado | com projeto e ≥ 114 |
 
-- **O denominador é o teto, não o aviso:** `142/300` diz "quanto falta para parar". A palavra `alto` marca quando passou do aviso (a régua do papel, D5 do plano). Sem palavra, abaixo do aviso.
-- **Arredondamento:** mil para baixo (`141 999` → `141 mil`), para nunca mostrar `150/150` antes de chegar.
+- **O denominador é a janela de compactação, não a régua do papel** (D1-F65-1, §Delta F65): `142/600` diz "quanto cabe antes de compactar", que é o que uma fração parece dizer. A régua do papel vira só palavra e cor: `· alto` a partir do aviso, `· limpar` a partir do teto. Sem palavra, abaixo do aviso.
+- **Arredondamento:** mil para baixo (`141 999` → `141 mil`), para nunca mostrar `600/600` antes de chegar.
 - **O contexto não aparece sem número** (`tokens` nulo): a peça some inteira, não vira `—`.
 
 ## 2. As ações (grupo da direita)
@@ -158,13 +189,13 @@ Terminal, 114 células, presente, uma pergunta de limpeza aberta:
 
 ```
 ◆ A orquestradora pede para se limpar · Q290  [ Pode se limpar ]
-⧗ 47:12  contexto 142/300 mil  F52 · design  E 2 · V 1      [ ● 3 perguntas ] [ Ficar ausente ] [ Abrir painel ]
+⧗ 47:12  contexto 142/600 mil  F52 · design  E 2 · V 1      [ ● 3 perguntas ] [ Ficar ausente ] [ Abrir painel ]
 ```
 
-94 células, ausente, contexto alto (a faixa 1 somaria 101: cai para a 2, sem item e sem o painel, porque o selo está à mostra):
+94 células, ausente, uma P com contexto alto (a faixa 1 somaria 101: cai para a 2, sem item e sem o painel, porque o selo está à mostra):
 
 ```
-⧗ 47:12  142 mil · alto                               [ ● 3 perguntas ] [ ☾ Estou de volta ]
+⧗ 47:12  362 mil · alto                               [ ● 3 perguntas ] [ ☾ Estou de volta ]
 ```
 
 72 células, presente, alerta do cache (com moldura):
@@ -202,7 +233,7 @@ Na faixa do topo do pane (F48), **depois da linha `⚠ Parou há…` e antes da 
 | Mensagem | Lugar | Duração | Tom | Quem vê |
 |---|---|---|---|---|
 | `⧗ 47:12` / `⧗ —` / `⧗ …` / `⧗ venceu` | barra, ponta esquerda | enquanto valer | neutro; aviso `espera`; alerta e venceu `ruim` | toda sessão |
-| `contexto 142/300 mil · alto` / `· teto` | barra, esquerda | enquanto valer | neutro; `espera`; `ruim` | toda sessão |
+| `contexto 142/600 mil` · `· alto` / `· limpar` | barra, esquerda | enquanto valer | neutro; `espera`; `ruim` | toda sessão |
 | `● 3 perguntas` | barra, 1º botão da direita | enquanto houver aberta | `espera` | toda sessão |
 | `◆ A orquestradora pede para se limpar · Q290` | linha do pedido, barra e pane | enquanto aberta | `espera` | toda sessão do projeto |
 | `✓ Ok enviado à orquestradora` | linha do pedido | até a próxima leitura | `ok` | quem clicou |
@@ -238,9 +269,10 @@ Texto de UI sem plano, ADR nem nome de arquivo. O `F52` e o `Q290` são dados (o
 | Enviando / enviado / falhou | `Enviando…`; `✓ Ok enviado à orquestradora`; volta o botão + toast | 4 |
 | Limpar antes de vencer (orquestradora) | a linha do pedido com o secundário `Limpar antes de vencer` | 5 |
 | Cache em aviso / alerta / venceu | moldura âmbar / vermelha; relógio em negrito / invertido | 6 |
-| Contexto alto / no teto | `· alto` em âmbar / `· teto` em vermelho e negrito | 3, 6 |
+| Contexto alto / no teto da régua | `· alto` em âmbar / `· limpar` em vermelho e negrito | 2b, 3, 6 |
 | Turno rodando | `⧗ …`, sem moldura | — |
-| Fora do pool (sem título) | relógio, contexto sem régua, selo, painel; sem item, sem pool | — |
+| Fora do pool (sem título) | relógio, contexto contra a janela sem palavra, selo, painel; sem item, sem pool | — |
+| Sem janela conhecida | contexto sem `/` (`contexto 198 mil`), com a palavra se houver régua | — |
 | `hasSurvey` ou `/barra` | a barra não desenha (`next(e)`) | — |
 | Terminal 114 / 94 / 72 / 40 | §5 | 7 |
 | Pane, faixa do pedido a W = 288 | §6 | 8 |
@@ -262,7 +294,10 @@ Nenhum. O relógio troca o texto a cada segundo e só; a moldura e a linha do pe
 - **D2-3 · `Ficar ausente` só com ≥ 94 células; `☾ Estou de volta` sempre.** Recomendo: fica; sair é uma vez por dia e tem o pane, esquecer ligado é o risco.
 - **D2-4 · O botão do painel cai, abaixo de 94, quando o selo está à mostra.** Recomendo: fica; o selo também abre, e o pane se fecha pela própria marca.
 - **D2-5 · Rótulo `Pode se limpar`** (a resposta, na voz do operador), e não "Ok para limpar". Recomendo: fica; diz o que a orquestradora vai ouvir.
-- **D2-6 · O denominador do contexto é o teto do papel**, com `alto` a partir do aviso. Recomendo: fica.
+- ~~**D2-6 · O denominador do contexto é o teto do papel**, com `alto` a partir do aviso.~~ **Substituída pela D1-F65-1** (pedido do operador, 26/10).
+- **D1-F65-1 · O denominador do contexto é a janela de compactação, igual para todos os papéis; a régua do papel fica como palavra e cor.** Caso: o operador leu `198/250` como uma janela errada. Se não decidir: fica (é o pedido dele). Recomendo: fica; a fração passa a dizer o que parece dizer.
+- **D1-F65-2 · A palavra do teto da régua é `· limpar`** (era `· teto`). Caso: com a janela embaixo, `260/600 · teto` diria "parou" com 340 mil sobrando. Se não decidir: fica `· limpar`. Recomendo: fica; diz que é hora de limpar sem dizer quem limpa, e serve à E (que se limpa) e à orquestradora (que pede).
+- **D1-F65-3 · A régua não aparece como número** (nada de `198/600 · limpa em 250`). Caso: o operador perde o "quanto falta para a régua". Se não decidir: fica sem. Recomendo: fica; a régua é do papel, que age nela sozinho, e alargar a peça do contexto derruba a faixa mais cedo em toda sessão.
 - **D2-7 · A revisão mora em `docs/design/revisoes/`** (padrão da skill e do `CLAUDE.md`), e não em `docs/design/` como as anteriores e o briefing citavam. Recomendo: fica; o padrão do projeto é este, e o plano diz à E só `docs/design/<revisão da D1>`.
 
 ## Crítica
@@ -291,11 +326,12 @@ Nenhum. O relógio troca o texto a cada segundo e só; a moldura e a linha do pe
 Testes visuais, além dos do plano:
 1. `faixaDaBarra`, estado comum de referência: 114 → 0; 113 e 94 → 1; 93 e 40 → 2. Com `· alto` a 114 → 1, e a 94 → 2; com moldura a 114 → 1; com `● 12 perguntas`, ausente e `Fechar painel` a 114 → 1; nenhuma faixa cabe a 40 → 2.
 2. Faixa 0, presente, 3 perguntas: a ordem dos filhos à esquerda é relógio, contexto, item, pool; à direita, os `Button` `perguntas`, `modo`, `painel`, nesta ordem; o rótulo de cada um é o filho (a constante), e o `label` é o nome acessível.
-3. Faixa 1: sem pool; contexto `142/300 mil`. Faixa 2: sem item; contexto `142 mil`; presente com selo → não há `modo` nem `painel`; ausente com selo → há `modo` (`☾ Estou de volta`) e não há `painel`; sem selo → há `painel`.
+3. Faixa 1: sem pool; contexto `142/600 mil`. Faixa 2: sem item; contexto `142 mil`; presente com selo → não há `modo` nem `painel`; ausente com selo → há `modo` (`☾ Estou de volta`) e não há `painel`; sem selo → há `painel`.
 4. A linha do pedido vem **antes** da barra no `Box column`; tem o único `Button` com `variant="primary"`; o texto tem `◆`; o Q-ID só nas faixas 0 e 1.
 5. Orquestradora com pedido aberto e cache a 8 min: **uma** linha do pedido, a do pedido (primário), não a do "limpar antes"; o único `Button` dela tem `key` `limpar-pedido`.
 6. Cache: 1 201 s → sem `borderStyle`; 1 200 s → `round` + `warning`, relógio `bold` e sem `color`; 600 s → `error`, relógio `inverse`; `isWorking` em qualquer valor → sem borda e `⧗ …`.
-7. Contexto no aviso termina em ` · alto`; no teto, ` · teto` e `bold`; papel desconhecido → sem `/`.
+7. Contexto contra a janela (`autoCompactWindow` 600 000): orquestradora a 198 mil → `contexto 198/600 mil`, sem palavra; a 260 mil → termina em ` · limpar`, `color` `error` e `bold`; P a 362 mil → ` · alto`, `warning`; papel desconhecido → com `/600` e sem palavra; janela nula → sem `/` e com a palavra (prove no mesmo estado que, com a janela, o `/` apareceria). A palavra vem de uma constante exportada (`PALAVRA_LIMPAR = ' · limpar'`, ao lado de `' · alto'`).
+9. `· limpar` conta na faixa: P a 510 mil (`contexto 510/600 mil · limpar`, 29), item `F52 · design`, pool `E 2 · V 1`, 3 perguntas, presente, painel fechado → a faixa 0 soma 63 + 2 + 52 + 2 = **119**: a 119 colunas → 0; a 118 → 1.
 8. Pane: a faixa do pedido vem depois da linha `⚠ Parou` (quando há) e antes da faixa do ausente; tem `borderColor="warning"` e o `Button` `limpar-pedido` primário; os rótulos (filhos) são as mesmas constantes da barra.
 
 **Gestos que a V audita** (`auditoria-de-clique`): o selo abre o pane e, aberto, não fecha; o painel abre e fecha do mesmo ponto; `Ficar ausente` → `☾ Estou de volta` no mesmo lugar, e de volta; `Pode se limpar` com uma pergunta de teste, olhando `Enviando…` antes do `✓`; `Limpar antes de vencer` deixa o rascunho na caixa; a barra a 94 e a 40 células sem nada sair pela direita; a moldura em claro e escuro.
