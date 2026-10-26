@@ -356,13 +356,38 @@ caso('entrada quebrada sai 0, sem saída, erro no log', () => {
 });
 const ent = (prompt, extra = {}) => rodar('operador-ausente.mjs', { session_id: 'x', hook_event_name: 'UserPromptSubmit', prompt, ...extra });
 const bandeiraArq = () => join(BASE_ORQ(), 'operador-ausente.json');
+const modoLigado = () => { if (!existsSync(bandeiraArq())) return false; const b = JSON.parse(readFileSync(bandeiraArq(), 'utf8')); return b.ligado !== false; };
 const EXP = (args) => `<command-name>/ausente</command-name>\n            <command-message>ausente</command-message>\n            <command-args>${args}</command-args>`;
 caso('operador-ausente: /ausente on liga e /ausente off desliga (cru e expandido)', () => {
   ent('/ausente on'); ok(existsSync(bandeiraArq()), 'on cru não ligou');
-  ent('/ausente off'); ok(!existsSync(bandeiraArq()), 'off cru não desligou');
+  ent('/ausente off'); ok(!modoLigado(), 'off cru não desligou');
   ent(EXP('on')); ok(existsSync(bandeiraArq()), 'on expandido não ligou');
-  ent(EXP('off')); ok(!existsSync(bandeiraArq()), 'off expandido não desligou');
+  ent(EXP('off')); ok(!modoLigado(), 'off expandido não desligou');
   ok(log().includes('ausente-on') && log().includes('ausente-off'), 'sem o log');
+});
+// F59 · A1: o off guarda o período na própria bandeira (`ligado:false` + `desde` do on), não apaga.
+caso('operador-ausente F59: off guarda {ligado:false, desde, desligadoEm, por:comando} com o desde do on', () => {
+  ent('/ausente on');
+  const on = JSON.parse(readFileSync(bandeiraArq(), 'utf8'));
+  ok(typeof on.desde === 'string' && on.desde !== '', 'precondição: o on gravou o desde');
+  ent('/ausente off', { session_id: 'sess-off' });
+  ok(existsSync(bandeiraArq()), 'o off apagou a bandeira em vez de guardar o período');
+  const off = JSON.parse(readFileSync(bandeiraArq(), 'utf8'));
+  ok(off.ligado === false, `ligado: ${JSON.stringify(off)}`);
+  ok(off.desde === on.desde, `desde mudou: ${off.desde} ≠ ${on.desde}`);
+  ok(!Number.isNaN(Date.parse(off.desligadoEm)), `desligadoEm inválido: ${off.desligadoEm}`);
+  ok(off.por === 'comando' && off.sessionId === 'sess-off', `por/sessionId: ${JSON.stringify(off)}`);
+});
+caso('operador-ausente F59: off sem bandeira não cria arquivo; ilegível ou já desligada, apaga/mantém sem inventar período', () => {
+  ent('/ausente off'); ok(!existsSync(bandeiraArq()), 'off sem bandeira criou arquivo');
+  mkdirSync(BASE_ORQ(), { recursive: true }); writeFileSync(bandeiraArq(), '{nao json');
+  ent('/ausente off'); ok(!existsSync(bandeiraArq()), 'bandeira ilegível devia ser apagada');
+  ent('/ausente on'); ent('/ausente off');
+  const antes = readFileSync(bandeiraArq(), 'utf8');
+  ent('/ausente off');
+  ok(existsSync(bandeiraArq()), 'segundo off apagou o período');
+  ok(readFileSync(bandeiraArq(), 'utf8') === antes, 'segundo off reescreveu o período');
+  ok(JSON.parse(antes).desde, 'o período guardado tem o desde');
 });
 caso('operador-ausente: prompt comum e frase de ausência NÃO mexem', () => {
   ent('vou dormir'); ok(!existsSync(bandeiraArq()), 'frase ligou');
