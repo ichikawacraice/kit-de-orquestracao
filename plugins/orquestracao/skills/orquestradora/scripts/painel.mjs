@@ -342,7 +342,7 @@ function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom, ante
     if (solto) throw new Error(`${chave}: ${solto.campo} cita "${solto.numero}" solto — na primeira menção escreva "${solto.numero} · <título do item>" (painel get fila ${solto.numero}); o operador não sabe o que é o número (a tecla F5 se descreve por extenso)`);
   }
   if (colecao === 'perguntas' && ('respondidaPor' in novo || 'respondidaEm' in novo)) {
-    throw new Error(`${chave}: respondidaPor só o pane grava (é a prova do clique do operador)`);
+    throw new Error(`${chave}: ${'respondidaPor' in novo ? 'respondidaPor' : 'respondidaEm'} só o pane grava (é a prova do clique do operador)`);
   }
   if (colecao === 'perguntas' && base.estado === 'aberta' && !base.sessaoId) {
     throw new Error(`${chave}: pergunta aberta sem sessaoId — a resposta do painel não teria para onde voltar`);

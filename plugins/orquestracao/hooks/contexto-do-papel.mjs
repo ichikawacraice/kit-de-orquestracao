@@ -52,7 +52,9 @@ function orquestradora(e, sid, transcript, ativo, t, det, reg) {
   if (t < PEDIR) return;
   const { limpou } = doTurno(transcript, inicioDoTurno(transcript) ?? 0, e.last_assistant_message);
   if (limpou) { registrar(sid, HOOK, 'limpou', det); return; }
-  const pediu = perguntasDeLimpeza(reg?.localId).some((d) => d.estado === 'aberta' || Date.now() - Date.parse(d.atualizadoEm) <= SEGURA_MS);
+  // A trégua conta da hora do clique (`respondidaEm`, senão `atualizadoEm`); data no futuro (> agora + 1 min) não vale.
+  const dentro = (iso) => { const d = Date.now() - Date.parse(iso); return d >= -60_000 && d <= SEGURA_MS; };
+  const pediu = perguntasDeLimpeza(reg?.localId).some((d) => d.estado === 'aberta' || dentro(Number.isNaN(Date.parse(d.respondidaEm)) ? d.atualizadoEm : d.respondidaEm));
   if (pediu) { registrar(sid, HOOK, 'satisfeito-pediu', det); return; }
   if (ativo) { registrar(sid, HOOK, 'deixou-passar', `cobrou-pedir ${det}`); return; }
   registrar(sid, HOOK, 'cobrou-pedir', det);

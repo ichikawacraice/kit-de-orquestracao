@@ -214,3 +214,18 @@ test('F48-8. bandeira {ligado:false} vale como desligada: ORQ com 210 mil passa'
 test('F48-9. planejadora com 210 mil segue cobrando sem bandeira (a mudança é só da orquestradora)', () => com((b) => {
   cobrou(rodar(b, 'P', transcript(b, { tokens: 210_000 })), /210 mil/);
 }));
+test('M1. pergunta `limpar · worktrees órfãos` aberta não satisfaz o pedido: cobra (cobrou-pedir)', () => com((b) => {
+  pergunta(b, 'Q1', LIMPAR({ titulo: 'limpar · worktrees órfãos' }));
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
+  assert.match(log(b), /\tcobrou-pedir\t/);
+  pergunta(b, 'Q1', LIMPAR()); // contraste: com o título exato a mesma fixture passa
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null);
+}));
+test('B1. trégua conta do respondidaEm: "não" do painel há 3 h com atualizadoEm de agora (uma nota) cobra; atualizadoEm em 2099 não segura', () => com((b) => {
+  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', respondidaPor: 'painel', respondidaEm: haMin(180), atualizadoEm: agora() }));
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
+  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: '2099-01-01T00:00:00.000Z' }));
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
+  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', respondidaPor: 'painel', respondidaEm: haMin(60), atualizadoEm: agora() }));
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null); // contraste: "não" de 1 h segura
+}));

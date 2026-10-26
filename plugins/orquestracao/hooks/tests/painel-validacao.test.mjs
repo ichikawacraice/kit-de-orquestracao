@@ -271,7 +271,7 @@ const dado = () => JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data
 caso('respondidaEm também só o pane grava: set/update/batch pela linha de comando são recusados', () => {
   gravaComoOPane();
   const r = painel('update', 'perguntas', 'Q1', '{"respondidaEm":"2099-01-01T00:00:00.000Z"}');
-  igual(r.exit, 1, `exit (${r.out})`); ok(r.err.includes('respondidaPor'), `stderr: ${r.err}`);
+  igual(r.exit, 1, `exit (${r.out})`); ok(r.err.includes('respondidaEm só o pane grava'), `stderr não cita o campo recusado: ${r.err}`);
   igual(dado().respondidaEm, RESP.respondidaEm, 'o respondidaEm mudou');
   igual(painel('set', 'perguntas', 'Q2', '{"estado":"respondida","respondidaEm":"2026-10-26T01:00:00.000Z"}').exit, 1, 'set aceitou');
 });
