@@ -21,6 +21,7 @@ function destinoLivre(pasta, nome) {
   return `${basename(nome, ext)}-${Date.now()}${ext}`;
 }
 function mover(de, para, nomes) {
+  if (!nomes.length) return [];
   mkdirSync(para, { recursive: true });
   return nomes.map((n) => {
     const novo = destinoLivre(para, n);

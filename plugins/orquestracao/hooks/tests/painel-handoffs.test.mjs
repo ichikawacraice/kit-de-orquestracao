@@ -12,6 +12,7 @@ const SCRIPTS = process.env.SCRIPTS_DIR || join(AQUI, '..', '..', 'skills', 'orq
 const TEMAS = JSON.stringify([{ id: 'editor', rotulo: 'Editor' }]);
 const DIA = 86_400_000;
 let base; let hand; let falhas = 0;
+let semEnvDaPasta = false; // true: não passa PAINEL_HANDOFFS_DIR (a pasta sai do PAINEL_DIR ou do HOME)
 
 function novoBase() {
   base = mkdtempSync(join(tmpdir(), 'painel-handoffs-'));
@@ -23,7 +24,7 @@ function novoBase() {
 function painel(...args) {
   const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
     encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL',
-    env: { ...process.env, PAINEL_DIR: join(base, 'painel'), PAINEL_HANDOFFS_DIR: hand, CLAUDE_CODE_SESSION_ID: '', HOME: join(base, 'home') },
+    env: { ...process.env, PAINEL_DIR: join(base, 'painel'), PAINEL_HANDOFFS_DIR: semEnvDaPasta ? '' : hand, CLAUDE_CODE_SESSION_ID: '', HOME: join(base, 'home') },
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -84,7 +85,7 @@ caso('destino já existe: o movido ganha sufixo -<timestamp>, nada é sobrescrit
   toque('F7.md');
   igual(painel('update', 'fila', 'F7', FECHA).exit, 0, 'update');
   igual(readFileSync(join(hand, 'arquivo', 'F7.md'), 'utf8'), 'antigo\n', 'o antigo seguiu intacto');
-  const nomes = readdirSync(join(hand, 'arquivo')).filter((n) => /^F7\.md-\d+$|^F7-\d+\.md$|^F7\.md.*-\d+/.test(n));
+  const nomes = readdirSync(join(hand, 'arquivo')).filter((n) => /^F7-\d+\.md$/.test(n));
   igual(nomes.length, 1, `um movido com sufixo (${readdirSync(join(hand, 'arquivo'))})`);
   ok(!ex('F7.md'), 'saiu da raiz');
 });
@@ -154,6 +155,27 @@ caso('fechar um item limpa sozinho os arquivados com mais de 30 dias', () => {
   igual(painel('update', 'fila', 'F7', FECHA).exit, 0, 'fechar F7');
   ok(!arq('F1.md'), 'o velho sumiu');
   ok(arq('F7.md'), 'o recém-fechado está arquivado e ficou');
+});
+
+caso('sem PAINEL_HANDOFFS_DIR a pasta sai do PAINEL_DIR; o handoff do HOME não é tocado', () => {
+  const doHome = join(base, 'home', '.claude', 'orquestracao', 'pool', 'handoffs');
+  const doPainel = join(base, 'pool', 'handoffs'); // PAINEL_DIR/../pool/handoffs
+  mkdirSync(doHome, { recursive: true }); mkdirSync(doPainel, { recursive: true });
+  writeFileSync(join(doHome, 'F7.md'), 'home\n'); writeFileSync(join(doPainel, 'F7.md'), 'painel\n');
+  semEnvDaPasta = true;
+  try {
+    criaItem('F7');
+    igual(painel('update', 'fila', 'F7', FECHA).exit, 0, 'fechar');
+  } finally { semEnvDaPasta = false; }
+  ok(existsSync(join(doHome, 'F7.md')) && !existsSync(join(doHome, 'arquivo')), 'o handoff do HOME ficou e não ganhou arquivo/');
+  ok(existsSync(join(doPainel, 'arquivo', 'F7.md')) && !existsSync(join(doPainel, 'F7.md')), 'o da pasta derivada do PAINEL_DIR foi arquivado');
+});
+
+caso('fechar item sem handoffs não cria handoffs/ nem arquivo/', () => {
+  rmSync(hand, { recursive: true });
+  criaItem('F7');
+  igual(painel('update', 'fila', 'F7', FECHA).exit, 0, 'fechar');
+  ok(!existsSync(hand), 'handoffs/ não foi criada');
 });
 
 // Doc × doc × código: o bloco da regra mora em dois arquivos e o prazo, no código.
