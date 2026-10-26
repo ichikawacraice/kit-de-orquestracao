@@ -17,7 +17,7 @@
 2. **Os caminhos e as opções saem do `.claude/kit.json`** do projeto, seções `documentos` (pastas, regras de conferência) e `design` (pasta do front, globs do que é visual, fontes, largura de referência). Sem a seção, a skill não supõe caminho e o hook sai sem decisão.
 3. **As regras de doc ganham conferência no gate** (`as-docs-concordam.mjs`), regra por regra, ligadas pelo `kit.json`.
 4. **O CLI liga tudo, em `iniciar` e em `adotar` (Q259):** os dois plugins em `enabledPlugins` do projeto, as cinco regras de conferência e os modelos de doc copiados só onde não existem (nunca sobrescreve o que o projeto já tem), tudo registrado no lock (ADR 0001, decisão 3). `--design <pasta>` diz onde mora o front; sem ela, a guarda de design fica inerte e o `kit doutor` avisa. Não há nível `leve`/`nenhum` no CLI: desligar é escolha feita depois, no plugin.
-5. **Desligar e ajustar mora no plugin (Q259, Q260):** cada parte que dá para desligar (cada regra de conferência, a guarda de design, a cobrança da crítica) e cada opção simples (pasta do front, largura de referência) vira opção do plugin, editável na aba de plugins do app. O que se desliga lá fica desligado mesmo que o `kit.json` ligue; o `kit.json` continua a fonte dos caminhos que o projeto versiona, e a opção do plugin preenchida vence o padrão dele.
+5. **Desligar e ajustar mora no plugin (Q259, Q260):** cada parte que dá para desligar (cada regra de conferência, a guarda de design, a cobrança da crítica) e cada opção simples (pasta do front, largura de referência) vira opção do plugin, editável na aba de plugins do app. A opção do plugin é o padrão; o `kit.json` do projeto vence quando diz algo diferente (o projeto manda, decisão do operador em 2026-10-25, antes de qualquer fatia implementada). Exceção: plugin desligado inteiro não roda, e o `kit.json` não o religa. Por isso o CLI só escreve no `kit.json` o que o projeto precisa fixar.
 6. **O Impeccable é recomendação, não dependência:** as skills do kit funcionam sem ele; com `--design`, o CLI declara o marketplace e o plugin dele no `.claude/settings.json` do projeto, com as envs de corte de telemetria no bloco `kit:design` (Q260); sem `--design`, nada. O `kit doutor` avisa quando o projeto tem design sem ele. Catálogos de estilo de terceiros não entram.
 
 ## Alternativas consideradas
@@ -29,7 +29,7 @@
 
 ## Consequências
 - Projeto novo e projeto adotado nascem com os processos sem copiar skill nenhuma; atualizar é subir a versão do plugin.
-- Projeto que já tem docs fora do formato recebe as regras de conferência ligadas: o primeiro gate pode reprovar até alguém desligar a regra no plugin ou ajustar as docs. O `adotar` diz isso na saída.
+- Projeto que já tem docs fora do formato recebe as regras de conferência ligadas: o primeiro gate pode reprovar até alguém desligar a regra (na aba do plugin, para si, ou no `kit.json`, para o time) ou ajustar as docs. O `adotar` diz isso na saída.
 - Toda opção nova de plugin precisa existir nos dois lugares que a leem (opção do plugin e `kit.json`), com teste que compara os dois.
 - O pool passa a citar só o que o kit entrega, com um teste que reprova citação inexistente.
 - Os nomes ganham prefixo (`processos:spec-driven`, `design:critica-de-ui`); as travas que casam por nome aceitam os dois (como no ADR 0001).
