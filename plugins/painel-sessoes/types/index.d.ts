@@ -121,7 +121,8 @@ export type Leitura = {
 }
 
 /** Onde está o pedido de sessão de um item: saindo, no campo do prompt (esperando o Enter), ou enviado à orquestradora (esperando o operador iniciar o cartão). */
-export type EstadoPedido = { estado: 'enviando' } | { estado: 'prompt'; em: number } | { estado: 'pedido'; em: number }
+export type PapelDoPedido = 'P' | 'D' | 'E' | 'V'
+export type EstadoPedido = { estado: 'enviando' } | { estado: 'prompt'; em: number; papel: PapelDoPedido } | { estado: 'pedido'; em: number; papel: PapelDoPedido }
 
 /** O que a barra de status lê, de leve, a cada 30 s e a cada turno: só arquivos, nunca `list_sessions`. */
 export type Barra = {
