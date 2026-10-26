@@ -1144,6 +1144,7 @@ const barraEscondida = atom({ plugin: 'painel-sessoes', key: 'barraEscondida' } 
 let trabalhandoNaBarra = false
 let timerRelogio: { cancel: () => void } | undefined
 let timerLeitura: { cancel: () => void } | undefined
+let timerBatida: { cancel: () => void } | undefined
 let lendoBarra = false
 let okEmCurso = false
 
@@ -1310,13 +1311,112 @@ async function rascunhoDeLimpar($: EngineInterface): Promise<void> {
   }
 }
 
+// A batida (ADR 0007): de 10 em 10 min, UMA das sessões vivas roda `painel batida` (o julgamento é do script) e leva as
+// mensagens que ele devolveu às sessões certas. Sem modelo e sem turno: só `$.process.run` e `send_message`.
+// A vez mora em arquivo (`batida/vez.json`): cada sessão tem o próprio relógio, e a que grava a vez e se relê dona dela roda.
+
+const BATIDA_TIQUE_MS = 60_000
+const BATIDA_MIN_PADRAO = 10
+const ESPERA_DA_VEZ_MS = 2000
+const SCRIPT_TIMEOUT_MS = 60_000
+const BASE_DA_BATIDA = '.claude/orquestracao'
+
+type Mensagem = { para: string; texto: string; item: string | null; tipo: string }
+type Vez = { localId: string; em: number }
+
+const inteiroPositivo = (v: string | undefined, padrao: number) => (v !== undefined && /^[1-9]\d*$/.test(v) ? Number(v) : padrao)
+
+async function lerJson<T>($: EngineInterface, caminho: string): Promise<T | null> {
+  try {
+    return JSON.parse((await $.fs.read(caminho)) as string) as T
+  } catch {
+    return null
+  }
+}
+
+/** O `installPath` do plugin orquestracao (escopo user) em installed_plugins.json. */
+async function caminhoDoPainel($: EngineInterface, home: string): Promise<string | null> {
+  const reg = await lerJson<{ plugins?: Record<string, Array<{ scope?: string; installPath?: string }>> }>($, `${home}/.claude/plugins/installed_plugins.json`)
+  const chave = Object.keys(reg?.plugins ?? {}).find(k => k.startsWith('orquestracao@'))
+  const entrada = chave ? reg?.plugins?.[chave]?.find(e => e.scope === 'user' && typeof e.installPath === 'string') : undefined
+
+  return entrada?.installPath ? `${entrada.installPath}/skills/orquestradora/scripts/painel.mjs` : null
+}
+
+async function registrarFalha($: EngineInterface, pasta: string, agora: number, m: Mensagem, motivo: string): Promise<void> {
+  $.ui.log(`batida: a mensagem para ${m.para} não chegou (${motivo})`)
+  try {
+    const arquivo = `${pasta}/falhas.jsonl`
+    const antes = (await $.fs.read(arquivo).catch(() => '')) as string
+    await $.fs.write(arquivo, `${antes}${JSON.stringify({ em: new Date(agora).toISOString(), para: m.para, item: m.item, motivo })}\n`)
+  } catch {
+    /* sem o registro, o log acima já disse */
+  }
+}
+
+async function rodar($: EngineInterface): Promise<void> {
+  if ((await $.env.get('BATIDA')) === 'off') return
+  const home = await $.env.get('HOME')
+  if (!home) return
+  const minutos = inteiroPositivo(await $.env.get('BATIDA_MIN'), BATIDA_MIN_PADRAO)
+  const pasta = `${home}/${BASE_DA_BATIDA}/batida`
+  const arquivoDaVez = `${pasta}/vez.json`
+  const agora = await $.clock.now()
+  const vez = await lerJson<Vez>($, arquivoDaVez)
+  if (vez && typeof vez.em === 'number' && agora - vez.em < minutos * 60_000) return
+
+  const eu = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__get_session', session_id: 'self' })
+  if (eu.deny !== undefined || eu.isError) throw new Error(`get_session: ${eu.deny ?? eu.text ?? 'erro sem texto'}`)
+  const proprio = JSON.parse(eu.text ?? '') as Vivo
+  await $.fs.write(arquivoDaVez, `${JSON.stringify({ localId: proprio.sessionId, em: agora })}\n`)
+  await $.clock.sleep(ESPERA_DA_VEZ_MS)
+  if ((await lerJson<Vez>($, arquivoDaVez))?.localId !== proprio.sessionId) return
+
+  const lista = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__list_sessions', linked: false, include_archived: false, limit: 200 })
+  if (lista.deny !== undefined || lista.isError) throw new Error(`list_sessions: ${lista.deny ?? lista.text ?? 'erro sem texto'}`)
+  const texto = lista.text ?? ''
+  const vivas = (JSON.parse(texto.slice(Math.max(0, texto.indexOf('[')))) as Vivo[]).filter(v => v.sessionId !== proprio.sessionId)
+  // o list_sessions não traz a própria sessão: sem ela, a batida a acharia "sumida" e soltaria o item dela
+  const arquivoDasSessoes = `${pasta}/sessoes.json`
+  await $.fs.write(arquivoDasSessoes, JSON.stringify([...vivas, proprio]))
+
+  const script = await caminhoDoPainel($, home)
+  if (!script) {
+    $.ui.log('batida sem o plugin orquestracao')
+    return
+  }
+  const r = await $.process.run(['node', script, 'batida', '--sessoes', arquivoDasSessoes], { timeoutMs: SCRIPT_TIMEOUT_MS })
+  if (r.exitCode !== 0) throw new Error(`painel batida saiu com ${r.exitCode}: ${r.stderr.slice(0, 200)}`)
+  const saida = JSON.parse(r.stdout) as { mensagens?: Mensagem[] }
+  for (const m of saida.mensagens ?? []) {
+    try {
+      const envio = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: m.para, message: m.texto })
+      if (envio.deny !== undefined) await registrarFalha($, pasta, agora, m, envio.deny)
+      else if (envio.isError) await registrarFalha($, pasta, agora, m, envio.text ?? 'erro sem texto')
+    } catch (err) {
+      await registrarFalha($, pasta, agora, m, mensagem(err))
+    }
+  }
+}
+
+/** Um tique do relógio de 1 min: nunca lança (o relógio do mod não pode cair por causa da batida). */
+async function batida($: EngineInterface): Promise<void> {
+  try {
+    await rodar($)
+  } catch (err) {
+    $.ui.log(`batida: ${mensagem(err)}`)
+  }
+}
+
 /** Do `session.start` do mod (o motor só aceita um por plugin): o comando, os dois relógios e a primeira leitura. */
 async function iniciarBarra($: EngineInterface): Promise<void> {
   await $.command.register({ name: 'barra', description: 'Mostra ou esconde a barra de status do kit' })
   timerRelogio?.cancel()
   timerLeitura?.cancel()
+  timerBatida?.cancel()
   timerRelogio = $.clock.every(1000, () => void tiqueDoCache($).catch(() => {}))
   timerLeitura = $.clock.every(LEITURA_MS, () => void lerBarra($))
+  timerBatida = $.clock.every(BATIDA_TIQUE_MS, () => void batida($))
   await lerBarra($)
 }
 

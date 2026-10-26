@@ -170,7 +170,7 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
     return { value: opc.copiaFalha ? { isCopied: false as const, reason: 'no-clipboard' as const } : { isCopied: true as const } }
   })
   const relogio = mock.clock(on, { now: opc.agora ?? Date.UTC(2026, 9, 23, 12) })
-  mock.env(on, { HOME: '/home/teste', ...(opc.host ? { CLAUDE_CODE_HOST_SESSION_ID: opc.host } : {}) })
+  mock.env(on, { HOME: '/home/teste', BATIDA: 'off', ...(opc.host ? { CLAUDE_CODE_HOST_SESSION_ID: opc.host } : {}) })
   const loja = new Map<string, unknown>(Object.entries(opc.store ?? {}))
   on('store.get', (_, e) => (opc.storeFalha ? { deny: 'store fora do ar' } : { value: loja.get(e.key) }))
   on('store.set', (_, e) => {
