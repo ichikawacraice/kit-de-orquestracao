@@ -112,6 +112,22 @@ test('resumo: sem período e sem --desde/--ate falha com mensagem; --desde/--ate
   assert.equal(JSON.parse(ok.stdout).periodo.desde, periodo.desde);
 });
 
+test('resumo: data só-dia vale como o dia inteiro em UTC, qualquer que seja a hora do período', () => {
+  const a = ambiente();
+  const h = (em) => [{ em, de: 'E3', para: 'V1', por: 'P3' }];
+  for (const [id, em] of [['G1', '2026-10-24'], ['G2', '2026-10-23'], ['G3', '2026-10-25']]) {
+    a.grava('fila', id, { titulo: id, projeto: 'proj', etapa: 'validacao', dono: 'V1', historico: h(em) });
+  }
+  const r = a.rodar('resumo', '--repo', a.repo, '--desde', '2026-10-24T10:00:00.000Z', '--ate', '2026-10-24T20:00:00.000Z');
+  assert.equal(r.status, 0, r.stderr);
+  const j = JSON.parse(r.stdout);
+  const ids = (l) => l.map((x) => x.id).sort();
+  assert.ok(j.itens.andaram.length > 0 && j.itens.parados.length > 0, 'seções vazias: o teste não mediria nada');
+  assert.deepEqual(ids(j.itens.andaram), ['G1']);
+  assert.equal(j.itens.andaram[0].de, 'E3');
+  assert.deepEqual(ids(j.itens.parados), ['G2', 'G3']);
+});
+
 test('pendente/entregue: ≤ 7 dias sem entrega devolve o período; entregue grava e zera; 8 dias não cobra', () => {
   const a = ambiente();
   assert.equal(JSON.parse(a.rodar('pendente').stdout), null, 'sem bandeira');
