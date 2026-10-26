@@ -119,11 +119,18 @@ caso('T2: archive/delete de membro → deny; de sessão comum passa; alvo inexis
 });
 caso('T2 piso (ADR 0004): última E livre não se arquiva fora do turno do operador; havendo outra, passa; no turno dele, passa sempre', () => {
   const A = (alvo, extra) => pre('ORQ', 'mcp__ccd_session_mgmt__archive_session', { session_id: alvo }, extra);
+  // Título canônico `E1 · livre`: o alvo É livre, então a exclusão do próprio alvo é que mantém o piso.
+  const regE1 = JSON.parse(readFileSync(dir('app', 'conta', 'local_E1.json'), 'utf8'));
+  writeFileSync(dir('app', 'conta', 'local_E1.json'), JSON.stringify({ ...regE1, title: 'E1 · livre' }));
+  ok(JSON.parse(readFileSync(dir('app', 'conta', 'local_E1.json'), 'utf8')).title === 'E1 · livre', 'precondição: E1 regravada com o título canônico');
   passa(A('local_E1', depeer()), 'precondição: com a E9 livre, arquivar E1 passa');
   unlinkSync(dir('app', 'conta', 'local_E9.json'));
   const r = A('local_E1', depeer());
   nega(r, 'única E livre, turno de peer');
   ok(/última E livre/.test(r.permissionDecisionReason) && /ADR 0004/.test(r.permissionDecisionReason), `motivo: ${r.permissionDecisionReason}`);
+  // Alvo que não é livre (E3 · executora · F5, sem item vivo) num projeto sem E livre: arquivá-la não muda a contagem de livres.
+  writeFileSync(dir('app', 'conta', 'local_E1.json'), JSON.stringify({ ...regE1, title: 'E1 · executora · livre' }));
+  passa(A('local_E3', depeer()), 'alvo que não é livre passa, o piso não se aplica');
   passa(A('local_E1', humano()), 'turno do operador passa sempre');
   passa(A('local_E1B', depeer()), 'livre de outro projeto sem orquestradora própria: o piso olha o projeto do alvo');
   passa(pre('ORQ', 'mcp__ccd_session_mgmt__archive_session', { session_id: 'local_V1' }, depeer()), 'V não tem piso');
