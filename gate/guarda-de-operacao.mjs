@@ -30,6 +30,9 @@
  *   - `staging-amplo`: `git add -A|--all|-u|.|:/|*` e `git commit -a` — varrem
  *     arquivo que outra sessão deixou na pasta;
  *   - `kill-por-nome`: `pkill` e `killall` — alcançam processo de outra sessão;
+ *   - `teste-fora-do-teto` (ADR 0005): `vitest`, `node --test` e `jest` chamados direto fora do CI, sem `com-fichas` nem
+ *     `KIT_FICHAS_TOMADAS=` na frente. Esta é a única regra que **recusa** (`deny`), também em bypass: o teste solto é o que
+ *     trava a máquina, e a recusa diz o comando certo (`com-fichas` ou o gate);
  *   - `destrutivos`: `git reset --hard`, `git push --force` (sem lease),
  *     `git clean -f`, `git branch -D`, `git checkout/restore .`,
  *     `git worktree remove --force` (fora de pasta temporária), `rm -rf` fora de
@@ -65,6 +68,7 @@ export const REGRAS = [
   "staging-amplo",
   "kill-por-nome",
   "destrutivos",
+  "teste-fora-do-teto",
 ];
 
 /** A regra de cada subcomando do `git` (o que não está aqui é `destrutivos`). */
@@ -393,6 +397,67 @@ export function avaliarSegmento(seg, ctx) {
   return null;
 }
 
+/** Os segmentos como vieram, sem tirar `VAR=x` nem `sudo`/`env` do começo — a regra do teto precisa ver o `KIT_FICHAS_TOMADAS=`. */
+function segmentosBrutos(comando) {
+  const saida = [];
+  let seg = [];
+  for (const t of tokenizar(comando)) {
+    if (OPERADORES.has(t)) {
+      if (seg.length) saida.push(seg);
+      seg = [];
+    } else seg.push(t);
+  }
+  if (seg.length) saida.push(seg);
+  return saida;
+}
+
+const RUNNERS_DE_TESTE = new Set(["vitest", "jest"]);
+const ehRunner = (t) => t !== undefined && RUNNERS_DE_TESTE.has(basename(t));
+
+/** `true` se o segmento sobe um runner de teste direto (`vitest`, `jest`, `node --test`) sem as fichas do teto. */
+function testeSolto(bruto) {
+  let i = 0;
+  let comFichas = false;
+  while (i < bruto.length) {
+    const t = bruto[i];
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(t)) {
+      if (t.startsWith("KIT_FICHAS_TOMADAS=")) comFichas = true;
+      i++;
+    } else if (["sudo", "time", "command", "exec", "nohup", "env"].includes(t)) i++;
+    else break;
+  }
+  if (comFichas) return false;
+  const [cmd, ...args] = bruto.slice(i);
+  if (cmd === undefined) return false;
+  const base = basename(cmd);
+  if (ehRunner(base)) return true;
+  if (["npx", "pnpx", "bunx"].includes(base)) return ehRunner(args.find((a) => !a.startsWith("-")));
+  if (["pnpm", "npm", "yarn"].includes(base)) {
+    const pos = posicionaisDoPnpm(args.filter((a) => a !== "--"));
+    return ehRunner(pos[0]) || (["exec", "dlx", "x"].includes(pos[0]) && ehRunner(pos[1]));
+  }
+  if (base === "node") {
+    // só as opções do node antes do script contam: `node script.mjs --test` passa `--test` ao script
+    for (const a of args) {
+      if (!a.startsWith("-")) break;
+      if (a === "--test" || a.startsWith("--test-")) return true;
+    }
+  }
+  return false;
+}
+
+/** O motivo da recusa da regra `teste-fora-do-teto`. */
+const MOTIVO_DO_TETO = "Teste fora do teto da máquina (ADR 0005): rode por `node scripts/kit/com-fichas.mjs -- <o comando>` ou pelo gate (`npm test [pacote]`).";
+
+/**
+ * As **recusas** da linha inteira (a regra `teste-fora-do-teto`): lista de motivos, vazia se nada a recusar. Fora do CI
+ * (`ctx.ci`) e com a regra ligada (`guarda.regras`). Diferente de {@link avaliar}, que pergunta.
+ */
+export function avaliarFirmes(comando, ctx) {
+  if (ctx.ci || !ativa(ctx, "teste-fora-do-teto")) return [];
+  return segmentosBrutos(comando).some(testeSolto) ? [MOTIVO_DO_TETO] : [];
+}
+
 /** Avalia a linha inteira, seguindo os `cd`. Devolve a lista de motivos (vazia = nada a perguntar). */
 export function avaliar(comando, ctx) {
   let cwd = ctx.cwd;
@@ -512,6 +577,7 @@ export function contextoDe(cwd) {
   return {
     cwd,
     regras: new Set(guarda.regras),
+    ci: Boolean(process.env["CI"]),
     frontend,
     tronco: guarda.tronco,
     buildFiltrado: guarda.buildFiltrado,
@@ -534,7 +600,18 @@ export function main(entrada) {
   const comando = evento?.tool_input?.command;
   if (evento?.tool_name !== "Bash" || typeof comando !== "string" || comando.length === 0) return 0;
   const cwd = evento.cwd || process.cwd();
-  const motivos = avaliar(comando, contextoDe(cwd));
+  const ctx = contextoDe(cwd);
+  const motivos = avaliar(comando, ctx);
+  // A recusa vale em qualquer modo, bypass incluído (ADR 0005, decisão 4): o teste solto é o que trava a máquina.
+  const firmes = avaliarFirmes(comando, ctx);
+  if (firmes.length > 0) {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: [...firmes, ...motivos].join(" · ") },
+      }),
+    );
+    return 0;
+  }
   if (motivos.length === 0) return 0;
   // Em bypass ("ignorar permissões") a guarda NÃO pergunta. Quem
   // escolhe esse modo deixa a sessão rodando sozinha por horas, e uma pergunta

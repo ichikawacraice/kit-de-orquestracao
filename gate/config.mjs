@@ -65,7 +65,7 @@ const PADRAO = {
     extras: [],
   },
   guarda: {
-    regras: ["build-com-dev-no-ar", "psql-f", "migration-fora-do-tronco", "merge-commit", "stash-sem-u", "staging-amplo", "kill-por-nome", "destrutivos"],
+    regras: ["build-com-dev-no-ar", "psql-f", "migration-fora-do-tronco", "merge-commit", "stash-sem-u", "staging-amplo", "kill-por-nome", "destrutivos", "teste-fora-do-teto"],
     tronco: "origin/main",
     frontend: "apps/web",
     migrations: "supabase/migrations",
