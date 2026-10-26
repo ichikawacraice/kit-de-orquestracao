@@ -2,7 +2,7 @@
 
 Pedido do operador (24/10): *"cada sessão só precisa conhecer as próprias skills… se tiver uma skill de boas práticas de React, quem deve ler e quem não? se tivermos uma skill de design, quem deve ler e quem não?"*
 
-**Cada membro lê o arquivo do SEU papel** em [`papeis/`](papeis/): o papel, as skills que usa e quando, e as que não lê. Esta página é o mapa geral. **Fonte única do filtro:** [`skills-por-papel.json`](skills-por-papel.json). Esta página explica o porquê; quem aplica e quem confere leem o JSON. Skill nova instalada sem linha no JSON reprova o teste `~/.claude/hooks/tests/skills-do-papel.test.mjs`.
+**Cada membro lê o arquivo do SEU papel** em [`papeis/`](papeis/): o papel, as skills que usa e quando, e as que não lê. Esta página é o mapa geral. **Fonte única do filtro:** [`skills-por-papel.json`](skills-por-papel.json). Esta página explica o porquê; quem aplica e quem confere leem o JSON. Skill de plugin do kit (`processos:*`, `design:*`) entra no JSON com o nome prefixado; o teste `plugins/orquestracao/hooks/tests/papeis-citam-o-que-existe.test.mjs` reprova papel que cita skill que não existe em `plugins/*/skills/` nem no JSON. Skill nova instalada sem linha no JSON reprova o teste `plugins/orquestracao/hooks/tests/skills-do-papel.test.mjs`.
 
 <a id="como-funciona"></a>
 ## Como a sessão passa a conhecer só as suas
@@ -28,7 +28,7 @@ Papéis: **O** orquestradora · **P** planejadora · **D** design · **E** execu
 ## As duas perguntas do operador
 
 - **Boas práticas de React** (`vercel-react-best-practices`, `vercel-composition-patterns`): **E lê** (escreve o componente), **V lê** (confere o diff contra elas), **P cita** (põe no briefing a regra que toca a tarefa, sem aplicar), **D e O não leem**. Hoje as duas estão desligadas no projeto; ligá-las para E e V é *assumida, a confirmar*.
-- **Design** (`revisao-de-arquitetura-de-ui`, `critica-de-ui`, `frontend-design`, `impeccable`): **só D lê.** **P cita** a revisão de arquitetura (para saber que o item passa pela D antes da E). **E e V não leem**: leem a **revisão aprovada** em `docs/design/revisoes/`, que já traduziu a skill para aquela tela. Ler a skill daria à E licença para redesenhar o que a D decidiu.
+- **Design** (`design:revisao-de-arquitetura-de-ui`, `design:critica-de-ui`, `frontend-design`, `impeccable`): **só D lê.** **P cita** a revisão de arquitetura (para saber que o item passa pela D antes da E). **E e V não leem**: leem a **revisão aprovada** em `docs/design/revisoes/`, que já traduziu a skill para aquela tela. Ler a skill daria à E licença para redesenhar o que a D decidiu.
 
 <a id="tabela"></a>
 ## Tabela
@@ -42,7 +42,7 @@ Papéis: **O** orquestradora · **P** planejadora · **D** design · **E** execu
 | orquestrar-com-subagentes | cita | não | não | não | não | no pool cada papel é sessão; o modo não se aplica |
 | notas-de-release, manage-skills | lê | não | não | não | não | release e biblioteca de skills são da O |
 | skill-creator | não | lê | não | não | não | skill nova é doc, e doc é da planejadora |
-| spec-driven | cita | lê | cita | lê | lê | P escreve spec/ADR; E fecha roadmap e diário; V confere doc |
+| processos:spec-driven | cita | lê | cita | lê | lê | P escreve spec/ADR; E fecha roadmap e diário; V confere doc |
 | superpowers:brainstorming, writing-plans, writing-skills | não | lê | brainstorming: lê | não | não | desenho e plano |
 | superpowers:executing-plans, finishing-a-development-branch | não | não | não | lê | não | cumprir plano e fechar branch |
 | superpowers:test-driven-development | não | cita | não | lê | cita | E escreve teste primeiro; P e V cobram |
@@ -52,13 +52,13 @@ Papéis: **O** orquestradora · **P** planejadora · **D** design · **E** execu
 | superpowers:dispatching-parallel-agents | não | não | não | não | lê | só a V divide em subagentes de leitura |
 | superpowers:requesting-code-review, subagent-driven-development, using-git-worktrees | não | não | não | não | não | no pool a revisão é da V, a execução é sessão, o worktree é fixo |
 | superpowers:using-superpowers, diagnosing-superpowers | lê | lê | lê | lê | lê | meta |
-| revisao-de-arquitetura-de-ui | não | cita | lê | não | não | ver "As duas perguntas" |
-| critica-de-ui, frontend-design, impeccable | não | não | lê | não | não | idem; a crítica roda no subagente da D |
-| auditoria-de-clique | não | cita | cita | lê | lê | E audita o gesto que mexeu; V confere; P e D preveem no plano |
+| design:revisao-de-arquitetura-de-ui | não | cita | lê | não | não | ver "As duas perguntas" |
+| design:critica-de-ui, frontend-design, impeccable | não | não | lê | não | não | idem; a crítica roda no subagente da D |
+| processos:auditoria-de-clique | não | cita | cita | lê | lê | E audita o gesto que mexeu; V confere; P e D preveem no plano |
 | vercel-react-best-practices, vercel-composition-patterns | não | cita | não | lê | lê | ver "As duas perguntas" |
 | supabase | não | cita | não | lê | lê | E escreve migration e RLS; V confere |
 | owasp-security | não | cita | não | lê | lê | E aplica ao escrever auth e entrada; V confere |
-| revisar-diff | cita | não | não | não | lê | a revisão do diff é da V; a O sabe que existe antes do merge |
+| processos:revisar-diff | cita | não | não | não | lê | a revisão do diff é da V; a O sabe que existe antes do merge |
 | security-audit, audit-context-building, differential-review, sharp-edges, variant-analysis, supply-chain-risk-auditor, claude-security | não | cita | não | não | lê | auditoria é validação; P só a planeja |
 | fp-check, semgrep, static-analysis | não | não | não | não | lê | ferramentas da auditoria |
 | agent-browser | não | não | lê | lê | lê | ver a tela: D olha, E testa, V confere o artefato |
@@ -71,6 +71,8 @@ Papéis: **O** orquestradora · **P** planejadora · **D** design · **E** execu
 
 | Plugin | O | P | D | E | V | Por quê |
 |---|---|---|---|---|---|---|
+| processos | sim | sim | sim | sim | sim | spec-driven, revisar-diff e auditoria-de-clique: cada papel os consulta conforme a tabela acima |
+| design | não | não | sim | sim | não | a D escreve a revisão e roda o crítico; a E fica ligada porque o `Stop` que cobra a crítica da tela roda em quem edita a tela (a skill de design na E segue vigiada pelo hook: aviso, não recusa) |
 | impeccable | sim | não | sim | não | não | design é da D |
 | document-skills | sim | não | não | não | não | docx/pptx/xlsx e cópias de frontend-design e webapp-testing; nada disso é trabalho do pool |
 | claude-security, insecure-defaults | sim | sim | não | não | sim | auditoria: V executa, P planeja |
