@@ -45,7 +45,7 @@ export function adotar({ destino, perfil: perfilPedido, versao, simular = false,
   }
   for (const t of plano.avisos) linhas.push(`trocado: ${t}`);
   for (const a of plano.avisosProjeto) linhas.push(`aviso: ${a}`);
-  if (plano.docsExistentes.length) linhas.push(`aviso: o projeto já tem ${plano.docsExistentes.join(', ')} e o plugin processos liga as cinco regras de conferência de documento por padrão: elas podem reprovar o primeiro gate com os documentos de hoje. Para desligar uma regra só na sua conta, use a aba de plugins do app (opções do processos; no terminal, /plugin); para valer para o time, escreva documentos.conferir no .claude/kit.json (lista vazia não confere nada).`);
+  if (plano.docsExistentes.length) linhas.push(`aviso: o projeto já tem ${plano.docsExistentes.join(', ')} e o plugin processos liga as cinco regras de conferência de documento por padrão: elas podem reprovar o primeiro gate com os documentos de hoje. Para desligar para o time, escreva documentos.conferir no .claude/kit.json (lista vazia não confere nada); para ajustar só a sua conta, use o /plugin do terminal (opções do processos), que grava no seu ~/.claude/settings.json.`);
   for (const c of plano.conflitos) linhas.push(`conflito: ${c}`);
   for (const p of plano.pendencias) linhas.push(`pendente: ${p}`);
   if (barrado) linhas.push(`kit adotar${simular ? ' --simular' : ''}: ${plano.conflitos.length} conflito(s); nada foi gravado. Resolva e rode de novo, ou use --parcial para gravar o resto e deixar os conflitos registrados no lock como pendentes.`);

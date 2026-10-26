@@ -60,9 +60,9 @@ O perfil `pnpm-workspace` com `pacotes: "auto"` reproduz o gate do Izanagi (`pnp
 
 Seção opcional do `kit.json`. O gate confere ANTES da suíte (no CI também), sai 1 no primeiro achado e nem toma a vez nem guarda verde.
 Quais regras rodam (A7): `documentos.conferir` no `kit.json` vence — a lista é a que roda e `[]` explícito não confere nada, para o time inteiro;
-sem a chave, valem as opções `conferir_*` do plugin `processos` (todas ligadas por padrão), que cada pessoa liga ou desliga na própria conta;
-o plugin `processos` desligado em `enabledPlugins` não roda regra nenhuma. A opção do plugin vale só para a sua conta (o app grava em
-`~/.claude/settings.json`; o gate lê de lá): para valer para o time, escreva `documentos.conferir` no `kit.json`. Se o app não mostrar a opção, o caminho é `/plugin` no terminal.
+sem a chave, valem as opções `conferir_*` do plugin `processos` (todas ligadas por padrão); o plugin `processos` desligado em `enabledPlugins` não roda regra nenhuma.
+O caminho principal para desligar é o `kit.json`, que vale para o time. A opção do plugin é ajuste da conta: edita-se no `/plugin` do terminal
+(ou direto em `pluginConfigs` do `~/.claude/settings.json`, onde o gate a lê); o app desktop não a mostra, e o projeto não injeta opção.
 Cada regra se liga à parte:
 
 | Regra | Reprova |

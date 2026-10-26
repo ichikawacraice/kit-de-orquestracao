@@ -111,7 +111,8 @@ describe('kit adotar liga os processos sem tocar no que existe', () => {
     assert.deepEqual(hashes(join(d, 'docs/adr')), antes, 'docs/adr foi tocado');
     assert.ok(existsSync(join(d, 'docs/specs/README.md')), 'a pasta que faltava recebe o modelo');
     assert.match(r.stdout, /podem reprovar o primeiro gate/);
-    assert.match(r.stdout, /aba de plugins/);
+    assert.match(r.stdout, /\/plugin do terminal/);
+    assert.doesNotMatch(r.stdout, /aba de plugins/, 'o app desktop não mostra as opções do plugin');
     assert.match(r.stdout, /documentos\.conferir/);
     const s = json(d, '.claude/settings.json');
     assert.equal(s.enabledPlugins[`processos@${MKT}`], true);
