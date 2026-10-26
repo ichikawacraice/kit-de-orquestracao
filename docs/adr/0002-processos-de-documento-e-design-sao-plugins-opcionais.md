@@ -1,7 +1,7 @@
 # ADR 0002 — Os processos de documento e de design são plugins opcionais por projeto
 
 - Data: 2026-10-25
-- Status: Proposto (número a confirmar pela orquestradora; Q259 e Q260 abertas)
+- Status: Proposto (número reservado pela orquestradora; Q259 e Q260 abertas)
 - Autor: P2 (planejadora do pool)
 - Relacionados: [plano da fase 3](../planos/2026-10-25-fase-3-processos-de-documento-e-design.md) · [ADR 0001](0001-plugin-para-o-nucleo-cli-para-o-projeto.md)
 

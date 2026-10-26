@@ -1,6 +1,6 @@
 # Fase 3 — processos de documento e de design (plano, P2, 2026-10-25)
 
-Item da fila: **F44**. Decisão: [ADR 0002](../adr/0002-processos-de-documento-e-design-sao-plugins-opcionais.md) (número a confirmar pela orquestradora). Fases anteriores: [fase 2, o pacote](2026-10-24-fase-2-o-pacote.md) (que deixou de fora a "camada c": as skills de UI e a `spec-driven` do Izanagi; é esta fase).
+Item da fila: **F44**. Decisão: [ADR 0002](../adr/0002-processos-de-documento-e-design-sao-plugins-opcionais.md). Fases anteriores: [fase 2, o pacote](2026-10-24-fase-2-o-pacote.md) (que deixou de fora a "camada c": as skills de UI e a `spec-driven` do Izanagi; é esta fase).
 
 Pedido do operador: *"lá no Izanagi temos skill de spec, de criação de documentos, como agir, como seguir os passos, como e onde criar as docs, temos o impeccable que faz a gestão do design… criar aqui um sistema completo, que em qualquer lugar que eu instalar ele vamos ter os processos corretos de orquestração e desenvolvimento, as boas práticas etc."*
 
