@@ -135,6 +135,26 @@ test('perguntaDeLimpeza: o sim do painel há até 30 min vale para a T7 e escond
   expect(perguntaDeLimpeza([velha, ok('Q99053', 5, { titulo: 'limpar · outra-coisa' }), nova], ids, undefined, agora)?.id, 'outro título').toBe('Q99052')
 })
 
+test('perguntaDeLimpeza: o pedido aberto depois do ok volta; o anterior ou do mesmo instante segue escondido', () => {
+  const ids = [ORQ]
+  const agora = Date.parse('2026-10-26T12:00:00Z')
+  const ok = (id: string, minutos: number) =>
+    limpar(id, { estado: 'respondida', resposta: RESPOSTA, respondidaPor: 'painel', respondidaEm: new Date(agora - minutos * 60_000).toISOString() })
+  // o sim é das 11:55
+  expect(perguntaDeLimpeza([ok('Q99053', 5), limpar('Q99054', { atualizadoEm: '2026-10-26T11:58:00Z' })], ids, undefined, agora)?.id, 'aberta depois do ok').toBe('Q99054')
+  expect(perguntaDeLimpeza([ok('Q99053', 5), limpar('Q99054', { atualizadoEm: '2026-10-26T11:55:00Z' })], ids, undefined, agora), 'empate: escondida').toBeNull()
+  expect(perguntaDeLimpeza([ok('Q99053', 5), limpar('Q99054', { atualizadoEm: '2026-10-26T11:50:00Z' })], ids, undefined, agora), 'aberta antes do ok').toBeNull()
+  // dois sins na janela (11:55 e 11:40) e a aberta das 11:50 entre eles: vale o sim mais recente
+  expect(perguntaDeLimpeza([ok('Q99053', 5), ok('Q99055', 20), limpar('Q99054', { atualizadoEm: '2026-10-26T11:50:00Z' })], ids, undefined, agora), 'vale o sim mais recente').toBeNull()
+  expect(perguntaDeLimpeza([ok('Q99053', 5), limpar('Q99054', { atualizadoEm: 'lixo' })], ids, undefined, agora), 'atualizadoEm ilegível: anterior').toBeNull()
+  // entre as candidatas vale a mais recente, como sem ok
+  const novaA = limpar('Q99056', { atualizadoEm: '2026-10-26T11:57:00Z' })
+  const novaB = limpar('Q99057', { atualizadoEm: '2026-10-26T11:59:00Z' })
+  expect(perguntaDeLimpeza([ok('Q99053', 5), novaA, novaB], ids, undefined, agora)?.id).toBe('Q99057')
+  // sim vencido (31 min) não esconde nada, como antes
+  expect(perguntaDeLimpeza([ok('Q99053', 31), limpar('Q99054', { atualizadoEm: '2026-10-26T11:20:00Z' })], ids, undefined, agora)?.id).toBe('Q99054')
+})
+
 test('abertasDoProjeto conta as abertas, todas', () => {
   const docs = [limpar('Q1'), limpar('Q2', { estado: 'respondida' }), doc('Q3', { estado: 'aberta', titulo: 'x' })]
   expect(abertasDoProjeto(docs)).toBe(2)
@@ -740,6 +760,22 @@ test('pane: o ok já dado esconde a linha mesmo com outra aberta da mesma orques
   expect(await lido(ui)).not.toMatch(/pede para se limpar/)
   expect(await ui.find({ key: 'limpar-pedido' })).toBeUndefined()
   await ui.unmount()
+})
+
+test('barra e pane: o pedido aberto 2 min atrás volta mesmo com o sim de 5 min', async ($, on) => {
+  const ok = limpar('Q290', { estado: 'respondida', resposta: RESPOSTA, respondidaPor: 'painel', respondidaEm: new Date(AGORA - 5 * 60_000).toISOString() })
+  const novo = limpar('Q291', { atualizadoEm: new Date(AGORA - 2 * 60_000).toISOString() }, 2)
+  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [ok, novo] })
+  const ui = await montar($, 'terminal')
+  expect(await lido(ui), 'a barra mostra o pedido novo').toMatch(/A orquestradora pede para se limpar · Q291/)
+  expect((await ui.find({ key: 'limpar-pedido' }))?.text).toBe('Pode se limpar')
+  await ui.unmount()
+  await $.command.run({ command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
+  await m.relogio.settle()
+  const pane = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await lido(pane), 'o pane também').toMatch(/A orquestradora pede para se limpar/)
+  expect((await pane.find({ key: 'limpar-pedido' }))?.text).toBe('Pode se limpar')
+  await pane.unmount()
 })
 
 test('pane: sem o pedido (ou só limpar · outra-coisa) a linha não aparece', async ($, on) => {
