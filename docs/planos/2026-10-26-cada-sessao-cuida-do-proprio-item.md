@@ -1,6 +1,6 @@
 # Plano · cada sessão cuida do próprio item, e a orquestradora só lê
 
-Planejadora: P3 · 2026-10-26. Branch: `claude/f122-cada-sessao-cuida-do-proprio-item` (a partir de `origin/main` f37aeb8). Decisão: ADR 0006 (número a confirmar pela orquestradora). Origem: Q388, respondida pelo operador com "outra".
+Planejadora: P3 · 2026-10-26. Branch: `claude/f122-cada-sessao-cuida-do-proprio-item` (a partir de `origin/main` f37aeb8). Decisão: ADR 0007. Origem: Q388, respondida pelo operador com "outra".
 
 <a id="medido"></a>
 ## Medido (26/10, ~20:12)
@@ -14,7 +14,7 @@ Planejadora: P3 · 2026-10-26. Branch: `claude/f122-cada-sessao-cuida-do-proprio
 - **Custo de tarefa agendada com modelo:** piso de ~90 mil tokens por rodada (medido pela orquestradora); a cada 10 min, ~13 milhões por dia.
 
 <a id="decisoes"></a>
-## Decisões (ADR 0006)
+## Decisões (ADR 0007)
 1. **Quem grava o quê.**
 
    | O que | Hoje | Passa a |
@@ -81,7 +81,7 @@ Teste antes do código em `plugins/painel-sessoes/tests/batida.test.tsx` (rodado
 
 ### D · versão, índice e ADR
 1. `plugins/orquestracao/.claude-plugin/plugin.json` e `plugins/painel-sessoes/.claude-plugin/plugin.json`: subir a versão de patch.
-2. `docs/adr/README.md`: linha do 0006 (já neste PR); status muda para Aceito só quando o operador confirmar Q392–Q394.
+2. `docs/adr/README.md`: linha do 0007 (já neste PR); status muda para Aceito só quando o operador confirmar Q392–Q394.
 
 <a id="pronto"></a>
 ## Critério de pronto (medível)

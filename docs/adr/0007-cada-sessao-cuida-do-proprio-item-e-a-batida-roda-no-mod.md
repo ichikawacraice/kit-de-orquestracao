@@ -1,4 +1,4 @@
-# ADR 0006 — Cada sessão cuida do próprio item, a batida de 10 min roda no mod sem modelo, e a orquestradora só lê
+# ADR 0007 — Cada sessão cuida do próprio item, a batida de 10 min roda no mod sem modelo, e a orquestradora só lê
 
 - Data: 2026-10-26
 - Status: Proposto
