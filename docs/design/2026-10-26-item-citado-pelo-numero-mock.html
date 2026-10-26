@@ -135,7 +135,7 @@ body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,Bl
 <p>Sobre o redesenho do F34, que não muda. Novo: o número ao lado do tema em todo bloco, a linha "Citados" sob o bloco, e o botão "Todos os itens" com o campo Achar. Colunas de 380 px e 300 px; o terminal em texto. Dados: a fila real de 26/10, com textos de <code>agora</code> e trava inventados para mostrar cada estado.</p>
 <style>
 /* F43: o número, a linha "Citados", a lista "Todos os itens". Nenhuma cor nova: s, m, t e as das etapas. */
-.num{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--s);letter-spacing:0;text-transform:none}
+.num{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--t);letter-spacing:0;text-transform:none}
 .sep{color:var(--m);font-size:11px}
 .sobre .esq{display:flex;align-items:baseline;gap:0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cit{display:grid;grid-template-columns:52px 1fr;gap:1px 0;font-size:12px;color:var(--m);margin-top:2px}
@@ -182,7 +182,7 @@ body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,Bl
   <div class="secao">
     <div class="cab av"><span class="ti">Esperam você</span><span class="ct">1</span><span class="lg">responda aqui</span></div>
     <div class="perg">
-      <div class="id"><b>Q260</b><span>F42 · Prévia VTEX · prévia VTEX: o que cada tipo…</span></div>
+      <div class="id" style="white-space:nowrap;overflow:hidden"><b>Q260</b><span style="overflow:hidden;text-overflow:ellipsis">F42 · prévia VTEX: o que cada tipo de conteúdo mostra (componentes globais, PLP, page list)</span></div>
       <div class="pt">A prévia da PLP entra antes da page list?</div>
       <div class="tx">A page list depende do mesmo ambiente de edição que a F12 consertou para a Wake.</div>
       <div class="rec">Recomendo: sim, a PLP primeiro; é a que o cliente mais abre.</div>
@@ -246,7 +246,7 @@ body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,Bl
 
   <div class="rodape"><button class="b">▸ Todos os itens · 44</button><button class="b">▸ Feitos hoje · 2</button><button class="b">▸ Perguntas respondidas · 15</button></div>
 </div>
-<p class="legenda">"Citado(s)" é a última linha do bloco, com o rótulo pendurado à esquerda. O F19 não existe na fila (é um buraco real: F18 → F20). A pergunta ganha o número do item no rótulo e, para o "F12" solto no caso, a linha "Citado" dentro do tingido.</p>
+<p class="legenda">"Citado(s)" é a última linha do bloco, com o rótulo pendurado à esquerda. O F19 não existe na fila (é um buraco real: F18 → F20). A pergunta ganha o número do item no rótulo (sem o tema, uma linha) e, para o "F12" solto no caso, a linha "Citado" dentro do tingido.</p>
 </div>
 
 <!-- ===================== 2 ===================== -->
@@ -273,7 +273,7 @@ body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,Bl
       <div class="chips"><span class="chip an">execução</span></div>
       <div class="quem"><span class="sel">E4<i class="vivo"></i></span><span><b>executora</b> · trabalhando agora</span></div>
       <div class="agora">junta as sobras da F30, F32 e F39 com a da F41</div>
-      <div class="depois">depois: sobras deste item</div>
+      <div class="depois">depois: sobras deste item <b style="color:var(--s)">→ F3</b></div>
       <div class="cit"><span class="rot">Citados</span><span class="l"><b>F3</b> · estudo: fila do pool (passos 1–3…</span><span class="l"><b>F30</b> · executora livre durante a vali…</span><span class="l">também F32, F39, F41</span></div>
       <div class="acoes cartao-acoes"><button class="b">Abrir E4</button></div>
     </div>
@@ -287,7 +287,7 @@ body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,Bl
   <div class="contagem" style="margin-top:8px">a lista inteira a 300 px:</div>
   <div class="todos" data-todos="300"></div>
 </div>
-<p class="legenda">O F3 vem primeiro porque é o <code>depois[].item</code> gravado; os outros, na ordem do texto. Com 4 ou mais, os 2 primeiros com título e o resto só pelo número.</p>
+<p class="legenda">O F3 vem primeiro porque é o <code>depois[].item</code> gravado, e a linha "depois" termina em → F3; os outros, na ordem do texto. Com 4 ou mais, os 2 primeiros com título e o resto só pelo número.</p>
 </div>
 
 <!-- ===================== 4 ===================== -->
@@ -297,7 +297,7 @@ body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,Bl
 ╭──────────────────────────────────────╮
 │ <span class="b w">Q260</span> A prévia da PLP entra antes da │
 │ page list?                           │
-│ <span class="d">F42 · Prévia VTEX · prévia VTEX: o…</span>  │
+│ <span class="d">F42 · prévia VTEX: o que cada tipo…</span>  │
 │ <span class="d">Citado: F12 · login da Wake vencido</span>  │
 │ <span class="d">vira modal que bloqueia o editor</span>     │
 ╰──────────────────────────────────────╯
@@ -317,6 +317,7 @@ body{margin:0;background:var(--bg);color:var(--t);font:13px/1.4 -apple-system,Bl
   <span class="d">Citado: F43 · o painel diz o que é…</span>
 
 [▾ Todos os itens · 44] [▸ Feitos hoje · 2]
+[▸ Perguntas respondidas · 15]
 [Achar: número ou palavra       ]
 
 <span class="b">Editor · izanagi</span>

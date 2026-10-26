@@ -2,7 +2,7 @@
 
 - **Data:** 2026-10-26
 - **Autora:** D1, designer do pool
-- **Estado:** em crítica (§12)
+- **Estado:** liberada. Crítica 25/30, aprovada com ressalvas, sem ressalva alta; as cinco ressalvas aplicadas aqui (§12)
 - **Mock:** [`2026-10-26-item-citado-pelo-numero-mock.html`](2026-10-26-item-citado-pelo-numero-mock.html), estático, claro e escuro, colunas de 380 e 300 px e o terminal
 - **Plano de origem:** [`docs/planos/2026-10-25-item-citado-pelo-numero.md`](../planos/2026-10-25-item-citado-pelo-numero.md), decisão (a). A parte B (a regra de texto no `painel.mjs`) é de outra executora e não entra aqui.
 - **Base:** [`2026-10-25-painel-redesenho.md`](2026-10-25-painel-redesenho.md) (F34). Tudo o que esta revisão não cita continua como lá: seções, cartões, cores, botões, a moldura `Box round`.
@@ -43,7 +43,7 @@ Três caminhos, do mais barato ao mais caro para o operador:
 
 ## Hierarquia e peso
 
-- **Nada novo sobe de peso.** O número é um identificador, não um aviso: 11/700 com algarismos tabulares, classe `s` (o cinza do texto secundário que já existe), enquanto o tema segue `m` 11/600. É um grau acima do tema, para o olho achar "F13" ao varrer, e abaixo do título 15/600.
+- **Nada novo sobe de peso.** O número é um identificador, não um aviso: 11/700 com algarismos tabulares, classe `t` (a cor do texto principal, que já existe), enquanto o ` · ` e o tema seguem `m` 11/600. O degrau vem de **cor e peso**: no tema claro, `s` (`#6b6b68`) e `m` (`#6f6f6b`) são quase a mesma cor, e só o peso não destaca o número. Fica abaixo do título, que é 15/600.
 - **"Citados" é a última linha do bloco**, depois de `depois`, em 12 px: o operador só a lê quando o texto acima citou um número que ele não reconhece.
 - **"Todos os itens" fica no rodapé**, fechado. Aberto, empurra o resto para baixo, como "Feitos hoje" já faz.
 - **A ação primária do pane não muda:** responder a pergunta. Os botões desta revisão são `secondary`.
@@ -60,7 +60,7 @@ Três caminhos, do mais barato ao mais caro para o operador:
 
 ## 1. O número no bloco
 
-- **Onde:** na linha "sobre" de `cartaoSvg` (Executando, Travados, Esperam você, Feitos hoje) e de `filaSvg` (Na fila): `F13` em `s` 11/700 tabular, ` · ` em `m`, depois o tema como hoje.
+- **Onde:** na linha "sobre" de `cartaoSvg` (Executando, Travados, Esperam você, Feitos hoje) e de `filaSvg` (Na fila): `F13` em `t` 11/700 tabular, ` · ` em `m`, depois o tema como hoje.
 - **Nunca é cortado.** O corte com reticências (`caber`) passa a valer só para o tema: `caber(upper(tema), 11, W − tempoW − largura('F13 · '))`.
 - **O `alt` do bloco começa pelo número:** `F13 · Editor — <título> — …`. É por ele que o teste acha o número de cada item, e é o que o leitor de tela lê primeiro.
 - **Sem cor nova e sem pílula.** Uma pílula por cartão disputaria com os chips de etapa e PR, que já são pílulas; o número é texto, no lugar onde o olho já procura o tema.
@@ -79,7 +79,7 @@ Três caminhos, do mais barato ao mais caro para o operador:
 
 **Que textos entram, em que ordem:**
 1. o `depois[].item` (§3), que é uma ligação gravada e vem primeiro;
-2. os números achados **nos textos que o bloco desenha**, na ordem em que aparecem: no cartão, título → trava → espera → `agora` → `depois[].texto`; na linha da fila, título → resumo. Um número citado num campo que o bloco não mostra não entra: a legenda explica o que está à vista.
+2. os números achados **nos campos que o bloco desenha, lidos inteiros, mesmo que o desenho corte o texto** (o `agora` em 2 linhas, a trava em 3, o `depois` em 1), na ordem em que aparecem: no cartão, título → trava → espera → `agora` → `depois[].texto`; na linha da fila, título → resumo. Campo que o bloco não desenha não entra. Motivo: `citadosDe` é pura e não conhece a largura; o número que o corte escondeu é justamente o que a legenda precisa dizer.
 
 **O que não entra:**
 - o número do próprio item;
@@ -91,7 +91,7 @@ Três caminhos, do mais barato ao mais caro para o operador:
 ## 3. `depois` com item ligado
 
 - A leitura passa a guardar `depois: Array<{ texto: string; item?: string }>` em vez de `string[]`.
-- A linha `depois:` continua **como hoje**: o texto, em 1 linha, com `(+N)`.
+- A linha `depois:` continua com o texto, em 1 linha, com `(+N)`, e **termina em ` → F3`** quando o primeiro `depois` tem item: o número em `s` 12/700, ~29 px. O `caber` corta o texto e nunca o ` → F3`. É o que diz "o próximo passo é o F3", e não só "o F3 foi citado".
 - O `item` ligado entra em "Citados" **em primeiro**, com o título do item. *Desvio do plano, assumido:* o plano punha `F22 · <título>` na própria linha `depois`; isso apaga o texto gravado (F7: *"sobras deste item"* → F3) e dobra a linha a 300 px. Com a ligação na legenda, os dois aparecem e só existe um lugar onde o número vira título.
 
 ## 4. "Todos os itens"
@@ -100,6 +100,8 @@ Três caminhos, do mais barato ao mais caro para o operador:
 - `▸ Todos os itens · N`, `Button secondary`, **o primeiro do rodapé**: é o único que existe sempre que a fila tem item, e, primeiro, não muda de lugar quando "Feitos hoje" some.
 - `N` = itens do índice (§6), todos os projetos, todas as etapas. Com o índice vazio, o botão não aparece.
 - Aberto: `▾ Todos os itens · N`, como os outros dois.
+- **A lista abre por último**, depois de "Feitos hoje" e "Perguntas respondidas" quando estão abertas: ela tem ~1.200 px (44 linhas × 22 px, mais 8 cabeçalhos), e as duas listas curtas não podem ficar enterradas embaixo dela. O botão continua o primeiro; a lista, a última.
+- O rodapé passa a montar com `botaoTodos || botaoFeitos || botaoAnteriores` (hoje é só `botaoFeitos || botaoAnteriores`, `register.tsx:894` no desktop e `:1024` no terminal).
 
 ### O campo Achar (quando o motor tem `Input`)
 - Logo abaixo do rodapé, antes da lista: `Input` com o rótulo de envio **"Achar"** e o texto de ajuda *"número (13 ou F13) ou palavra"*. O motor só avisa no envio (`onSubmit`), então o filtro vale depois do Enter.
@@ -122,7 +124,7 @@ Três caminhos, do mais barato ao mais caro para o operador:
 
 ## 5. A pergunta
 
-- O rótulo da pílula do Q-ID passa a começar pelo número do item, quando a pergunta tem `item`: `Q238 · F34 · Kit · o painel das sessões ganha cara…` (o `rotulo` monta-se como `${item} · ${tema} · ${título}`).
+- O rótulo da pílula do Q-ID passa a ser **`${item} · ${título do item}`**, sem o tema, quando a pergunta tem `item`: `Q238  F34 · o painel das sessões ganha cara…`. Continua **uma linha** cortada por `caber` (`desenho.ts:182`). Sem o tema, sobram ~170 px para o título a 300 px, em vez de 65 px; o número já identifica, e o tema está em "Todos os itens". Pergunta sem item: `sessao`, como hoje.
 - **"Citados"** entra como última linha do cartão, dentro do tingido âmbar, para números soltos no título, caso, "se não decidir" e recomendação, com o mesmo desenho do §2 (a 16 px da borda, como o texto do cartão). Com a parte B, pergunta nova não terá número solto; a linha serve às 23 antigas.
 - Perguntas respondidas (`anteriorSvg`) ficam como estão: estão fora do pedido e já se fecharam.
 
@@ -154,7 +156,7 @@ O pane hoje joga fora, na leitura, todo item fechado há mais de 24 h. "Citados"
 | Linha "Citados" | uma função interna `citadosSvg(x0, y0, larguraLinha, citados)` em `desenho.ts`, usada pelo cartão, pela fila e pela pergunta, que devolve `{ partes, altura }` como `chipsSvg` | **sim** |
 | Regra de quem é citado | `citadosDe` em `register.tsx` (pura) | **sim** |
 | Índice | a leitura em `register.tsx` + tipo `ItemDoIndice` | **sim** |
-| Botão "Todos os itens" | `Button secondary`, átomo novo `verTodos: boolean` | **sim** |
+| Botão "Todos os itens" | `Button secondary`, átomo novo `verTodos: boolean`; primeiro no rodapé, lista aberta por último | **sim** |
 | Campo Achar | `Input` (`submitLabel="Achar"`) + `Button secondary` "Limpar"; átomo novo `filtroTodos: string` | **sim** |
 | Lista | `todosSvg(W, grupo, { comProjeto })`, um `Svg` por tema, com `key` `todos:<projeto>:<tema>` | **sim** |
 | Rótulo da pergunta | onde `rotulo` é montado na leitura das perguntas | muda |
@@ -199,10 +201,10 @@ Nenhum. Abrir a lista e filtrar trocam o conteúdo sem animação, como "Feitos 
 
 **Assumidas, a confirmar** (reversíveis, a execução segue com elas):
 - **D-a2 (do plano):** legenda "Citados", e não o título no meio do texto. Mantida, com a medida do §2.
-- **D1-1:** o `depois[].item` vai para "Citados" em primeiro, e a linha `depois` guarda o texto (§3). Se não decidir: fica assim. Recomendo assim: não se perde o texto gravado e a linha não dobra.
+- **D1-1:** a linha `depois` guarda o texto e termina em ` → F3`; o título do F3 vai para "Citados", em primeiro (§3, forma da crítica, P2). Se não decidir: fica assim. Recomendo assim: não se perde o texto gravado, a linha não dobra e o sentido de "próximo passo" fica à vista.
 - **D1-2:** campo **Achar** na lista (§4). Se não decidir: fica, quando o motor tiver `Input`. Recomendo: fica; custa um átomo e um filtro puro, e é o caminho de quem chega com o número de fora.
 - **D1-3:** o projeto à direita do cabeçalho do tema sempre que a lista tem dois projetos (§4).
-- **D1-4:** o número em `s` 11/700 (um grau acima do tema em `m`), e não no mesmo tom do tema como o plano dizia. Motivo: no mesmo tom, `F13 · EDITOR` vira uma mancha só e o número não se acha de relance.
+- **D1-4:** o número em `t` 11/700, e não no mesmo tom do tema como o plano dizia. Motivo: no mesmo tom, `F13 · EDITOR` vira uma mancha só e o número não se acha de relance; `s` não basta no tema claro (é quase `m`).
 
 **Gotchas para a E:**
 - **`\bF\d+\b` pega "F5" tecla.** Se F5 existir na fila, "aperte F5" vira `F5 · Travas por hook…`. Aceito: a parte B pede que tecla se escreva por extenso.
@@ -217,12 +219,13 @@ Arquivos: `plugins/painel-sessoes/hooks/desenho.ts`, `hooks/register.tsx`, `type
 
 Testes (antes do código, com a fixtura de 44 itens tirada da fila real, sem dado sensível):
 1. A fixtura não está vazia; **todo** cartão, linha de fila e feito traz `F<n>` no começo do `alt`, e o número aparece no `source` do SVG.
-2. `citadosDe`: 1 número; 3 números; 4 → 2 + "também"; repetido; o próprio; `F13 · …` já resolvido (não entra); número inexistente (sem `titulo`); `depois[].item` primeiro.
+2. `citadosDe`: 1 número; 3 números; 4 → 2 + "também"; repetido; o próprio; `F13 · …` já resolvido (não entra); número inexistente (sem `titulo`); `depois[].item` primeiro; número no fim de um `agora` longo que o desenho corta (entra); a linha `depois` termina em ` → F<n>` com item.
 3. **Concordância com a parte B:** a regex de `citadosDe` e a da recusa do `painel.mjs` classificam a mesma lista de frases do mesmo jeito (quando a B estiver na branch; antes disso, o teste compara com o exemplo do protocolo).
 4. A leitura guarda o índice com feito antigo e descartado; os itens visíveis continuam só com os feitos de 24 h.
 5. "Todos os itens · N" com N = tamanho do índice; aberto, os grupos na ordem de `temas.json`, vivos antes dos feitos, número decrescente; projeto no cabeçalho com dois projetos e sem ele com um.
 6. Filtro: `13`, `F13`, `f13` → só o F13; palavra sem acento acha título com acento; `99` → "Nenhum item com “99”."
-7. Pergunta com `item`: o rótulo começa pelo número.
+7. Pergunta com `item`: o rótulo é `F<n> · <título do item>`, sem o tema.
+10. Com "Todos os itens" e "Feitos hoje" abertos, os feitos vêm antes da lista inteira; sem feitos e sem anteriores, o rodapé ainda aparece com o botão novo.
 8. Terminal: a 1ª linha do item começa por `F<n> · `.
 9. `claude plugin test plugins/painel-sessoes` verde.
 
@@ -230,4 +233,19 @@ Testes (antes do código, com a fixtura de 44 itens tirada da fila real, sem dad
 
 ## 12. Crítica
 
-*(preenchida depois da rodada)*
+### Rodada 1: 25/30, aprovada com ressalvas
+
+O crítico rodou em contexto separado e mediu as larguras com o `em()` do `desenho.ts`. Ele deu hierarquia 4, densidade 4, consistência 4, ruído 4, ação primária 5 e aderência 4. Nenhuma ressalva é alta, então a revisão está liberada (teto Q207). As cinco eram baratas e só mudavam texto, por isso foram aplicadas nesta revisão, sem rodada 2:
+
+| # | Peso | Ressalva | Conserto |
+|---|---|---|---|
+| P1 | média | o número em `s` não se distingue do tema em `m` no tema claro | o número passa para `t` 11/700 (§Hierarquia, §1, D1-4, mock) |
+| P2 | média | o `depois` ligado virava uma citação qualquer | a linha `depois:` termina em ` → F3` (§3, D1-1, mock 3) |
+| P3 | baixa | "só o que está à vista" não se cumpre numa função pura | a regra lê os campos inteiros (§2, teste 2) |
+| P4 | baixa | o rótulo da pergunta quebrava no mock e é de uma linha no código; a 300 px sobravam 65 px | rótulo `F42 · <título>` sem o tema, em uma linha (§5, mock 1) |
+| P5 | baixa | a ordem das listas abertas e a condição do rodapé estavam indefinidas | a lista abre por último; o rodapé monta também com o botão novo (§4, Regiões, teste 10) |
+
+Três achados baixos ficaram como notas para a E e a V:
+- o terminal do mock não mostrava "Perguntas respondidas" (já corrigido no mock);
+- o `alt` do cartão **leva** a linha "Citados", que entra no fim como `Citados: F12 · …; F2 · …`;
+- os 282 px do rodapé a 300 px dependem do respiro do `Button` do motor. Quem confirma é a auditoria de clique.
