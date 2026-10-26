@@ -32,10 +32,13 @@ function cenario({ bandeira, entregue = false, cwdGit = true } = {}) {
     { type: 'user', origin: { kind: 'human' }, message: { content: 'oi' } },
     { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'mcp__ccd_session_mgmt__list_sessions', input: {} }, { type: 'tool_use', name: 'Bash', input: { command: 'node painel.mjs update sessoes x {}' } }] } },
   ];
+  // uma E livre do projeto, para o piso do pool (ADR 0004) não entrar nestes casos
+  const app = join(raiz, 'app'); mkdirSync(app);
+  writeFileSync(join(app, 'local_E1.json'), JSON.stringify({ sessionId: 'local_E1', isArchived: false, title: 'E1 · livre', cwd: repo }));
   const tr = join(raiz, 't.jsonl'); writeFileSync(tr, linhas.map((l) => JSON.stringify(l)).join('\n'));
   const rodar = (extra = {}) => execFileSync('node', [HOOK], {
     input: JSON.stringify({ session_id: sid, transcript_path: tr, cwd: cwdGit ? repo : join(raiz, 'fora'), ...extra }),
-    encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: { ...process.env, HOME: home, HOOKS_CREWAI_BASE: base },
+    encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: { ...process.env, HOME: home, HOOKS_CREWAI_BASE: base, POOL_APP_SESSOES_DIR: app },
   });
   return { rodar };
 }
@@ -144,6 +147,7 @@ test('(iii-P2) item em planejamento sem P e sem P livre → pede a vaga de P', (
   assert.match(r.reason, /F9/); assert.match(r.reason, /sem P livre/); assert.match(r.reason, /start_session/);
 });
 test('(iii-P3) item em planejamento com P dona não é cobrado', () => {
+  livre('local_E1', 'E1 · livre');
   item('F9', { etapa: 'planejamento', donoApelido: 'P3', com: [{ apelido: 'P3' }], historico: [{ em: minAtras(10), etapa: 'planejamento', dono: 'P3' }] });
   assert.equal(rodar([LIST, GRAVA]), null);
 });
@@ -165,6 +169,7 @@ test('(vi) espera de 2 min não bloqueia', () => {
 });
 
 test('(vii) item de outro projeto não bloqueia', () => {
+  livre('local_E1', 'E1 · livre');
   item('F7', {}, 'proj-b');
   assert.equal(rodar([LIST, GRAVA]), null);
 });
@@ -216,6 +221,7 @@ test('(xi) item entregue pela E: não pede despacho nem vaga; cobra a dona avan�
 });
 
 test('(xii) validacao sem V e sem entregue: pede confirmar com a dona; com V livre satisfaz com com add OU mensagem', () => {
+  livre('local_E1', 'E1 · livre');
   item('F7', { etapa: 'validacao', historico: [{ em: minAtras(20), etapa: 'validacao', dono: 'P1' }] });
   livre('local_V1', 'V1 · livre');
   const r = rodar([LIST, GRAVA]);
@@ -249,7 +255,35 @@ test('(xv) as três: resumo + ritual não feito + item esperando na mesma razão
   assert.match(r.reason, /resumo/); assert.match(r.reason, /Falta: list_sessions/); assert.match(r.reason, /F7 esperando E/);
 });
 
+// ADR 0004: piso de uma E livre por projeto fora do modo ausente.
+test('(piso-1) sem E livre, sem item, ausente desligado, sem start_session → cobra a vaga', () => {
+  const r = rodar([LIST, GRAVA]);
+  assert.equal(r?.decision, 'block', 'precondição: a cobrança tem de ser detectada');
+  assert.match(r.reason, /sem E livre/); assert.match(r.reason, /peça a vaga/); assert.match(r.reason, /ADR 0004/);
+});
+test('(piso-2) com E2 livre do projeto → não cobra o piso', () => {
+  livre('local_E2', 'E2 · livre');
+  assert.equal(rodar([LIST, GRAVA]), null);
+});
+test('(piso-3) com start_session no turno → não cobra o piso', () => {
+  assert.equal(rodar([LIST, GRAVA, START]), null);
+});
+test('(piso-4) modo ausente ligado → não cobra o piso', () => {
+  writeFileSync(join(base, 'orq', 'operador-ausente.json'), JSON.stringify({ ligado: true, desde: minAtras(30) }));
+  assert.equal(rodar([LIST, GRAVA]), null);
+});
+test('(piso-5) E livre de outro projeto não conta; livre de outro papel (P) também não', () => {
+  livre('local_E9', 'E9 · livre', { cwd: repoB });
+  livre('local_P2', 'P2 · livre');
+  const r = rodar([LIST, GRAVA]);
+  assert.equal(r?.decision, 'block'); assert.match(r.reason, /sem E livre/);
+});
+test('(piso-6) repo que não resolve → não cobra o piso', () => {
+  assert.equal(rodar([LIST, GRAVA], { extra: { cwd: join(base, 'fora') } }), null);
+});
+
 test('sem item esperando e ritual feito → passa', () => {
+  livre('local_E1', 'E1 · livre');
   item('F7', { com: [{ apelido: 'P1' }, { apelido: 'E1' }] });
   assert.equal(rodar([LIST, GRAVA]), null);
 });

@@ -68,6 +68,15 @@ function cobrancaDeEspera(cwd, nomeProjeto, comandos, usadas, mensagens) {
   return faltas;
 }
 
+// Piso de uma E livre (ADR 0004): fora do modo ausente, o projeto resolve, nenhuma E livre e o turno sem start_session.
+function faltaPiso(cwd, usadas) {
+  if (modoAusente() || [...usadas].some((n) => n.endsWith('start_session'))) return null;
+  const repo = gitCommonDir(cwd);
+  if (!repo) return null;
+  if (membrosLivres(repo).some((m) => m.papel === 'E')) return null;
+  return 'Piso do pool (ADR 0004): sem E livre no projeto: peça a vaga (start_session; fora do turno do operador, cartão).';
+}
+
 function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id, transcript_path, stop_hook_active } = input;
@@ -114,7 +123,8 @@ function main() {
   const projeto = projetoDoRepo(input.cwd || process.cwd());
   const periodo = projeto ? pendente(projeto) : null;
   const espera = cobrancaDeEspera(input.cwd || process.cwd(), projeto, comandos, usadas, mensagens);
-  if (faltam.length === 0 && !periodo && espera.length === 0) return;
+  const piso = projeto ? faltaPiso(input.cwd || process.cwd(), usadas) : null;
+  if (faltam.length === 0 && !periodo && espera.length === 0 && !piso) return;
   const resumo = periodo
     ? `O operador desligou o modo ausente (período de ${periodo.desde} a ${periodo.ate}) e o resumo ainda não foi entregue: ` +
       `rode \`node "${AUSENCIA}" resumo --md\`, entregue o resumo no formato da skill orquestradora (seção resumo-da-ausencia) e registre com \`node "${AUSENCIA}" entregue\`. `
@@ -128,7 +138,7 @@ function main() {
   const paradas = espera.length > 0
     ? `Item parado sem o papel da etapa (protocolo.md#esperando-papel): ${espera.join(' · ')}.`
     : '';
-  process.stdout.write(JSON.stringify({ decision: 'block', reason: [resumo.trim(), ritual, paradas].filter(Boolean).join('\n') }));
+  process.stdout.write(JSON.stringify({ decision: 'block', reason: [resumo.trim(), ritual, paradas, piso].filter(Boolean).join('\n') }));
 }
 
 try {
