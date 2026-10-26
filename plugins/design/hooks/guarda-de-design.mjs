@@ -81,6 +81,8 @@ function git(cwd, args) {
     timeout: PRAZO_DO_GIT_MS,
     killSignal: "SIGKILL",
     stdio: ["ignore", "pipe", "pipe"],
+    // Idioma fixo: a guarda lê a mensagem de erro do git ("not a git repository"), que o locale traduz.
+    env: { ...process.env, LC_ALL: "C" },
     maxBuffer: 64 * 1024 * 1024,
   });
 }

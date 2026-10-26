@@ -520,6 +520,14 @@ describe('o hook de ponta a ponta: um projeto de rascunho com `design` no kit.js
       assert.equal(r.status, 0);
       assert.equal(r.stdout, '');
       assert.equal(r.stderr, '');
+      // Com o git em alemão a mensagem muda: a guarda não pode depender do idioma.
+      const alemao = { ...env, LC_ALL: 'de_DE.UTF-8', GIT_CEILING_DIRECTORIES: dirname(fora) };
+      const prova = spawnSync('git', ['-C', fora, 'rev-parse', '--show-toplevel'], { encoding: 'utf-8', timeout: 10_000, killSignal: 'SIGKILL', env: alemao });
+      assert.match(prova.stderr, /Kein Git-Repository/, 'precondição: o locale de_DE tem de traduzir o git, senão o teste não mede nada');
+      const rd = spawnSync('node', [SCRIPT], { input: JSON.stringify({ hook_event_name: 'Stop', session_id: 'x', cwd: fora }), encoding: 'utf-8', timeout: 15_000, killSignal: 'SIGKILL', env: alemao });
+      assert.equal(rd.status, 0);
+      assert.equal(rd.stdout, '');
+      assert.equal(rd.stderr, '', 'git em alemão não pode vazar para o stderr');
       mkdirSync(join(proj, '.claude'), { recursive: true });
       const kitJson = join(proj, '.claude', 'kit.json');
       const bom = readFileSync(kitJson, 'utf-8');
