@@ -1,6 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, mkdirSync, copyFileSync, appendFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,7 +12,8 @@ const MODELOS = [
   'front/PRODUCT.md', 'front/DESIGN.md', 'front/ANATOMIA.md', 'CLAUDE.md',
 ];
 const PROIBIDAS = ['Izanagi', 'Wake', 'VTEX', 'apps/web'];
-const ler = (f) => readFileSync(join(RAIZ, 'modelos', f), 'utf8');
+const ler = (f, base = join(RAIZ, 'modelos')) => readFileSync(join(base, f), 'utf8');
+const citadas = (texto) => PROIBIDAS.filter((p) => texto.includes(p));
 const bloco = (texto, nome) => new RegExp(`<!-- kit:${nome} v(\\d+) -->([\\s\\S]*?)<!-- /kit:${nome} -->`).exec(texto);
 
 describe('modelos de documento (K10)', () => {
@@ -20,13 +22,21 @@ describe('modelos de documento (K10)', () => {
       assert.ok(existsSync(join(RAIZ, 'modelos', f)), `${f} não existe`);
       const t = ler(f);
       assert.ok(t.trim().length > 200, `${f} vazio ou curto demais (${t.trim().length})`);
-      for (const p of PROIBIDAS) assert.ok(!t.includes(p), `${f} cita "${p}"`);
+      assert.deepEqual(citadas(t), [], `${f} cita o produto de origem`);
     });
   }
 
-  test('o detector de palavra proibida enxerga a palavra (a ausência acima mede algo)', () => {
-    assert.ok(`texto do Izanagi`.includes(PROIBIDAS[0]));
-    assert.ok(PROIBIDAS.every((p) => p.length > 0));
+  test('o detector de palavra proibida enxerga a palavra num modelo copiado, pelo mesmo caminho (ler + citadas)', () => {
+    const base = mkdtempSync(join(tmpdir(), 'kit-modelo-'));
+    try {
+      mkdirSync(join(base, 'docs', 'adr'), { recursive: true });
+      copyFileSync(join(RAIZ, 'modelos', 'docs/adr/README.md'), join(base, 'docs/adr/README.md'));
+      assert.deepEqual(citadas(ler('docs/adr/README.md', base)), []); // a cópia limpa passa
+      for (const p of PROIBIDAS) {
+        appendFileSync(join(base, 'docs/adr/README.md'), `\ntexto do ${p}\n`);
+        assert.ok(citadas(ler('docs/adr/README.md', base)).includes(p), `o detector não enxergou "${p}"`);
+      }
+    } finally { rmSync(base, { recursive: true, force: true }); }
   });
 
   test('o modelo de spec traz o vocabulário fechado de status, na ordem', () => {
@@ -55,7 +65,7 @@ describe('blocos do modelos/CLAUDE.md (K10)', () => {
   test('kit:documentos v1 existe, fechado e com as regras de doc', () => {
     const b = bloco(t, 'documentos');
     assert.ok(b, 'bloco kit:documentos ausente'); assert.equal(b[1], '1');
-    for (const frase of ['4 dígitos', 'imutável', '400 caracteres', 'diário', 'datada', 'âncora', 'mergeado']) {
+    for (const frase of ['4 dígitos', 'imutável', '400 caracteres', 'diário', 'datada', 'âncora', 'mergeado', '3 dígitos', 'Pendências:', 'A spec no presente só afirma o que existe', 'no máximo 2 links']) {
       assert.ok(b[2].toLowerCase().includes(frase.toLowerCase()), `kit:documentos não diz "${frase}"`);
     }
   });
@@ -63,7 +73,7 @@ describe('blocos do modelos/CLAUDE.md (K10)', () => {
   test('kit:design v1 existe, fechado e com o fluxo, o teto e as envs do Impeccable', () => {
     const b = bloco(t, 'design');
     assert.ok(b, 'bloco kit:design ausente'); assert.equal(b[1], '1');
-    for (const frase of ['24/30', 'IMPECCABLE_NO_TELEMETRY', 'IMPECCABLE_NO_UPDATE_CHECK', 'config.local.json', 'estado visível']) {
+    for (const frase of ['24/30', 'IMPECCABLE_NO_TELEMETRY', 'IMPECCABLE_NO_UPDATE_CHECK', 'config.local.json', 'estado visível', 'nunca `hooks off`', 'O efeito entra na hora', 'Texto de UI não cita spec, ADR nem doc']) {
       assert.ok(b[2].includes(frase), `kit:design não diz "${frase}"`);
     }
   });
