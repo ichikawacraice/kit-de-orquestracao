@@ -10,7 +10,8 @@
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
 // fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam; e o
 // designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista; a pasta é
-// cercada: valor inválido (absoluto, `..`, a própria raiz) vale o padrão e symlink não libera.
+// cercada: valor inválido (absoluto, `..`, a própria raiz) vale o padrão e symlink não libera
+// (recusa com o motivo e o rótulo `recusou-symlink` no log).
 // Erro do hook vai para o log e a ferramenta segue.
 import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -71,17 +72,21 @@ function caminhoReal(p) {
   return join(realpathSync(a), relative(a, p));
 }
 
-// Na dúvida, nega: qualquer erro aqui vale `false`, não falha aberta.
+// `'liberado'`, `'symlink'` (o caminho, lido sem resolver links, está na pasta de revisões, mas o real
+// não: recusa com o motivo) ou `false`. Na dúvida, nega: erro antes de saber a pasta vale `false`.
 function designerNaRevisao(tipo, p) {
   if (semPrefixoDoKit(tipo) !== 'designer') return false;
+  let lido;
   try {
     const raiz = raizDoProjeto(p);
     if (!raiz) return false;
     const rel = pastaDeRevisoes(raiz);
+    lido = { rel, dentro: p.startsWith(resolve(raiz, rel) + '/') };
     const esperada = resolve(realpathSync(raiz), rel);
-    return caminhoReal(resolve(raiz, rel)) === esperada && caminhoReal(p).startsWith(esperada + '/');
+    if (caminhoReal(resolve(raiz, rel)) === esperada && caminhoReal(p).startsWith(esperada + '/')) return 'liberado';
+    return lido.dentro ? { symlink: rel } : false;
   } catch {
-    return false;
+    return lido?.dentro ? { symlink: lido.rel } : false;
   }
 }
 
@@ -103,8 +108,23 @@ function main() {
     registrar(e.session_id || '-', HOOK, 'liberado-por-tipo', `${quem} ${e.tool_name} ${p}`);
     return;
   }
-  if (designerNaRevisao(e.agent_type, p)) {
+  const revisao = designerNaRevisao(e.agent_type, p);
+  if (revisao === 'liberado') {
     registrar(e.session_id || '-', HOOK, 'liberado-por-papel', `${quem} ${e.tool_name} ${p}`);
+    return;
+  }
+  if (revisao?.symlink) {
+    registrar(e.session_id || '-', HOOK, 'recusou-symlink', `${quem} ${e.tool_name} ${p}`);
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason:
+          `O caminho passa por um link simbólico (${p}): o designer só grava na pasta de revisões real ` +
+          `(${revisao.symlink}). Troque o link por uma pasta ou aponte design.revisoes do .claude/kit.json ` +
+          'para o caminho real. Pare e devolva no relatório o que gravaria (arquivo e conteúdo).',
+      },
+    }));
     return;
   }
 
