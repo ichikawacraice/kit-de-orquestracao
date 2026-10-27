@@ -133,13 +133,15 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, che
   }
   for (const F of Object.keys(cutucadas)) if (!vistos.has(F)) delete cutucadas[F];
 
-  // piso de E e excedentes (fora do modo ausente)
+  // piso de E e excedentes (fora do modo ausente). Livre no `fez` de item vivo não é excedente nem conta para o teto:
+  // a trava de arquivamento recusa arquivá-lo (só se arquiva membro sem item vivo).
+  const noFez = fezDaFila(itens);
   if (!ausente) {
     for (const [nome, proj] of projetos) {
       const livresE = livresDe(linhas, 'E', nome, projetoDe, ocupados);
       if (proj.membros > 0 && livresE.length === 0 && !proj.vagas.some((v) => v.papel === 'E' && v.piso)) proj.vagas.push({ papel: 'E', piso: true });
       for (const papel of ['P', 'D', 'E', 'V']) {
-        const l = livresDe(linhas, papel, nome, projetoDe, ocupados);
+        const l = livresDe(linhas, papel, nome, projetoDe, ocupados).filter((x) => !noFez.has(x.localId));
         if (l.length > TETO_DE_LIVRES) for (const x of l.slice(0, l.length - TETO_DE_LIVRES)) proj.excedentes.push({ papel, apelido: x.apelido, localId: x.localId });
       }
     }
@@ -149,7 +151,6 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, che
   // Uma mensagem por título (trocou por outro título velho, avisa de novo). O aviso só sai do estado quando o título deixa de ser
   // velho pela fila ou pelo título (livre, dono, `com`, `fez`, arquivado): rodar ou estar recente não conta, senão a própria
   // mensagem acordaria o membro e o reaviso viria na batida seguinte.
-  const noFez = fezDaFila(itens);
   const velhos = new Set();
   for (const r of linhas) {
     const apelido = apelidoDoTitulo(r.title);
