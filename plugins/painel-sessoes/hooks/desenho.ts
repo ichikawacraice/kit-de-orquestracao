@@ -531,13 +531,13 @@ export const textoEsperando = (e: NonNullable<LinhaItem['esperando']>, agora: nu
 
 const upper = (s: string): string => s.toLocaleUpperCase('pt-BR')
 
-type Pessoa = { apelido: string; localId: string }
+type Pessoa = { apelido: string; localId: string; titulo?: string; dona?: true }
 /** As sessões que trabalham no item e seguem vivas; sem `com`, o dono, que sem ninguém já está na trava. */
 function pessoasDoItem(item: LinhaItem): Pessoa[] {
   const vivos = (item.com ?? []).filter(c => c.vivo !== false)
-  if (vivos.length > 0) return vivos.map(c => ({ apelido: c.apelido, localId: c.localId }))
+  if (vivos.length > 0) return vivos.map(c => ({ apelido: c.apelido, localId: c.localId, titulo: c.titulo, dona: c.dona }))
 
-  return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ apelido: item.dono.apelido, localId: item.dono.localId }] : []
+  return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ apelido: item.dono.apelido, localId: item.dono.localId, titulo: item.dono.titulo, dona: item.dono.dona }] : []
 }
 
 export const MAX_LINHAS_QUEM = 3
@@ -554,7 +554,8 @@ function linhaQuem(y: number, p: Pessoa, situacao: string | undefined, W: number
   const apelido = p.apelido
   const selo = largura(apelido, 11.5) + 18
   const encerrada = situacao === undefined
-  const papel = papelDe(apelido)
+  // F189: o selo da dona é o F<n> da sessão, que não diz o papel; a marca `dona` diz.
+  const papel = p.dona ? 'dona' : papelDe(apelido)
   const vivo = situacao === 'trabalhando agora'
   const dito = encerrada ? 'sessão encerrada' : situacao
   const xTexto = selo + 8
@@ -566,7 +567,7 @@ function linhaQuem(y: number, p: Pessoa, situacao: string | undefined, W: number
     : `<tspan class="${encerrada ? 'm' : 's'}">${xml(corte)}</tspan>`
 
   return {
-    alt: `${apelido}${papel ? `, ${papel}` : ''}, ${dito}`,
+    alt: `${p.titulo ?? apelido}${papel ? `, ${papel}` : ''}, ${dito}`,
     svg: `<rect class="k" x="0" y="${y}" width="${selo}" height="22" rx="6"/>
 ${texto(selo / 2, y + 15, 11.5, 't', xml(apelido), ' text-anchor="middle" font-weight="700"')}
 ${vivo ? `<circle class="vivo ${ANDA}" cx="${selo - 2}" cy="${y + 2}" r="3.5"/>` : ''}

@@ -17,10 +17,13 @@ export type LinhaItem = {
   /** A etapa como veio no documento (pode estar fora da lista: aí `foraDoContrato` explica). */
   etapa: string
   situacao: Situacao
-  /** `link` só quando a sessão dona está viva: o endereço que abre a sessão no app. */
-  dono?: { apelido: string; localId: string; link?: string }
+  /**
+   * `link` só quando a sessão dona está viva: o endereço que abre a sessão no app. No modelo da dona (apelido gravado `dona`),
+   * `apelido` é o `F<n>` do título da sessão (sem ela na lista, o do item), `titulo` o título inteiro e `dona` a marca do papel.
+   */
+  dono?: { apelido: string; localId: string; link?: string; titulo?: string; dona?: true }
   /** Quem trabalha agora no item (o `com` do painel). `vivo` é null quando a lista de sessões não veio: nem botão, nem "saiu". */
-  com: Array<{ apelido: string; localId: string; oQue: string; vivo: boolean | null; link?: string }>
+  com: Array<{ apelido: string; localId: string; oQue: string; vivo: boolean | null; link?: string; titulo?: string; dona?: true }>
   /** Esperando o operador ou o gate: não é trava, e o item fica no bloco do tema. */
   espera?: { motivo: 'operador' | 'gate'; texto: string }
   /** Esperando alguém do papel da etapa (P, D, E ou V) desde `desde`; ausente quando há quem trabalhe, ou o item espera de propósito. `entregue`: o papel já entregou a parte; falta a dona avançar a etapa. */
