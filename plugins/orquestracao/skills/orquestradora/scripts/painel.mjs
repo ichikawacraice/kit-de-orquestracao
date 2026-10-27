@@ -38,7 +38,7 @@
 //   (set em fila/<id> que JÁ existe exige --se-versao N — ou "seVersao" na op do batch —: sem ele, o set apagaria o item em silêncio)
 //
 // Coleções: sessoes, perguntas, fila (itens F<n>; protocolo em pool/protocolo.md#a-fila) e cartoes (cartão de sessão dona
-//   que espera o clique do operador; id = task_id do start_session; { projeto, apelido: "dona", papel: "dona", itens: [F<n>], orquestradoraId, propostoEm };
+//   que espera o clique do operador; id = task_id do start_session; { projeto, apelido: "dona", papel: "dona", itens: [F<n>], orquestradoraId, propostoEm? }; propostoEm é opcional: o painel grava agora (e troca hora no futuro por agora);
 //   a orquestradora grava e apaga, e a batida apaga o cartão cuja sessão já abriu e o que passou de 12 h).
 //
 // `projeto` (sessoes, fila e perguntas): ao CRIAR um documento sem o campo, o script o preenche com o nome do repositório git de
@@ -408,6 +408,18 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
 
 // Cartão de sessão dona que espera o clique do operador (a coleção `cartoes`; id = o task_id do start_session): apelido e papel
 // `dona`, exatamente um item; a sessão aberta se chama `F<n> · <tema>`.
+// `propostoEm` é do painel: ausente vira agora; no futuro (além de 5 min de folga de relógio) a hora escrita à mão estava
+// errada e também vira agora, com aviso. Data que não é ISO segue para a validação recusar.
+const FOLGA_PROPOSTO_MS = 5 * 60_000;
+function corrigirPropostoEm(chave, c) {
+  const agora = Date.now();
+  if (c.propostoEm === undefined || c.propostoEm === null || c.propostoEm === '') c.propostoEm = new Date(agora).toISOString();
+  else if (Date.parse(c.propostoEm) > agora + FOLGA_PROPOSTO_MS) {
+    process.stderr.write(`aviso: ${chave}: propostoEm ${c.propostoEm} está no futuro; gravei agora (o painel preenche o campo, não precisa escrevê-lo)\n`);
+    c.propostoEm = new Date(agora).toISOString();
+  }
+}
+
 function validarCartao(chave, c) {
   for (const k of ['projeto', 'orquestradoraId']) if (!textoNaoVazio(c[k])) throw new Error(`${chave}: ${k} é obrigatório`);
   if (c.apelido !== 'dona') throw new Error(`${chave}: apelido "${c.apelido}" não é dona`);
@@ -521,6 +533,7 @@ function planejar(o, seVersao, vista) {
     throw new Error(`${chave}: projeto "${base.projeto}" fora do padrão (minúsculas, números e traço)${sugestao ? `; use "${sugestao}"` : ''}`);
   }
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
+  if (colecao === 'cartoes') corrigirPropostoEm(chave, base);
   validarPadrao(colecao, id, novo, base, vista, op, !!atual, viaCom, atual?.data);
   const semente = colecao === 'fila' ? sementePendente : null;
   const transicao = colecao === 'fila' ? automaticosDaFila(base, novo, atual?.data) : {};

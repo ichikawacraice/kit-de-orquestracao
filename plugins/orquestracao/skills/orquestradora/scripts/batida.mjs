@@ -24,11 +24,13 @@ const tituloDoCartao = (titulo, c) => (/^(F\d+) · /.exec(titulo || '')?.[1] ?? 
 // Cartões de sessão dona (coleção `cartoes`) que já não esperam o clique: a sessão `F<n> · …` do item apareceu viva no projeto
 // depois de `propostoEm`, ou passou de CARTAO_VALIDADE_H (também quando `propostoEm` não é legível). `linhas` null = sem a lista
 // de sessões: só o prazo vale. Sessão de antes de `propostoEm` com o mesmo título é outra e não resolve.
+// `propostoEm` no futuro (hora escrita errada) não vale: conta de `atualizadoEm` (a gravação do cartão), ou de agora se faltar.
 // `cartoes`: [{ id, data }] → ids a apagar.
 export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs }) {
   const apagar = [];
   for (const { id, data: c } of cartoes) {
-    const proposto = ms(c?.propostoEm);
+    let proposto = ms(c?.propostoEm);
+    if (proposto !== null && proposto > agoraMs) proposto = Math.min(ms(c?.atualizadoEm) ?? agoraMs, agoraMs);
     if (proposto === null || agoraMs - proposto >= CARTAO_VALIDADE_H * 3_600_000) { apagar.push(id); continue; }
     const aberto = (linhas ?? []).some((r) => {
       if (!vivoNaLista(r) || !tituloDoCartao(r.title, c) || projetoDe(r) !== slugDoProjeto(c.projeto)) return false;

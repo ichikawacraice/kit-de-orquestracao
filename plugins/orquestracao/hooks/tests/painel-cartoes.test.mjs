@@ -3,7 +3,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,6 +64,26 @@ for (const [nome, extra, trecho] of [
     assert.ok(!existsSync(arq('task_x')));
   });
 }
+test('cartoes: propostoEm ausente é gravado pelo painel como agora', () => {
+  const { propostoEm, ...semHora } = cartao();
+  const antes = Date.now();
+  const r = painel(['set', 'cartoes', 'task_s', JSON.stringify(semHora)]);
+  assert.equal(r.exit, 0, r.err);
+  const gravado = Date.parse(JSON.parse(readFileSync(arq('task_s'), 'utf8')).data.propostoEm);
+  assert.ok(Number.isFinite(gravado), 'propostoEm gravado e legível');
+  assert.ok(gravado >= antes - 1000 && gravado <= Date.now() + 1000, `propostoEm ~ agora (${gravado})`);
+});
+test('cartoes: propostoEm no futuro (além de 5 min) é trocado por agora, com aviso; até 5 min de folga fica', () => {
+  const antes = Date.now();
+  const r = painel(['set', 'cartoes', 'task_f', JSON.stringify(cartao({ propostoEm: iso(T + 3 * H) }))]);
+  assert.equal(r.exit, 0, r.err);
+  assert.ok(r.err.includes('propostoEm'), `aviso na saída: ${r.err}`);
+  const gravado = Date.parse(JSON.parse(readFileSync(arq('task_f'), 'utf8')).data.propostoEm);
+  assert.ok(gravado >= antes - 1000 && gravado <= Date.now() + 1000, `propostoEm ~ agora (${iso(gravado)})`);
+  const folga = iso(Date.now() + 2 * MIN);
+  assert.equal(painel(['set', 'cartoes', 'task_g', JSON.stringify(cartao({ propostoEm: folga }))]).exit, 0);
+  assert.equal(JSON.parse(readFileSync(arq('task_g'), 'utf8')).data.propostoEm, folga);
+});
 test('cartoes: delete apaga o documento (a orquestradora retira o cartão)', () => {
   painel(['set', 'cartoes', 'task_a', JSON.stringify(cartao())]);
   assert.ok(existsSync(arq('task_a')));
@@ -83,6 +103,13 @@ test('cartoesResolvidos: a sessão `F<n> · <tema>` do item criada depois de pro
 test('cartoesResolvidos: sessão de ANTES de propostoEm fica (é a sessão antiga com o mesmo título)', () => {
   const antiga = linha('F144 · cartão da dona', { createdAt: iso(T - 3 * H), lastActivityAt: iso(T - 3 * H) });
   assert.deepEqual(cartoesResolvidos({ cartoes: [doc('a')], linhas: [antiga], projetoDe, agoraMs: T }), []);
+});
+test('cartoesResolvidos: propostoEm no futuro vale como agora — sessão viva do item resolve; a validade de 12 h conta de agora', () => {
+  const futuro = doc('d', { propostoEm: iso(T + 3 * H), atualizadoEm: iso(T - 10 * MIN) });
+  assert.deepEqual(cartoesResolvidos({ cartoes: [futuro], linhas: [linha('F144 · cartão da dona', { createdAt: iso(T - MIN), lastActivityAt: iso(T) })], projetoDe, agoraMs: T }), ['d']);
+  assert.deepEqual(cartoesResolvidos({ cartoes: [futuro], linhas: [linha('F144 · velha', { createdAt: iso(T - 3 * H), lastActivityAt: iso(T - 3 * H) })], projetoDe, agoraMs: T }), [], 'sessão de antes da gravação não resolve');
+  assert.deepEqual(cartoesResolvidos({ cartoes: [futuro], linhas: [], projetoDe, agoraMs: T }), [], 'sem sessão e dentro do prazo, fica');
+  assert.deepEqual(cartoesResolvidos({ cartoes: [doc('v', { propostoEm: iso(T + 3 * H), atualizadoEm: iso(T - 13 * H) })], linhas: [], projetoDe, agoraMs: T }), ['v'], '12 h contam da gravação');
 });
 test('cartoesResolvidos: sem createdAt usa lastActivityAt', () => {
   const sem = { sessionId: lid(9), title: 'F144 · cartão da dona', isArchived: false, lastActivityAt: iso(T) };
