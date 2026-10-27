@@ -1,7 +1,7 @@
-# gate — o gate genérico e a guarda de operação (K5)
+# gate — o gate genérico e a guarda de operação
 
 Um gate por vez na máquina, com verde guardado pela árvore exata e teto de workers.
-Portado do Izanagi (`188f37fb8`) e parametrizado por `.claude/kit.json` do projeto.
+Parametrizado por `.claude/kit.json` do projeto.
 
 | Script | Faz |
 |---|---|
@@ -55,7 +55,7 @@ valor que não é lista, é erro (`carregarConfig`), e `arvore.extras` exige `no
 `envNomes` e `dotenv`. `kit.json` ilegível ou inválido não trava o hook: cai nas regras padrão e avisa no stderr. Registro no `settings.json`:
 `{ "hooks": { "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "node <caminho>/gate/guarda-de-operacao.mjs" }] }] } }`.
 
-O perfil `pnpm-workspace` com `pacotes: "auto"` reproduz o gate do Izanagi (`pnpm -r --workspace-concurrency=2 test`,
+O perfil `pnpm-workspace` com `pacotes: "auto"` roda o gate de um monorepo pnpm (`pnpm -r --workspace-concurrency=2 test`,
 `pnpm --filter <pacote> test`, `pnpm -r typecheck`).
 
 ## As docs concordam (`documentos`)
@@ -104,7 +104,7 @@ Todo teste da máquina (o gate, o typecheck do gate, o `com-fichas` e o `vitest`
 `KIT_GATE_SEM_CACHE=1`, `KIT_GATE_VERDE_DIR`, `KIT_TESTE_WORKERS`, `KIT_CONSERTO_WORKERS`, `KIT_NUCLEOS_DIR`,
 `KIT_NUCLEOS_DE_TESTE`, `KIT_FICHAS_TOMADAS`.
 `KIT_CARGA_1MIN` fixa a carga de 1 min que a orquestradora lê para dizer "máquina cheia"; é só para testes.
-Os nomes `IZANAGI_*` equivalentes valem como reserva (`KIT_*` vence). No CI (`CI` definido) não há fila, teto nem verde.
+Os nomes legados `IZANAGI_*` equivalentes valem como reserva, para o projeto de onde o gate veio (`KIT_*` vence). No CI (`CI` definido) não há fila, teto nem verde.
 
 ## Testes
 
