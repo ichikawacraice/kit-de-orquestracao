@@ -221,8 +221,8 @@ test('fechadasRecentes: só o arquivo mudado no período, de todos os projetos',
   assert.deepEqual(fechadasRecentes(pasta(), { desdeMs: agora - 86_400_000 }).map((f) => f.split('/').pop()).sort(), ['Q1.json', 'Q2.json']);
 });
 
-test('a batida só arquiva depois da migração; depois, leva a resposta que o pane deixou na pasta quente (--seco não)', () => {
-  pergunta('Q1', { estado: 'respondida', projeto: 'izanagi', respondidaPor: 'painel', respondidaEm: '2026-10-20T15:00:00Z' });
+test('com migração pendente a batida não arquiva; depois dela, leva a resposta que o pane deixou na pasta quente (--seco não)', () => {
+  pergunta('Q1', { estado: 'respondida', projeto: 'Izanagi', respondidaPor: 'painel', respondidaEm: '2026-10-20T15:00:00Z' });
   const lista = join(base, 'sessoes.json');
   writeFileSync(lista, '[]');
   const antes = painel(['batida', '--sessoes', lista]);
@@ -270,4 +270,31 @@ test('ehDaOrquestradora compara pelo mesmo slug do painel', async () => {
   assert.equal(ehDaOrquestradora('🎛 orquestradora — Wicomm IA', 'wicomm-ia'), true);
   assert.equal(ehDaOrquestradora('🎛 orquestradora — Izanagi', 'izanagi'), true);
   assert.equal(ehDaOrquestradora('🎛 orquestradora — Izanagi', 'outro'), false);
+});
+
+test('painel novo, sem nada a migrar: a primeira batida grava a marca e já arquiva', () => {
+  pergunta('Q1', { estado: 'respondida', projeto: 'izanagi', respondidaEm: '2026-10-20T15:00:00Z' });
+  const lista = join(base, 'sessoes.json');
+  writeFileSync(lista, '[]');
+  const r = painel(['batida', '--sessoes', lista]);
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().perguntasArquivadas, ['Q1']);
+  assert.ok(existsSync(join(base, 'painel', '.migracao-F183')));
+});
+
+test('migração com a mesma pergunta na pasta quente e no arquivo: fica a de versão maior, a outra sai', () => {
+  writeFileSync(quente('Q5'), JSON.stringify({ id: 'Q5', version: 3, data: { estado: 'respondida', projeto: 'Izanagi', resposta: 'PANE-NOVA', respondidaEm: '2026-10-20T15:00:00Z' } }));
+  mkdirSync(join(pasta(), 'arquivo', 'izanagi', '2026-10'), { recursive: true });
+  writeFileSync(noArquivo('izanagi', '2026-10', 'Q5'), JSON.stringify({ id: 'Q5', version: 2, data: { estado: 'respondida', projeto: 'Izanagi', resposta: 'PAINEL-VELHA', respondidaEm: '2026-10-20T15:00:00Z' } }));
+  const lista = join(base, 'sessoes.json');
+  writeFileSync(lista, '[]');
+  assert.deepEqual(painel(['batida', '--sessoes', lista]).json().perguntasArquivadas, [], 'com o que migrar, a batida espera');
+  const seco = painel(['perguntas', 'migrar', '--seco']).json();
+  assert.equal(seco.duplicadas.length, 1);
+  const r = painel(['perguntas', 'migrar']);
+  assert.equal(r.exit, 0, r.err);
+  assert.ok(!existsSync(quente('Q5')));
+  const ficou = lerJson(noArquivo('izanagi', '2026-10', 'Q5'));
+  assert.equal(ficou.data.resposta, 'PANE-NOVA');
+  assert.equal(ficou.data.projeto, 'izanagi');
 });

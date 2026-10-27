@@ -119,7 +119,9 @@ export function montarResumo({ projeto, desde, ate, repo, branch = 'main' }) {
   // Pergunta sem projeto cuja sessão também não resolve não some: assumida e aberta vão em `semProjeto` (quem lê decide).
   const todasPerguntas = lerColecao('perguntas', avisos);
   // F183: a migração grava `sem-projeto` em quem não resolveu; para o resumo, é o mesmo que não ter projeto
-  const projetoDe = (q) => (q.projeto === SEM_PROJETO ? undefined : q.projeto) ?? projetoDaSessao.get(q.sessaoId);
+  // (vale também para a sessão da pergunta, que a migração pode ter marcado `sem-projeto`)
+  const real = (p) => (p === SEM_PROJETO ? undefined : p);
+  const projetoDe = (q) => real(q.projeto) ?? real(projetoDaSessao.get(q.sessaoId));
   const perguntas = todasPerguntas.filter((q) => mesmo(projetoDe(q)));
   const resumoDe = (q) => ({ id: q.id, titulo: q.titulo, recomendacao: q.recomendacao ?? null, sessaoId: q.sessaoId ?? null });
   const assumidas = perguntas.filter((q) => q.estado === 'assumida').map((q) => ({ ...resumoDe(q), noPeriodo: dentro(q.criadaEm) || dentro(q.atualizadoEm) }));

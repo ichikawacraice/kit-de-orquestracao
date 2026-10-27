@@ -1293,7 +1293,7 @@ function comandoBatida(args) {
       gravarJson(join(pasta, `${nome}.json`), { ...conteudo, em });
     }
     // F183: a resposta gravada pelo pane fica na pasta quente (o mod não apaga arquivo); a batida a leva para o arquivo
-    try { saida.perguntasArquivadas = existsSync(MARCA_DA_MIGRACAO()) ? arquivarFechadas(false) : []; } catch (e) { process.stderr.write(`batida: não arquivei as perguntas fechadas: ${e?.message || e}\n`); }
+    try { saida.perguntasArquivadas = migracaoFeita() ? arquivarFechadas(false) : []; } catch (e) { process.stderr.write(`batida: não arquivei as perguntas fechadas: ${e?.message || e}\n`); }
     for (const id of marcadoresApagados) rmSync(join(ORQ(), 'ativas', id), { force: true });
     for (const id of cartoesApagados) rmSync(caminho('cartoes', id), { force: true });
     // o mesmo julgamento de `pode-reiniciar`, com a lista que a batida já tem (F152); falhar aqui não derruba a batida
@@ -1327,6 +1327,30 @@ function arquivarFechadas(seco) {
 
 // A batida só arquiva depois da migração: antes dela, mover 400 arquivos do estado real sem backup nem ok do operador não vale.
 const MARCA_DA_MIGRACAO = () => join(BASE, '.migracao-F183');
+// Painel novo (ou que nunca precisou da migração): sem nada a migrar, a marca nasce aqui e a batida passa a arquivar.
+// Enquanto há o que migrar, cada batida confere de novo (lê o painel inteiro) e não move nada.
+function migracaoFeita() {
+  if (existsSync(MARCA_DA_MIGRACAO())) return true;
+  // conferência barata (sem o registro do app): algum projeto fora do slug, ou pergunta repetida entre a pasta quente e o arquivo
+  const dir = caminho('perguntas');
+  const vistos = new Set();
+  const arquivos = [
+    ...(existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.json')).map((n) => join(dir, n)) : []),
+    ...arq.arquivadas(dir),
+    ...['sessoes', 'fila', 'cartoes'].flatMap((c) => (existsSync(caminho(c)) ? readdirSync(caminho(c)).filter((n) => n.endsWith('.json')).map((n) => join(caminho(c), n)) : [])),
+  ];
+  for (const f of arquivos) {
+    let doc;
+    try { doc = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
+    const pergunta = f.startsWith(dir);
+    if (pergunta && vistos.has(doc?.id)) return false;
+    if (pergunta) vistos.add(doc?.id);
+    const p = doc?.data?.projeto;
+    if ((p === undefined && (pergunta || f.startsWith(caminho('sessoes')))) || (p !== undefined && !arq.SLUG.test(String(p)))) return false;
+  }
+  writeFileSync(MARCA_DA_MIGRACAO(), `${JSON.stringify({ em: new Date().toISOString(), semMigrar: true })}\n`);
+  return true;
+}
 
 // F183, migração única: `projeto` em slug nas quatro coleções; a pergunta sem projeto ganha o da sessão dela (sessoes/<sessaoId>,
 // senão o registro do app), e o resto `sem-projeto`; a sessão sem projeto, pelo registro do app, senão `sem-projeto`. Depois
@@ -1345,11 +1369,24 @@ function migrarProjetos(seco) {
       try { return [{ f, doc: JSON.parse(readFileSync(f, 'utf8')) }]; } catch { process.stderr.write(`aviso: ${f} ilegível, ficou como está\n`); return []; }
     });
   };
+  // A corrida com o pane pode deixar a mesma pergunta na pasta quente e no arquivo: fica a de `version` maior (empate: a
+  // atualizada por último); as outras saem (estão no backup) e vão em `duplicadas`.
+  const peso = ({ doc }) => [doc?.version ?? 0, Date.parse(doc?.data?.atualizadoEm ?? doc?.data?.respondidaEm ?? '') || 0];
+  const maior = (a, b) => { const [va, ta] = peso(a); const [vb, tb] = peso(b); return va !== vb ? va > vb : ta >= tb; };
+  const porId = new Map();
+  const duplicadas = [];
+  for (const c of docs('perguntas')) {
+    const outra = porId.get(c.doc.id);
+    if (!outra) { porId.set(c.doc.id, c); continue; }
+    const [fica, sai] = maior(c, outra) ? [c, outra] : [outra, c];
+    porId.set(c.doc.id, fica);
+    duplicadas.push({ id: c.doc.id, sai: sai.f, fica: fica.f });
+  }
   const sessoes = docs('sessoes');
   const projetoDaSessao = new Map(sessoes.map(({ doc }) => [doc?.data?.sessionId ?? doc?.id, arq.slugDoProjeto(doc?.data?.projeto)]));
   const novos = [];
   for (const colecao of ['perguntas', 'sessoes', 'fila', 'cartoes']) {
-    for (const { f, doc } of colecao === 'sessoes' ? sessoes : docs(colecao)) {
+    for (const { f, doc } of colecao === 'sessoes' ? sessoes : colecao === 'perguntas' ? porId.values() : docs(colecao)) {
       const d = doc?.data ?? {};
       let novo = arq.slugDoProjeto(d.projeto);
       if (!novo && colecao === 'perguntas') {
@@ -1368,17 +1405,18 @@ function migrarProjetos(seco) {
   const projetos = Object.fromEntries(novos.filter((n) => n.muda).map((n) => [chave(n), n.projeto]));
   const quente = caminho('perguntas');
   const arquivadas = novos.filter((n) => n.colecao === 'perguntas' && dirname(n.f) === quente && n.destino !== n.f).map((n) => n.doc.id);
-  if (seco) return { seco: true, projeto: projetos, arquivadas };
+  if (seco) return { seco: true, projeto: projetos, arquivadas, duplicadas };
   const backup = join(BASE, '..', 'backups', `F183-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   mkdirSync(dirname(backup), { recursive: true });
   cpSync(BASE, backup, { recursive: true, filter: (src) => !src.startsWith(TRAVA) });
+  for (const d of duplicadas) rmSync(d.sai, { force: true });
   for (const n of novos) {
     if (n.muda) gravarEm(n.destino, n.doc.id, n.data, (n.doc.version ?? 0) + 1);
     else { mkdirSync(dirname(n.destino), { recursive: true }); renameSync(n.f, n.destino); }
     if (n.muda && n.destino !== n.f) rmSync(n.f, { force: true });
   }
   writeFileSync(MARCA_DA_MIGRACAO(), `${JSON.stringify({ em: new Date().toISOString(), backup })}\n`);
-  return { seco: false, backup, projeto: projetos, arquivadas };
+  return { seco: false, backup, projeto: projetos, arquivadas, duplicadas };
 }
 
 function comandoPerguntas(args) {

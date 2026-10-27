@@ -130,7 +130,7 @@ export function julgar({ agoraMs, itens, todos = itens, afinidadeMin = AFINIDADE
 
   for (const [F, d] of [...itens].sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }))) {
     if (!d || ETAPAS_FINAIS.has(d.etapa)) continue;
-    const nome = String(d.projeto ?? '').toLowerCase();
+    const nome = slugDoProjeto(d.projeto); // F183: o mesmo slug das sessões
     if (!nome) continue;
     const proj = projeto(nome);
     vistos.add(F);

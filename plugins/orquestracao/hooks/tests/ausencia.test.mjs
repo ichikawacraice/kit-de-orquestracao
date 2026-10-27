@@ -154,8 +154,10 @@ test('F183: a pergunta que a migração marcou `sem-projeto` segue em semProjeto
   a.bandeira({ ligado: false, desde: periodo.desde, desligadoEm: periodo.ate, por: 'painel' });
   a.grava('perguntas', 'Q9', { projeto: 'sem-projeto', titulo: 'assumida que a migração não resolveu', estado: 'assumida', criadaEm: haH(5) });
   a.grava('perguntas', 'Q10', { projeto: 'proj', titulo: 'do projeto', estado: 'aberta', criadaEm: haH(5) });
+  a.grava('sessoes', 'local_semprojeto', { sessionId: 'local_semprojeto', projeto: 'sem-projeto' });
+  a.grava('perguntas', 'Q11', { projeto: 'sem-projeto', sessaoId: 'local_semprojeto', titulo: 'da sessão também sem projeto', estado: 'assumida', criadaEm: haH(5) });
   const j = JSON.parse(a.rodar('resumo', '--repo', a.repo).stdout);
   assert.deepEqual(j.perguntas.abertas.map((q) => q.id), ['Q10'], 'a presença de uma pergunta do projeto é medida');
-  assert.deepEqual(j.perguntas.semProjeto.map((q) => q.id), ['Q9']);
-  assert.ok(j.pedeAcao.some((p) => p.id === 'Q9'));
+  assert.deepEqual(j.perguntas.semProjeto.map((q) => q.id).sort(), ['Q11', 'Q9']);
+  assert.ok(j.pedeAcao.some((p) => p.id === 'Q9') && j.pedeAcao.some((p) => p.id === 'Q11'));
 });
