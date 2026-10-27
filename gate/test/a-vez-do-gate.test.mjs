@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { carregarConfig } from "../config.mjs";
 import {
   ambienteDoFilho,
+  minimoParaComecar,
   argumentosDaSuite,
   caminhoDaTrava,
   caminhoDaVaga,
@@ -445,6 +446,15 @@ describe("o gate toma as fichas do teto", () => {
     expect(fichasDaSuite({ ...T10 }, [], RAIZ, carregarConfig(RAIZ, { gate: { comandoCompleto: "node --test", nucleos: 9 } }))).toBe(7);
   });
 
+  it("o mínimo para começar depois do prazo: metade do pedido; no pnpm-workspace, nunca menos de 2 workers por pacote", () => {
+    const COMANDO = carregarConfig(RAIZ, { gate: { comandoCompleto: "node --test" } });
+    expect(minimoParaComecar(4, {}, COMANDO)).toBe(2);
+    expect(minimoParaComecar(5, {}, COMANDO)).toBe(3);
+    expect(minimoParaComecar(6, {}, PNPM)).toBe(4); // metade seria 3 = 1 worker por pacote
+    expect(minimoParaComecar(6, { KIT_GATE_PACOTES: "1" }, PNPM)).toBe(3); // 1 pacote: metade já dá 3 workers
+    expect(minimoParaComecar(2, {}, PNPM)).toBe(2); // nunca mais que o pedido
+  });
+
   it("o `{fichas}` do comando vira o número levado; sem o número, fica como está", () => {
     const cfg = carregarConfig(RAIZ, { gate: { comandoCompleto: "node --test --test-concurrency={fichas}", pacotes: ["a"], comandoPorPacote: "node --test {pacote} --c={fichas}" } });
     expect(comandoDaSuite({}, [], RAIZ, cfg, 3)).toEqual({ cmd: "node", args: ["--test", "--test-concurrency=3"] });
@@ -717,10 +727,10 @@ describe("o gate e a vez da máquina (ADR 0008)", () => {
     }
   });
 
-  it("prazo da devolução vencido: começa com 5 de 6, e com 3 de 6; com 2 de 6 não começa", async () => {
+  it("prazo da devolução vencido: começa com 5 de 6 e com 4 de 6 (2 workers por pacote); com 3 de 6 (1 por pacote) e com 2 de 6 não começa", async () => {
     const casos = [
       [5, 5],
-      [3, 3],
+      [4, 4],
     ];
     for (const [livres, esperado] of casos) {
       const p = montar({ perfil: "pnpm-workspace", pacotes: ["a", "b"], filtroDePacote: "@x/{pacote}", comandoCompleto: "x" });
@@ -735,25 +745,27 @@ describe("o gate e a vez da máquina (ADR 0008)", () => {
         limparTudo(p);
       }
     }
-    const p = montar({ perfil: "pnpm-workspace", pacotes: ["a", "b"], filtroDePacote: "@x/{pacote}", comandoCompleto: "x" });
-    try {
-      for (let k = 7; k > 2; k--) writeFileSync(join(p.pasta, String(k)), JSON.stringify({ ...dono(), emprestada: true }));
-      let t = 0;
-      const avisos = [];
-      const erro = await tomarAsFichasDoGate({ ...p.env, KIT_PRAZO_DA_DEVOLUCAO_SEG: "1" }, [], p.raiz, PNPM_PAC, {
-        agora: () => t,
-        dormir: async (ms) => {
-          t += ms;
-          if (t > 600_000) throw new Error("PARADO: 2 de 6 não começa");
-        },
-        avisar: (m) => avisos.push(m),
-      }).then(() => null, (e) => e);
-      expect(erro, "o gate com 2 de 6 começou").toMatch(/PARADO/);
-      // a vez da máquina não fica presa por quem desistiu
-      expect(avisos.length).toBeGreaterThan(3);
-      expect(existsSync(join(p.pasta, "gate"))).toBe(false);
-    } finally {
-      limparTudo(p);
+    for (const livres of [3, 2]) {
+      const p = montar({ perfil: "pnpm-workspace", pacotes: ["a", "b"], filtroDePacote: "@x/{pacote}", comandoCompleto: "x" });
+      try {
+        for (let k = 7; k > livres; k--) writeFileSync(join(p.pasta, String(k)), JSON.stringify({ ...dono(), emprestada: true }));
+        let t = 0;
+        const avisos = [];
+        const erro = await tomarAsFichasDoGate({ ...p.env, KIT_PRAZO_DA_DEVOLUCAO_SEG: "1" }, [], p.raiz, PNPM_PAC, {
+          agora: () => t,
+          dormir: async (ms) => {
+            t += ms;
+            if (t > 600_000) throw new Error(`PARADO: ${livres} de 6 não começa`);
+          },
+          avisar: (m) => avisos.push(m),
+        }).then(() => null, (e) => e);
+        expect(erro, `o gate com ${livres} de 6 começou`).toMatch(/PARADO/);
+        // a vez da máquina não fica presa por quem desistiu
+        expect(avisos.length).toBeGreaterThan(3);
+        expect(existsSync(join(p.pasta, "gate"))).toBe(false);
+      } finally {
+        limparTudo(p);
+      }
     }
   });
 

@@ -95,3 +95,7 @@ Em `gate/o-teto-da-maquina.mjs`, função `tomarFichasNormais({ quero, pasta, te
 - Mudar `pacotesJuntos` do gate (2) ou medir o gate inteiro com 1 × 7 contra 2 × 3.
 - Memória e `next build` (ficam como no ADR 0005).
 - Apagar o `teto.json` da máquina: decisão do operador (o padrão novo dá os mesmos 10).
+
+## Desvios na execução (F136, 26/10)
+- **Limiar do gate depois do prazo (passo 4.5).** A nota da V1 (`ceil(6/2)` = 3 dá 1 worker por pacote no gate de 2 pacotes) foi medida: Izanagi `web` (725 arquivos, `develop` 124afc57c) com `IZANAGI_TESTE_WORKERS=1` levou **861 s** (carga de 1 min 7 → 25 durante a rodada, com outras sessões na máquina), contra 160–164 s com 3 workers no dia. O limiar no perfil `pnpm-workspace` passou a `max(ceil(pedido / 2), 2 × pacotesJuntos)` — 4 de 6 —, em `minimoParaComecar` (`gate/a-vez-do-gate.mjs`). O perfil `comando` segue em `ceil(pedido / 2)`. O texto do [ADR 0008](../adr/0008-vaga-do-gate-e-vaga-dos-testes-no-teto-da-maquina.md) (decisão 6, "3 de 6") ficou como foi mergeado: o ADR é imutável, e esta linha registra a diferença.
+- **`tomarFichasDoGate` e `esperarAVezDoGate` moram em `gate/o-teto-da-maquina.mjs`** (não em `a-vez-do-gate.mjs`), para os testes injetarem relógio e pasta sem montar um repositório.

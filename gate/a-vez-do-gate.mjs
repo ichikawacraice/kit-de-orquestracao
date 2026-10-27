@@ -203,6 +203,17 @@ export function fichasDaSuite(env = process.env, argv = [], raiz = RAIZ, cfg = c
 }
 
 /**
+ * O mínimo de fichas com que o gate começa depois do prazo da devolução: metade do pedido, `ceil(quero / 2)` — e, no perfil `pnpm-workspace`, nunca
+ * menos que 2 workers por pacote (`2 × pacotesJuntos`). Medido em 26/10 (Izanagi `web`, 725 arquivos): 1 worker levou 861 s sob carga 25, contra
+ * 160 s com 3; o vitest fixa os workers ao subir, então começar com 1 por pacote é pior que esperar mais um pouco.
+ */
+export function minimoParaComecar(quero, env, cfg) {
+  const metade = Math.ceil(quero / 2);
+  if (cfg.gate.perfil !== "pnpm-workspace") return metade;
+  return Math.min(quero, Math.max(metade, 2 * (pacotesJuntos(env, cfg) ?? 1)));
+}
+
+/**
  * Toma as fichas do teto da máquina para a suíte, esperando se preciso: `{ levou, quantas, teto, pasta, eu, comAVez }`.
  * A suíte inteira (fila do gate) toma primeiro a **vez do gate da máquina** (`<pasta>/gate`, um por vez, de qualquer projeto) e depois as fichas
  * da faixa dela, esperando a devolução das emprestadas até `gate.prazos.devolucaoSeg`; o conserto toma como teste normal, sem a vez.
@@ -228,7 +239,7 @@ export async function tomarAsFichasDoGate(env, argv, raiz, cfg, opcoes = {}) {
   await esperarAVezDoGate({ pasta, eu, ...injetaveis });
   try {
     const prazoMs = inteiroDoEnv(env, "PRAZO_DA_DEVOLUCAO_SEG", cfg.gate.prazos.devolucaoSeg) * 1000;
-    const levou = await tomarFichasDoGate({ quero, pasta, teto, eu, prazoMs, env, ...injetaveis });
+    const levou = await tomarFichasDoGate({ quero, pasta, teto, eu, prazoMs, env, minimo: minimoParaComecar(quero, env, cfg), ...injetaveis });
     return { levou, quantas: levou.length, teto, pasta, eu, comAVez: true };
   } catch (e) {
     soltarAVezDoGate(pasta, eu); // quem desiste não segura a vez da máquina
