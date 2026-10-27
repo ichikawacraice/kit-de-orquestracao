@@ -71,4 +71,14 @@ export const CASOS = [
   { nome: 'sem historico: usa atualizadoEm',
     data: { etapa: 'execucao', com: [], atualizadoEm: min(7) },
     esperado: { papel: 'E', desde: min(7), minutos: 7, entregue: false } },
+  // ADR 0011: item da dona
+  { nome: 'via dona em execucao com a dona (apelido livre): não espera',
+    data: { etapa: 'execucao', via: 'dona', donoLocalId: 'local_x', donoApelido: 'dona', com: [{ apelido: 'dona' }], historico: hist([min(35), 'execucao', 'dona']) },
+    esperado: null },
+  { nome: 'via dona em validacao só com alguém no com: não espera',
+    data: { etapa: 'validacao', via: 'dona', com: [{ apelido: 'dona' }], historico: hist([min(35), 'validacao', null]) },
+    esperado: null },
+  { nome: 'via dona sem dona e sem com: espera o papel da etapa (a orquestradora abre a dona)',
+    data: { etapa: 'planejamento', via: 'dona', com: [], historico: hist([min(12), 'planejamento', null]) },
+    esperado: { papel: 'P', desde: min(12), minutos: 12, entregue: false } },
 ];

@@ -181,6 +181,7 @@ function main() {
   // execução, validação e merge quem trabalha é a E/V do `com`, e o item parado é da batida.
   const pendentes = meus.filter((i) => {
     if (i.etapa !== null && !ETAPAS_DA_DONA.includes(i.etapa)) return false;
+    if (i.data?.via === 'dona') return false; // ADR 0011: a dona do item inteiro grava quando a etapa muda, não a cada turno
     const t = Date.parse(i.atualizadoEm);
     return Number.isNaN(t) || t < inicio;
   });

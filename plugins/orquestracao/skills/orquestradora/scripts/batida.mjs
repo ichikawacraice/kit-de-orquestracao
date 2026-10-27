@@ -100,7 +100,7 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs }) {
   return apagar;
 }
 
-export function julgar({ agoraMs, itens, todos = itens, afinidadeMin = AFINIDADE_MIN, linhas, projetoDe, estado, ausente, cheia, esperandoPapel, ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
+export function julgar({ agoraMs, itens, todos = itens, afinidadeMin = AFINIDADE_MIN, linhas, projetoDe, estado, ausente, cheia, esperandoPapel, ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN, dona = false }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const ocupados = ocupadosDaFila(itens);
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
@@ -171,6 +171,8 @@ export function julgar({ agoraMs, itens, todos = itens, afinidadeMin = AFINIDADE
       }
       continue;
     }
+    // ADR 0011 (`dona`): sem pool não há livre a avisar; o item sem ninguém vira vaga de dona no relatório da orquestradora.
+    if (dona) { proj.vagas.push({ papel: 'dona', item: F }); continue; }
     if (r.papel === 'V' && cheia()) { espera.push({ F, texto: 'máquina cheia' }); continue; }
     const livres = livresDe(linhas, r.papel, nome, projetoDe, ocupados).filter((l) => !usados.has(l.localId));
     const afim = afimDe(d, r.papel, todos, linhas, projetoDe);
@@ -200,7 +202,7 @@ export function julgar({ agoraMs, itens, todos = itens, afinidadeMin = AFINIDADE
   // piso de E e excedentes (fora do modo ausente). Livre no `fez` de item vivo não é excedente nem conta para o teto:
   // a trava de arquivamento recusa arquivá-lo (só se arquiva membro sem item vivo).
   const noFez = fezDaFila(itens);
-  if (!ausente) {
+  if (!ausente && !dona) {
     for (const [nome, proj] of projetos) {
       const livresE = livresDe(linhas, 'E', nome, projetoDe, ocupados);
       if (proj.membros > 0 && livresE.length === 0 && !proj.vagas.some((v) => v.papel === 'E' && v.piso)) proj.vagas.push({ papel: 'E', piso: true });

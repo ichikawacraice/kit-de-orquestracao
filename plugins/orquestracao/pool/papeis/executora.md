@@ -2,6 +2,8 @@
 
 Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do pool: `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`. Mapa de todas as skills: `../skills-por-papel.md`. A lista que você recebe já vem filtrada para o papel. Depois de uma limpeza, as perguntas que você abriu continuam suas: [protocolo](../protocolo.md#perguntas-proprias).
 
+> **Legado (ADR 0011, 27/10).** Este papel só existe com `KIT_MODELO=papeis`, para item antigo do pool que ainda termina nele. No modelo da dona, a execução é da sessão dona do item: leia [`../dona.md`](../dona.md) e [o protocolo](../protocolo.md#modelo-da-dona).
+
 ## O papel
 - **Faz:**
   - cumpre um plano pronto: arquivos, passos, critério de pronto medível e fora de escopo;

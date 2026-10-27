@@ -11,7 +11,7 @@
 //   T3  start_session: negado em turno que não é do operador com o modo ausente ligado (/ausente on) e a membro do pool.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava) e em <BASE>/limpeza/ (o ok de limpar só nasce do clique na barra).
 //   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o botão de limpar da barra (o ok vale uma limpeza), o sim do painel ou o da janela, F48/F53/F147).
-//   T6  Bash `gh pr merge` ou `painel mergear` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
+//   T6  Bash `gh pr merge`, `painel mergear` ou `painel fila-de-merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
 //   T9  SendMessage / send_message de uma V cujo texto diz `validado` ou `aprovado` sem a linha `PR <n> validado, HEAD <sha de 7 a 40 hex>` → deny
 //       (assumida, a confirmar, F150): o recado sem sha não deixa a orquestradora conferir a ponta com `painel mergear`. Outros papéis passam.
 //   T8  Bash `painel … com add F<n> …` da orquestradora, item `F<n>` em `etapa: "validacao"` e máquina cheia (todas as fichas do teto
@@ -22,10 +22,13 @@
 // ~/.claude/** (inclusive nos hooks): decisão consciente, notas e memória moram lá.
 // `deny` (vale em bypass) onde a decisão já foi tomada; `ask` no T6 (o operador às vezes manda mergear direto).
 // Erro do hook vai para o log e a ferramenta segue.
+// ADR 0011: com o modelo da dona (padrão; `KIT_MODELO=papeis` volta ao pool) T1, T1c, T8 e o piso de E do T2 não valem: a dona
+// escreve código e lança o validador subagente, e a orquestradora não despacha V.
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { registrar, lerEntrada, semPrefixoDoPlugin, modoAusente, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
+import { modeloDaDona } from './modelo-do-kit.mjs';
 import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, membrosLivres, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, janelasDeLimpeza, SIM_DA_JANELA_MS, filaDir, maquinaCheia, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'papel-do-pool';
@@ -82,7 +85,7 @@ function main() {
     }
     if (LIVRES.some((f) => f(p))) return;
     const reg = registroDaSessao(e.session_id);
-    if (membroDoPool(reg?.titulo)?.papel === 'V') {
+    if (!modeloDaDona() && membroDoPool(reg?.titulo)?.papel === 'V') {
       return nega('T1c', membroDoPool(reg.titulo).id, p, 'Validadora não conserta o que valida: devolva o achado (arquivo, linha, correção) a quem planejou.');
     }
     return;
@@ -94,13 +97,13 @@ function main() {
     const itensDeV = [...normal.matchAll(new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+com\s+add\s+(F\d+)\s+\S+\s+["']?(\S+?)["']?(?:\s|$)`, 'g'))].filter((m) => /^V/i.test(m[2])).map((m) => m[1]).filter((F) => {
       try { return JSON.parse(readFileSync(join(filaDir(), `${F}.json`), 'utf8'))?.data?.etapa === 'validacao'; } catch { return false; }
     });
-    if (itensDeV.length > 0 && ehOrquestradora(e.session_id, registroDaSessao(e.session_id)?.titulo)) {
+    if (itensDeV.length > 0 && !modeloDaDona() && ehOrquestradora(e.session_id, registroDaSessao(e.session_id)?.titulo)) {
       const m = maquinaCheia();
       if (m.cheia) {
         return nega('T8', 'orquestradora', itensDeV.join(','), `Máquina cheia (${m.tomadas} de ${m.teto} fichas, carga ${m.carga.toFixed(1)}): não despache a V agora; grave no item espera {"motivo":"gate","texto":"máquina cheia"} (ADR 0005).`);
       }
     }
-    const mergearDoPainel = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+mergear\b`).test(normal);
+    const mergearDoPainel = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:mergear|fila-de-merge)\b`).test(normal);
     if (!mergearDoPainel && !/\bgh\b[^\n|;&]*\bpr\s+merge\b/.test(ti.command || '')) return;
     const reg = registroDaSessao(e.session_id);
     if (ehOrquestradora(e.session_id, reg?.titulo)) return;
@@ -128,6 +131,7 @@ function main() {
   if (tool === 'Agent' || tool === 'Task') {
     const tipo = semPrefixoDoPlugin(ti.subagent_type);
     if (tipo !== 'executor' && tipo !== 'validador') return;
+    if (modeloDaDona()) return;
     const reg = registroDaSessao(e.session_id);
     const orq = ehOrquestradora(e.session_id, reg?.titulo);
     const m = membroDoPool(reg?.titulo);
@@ -172,7 +176,7 @@ function main() {
         const dela = meu && dele && meu !== dele ? projetoTemOrquestradora(alvo, dele) : undefined;
         // Piso de uma E livre (ADR 0004): fora do turno do operador, a última E livre (o alvo livre e nenhuma outra) do projeto da orquestradora não se arquiva.
         const livresE = meu && meu === dele && m.papel === 'E' ? membrosLivres(dele).filter((x) => x.papel === 'E') : [];
-        if (!porComando && meu && meu === dele && m.papel === 'E' && livresE.some((x) => x.localId === reg.localId) && !livresE.some((x) => x.localId !== reg.localId)) {
+        if (!porComando && !modeloDaDona() && meu && meu === dele && m.papel === 'E' && livresE.some((x) => x.localId === reg.localId) && !livresE.some((x) => x.localId !== reg.localId)) {
           return nega('T2', m.id, String(alvo), `${m.id} é a última E livre do projeto: fora do modo ausente o pool mantém pelo menos uma (ADR 0004). Só o operador, no turno dele, manda arquivá-la.`);
         }
         if (meu && dele && (meu === dele || dela === false)) {

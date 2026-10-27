@@ -7,6 +7,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// ADR 0011: estes casos medem o pool de papéis, que só vale com KIT_MODELO=papeis (os filhos herdam o ambiente).
+process.env.KIT_MODELO = 'papeis';
 
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 const PAINEL = join(SCRIPTS, 'painel.mjs');

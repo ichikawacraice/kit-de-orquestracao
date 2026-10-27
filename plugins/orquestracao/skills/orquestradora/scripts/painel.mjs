@@ -20,6 +20,7 @@
 //   painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]   (ADR 0009) ao terminar, pega o item vivo mais antigo do mesmo projeto e tema do último item por onde a sessão passou (`passaram`) que espera o papel dela (pula o item só se a sessão já passou por ele nesta etapa), como o `pegar` → {pegou:true, item, …} ou {pegou:false, motivo}; recusa com o contexto acima do aviso do papel (E 300 mil, P/D/V 350 mil) ou sem medida do transcript; --tokens só sobrescreve a medida (teste)
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge do PR validado (F150): confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); exit 0 nos dois casos, 1 só em erro de leitura
+//   painel.mjs fila-de-merge <PR> [<PR>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   (ADR 0011) a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → um PR por vez para achar quem quebra), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, pede ao membro com título de item fechado que volte a livre, relata merge/vagas/excedentes/títulos velhos à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
@@ -50,8 +51,9 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 import { AFINIDADE_MIN, BATIDA_SOLTA_MIN, cartoesResolvidos, julgar, livresDe, ocupadosDaFila } from './batida.mjs';
-import { SHA_VALIDADO, conferir, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
+import { SHA_VALIDADO, conferir, dadosDoPr, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerPs, textoDoReinicio } from './pode-reiniciar.mjs';
+import { GATE_PADRAO, montarLote } from './fila-de-merge.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 // Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
@@ -111,6 +113,8 @@ const regras = CONFERE_MEMBRO
 // As réguas de contexto por papel moram no hook contexto-do-papel (que só roda quando é o script principal); o `seguinte` as lê dali.
 const reguas = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'contexto-do-papel.mjs')).href) : null;
 const crewai = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'hooks-crewai-comum.mjs')).href) : null;
+// ADR 0011: o modelo de trabalho (dona ou papeis) decide se a batida avisa livres, conta piso e excedentes.
+const modelo = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'modelo-do-kit.mjs')).href) : null;
 let meusIds; // Set de ids que contam como "a própria sessão"; null = não resolvido
 function ehMinha(id) {
   if (!MEU_CLI) return true;
@@ -967,6 +971,44 @@ function comandoMergear(args) {
   return { mergeado: true, pr, sha: c.sha, base: c.base, ...(c.aviso ? { aviso: c.aviso } : {}), itens };
 }
 
+// `fila-de-merge <PR…>` (ADR 0011). Monta e testa fora da trava (é lento); cada merge segue o `mergear`; a devolução grava o item.
+function comandoFilaDeMerge(args) {
+  const seco = flag(args, '--seco', false);
+  const gate = flag(args, '--gate') ?? GATE_PADRAO;
+  const preparar = flag(args, '--preparar');
+  const uso = 'uso: painel.mjs fila-de-merge <PR> [<PR>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]';
+  if (!args.length || args.some((a) => !/^[1-9]\d*$/.test(String(a)))) throw new Error(uso);
+  const numeros = [...new Set(args.map(Number))];
+  const cwd = process.cwd();
+  const prs = numeros.map((pr) => {
+    const v = dadosDoPr(pr, cwd);
+    if (v.state !== 'OPEN') throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
+    return { pr, sha: v.headRefOid.toLowerCase(), base: v.baseRefName };
+  });
+  const bases = [...new Set(prs.map((p) => p.base))];
+  if (bases.length > 1) throw new Error(`fila-de-merge: os PRs vão para bases diferentes (${bases.join(', ')}); um lote por base`);
+  const lote = montarLote({ prs: prs.map(({ pr, sha }) => ({ pr, sha })), base: bases[0], cwd, gate, preparar });
+  const { projeto } = projetoDoCwd();
+  const itensDoPr = (pr) => [...itensVivos()].filter(([, d]) => projeto && String(d?.projeto ?? '').toLowerCase() === projeto && Array.isArray(d.prs) && d.prs.includes(pr));
+  const resumo = { base: lote.base, gates: lote.gates, logs: lote.pasta };
+  if (seco) return { seco: true, ...resumo, mergearia: lote.aprovados.map((a) => a.pr), devolveria: lote.devolvidos.map(({ pr, motivo }) => ({ pr, motivo })) };
+  const mergeados = [];
+  for (const { pr, sha } of lote.aprovados) {
+    const r = comandoMergear([String(pr), sha]);
+    if (r.recusado) lote.devolvidos.push({ pr, sha, motivo: r.motivo });
+    else mergeados.push({ pr, itens: r.itens });
+  }
+  const devolvidos = lote.devolvidos.map(({ pr, motivo, log }) => {
+    const itens = comTrava(() => itensDoPr(pr).map(([F, d]) => {
+      const agora = `devolvido pela fila de merge (PR ${pr}): ${motivo}`.slice(0, 300);
+      efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { etapa: 'execucao', agora } }, undefined, new Map()));
+      return { item: F, dona: d.donoLocalId ?? null };
+    }));
+    return { pr, motivo, ...(log ? { log } : {}), itens };
+  });
+  return { ...resumo, mergeados, devolvidos };
+}
+
 const ORQ = () => regras.BASE;
 const arquivoJson = (f, padrao) => { try { return JSON.parse(readFileSync(f, 'utf8')); } catch { return padrao; } };
 function gravarJson(f, v) {
@@ -1058,6 +1100,7 @@ function comandoBatida(args) {
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
       caminhoDoRelatorio: (nome) => join(pasta, `${nome}.json`),
       prazoMin: prazoEmMin([]), soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
+      dona: modelo.modeloDaDona(),
     });
     const marcadoresApagados = marcadoresMortos(new Map(linhas.map((r) => [r.sessionId, r])), agoraMs);
     const cartoesApagados = cartoesResolvidos({ cartoes: cartoesDoPainel(), linhas, projetoDe: projetoDeUmaLinha(), agoraMs });
@@ -1205,6 +1248,9 @@ function main(argv) {
       saida = r;
       break;
     }
+    case 'fila-de-merge':
+      saida = comandoFilaDeMerge(resto);
+      break;
     case 'batch': {
       const ops = JSON.parse(a);
       if (!Array.isArray(ops)) throw new Error('batch: esperava uma lista');
@@ -1212,7 +1258,7 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|seguinte|batida|mergear|pode-reiniciar|handoffs … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|seguinte|batida|mergear|pode-reiniciar|fila-de-merge|handoffs … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
   return (cmd === 'pegar' || cmd === 'mergear') && saida.recusado ? 1 : 0;

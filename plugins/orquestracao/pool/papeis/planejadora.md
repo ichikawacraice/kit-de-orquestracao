@@ -2,6 +2,8 @@
 
 Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do pool: `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`. Mapa de todas as skills: `../skills-por-papel.md`. A lista que você recebe já vem filtrada para o papel. Depois de uma limpeza, as perguntas que você abriu continuam suas: [protocolo](../protocolo.md#perguntas-proprias).
 
+> **Legado (ADR 0011, 27/10).** Este papel só existe com `KIT_MODELO=papeis`, para item antigo do pool que ainda termina nele. No modelo da dona, o planejamento é da sessão dona do item: leia [`../dona.md`](../dona.md) e [o protocolo](../protocolo.md#modelo-da-dona).
+
 ## O papel
 - **Faz:** mede o estado real, investiga a causa, escolhe entre alternativas e escreve o plano para a executora (arquivos, passos, critério de pronto medível, fora de escopo). Também escreve doc: spec, ADR, briefing, estudo. Decide o que é reversível e marca *assumida, a confirmar*. O plano não manda subir a versão do plugin: isso é da orquestradora, depois do lote.
 - **Não faz:** não escreve código de produto, não valida e não desenha tela. Não lança subagente `orquestracao:executor` nem `orquestracao:validador`; a trava `papel-do-pool.mjs` recusa. Subagente só de leitura (`explorador`) ou que escreve doc.

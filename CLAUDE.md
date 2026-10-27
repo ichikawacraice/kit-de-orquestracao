@@ -24,12 +24,16 @@ Lidos de `.claude/kit.json`:
 - Sem typecheck neste repo.
 - Validar manifestos: `claude plugin validate .` (e `claude plugin validate plugins/<nome> --strict`)
 - Testes do mod: `claude plugin test plugins/painel-sessoes` (o `node --test` da raiz não os pega: são `.tsx`).
+- **Testes afetados** (durante o trabalho, ADR 0011): `testes-afetados -- node gate/com-fichas.mjs -- node --test` (sem `--`, só lista).
 <!-- /kit:comandos -->
 
 <!-- kit:regras-de-operacao v1 -->
 ## Regras de operação
-- Um gate por vez; gate verde sobre a mesma árvore não se repete (o verde é guardado pela árvore exata).
-- Rebase em vez de merge commit; PR sempre com o rebase em dia sobre a branch de integração do projeto.
+- **Uma sessão dona por item, do plano ao PR** (ADR 0011): ela planeja, escreve, testa e abre o PR; manual em `plugins/orquestracao/pool/dona.md`. Sem P/D/E/V em sessões separadas (o pool só volta com `KIT_MODELO=papeis`, para item antigo).
+- **Revisão por subagente** `orquestracao:validador` de contexto limpo antes do PR: só achados que afetam correção; o leve vai ao PR ou ao `depois` do item, nunca vira item.
+- **Durante o trabalho, só os testes afetados**; o gate completo (`npm test`) roda uma vez, na fila de merge da orquestradora (`painel fila-de-merge <PR…>`), sobre a combinação dos PRs. Um gate por vez; gate verde sobre a mesma árvore não se repete.
+- **Ninguém rebaseia por merge alheio:** a fila devolve à dona só o conflito real ou o gate vermelho. Rebase em vez de merge commit quando rebasear.
+- **No máximo 4 donas trabalhando ao mesmo tempo** (3 com a máquina cheia); a orquestradora abre a dona quando o item nasce ou outra termina.
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
 - Commit em português, no formato convencional (`feat(escopo): …`).
 - A paridade plugin × `~/.claude` deixou de ser exigida: a K8 rodou em 2026-10-25T14:01 (backup `~/.claude/orquestracao/backups/K8-2026-10-25T14-01-55-715Z`), o `~/.claude/settings.json` não registra mais nenhum hook e o plugin é a cópia viva — conserto entra só nele. `scripts/paridade.mjs` e `scripts/k8/sincronizar.mjs` ficam para a migração de outra máquina.

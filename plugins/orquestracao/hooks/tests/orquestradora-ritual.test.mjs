@@ -10,6 +10,8 @@ import { beforeEach, afterEach } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { rmSync, existsSync, readFileSync } from 'node:fs';
 import { gitCommonDir, chaveDoPiso } from '../pool-comum.mjs';
+// ADR 0011: estes casos medem o pool de papéis, que só vale com KIT_MODELO=papeis (os filhos herdam o ambiente).
+process.env.KIT_MODELO = 'papeis';
 
 const HOOK = join(dirname(fileURLToPath(import.meta.url)), '..', 'orquestradora-ritual.mjs');
 const haH = (h) => new Date(Date.now() - h * 3600_000).toISOString();
