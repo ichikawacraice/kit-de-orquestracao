@@ -436,11 +436,11 @@ export async function tomarFichasDoGate(opcoes) {
   for (;;) {
     const r = tentarTomarFichas(pasta, teto, pedido - levou.length, eu, { agora: agora(), avisar, ordem: faixaDoGate.filter((k) => !levou.includes(k)) });
     levou.push(...r.levou);
-    if (levou.length >= pedido) return levou;
+    if (levou.length >= pedido) return levou.sort((a, b) => a - b);
     const esperou = agora() - inicio;
     if (esperou >= prazoMs && levou.length >= Math.min(minimo, pedido)) {
       avisar(`[teto] o prazo da devolução (${Math.round(prazoMs / 1000)} s) venceu: o gate começa com ${levou.length} de ${pedido} fichas`);
-      return levou;
+      return levou.sort((a, b) => a - b);
     }
     if (ultimoAviso === null || agora() - ultimoAviso >= avisoMs) {
       avisar(
