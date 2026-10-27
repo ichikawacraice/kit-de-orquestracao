@@ -13,7 +13,7 @@ Lidos de `.claude/kit.json`:
 - **Gate completo** (`gate.comandoCompleto`): roda antes de empurrar; só um gate por vez na máquina.
 - **Teste parcial** (`gate.comandoPorPacote`): só o pacote que o diff toca.
 - **Typecheck** (`gate.typecheck`), se o projeto tiver.
-- **Teste isolado:** `node scripts/kit/com-fichas.mjs -- <comando>` (teto de núcleos da máquina, somando todas as sessões).
+- **Teste isolado:** `node scripts/kit/com-fichas.mjs -- <comando>` (teto de núcleos da máquina, somando todas as sessões; o gate completo tem faixa e vez próprias).
 <!-- /kit:comandos -->
 
 <!-- kit:regras-de-operacao v1 -->

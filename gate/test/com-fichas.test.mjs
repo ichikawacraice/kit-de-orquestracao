@@ -151,7 +151,8 @@ describe("com-fichas", () => {
     assert.ok(Math.max(...vistos.map((v) => v.max)) >= 8, `prova de que a medida enxerga ficha: o gate tem 7 e algum normal tem ≥ 1 — ${JSON.stringify(vistos)}`);
     assert.ok(Math.max(...vistos.map((v) => v.max)) <= 10, `passou do teto: ${JSON.stringify(vistos)}`);
     assert.deepEqual(vistos.map((v) => v.violacoes), [0, 0, 0, 0, 0], "ninguém tocou 1..7");
-    assert.deepEqual(vistos.map((v) => v.fichas), ["3", "3", "3", "3", "3"], "cada um levou as 3 normais, esperando a vez dos outros");
+    // leva o que houver livre: com a faixa normal (3) dividida entre os cinco, cada um leva de 1 a 3 — nunca da faixa do gate
+    assert.ok(vistos.every((v) => Number(v.fichas) >= 1 && Number(v.fichas) <= 3), `cada um leva de 1 a 3 fichas: ${JSON.stringify(vistos)}`);
     assert.deepEqual(readdirSync(pasta).sort((a, b) => a.localeCompare(b)), ["1", "2", "3", "4", "5", "6", "7", "gate"]);
   });
 });
