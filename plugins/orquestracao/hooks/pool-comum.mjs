@@ -10,12 +10,16 @@ import { BASE, tituloRapido, semPrefixoDoPlugin, INICIO_DE_COMANDO, INVOCACAO_DO
 
 export { BASE };
 const H = homedir();
-// A máquina está cheia para teste? (ADR 0005, operador, 26/10) — o plugin não importa `gate/` (que não vai junto quando ele é instalado),
-// então lê as fichas por conta própria: a pasta, o teto e o PID dono seguem o mesmo contrato do `gate/o-teto-da-maquina.mjs` (um teste
-// compara os dois). Cheia = todas as fichas tomadas, ou carga de 1 min ≥ núcleos. Valor de teto inválido aqui não derruba o hook:
-// cai para o próximo da ordem (o gate, esse, recusa alto). `KIT_CARGA_1MIN` fixa a carga (os testes).
+// A máquina está cheia para teste? (ADR 0005 e 0008, operador, 26/10) — o plugin não importa `gate/` (que não vai junto quando ele é instalado),
+// então lê as fichas por conta própria: a pasta, o teto, as faixas e o PID dono seguem o mesmo contrato do `gate/o-teto-da-maquina.mjs` (um teste
+// compara os dois). O teto tem a faixa do gate (fichas 1..G) e a faixa normal (G+1..T). Cheia = nenhuma ficha normal livre e, ou há gate rodando
+// (`<pasta>/gate` com PID vivo), ou a faixa do gate também está sem livre; ou a carga de 1 min ≥ núcleos. Um gate sozinho não segura a V.
+// Valor de teto inválido aqui não derruba o hook: cai para o próximo da ordem (o gate, esse, recusa alto). `KIT_CARGA_1MIN` fixa a carga (os testes).
 const FICHA_ILEGIVEL_MS = 30_000;
+const FRACAO_PADRAO_DE_TESTE = 2 / 3;
+const FRACAO_PADRAO_DO_GATE = 0.7;
 const inteiroPositivo = (n) => Number.isInteger(n) && n >= 1;
+const fracaoValida = (v, aberta = false) => { if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null; const f = typeof v === 'number' ? v : Number(v); return Number.isFinite(f) && f > 0 && f <= 1 && !(aberta && f >= 1) ? f : null; };
 const vivo = (pid) => { if (!Number.isInteger(pid) || pid <= 0) return false; try { process.kill(pid, 0); return true; } catch (e) { return e?.code === 'EPERM'; } };
 export const pastaDoTeto = (env = process.env) => env.KIT_NUCLEOS_DIR || join(H, '.claude', 'orquestracao', 'nucleos-de-teste');
 export function tetoDaMaquina(env = process.env, nucleos = availableParallelism(), pasta = pastaDoTeto(env)) {
@@ -23,27 +27,53 @@ export function tetoDaMaquina(env = process.env, nucleos = availableParallelism(
     const v = env[nome];
     if (v !== undefined && v !== '' && inteiroPositivo(Number(v))) return Number(v);
   }
-  try { const n = JSON.parse(readFileSync(join(pasta, 'teto.json'), 'utf8'))?.nucleos; if (inteiroPositivo(n)) return n; } catch { /* sem arquivo: o padrão */ }
-  return Math.max(1, Math.floor(nucleos / 2));
+  const dosNucleos = (f) => Math.max(1, Math.floor(nucleos * f));
+  const daEnv = fracaoValida(env.KIT_FRACAO_DE_TESTE);
+  if (daEnv !== null) return dosNucleos(daEnv);
+  try {
+    const json = JSON.parse(readFileSync(join(pasta, 'teto.json'), 'utf8'));
+    if (inteiroPositivo(json?.nucleos)) return json.nucleos;
+    const f = fracaoValida(json?.fracao);
+    if (f !== null) return dosNucleos(f);
+  } catch { /* sem arquivo: o padrão */ }
+  return dosNucleos(FRACAO_PADRAO_DE_TESTE);
+}
+/** As faixas do teto `T` — as mesmas de `faixas()` do gate: `{ gate: G, normal: T − G, compartilhada }`. */
+export function faixasDoTeto(teto, env = process.env) {
+  const f = fracaoValida(env.KIT_FRACAO_DO_GATE, true) ?? FRACAO_PADRAO_DO_GATE;
+  if (teto <= 1) return { gate: 1, normal: 1, compartilhada: true };
+  const gate = Math.min(teto - 1, Math.max(1, Math.floor(teto * f)));
+  return { gate, normal: teto - gate, compartilhada: false };
+}
+/** O PID da ficha (ou da vez do gate) em `caminho` se ela vale agora; `undefined` se não vale (ausente, PID morto, ilegível velha); `null` se ilegível recente. */
+function donoVivo(caminho) {
+  try {
+    let pid = null;
+    try { const p = JSON.parse(readFileSync(caminho, 'utf8'))?.pid; if (Number.isInteger(p)) pid = p; } catch { /* ilegível */ }
+    if (pid === null) return Date.now() - statSync(caminho).mtimeMs <= FICHA_ILEGIVEL_MS ? null : undefined;
+    return vivo(pid) ? pid : undefined;
+  } catch { return undefined; }
 }
 export function maquinaCheia({ env = process.env, pasta, teto, carga, nucleos = availableParallelism() } = {}) {
   const dir = pasta ?? pastaDoTeto(env);
   const limite = teto ?? tetoDaMaquina(env, nucleos, dir);
   let cargaAgora = carga;
   if (cargaAgora === undefined) { const c = Number(env.KIT_CARGA_1MIN); cargaAgora = env.KIT_CARGA_1MIN !== undefined && env.KIT_CARGA_1MIN !== '' && Number.isFinite(c) ? c : loadavg()[0]; }
-  let tomadas = 0;
+  const faixas = faixasDoTeto(limite, env);
+  const tomadasKs = new Set();
   let nomes = [];
   try { nomes = readdirSync(dir); } catch { /* sem pasta: nenhuma ficha */ }
   for (const nome of nomes) {
     if (!/^[1-9]\d*$/.test(nome)) continue;
-    const caminho = join(dir, nome);
-    try {
-      let pid = null;
-      try { const p = JSON.parse(readFileSync(caminho, 'utf8'))?.pid; if (Number.isInteger(p)) pid = p; } catch { /* ilegível */ }
-      if (pid === null ? Date.now() - statSync(caminho).mtimeMs <= FICHA_ILEGIVEL_MS : vivo(pid)) tomadas += 1;
-    } catch { /* sumiu entre listar e ler */ }
+    if (donoVivo(join(dir, nome)) !== undefined) tomadasKs.add(Number(nome));
   }
-  return { cheia: tomadas >= limite || cargaAgora >= nucleos, tomadas, teto: limite, carga: cargaAgora, nucleos, pasta: dir };
+  const gateRodando = !faixas.compartilhada && donoVivo(join(dir, 'gate')) !== undefined;
+  const ksNormais = faixas.compartilhada ? [1] : Array.from({ length: faixas.normal }, (_, i) => faixas.gate + 1 + i);
+  const ksDoGate = Array.from({ length: faixas.gate }, (_, i) => i + 1);
+  const livresNormais = ksNormais.filter((k) => !tomadasKs.has(k)).length;
+  const livresDoGate = ksDoGate.filter((k) => !tomadasKs.has(k)).length;
+  const semFicha = livresNormais === 0 && (gateRodando || livresDoGate === 0);
+  return { cheia: semFicha || cargaAgora >= nucleos, tomadas: tomadasKs.size, teto: limite, faixas, livresNormais, livresDoGate, gateRodando: gateRodando ? true : null, carga: cargaAgora, nucleos, pasta: dir };
 }
 const SESSOES_DIR = () => process.env.POOL_APP_SESSOES_DIR || join(H, 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
 // O registro tem uma pasta por conta do app; a de outra conta fica no disco com sessões que o app já não mostra (F142, medido

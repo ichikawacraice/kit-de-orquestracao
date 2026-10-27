@@ -271,6 +271,38 @@ caso('membrosLivres: livre da pasta de outra conta não conta; sem config do app
     writeFileSync(join(base, 'config.json'), JSON.stringify({ lastKnownAccountUuid: 'conta-sem-pasta' }));
     ok(ids() === 'local_fantasma,local_viva', `conta sem pasta no disco não esconde todos: ${ids()}`);
   } finally { process.env.POOL_APP_SESSOES_DIR = antes; rmSync(join(base, 'config.json'), { force: true }); }
+// ADR 0008 (26/10): o teto tem a faixa do gate (1..G) e a normal (G+1..T); a máquina está cheia para a V quando falta ficha NORMAL e não há o que emprestar.
+caso('maquinaCheia (ADR 0008): gate rodando com a faixa normal livre → não cheia; faixa normal cheia com gate rodando → cheia; sem gate, faixa normal cheia e a do gate livre → não cheia', () => {
+  const pasta = join(base, 'nucleos-faixas'); mkdirSync(pasta);
+  const dono = { pid: process.pid, token: 't', worktree: '/w', projeto: 'p', desde: new Date().toISOString() };
+  const ficha = (k) => writeFileSync(join(pasta, String(k)), JSON.stringify(dono));
+  const vez = () => writeFileSync(join(pasta, 'gate'), JSON.stringify(dono));
+  const maq = () => maquinaCheia({ pasta, teto: 10, carga: 0, nucleos: 15, env: {} });
+  for (let k = 1; k <= 6; k++) ficha(k); // o gate com as 6 fichas dele
+  vez();
+  let r = maq();
+  ok(r.faixas.gate === 7 && r.faixas.normal === 3, `faixas 7/3: ${JSON.stringify(r)}`);
+  ok(r.gateRodando !== null && r.livresNormais === 3 && r.cheia === false, `gate rodando, normal livre: ${JSON.stringify(r)}`);
+  for (const k of [8, 9, 10]) ficha(k);
+  r = maq();
+  ok(r.livresNormais === 0 && r.gateRodando !== null && r.cheia === true, `normal cheia com gate rodando: ${JSON.stringify(r)}`);
+  rmSync(join(pasta, 'gate'));
+  r = maq();
+  ok(r.gateRodando === null && r.livresNormais === 0 && r.cheia === false, `sem gate e a ficha 7 emprestável: ${JSON.stringify(r)}`);
+  ficha(7);
+  r = maq();
+  ok(r.cheia === true && r.tomadas === 10, `sem gate, tudo tomado: ${JSON.stringify(r)}`);
+});
+caso('maquinaCheia (ADR 0008): a vez do gate de PID morto não conta como gate rodando; `gate` não é ficha', () => {
+  const pasta = join(base, 'nucleos-vez-morta'); mkdirSync(pasta);
+  const morto = Number(execFileSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' }).trim());
+  ok(morto > 0, 'precondição: PID do filho');
+  writeFileSync(join(pasta, 'gate'), JSON.stringify({ pid: morto }));
+  const r = maquinaCheia({ pasta, teto: 10, carga: 0, nucleos: 15, env: {} });
+  ok(r.gateRodando === null && r.tomadas === 0, `vez morta: ${JSON.stringify(r)}`);
+  writeFileSync(join(pasta, 'gate'), JSON.stringify({ pid: process.pid }));
+  const viva = maquinaCheia({ pasta, teto: 10, carga: 0, nucleos: 15, env: {} });
+  ok(viva.gateRodando !== null && viva.tomadas === 0, `prova: com PID vivo o gate roda e ainda assim não é ficha: ${JSON.stringify(viva)}`);
 });
 rmSync(base, { recursive: true, force: true });
 console.log(falhas ? `\n${falhas} caso(s) falharam` : '\ntodos verdes');
