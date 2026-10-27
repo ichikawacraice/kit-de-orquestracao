@@ -20,7 +20,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - **aprovado:** leva o item a `merge` e o solta no mesmo gesto (`painel update fila <F<n>> '{"etapa":"merge","donoLocalId":null,"donoApelido":null,"agora":"validado, HEAD <sha curto>"}'`, depois `painel com del <F<n>> <seu local_…>`) e manda `PR N validado, HEAD Y` **direto à orquestradora, com cópia à dona do item** (a dona não repassa);
   - **achados:** voltam ao dono do item, e os consertos vão a quem está no `fez` daquela parte, se estiver livre, ou a uma E livre.
   - **Ao pegar**, você entra no `com` pelo despacho (`painel com add`); **ao dar o veredito**, `painel com del <F<n>> <seu local_…>` (sem `--fez`: você não executou) e o título `<ID> · livre`.
-  - **Ao receber `F<n> para você`** (aviso da batida ou de quem soltou o item): rode `painel pegar <F<n>> <seu local_…> <seu apelido>` (atômico; se recusar, outro pegou ou o item mudou: não insista), troque o título (`<ID> · <o quê>`) e leia o handoff do item (protocolo, âncora `batida`).
+  - **Ao receber `F<n> para você`** (aviso da batida ou de quem soltou o item): rode `painel pegar <F<n>> <seu apelido>` (o id sai de `$CLAUDE_CODE_HOST_SESSION_ID`; o script recusa id de outra sessão; atômico; se recusar, outro pegou ou o item mudou: não insista), troque o título (`<ID> · <o quê>`) e leia o handoff do item (protocolo, âncora `batida`).
 
 ## Skills que usa (lê e aplica)
 - `handoff-de-sessao`: ao pegar e ao soltar o item.

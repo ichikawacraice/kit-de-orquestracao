@@ -15,7 +15,7 @@
 //   painel.mjs com del <F> <local_> [--fez]   tira a sessão do `com`; --fez a registra em `fez` (quem executou)
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]   os membros livres do papel no projeto, o mais antigo parado primeiro → [{localId, apelido}]; --sessoes é o JSON do list_sessions (sem ele, o registro do app, sem contar a mesma sessão duas vezes)
-//   painel.mjs pegar <F> <local_> <apelido>   o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
+//   painel.mjs pegar <F> [<local_>] <apelido>   (o id sai de $CLAUDE_CODE_HOST_SESSION_ID; id de outra sessão, de orquestradora ou de outro apelido é recusado) o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, pede ao membro com título de item fechado que volte a livre, relata merge/vagas/excedentes/títulos velhos à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
@@ -84,11 +84,18 @@ const pool = MEU_CLI
 // `esperando` da `list fila` (F58): a regra mora em hooks/esperando-papel.mjs; só `list fila` a carrega (as outras
 // invocações não dependem do módulo, nem a cópia do script solta numa pasta sem `hooks/`).
 const DA_BATIDA = ['batida', 'pegar', 'livres'].includes(process.argv[2]);
+const CONFERE_MEMBRO = DA_BATIDA || process.argv[2] === 'com';
 const esperandoPapel = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
   ? (await import(pathToFileURL(join(HOOKS_DIR, 'esperando-papel.mjs')).href)).esperandoPapel
   : null;
-// `batida`, `pegar` e `livres` também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
-const regras = DA_BATIDA ? await import(pathToFileURL(POOL_COMUM).href) : null;
+// `batida`, `pegar` e `livres` (e `com`, só para conferir o membro) também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
+const regras = CONFERE_MEMBRO
+  ? await import(pathToFileURL(POOL_COMUM).href).catch((e) => {
+    if (DA_BATIDA) throw e;
+    process.stderr.write(`painel.mjs: aviso: não consegui importar ${POOL_COMUM} (${e.message}); o id do membro não foi conferido\n`);
+    return null;
+  })
+  : null;
 const crewai = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'hooks-crewai-comum.mjs')).href) : null;
 let meusIds; // Set de ids que contam como "a própria sessão"; null = não resolvido
 function ehMinha(id) {
@@ -651,12 +658,32 @@ function comTrava(fn) {
   }
 }
 
+// F155: o id do próprio membro. O Bash da sessão aberta por outra não mostra o `local_…` dela (só o de quem a abriu), então
+// quem digita o id erra. Fonte: CLAUDE_CODE_HOST_SESSION_ID; senão o registro do app pelo id do CLI; senão null.
+function idDestaSessao() {
+  const h = process.env.CLAUDE_CODE_HOST_SESSION_ID;
+  if (h && LOCAL_ID.test(h)) return h;
+  try { return regras?.registroDaSessao(MEU_CLI)?.localId ?? null; } catch { return null; }
+}
+// O id tem de ser de um membro do pool com o apelido dado: orquestradora e membro de outro apelido são recusados. Id fora do
+// registro ou título sem apelido (sessão recém-aberta) passa: errar para o lado de não travar a escrita.
+function conferirMembro(localId, apelido, onde) {
+  let reg = null;
+  try { reg = regras?.registroDaSessao(localId, { fresco: true }) ?? null; } catch { /* sem registro */ }
+  const titulo = reg?.titulo ?? reg?.title;
+  if (!titulo) return;
+  if (titulo.startsWith('🎛 orquestradora')) throw new Error(`${onde}: ${localId} é a sessão "${titulo}", não um membro do pool; o id do membro sai do start_session (para si: $CLAUDE_CODE_HOST_SESSION_ID)`);
+  const m = regras.membroDoPool(titulo);
+  if (m && m.id !== apelido) throw new Error(`${onde}: ${localId} é a ${m.id} ("${titulo}"), não a ${apelido}`);
+}
+
 // `com add|del`: lê, muda e grava a lista dentro da trava do painel; é a única via que grava `com` (e a que acrescenta a `fez`).
 function comandoCom(args) {
   const [sub, F, localId, ...resto] = args;
   if (sub !== 'add' && sub !== 'del') throw new Error('uso: painel.mjs com add <F> <local_> <apelido> "<oQue>" | com del <F> <local_> [--fez]');
   if (!ID.test(String(F))) throw new Error(`com: id de item inválido "${F}"`);
   if (!LOCAL_ID.test(String(localId))) throw new Error(`com: "${localId}" não é local_<uuid>`);
+  if (sub === 'add') conferirMembro(localId, resto[0], 'com add');
   return comTrava(() => {
     const atual = ler('fila', F);
     if (!atual) throw new Error(`fila/${F} não existe`);
@@ -751,10 +778,17 @@ function comandoLivres(args) {
 
 // `pegar`: o membro livre que recebeu o aviso. Tudo dentro da trava: dois livres no mesmo item, um só pega.
 function comandoPegar(args) {
-  const [F, localId, apelido, ...sobra] = args;
-  if (!ID.test(String(F)) || sobra.length) throw new Error('uso: painel.mjs pegar <F> <local_…> <apelido>');
-  if (!LOCAL_ID.test(String(localId))) throw new Error(`pegar: "${localId}" não é local_<uuid>`);
+  const [F, ...resto] = args;
+  const apelido = resto.pop();
+  const [dado, ...sobra] = resto;
+  if (!ID.test(String(F)) || sobra.length) throw new Error('uso: painel.mjs pegar <F> [<local_…>] <apelido>');
   if (!/^[PDEV]\d+$/.test(String(apelido))) throw new Error(`pegar: apelido "${apelido}" não é P<n>, D<n>, E<n> ou V<n>`);
+  const propria = idDestaSessao();
+  const localId = dado ?? propria;
+  if (!localId) throw new Error('pegar: não sei o id desta sessão (sem $CLAUDE_CODE_HOST_SESSION_ID); passe o <local_…>: painel.mjs pegar <F> <local_…> <apelido>');
+  if (!LOCAL_ID.test(String(localId))) throw new Error(`pegar: "${localId}" não é local_<uuid>`);
+  if (propria && localId !== propria) throw new Error(`pegar: ${localId} não é esta sessão (${propria}); pegar é sempre para a própria sessão: painel.mjs pegar ${F} ${apelido}`);
+  conferirMembro(localId, apelido, 'pegar');
   const recusa = (motivo) => ({ recusado: true, item: F, motivo });
   return comTrava(() => {
     const atual = ler('fila', F);
