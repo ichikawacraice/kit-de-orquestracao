@@ -36,13 +36,13 @@ A dona é uma sessão só, mas troca de chapéu a cada etapa: **ao entrar numa e
 
 <a id="testes-afetados"></a>
 ### Testes: os afetados no trabalho, o gate uma vez na fila
-- Enquanto trabalha, a dona roda **só os testes do que tocou**: `testes-afetados -- <comando de teste do projeto>` (neste kit: `testes-afetados -- node gate/com-fichas.mjs -- node --test`). Ele lista os testes que a branch tocou, os que citam o nome de um arquivo tocado e os que citam um módulo que cita um tocado (um nível); sem `--`, só lista. Limites: import montado em tempo de execução e mais de um nível de dependência não aparecem; na dúvida, rode o pacote inteiro pelo `com-fichas`.
+- Enquanto trabalha, a dona roda **só os testes do que tocou**: `testes-afetados -- <comando de teste do projeto>` (neste kit: `testes-afetados -- node gate/com-fichas.mjs -- node --test`). Ele lista os testes que a branch tocou, os que citam o nome de um arquivo tocado e os que citam um módulo que cita um tocado (um nível); sem `--`, só lista. Limites: import montado em tempo de execução, mais de um nível de dependência e o nome antigo de um arquivo renomeado não aparecem; `.tsx` fica fora do padrão (o mod tem `claude plugin test`); na dúvida, rode o pacote inteiro pelo `com-fichas`.
 - O **gate completo** (`npm test`, ou o do `CLAUDE.md` do projeto) roda **uma vez, na fila de merge**, sobre a combinação. A dona não roda o gate completo antes do PR, salvo quando o diff mexe na própria infraestrutura de teste.
 
 <a id="fila-de-merge"></a>
 ### A fila de merge da orquestradora
 - A dona entrega com `PR N pronto, HEAD <sha completo>` à orquestradora, põe o item em `merge` (`{"etapa":"merge","prs":[N],"agora":"PR N na fila de merge"}`) e para. Não rebaseia por merge alheio.
-- A orquestradora junta os PRs prontos e roda `painel fila-de-merge <PR> [<PR>…] [--gate "<cmd>"] [--preparar "<cmd>"]`, na ordem em que chegaram: monta a combinação sobre a base num worktree temporário (squash, um PR por vez), roda o gate **uma vez** nela, mergeia na ordem o que passou (como o `painel mergear`, que fecha o item) e devolve o que conflitou ou ficou vermelho (com a combinação vermelha, testa um PR por vez sobre a parte verde para achar quem quebra). O item devolvido volta a `execucao` com o motivo no `agora`, e a orquestradora manda à dona (`dona` na saída) uma linha com o motivo e o log. `--preparar` instala as dependências na árvore temporária (ex.: `pnpm install --frozen-lockfile`); `--seco` monta e testa sem mergear.
+- A orquestradora junta os PRs prontos e roda `painel fila-de-merge <PR>:<sha> [<PR>:<sha>…] [--gate "<cmd>"] [--preparar "<cmd>"]`, na ordem em que chegaram, com o sha de cada recado (ponta que mudou depois dele volta à dona sem entrar no lote): monta a combinação sobre a base num worktree temporário (squash, um PR por vez), roda o gate **uma vez** nela, mergeia na ordem o que passou (como o `painel mergear`, que fecha o item) e devolve o que conflitou ou ficou vermelho (com a combinação vermelha, testa um PR por vez sobre a parte verde para achar quem quebra). O item devolvido volta a `execucao` com o motivo no `agora`, e a orquestradora manda à dona (`dona` na saída) uma linha com o motivo e o log. `--preparar` instala as dependências na árvore temporária (ex.: `pnpm install --frozen-lockfile`); `--seco` monta e testa sem mergear.
 - Depois do lote, a versão dos plugins sobe num commit só (`subir-versao`).
 
 <a id="teto-de-donas"></a>
@@ -52,7 +52,7 @@ A dona é uma sessão só, mas troca de chapéu a cada etapa: **ao entrar numa e
 ### Despacho por evento
 - A orquestradora abre a dona quando o item nasce e quando uma dona termina (o recado `PR N pronto` e o item devolvido são os eventos). O ritual (`orquestradora-ritual.mjs`) cobra, abaixo do teto, abrir a dona do item que está sem ninguém há 5 min ou mais (`ESPERA_MIN`).
 - A batida segue de 10 em 10 min como rede de segurança: cutuca a dona do item parado, solta o item cuja dona sumiu e relata o `merge` parado e a vaga de dona. Ela não avisa livre, não conta piso nem excedentes.
-- **Item antigo do pool** (sem `via`) ainda vivo: a orquestradora o converte (grava `via: "dona"` e abre a dona com o handoff dele) ou o deixa terminar no modelo antigo com `KIT_MODELO=papeis` na sessão que o leva.
+- **Item antigo do pool** (sem `via`) ainda vivo: a orquestradora o converte — grava `via: "dona"` e abre a dona com o handoff dele. O script `migrar-para-dona.mjs` faz isso para a fila inteira. Deixar o item terminar no pool exige `KIT_MODELO=papeis` (ou `modelo.json`) na máquina toda, porque a batida e o ritual também leem a chave.
 
 ---
 

@@ -16,7 +16,8 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, extname, join } from 'node:path';
 
-const PADRAO_DE_TESTE = /(^|\/)[^/]*\.test\.(mjs|cjs|js|ts|tsx|mts)$|(^|\/)test\/.*\.(mjs|js|ts)$/;
+// `.tsx` fica de fora do padrão: o `node --test` não o roda (o mod tem o próprio `claude plugin test`); `--padrao` troca.
+const PADRAO_DE_TESTE = /(^|\/)[^/]*\.test\.(mjs|cjs|js|ts|mts)$|(^|\/)test\/.*\.(mjs|js|ts)$/;
 const CODIGO = /\.(mjs|cjs|js|ts|tsx|mts|jsx)$/;
 
 function git(args, cwd) {

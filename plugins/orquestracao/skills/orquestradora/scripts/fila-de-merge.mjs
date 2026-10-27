@@ -35,13 +35,20 @@ export function rodarComando(cmd, cwd, log) {
   } finally { closeSync(fd); }
 }
 
+// Volta a árvore ao `ref` e apaga o que o gate deixou fora do índice (sem `-x`: o ignorado, como node_modules, fica);
+// arquivo solto do gate faria o squash seguinte abortar com "untracked … would be overwritten", sem conflito real.
+function limpar(wt, ref) {
+  gitOk(['reset', '-q', '--hard', ref], wt);
+  gitOk(['clean', '-q', '-fd'], wt);
+}
+
 // Aplica um PR (sha) por squash no HEAD do worktree. → { ok:true } | { ok:false, arquivos }
 function aplicar(wt, pr, sha) {
   const m = git(['merge', '--squash', '--no-commit', sha], wt);
   if (m.status !== 0) {
     const st = git(['diff', '--name-only', '--diff-filter=U'], wt);
     const arquivos = st.out.split('\n').filter(Boolean);
-    gitOk(['reset', '-q', '--hard', 'HEAD'], wt);
+    limpar(wt, 'HEAD');
     return { ok: false, arquivos };
   }
   // squash sem mudança (PR já contido na base) não gera commit; o `--allow-empty` mantém um commit por PR
@@ -79,15 +86,16 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
     if (todos.ok) return { base, aprovados: aplicados, devolvidos, gates, pasta };
     if (todos.preparo) throw new Error(`o preparo falhou (exit ${todos.status}); veja ${todos.log}`);
     // vermelho: um por vez sobre a parte verde, para achar quem quebra
-    gitOk(['reset', '-q', '--hard', `origin/${base}`], wt);
+    limpar(wt, `origin/${base}`);
     const aprovados = [];
     for (const item of aplicados) {
       const a = aplicar(wt, item.pr, item.sha);
       if (!a.ok) { devolvidos.push({ ...item, motivo: `conflito com ${base} + a parte verde em ${a.arquivos.join(', ')}`, arquivos: a.arquivos }); continue; }
+      limpar(wt, 'HEAD'); // o gate do lote pode ter deixado arquivo solto
       const g = gateAqui(`pr-${item.pr}`);
       if (g.ok) { aprovados.push(item); continue; }
       devolvidos.push({ ...item, motivo: `gate vermelho (exit ${g.status}) com o PR sobre ${base}${aprovados.length ? ` + ${aprovados.map((x) => `#${x.pr}`).join(', ')}` : ''}`, log: g.log });
-      gitOk(['reset', '-q', '--hard', 'HEAD~1'], wt);
+      limpar(wt, 'HEAD~1');
     }
     return { base, aprovados, devolvidos, gates, pasta };
   } finally {

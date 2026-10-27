@@ -151,3 +151,30 @@ test('uso errado e PR fechado são recusados', () => {
     assert.match(r.err, /não está aberto/);
   } finally { limpar(c); }
 });
+
+test('o sha do recado: ponta diferente é devolvida sem montar; o certo passa', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F2', 24);
+    const r = c.painel('fila-de-merge', '21:abc1234', `24:${c.shas[24].slice(0, 7)}`, '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24]);
+    assert.equal(s.devolvidos[0].pr, 21);
+    assert.match(s.devolvidos[0].motivo, /a ponta mudou/);
+  } finally { limpar(c); }
+});
+
+test('arquivo solto que o gate deixa não vira conflito falso do PR seguinte', () => {
+  const c = montar();
+  try {
+    c.item('F3', 23); c.item('F4', 24);
+    // o gate cria d.txt (o arquivo do 24) e reprova c.txt (o do 23): sem limpar a árvore, o 24 abortaria por "untracked … overwritten"
+    const r = c.painel('fila-de-merge', '23', '24', '--gate', 'touch d.txt; test ! -f c.txt');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24]);
+    assert.deepEqual(s.devolvidos.map((d) => d.pr), [23]);
+    assert.match(s.devolvidos[0].motivo, /gate vermelho/);
+  } finally { limpar(c); }
+});

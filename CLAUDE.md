@@ -31,7 +31,7 @@ Lidos de `.claude/kit.json`:
 ## Regras de operação
 - **Uma sessão dona por item, do plano ao PR** (ADR 0011): ela planeja, escreve, testa e abre o PR; manual em `plugins/orquestracao/pool/dona.md`. Sem P/D/E/V em sessões separadas (o pool só volta com `KIT_MODELO=papeis`, para item antigo).
 - **Revisão por subagente** `orquestracao:validador` de contexto limpo antes do PR: só achados que afetam correção; o leve vai ao PR ou ao `depois` do item, nunca vira item.
-- **Durante o trabalho, só os testes afetados**; o gate completo (`npm test`) roda uma vez, na fila de merge da orquestradora (`painel fila-de-merge <PR…>`), sobre a combinação dos PRs. Um gate por vez; gate verde sobre a mesma árvore não se repete.
+- **Durante o trabalho, só os testes afetados**; o gate completo (`npm test`) roda uma vez, na fila de merge da orquestradora (`painel fila-de-merge <N>:<sha>…`), sobre a combinação dos PRs. Um gate por vez; gate verde sobre a mesma árvore não se repete.
 - **Ninguém rebaseia por merge alheio:** a fila devolve à dona só o conflito real ou o gate vermelho. Rebase em vez de merge commit quando rebasear.
 - **No máximo 4 donas trabalhando ao mesmo tempo** (3 com a máquina cheia); a orquestradora abre a dona quando o item nasce ou outra termina.
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
