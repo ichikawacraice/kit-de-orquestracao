@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * **Roda um comando de teste pelo teto de núcleos da máquina** (ADR 0005, operador, 26/10).
+ * **Roda um comando de teste pelo teto de núcleos da máquina** (ADR 0005 e 0008, operador, 26/10). É um teste normal: toma da faixa
+ * normal e, sem gate rodando, empresta da faixa do gate, sem passar do `--quero`.
  *
  *   node gate/com-fichas.mjs [--quero N] -- <comando…>
  *
@@ -13,7 +14,7 @@
  */
 import { spawn } from "node:child_process";
 import { availableParallelism } from "node:os";
-import { pastaDoTeto, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFichas } from "./o-teto-da-maquina.mjs";
+import { pastaDoTeto, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFichasNormais } from "./o-teto-da-maquina.mjs";
 import { rodarSePrincipal } from "./o-script-principal.mjs";
 
 const USO = "uso: com-fichas [--quero N] -- <comando…>   (N inteiro ≥ 1, padrão 2; `{fichas}` nos argumentos vira o número levado)";
@@ -88,7 +89,7 @@ export async function main(env = process.env, argv = process.argv.slice(2)) {
   const pasta = pastaDoTeto(env);
   const teto = tetoDaMaquina(env, availableParallelism(), pasta);
   const eu = quemSouEuNasFichas();
-  const levou = await tomarFichas({ quero, pasta, teto, eu });
+  const levou = await tomarFichasNormais({ quero, pasta, teto, eu });
   const soltar = () => soltarFichas(pasta, levou, eu);
   process.on("exit", soltar);
   try {

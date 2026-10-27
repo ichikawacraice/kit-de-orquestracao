@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { availableParallelism, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { carregarConfig } from "../config.mjs";
 import {
   ambienteDoFilho,
+  minimoParaComecar,
   argumentosDaSuite,
   caminhoDaTrava,
   caminhoDaVaga,
@@ -27,7 +28,6 @@ import {
   tomarAsFichasDoGate,
   vagas,
 } from "../a-vez-do-gate.mjs";
-import { workersPorPacote } from "../o-teto-de-workers.mjs";
 import { expect } from "./expect.mjs";
 
 /**
@@ -418,25 +418,41 @@ describe("o gate toma as fichas do teto", () => {
     return env;
   };
 
-  it("a config traz os padrões (4 e 2) e as variáveis do teto ficam fora da chave do verde", async () => {
+  it("a config traz os padrões (4, 2 e 300 s de devolução) e as variáveis do teto ficam fora da chave do verde", async () => {
     const cfg = carregarConfig(RAIZ, {});
     expect(cfg.gate.nucleos).toBe(4);
     expect(cfg.gate.nucleosTypecheck).toBe(2);
-    for (const n of ["NUCLEOS_DIR", "NUCLEOS_DE_TESTE", "FICHAS_TOMADAS"]) expect(cfg.arvore.foraDaChave).toContain(n);
+    expect(cfg.gate.prazos.devolucaoSeg).toBe(300);
+    for (const n of ["NUCLEOS_DIR", "NUCLEOS_DE_TESTE", "FICHAS_TOMADAS", "FRACAO_DE_TESTE", "FRACAO_DO_GATE", "PRAZO_DA_DEVOLUCAO_SEG"]) expect(cfg.arvore.foraDaChave).toContain(n);
     const { nomesDoEnv } = await import("../o-verde-da-arvore.mjs");
-    const nomes = nomesDoEnv({ KIT_NUCLEOS_DIR: "x", KIT_NUCLEOS_DE_TESTE: "3", KIT_FICHAS_TOMADAS: "2", IZANAGI_NUCLEOS_DE_TESTE: "3", KIT_OUTRA: "1" }, cfg.arvore);
+    const nomes = nomesDoEnv({ KIT_NUCLEOS_DIR: "x", KIT_NUCLEOS_DE_TESTE: "3", KIT_FICHAS_TOMADAS: "2", IZANAGI_NUCLEOS_DE_TESTE: "3", KIT_FRACAO_DE_TESTE: "0.5", KIT_FRACAO_DO_GATE: "0.5", KIT_PRAZO_DA_DEVOLUCAO_SEG: "1", KIT_OUTRA: "1" }, cfg.arvore);
     expect(nomes).toEqual(["KIT_OUTRA"]);
   });
 
-  it("quanto a suíte pede: pnpm = pacotes juntos × workers; conserto = workers do conserto; comando = gate.nucleos", () => {
-    expect(fichasDaSuite({ KIT_TESTE_WORKERS: "3" }, [], RAIZ, PNPM)).toBe(6); // 2 pacotes × 3
-    expect(fichasDaSuite({}, [], RAIZ, PNPM)).toBe(2 * workersPorPacote(availableParallelism()));
-    expect(fichasDaSuite({ KIT_TESTE_WORKERS: "3", KIT_GATE_PACOTES: "3" }, [], RAIZ, PNPM)).toBe(9);
-    expect(fichasDaSuite({}, ["web"], RAIZ, PNPM)).toBe(2); // gate.workersConserto
-    expect(fichasDaSuite({ KIT_CONSERTO_WORKERS: "5" }, ["web"], RAIZ, PNPM)).toBe(5);
+  it("quanto a suíte pede (ADR 0008, teto 10 → faixa do gate 7): pnpm = pacotes juntos × floor(G / juntos); conserto = workers do conserto; comando = min(gate.nucleos, G)", () => {
+    const T10 = { KIT_NUCLEOS_DE_TESTE: "10" };
+    expect(fichasDaSuite({ ...T10 }, [], RAIZ, PNPM)).toBe(6); // 2 pacotes × floor(7 / 2): a sobra (1) fica emprestável
+    expect(fichasDaSuite({ ...T10, KIT_TESTE_WORKERS: "3" }, [], RAIZ, PNPM)).toBe(6); // 2 pacotes × 3, cabe em 7
+    expect(fichasDaSuite({ ...T10, KIT_TESTE_WORKERS: "3", KIT_GATE_PACOTES: "3" }, [], RAIZ, PNPM)).toBe(7); // 9 passa da faixa: vale G
+    expect(fichasDaSuite({ KIT_NUCLEOS_DE_TESTE: "100", KIT_TESTE_WORKERS: "3", KIT_GATE_PACOTES: "3" }, [], RAIZ, PNPM)).toBe(9); // faixa 70: cabe
+    expect(fichasDaSuite({ KIT_NUCLEOS_DE_TESTE: "3" }, [], RAIZ, PNPM)).toBe(2); // faixa 2, 2 pacotes: 1 cada
+    expect(fichasDaSuite({ KIT_NUCLEOS_DE_TESTE: "1" }, [], RAIZ, PNPM)).toBe(1); // teto 1: nunca pede mais que a faixa
+    expect(fichasDaSuite({ ...T10 }, ["web"], RAIZ, PNPM)).toBe(2); // gate.workersConserto
+    expect(fichasDaSuite({ ...T10, KIT_CONSERTO_WORKERS: "5" }, ["web"], RAIZ, PNPM)).toBe(5);
     const COMANDO = carregarConfig(RAIZ, { gate: { comandoCompleto: "node --test" } });
-    expect(fichasDaSuite({}, [], RAIZ, COMANDO)).toBe(4);
-    expect(fichasDaSuite({}, [], RAIZ, carregarConfig(RAIZ, { gate: { comandoCompleto: "node --test", nucleos: 6 } }))).toBe(6);
+    expect(fichasDaSuite({ ...T10 }, [], RAIZ, COMANDO)).toBe(4);
+    expect(fichasDaSuite({ KIT_NUCLEOS_DE_TESTE: "3" }, [], RAIZ, COMANDO)).toBe(2); // min(4, G=2)
+    expect(fichasDaSuite({ ...T10 }, [], RAIZ, carregarConfig(RAIZ, { gate: { comandoCompleto: "node --test", nucleos: 6 } }))).toBe(6);
+    expect(fichasDaSuite({ ...T10 }, [], RAIZ, carregarConfig(RAIZ, { gate: { comandoCompleto: "node --test", nucleos: 9 } }))).toBe(7);
+  });
+
+  it("o mínimo para começar depois do prazo: metade do pedido; no pnpm-workspace, nunca menos de 2 workers por pacote", () => {
+    const COMANDO = carregarConfig(RAIZ, { gate: { comandoCompleto: "node --test" } });
+    expect(minimoParaComecar(4, {}, COMANDO)).toBe(2);
+    expect(minimoParaComecar(5, {}, COMANDO)).toBe(3);
+    expect(minimoParaComecar(6, {}, PNPM)).toBe(4); // metade seria 3 = 1 worker por pacote
+    expect(minimoParaComecar(6, { KIT_GATE_PACOTES: "1" }, PNPM)).toBe(3); // 1 pacote: metade já dá 3 workers
+    expect(minimoParaComecar(2, {}, PNPM)).toBe(2); // nunca mais que o pedido
   });
 
   it("o `{fichas}` do comando vira o número levado; sem o número, fica como está", () => {
@@ -519,11 +535,11 @@ describe("o gate toma as fichas do teto", () => {
       }
     });
 
-    it("com o teto menor que o pedido, leva o que o teto dá (2 de 2)", async () => {
+    it("com o teto menor que o pedido, leva a faixa do gate (teto 2 → 1 de 1)", async () => {
       const p = montar();
       try {
         expect(await main({ ...p.env, KIT_NUCLEOS_DE_TESTE: "2" }, [], p.raiz)).toBe(0);
-        expect(vistos(p)).toEqual([{ env: "2", arg: "2", naPasta: 2 }]);
+        expect(vistos(p)).toEqual([{ env: "1", arg: "1", naPasta: 1 }]);
       } finally {
         rmSync(p.raiz, { recursive: true, force: true });
         rmSync(p.base, { recursive: true, force: true });
@@ -562,5 +578,207 @@ describe("o gate toma as fichas do teto", () => {
         rmSync(p.base, { recursive: true, force: true });
       }
     });
+  });
+});
+
+/**
+ * **O gate é um por vez na máquina e leva só a faixa dele** (ADR 0008, operador, 26/10).
+ *
+ * Mesmo molde do bloco acima: pasta temporária (`KIT_NUCLEOS_DIR`), trava do repositório temporária, e o comando da suíte grava
+ * o que viu. A "outra sessão" é este processo (PID vivo) escrevendo os arquivos da pasta à mão.
+ */
+describe("o gate e a vez da máquina (ADR 0008)", () => {
+  const LIMPO = { KIT_FICHAS_TOMADAS: undefined, KIT_NUCLEOS_DE_TESTE: undefined, IZANAGI_NUCLEOS_DE_TESTE: undefined, KIT_FRACAO_DE_TESTE: undefined, KIT_FRACAO_DO_GATE: undefined, KIT_TESTE_WORKERS: undefined, IZANAGI_TESTE_WORKERS: undefined, KIT_GATE_PACOTES: undefined, IZANAGI_GATE_PACOTES: undefined, KIT_GATE_VAGAS: undefined, IZANAGI_GATE_VAGAS: undefined, CI: "" };
+  const limpo = (extra = {}) => {
+    const env = { ...process.env, ...LIMPO, ...extra };
+    for (const [k, v] of Object.entries(env)) if (v === undefined) delete env[k];
+    return env;
+  };
+  const dono = (sobre = {}) => ({ pid: process.pid, token: "outro", worktree: "/wt/outro", projeto: "outro", desde: new Date().toISOString(), ...sobre });
+  const PNPM_PAC = carregarConfig(RAIZ, { gate: { perfil: "pnpm-workspace", pacotes: ["a", "b"], filtroDePacote: "@x/{pacote}" } });
+
+  /** Um repositório com o gate de comando `node suite.mjs {fichas}`; a suíte anota quais fichas existiam e se a vez da máquina estava tomada. */
+  function montar(kit = {}) {
+    const raiz = realpathSync(mkdtempSync(join(tmpdir(), "kit-vez-maquina-")));
+    const g = (args) => spawnSync("git", args, { cwd: raiz, encoding: "utf-8", timeout: 10_000, killSignal: "SIGKILL" });
+    g(["init", "-q"]);
+    g(["config", "user.email", "t@kit.local"]);
+    g(["config", "user.name", "t"]);
+    writeFileSync(
+      join(raiz, "suite.mjs"),
+      `import { appendFileSync, existsSync, readdirSync } from "node:fs";
+       const ks = readdirSync(process.env.KIT_NUCLEOS_DIR).filter((x) => /^[0-9]+$/.test(x)).map(Number).sort((a, b) => a - b);
+       appendFileSync(process.env.MARCA, JSON.stringify({ fichas: process.env.KIT_FICHAS_TOMADAS, ks, vez: existsSync(process.env.KIT_NUCLEOS_DIR + "/gate") }) + "\\n");`,
+    );
+    mkdirSync(join(raiz, ".claude"));
+    writeFileSync(join(raiz, ".claude", "kit.json"), JSON.stringify({ gate: { comandoCompleto: "node suite.mjs {fichas}", ...kit } }));
+    g(["add", "-A"]);
+    g(["commit", "-qm", "base"]);
+    const base = realpathSync(mkdtempSync(join(tmpdir(), "kit-vez-maquina-base-")));
+    mkdirSync(join(base, "nucleos"));
+    const env = limpo({
+      KIT_GATE_TRAVA: join(base, "g.trava"),
+      KIT_CONSERTO_TRAVA: join(base, "c.trava"),
+      KIT_GATE_VERDE_DIR: join(base, "verde"),
+      KIT_NUCLEOS_DIR: join(base, "nucleos"),
+      KIT_NUCLEOS_DE_TESTE: "10",
+      KIT_PRAZO_DA_DEVOLUCAO_SEG: "1",
+      MARCA: join(base, "marca.jsonl"),
+    });
+    return { raiz, base, env, pasta: join(base, "nucleos") };
+  }
+  const limparTudo = (p) => {
+    rmSync(p.raiz, { recursive: true, force: true });
+    rmSync(p.base, { recursive: true, force: true });
+  };
+  const vistos = (p) => readFileSync(p.env.MARCA, "utf-8").trim().split("\n").map((l) => JSON.parse(l));
+  const numeradas = (pasta) => readdirSync(pasta).filter((x) => /^[0-9]+$/.test(x)).sort((a, b) => a - b);
+
+  it("o gate sozinho leva as fichas da faixa dele (1..4 com gate.nucleos 4), toma a vez da máquina, e solta tudo na saída", async () => {
+    const p = montar();
+    try {
+      expect(await main(p.env, [], p.raiz)).toBe(0);
+      expect(vistos(p)).toEqual([{ fichas: "4", ks: [1, 2, 3, 4], vez: true }]);
+      expect(readdirSync(p.pasta)).toEqual([]);
+    } finally {
+      limparTudo(p);
+    }
+  });
+
+  it("a saída solta as fichas, depois a vez da máquina, depois a vez do repositório (nesta ordem)", async () => {
+    const p = montar();
+    try {
+      // a suíte lê a pasta e a trava do repositório; um observador no `finally` de fora só vê o fim. A ordem se prova pelo que a
+      // suíte vê ainda tomado e pelo que `soltar` encontra depois: aqui, a suíte confere os três arquivos no momento em que roda.
+      writeFileSync(
+        join(p.raiz, "suite.mjs"),
+        `import { appendFileSync, existsSync, readdirSync } from "node:fs";
+         const nume = readdirSync(process.env.KIT_NUCLEOS_DIR).filter((x) => /^[0-9]+$/.test(x)).length;
+         appendFileSync(process.env.MARCA, JSON.stringify({ nume, vezMaquina: existsSync(process.env.KIT_NUCLEOS_DIR + "/gate"), vezRepo: existsSync(process.env.KIT_GATE_TRAVA) }) + "\\n");`,
+      );
+      spawnSync("git", ["commit", "-qam", "suite"], { cwd: p.raiz, timeout: 10_000, killSignal: "SIGKILL" });
+      expect(await main(p.env, [], p.raiz)).toBe(0);
+      expect(vistos(p)).toEqual([{ nume: 4, vezMaquina: true, vezRepo: true }]);
+      expect(readdirSync(p.pasta)).toEqual([]);
+      expect(existsSync(p.env.KIT_GATE_TRAVA)).toBe(false);
+    } finally {
+      limparTudo(p);
+    }
+  });
+
+  it("dois gates de repositórios diferentes: o segundo espera a vez da máquina e diz o worktree do primeiro", async () => {
+    const a = montar();
+    const b = montar();
+    try {
+      // `b` usa a MESMA pasta de fichas que `a`; as travas dos repositórios são distintas (o que antes deixava os dois rodarem juntos)
+      b.env["KIT_NUCLEOS_DIR"] = a.pasta;
+      expect(a.env.KIT_GATE_TRAVA).not.toBe(b.env.KIT_GATE_TRAVA);
+      writeFileSync(join(a.pasta, "gate"), JSON.stringify(dono({ worktree: a.raiz, projeto: "primeiro" })));
+      const avisos = [];
+      const antes = console.error;
+      console.error = (...m) => avisos.push(m.join(" "));
+      let codigo;
+      try {
+        const rodando = main(b.env, [], b.raiz);
+        // o segundo gate está esperando: a suíte dele nem começou enquanto a vez for do primeiro
+        await new Promise((r) => setTimeout(r, 400));
+        expect(existsSync(b.env.MARCA), "o segundo gate rodou com a vez da máquina tomada").toBe(false);
+        rmSync(join(a.pasta, "gate"));
+        codigo = await rodando;
+      } finally {
+        console.error = antes;
+      }
+      expect(codigo).toBe(0);
+      expect(avisos.join("\n")).toContain(a.raiz);
+      expect(vistos(b)[0].fichas).toBe("4");
+    } finally {
+      limparTudo(a);
+      limparTudo(b);
+    }
+  });
+
+  it("com 2 fichas emprestadas a um dono vivo: o gate espera; soltas, começa com as pedidas", async () => {
+    const p = montar({ perfil: "pnpm-workspace", pacotes: ["a", "b"], filtroDePacote: "@x/{pacote}", comandoCompleto: "node suite.mjs {fichas}" });
+    // `fichasDaSuite` no pnpm-workspace pede 2 × floor(7/2) = 6; o comando do gate é o `pnpm`, então aqui medimos `tomarAsFichasDoGate`
+    try {
+      writeFileSync(join(p.pasta, "1"), JSON.stringify({ ...dono(), emprestada: true }));
+      writeFileSync(join(p.pasta, "2"), JSON.stringify({ ...dono(), emprestada: true }));
+      let sonos = 0;
+      const avisos = [];
+      const r = await tomarAsFichasDoGate({ ...p.env, KIT_PRAZO_DA_DEVOLUCAO_SEG: "3600" }, [], p.raiz, PNPM_PAC, {
+        avisar: (m) => avisos.push(m),
+        dormir: async () => {
+          sonos += 1;
+          if (sonos === 3) {
+            rmSync(join(p.pasta, "1"));
+            rmSync(join(p.pasta, "2"));
+          }
+        },
+      });
+      expect(sonos).toBeGreaterThan(2);
+      expect(r.quantas).toBe(6);
+      expect(r.levou).toEqual([1, 2, 3, 4, 5, 6, 7].filter((k) => r.levou.includes(k)));
+      expect(r.levou.every((k) => k >= 1 && k <= 7), "só da faixa do gate").toBe(true);
+      expect(r.levou).toHaveLength(6);
+      expect(avisos.join("\n")).toMatch(/\/wt\/outro/);
+      expect(existsSync(join(p.pasta, "gate"))).toBe(true);
+    } finally {
+      limparTudo(p);
+    }
+  });
+
+  it("prazo da devolução vencido: começa com 5 de 6 e com 4 de 6 (2 workers por pacote); com 3 de 6 (1 por pacote) e com 2 de 6 não começa", async () => {
+    const casos = [
+      [5, 5],
+      [4, 4],
+    ];
+    for (const [livres, esperado] of casos) {
+      const p = montar({ perfil: "pnpm-workspace", pacotes: ["a", "b"], filtroDePacote: "@x/{pacote}", comandoCompleto: "x" });
+      try {
+        // um dono vivo segura `7 - livres` fichas da faixa do gate, de cima para baixo
+        for (let k = 7; k > livres; k--) writeFileSync(join(p.pasta, String(k)), JSON.stringify({ ...dono(), emprestada: true }));
+        let t = 0;
+        const r = await tomarAsFichasDoGate({ ...p.env, KIT_PRAZO_DA_DEVOLUCAO_SEG: "1" }, [], p.raiz, PNPM_PAC, { agora: () => t, dormir: async (ms) => { t += ms; }, avisar: () => {} });
+        expect(r.quantas, `${livres} livres`).toBe(esperado);
+        expect(r.quantas).toBeLessThan(6);
+      } finally {
+        limparTudo(p);
+      }
+    }
+    for (const livres of [3, 2]) {
+      const p = montar({ perfil: "pnpm-workspace", pacotes: ["a", "b"], filtroDePacote: "@x/{pacote}", comandoCompleto: "x" });
+      try {
+        for (let k = 7; k > livres; k--) writeFileSync(join(p.pasta, String(k)), JSON.stringify({ ...dono(), emprestada: true }));
+        let t = 0;
+        const avisos = [];
+        const erro = await tomarAsFichasDoGate({ ...p.env, KIT_PRAZO_DA_DEVOLUCAO_SEG: "1" }, [], p.raiz, PNPM_PAC, {
+          agora: () => t,
+          dormir: async (ms) => {
+            t += ms;
+            if (t > 600_000) throw new Error(`PARADO: ${livres} de 6 não começa`);
+          },
+          avisar: (m) => avisos.push(m),
+        }).then(() => null, (e) => e);
+        expect(erro, `o gate com ${livres} de 6 começou`).toMatch(/PARADO/);
+        // a vez da máquina não fica presa por quem desistiu
+        expect(avisos.length).toBeGreaterThan(3);
+        expect(existsSync(join(p.pasta, "gate"))).toBe(false);
+      } finally {
+        limparTudo(p);
+      }
+    }
+  });
+
+  it("o conserto (um pacote) toma como teste normal: não pega a vez da máquina e não espera o gate de outro dono", async () => {
+    const p = montar({ perfil: "pnpm-workspace", pacotes: ["a", "b"], filtroDePacote: "@x/{pacote}", comandoCompleto: "x" });
+    try {
+      writeFileSync(join(p.pasta, "gate"), JSON.stringify(dono({ token: "gate-outro" })));
+      const r = await tomarAsFichasDoGate(p.env, ["a"], p.raiz, PNPM_PAC, { avisar: () => {} });
+      expect(r.quantas).toBe(2); // gate.workersConserto
+      expect(r.levou).toEqual([10, 9]);
+      expect(JSON.parse(readFileSync(join(p.pasta, "gate"), "utf-8")).token, "a vez do outro gate segue dele").toBe("gate-outro");
+    } finally {
+      limparTudo(p);
+    }
   });
 });

@@ -33,8 +33,8 @@ beforeEach(() => {
   writeFileSync(
     join(raiz, "tc.mjs"),
     `import { appendFileSync, readdirSync } from "node:fs";
-     const n = readdirSync(process.env.KIT_NUCLEOS_DIR).filter((x) => /^[0-9]+$/.test(x)).length;
-     appendFileSync(process.env.MARCA, JSON.stringify({ quando: Date.now(), naPasta: n, env: process.env.KIT_FICHAS_TOMADAS }) + "\\n");`,
+     const ks = readdirSync(process.env.KIT_NUCLEOS_DIR).filter((x) => /^[0-9]+$/.test(x)).map(Number).sort((a, b) => a - b);
+     appendFileSync(process.env.MARCA, JSON.stringify({ quando: Date.now(), naPasta: ks.length, ks, env: process.env.KIT_FICHAS_TOMADAS }) + "\\n");`,
   );
   mkdirSync(join(raiz, ".claude"));
   writeFileSync(join(raiz, ".claude", "kit.json"), JSON.stringify({ gate: { comandoCompleto: "node -e 0", typecheck: "node tc.mjs", nucleosTypecheck: 2 } }));
@@ -111,6 +111,34 @@ describe("o typecheck do gate e o teto da máquina", () => {
     const [v] = vistos();
     assert.ok(v.quando >= fimDoDono - 50, `o typecheck começou ${fimDoDono - v.quando} ms antes de o dono sair (${inicio})`);
     assert.equal(v.naPasta, 1, "levou a única ficha do teto");
+  });
+
+  it("é teste normal (ADR 0008): com a vez do gate de outro dono, toma da faixa normal sem esperar e não toca a faixa do gate", async () => {
+    const dono = spawn(process.execPath, ["-e", "setTimeout(() => {}, 20000)"], { stdio: "ignore" });
+    try {
+      writeFileSync(join(pasta, "gate"), JSON.stringify({ pid: dono.pid, token: "dono", worktree: "/wt/outro-gate", projeto: "outro", desde: new Date().toISOString() }));
+      const r = await rodar(envDe({ KIT_NUCLEOS_DE_TESTE: "10" }));
+      assert.equal(r.status, 0, r.stderr);
+      assert.doesNotMatch(r.stderr, /esperando/, "não esperou o gate");
+      assert.deepEqual(vistos()[0].ks, [9, 10], "as duas fichas vieram da faixa normal (8..10), de cima");
+    } finally {
+      dono.kill("SIGKILL");
+    }
+  });
+
+  it("com a vez do gate e a faixa normal cheias de um dono vivo, espera o dono sair em vez de emprestar da faixa do gate", async () => {
+    const dono = spawn(process.execPath, ["-e", "setTimeout(() => {}, 1500)"], { stdio: "ignore" });
+    const saiu = new Promise((resolve) => dono.on("close", () => resolve(Date.now())));
+    const ficha = { pid: dono.pid, token: "dono", worktree: "/wt/dono-gate", projeto: "outro", desde: new Date().toISOString() };
+    for (const k of ["gate", "10", "9", "8"]) writeFileSync(join(pasta, k), JSON.stringify(ficha));
+    const r = await rodar(envDe({ KIT_NUCLEOS_DE_TESTE: "10" }));
+    const fimDoDono = await saiu;
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /\/wt\/dono-gate/, "diz por quem espera");
+    const [v] = vistos();
+    assert.ok(v.quando >= fimDoDono - 50, `o typecheck começou ${fimDoDono - v.quando} ms antes de o dono sair: emprestou com o gate rodando`);
+    assert.ok(v.ks.includes(9) && v.ks.includes(10), `depois que o dono saiu, as fichas vêm da faixa normal: ${JSON.stringify(v.ks)}`);
+    assert.deepEqual(v.ks.filter((k) => k <= 7), [], "nenhuma ficha da faixa do gate (a ficha 8 é só o arquivo morto do dono)");
   });
 
   it("no CI não toma ficha", async () => {

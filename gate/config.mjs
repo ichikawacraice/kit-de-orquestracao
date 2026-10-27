@@ -55,13 +55,13 @@ const PADRAO = {
     // fichas do teto da máquina (ADR 0005): o que a suíte e o typecheck pedem; leva o que houver livre
     nucleos: 4,
     nucleosTypecheck: 2,
-    prazos: { vezMin: 60, verdeHoras: 24, retencaoDias: 7, typecheckMin: 15, buildMin: 10, ilegivelSeg: 30 },
+    prazos: { vezMin: 60, verdeHoras: 24, retencaoDias: 7, typecheckMin: 15, buildMin: 10, ilegivelSeg: 30, devolucaoSeg: 300 },
   },
   documentos: DOCUMENTOS_PADRAO,
   arvore: {
     prefixosEnv: ["KIT_"],
     avulsas: ["CI", "TZ", "NODE_OPTIONS"],
-    foraDaChave: ["GATE_SEM_CACHE", "GATE_TRAVA", "GATE_VERDE_DIR", "NUCLEOS_DIR", "NUCLEOS_DE_TESTE", "FICHAS_TOMADAS"],
+    foraDaChave: ["GATE_SEM_CACHE", "GATE_TRAVA", "GATE_VERDE_DIR", "NUCLEOS_DIR", "NUCLEOS_DE_TESTE", "FICHAS_TOMADAS", "FRACAO_DE_TESTE", "FRACAO_DO_GATE", "PRAZO_DA_DEVOLUCAO_SEG"],
     extras: [],
   },
   guarda: {

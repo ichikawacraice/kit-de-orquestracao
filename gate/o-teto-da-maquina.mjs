@@ -8,14 +8,21 @@
  * teto) é o arquivo `<pasta>/<k>`, criado com `openSync(…, 'wx')`, com `{pid, token, worktree, projeto, desde}`.
  * O contrato é o mesmo do ADR 0400 do Izanagi (arquivo `<k>`, PID dono): os dois projetos dividem as fichas.
  *
- * **O valor.** Em ordem: `KIT_NUCLEOS_DE_TESTE` (ou o legado `IZANAGI_NUCLEOS_DE_TESTE`); o arquivo
- * `<pasta>/teto.json` `{"nucleos": N}`; metade dos núcleos, no mínimo 1. No CI não há teto (`null`).
+ * **O valor** (ADR 0008, operador, 26/10: o teto é fração dos núcleos). Em ordem: `KIT_NUCLEOS_DE_TESTE` (ou o legado
+ * `IZANAGI_NUCLEOS_DE_TESTE`), absoluto; `KIT_FRACAO_DE_TESTE`; o arquivo `<pasta>/teto.json` com `{"nucleos": N}` (absoluto,
+ * vence) ou `{"fracao": f}`; 2/3 dos núcleos (`floor`, mínimo 1). No CI não há teto (`null`).
+ *
+ * **Duas faixas** (ADR 0008). Faixa do gate: fichas `1..G`, G = floor(T × 0,7) (`KIT_FRACAO_DO_GATE`); faixa normal:
+ * `G+1..T`. O gate completo toma só da faixa dele, depois de tomar a **vez do gate da máquina** (`<pasta>/gate`, um por vez,
+ * de qualquer projeto); o teste normal toma de `T` para baixo e, sem gate rodando, **empresta** da faixa do gate (ficha marcada
+ * `"emprestada": true`), sem nunca passar do que pediu.
  *
  * **Quem toma.** Pede `quero`, leva o que houver livre (no mínimo 1) e só espera quando não há nenhuma,
  * dizendo por quem a cada minuto. A ficha de PID morto volta ao teto; a ilegível há mais de 30 s também.
  * Não há prazo de vez: o vitest em modo watch segura a ficha de propósito.
  *
- * Linha de comando: sem argumento imprime o estado; `--teto N` grava o `teto.json`; `--teto padrao` o apaga.
+ * Linha de comando: sem argumento imprime o estado e as duas faixas; `--teto N` grava o `teto.json` (e avisa que número fixo não acompanha
+ * a máquina); `--fracao f` grava `{"fracao": f}`; `--teto padrao` o apaga.
  */
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -27,6 +34,12 @@ import { rodarSePrincipal } from "./o-script-principal.mjs";
 
 /** Ficha ilegível (alguém no meio da escrita, ou lixo) mais velha que isto é tratada como abandonada. */
 const ILEGIVEL_ABANDONADA_MS = 30_000;
+
+/** A fração padrão dos núcleos para teste (ADR 0008: 10 em 15) e a do teto que vai para o gate. O plugin repete estes números (um teste compara). */
+export const FRACAO_PADRAO_DE_TESTE = 2 / 3;
+export const FRACAO_PADRAO_DO_GATE = 0.7;
+/** O nome da vez do gate da máquina dentro da pasta das fichas (não casa com `^[1-9]\d*$`: nunca é ficha). */
+export const NOME_DA_VEZ_DO_GATE = "gate";
 
 /** `true` se o PID existe. `EPERM` é processo vivo de outro usuário — vivo. (Mora aqui; o gate o reexporta.) */
 export function processoVivo(pid) {
@@ -48,9 +61,17 @@ export function pastaDoTeto(env = process.env) {
 
 const inteiroPositivo = (n) => Number.isInteger(n) && n >= 1;
 
+/** Uma fração em `(0, 1]` (ou `(0, 1)` com `aberta`): o número, ou `null` se não vale. */
+function fracaoValida(valor, aberta = false) {
+  if (valor === null || valor === undefined || valor === "" || typeof valor === "boolean") return null;
+  const f = typeof valor === "number" ? valor : Number(valor);
+  if (!Number.isFinite(f) || f <= 0 || f > 1 || (aberta && f >= 1)) return null;
+  return f;
+}
+
 /**
- * O teto: `null` no CI; senão a env, o `<pasta>/teto.json` ou metade dos núcleos (mínimo 1). Valor inválido
- * é erro alto que cita a variável ou o arquivo.
+ * O teto: `null` no CI; senão a env absoluta, `KIT_FRACAO_DE_TESTE`, o `<pasta>/teto.json` (`nucleos` vence `fracao`) ou 2/3 dos
+ * núcleos (`floor`, mínimo 1). Valor inválido é erro alto que cita a variável ou o arquivo.
  */
 export function tetoDaMaquina(env = process.env, nucleos = availableParallelism(), pasta = pastaDoTeto(env)) {
   if (env["CI"]) return null;
@@ -60,6 +81,8 @@ export function tetoDaMaquina(env = process.env, nucleos = availableParallelism(
     if (!inteiroPositivo(n)) throw new Error(`KIT_NUCLEOS_DE_TESTE precisa ser inteiro ≥ 1, e veio ${JSON.stringify(pedido)}`);
     return n;
   }
+  const dosNucleos = (f) => Math.max(1, Math.floor(nucleos * f));
+  const fracaoPedida = env["KIT_FRACAO_DE_TESTE"];
   const arquivo = join(pasta, "teto.json");
   let texto = null;
   try {
@@ -67,18 +90,54 @@ export function tetoDaMaquina(env = process.env, nucleos = availableParallelism(
   } catch (e) {
     if (e?.code !== "ENOENT") throw new Error(`${arquivo} ilegível: ${e.message}`);
   }
+  let json = null;
   if (texto !== null) {
-    let n;
     try {
-      n = JSON.parse(texto)?.nucleos;
+      json = JSON.parse(texto);
     } catch (e) {
       throw new Error(`${arquivo} ilegível: ${e.message}`);
     }
-    if (!inteiroPositivo(n)) throw new Error(`${arquivo}: "nucleos" precisa ser inteiro ≥ 1, e veio ${JSON.stringify(n)}`);
-    return n;
   }
-  return Math.max(1, Math.floor(nucleos / 2));
+  // A env de fração vence o arquivo; validada mesmo quando o arquivo traria `nucleos`? Não: o absoluto do arquivo só perde para a env.
+  if (fracaoPedida !== undefined && fracaoPedida !== "") {
+    const f = fracaoValida(fracaoPedida);
+    if (f === null) throw new Error(`KIT_FRACAO_DE_TESTE precisa ser um número em (0, 1], e veio ${JSON.stringify(fracaoPedida)}`);
+    return dosNucleos(f);
+  }
+  if (json !== null && json?.nucleos !== undefined) {
+    if (!inteiroPositivo(json.nucleos)) throw new Error(`${arquivo}: "nucleos" precisa ser inteiro ≥ 1, e veio ${JSON.stringify(json.nucleos)}`);
+    return json.nucleos;
+  }
+  if (json !== null && json?.fracao !== undefined) {
+    const f = fracaoValida(json.fracao);
+    if (f === null) throw new Error(`${arquivo}: "fracao" precisa ser um número em (0, 1], e veio ${JSON.stringify(json.fracao)}`);
+    return dosNucleos(f);
+  }
+  if (json !== null && !(json && typeof json === "object")) throw new Error(`${arquivo}: precisa ser um objeto com "nucleos" ou "fracao"`);
+  return dosNucleos(FRACAO_PADRAO_DE_TESTE);
 }
+
+/**
+ * As duas faixas do teto `T` (ADR 0008): `{ gate: G, normal: T − G, compartilhada }`. G = floor(T × fração do gate), com ao menos 1 em
+ * cada faixa quando T ≥ 2. T = 1: as duas faixas são a mesma ficha (`compartilhada: true`). Faixa do gate = fichas `1..G`; normal = `G+1..T`
+ * (com `compartilhada`, a ficha 1).
+ */
+export function faixas(teto, env = process.env) {
+  const pedida = env["KIT_FRACAO_DO_GATE"];
+  let f = FRACAO_PADRAO_DO_GATE;
+  if (pedida !== undefined && pedida !== "") {
+    f = fracaoValida(pedida, true);
+    if (f === null) throw new Error(`KIT_FRACAO_DO_GATE precisa ser um número em (0, 1), e veio ${JSON.stringify(pedida)}`);
+  }
+  if (teto <= 1) return { gate: 1, normal: 1, compartilhada: true };
+  const gate = Math.min(teto - 1, Math.max(1, Math.floor(teto * f)));
+  return { gate, normal: teto - gate, compartilhada: false };
+}
+
+/** Os `k` da faixa normal, na ordem em que o teste normal tenta: de `T` para baixo. */
+const ordemNormal = (teto, f) => (f.compartilhada ? [1] : Array.from({ length: f.normal }, (_, i) => teto - i));
+/** Os `k` da faixa do gate emprestáveis, de `G` para baixo (o gate toma de 1 para cima: os dois se encontram o mais tarde possível). */
+const ordemEmprestada = (f) => Array.from({ length: f.gate }, (_, i) => f.gate - i);
 
 /** Quem toma as fichas: o que vai escrito nelas, para quem espera saber por quem. */
 export function quemSouEuNasFichas(cwd = process.cwd()) {
@@ -159,16 +218,52 @@ function tentarFicha(caminho, eu, agora, ilegivelMs, avisar) {
  * os das fichas ocupadas (um pode ser `null`: ficha sendo escrita).
  */
 export function tentarTomarFichas(pasta, teto, quero, eu, opcoes = {}) {
-  const { agora = Date.now(), ilegivelMs = ILEGIVEL_ABANDONADA_MS, avisar = (m) => console.error(m) } = opcoes;
+  const { agora = Date.now(), ilegivelMs = ILEGIVEL_ABANDONADA_MS, avisar = (m) => console.error(m), emprestadas = new Set() } = opcoes;
+  const ordem = opcoes.ordem ?? Array.from({ length: teto }, (_, i) => i + 1);
   mkdirSync(pasta, { recursive: true });
   const levou = [];
   const donos = [];
-  for (let k = 1; k <= teto && levou.length < quero; k++) {
-    const r = tentarFicha(join(pasta, String(k)), eu, agora, ilegivelMs, avisar);
+  for (const k of ordem) {
+    if (levou.length >= quero) break;
+    const r = tentarFicha(join(pasta, String(k)), emprestadas.has(k) ? { ...eu, emprestada: true } : eu, agora, ilegivelMs, avisar);
     if (r.tomou) levou.push(k);
     else donos.push(r.dono);
   }
   return { levou, donos };
+}
+
+/** O dono vivo da vez do gate da máquina (`<pasta>/gate`), ou `null` sem ela, com PID morto ou ilegível há mais de `ilegivelMs`. */
+export function donoDoGate(pasta, agora = Date.now(), ilegivelMs = ILEGIVEL_ABANDONADA_MS) {
+  const caminho = join(pasta, NOME_DA_VEZ_DO_GATE);
+  const lida = lerFicha(caminho);
+  if (lida === null || motivoParaRetomar(caminho, lida, agora, ilegivelMs) !== null) return null;
+  return lida.dono ?? { pid: null };
+}
+
+/** Uma tentativa de tomar a vez do gate da máquina: `{ tomou: true }` ou `{ tomou: false, dono }`. Mesmo contrato da ficha (`wx`, PID morto retomado). */
+export function tentarAVezDoGate(pasta, eu, opcoes = {}) {
+  const { agora = Date.now(), ilegivelMs = ILEGIVEL_ABANDONADA_MS, avisar = (m) => console.error(m) } = opcoes;
+  mkdirSync(pasta, { recursive: true });
+  return tentarFicha(join(pasta, NOME_DA_VEZ_DO_GATE), eu, agora, ilegivelMs, avisar);
+}
+
+/** Solta a vez do gate da máquina — só se `pid` e `token` são os de `eu`. Devolve se soltou. */
+export function soltarAVezDoGate(pasta, eu) {
+  return soltarFichas(pasta, [NOME_DA_VEZ_DO_GATE], eu).length > 0;
+}
+
+/**
+ * Uma tentativa do teste normal: a faixa normal de `T` para baixo; depois, só se não há gate rodando, a faixa do gate de `G` para baixo
+ * como empréstimo (marcada `emprestada`). Nunca leva mais que `quero`: o empréstimo faz caber mais testes juntos, não um teste maior.
+ */
+export function tentarTomarFichasNormais(pasta, teto, quero, eu, opcoes = {}) {
+  const { agora = Date.now(), ilegivelMs = ILEGIVEL_ABANDONADA_MS, env = process.env } = opcoes;
+  const f = faixas(teto, env);
+  const ordemDoNormal = ordemNormal(teto, f);
+  const gateRodando = f.compartilhada ? null : donoDoGate(pasta, agora, ilegivelMs);
+  const emprestadas = f.compartilhada || gateRodando !== null ? [] : ordemEmprestada(f);
+  const { env: _, ...resto } = opcoes;
+  return tentarTomarFichas(pasta, teto, quero, eu, { ...resto, ordem: [...ordemDoNormal, ...emprestadas], emprestadas: new Set(emprestadas) });
 }
 
 /** Solta as fichas `ks` — só as que ainda são minhas (mesmo `pid` e `token`). Devolve as que soltou. */
@@ -189,8 +284,11 @@ export function soltarFichas(pasta, ks, eu) {
   return soltas;
 }
 
-/** O estado do teto: `{ teto, tomadas: [{ k, dono }], livres }`, contando só ficha viva (ou ilegível recente). */
-export function estadoDoTeto(pasta, teto, agora = Date.now(), ilegivelMs = ILEGIVEL_ABANDONADA_MS) {
+/**
+ * O estado do teto: `{ teto, tomadas: [{ k, dono }], livres, faixas, gateRodando, tomadasNaFaixa: { gate, normal } }`, contando só ficha viva
+ * (ou ilegível recente). `gateRodando` é o dono da vez do gate da máquina, ou `null`.
+ */
+export function estadoDoTeto(pasta, teto, agora = Date.now(), ilegivelMs = ILEGIVEL_ABANDONADA_MS, env = process.env) {
   const tomadas = [];
   let nomes = [];
   try {
@@ -206,7 +304,16 @@ export function estadoDoTeto(pasta, teto, agora = Date.now(), ilegivelMs = ILEGI
     tomadas.push({ k: Number(nome), dono: lida.dono });
   }
   tomadas.sort((a, b) => a.k - b.k);
-  return { teto, tomadas, livres: Math.max(0, teto - tomadas.length) };
+  const f = faixas(teto, env);
+  const naFaixaDoGate = tomadas.filter((t) => t.k <= f.gate).length;
+  return {
+    teto,
+    tomadas,
+    livres: Math.max(0, teto - tomadas.length),
+    faixas: f,
+    gateRodando: donoDoGate(pasta, agora, ilegivelMs),
+    tomadasNaFaixa: { gate: naFaixaDoGate, normal: tomadas.length - naFaixaDoGate },
+  };
 }
 
 const hora = (iso) => (iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "?");
@@ -242,11 +349,12 @@ export async function tomarFichas(opcoes) {
     dormir = (ms) => new Promise((r) => setTimeout(r, ms)),
     agora = () => Date.now(),
     avisar = (m) => console.error(m),
+    tentar = tentarTomarFichas,
   } = opcoes;
   const inicio = agora();
   let ultimoAviso = null;
   for (;;) {
-    const r = tentarTomarFichas(pasta, teto, quero, eu, { agora: agora(), avisar });
+    const r = tentar(pasta, teto, quero, eu, { agora: agora(), avisar });
     if (r.levou.length > 0) {
       if (ultimoAviso !== null) avisar(`[teto] as fichas chegaram depois de ${Math.round((agora() - inicio) / 1000)} s: ${r.levou.length} de ${quero}`);
       return r.levou;
@@ -256,6 +364,89 @@ export async function tomarFichas(opcoes) {
       ultimoAviso = agora();
     } else if (agora() - ultimoAviso >= avisoMs) {
       avisar(`[teto] ainda esperando fichas (${Math.round((agora() - inicio) / 60_000)} min) — ${quemSegura(r.donos)}`);
+      ultimoAviso = agora();
+    }
+    await dormir(intervaloMs);
+  }
+}
+
+/** {@link tomarFichas} pelo teste normal: faixa normal, e a do gate emprestada sem gate rodando. A ordem se recalcula a cada tentativa da espera. */
+export const tomarFichasNormais = (opcoes) => tomarFichas({ ...opcoes, tentar: tentarTomarFichasNormais });
+
+/**
+ * Toma a vez do gate da máquina, esperando se outro gate (de qualquer projeto) a tem: avisa por quem ao começar e a cada `avisoMs`.
+ * `dormir`, `agora` e `avisar` são injetáveis.
+ */
+export async function esperarAVezDoGate(opcoes) {
+  const {
+    pasta,
+    eu,
+    intervaloMs = 2_000,
+    avisoMs = 60_000,
+    dormir = (ms) => new Promise((r) => setTimeout(r, ms)),
+    agora = () => Date.now(),
+    avisar = (m) => console.error(m),
+  } = opcoes;
+  const inicio = agora();
+  let ultimoAviso = null;
+  for (;;) {
+    const r = tentarAVezDoGate(pasta, eu, { agora: agora(), avisar });
+    if (r.tomou) {
+      if (ultimoAviso !== null) avisar(`[teto] a vez do gate da máquina chegou depois de ${Math.round((agora() - inicio) / 1000)} s`);
+      return;
+    }
+    if (ultimoAviso === null) {
+      avisar(`[teto] esperando a vez do gate da máquina — outro gate está rodando: ${quemSegura([r.dono])}`);
+      ultimoAviso = agora();
+    } else if (agora() - ultimoAviso >= avisoMs) {
+      avisar(`[teto] ainda esperando a vez do gate da máquina (${Math.round((agora() - inicio) / 60_000)} min) — ${quemSegura([r.dono])}`);
+      ultimoAviso = agora();
+    }
+    await dormir(intervaloMs);
+  }
+}
+
+/**
+ * As fichas do gate (já com a vez da máquina): só da faixa dele, de 1 para cima, até `quero`. Leva o livre e espera a devolução das
+ * emprestadas até `prazoMs`; vencido o prazo, começa com o que tem se for ao menos `minimo` (padrão `ceil(quero / 2)`), senão segue
+ * esperando e diz por quem a cada `avisoMs`. Devolve os `k` levados. Quem segura ficha na faixa e nunca devolve (o vitest em watch)
+ * não trava o gate, enquanto sobrar o `minimo`.
+ */
+export async function tomarFichasDoGate(opcoes) {
+  const {
+    quero,
+    pasta,
+    teto,
+    eu,
+    minimo = Math.ceil(quero / 2),
+    prazoMs = 300_000,
+    intervaloMs = 2_000,
+    avisoMs = 60_000,
+    dormir = (ms) => new Promise((r) => setTimeout(r, ms)),
+    agora = () => Date.now(),
+    avisar = (m) => console.error(m),
+    env = process.env,
+  } = opcoes;
+  const f = faixas(teto, env);
+  const faixaDoGate = Array.from({ length: f.gate }, (_, i) => i + 1);
+  const pedido = Math.min(quero, f.gate);
+  const levou = [];
+  const inicio = agora();
+  let ultimoAviso = null;
+  for (;;) {
+    const r = tentarTomarFichas(pasta, teto, pedido - levou.length, eu, { agora: agora(), avisar, ordem: faixaDoGate.filter((k) => !levou.includes(k)) });
+    levou.push(...r.levou);
+    if (levou.length >= pedido) return levou.sort((a, b) => a - b);
+    const esperou = agora() - inicio;
+    if (esperou >= prazoMs && levou.length >= Math.min(minimo, pedido)) {
+      avisar(`[teto] o prazo da devolução (${Math.round(prazoMs / 1000)} s) venceu: o gate começa com ${levou.length} de ${pedido} fichas`);
+      return levou.sort((a, b) => a - b);
+    }
+    if (ultimoAviso === null || agora() - ultimoAviso >= avisoMs) {
+      avisar(
+        `[teto] o gate tem ${levou.length} de ${pedido} fichas — esperando a devolução das emprestadas por: ${quemSegura(r.donos)}` +
+          (esperou >= prazoMs ? ` (prazo vencido, mas falta chegar a ${Math.min(minimo, pedido)})` : ""),
+      );
       ultimoAviso = agora();
     }
     await dormir(intervaloMs);
@@ -281,11 +472,12 @@ export function tomarFichasSync(opcoes) {
     agora = () => Date.now(),
     avisar = (m) => console.error(m),
     limiteMs = Infinity,
+    tentar = tentarTomarFichas,
   } = opcoes;
   const inicio = agora();
   let ultimoAviso = null;
   for (;;) {
-    const r = tentarTomarFichas(pasta, teto, quero, eu, { agora: agora(), avisar });
+    const r = tentar(pasta, teto, quero, eu, { agora: agora(), avisar });
     if (r.levou.length > 0) {
       if (ultimoAviso !== null) avisar(`[teto] as fichas chegaram depois de ${Math.round((agora() - inicio) / 1000)} s: ${r.levou.length} de ${quero}`);
       return r.levou;
@@ -302,9 +494,26 @@ export function tomarFichasSync(opcoes) {
   }
 }
 
+/** {@link tomarFichasSync} pelo teste normal (o vitest de pacote, o typecheck). */
+export const tomarFichasNormaisSync = (opcoes) => tomarFichasSync({ ...opcoes, tentar: tentarTomarFichasNormais });
+
 /** A linha de comando: estado, `--teto N`, `--teto padrao`. Devolve o código de saída. */
 export function main(env = process.env, argv = process.argv.slice(2)) {
   const pasta = pastaDoTeto(env);
+  const j = argv.indexOf("--fracao");
+  if (j !== -1) {
+    const valor = argv[j + 1];
+    const f = fracaoValida(valor);
+    if (f === null) {
+      console.error(`[teto] --fracao precisa de um número em (0, 1], e veio ${JSON.stringify(valor)}`);
+      return 2;
+    }
+    const arquivo = join(pasta, "teto.json");
+    mkdirSync(pasta, { recursive: true });
+    writeFileSync(arquivo, JSON.stringify({ fracao: f }));
+    console.log(`teto.json gravado em ${arquivo}: fração ${f} dos núcleos`);
+    return 0;
+  }
   const i = argv.indexOf("--teto");
   if (i !== -1) {
     const valor = argv[i + 1];
@@ -315,7 +524,7 @@ export function main(env = process.env, argv = process.argv.slice(2)) {
       } catch (e) {
         if (e?.code !== "ENOENT") throw e;
       }
-      console.log(`teto.json apagado: vale o padrão (metade dos núcleos)`);
+      console.log(`teto.json apagado: vale o padrão (2/3 dos núcleos)`);
       return 0;
     }
     const n = Number(valor);
@@ -326,6 +535,7 @@ export function main(env = process.env, argv = process.argv.slice(2)) {
     mkdirSync(pasta, { recursive: true });
     writeFileSync(arquivo, JSON.stringify({ nucleos: n }));
     console.log(`teto.json gravado em ${arquivo}: ${n} núcleos`);
+    console.log(`[teto] aviso: número fixo não acompanha a máquina; prefira --fracao f (0 < f ≤ 1)`);
     return 0;
   }
   const teto = tetoDaMaquina(env, availableParallelism(), pasta);
@@ -333,8 +543,10 @@ export function main(env = process.env, argv = process.argv.slice(2)) {
     console.log("CI: sem teto");
     return 0;
   }
-  const e = estadoDoTeto(pasta, teto);
+  const e = estadoDoTeto(pasta, teto, Date.now(), ILEGIVEL_ABANDONADA_MS, env);
   console.log(`teto ${e.teto} · tomadas ${e.tomadas.length} · livres ${e.livres}`);
+  console.log(`faixa do gate ${e.faixas.gate} (tomadas ${e.tomadasNaFaixa.gate}) · faixa normal ${e.faixas.normal} (tomadas ${e.tomadasNaFaixa.normal})${e.faixas.compartilhada ? " · faixas na mesma ficha" : ""}`);
+  console.log(`vez do gate: ${e.gateRodando ? descrever(e.gateRodando) : "livre"}`);
   for (const { k, dono } of e.tomadas) {
     console.log(`  ${k} · ${dono?.projeto ?? "?"} · ${dono?.worktree ?? dono?.cwd ?? "?"} · PID ${dono?.pid ?? "?"} · desde ${hora(dono?.desde)}`);
   }

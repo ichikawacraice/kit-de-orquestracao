@@ -45,7 +45,18 @@ import { RAIZ, conferirInstalacao, constroi, projetosDoWorkspace } from "./o-dis
 import { consultar, guardarSeAArvoreNaoMudou, linhaDoPulo } from "./o-verde-da-arvore.mjs";
 import { rodarSePrincipal } from "./o-script-principal.mjs";
 import { workersPorPacote } from "./o-teto-de-workers.mjs";
-import { pastaDoTeto, processoVivo, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFichas } from "./o-teto-da-maquina.mjs";
+import {
+  esperarAVezDoGate,
+  faixas,
+  pastaDoTeto,
+  processoVivo,
+  quemSouEuNasFichas,
+  soltarAVezDoGate,
+  soltarFichas,
+  tetoDaMaquina,
+  tomarFichasDoGate,
+  tomarFichasNormais,
+} from "./o-teto-da-maquina.mjs";
 
 /** Quanto uma vez vale por padrão (`gate.prazos.vezMin`). O gate leva minutos; isto só existe para que um dono travado não segure a fila para sempre. */
 export const PRAZO_DA_VEZ_MS = 60 * 60 * 1000;
@@ -175,18 +186,37 @@ export function comandoDaSuite(env = process.env, argv = [], raiz = RAIZ, cfg = 
 export const argumentosDaSuite = (env = process.env, argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) => comandoDaSuite(env, argv, raiz, cfg).args;
 
 /**
- * Quantas fichas do teto da máquina a suíte pede (ADR 0005). Perfil `pnpm-workspace`: a suíte inteira, pacotes juntos × workers
- * (`KIT_TESTE_WORKERS` ou um quarto da máquina); o conserto, `gate.workersConserto` (ou `KIT_CONSERTO_WORKERS`). Perfil `comando`: `gate.nucleos`.
+ * Quantas fichas do teto da máquina a suíte pede (ADR 0005 e 0008). O gate completo só toma da faixa dele (G = fichas `1..G`). Perfil
+ * `pnpm-workspace`: pacotes juntos × `floor(G / juntos)` (ou `KIT_TESTE_WORKERS` por pacote), nunca mais que G — a sobra da divisão
+ * fica emprestável; o conserto, `gate.workersConserto` (ou `KIT_CONSERTO_WORKERS`), como teste normal. Perfil `comando`:
+ * `min(gate.nucleos, G)`. No CI (sem teto) valem os números sem a faixa.
  */
 export function fichasDaSuite(env = process.env, argv = [], raiz = RAIZ, cfg = carregarConfig(raiz)) {
-  if (cfg.gate.perfil !== "pnpm-workspace") return cfg.gate.nucleos;
-  if (filaDoArgv(argv, raiz, cfg) === "conserto") return inteiroDoEnv(env, "CONSERTO_WORKERS", cfg.gate.workersConserto);
+  const conserto = cfg.gate.perfil === "pnpm-workspace" && filaDoArgv(argv, raiz, cfg) === "conserto";
+  if (conserto) return inteiroDoEnv(env, "CONSERTO_WORKERS", cfg.gate.workersConserto);
+  const teto = tetoDaMaquina(env, availableParallelism(), pastaDoTeto(env));
+  const faixaDoGate = teto === null ? Infinity : faixas(teto, env).gate;
+  if (cfg.gate.perfil !== "pnpm-workspace") return Math.min(cfg.gate.nucleos, faixaDoGate);
   const juntos = pacotesJuntos(env, cfg) ?? 1;
-  return juntos * inteiroDoEnv(env, "TESTE_WORKERS", workersPorPacote(availableParallelism()));
+  const porPacote = inteiroDoEnv(env, "TESTE_WORKERS", faixaDoGate === Infinity ? workersPorPacote(availableParallelism()) : Math.max(1, Math.floor(faixaDoGate / juntos)));
+  return Math.max(1, Math.min(juntos * porPacote, faixaDoGate));
 }
 
 /**
- * Toma as fichas do teto da máquina para a suíte, esperando se não houver nenhuma: `{ levou, quantas, teto, pasta, eu }`.
+ * O mínimo de fichas com que o gate começa depois do prazo da devolução: metade do pedido, `ceil(quero / 2)` — e, no perfil `pnpm-workspace`, nunca
+ * menos que 2 workers por pacote (`2 × pacotesJuntos`). Medido em 26/10 (Izanagi `web`, 725 arquivos): 1 worker levou 861 s sob carga 25, contra
+ * 160 s com 3; o vitest fixa os workers ao subir, então começar com 1 por pacote é pior que esperar mais um pouco.
+ */
+export function minimoParaComecar(quero, env, cfg) {
+  const metade = Math.ceil(quero / 2);
+  if (cfg.gate.perfil !== "pnpm-workspace") return metade;
+  return Math.min(quero, Math.max(metade, 2 * (pacotesJuntos(env, cfg) ?? 1)));
+}
+
+/**
+ * Toma as fichas do teto da máquina para a suíte, esperando se preciso: `{ levou, quantas, teto, pasta, eu, comAVez }`.
+ * A suíte inteira (fila do gate) toma primeiro a **vez do gate da máquina** (`<pasta>/gate`, um por vez, de qualquer projeto) e depois as fichas
+ * da faixa dela, esperando a devolução das emprestadas até `gate.prazos.devolucaoSeg`; o conserto toma como teste normal, sem a vez.
  * Quem já tem fichas (`KIT_FICHAS_TOMADAS` no env) não toma de novo: `levou` vazio e `quantas` = o que veio.
  */
 export async function tomarAsFichasDoGate(env, argv, raiz, cfg, opcoes = {}) {
@@ -195,12 +225,26 @@ export async function tomarAsFichasDoGate(env, argv, raiz, cfg, opcoes = {}) {
   if (ja !== undefined && ja !== "") {
     const n = Number(ja);
     if (!Number.isInteger(n) || n < 1) throw new Error(`KIT_FICHAS_TOMADAS precisa ser inteiro ≥ 1, e veio ${JSON.stringify(ja)}`);
-    return { levou: [], quantas: n, teto: null, pasta, eu: null };
+    return { levou: [], quantas: n, teto: null, pasta, eu: null, comAVez: false };
   }
   const teto = tetoDaMaquina(env, availableParallelism(), pasta);
   const eu = quemSouEuNasFichas(raiz);
-  const levou = await tomarFichas({ quero: fichasDaSuite(env, argv, raiz, cfg), pasta, teto, eu, ...opcoes });
-  return { levou, quantas: levou.length, teto, pasta, eu };
+  const quero = fichasDaSuite(env, argv, raiz, cfg);
+  if (filaDoArgv(argv, raiz, cfg) === "conserto") {
+    const levou = await tomarFichasNormais({ quero, pasta, teto, eu, ...opcoes });
+    return { levou, quantas: levou.length, teto, pasta, eu, comAVez: false };
+  }
+  const { dormir, avisar, agora } = opcoes;
+  const injetaveis = { ...(dormir ? { dormir } : {}), ...(avisar ? { avisar } : {}), ...(agora ? { agora } : {}) };
+  await esperarAVezDoGate({ pasta, eu, ...injetaveis });
+  try {
+    const prazoMs = inteiroDoEnv(env, "PRAZO_DA_DEVOLUCAO_SEG", cfg.gate.prazos.devolucaoSeg) * 1000;
+    const levou = await tomarFichasDoGate({ quero, pasta, teto, eu, prazoMs, env, minimo: minimoParaComecar(quero, env, cfg), ...injetaveis });
+    return { levou, quantas: levou.length, teto, pasta, eu, comAVez: true };
+  } catch (e) {
+    soltarAVezDoGate(pasta, eu); // quem desiste não segura a vez da máquina
+    throw e;
+  }
 }
 
 /** Roda `git` com prazo, e devolve a saída — ou `null` com o motivo escrito em `erro`. */
@@ -585,11 +629,14 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
   // Soltar no fim é o caminho normal; o `exit` cobre a saída por exceção. Um
   // SIGKILL — ou um Ctrl-C durante o build, que é síncrono — não passa por
   // nenhum dos dois: por isso a trava de PID morto é retomada.
-  let fichas = { levou: [], quantas: 0, teto: null, pasta: null, eu: null };
-  const soltarAoSair = () => {
+  let fichas = { levou: [], quantas: 0, teto: null, pasta: null, eu: null, comAVez: false };
+  // a ordem de soltar (ADR 0008): as fichas, depois a vez da máquina, depois a vez do repositório
+  const soltarTudo = () => {
     if (fichas.eu) soltarFichas(fichas.pasta, fichas.levou, fichas.eu);
+    if (fichas.comAVez) soltarAVezDoGate(fichas.pasta, fichas.eu);
     soltar(minha, eu);
   };
+  const soltarAoSair = soltarTudo;
   process.on("exit", soltarAoSair);
   try {
     // De novo, já com a vez: a sessão que estava na frente pode ter acabado de
@@ -602,7 +649,7 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
         return 0;
       }
     }
-    // As fichas do teto da máquina vêm DEPOIS da vez e do verde reconferido: quem espera a vez não segura núcleo (ADR 0005).
+    // A vez da máquina e as fichas vêm DEPOIS da vez do repositório e do verde reconferido: quem espera a vez não segura núcleo (ADR 0005 e 0008).
     fichas = await tomarAsFichasDoGate(env, argv, raiz, cfg);
     comando = comandoDaSuite(env, argv, raiz, cfg, fichas.quantas);
     const doTeto = fichas.teto === null ? "" : ` de ${fichas.teto} da máquina`;
@@ -622,9 +669,8 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
     if (resultado === 0 && verde !== null) guardarSeAArvoreNaoMudou("test", verde, inicio, raiz, env, undefined, cfg);
     return resultado;
   } finally {
-    // as fichas saem antes da vez: quem esperava a vez já pode precisar delas
-    if (fichas.eu) soltarFichas(fichas.pasta, fichas.levou, fichas.eu);
-    soltar(minha, eu);
+    // as fichas saem antes da vez da máquina e esta antes da vez do repositório: quem esperava a vez já pode precisar delas
+    soltarTudo();
     process.off("exit", soltarAoSair);
   }
 }

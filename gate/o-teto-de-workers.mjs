@@ -1,6 +1,6 @@
 import { availableParallelism } from "node:os";
 import { envKit } from "./config.mjs";
-import { pastaDoTeto, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFichasSync } from "./o-teto-da-maquina.mjs";
+import { pastaDoTeto, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFichasNormaisSync } from "./o-teto-da-maquina.mjs";
 
 /**
  * **O teto de workers do vitest fora do CI, num lugar só** — para o
@@ -26,7 +26,7 @@ import { pastaDoTeto, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFich
  * `workersPorNucleo` (`teto.workersPorNucleo` do `kit.json`, padrão 0,25): um
  * QUARTO da máquina por pacote — 3 em 15 núcleos.
  *
- * **O teto da máquina** (ADR 0005, operador, 26/10): o processo principal do vitest pede esse número em fichas
+ * **O teto da máquina** (ADR 0005 e 0008, operador, 26/10; teste normal: faixa normal, mais a do gate emprestada sem gate rodando): o processo principal do vitest pede esse número em fichas
  * (`o-teto-da-maquina.mjs`), leva o que houver livre (no mínimo 1) e devolve `maxWorkers` = o que levou. Com
  * `KIT_FICHAS_TOMADAS` no env (o gate, o `com-fichas`, ou uma leitura anterior deste processo) não toma de novo; um
  * worker do vitest (`VITEST_WORKER_ID`/`VITEST_POOL_ID`) também não. `opcoes` (`pasta`, `teto`, `avisar`, `dormir`)
@@ -58,7 +58,7 @@ export function tetoDeWorkers(env = process.env, nucleos = availableParallelism(
   const teto = opcoes.teto ?? tetoDaMaquina(env, nucleos, pasta);
   if (teto === null) return { maxWorkers: hoje, minWorkers: 1 };
   const eu = quemSouEuNasFichas();
-  const levou = tomarFichasSync({ quero: hoje, pasta, teto, eu, ...(opcoes.avisar ? { avisar: opcoes.avisar } : {}), ...(opcoes.dormir ? { dormir: opcoes.dormir } : {}) });
+  const levou = tomarFichasNormaisSync({ quero: hoje, pasta, teto, eu, ...(opcoes.avisar ? { avisar: opcoes.avisar } : {}), ...(opcoes.dormir ? { dormir: opcoes.dormir } : {}) });
   // Os filhos herdam a env e não tomam de novo; as fichas saem com o processo (o vitest em watch as segura até fechar, de propósito).
   process.env["KIT_FICHAS_TOMADAS"] = String(levou.length);
   process.once("exit", () => soltarFichas(pasta, levou, eu));

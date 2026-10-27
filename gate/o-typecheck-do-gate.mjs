@@ -12,7 +12,7 @@ import { carregarConfig, partirComando } from "./config.mjs";
 import { RAIZ, conferirInstalacao, constroi } from "./o-dist-que-o-gate-le.mjs";
 import { consultar, guardarSeAArvoreNaoMudou, linhaDoPulo } from "./o-verde-da-arvore.mjs";
 import { rodarSePrincipal } from "./o-script-principal.mjs";
-import { pastaDoTeto, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFichasSync } from "./o-teto-da-maquina.mjs";
+import { pastaDoTeto, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFichasNormaisSync } from "./o-teto-da-maquina.mjs";
 
 /** Roda `gate.typecheck` com prazo (`gate.prazos.typecheckMin`) e SIGKILL: um `tsc` pendurado não pode segurar a sessão. Devolve o código de saída. */
 function rodarOTypecheck(raiz, cfg, env = process.env) {
@@ -22,12 +22,12 @@ function rodarOTypecheck(raiz, cfg, env = process.env) {
   }
   const prazoMs = cfg.gate.prazos.typecheckMin * 60_000;
   const [cmd, ...args] = partirComando(cfg.gate.typecheck);
-  // As fichas do teto da máquina (ADR 0005): `gate.nucleosTypecheck`, a não ser que quem chamou já as tenha (`KIT_FICHAS_TOMADAS`) ou seja o CI.
+  // As fichas do teto da máquina (ADR 0005 e 0008; como teste normal, fora da vez do gate): `gate.nucleosTypecheck`, a não ser que quem chamou já as tenha (`KIT_FICHAS_TOMADAS`) ou seja o CI.
   const jaTem = env["KIT_FICHAS_TOMADAS"] !== undefined && env["KIT_FICHAS_TOMADAS"] !== "";
   const pasta = pastaDoTeto(env);
   const teto = env["CI"] || jaTem ? null : tetoDaMaquina(env, availableParallelism(), pasta);
   const eu = teto === null ? null : quemSouEuNasFichas(raiz);
-  const levou = eu === null ? [] : tomarFichasSync({ quero: cfg.gate.nucleosTypecheck, pasta, teto, eu });
+  const levou = eu === null ? [] : tomarFichasNormaisSync({ quero: cfg.gate.nucleosTypecheck, pasta, teto, eu });
   const soltar = () => (eu === null ? [] : soltarFichas(pasta, levou, eu));
   process.on("exit", soltar);
   try {
