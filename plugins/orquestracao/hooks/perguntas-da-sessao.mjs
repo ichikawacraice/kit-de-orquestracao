@@ -3,6 +3,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { fechadasRecentes } from '../skills/orquestradora/scripts/perguntas-arquivo.mjs';
 
 const JANELA_PADRAO_MS = 86_400_000;
 const LIMITE_POR_GRUPO = 10;
@@ -22,10 +23,15 @@ export function perguntasDaSessao(localId, { dir = join(painelDir(), 'perguntas'
     const abertas = [];
     const respondidas = [];
     const assumidas = [];
-    for (const nome of readdirSync(dir)) {
-      if (!nome.endsWith('.json')) continue;
+    // F183: abertas e assumidas na pasta quente; a respondida pode já estar no arquivo, de onde só se lê o que mudou na janela.
+    const arquivos = [
+      ...readdirSync(dir).filter((n) => n.endsWith('.json')).map((n) => join(dir, n)),
+      ...fechadasRecentes(dir, { desdeMs: agora - janelaMs }),
+    ];
+    for (const f of arquivos) {
+      const nome = f.slice(f.lastIndexOf('/') + 1);
       let doc;
-      try { doc = JSON.parse(readFileSync(join(dir, nome), 'utf8')); } catch { continue; }
+      try { doc = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
       const d = doc?.data;
       if (!d || d.sessaoId !== localId) continue;
       const quando = texto(d.respondidaEm) ?? texto(d.atualizadoEm) ?? texto(d.criadaEm);

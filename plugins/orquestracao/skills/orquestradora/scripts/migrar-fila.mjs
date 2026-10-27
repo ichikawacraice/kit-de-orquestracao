@@ -13,6 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { join, dirname, resolve, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { slugDoProjeto } from './perguntas-arquivo.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
@@ -35,7 +36,7 @@ function projetoDosItens() {
     // o git common dir (como projetoDoCwd do painel.mjs), não --show-toplevel: dentro de um worktree o nome é o do repositório principal
     const g = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
     const comum = g.status === 0 ? g.stdout.trim() : '';
-    projetoDerivado = comum ? basename(basename(comum) === '.git' ? dirname(comum) : comum).replace(/\.git$/, '').toLowerCase() : '';
+    projetoDerivado = comum ? (slugDoProjeto(basename(basename(comum) === '.git' ? dirname(comum) : comum).replace(/\.git$/, '')) ?? '') : ''; // F183: o slug que o painel aceita
     if (projetoDerivado) console.error(`migrar-fila: KIT_PROJETO não definido; derivei o projeto "${projetoDerivado}" do git (repositório principal) da pasta atual (${process.cwd()}). Defina KIT_PROJETO para outro nome.`);
   }
   return projetoDerivado || undefined;

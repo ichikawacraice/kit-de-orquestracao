@@ -1,6 +1,7 @@
 // A batida (ADR 0007): o julgamento puro de "o que está parado, quem avisar, o que soltar". Sem I/O: o painel.mjs lê a fila,
 // a lista de sessões (`list_sessions`, passada por arquivo) e o estado da batida, chama `julgar` e aplica o resultado
 // (grava o estado, solta, grava a espera). Quem chama a cada 10 min é o mod painel-sessoes.
+import { slugDoProjeto } from './perguntas-arquivo.mjs';
 
 export const PRAZO_MIN = 30; // item parado: sem gravar há tanto (PAINEL_PRAZO_MIN troca)
 export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta (BATIDA_SOLTA_MIN troca)
@@ -19,7 +20,7 @@ const apelidoDoTitulo = (t) => /^([PDEV]\d+) · /.exec(t || '')?.[1] ?? null;
 export const ehLivre = (titulo) => /^[PDEV]\d+ · livre\s*$/.test(titulo || '');
 export const ehDaOrquestradora = (titulo, projeto) => {
   const m = /^🎛 orquestradora — (.+?)\s*$/.exec(titulo || '');
-  return Boolean(m) && m[1].toLowerCase() === projeto;
+  return Boolean(m) && slugDoProjeto(m[1]) === projeto; // F183: o mesmo slug do painel ("Wicomm IA" → wicomm-ia)
 };
 const vivoNaLista = (row) => row && row.isArchived !== true;
 
@@ -58,7 +59,7 @@ export function livresDe(linhas, papel, projeto, projetoDe, ocupados) {
 // O próprio item vem primeiro: no conserto (o item volta à execução) quem o fez tem a conversa; só sem ninguém vivo dele valem os outros.
 export function afimDe(item, papel, itens, linhas, projetoDe) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
-  const nome = String(item?.projeto ?? '').toLowerCase();
+  const nome = slugDoProjeto(item?.projeto);
   if (!nome || !texto(item?.tema)) return null;
   const daLista = (d) => (Array.isArray(d.passaram) ? d.passaram : (Array.isArray(d.fez) ? d.fez.map((f) => ({ ...f, papel: String(f?.apelido ?? '')[0] })) : []));
   const vivo = (e) => {
@@ -70,7 +71,7 @@ export function afimDe(item, papel, itens, linhas, projetoDe) {
   if (doProprio) return { localId: doProprio.localId, apelido: doProprio.apelido };
   const candidatos = [];
   for (const d of itens.values()) {
-    if (d === item || String(d?.projeto ?? '').toLowerCase() !== nome || d?.tema !== item.tema) continue;
+    if (d === item || slugDoProjeto(d?.projeto) !== nome || d?.tema !== item.tema) continue;
     candidatos.push(...validos(d));
   }
   candidatos.sort((a, b) => ms(b.em) - ms(a.em));
@@ -94,7 +95,7 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs }) {
     const proposto = ms(c?.propostoEm);
     if (proposto === null || agoraMs - proposto >= CARTAO_VALIDADE_H * 3_600_000) { apagar.push(id); continue; }
     const aberto = (linhas ?? []).some((r) => {
-      if (!vivoNaLista(r) || !tituloDoCartao(r.title, c) || projetoDe(r) !== String(c.projeto ?? '').toLowerCase()) return false;
+      if (!vivoNaLista(r) || !tituloDoCartao(r.title, c) || projetoDe(r) !== slugDoProjeto(c.projeto)) return false;
       const criada = ms(r.createdAt) ?? ms(r.lastActivityAt);
       return criada !== null && criada >= proposto;
     });
@@ -129,7 +130,7 @@ export function julgar({ agoraMs, itens, todos = itens, afinidadeMin = AFINIDADE
 
   for (const [F, d] of [...itens].sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }))) {
     if (!d || ETAPAS_FINAIS.has(d.etapa)) continue;
-    const nome = String(d.projeto ?? '').toLowerCase();
+    const nome = slugDoProjeto(d.projeto); // F183: o mesmo slug das sessões
     if (!nome) continue;
     const proj = projeto(nome);
     vistos.add(F);

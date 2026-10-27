@@ -143,7 +143,7 @@ function painel(base, ...args) {
 test('painel list perguntas aberta --sessao A devolve só as de A; sem valor é erro', () => {
   const { base } = novoPainel({ Q1: q('A'), Q3: q('B'), Q2: q('A', { estado: 'respondida' }) });
   try {
-    const todas = JSON.parse(painel(base, 'list', 'perguntas', 'aberta').stdout);
+    const todas = JSON.parse(painel(base, 'list', 'perguntas', 'aberta', '--todos').stdout);
     assert.deepEqual(ids(todas).sort(), ['Q1', 'Q3'], 'sem o filtro as duas aparecem');
     const r = painel(base, 'list', 'perguntas', 'aberta', '--sessao', 'A');
     assert.equal(r.status, 0, r.stderr);

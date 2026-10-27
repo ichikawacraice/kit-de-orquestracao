@@ -11,6 +11,7 @@ import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { SEM_PROJETO, slugDoProjeto } from './perguntas-arquivo.mjs';
 
 const BASE = () => process.env.HOOKS_CREWAI_BASE || join(homedir(), '.claude', 'orquestracao');
 const PAINEL = () => process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(BASE(), 'painel');
@@ -24,7 +25,7 @@ export function projetoDoRepo(dir) {
     const repo = git(dir, ['rev-parse', '--path-format=absolute', '--git-common-dir'], 5000).trim();
     if (!repo) return null;
     const raiz = basename(repo) === '.git' ? dirname(repo) : repo;
-    return basename(raiz).replace(/\.git$/, '').toLowerCase() || null;
+    return slugDoProjeto(basename(raiz).replace(/\.git$/, '')); // F183: o mesmo slug do painel
   } catch { return null; }
 }
 
@@ -77,7 +78,7 @@ export function montarResumo({ projeto, desde, ate, repo, branch = 'main' }) {
     return t >= d0 && t <= d1;
   };
   const avisos = [];
-  const mesmo = (p) => p && String(p).toLowerCase() === projeto;
+  const mesmo = (p) => p && slugDoProjeto(p) === projeto;
 
   let main = [];
   try {
@@ -117,7 +118,10 @@ export function montarResumo({ projeto, desde, ate, repo, branch = 'main' }) {
 
   // Pergunta sem projeto cuja sessão também não resolve não some: assumida e aberta vão em `semProjeto` (quem lê decide).
   const todasPerguntas = lerColecao('perguntas', avisos);
-  const projetoDe = (q) => q.projeto ?? projetoDaSessao.get(q.sessaoId);
+  // F183: a migração grava `sem-projeto` em quem não resolveu; para o resumo, é o mesmo que não ter projeto
+  // (vale também para a sessão da pergunta, que a migração pode ter marcado `sem-projeto`)
+  const real = (p) => (p === SEM_PROJETO ? undefined : p);
+  const projetoDe = (q) => real(q.projeto) ?? real(projetoDaSessao.get(q.sessaoId));
   const perguntas = todasPerguntas.filter((q) => mesmo(projetoDe(q)));
   const resumoDe = (q) => ({ id: q.id, titulo: q.titulo, recomendacao: q.recomendacao ?? null, sessaoId: q.sessaoId ?? null });
   const assumidas = perguntas.filter((q) => q.estado === 'assumida').map((q) => ({ ...resumoDe(q), noPeriodo: dentro(q.criadaEm) || dentro(q.atualizadoEm) }));
@@ -169,7 +173,7 @@ function main(argv) {
   const [cmd, ...resto] = argv;
   const o = opcoes(resto);
   const repo = o.repo || process.cwd();
-  const projeto = (o.projeto || projetoDoRepo(repo) || '').toLowerCase();
+  const projeto = slugDoProjeto(o.projeto) || projetoDoRepo(repo) || '';
   const sai = (v) => process.stdout.write(`${JSON.stringify(v)}\n`);
   const falha = (m) => { process.stderr.write(`ausencia.mjs: ${m}\n`); process.exitCode = 1; };
   const periodoEscolhido = () => (o.desde && o.ate ? { desde: o.desde, ate: o.ate } : periodoDesligado());

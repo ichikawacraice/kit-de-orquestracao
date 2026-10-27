@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { homedir, loadavg, availableParallelism } from 'node:os';
 import { join, basename, dirname } from 'node:path';
+import { fechadasRecentes, slugDoProjeto } from '../skills/orquestradora/scripts/perguntas-arquivo.mjs';
 import { BASE, tituloRapido, semPrefixoDoPlugin, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
 
 export { BASE };
@@ -149,15 +150,16 @@ const ETAPAS_DO_FEZ = ['execucao', 'validacao', 'merge'];
 export const filaDir = () => process.env.FILA_DIR || join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'fila');
 // Perguntas `limpar · orquestradora` da sessão (F48; só o título exato vale, outra `limpar · …` não é pedido nem ok): documentos de <PAINEL_DIR>/perguntas. Erro de leitura = lista vazia.
 const perguntasDir = () => join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'perguntas');
+// F183: a respondida pode já estar no arquivo; o "sim" vale 30 min, então do arquivo só se lê o que mudou no último dia.
 export function perguntasDeLimpeza(localId) {
   const saida = [];
   if (!localId) return saida;
   let nomes;
-  try { nomes = readdirSync(perguntasDir()); } catch { return saida; }
-  for (const n of nomes) {
-    if (!n.endsWith('.json')) continue;
+  try { nomes = readdirSync(perguntasDir()).filter((n) => n.endsWith('.json')).map((n) => join(perguntasDir(), n)); } catch { return saida; }
+  nomes.push(...fechadasRecentes(perguntasDir(), { desdeMs: Date.now() - 86_400_000 }));
+  for (const f of nomes) {
     try {
-      const d = JSON.parse(readFileSync(join(perguntasDir(), n), 'utf8'))?.data;
+      const d = JSON.parse(readFileSync(f, 'utf8'))?.data;
       if (d && typeof d.titulo === 'string' && d.titulo.trim() === 'limpar · orquestradora' && d.sessaoId === localId) saida.push(d);
     } catch { /* documento ilegível */ }
   }
@@ -310,7 +312,7 @@ export function projetoDaSessao(reg) {
   const repo = gitCommonDir(reg?.originCwd || reg?.cwd);
   if (!repo) return null;
   const raiz = basename(repo) === '.git' ? dirname(repo) : repo;
-  return { repo, nome: basename(raiz).replace(/\.git$/, '').toLowerCase() };
+  return { repo, nome: slugDoProjeto(basename(raiz).replace(/\.git$/, '')) };
 }
 
 // Membros do pool livres do projeto (F58): sessões NÃO arquivadas com título `<P|D|E|V><n> · livre` cujo projeto é o `repo`
