@@ -66,7 +66,7 @@ function montar() {
   ctx.painel = (...args) => {
     const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
       cwd: clone, encoding: 'utf8', timeout: 120000, killSignal: 'SIGKILL',
-      env: { ...process.env, ...ENV_GIT, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), CLAUDE_CODE_SESSION_ID: '', GH_BIN: gh, GH_ESTADO: estado, GH_LOG: log },
+      env: { ...process.env, ...ENV_GIT, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), HOOKS_CREWAI_BASE: '', CLAUDE_CODE_SESSION_ID: '', GH_BIN: gh, GH_ESTADO: estado, GH_LOG: log },
     });
     assert.ok(!r.error, String(r.error));
     return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -81,6 +81,21 @@ function montar() {
   return ctx;
 }
 const limpar = (c) => rmSync(c.raiz, { recursive: true, force: true });
+
+// F184: o gate vermelho de um PR grava o acerto dos testes afetados (o log da fila contra a seleção no sha do PR).
+test('gate vermelho grava o acerto dos testes afetados do PR', () => {
+  const c = montar();
+  try {
+    c.item('F3', 23);
+    const r = c.painel('fila-de-merge', '23', '--gate', 'echo "test at t/c.test.mjs:1:1"; test ! -f c.txt');
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.deepEqual(JSON.parse(r.out).devolvidos.map((d) => d.pr), [23]);
+    const linhas = readFileSync(join(c.raiz, 'home', '.claude', 'orquestracao', 'testes-afetados-acerto.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    assert.equal(linhas.length, 1);
+    assert.deepEqual([linhas[0].pr, linhas[0].sha, linhas[0].base], [23, c.shas[23], 'main']);
+    assert.equal(linhas[0].acerto, null, 'o repo do teste não tem t/c.test.mjs: nada lido do log');
+  } finally { limpar(c); }
+});
 
 test('lote verde: um gate só, mergeia na ordem e fecha os itens', () => {
   const c = montar();

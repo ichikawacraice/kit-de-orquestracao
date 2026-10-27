@@ -54,6 +54,7 @@ import { AFINIDADE_MIN, BATIDA_SOLTA_MIN, cartoesResolvidos, julgar, livresDe, o
 import { SHA_VALIDADO, conferir, dadosDoPr, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerPs, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote } from './fila-de-merge.mjs';
+import { registrarAcerto } from './testes-afetados.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 // Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
@@ -1012,7 +1013,9 @@ function comandoFilaDeMerge(args) {
     if (r.recusado) lote.devolvidos.push({ pr, sha, motivo: r.motivo });
     else mergeados.push({ pr, itens: r.itens });
   }
-  const devolvidos = lote.devolvidos.map(({ pr, motivo, log }) => {
+  const devolvidos = lote.devolvidos.map(({ pr, sha, motivo, log }) => {
+    // F184: o vermelho do gate mede o acerto dos testes afetados da dona; a medição que falha não pesa na fila
+    if (log) try { registrarAcerto({ cwd, pr, sha, base: lote.base, log }); } catch { /* sem medição */ }
     const itens = comTrava(() => itensDoPr(pr).map(([F, d]) => {
       const agora = `devolvido pela fila de merge (PR ${pr}): ${motivo}`.slice(0, 300);
       efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { etapa: 'execucao', agora } }, undefined, new Map()));

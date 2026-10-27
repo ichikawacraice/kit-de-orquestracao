@@ -197,6 +197,7 @@ caso('c4 R1: o painel.mjs do plugin não cai para ~/.claude/hooks (só vale onde
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'mergear.mjs'), readFileSync(join(SCRIPTS, 'mergear.mjs'), 'utf8')); // idem
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'pode-reiniciar.mjs'), readFileSync(join(SCRIPTS, 'pode-reiniciar.mjs'), 'utf8')); // idem
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'fila-de-merge.mjs'), readFileSync(join(SCRIPTS, 'fila-de-merge.mjs'), 'utf8')); // idem (ADR 0011)
+  writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'testes-afetados.mjs'), readFileSync(join(SCRIPTS, 'testes-afetados.mjs'), 'utf8')); // idem (F184)
   const r = spawnSync('node', [join(plugin, 'skills', 'orquestradora', 'scripts', 'painel.mjs'), 'set', 'sessoes', 'local_OUTRA', '{"titulo":"x"}'], {
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', cwd: base,
     env: { ...process.env, HOME: lar, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: 'cli-self', KIT_HOOKS_DIR: '' },
