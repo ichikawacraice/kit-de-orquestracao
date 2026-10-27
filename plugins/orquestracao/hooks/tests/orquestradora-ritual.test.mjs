@@ -441,4 +441,40 @@ test('(gate-9) máquina cheia suspende o pedido de vaga só de E e V; P e D cont
     rmSync(join(base, 'painel', 'fila', 'F7.json'));
   }
 });
+
+// Os livres além do teto (dois por papel, Q394) que a batida relata: o ritual cobra o arquivamento, porque desde o ADR 0007 ninguém mais o cobrava.
+const excedentes = (lista) => {
+  mkdirSync(join(base, 'orq', 'batida'), { recursive: true });
+  writeFileSync(join(base, 'orq', 'batida', 'proj-a.json'), JSON.stringify({ em: new Date().toISOString(), merge: [], vagas: [], excedentes: lista }));
+};
+const ARQUIVA = (id) => ['mcp__ccd_session_mgmt__archive_session', { session_id: id }];
+test('(arq-1) excedente da batida ainda livre: bloqueia pedindo o arquivamento; arquivado no turno, não', () => {
+  for (const n of [1, 2, 3]) livre(`local_E${n}`, `E${n} · livre`);
+  excedentes([{ papel: 'E', apelido: 'E3', localId: 'local_E3' }]);
+  const r = rodar([]);
+  assert.equal(r?.decision, 'block', 'precondição: a cobrança aparece');
+  assert.match(r.reason, /além do teto/);
+  assert.match(r.reason, /E3/);
+  assert.match(r.reason, /archive_session/);
+  assert.equal(rodar([ARQUIVA('local_E3')]), null, 'arquivou no turno: nada a cobrar');
+  assert.equal(rodar([], { extra: { stop_hook_active: true } }), null, 'só uma vez por turno');
+});
+test('(arq-2) excedente que já não é livre (pegou item ou foi arquivado) não se cobra: o relatório pode ter até 10 min', () => {
+  livre('local_E1', 'E1 · livre');
+  livre('local_E3', 'E3 · conserta o login');
+  excedentes([{ papel: 'E', apelido: 'E3', localId: 'local_E3' }]);
+  assert.equal(rodar([]), null, 'trabalhando: não cobra');
+  livre('local_E3', 'E3 · livre', { isArchived: true });
+  assert.equal(rodar([]), null, 'arquivado: não cobra');
+  livre('local_E3', 'E3 · livre');
+  assert.equal(rodar([])?.decision, 'block', 'prova: livre de novo, a cobrança volta');
+});
+test('(arq-3) modo ausente ligado: nada se arquiva, então nada se cobra', () => {
+  for (const n of [1, 2, 3]) livre(`local_E${n}`, `E${n} · livre`);
+  excedentes([{ papel: 'E', apelido: 'E3', localId: 'local_E3' }]);
+  assert.equal(rodar([])?.decision, 'block', 'precondição: desligado, cobra');
+  writeFileSync(join(base, 'orq', 'operador-ausente.json'), JSON.stringify({ ligado: true, desde: new Date().toISOString(), por: 'comando' }));
+  const r = rodar([]);
+  assert.ok(!r || !/além do teto/.test(r.reason), 'ligado: não cobra o arquivamento');
+});
 }

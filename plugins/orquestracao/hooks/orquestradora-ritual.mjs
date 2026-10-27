@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Stop hook: numa sessão orquestradora, o turno só termina depois do que a batida não resolve (ADR 0007): o item esperando
-// papel sem membro livre (pedir a vaga), o piso de E, o resumo do modo ausente e a batida parada. O estado mecânico das
+// papel sem membro livre (pedir a vaga), o piso de E, o resumo do modo ausente, a batida parada e os livres além do teto. O estado mecânico das
 // sessões, o item parado e o aviso ao livre são da batida (mod painel-sessoes); a orquestradora só lê o relatório dela.
 // F59: e, havendo período do modo ausente desligado (≤ 7 dias) sem entrega registrada para o projeto, o resumo
 // (skills/orquestradora/scripts/ausencia.mjs, seção `resumo-da-ausencia`).
@@ -147,6 +147,19 @@ function faltaBatida(projeto) {
     : `A batida nunca escreveu o relatório de ${projeto}: confira se o mod painel-sessoes está ligado.`;
 }
 
+// Os livres além do teto de dois por papel (Q394) que a batida relata em `excedentes`: com o modo ausente desligado, o turno arquiva
+// os que seguem livres. Só conta o que ainda é livre agora (o relatório pode ter até 10 min) e não foi arquivado neste turno.
+function faltaArquivar(cwd, projeto, arquivadas) {
+  if (modoAusente()) return null;
+  let lista = [];
+  try { lista = JSON.parse(readFileSync(join(BASE, 'batida', `${projeto}.json`), 'utf8'))?.excedentes ?? []; } catch { /* sem relatório */ }
+  if (!Array.isArray(lista) || lista.length === 0) return null;
+  const livres = new Set(membrosLivres(gitCommonDir(cwd)).map((m) => m.localId));
+  const faltam = lista.filter((x) => x?.localId && livres.has(x.localId) && !arquivadas.has(x.localId));
+  if (faltam.length === 0) return null;
+  return `Livres além do teto de dois por papel: ${faltam.map((x) => x.apelido).join(', ')}: arquive (archive_session) quem cumpre as cinco condições da skill orquestradora e liste numa linha no relatório.`;
+}
+
 function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id, transcript_path, stop_hook_active } = input;
@@ -171,6 +184,7 @@ function main() {
   const comandos = [];
   const mensagens = [];
   let startsDeE = false;
+  const arquivadas = new Set();
   for (const e of entradas.slice(inicio + 1)) {
     if (e.type !== 'assistant') continue;
     const c = e.message?.content;
@@ -179,6 +193,7 @@ function main() {
       if (item.type !== 'tool_use') continue;
       usadas.add(item.name);
       if (item.name.endsWith('start_session') && /^E\d+\b/.test(String(item.input?.title ?? ''))) startsDeE = true;
+      if (item.name.endsWith('archive_session') && item.input?.session_id) arquivadas.add(String(item.input.session_id));
       if (item.name === 'Bash') {
         const cmd = String(item.input?.command ?? '');
         comandos.push(cmd);
@@ -192,7 +207,8 @@ function main() {
   const espera = cobrancaDeEspera(input.cwd || process.cwd(), projeto, comandos, usadas, mensagens);
   const piso = projeto ? faltaPiso(input.cwd || process.cwd(), usadas, startsDeE, session_id) : null;
   const batidaParada = projeto ? faltaBatida(projeto) : null;
-  if (!periodo && espera.length === 0 && !piso && !batidaParada) return;
+  const arquivar = projeto ? faltaArquivar(input.cwd || process.cwd(), projeto, arquivadas) : null;
+  if (!periodo && espera.length === 0 && !piso && !batidaParada && !arquivar) return;
   const resumo = periodo
     ? `O operador desligou o modo ausente (período de ${periodo.desde} a ${periodo.ate}) e o resumo ainda não foi entregue: ` +
       `rode \`node "${AUSENCIA}" resumo --md\`, entregue o resumo no formato da skill orquestradora (seção resumo-da-ausencia) e registre com \`node "${AUSENCIA}" entregue\`. `
@@ -200,7 +216,7 @@ function main() {
   const paradas = espera.length > 0
     ? `Item parado sem o papel da etapa (protocolo.md#esperando-papel): ${espera.join(' · ')}.`
     : '';
-  process.stdout.write(JSON.stringify({ decision: 'block', reason: [resumo.trim(), paradas, piso, batidaParada].filter(Boolean).join('\n') }));
+  process.stdout.write(JSON.stringify({ decision: 'block', reason: [resumo.trim(), paradas, piso, batidaParada, arquivar].filter(Boolean).join('\n') }));
 }
 
 try {

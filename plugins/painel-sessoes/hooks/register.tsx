@@ -1389,6 +1389,14 @@ async function rodar($: EngineInterface): Promise<void> {
   if (r.exitCode !== 0) throw new Error(`painel batida saiu com ${r.exitCode}: ${r.stderr.slice(0, 200)}`)
   const saida = JSON.parse(r.stdout) as { mensagens?: Mensagem[] }
   for (const m of saida.mensagens ?? []) {
+    // a batida pode rodar na própria orquestradora: o app recusa send_message para a sessão atual, então entra como prompt dela
+    if (m.para === proprio.sessionId) {
+      void $.prompt.submit({ text: m.texto }).then(
+        r => (r.drop !== undefined ? registrarFalha($, pasta, agora, m, r.drop || 'o prompt foi recusado') : undefined),
+        err => registrarFalha($, pasta, agora, m, mensagem(err)),
+      ).catch(() => {})
+      continue
+    }
     try {
       const envio = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: m.para, message: m.texto })
       if (envio.deny !== undefined) await registrarFalha($, pasta, agora, m, envio.deny)
