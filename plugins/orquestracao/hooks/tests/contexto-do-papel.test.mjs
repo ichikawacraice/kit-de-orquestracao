@@ -218,6 +218,7 @@ test('F190-1. ORQ marcada, modo ausente do painel ligado, 257 mil com "?": cobra
   const r = rodar(b, 'ORQ', transcript(b, { tokens: 257_000, texto: PERGUNTA }));
   cobrou(r, /257 mil.*esperando resposta/s);
   assert.match(r.reason, /modo ausente/i);
+  assert.match(r.reason, /desde \d{2}:\d{2} em São Paulo, pelo botão do painel/);
   assert.match(r.reason, /\/ausente off/);
   assert.match(log(b), /\tcobrou-150-espera\torquestradora-ausente 257 mil/);
   assert.doesNotMatch(log(b), /planejadora/);
