@@ -179,8 +179,8 @@ declare module 'claude-code' {
       barra: Barra
       /** O `/barra` escondeu a barra nesta sessão. */
       barraEscondida: boolean
-      /** Desde quando o limpar foi mandado e a limpeza ainda não apareceu; null = nenhum em curso. */
-      limpando: number | null
+      /** O `↺ Limpando…` da barra: a hora do clique e o contexto lido nele; `null` fora da limpeza. */
+      limpando: { desde: number; tokens: number | null } | null
     }
   }
 }

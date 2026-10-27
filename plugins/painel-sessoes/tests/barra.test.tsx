@@ -756,6 +756,23 @@ test('Limpando… volta quando a leitura vê o contexto abaixo de 150 mil, e nã
   await livre.unmount()
 })
 
+test('Limpando… com o clique já abaixo de 150 mil só volta quando o contexto cai à metade', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 90_000 })
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  await m.relogio.advance(LEITURA_MS + 1000)
+  const preso = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await preso.find({ key: 'limpar' }))?.text, 'mesmos 90 mil na leitura: segue Limpando…').toBe('↺ Limpando…')
+  m.definirTokens(20_000)
+  await m.relogio.advance(LEITURA_MS + 1000)
+  const livre = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await livre.find({ key: 'limpar' }))?.text, 'contexto caiu à metade: o botão volta').toBe('↺ Limpar')
+  await ui.unmount()
+  await preso.unmount()
+  await livre.unmount()
+})
+
 test('Limpando… volta sozinho aos 10 min, mesmo com o contexto alto', async ($, on) => {
   const m = await iniciar($, on, { tokens: 212_000 })
   const ui = await montar($, 'terminal', { bodyColumns: 140 })
