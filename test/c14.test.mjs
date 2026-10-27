@@ -15,9 +15,11 @@ const NOMES = ['executor', 'orquestracao:executor', 'outro:executor'];
 // HOME próprio, fora de tmpdir (as pastas livres da trava incluem tmpdir: um HOME ali faria o que deve ser negado passar). Os casos medem `~/Developer/...`.
 // Mesma regra de LIVRES das travas (`/tmp`, `/var/folders` e tmpdir): HOME nesses caminhos faz passar o que deve ser negado.
 const CAI_NOS_LIVRES = (p) => /^\/(private\/)?tmp\//.test(`${p}/`) || `${p}/`.startsWith('/var/folders/') || `${p}/`.startsWith('/private/var/folders/') || `${p}/`.startsWith(`${realpathSync(tmpdir())}/`);
-// Procura onde criar o HOME fora dos LIVRES: primeiro ao lado do teste, depois no HOME do usuário (checkout sob /tmp).
+// Procura onde criar o HOME fora dos LIVRES: primeiro em `.tmp-testes/` na raiz do repo, depois no HOME do usuário (checkout sob /tmp).
+// Nunca em `test/`: o cli.test varre `test/` e um HOME que some no meio da varredura derruba quem varre.
 function criarHomeDoTeste(candidatas, prefixo) {
   for (const base of candidatas) {
+    mkdirSync(base, { recursive: true });
     if (CAI_NOS_LIVRES(realpathSync(base))) continue;
     const h = mkdtempSync(join(base, prefixo));
     if (!CAI_NOS_LIVRES(realpathSync(h))) return h;
@@ -25,7 +27,7 @@ function criarHomeDoTeste(candidatas, prefixo) {
   }
   throw new Error(`precondição: não achei pasta fora das livres da trava (/tmp, /var/folders, ${realpathSync(tmpdir())}) para o HOME do teste; as candidatas foram ${candidatas.join(', ')}`);
 }
-const HOME_DO_TESTE = criarHomeDoTeste([join(RAIZ, 'test'), userInfo().homedir], '.home-c14-');
+const HOME_DO_TESTE = criarHomeDoTeste([join(RAIZ, '.tmp-testes'), userInfo().homedir], '.home-c14-');
 after(() => rmSync(HOME_DO_TESTE, { recursive: true, force: true }));
 process.env.HOME = HOME_DO_TESTE;
 assert.ok(!CAI_NOS_LIVRES(realpathSync(HOME_DO_TESTE)), 'precondição: o HOME do teste está fora das livres da trava');
