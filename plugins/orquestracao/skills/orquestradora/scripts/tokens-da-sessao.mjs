@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// O gasto de uma sessão em tokens. Ferramenta avulsa: desde a Q409 (27/10) a orquestradora não grava
+// O gasto de uma sessão em tokens. Ferramenta avulsa: desde a Q409 (26/10) a orquestradora não grava
 // mais o gasto no painel ao arquivar.
 // `get_usage` não serve aqui: em sessão ociosa ou arquivada devolve "unavailable" (sem processo),
 // e mesmo viva ele mede a JANELA atual, não o gasto acumulado. O gasto mora no transcript.
