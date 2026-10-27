@@ -590,6 +590,7 @@ test('seguinte: sem o local_, o id da própria sessão sai de CLAUDE_CODE_HOST_S
   const r = painel(['seguinte', 'E3', '--tokens', '1000'], { env: { CLAUDE_CODE_HOST_SESSION_ID: lid(3) } });
   assert.equal(r.exit, 0, r.err);
   assert.equal(r.json().item, 'F2', r.out);
+});
 test('seguinte: a V que acabou de dar o veredito não repega o item de onde saiu; pega outro do mesmo tema', () => {
   const emValidacao = (extra = {}) => ({ ...semGente, etapa: 'validacao', historico: [{ em: iso(T - 20 * MIN), etapa: 'validacao', dono: null }], atualizadoEm: iso(T - 20 * MIN), ...extra });
   item('F1', emValidacao({ passaram: [passou(7, 'V1', T - 5 * MIN)] })); // a V1 passou por ele e saiu sem --fez: o item segue esperando V
