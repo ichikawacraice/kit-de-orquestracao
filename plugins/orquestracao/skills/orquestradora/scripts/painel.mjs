@@ -976,10 +976,12 @@ function comandoMergear(args) {
 }
 
 // `fila-de-merge <PR…>` (ADR 0011). Monta e testa fora da trava (é lento); cada merge segue o `mergear`; a devolução grava o item.
-// Lote pela fila ocupada (F182): `<BASE>/../fila-de-merge/<projeto>.json` guarda {ocupada:{pid,desde}|null, pendentes:[{pr,sha?}]}.
-// Com a fila ocupada por um processo vivo, a chamada só anota os PRs em `pendentes` e sai; quem roda, ao terminar a rodada,
-// leva a lista inteira como o lote seguinte, até esvaziar. Ocupada por processo morto: a chamada nova assume e leva os
-// pendentes antes dos seus. `--seco` não usa nem mexe na lista.
+// Lote pela fila ocupada (F182): `<BASE>/../fila-de-merge/<projeto>.json` guarda {ocupada:{pid,desde}|null,
+// pendentes:[{pr,sha?}], emVoo:[{pr,sha?}]}. Com a fila ocupada por um processo vivo, a chamada só anota os PRs em `pendentes`
+// e sai; quem roda, ao terminar a rodada, leva a lista inteira como o lote seguinte, até esvaziar. `emVoo` é o lote da rodada
+// que roda: ocupada por processo morto, a chamada nova assume e leva o `emVoo` e os pendentes antes dos seus. Falha de um PR
+// (fechado, ilegível, ponta mudou) só o tira do lote; PR de outra base fica para a rodada seguinte; erro da rodada inteira
+// (preparo, git) não volta à lista: sai no erro com os PRs que não rodaram. `--seco` não usa nem mexe na lista.
 const ESTADO_DA_FILA = (projeto) => join(BASE, '..', 'fila-de-merge', `${projeto || 'sem-projeto'}.json`);
 function processoVivo(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -991,7 +993,7 @@ function juntarPedidos(lista, novos) {
   for (const n of novos) {
     const i = r.findIndex((p) => p.pr === n.pr);
     if (i < 0) r.push({ ...n });
-    else if (n.sha) r[i].sha = n.sha;
+    else if (n.sha) r[i] = { ...r[i], sha: n.sha };
   }
   return r;
 }
@@ -1006,10 +1008,15 @@ function comandoFilaDeMerge(args) {
   if (!args.length || casados.some((m) => !m)) throw new Error(uso);
   const pedidos = juntarPedidos([], casados.map(([, n, sha]) => (sha ? { pr: Number(n), sha: sha.toLowerCase() } : { pr: Number(n) })));
   const cwd = process.cwd();
+  // o PR pedido agora tem de existir e estar aberto (erro de quem pediu, como antes); o resto se confere na rodada
+  for (const { pr } of pedidos) {
+    const v = dadosDoPr(pr, cwd);
+    if (v.state !== 'OPEN') throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
+  }
   if (seco) return rodadaDaFila(pedidos, { seco, gate, preparar, cwd });
   const arquivo = ESTADO_DA_FILA(projetoDoCwd(cwd).projeto);
-  const vazio = { ocupada: null, pendentes: [] };
-  const lerEstado = () => { const e = arquivoJson(arquivo, vazio); return { ocupada: e?.ocupada ?? null, pendentes: Array.isArray(e?.pendentes) ? e.pendentes : [] }; };
+  const lista = (v) => (Array.isArray(v) ? v : []);
+  const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };
   const entrada = comTrava(() => {
     const e = lerEstado();
     if (e.ocupada && e.ocupada.pid !== process.pid && processoVivo(e.ocupada.pid)) {
@@ -1017,33 +1024,40 @@ function comandoFilaDeMerge(args) {
       gravarJson(arquivo, { ...e, pendentes });
       return { pendente: true, ocupadaDesde: e.ocupada.desde ?? null, pendentes };
     }
-    gravarJson(arquivo, { ocupada: { pid: process.pid, desde: new Date().toISOString() }, pendentes: [] });
-    return { lote: juntarPedidos(e.pendentes.map((x) => ({ ...x, daFila: true })), pedidos) };
+    const lote = juntarPedidos(juntarPedidos(e.emVoo, e.pendentes), pedidos);
+    gravarJson(arquivo, { ocupada: { pid: process.pid, desde: new Date().toISOString() }, pendentes: [], emVoo: lote });
+    return { lote };
   });
   if (entrada.pendente) return entrada;
   const rodadas = [];
   try {
     let lote = entrada.lote;
     while (lote.length) {
+      let r;
       try {
-        rodadas.push({ prs: lote.map((p) => p.pr), ...rodadaDaFila(lote, { seco, gate, preparar, cwd }) });
+        r = rodadaDaFila(lote, { seco, gate, preparar, cwd });
       } catch (erro) {
-        // o lote que não rodou volta à frente da lista; o erro da 1ª rodada sobe, o de uma seguinte vai na saída
-        const devolta = lote.map(({ daFila, ...x }) => x);
-        comTrava(() => { const e = lerEstado(); gravarJson(arquivo, { ...e, pendentes: juntarPedidos(devolta, e.pendentes) }); });
-        if (!rodadas.length) throw erro;
-        rodadas.push({ prs: lote.map((p) => p.pr), erro: String(erro?.message || erro).split('\n')[0], mergeados: [], devolvidos: [] });
+        // erro da rodada inteira: os PRs dela não voltam à lista (um PR que derruba o preparo travaria a fila para sempre)
+        const adiados = erro?.adiados ?? [];
+        const naoRodaram = lote.filter((p) => !adiados.some((a) => a.pr === p.pr)).map((p) => p.pr);
+        comTrava(() => { const e = lerEstado(); gravarJson(arquivo, { ...e, pendentes: juntarPedidos(adiados, e.pendentes), emVoo: [] }); });
+        const msg = `${String(erro?.message || erro).split('\n')[0]}; não rodaram: ${naoRodaram.map((n) => `#${n}`).join(', ')} (chame de novo com os que seguem valendo)`;
+        if (!rodadas.length) throw new Error(msg);
+        rodadas.push({ prs: naoRodaram, erro: msg, mergeados: [], devolvidos: [] });
         break;
       }
+      const { adiados = [], ...resto } = r;
+      rodadas.push({ prs: lote.filter((p) => !adiados.some((a) => a.pr === p.pr)).map((p) => p.pr), ...resto });
       // ler a lista vazia e soltar a fila no mesmo trecho travado: o PR que chega depois disso acha a fila livre
       lote = comTrava(() => {
         const e = lerEstado();
-        gravarJson(arquivo, { ocupada: e.pendentes.length ? e.ocupada : null, pendentes: [] });
-        return e.pendentes.map((x) => ({ ...x, daFila: true }));
+        const seguinte = juntarPedidos(adiados, e.pendentes);
+        gravarJson(arquivo, { ocupada: seguinte.length ? e.ocupada : null, pendentes: [], emVoo: seguinte });
+        return seguinte;
       });
     }
   } finally {
-    comTrava(() => { const e = lerEstado(); if (e.ocupada?.pid === process.pid) gravarJson(arquivo, { ...e, ocupada: null }); });
+    comTrava(() => { const e = lerEstado(); if (e.ocupada?.pid === process.pid) gravarJson(arquivo, { ...e, ocupada: null, emVoo: [] }); });
   }
   if (rodadas.length === 1) { const { prs, ...r } = rodadas[0]; return r; }
   const suspeitas = rodadas.map((r) => r.suspeitaDeInstavel).filter(Boolean);
@@ -1064,24 +1078,31 @@ function comandoFilaDeMerge(args) {
 function rodadaDaFila(pedidos, { seco, gate, preparar, cwd }) {
   const recusados = [];
   const prs = [];
-  for (const { pr, sha: pedido, daFila } of pedidos) {
-    const v = dadosDoPr(pr, cwd);
-    // o PR pedido agora e fechado é erro de quem pediu; o que esperava na lista e fechou no meio tempo só sai dela
-    if (v.state !== 'OPEN' && daFila) { recusados.push({ pr, sha: '', motivo: `o PR ${pr} não está mais aberto (${v.state}); saiu da fila` }); continue; }
-    if (v.state !== 'OPEN') throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
+  for (const { pr, sha: pedido } of pedidos) {
+    // PR que fechou ou não se lê no meio tempo só sai do lote, sem mexer no item (mergeado à mão, o item já se fechou)
+    let v;
+    try { v = dadosDoPr(pr, cwd); } catch (e) { recusados.push({ pr, sha: '', motivo: `não consegui ler o PR ${pr}: ${String(e?.message || e).split('\n')[0]}; saiu da fila`, semItem: true }); continue; }
+    if (v.state !== 'OPEN') { recusados.push({ pr, sha: '', motivo: `o PR ${pr} não está mais aberto (${v.state}); saiu da fila`, semItem: true }); continue; }
     const sha = v.headRefOid.toLowerCase();
     if (pedido && !sha.startsWith(pedido)) { recusados.push({ pr, sha, motivo: `a ponta mudou: entregue ${pedido}, agora ${sha.slice(0, 7)}; a dona manda de novo PR ${pr} pronto` }); continue; }
     prs.push({ pr, sha, base: v.baseRefName });
   }
-  if (!prs.length) return { mergeados: [], devolvidos: recusados.map(({ pr, motivo }) => ({ pr, motivo, itens: [] })) };
-  const bases = [...new Set(prs.map((p) => p.base))];
-  if (bases.length > 1) throw new Error(`fila-de-merge: os PRs vão para bases diferentes (${bases.join(', ')}); um lote por base`);
-  const lote = montarLote({ prs: prs.map(({ pr, sha }) => ({ pr, sha })), base: bases[0], cwd, gate, preparar });
+  // um lote por base: a do primeiro a chegar; o PR de outra base fica para a rodada seguinte (no `--seco`, só se diz)
+  const base = prs[0]?.base;
+  const adiados = prs.filter((p) => p.base !== base).map(({ pr }) => pedidos.find((x) => x.pr === pr));
+  const doLote = prs.filter((p) => p.base === base);
+  const extra = adiados.length ? { adiados } : {};
+  if (!doLote.length) {
+    if (seco) return { seco: true, mergearia: [], devolveria: recusados.map(({ pr, motivo }) => ({ pr, motivo })) };
+    return { mergeados: [], devolvidos: recusados.map(({ pr, motivo }) => ({ pr, motivo, itens: [] })), ...extra };
+  }
+  let lote;
+  try { lote = montarLote({ prs: doLote.map(({ pr, sha }) => ({ pr, sha })), base, cwd, gate, preparar }); } catch (e) { e.adiados = adiados; throw e; }
   lote.devolvidos.unshift(...recusados);
   const { projeto } = projetoDoCwd();
   const itensDoPr = (pr) => [...itensVivos()].filter(([, d]) => projeto && String(d?.projeto ?? '').toLowerCase() === projeto && Array.isArray(d.prs) && d.prs.includes(pr));
   const resumo = { base: lote.base, gates: lote.gates, logs: lote.pasta, ...(lote.suspeitaDeInstavel ? { suspeitaDeInstavel: lote.suspeitaDeInstavel } : {}) };
-  if (seco) return { seco: true, ...resumo, mergearia: lote.aprovados.map((a) => a.pr), devolveria: lote.devolvidos.map(({ pr, motivo }) => ({ pr, motivo })) };
+  if (seco) return { seco: true, ...resumo, mergearia: lote.aprovados.map((a) => a.pr), devolveria: lote.devolvidos.map(({ pr, motivo }) => ({ pr, motivo })), ...(adiados.length ? { outraBase: adiados.map((a) => a.pr) } : {}) };
   const mergeados = [];
   for (const { pr, sha } of lote.aprovados) {
     // um merge que falha (gh, fetch) não derruba o lote: vira devolução e os outros seguem
@@ -1090,17 +1111,17 @@ function rodadaDaFila(pedidos, { seco, gate, preparar, cwd }) {
     if (r.recusado) lote.devolvidos.push({ pr, sha, motivo: r.motivo });
     else mergeados.push({ pr, itens: r.itens });
   }
-  const devolvidos = lote.devolvidos.map(({ pr, sha, motivo, log }) => {
+  const devolvidos = lote.devolvidos.map(({ pr, sha, motivo, log, semItem }) => {
     // F184: o vermelho do gate mede o acerto dos testes afetados da dona; a medição que falha não pesa na fila
     if (log) try { registrarAcerto({ cwd, pr, sha, base: lote.base, log }); } catch { /* sem medição */ }
-    const itens = comTrava(() => itensDoPr(pr).map(([F, d]) => {
+    const itens = semItem ? [] : comTrava(() => itensDoPr(pr).map(([F, d]) => {
       const agora = `devolvido pela fila de merge (PR ${pr}): ${motivo}`.slice(0, 300);
       efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { etapa: 'execucao', agora } }, undefined, new Map()));
       return { item: F, dona: d.donoLocalId ?? null };
     }));
     return { pr, motivo, ...(log ? { log } : {}), itens };
   });
-  return { ...resumo, mergeados, devolvidos };
+  return { ...resumo, mergeados, devolvidos, ...extra };
 }
 
 const ORQ = () => regras.BASE;
