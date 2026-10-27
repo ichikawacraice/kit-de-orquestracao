@@ -5,6 +5,12 @@
 //
 //   painel.mjs get    <colecao> <id>
 //   painel.mjs list   <colecao> [estado] [--projeto <nome> | --todos] [--sessao <local_…>]   (sem flag lista tudo; --sessao filtra pelo `sessaoId` do documento)
+//     (F183) `list perguntas` sem `--projeto`, `--todos` nem `--sessao` lista o projeto da pasta atual, e só a pasta quente (abertas e
+//     assumidas); `respondida`/`cancelada` ou `--arquivo` incluem o arquivo (`perguntas/arquivo/<projeto>/<AAAA-MM>/`)
+//   painel.mjs perguntas arquivar [--seco]   leva ao arquivo as fechadas que ficaram na pasta quente (a resposta do pane); a batida roda junto → {arquivadas:[…]}
+//   painel.mjs perguntas migrar [--seco]   (F183, uma vez) `projeto` em slug nas quatro coleções; pergunta sem projeto pega o da sessão
+//     (sessoes/<sessaoId>, senão o registro do app), senão `sem-projeto`; sessão sem projeto, pelo registro; depois arquiva as fechadas.
+//     Sem --seco faz backup do painel em <PAINEL_DIR>/../backups/F183-<data>/ → {seco, backup, projeto:{id: novo}, arquivadas}
 //   painel.mjs set    <colecao> <id> '<json>'            substitui o documento
 //   painel.mjs update <colecao> <id> '<json>' [--se-versao N]   mescla os campos (null apaga)
 //   painel.mjs batch  '[{"op":"set|update|delete","colecao":"…","id":"…","data":{…},"seVersao":N}]'   (seVersao opcional por op)
@@ -38,12 +44,14 @@
 //   que espera o clique do operador; id = task_id do start_session; { projeto, apelido, papel, itens[F<n>], orquestradoraId, propostoEm }; cartão de dona: apelido e papel `dona`, um item só;
 //   a orquestradora grava e apaga, e a batida apaga o apelido vivo e o que passou de 12 h).
 //
-// `projeto` (sessoes e fila): ao CRIAR um documento sem o campo, o script o preenche com o nome do repositório git de
-// onde roda (basename da pasta que contém o git common dir, minúsculo; fora de git não preenche). Ambiente: PAINEL_DIR
+// `projeto` (sessoes, fila e perguntas): ao CRIAR um documento sem o campo, o script o preenche com o nome do repositório git de
+// onde roda (basename da pasta que contém o git common dir, em slug `[a-z0-9-]`; fora de git não preenche). Toda op que grava
+// `projeto` fora do slug é recusada (F183). Pergunta respondida/cancelada mora em `perguntas/arquivo/<projeto>/<AAAA-MM>/<Q>.json`
+// (mês da resposta, São Paulo); `get`, `update` e `delete` a acham onde estiver, e a que reabre volta à pasta quente. Ambiente: PAINEL_DIR
 // (o nome antigo IZANAGI_PAINEL_DIR segue valendo, e o novo vence); idem PAINEL_PAUSA_* (só teste).
 //
 // Toda escrita grava `atualizadoEm` (agora, ISO) quando o JSON não traz um, e sobe `version`.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -55,6 +63,8 @@ import { SHA_VALIDADO, conferir, dadosDoPr, estadoDoPr, mergearNoGitHub } from '
 import { julgarReinicio, lerFichas, lerPs, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote } from './fila-de-merge.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
+// F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
+import * as arq from './perguntas-arquivo.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 // Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
@@ -71,7 +81,7 @@ function projetoDoCwd(cwd = process.cwd()) {
     }).trim();
     if (!repo) return { projeto: null, motivo: 'cwd fora de git' };
     const raiz = basename(repo) === '.git' ? dirname(repo) : repo;
-    return { projeto: basename(raiz).replace(/\.git$/, '').toLowerCase() || null, motivo: 'cwd fora de git' };
+    return { projeto: arq.slugDoProjeto(basename(raiz).replace(/\.git$/, '')), motivo: 'cwd fora de git' };
   } catch (e) {
     // git que não respondeu a tempo não quer dizer "fora de git": são avisos diferentes
     if (e?.signal === 'SIGKILL' || e?.code === 'ETIMEDOUT') return { projeto: null, motivo: `git não respondeu em ${limiteMs / 1000} s` };
@@ -97,7 +107,8 @@ const pool = MEU_CLI
 // invocações não dependem do módulo, nem a cópia do script solta numa pasta sem `hooks/`).
 const DA_BATIDA = ['batida', 'pegar', 'livres', 'seguinte'].includes(process.argv[2]);
 const DO_REINICIO = process.argv[2] === 'pode-reiniciar';
-const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || process.argv[2] === 'com';
+const DA_MIGRACAO = process.argv[2] === 'perguntas' && process.argv[3] === 'migrar';
+const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || DA_MIGRACAO || process.argv[2] === 'com';
 const moduloEsperando = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
   ? await import(pathToFileURL(join(HOOKS_DIR, 'esperando-papel.mjs')).href)
   : null;
@@ -135,17 +146,32 @@ function caminho(colecao, id) {
 }
 
 function ler(colecao, id) {
-  const f = caminho(colecao, id);
-  return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
+  let f = caminho(colecao, id);
+  if (colecao === 'perguntas') f = arq.acharPergunta(caminho(colecao), id);
+  return f && existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
 }
 
 function gravar(colecao, id, data, version) {
+  if (colecao === 'perguntas') return gravarPergunta(id, data, version);
   const dir = caminho(colecao);
   mkdirSync(dir, { recursive: true });
-  const f = caminho(colecao, id);
+  gravarEm(caminho(colecao, id), id, data, version);
+  return { id, version };
+}
+function gravarEm(f, id, data, version) {
+  mkdirSync(dirname(f), { recursive: true });
   const tmp = `${f}.${process.pid}.tmp`;
   writeFileSync(tmp, `${JSON.stringify({ id, version, data }, null, 2)}\n`);
   renameSync(tmp, f);
+}
+// F183: a pergunta vai para o lugar do estado dela (aberta/assumida na pasta quente, fechada no arquivo do projeto e do mês);
+// a cópia de onde ela estava sai depois que a nova está gravada.
+function gravarPergunta(id, data, version) {
+  const dir = caminho('perguntas');
+  const antes = arq.acharPergunta(dir, id);
+  const destino = arq.lugarDe(dir, id, data);
+  gravarEm(destino, id, data, version);
+  if (antes && antes !== destino) rmSync(antes, { force: true });
   return { id, version };
 }
 
@@ -488,7 +514,7 @@ function planejar(o, seVersao, vista) {
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.com) && atual.data.com.length) base.com = atual.data.com;
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.fez)) base.fez = atual.data.fez;
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.passaram)) base.passaram = atual.data.passaram;
-  if ((colecao === 'sessoes' || colecao === 'fila') && !base.projeto && (op === 'set' || !atual)) {
+  if ((colecao === 'sessoes' || colecao === 'fila' || colecao === 'perguntas') && !base.projeto && (op === 'set' || !atual)) {
     const { projeto, motivo } = projetoDoCwd();
     if (projeto) base.projeto = projeto;
     else process.stderr.write(`aviso: ${colecao}/${id} sem projeto (${motivo})\n`);
@@ -499,6 +525,11 @@ function planejar(o, seVersao, vista) {
     try {
       if (projeto && lerTemas(ARQUIVO_DE_TEMAS()).some((t) => t?.id === novo.tema && t?.projeto && String(t.projeto).toLowerCase() === projeto)) base.projeto = projeto;
     } catch { /* lista ilegível: a validação do tema reporta */ }
+  }
+  // F183: projeto num nome só. Vale para o que esta op grava (o campo veio nela, ou o documento nasce agora); o antigo a migração conserta.
+  if (base.projeto !== undefined && ('projeto' in novo || !atual) && !arq.SLUG.test(String(base.projeto))) {
+    const sugestao = arq.slugDoProjeto(base.projeto);
+    throw new Error(`${chave}: projeto "${base.projeto}" fora do padrão (minúsculas, números e traço)${sugestao ? `; use "${sugestao}"` : ''}`);
   }
   if (!('atualizadoEm' in novo)) base.atualizadoEm = new Date().toISOString();
   validarPadrao(colecao, id, novo, base, vista, op, !!atual, viaCom, atual?.data);
@@ -511,7 +542,8 @@ function planejar(o, seVersao, vista) {
 
 function efetivar(p) {
   if (p.apagar) {
-    rmSync(caminho(p.colecao, p.id), { force: true });
+    const f = p.colecao === 'perguntas' ? arq.acharPergunta(caminho('perguntas'), p.id) : caminho(p.colecao, p.id);
+    if (f) rmSync(f, { force: true });
     return { id: p.id, deleted: true };
   }
   semearTema(p.semente);
@@ -1255,6 +1287,8 @@ function comandoBatida(args) {
       if (mudou && !conteudo.orquestradora) { const antes = arquivoJson(join(pasta, `${nome}.json`), null); gravarJson(join(pasta, `${nome}.json`), { ...conteudo, merge: antes?.merge ?? [], vagas: antes?.vagas ?? [], excedentes: antes?.excedentes ?? [], titulosVelhos: antes?.titulosVelhos ?? [], em }); continue; }
       gravarJson(join(pasta, `${nome}.json`), { ...conteudo, em });
     }
+    // F183: a resposta gravada pelo pane fica na pasta quente (o mod não apaga arquivo); a batida a leva para o arquivo
+    try { saida.perguntasArquivadas = arquivarFechadas(false); } catch (e) { process.stderr.write(`batida: não arquivei as perguntas fechadas: ${e?.message || e}\n`); }
     for (const id of marcadoresApagados) rmSync(join(ORQ(), 'ativas', id), { force: true });
     for (const id of cartoesApagados) rmSync(caminho('cartoes', id), { force: true });
     // o mesmo julgamento de `pode-reiniciar`, com a lista que a batida já tem (F152); falhar aqui não derruba a batida
@@ -1262,6 +1296,78 @@ function comandoBatida(args) {
     return saida;
   };
   return seco ? rodar() : comTrava(rodar);
+}
+
+// F183: as perguntas fechadas (respondida/cancelada) que ainda estão na pasta quente vão para o arquivo, sem mexer no conteúdo.
+// Chame dentro da trava. → os ids movidos (ou que seriam, com `seco`).
+function arquivarFechadas(seco) {
+  const dir = caminho('perguntas');
+  if (!existsSync(dir)) return [];
+  const movidas = [];
+  for (const n of readdirSync(dir)) {
+    if (!n.endsWith('.json')) continue;
+    const f = join(dir, n);
+    let doc;
+    try { doc = JSON.parse(readFileSync(f, 'utf8')); } catch { process.stderr.write(`aviso: perguntas/${n} ilegível, ficou onde está\n`); continue; }
+    if (!arq.FECHADAS.has(doc?.data?.estado)) continue;
+    const id = n.replace(/\.json$/, '');
+    movidas.push(id);
+    if (seco) continue;
+    const destino = arq.caminhoNoArquivo(dir, id, doc.data);
+    mkdirSync(dirname(destino), { recursive: true });
+    renameSync(f, destino);
+  }
+  return movidas;
+}
+
+// F183, migração única: `projeto` em slug nas quatro coleções; a pergunta sem projeto ganha o da sessão dela (sessoes/<sessaoId>,
+// senão o registro do app), e o resto `sem-projeto`; a sessão sem projeto, pelo registro do app, senão `sem-projeto`. Depois
+// arquiva as fechadas. Sem `seco`, copia o painel inteiro para <BASE>/../backups/F183-<data>/ antes de gravar.
+function migrarProjetos(seco) {
+  const doRegistro = (localId) => {
+    if (!regras || !localId) return null;
+    try { const reg = regras.registroDaSessao(localId, { fresco: true }); return reg ? arq.slugDoProjeto(regras.projetoDaSessao(reg)?.nome) : null; } catch { return null; }
+  };
+  const docs = (colecao) => {
+    const dir = caminho(colecao);
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir).filter((n) => n.endsWith('.json')).flatMap((n) => {
+      try { return [{ f: join(dir, n), doc: JSON.parse(readFileSync(join(dir, n), 'utf8')) }]; } catch { process.stderr.write(`aviso: ${colecao}/${n} ilegível, ficou como está\n`); return []; }
+    });
+  };
+  const sessoes = docs('sessoes');
+  const projetoDaSessao = new Map(sessoes.map(({ doc }) => [doc?.data?.sessionId ?? doc?.id, arq.slugDoProjeto(doc?.data?.projeto)]));
+  const novos = [];
+  for (const colecao of ['perguntas', 'sessoes', 'fila', 'cartoes']) {
+    for (const { f, doc } of colecao === 'sessoes' ? sessoes : docs(colecao)) {
+      const d = doc?.data ?? {};
+      let novo = arq.slugDoProjeto(d.projeto);
+      if (!novo && colecao === 'perguntas') {
+        const sid = [d.sessaoId, d.sessao].find((v) => LOCAL_ID.test(String(v ?? '')));
+        novo = (sid && (projetoDaSessao.get(sid) || doRegistro(sid))) || arq.SEM_PROJETO;
+      }
+      if (!novo && colecao === 'sessoes') novo = doRegistro(d.sessionId ?? doc.id) || arq.SEM_PROJETO;
+      if (!novo || novo === d.projeto) continue;
+      novos.push({ colecao, f, doc, projeto: novo });
+    }
+  }
+  const chave = (n) => (n.colecao === 'perguntas' ? n.doc.id : `${n.colecao}/${n.doc.id}`);
+  const projetos = Object.fromEntries(novos.map((n) => [chave(n), n.projeto]));
+  const fechadasNaQuente = docs('perguntas').filter(({ doc }) => arq.FECHADAS.has(doc?.data?.estado)).map(({ doc }) => doc.id);
+  if (seco) return { seco: true, projeto: projetos, arquivadas: fechadasNaQuente };
+  const backup = join(BASE, '..', 'backups', `F183-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+  mkdirSync(dirname(backup), { recursive: true });
+  cpSync(BASE, backup, { recursive: true, filter: (src) => !src.startsWith(TRAVA) });
+  for (const n of novos) gravarEm(n.f, n.doc.id, { ...n.doc.data, projeto: n.projeto }, (n.doc.version ?? 0) + 1);
+  return { seco: false, backup, projeto: projetos, arquivadas: arquivarFechadas(false) };
+}
+
+function comandoPerguntas(args) {
+  const seco = flag(args, '--seco', false);
+  const [sub, ...sobra] = args;
+  if (sobra.length || !['arquivar', 'migrar'].includes(sub)) throw new Error('uso: painel.mjs perguntas arquivar|migrar [--seco]');
+  if (sub === 'arquivar') return { seco, arquivadas: seco ? arquivarFechadas(true) : comTrava(() => arquivarFechadas(false)) };
+  return seco ? migrarProjetos(true) : comTrava(() => migrarProjetos(false));
 }
 
 // `list fila vencidos`: vivo, com dono ou `com`, sem `espera` nem `trava` (quem espera o operador ou o gate está parado de propósito)
@@ -1312,6 +1418,7 @@ function main(argv) {
       const sessao = is >= 0 ? String(resto.splice(is, 2)[1] ?? '') : null;
       if (is >= 0 && !sessao) throw new Error('--sessao pede o local_… da sessão');
       const it = resto.indexOf('--todos'); if (it >= 0) resto.splice(it, 1);
+      const ia = resto.indexOf('--arquivo'); if (ia >= 0) resto.splice(ia, 1);
       let prazoMin = null;
       if (a === 'fila') {
         const iv = resto.indexOf('vencidos', 1);
@@ -1328,12 +1435,20 @@ function main(argv) {
       }
       const b = resto[1];
       const dir = caminho(a);
+      // F183: `list perguntas` lê o projeto da pasta atual (sem `--todos`, `--projeto` nem `--sessao`) e só a pasta quente;
+      // o filtro respondida/cancelada e `--arquivo` incluem o arquivo (do projeto pedido, ou de todos).
+      let projetoDaLista = projeto;
+      if (a === 'perguntas' && !projeto && it < 0 && !sessao) {
+        const { projeto: doCwd, motivo } = projetoDoCwd();
+        if (doCwd) projetoDaLista = doCwd;
+        else process.stderr.write(`aviso: list perguntas sem projeto (${motivo}): listo todos\n`);
+      }
+      const doArquivo = a === 'perguntas' && (ia >= 0 || arq.FECHADAS.has(b)) ? arq.arquivadas(dir, { projeto: projetoDaLista ?? undefined }) : [];
       saida = existsSync(dir)
-        ? readdirSync(dir)
-            .filter((n) => n.endsWith('.json'))
-            .map((n) => JSON.parse(readFileSync(join(dir, n), 'utf8')))
+        ? [...readdirSync(dir).filter((n) => n.endsWith('.json')).map((n) => join(dir, n)), ...doArquivo]
+            .map((f) => JSON.parse(readFileSync(f, 'utf8')))
             .filter((d) => (prazoMin !== null ? ehVencido(d.data, prazoMin * 60_000, Date.now()) : !b || (a === 'fila' && b === 'esperando') || filtraPorEstado(a, d.data, b)))
-            .filter((d) => !projeto || String(d.data?.projeto ?? '').toLowerCase() === projeto)
+            .filter((d) => !projetoDaLista || String(d.data?.projeto ?? '').toLowerCase() === projetoDaLista)
             .filter((d) => !sessao || d.data?.sessaoId === sessao)
             .map((d) => (a === 'fila' ? { ...d, esperando: esperandoPapel(d.data, Date.now()) } : d))
             .filter((d) => !(a === 'fila' && b === 'esperando') || d.esperando)
@@ -1347,6 +1462,9 @@ function main(argv) {
       break;
     case 'temas':
       saida = comandoTemas(resto);
+      break;
+    case 'perguntas':
+      saida = comandoPerguntas(resto);
       break;
     case 'seguinte':
       saida = comandoSeguinte(resto);

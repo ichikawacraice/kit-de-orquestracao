@@ -132,6 +132,8 @@ type Opcoes = {
   rascunho?: string
   /** `$.prompt.fill` não pôs o texto na caixa. */
   fillRecusa?: boolean
+  /** Perguntas fechadas no arquivo (F183): `caminho` relativo a `perguntas/arquivo/`, com o mtime do arquivo. */
+  arquivadas?: Array<{ caminho: string; doc: Doc; mtimeMs: number }>
   /** A gravação da bandeira falha com este motivo. */
   bandeiraFalha?: string
   /** A gravação da bandeira só termina quando esta promessa se resolve: o clique em curso. */
@@ -194,18 +196,29 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   if (opc.bandeira !== undefined) arquivos.set(BANDEIRA, opc.bandeira)
   for (const d of opc.sessoesDocs ?? []) arquivos.set(`${PASTA}/sessoes/${d.id}.json`, JSON.stringify(d))
   for (const d of opc.cartoes ?? []) arquivos.set(`${PASTA}/cartoes/${d.id}.json`, JSON.stringify(d))
+  const mtimes = new Map<string, number>()
+  for (const a of opc.arquivadas ?? []) {
+    arquivos.set(`${PASTA}/perguntas/arquivo/${a.caminho}`, JSON.stringify(a.doc))
+    mtimes.set(`${PASTA}/perguntas/arquivo/${a.caminho}`, a.mtimeMs)
+  }
   const bandeiras: Escrita[] = []
   if (!opc.semTemas) arquivos.set(`${PASTA}/temas.json`, JSON.stringify(opc.temas ?? TEMAS_REAIS))
   const escritas: Escrita[] = []
   on('fs.list', async (_, e) => {
     if (falhaPasta) return { deny: 'sem acesso à pasta do painel' }
     if (opc.parar?.on) await new Promise(() => undefined)
+    // Como o disco: só os filhos diretos, a subpasta como `directory` (F183: `perguntas/arquivo/` mora dentro da coleção).
     const prefixo = `${e.path}/`
-    const value = [...arquivos.keys()]
-      .filter(k => k.startsWith(prefixo))
-      .map(k => ({ name: k.slice(prefixo.length), kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false }))
+    const filhos = new Map<string, { name: string; kind: 'file' | 'directory'; size: number; mtimeMs: number; isLink: boolean }>()
+    for (const k of arquivos.keys()) {
+      if (!k.startsWith(prefixo)) continue
+      const resto = k.slice(prefixo.length)
+      const barra = resto.indexOf('/')
+      if (barra < 0) filhos.set(resto, { name: resto, kind: 'file', size: 1, mtimeMs: mtimes.get(k) ?? 0, isLink: false })
+      else if (!filhos.has(resto.slice(0, barra))) filhos.set(resto.slice(0, barra), { name: resto.slice(0, barra), kind: 'directory', size: 0, mtimeMs: 0, isLink: false })
+    }
 
-    return { value }
+    return { value: [...filhos.values()] }
   })
   on('fs.read', (_, e) => {
     const t = arquivos.get(e.path)
@@ -624,6 +637,40 @@ test('o botão da opção grava a resposta presa à versão lida', async ($, on)
   expect(lido).toMatch(/Perguntas respondidas · 2/)
   expect(await ui.find({ key: 'Q7:b' })).toBeUndefined()
   await ui.unmount()
+})
+
+test('F183: o rodapé lê do arquivo só as respondidas hoje (São Paulo), além das fechadas da pasta quente', async ($, on) => {
+  const AGORA_SP = Date.UTC(2026, 9, 23, 12) // 09:00 em São Paulo
+  const hoje = Date.UTC(2026, 9, 23, 10)
+  const ontem = Date.UTC(2026, 9, 22, 20)
+  const { relogio } = engine(on, false, {}, {
+    agora: AGORA_SP,
+    arquivadas: [
+      { caminho: 'izanagi/2026-10/Q30.json', mtimeMs: hoje, doc: doc('Q30', { projeto: 'izanagi', titulo: 'fechada hoje', estado: 'respondida', resposta: 'sim', respondidaEm: new Date(hoje).toISOString() }) },
+      { caminho: 'kit/2026-10/Q31.json', mtimeMs: hoje, doc: doc('Q31', { projeto: 'kit', titulo: 'movida hoje, respondida ontem', estado: 'respondida', resposta: 'não', respondidaEm: new Date(ontem).toISOString() }) },
+      { caminho: 'kit/2026-10/Q32.json', mtimeMs: ontem, doc: doc('Q32', { projeto: 'kit', titulo: 'de ontem', estado: 'respondida', resposta: 'x', respondidaEm: new Date(ontem).toISOString() }) },
+    ],
+  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(ABRIR)
+  await relogio.settle()
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const lido = await lerTudo(ui)
+  // Q5 (respondida que ainda está na pasta quente) + Q30 (do arquivo, hoje); Q31 e Q32 são de ontem
+  expect(lido).toMatch(/Perguntas respondidas · 2/)
+  if (!/Q30/.test(lido)) await ui.press({ key: 'anteriores' })
+  const aberto = await lerTudo(ui)
+  expect(aberto).toMatch(/Q30 · respondida/)
+  expect(aberto).toMatch(/Q5 · respondida/)
+  expect(aberto).not.toMatch(/Q31|Q32/)
+  await ui.unmount()
+})
+
+test('F183: diaEmSP e inicioDoDiaEmSP contam o dia em São Paulo', () => {
+  expect(R.diaEmSP(Date.UTC(2026, 10, 1, 1))).toBe('2026-10-31')
+  expect(R.diaEmSP(Date.UTC(2026, 10, 1, 3))).toBe('2026-11-01')
+  expect(new Date(R.inicioDoDiaEmSP(Date.UTC(2026, 9, 23, 12))).toISOString()).toBe('2026-10-23T03:00:00.000Z')
 })
 
 test('erro de leitura aparece no pane, nunca lista vazia calada', async ($, on) => {

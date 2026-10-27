@@ -79,6 +79,9 @@ describe('c14 — nome do agente com e sem o prefixo do plugin', () => {
     const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'kit-c14-mut-')));
     try {
       cpSync(HOOKS, join(tmp, 'hooks'), { recursive: true });
+      // F183: pool-comum importa o módulo das perguntas, vizinho da skill
+      const scripts = join('skills', 'orquestradora', 'scripts', 'perguntas-arquivo.mjs');
+      cpSync(join(RAIZ, 'plugins', 'orquestracao', scripts), join(tmp, scripts));
       const comum = join(tmp, 'hooks', 'hooks-crewai-comum.mjs');
       const antes = readFileSync(comum, 'utf8');
       assert.match(antes, /export const semPrefixoDoPlugin = /);

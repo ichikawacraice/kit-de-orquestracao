@@ -131,7 +131,7 @@ Cada sessão cuida do próprio item e a orquestradora só lê. O que era ritual 
 
 <a id="perguntas-proprias"></a>
 ## Perguntas da própria sessão, depois de uma limpeza
-A limpeza apaga a lembrança, não as perguntas: elas ficam em `perguntas/<ID>.json` com `sessaoId` = você. No início da conversa nova, o hook `sessao-inicio.mjs` lista as abertas e as respondidas nas últimas 24 h que são suas; sem a lista (CLI fora do app), rode `painel list perguntas aberta --sessao <seu local_…>` (o `local_…` vem de `get_session` com `"self"`). Mensagem que começa com `Q<n> — pergunta aberta POR ESTA SESSÃO` é sua: retome pelo `caso` e pelo `handoff` do item, sem devolver à orquestradora nem pedir repasse. Resposta já atendida (o handoff diz) não se refaz.
+A limpeza apaga a lembrança, não as perguntas: elas ficam no painel com `sessaoId` = você (`painel get perguntas <ID>` acha a aberta na pasta quente e a respondida no arquivo do projeto). No início da conversa nova, o hook `sessao-inicio.mjs` lista as abertas e as respondidas nas últimas 24 h que são suas; sem a lista (CLI fora do app), rode `painel list perguntas aberta --sessao <seu local_…>` (o `local_…` vem de `get_session` com `"self"`). Mensagem que começa com `Q<n> — pergunta aberta POR ESTA SESSÃO` é sua: retome pelo `caso` e pelo `handoff` do item, sem devolver à orquestradora nem pedir repasse. Resposta já atendida (o handoff diz) não se refaz.
 
 <a id="via-rapida"></a>
 ## Via rápida e escopo trancado (ADR 0004, Q370, operador, 26/10)

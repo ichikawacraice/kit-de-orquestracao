@@ -273,6 +273,9 @@ caso('F70.4: --todos fora do app usa <BASE>/pool/conta-atual.txt, não a pasta d
   const copia = dir('copia'); mkdirSync(join(copia, 'pool'), { recursive: true }); mkdirSync(join(copia, 'hooks'));
   for (const f of readdirSync(POOL).filter((n) => n.endsWith('.mjs') || n.endsWith('.json'))) copyFileSync(join(POOL, f), join(copia, 'pool', f));
   for (const f of readdirSync(HOOKS).filter((n) => n.endsWith('.mjs'))) copyFileSync(join(HOOKS, f), join(copia, 'hooks', f));
+  // F183: pool-comum importa o módulo das perguntas, vizinho da skill
+  mkdirSync(join(copia, 'skills', 'orquestradora', 'scripts'), { recursive: true });
+  copyFileSync(join(PLUGIN, 'skills', 'orquestradora', 'scripts', 'perguntas-arquivo.mjs'), join(copia, 'skills', 'orquestradora', 'scripts', 'perguntas-arquivo.mjs'));
   gravarContaAtual(join(copia, 'pool'), `${VELHA}/${ORG}\n`);
   const r2 = rodar(['--todos', '--conferir'], { semEnv: SEM_CONTA, script: join(copia, 'pool', 'aplicar-skills-do-papel.mjs') });
   ok(r2.status === 2, `deveria recusar (exit 2), deu ${r2.status}: ${r2.out} ${r2.err}`);

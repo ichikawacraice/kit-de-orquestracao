@@ -453,6 +453,13 @@ export function hora(ms: number): string {
   return `${dois(d.getHours())}:${dois(d.getMinutes())}:${dois(d.getSeconds())}`
 }
 
+// São Paulo sem horário de verão desde 2019: UTC−3 fixo (o painel.mjs usa o fuso pelo Intl; dão o mesmo dia).
+const SP_MS = 3 * 3_600_000
+/** O dia (AAAA-MM-DD) de um instante em São Paulo. */
+export const diaEmSP = (ms: number): string => new Date(ms - SP_MS).toISOString().slice(0, 10)
+/** O instante em que começou, em São Paulo, o dia de `ms`. */
+export const inicioDoDiaEmSP = (ms: number): number => Date.parse(`${diaEmSP(ms)}T00:00:00Z`) + SP_MS
+
 const mensagem = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 let timer: { cancel: () => void } | undefined
@@ -842,8 +849,46 @@ async function ler($: EngineInterface): Promise<void> {
     return docs
   }
 
+  // F183: as fechadas moram em `perguntas/arquivo/<projeto>/<AAAA-MM>/`; o rodapé lê de lá só as respondidas hoje.
+  const lerArquivoDoDia = async (): Promise<Doc[]> => {
+    const raiz = `${pasta}/perguntas/arquivo`
+    const agoraMs = await $.clock.now()
+    const hoje = diaEmSP(agoraMs)
+    const desde = inicioDoDiaEmSP(agoraMs)
+    let projetos: Awaited<ReturnType<EngineInterface['fs']['list']>> = []
+    try {
+      projetos = await $.fs.list(raiz)
+    } catch {
+      return [] // sem arquivo ainda: nada fechado fora da pasta quente
+    }
+    const docs: Doc[] = []
+    for (const p of projetos.filter(e => e.kind === 'directory')) {
+      const dir = `${raiz}/${p.name}/${hoje.slice(0, 7)}`
+      let entradas: typeof projetos = []
+      try {
+        entradas = await $.fs.list(dir)
+      } catch {
+        continue // projeto sem pergunta fechada neste mês
+      }
+      // o arquivo é escrito quando a pergunta fecha ou é movida: o que não mudou hoje não foi respondido hoje
+      for (const e of entradas) {
+        if (e.kind !== 'file' || !e.name.endsWith('.json') || e.mtimeMs < desde) continue
+        try {
+          const d = lerDoc((await $.fs.read(`${dir}/${e.name}`)) as string, e.name)
+          const quando = texto(d.data.respondidaEm) ?? texto(d.data.atualizadoEm)
+          if (quando && !Number.isNaN(Date.parse(quando)) && diaEmSP(Date.parse(quando)) === hoje) docs.push(d)
+        } catch (err) {
+          erros.push(`perguntas/arquivo/${p.name}/${e.name}: ${mensagem(err)}`)
+        }
+      }
+    }
+
+    return docs
+  }
+
   let docsSessoes: Doc[] = []
   let docsPerguntas: Doc[] = []
+  let docsDoDia: Doc[] = []
   let docsFila: Doc[] = []
   let docsCartoes: Doc[] = []
   let temas: Tema[] = []
@@ -862,6 +907,10 @@ async function ler($: EngineInterface): Promise<void> {
     lerColecao('perguntas').then(
       d => void (docsPerguntas = d),
       err => void erros.push(`perguntas do painel: ${mensagem(err)}`),
+    ),
+    lerArquivoDoDia().then(
+      d => void (docsDoDia = d),
+      err => void erros.push(`perguntas respondidas hoje: ${mensagem(err)}`),
     ),
     lerColecao('fila').then(
       d => void (docsFila = d),
@@ -946,7 +995,9 @@ async function ler($: EngineInterface): Promise<void> {
     })
   const perguntas = docsPerguntas.filter(d => d.data.estado === 'aberta').map(montarPergunta).sort((a, b) => numero(a.id) - numero(b.id))
   const assumidas = docsPerguntas.filter(d => d.data.estado === 'assumida').map(montarPergunta).sort((a, b) => numero(b.id) - numero(a.id))
-  const anteriores: PerguntaAnterior[] = docsPerguntas
+  // As fechadas que ainda estão na pasta quente (a batida as leva ao arquivo) mais as do arquivo respondidas hoje.
+  const naQuente = new Set(docsPerguntas.map(d => d.id))
+  const anteriores: PerguntaAnterior[] = [...docsPerguntas, ...docsDoDia.filter(d => !naQuente.has(d.id))]
     .filter(d => d.data.estado !== 'aberta' && d.data.estado !== 'assumida')
     .sort((a, b) => numero(b.id) - numero(a.id))
     .slice(0, ANTERIORES)

@@ -198,6 +198,7 @@ caso('c4 R1: o painel.mjs do plugin não cai para ~/.claude/hooks (só vale onde
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'pode-reiniciar.mjs'), readFileSync(join(SCRIPTS, 'pode-reiniciar.mjs'), 'utf8')); // idem
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'fila-de-merge.mjs'), readFileSync(join(SCRIPTS, 'fila-de-merge.mjs'), 'utf8')); // idem (ADR 0011)
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'testes-afetados.mjs'), readFileSync(join(SCRIPTS, 'testes-afetados.mjs'), 'utf8')); // idem (F184)
+  writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'perguntas-arquivo.mjs'), readFileSync(join(SCRIPTS, 'perguntas-arquivo.mjs'), 'utf8')); // idem (F183)
   const r = spawnSync('node', [join(plugin, 'skills', 'orquestradora', 'scripts', 'painel.mjs'), 'set', 'sessoes', 'local_OUTRA', '{"titulo":"x"}'], {
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', cwd: base,
     env: { ...process.env, HOME: lar, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: 'cli-self', KIT_HOOKS_DIR: '' },
@@ -273,7 +274,8 @@ caso('respondidaPor é prova do clique no painel: set/update/batch pela linha de
 
 const RESP = { estado: 'respondida', titulo: 'limpar · orquestradora', sessaoId: 'local_a', resposta: 'não', respondidaPor: 'painel', respondidaEm: '2026-10-26T01:00:00.000Z', atualizadoEm: '2026-10-26T01:00:00.000Z' };
 const gravaComoOPane = (extra = {}) => { mkdirSync(join(base, 'painel', 'perguntas'), { recursive: true }); writeFileSync(arq('perguntas', 'Q1'), JSON.stringify({ id: 'Q1', version: 1, data: { ...RESP, ...extra } })); };
-const dado = () => JSON.parse(readFileSync(arq('perguntas', 'Q1'), 'utf8')).data;
+// F183: a respondida sai da pasta quente para o arquivo; o `get` a acha onde estiver.
+const dado = () => JSON.parse(painel('get', 'perguntas', 'Q1').out).data;
 caso('respondidaEm também só o pane grava: set/update/batch pela linha de comando são recusados', () => {
   gravaComoOPane();
   const r = painel('update', 'perguntas', 'Q1', '{"respondidaEm":"2099-01-01T00:00:00.000Z"}');

@@ -16,6 +16,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { gravaNoPainel } from './hooks-crewai-comum.mjs';
 import { BASE as BASE_DO_POOL, registroDaSessao, gitCommonDir } from './pool-comum.mjs';
+import { acharPergunta } from '../skills/orquestradora/scripts/perguntas-arquivo.mjs';
 
 const BASE = join(homedir(), '.claude', 'orquestracao');
 const ATIVAS = join(BASE_DO_POOL, 'ativas'); // o mesmo `ativas/` que projetoTemOrquestradora lê
@@ -51,7 +52,8 @@ function citaPerguntaDestaSessao(texto, sessionId) {
   }
   const painel = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(BASE, 'painel');
   return ids.some((q) => {
-    try { return JSON.parse(readFileSync(join(painel, 'perguntas', `${q}.json`), 'utf8')).data?.sessaoId === local; } catch { return false; }
+    // F183: a pergunta fechada mora no arquivo; acharPergunta olha a pasta quente e depois ele
+    try { const f = acharPergunta(join(painel, 'perguntas'), q); return Boolean(f) && JSON.parse(readFileSync(f, 'utf8')).data?.sessaoId === local; } catch { return false; }
   });
 }
 
