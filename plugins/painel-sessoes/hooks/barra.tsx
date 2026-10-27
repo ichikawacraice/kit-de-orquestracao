@@ -335,7 +335,6 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
       return (
         <Button
           key="limpar"
-         
           variant={destaque ? 'primary' : 'secondary'}
           dimColor={!destaque}
           onPress={() => {
@@ -350,7 +349,6 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
       return (
         <Button
           key="modo"
-         
           variant="secondary"
           dimColor={modo === 'presente'}
           onPress={() => {
