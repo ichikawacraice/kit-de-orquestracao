@@ -158,11 +158,13 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, che
     if (ocupados.has(r.sessionId) || noFez.has(r.sessionId)) continue;
     velhos.add(r.sessionId);
     const t = ms(r.lastActivityAt);
-    if (r.isRunning === true || (t !== null && agoraMs - t < TITULO_VELHO_MIN * 60_000)) continue;
     const titulo = String(r.title).trim();
-    projeto(p).titulosVelhos.push({ apelido, localId: r.sessionId, titulo });
     const chave = `titulo:${r.sessionId}`;
-    if (avisos[chave]?.titulo === titulo) continue;
+    const avisado = avisos[chave]?.titulo === titulo;
+    // rodando ou recente: ainda não é velho, exceto quem já foi avisado deste título (segue no relatório, sem relatório a mais)
+    if (!avisado && (r.isRunning === true || (t !== null && agoraMs - t < TITULO_VELHO_MIN * 60_000))) continue;
+    projeto(p).titulosVelhos.push({ apelido, localId: r.sessionId, titulo });
+    if (avisado) continue;
     nova(r.sessionId, `O seu título "${titulo}" é de um item que já fechou: você não é dona, não está no \`com\` nem no \`fez\` de nenhum item vivo. Troque o título para \`${apelido} · livre\` e chame \`clear_session\` com "self".`, null, 'titulo-velho');
     avisos[chave] = { em: new Date(agoraMs).toISOString(), localId: r.sessionId, titulo };
   }

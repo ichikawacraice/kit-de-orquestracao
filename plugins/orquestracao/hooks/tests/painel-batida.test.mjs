@@ -410,3 +410,12 @@ test('batida: a mesma lista de títulos velhos em outra ordem não repete o rela
   const b = batida(sessoes(sessao(12, 'E12 · b'), sessao(6, 'E6 · a'), orq), T + 11 * MIN);
   assert.deepEqual(msgs(b, 'relatorio'), [], b.out);
 });
+test('batida: o avisado que acorda continua em titulosVelhos, sem relatório a mais (F134, nota da V1)', () => {
+  const orq = sessao(30, '🎛 orquestradora — kit');
+  assert.equal(msgs(batida(sessoes(sessao(6, 'E6 · a'), orq)), 'relatorio').length, 1);
+  const b = batida(sessoes(sessao(6, 'E6 · a', { isRunning: true }), orq), T + 10 * MIN);
+  assert.deepEqual(b.json().projetos.kit.titulosVelhos.map((x) => x.apelido), ['E6'], b.out);
+  assert.deepEqual(msgs(b, 'relatorio'), []);
+  const c = batida(sessoes(sessao(6, 'E6 · a', { lastActivityAt: iso(T + 10 * MIN) }), orq), T + 21 * MIN);
+  assert.deepEqual(msgs(c, 'relatorio'), [], c.out);
+});
