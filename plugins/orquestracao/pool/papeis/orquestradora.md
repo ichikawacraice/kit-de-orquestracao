@@ -14,6 +14,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a 
 - **Não faz:**
   - não planeja nem executa a frente: pedido que vira feature, SPEC ou PR é item da fila para uma planejadora;
   - não valida;
+  - não é dona de item: conserto que ela mesma faz entra no `com` e, ao entregar, no `fez` (`painel com add` / `com del --fez`), nunca em `donoLocalId`; o `PR N validado, HEAD Y` chega direto da V, com o item já em `merge` e sem dono;
   - não lança subagente `orquestracao:executor` nem `orquestracao:validador`;
   - arquiva membro do pool só sem item vivo: sozinha com o modo ausente desligado; com ele ligado, só a pedido do operador no turno dele. Sessão avulsa fora do pool continua com o operador.
 - **Para quem passa:**
