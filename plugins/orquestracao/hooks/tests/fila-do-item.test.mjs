@@ -257,6 +257,40 @@ caso('F153-f: dona com dois itens, um em planejamento não gravado e um em execu
   ok(r.reason.includes('item F20 (em andamento)') && !r.reason.includes('F21'), `texto: ${r.reason}`);
 });
 
+// ---- F179: a dona do item inteiro (`via: "dona"`) grava o item no turno que mudou algo (editou, commitou, empurrou, abriu PR) ----
+const usaNoTurno = (name, input) => ({ type: 'assistant', uuid: `a-${name}`, timestamp: '2026-10-24T12:00:10.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', id: `t-${name}`, name, input }] } });
+const turnoDaDona = (...usos) => { registroLocal(LOCAL, SID); transcript([...turno(), ...usos]); return rodar(stop()); };
+caso('F179-a: dona via dona que editou arquivo e não gravou o item no turno: bloqueia e manda gravar agora', () => {
+  item('F40', { etapa: 'execucao', via: 'dona', donoLocalId: LOCAL, donoApelido: 'dona', atualizadoEm: ANTES });
+  const r = turnoDaDona(usaNoTurno('Edit', { file_path: '/r/a.mjs', old_string: 'a', new_string: 'b' }));
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('F40') && r.reason.includes('"agora"'), `texto: ${r.reason}`);
+});
+caso('F179-b: dona via dona que commitou, empurrou ou abriu PR sem gravar: bloqueia (em qualquer etapa viva, inclusive merge)', () => {
+  for (const [etapa, cmd] of [['planejamento', 'git commit -m x'], ['validacao', 'git push -u origin b'], ['merge', 'gh pr create --title x']]) {
+    rmSync(join(filaDir(), 'F40.json'), { force: true });
+    item('F40', { etapa, via: 'dona', donoLocalId: LOCAL, atualizadoEm: ANTES });
+    igual(turnoDaDona(usaNoTurno('Bash', { command: cmd }))?.decision, 'block', `${etapa}: ${cmd}`);
+  }
+});
+caso('F179-c: dona via dona que só leu ou esperou: passa (a presença do item é detectada: com edição bloquearia)', () => {
+  item('F40', { etapa: 'merge', via: 'dona', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  igual(turnoDaDona(usaNoTurno('Bash', { command: 'git status' }), usaNoTurno('Read', { file_path: '/r/a.mjs' })), null, 'só leu');
+  igual(turnoDaDona(usaNoTurno('Write', { file_path: '/r/b.md', content: 'x' }))?.decision, 'block', 'com escrita bloqueia');
+});
+caso('F179-d: dona via dona que editou E gravou o item no turno: passa', () => {
+  item('F40', { etapa: 'execucao', via: 'dona', donoLocalId: LOCAL, atualizadoEm: DEPOIS });
+  igual(turnoDaDona(usaNoTurno('Edit', { file_path: '/r/a.mjs', old_string: 'a', new_string: 'b' })), null, 'passa');
+});
+caso('F179-e: a edição de um turno ANTERIOR não conta', () => {
+  item('F40', { etapa: 'execucao', via: 'dona', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  registroLocal(LOCAL, SID);
+  const velho = { ...usaNoTurno('Edit', { file_path: '/r/a.mjs' }), timestamp: '2026-10-24T10:00:03.000Z' };
+  const t = turno(); t.splice(1, 0, velho);
+  transcript(t);
+  igual(rodar(stop()), null, 'passa');
+});
+
 const livreNoTurno = () => [...turno(), { type: 'assistant', uuid: 'a2', timestamp: '2026-10-24T12:01:00.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'mcp__ccd_session_mgmt__set_session_title', input: { session_id: 'self', title: 'P1 · livre' } }] } }];
 caso('F32: a dona que se declarou livre no turno passa (livre-no-turno): o livre-se-limpa a solta', () => {
   item('F12', { etapa: 'planejamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
