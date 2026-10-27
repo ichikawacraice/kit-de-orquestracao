@@ -3084,3 +3084,12 @@ test('F189 desenho: a dona que saiu do com sem travar o item diz "dona F<n> saiu
   const [item] = monta([DONA_DOC({ donoLocalId: 'local_e', donoApelido: 'E3' })], [{ sessionId: 'local_e' }])
   expect(D.quemSaiu(item as never).map(q => q.t)).toEqual(['dona F189 saiu'])
 })
+
+// F200: o id do documento vira caminho na resposta (`perguntas/<id>.json`); o id de dentro do JSON só vale se for um nome simples.
+test('lerDoc: id com barra ou ".." fica com o nome do arquivo', () => {
+  expect(R.lerDoc('{"id":"Q7","data":{}}', 'Q7.json').id).toBe('Q7')
+  expect(R.lerDoc('{"id":"../../alvo","data":{}}', 'Q8.json').id).toBe('Q8')
+  expect(R.lerDoc('{"id":"a/b","data":{}}', 'Q9.json').id).toBe('Q9')
+  expect(R.lerDoc('{"id":"..","data":{}}', 'Q10.json').id).toBe('Q10')
+  expect(R.lerDoc('{"data":{}}', 'Q11.json').id).toBe('Q11')
+})

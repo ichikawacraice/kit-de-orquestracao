@@ -146,6 +146,7 @@ export function carregarConfig(raiz, kit = lerKitJson(raiz), ambiente = {}) {
   validarGuarda(kit.guarda);
   validarDocumentos(kit.documentos);
   validarExtras(kit.arvore?.extras);
+  validarNomesDoGate(kit.gate);
   const base = perfil === "pnpm-workspace" ? mesclar(PADRAO, PERFIL_PNPM) : PADRAO;
   const efetiva = mesclar(base, { gate: kit.gate ?? {}, arvore: kit.arvore ?? {}, guarda: objeto(kit.guarda) ? kit.guarda : {}, documentos: objeto(kit.documentos) ? kit.documentos : {} });
   const { regras, origem } = regrasQueRodam(raiz, kit, ambiente);
@@ -163,6 +164,18 @@ export function avisoDeLaco(comando) {
     return `gate.comandoCompleto ${JSON.stringify(comando)} parece chamar o \`test\` do projeto, que é o próprio gate (laço) — o gate recusa se for; aponte para o script da suíte, ex.: "npm run test:suite"`;
   }
   return null;
+}
+
+/**
+ * `gate.trava`, `gate.travaConserto` e `gate.verdeDir` são nomes dentro do git dir do projeto: nome simples, sem `/` nem `..`.
+ * O `kit.json` vem do repositório; com `..` o gate retomaria (apagaria) uma trava de fora e o `kit remover` apagaria a pasta.
+ */
+function validarNomesDoGate(gate) {
+  for (const campo of ["trava", "travaConserto", "verdeDir"]) {
+    const v = gate?.[campo];
+    if (v === undefined) continue;
+    if (typeof v !== "string" || !/^[\w.-]+$/.test(v) || v === "." || v === "..") throw new Error(`gate.${campo} precisa ser um nome simples (letras, dígitos, ".", "-", "_"), e veio ${JSON.stringify(v)}`);
+  }
 }
 
 /** `guarda.regras`: lista de regras conhecidas. Um typo desligaria a regra calado, e uma string viraria um conjunto de letras. */

@@ -461,3 +461,28 @@ test('erro de preparo diz quem ficou na fila (o PR de outra base)', () => {
     assert.match(r.err, /ficaram na fila: #25/);
   } finally { limpar(c); }
 });
+
+// F200: o repositório pode ser público; o PR de fork (de outra pessoa) não roda o gate na máquina nem é mergeado pela fila.
+test('PR de fork é recusado: nem gate nem merge, e o pedido explica', () => {
+  const c = montar();
+  try {
+    const est = JSON.parse(readFileSync(join(c.raiz, 'estado.json'), 'utf8'));
+    est.prs[24].isCrossRepository = true;
+    writeFileSync(join(c.raiz, 'estado.json'), JSON.stringify(est));
+    const marca = join(c.raiz, 'gate-rodou');
+    // antes de medir: o gate deste caso deixa marca, e o PR 21 (do próprio repositório) a deixa
+    const ok = c.painel('fila-de-merge', '21', '--gate', `touch ${marca}`);
+    assert.equal(ok.exit, 0, ok.err + ok.out);
+    assert.ok(existsSync(marca), 'o gate do PR do repositório não rodou');
+    rmSync(marca);
+    const r = c.painel('fila-de-merge', '24', '--gate', `touch ${marca}`);
+    assert.notEqual(r.exit, 0, 'a fila aceitou o PR de fork');
+    assert.match(r.err, /fork/);
+    assert.equal(existsSync(marca), false, 'o gate rodou o código do fork');
+    assert.deepEqual(c.merges(), [21], 'mergeou o fork');
+    const m = c.painel('mergear', '24', c.shas[24]);
+    assert.equal(JSON.parse(m.out).recusado, true, `o mergear aceitou o PR de fork: ${m.out}${m.err}`);
+    assert.match(JSON.parse(m.out).motivo, /fork/);
+    assert.deepEqual(c.merges(), [21]);
+  } finally { limpar(c); }
+});

@@ -81,12 +81,15 @@ type Vivo = {
 
 type Doc = { id: string; data: Record<string, unknown>; version?: number }
 
-/** Um documento do painel: o arquivo inteiro, `{ id, version, data }`. */
+/** O id que pode virar nome de arquivo (o mesmo do `painel.mjs`): sem barra, e nem `.` nem `..`. */
+const ID_DO_DOC = /^(?!\.{1,2}$)[A-Za-z0-9_.-]{1,120}$/
+
+/** Um documento do painel: o arquivo inteiro, `{ id, version, data }`. O id de dentro só vale se for nome simples: ele vira caminho na resposta. */
 export function lerDoc(texto: string, nome: string): Doc {
   const v = JSON.parse(texto) as Partial<Doc>
   if (!v || typeof v.data !== 'object' || v.data === null) throw new Error(`${nome}: sem o campo data`)
 
-  return { id: typeof v.id === 'string' ? v.id : nome.replace(/\.json$/, ''), data: v.data, version: v.version }
+  return { id: typeof v.id === 'string' && ID_DO_DOC.test(v.id) ? v.id : nome.replace(/\.json$/, ''), data: v.data, version: v.version }
 }
 
 const CARTAO_VALIDADE_MS = 12 * 3_600_000

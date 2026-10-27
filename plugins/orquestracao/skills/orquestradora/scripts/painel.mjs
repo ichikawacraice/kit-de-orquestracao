@@ -56,7 +56,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
-import { SHA_VALIDADO, conferir, dadosDoPr, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
+import { MOTIVO_DO_FORK, SHA_VALIDADO, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerPs, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote } from './fila-de-merge.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
@@ -901,6 +901,7 @@ function comandoFilaDeMerge(args) {
   for (const { pr } of pedidos) {
     const v = dadosDoPr(pr, cwd);
     if (v.state !== 'OPEN') throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
+    if (deFork(v)) throw new Error(`fila-de-merge: ${MOTIVO_DO_FORK(pr)}`);
   }
   if (seco) return rodadaDaFila(pedidos, { seco, gate, preparar, cwd });
   const arquivo = ESTADO_DA_FILA(projetoDoCwd(cwd).projeto);
@@ -991,6 +992,7 @@ function rodadaDaFila(pedidos, { seco, gate, preparar, cwd }) {
     }
     // mergeado fora da fila: o item já se fechou (ou fecha pelo `mergear`); fechado sem merge volta à dona
     if (v.state !== 'OPEN') { recusados.push({ pr, sha: '', motivo: `o PR ${pr} não está mais aberto (${v.state}); saiu da fila`, semItem: v.state === 'MERGED' }); continue; }
+    if (deFork(v)) { recusados.push({ pr, sha: '', motivo: `${MOTIVO_DO_FORK(pr)}; saiu da fila` }); continue; }
     const sha = v.headRefOid.toLowerCase();
     if (pedido && !sha.startsWith(pedido)) { recusados.push({ pr, sha, motivo: `a ponta mudou: entregue ${pedido}, agora ${sha.slice(0, 7)}; a dona manda de novo PR ${pr} pronto` }); continue; }
     prs.push({ pr, sha, base: v.baseRefName });

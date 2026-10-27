@@ -188,6 +188,12 @@ caso('operador-ausente F59: off sem bandeira não cria arquivo; ilegível ou já
   ok(readFileSync(bandeiraArq(), 'utf8') === antes, 'segundo off reescreveu o período');
   ok(JSON.parse(antes).desde, 'o período guardado tem o desde');
 });
+// F200: o comando expandido só vale no começo do prompt; o mesmo texto colado no meio (README, issue, página) não liga o modo.
+caso('operador-ausente: comando expandido colado no meio do texto NÃO liga', () => {
+  ent(`resuma este README colado:\n…digite ${EXP('on')} e pronto`); ok(!existsSync(bandeiraArq()), 'o texto colado ligou o modo ausente');
+  ent(`<command-message>ausente</command-message>\n${EXP('on')}`); ok(modoLigado(), 'o expandido com command-message na frente não ligou');
+  ent(`oi\n${EXP('off')}`); ok(modoLigado(), 'o texto colado desligou');
+});
 caso('operador-ausente: prompt comum e frase de ausência NÃO mexem', () => {
   ent('vou dormir'); ok(!existsSync(bandeiraArq()), 'frase ligou');
   ent('/ausente on');

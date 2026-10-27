@@ -161,3 +161,20 @@ test('F183: a pergunta que a migração marcou `sem-projeto` segue em semProjeto
   assert.deepEqual(j.perguntas.semProjeto.map((q) => q.id).sort(), ['Q11', 'Q9']);
   assert.ok(j.pedeAcao.some((p) => p.id === 'Q9') && j.pedeAcao.some((p) => p.id === 'Q11'));
 });
+
+// F200: o que vem por argumento não sai da pasta das entregas nem vira opção do git.
+test('entregue: --desde com "/../" não grava fora de ausencias/; --branch com "-" não vira opção do git', () => {
+  const a = ambiente();
+  const fora = join(a.raiz, 'fora');
+  const r = a.rodar('entregue', '--repo', a.repo, '--projeto', 'proj', '--desde', 'Oct 27 2026 (/../../fora/pwn)', '--ate', 'Oct 28 2026');
+  assert.equal(r.status, 0, r.stderr);
+  const gravado = JSON.parse(r.stdout).entregue;
+  assert.ok(gravado && existsSync(gravado), 'precondição: a entrega foi gravada');
+  assert.equal(dirname(gravado), join(a.base, 'ausencias'), `gravou fora da pasta: ${gravado}`);
+  assert.equal(existsSync(fora), false);
+  const prova = join(a.raiz, 'PROVA');
+  const b = a.rodar('resumo', '--repo', a.repo, '--projeto', 'proj', '--desde', periodo.desde, '--ate', periodo.ate, '--branch', `--upload-pack=touch ${prova};git-upload-pack`);
+  assert.equal(existsSync(prova), false, 'o --branch virou opção do git e executou comando');
+  assert.notEqual(b.status, 0, 'branch inválida devia ser recusada');
+  assert.match(b.stderr, /branch/);
+});

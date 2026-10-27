@@ -1,8 +1,8 @@
 // O que o kit põe num projeto e como: o plano é calculado em memória (iniciar, adotar e --simular usam o mesmo) e só então gravado.
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { LOCK, blocosDe, sha256 } from './lock.mjs';
@@ -19,6 +19,25 @@ export const HOOK_GUARDA = 'node "$CLAUDE_PROJECT_DIR/scripts/kit/guarda-de-oper
 const TESTE_PADRAO_DO_NPM = /no test specified/;
 /** Arquivos que o projeto também edita: nunca saem inteiros; o kit mexe só nos blocos/chaves que registrou. */
 export const COMPARTILHADOS = new Set(['CLAUDE.md', 'package.json', '.claude/settings.json', '.claude/kit.json']);
+
+/** Existe, inclusive como link simbólico quebrado (o `existsSync` segue o link e diria que não). */
+export const existe = (p) => { try { lstatSync(p); return true; } catch { return false; } };
+
+/**
+ * Por que o kit não pode gravar nem apagar `rel` em `destino`, ou `null` quando pode: o caminho tem de ficar dentro do projeto
+ * (sem absoluto, sem `..`) e não passar por link simbólico, nem ser um. O repositório pode ser de outra pessoa: um link
+ * versionado faria o kit escrever onde o link aponta (ex.: um arquivo do shell na pasta pessoal).
+ */
+export function foraDoProjeto(destino, rel) {
+  if (typeof rel !== 'string' || rel === '' || isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) return `${rel}: caminho fora do projeto`;
+  let atual = destino;
+  for (const parte of rel.split(/[\\/]/).filter(Boolean)) {
+    atual = join(atual, parte);
+    let st; try { st = lstatSync(atual); } catch { return null; }
+    if (st.isSymbolicLink()) return `${rel}: ${relative(destino, atual)} é link simbólico — o kit não grava nem apaga através de link`;
+  }
+  return null;
+}
 
 export const lerTexto = (destino, rel) => (existsSync(join(destino, rel)) ? readFileSync(join(destino, rel), 'utf8') : null);
 export const lerModelo = () => JSON.parse(readFileSync(join(RAIZ_DO_KIT, 'modelos', 'kit.json'), 'utf8'));
@@ -488,6 +507,7 @@ export function gravar(destino, mudancas, lock) {
     if (!lock.pastasCriadas.length) delete lock.pastasCriadas;
     itens.push({ arquivo: LOCK, antigo: lerTexto(destino, LOCK), novo: `${JSON.stringify(lock, null, 2)}\n` });
   }
+  for (const m of itens) { const motivo = foraDoProjeto(destino, m.arquivo); if (motivo) return { erro: `não gravei nada: ${motivo}` }; }
   const criadas = []; const temporarios = []; const renomeados = [];
   let onde = '';
   try {
@@ -496,7 +516,8 @@ export function gravar(destino, mudancas, lock) {
       onde = m.arquivo;
       const t = `${join(destino, m.arquivo)}.kit-tmp`;
       temporarios.push(t);
-      writeFileSync(t, m.novo);
+      rmSync(t, { force: true }); // `.kit-tmp` que já existe (órfão, ou link plantado) sai; o `wx` cria um arquivo novo e não segue link
+      writeFileSync(t, m.novo, { flag: 'wx' });
       if (m.antigo !== null) chmodSync(t, statSync(join(destino, m.arquivo)).mode & 0o7777);
     }
     for (const m of itens) { onde = m.arquivo; renomeado(m, destino, renomeados); }

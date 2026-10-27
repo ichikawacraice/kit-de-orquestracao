@@ -15,7 +15,7 @@ export const semPrefixoDoKit = (nome) => String(nome ?? '').replace(/^\/?(?:orqu
 export function registrar(sessao, hook, desfecho, detalhe = '') {
   try {
     const d = String(detalhe).replace(/\s+/g, ' ').slice(0, 300);
-    appendFileSync(LOG, `${new Date().toISOString()}\t${sessao || '-'}\t${hook}\t${desfecho}\t${d}\n`);
+    appendFileSync(LOG, `${new Date().toISOString()}\t${sessao || '-'}\t${hook}\t${desfecho}\t${d}\n`, { mode: 0o600 }); // o modo vale ao criar
   } catch { /* sem log, segue */ }
 }
 

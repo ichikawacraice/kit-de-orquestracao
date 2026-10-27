@@ -1,10 +1,10 @@
 // `kit remover [--simular]`: tira blocos, chaves e arquivos cujo hash bate com o lock; o que foi mexido fica e é listado.
 import { existsSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { carregarConfig } from '../gate/config.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, desfazerOperador, esqueletoDe, fraseDoKit, gitDirComum, lerTexto, semBom, semOsBlocos, serializar } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, desfazerOperador, esqueletoDe, foraDoProjeto, fraseDoKit, gitDirComum, lerTexto, semBom, semOsBlocos, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -14,6 +14,9 @@ export function remover({ destino, simular = false }) {
   const caminho = join(destino, LOCK);
   const { lock, erro } = lerLock(destino);
   if (erro) return { codigo: 1, saida: '', erro: `kit remover: ${erro}` };
+  // o que o kit edita no lugar (CLAUDE.md e os JSON) não pode ser link: a edição iria para onde ele aponta
+  const links = [...COMPARTILHADOS, LOCK].map((rel) => foraDoProjeto(destino, rel)).filter(Boolean);
+  if (links.length) return { codigo: 1, saida: '', erro: `kit remover: ${links.join('; ')} — nada foi removido` };
   const ilegiveis = [];
   const c = lock.chaves ?? { settings: {}, package: {}, kitJson: {} };
   const linhas = []; const gravacoes = new Map(); const apagar = [];
@@ -23,6 +26,8 @@ export function remover({ destino, simular = false }) {
   // arquivos inteiros do kit (scripts/kit/…): só se o hash bate
   for (const [rel, hash] of Object.entries(lock.arquivos)) {
     if (COMPARTILHADOS.has(rel)) continue;
+    const motivo = foraDoProjeto(destino, rel);
+    if (motivo) { linhas.push(`recusado: ${motivo}`); continue; }
     const atual = lerTexto(destino, rel);
     if (atual === null) continue;
     if (sha256(atual) === hash) { apagar.push(rel); tirou(rel); } else deixou(rel);
@@ -44,7 +49,7 @@ export function remover({ destino, simular = false }) {
       } else deixou(`bloco ${nome} (CLAUDE.md)`);
       continue;
     }
-    const inteiro = claude.match(new RegExp(`<!-- kit:${nome} v\\d+ -->[\\s\\S]*?<!-- /kit:${nome} -->`))[0];
+    const inteiro = claude.match(new RegExp(`<!-- kit:${escapar(nome)} v\\d+ -->[\\s\\S]*?<!-- /kit:${escapar(nome)} -->`))[0];
     const i = claude.indexOf(inteiro);
     const antes = claude[i - 1] === '\n' ? (claude[i - 2] === '\r' ? 2 : 1) : 0;
     const depois = claude.startsWith('\r\n', i + inteiro.length) ? 2 : claude[i + inteiro.length] === '\n' ? 1 : 0;
@@ -135,7 +140,7 @@ export function remover({ destino, simular = false }) {
   // o verde guardado do gate mora no git dir do projeto (um para todo worktree)
   let verde = null;
   const comum = gitDirComum(destino);
-  if (comum) { let nome = 'kit-gate-verde'; try { nome = carregarConfig(destino).gate.verdeDir || nome; } catch { /* kit.json ilegível: o nome padrão */ } const d = join(comum, nome); if (existsSync(d)) verde = d; }
+  if (comum) { let nome = 'kit-gate-verde'; try { nome = carregarConfig(destino).gate.verdeDir || nome; } catch { /* kit.json ilegível: o nome padrão */ } const d = resolve(comum, nome); if (d.startsWith(resolve(comum) + sep) && existsSync(d)) verde = d; }
   if (verde) tirou(`${verde.replace(comum, '.git')}/ (verde guardado do gate)`);
 
   if (ilegiveis.length) return { codigo: 1, saida: '', erro: `kit remover: ${ilegiveis.join('; ')} — nada foi removido` };
@@ -145,7 +150,7 @@ export function remover({ destino, simular = false }) {
     rmSync(caminho, { force: true });
     if (verde) rmSync(verde, { recursive: true, force: true });
     // só as pastas que o lock diz que o kit criou, da mais funda para a mais rasa, e só se ficaram vazias
-    for (const dir of [...(lock.pastasCriadas ?? [])].sort((a, b) => b.split('/').length - a.split('/').length)) { try { if (!readdirSync(join(destino, dir)).length) rmdirSync(join(destino, dir)); } catch { /* não existe ou não está vazia */ } }
+    for (const dir of (lock.pastasCriadas ?? []).filter((p) => !foraDoProjeto(destino, p)).sort((a, b) => b.split('/').length - a.split('/').length)) { try { if (!readdirSync(join(destino, dir)).length) rmdirSync(join(destino, dir)); } catch { /* não existe ou não está vazia */ } }
   }
   linhas.push(...desfazerOperador(lock.operador, { simular }));
   if (lock.recuperado) linhas.push('aviso: instalação recuperada de uma interrompida — o texto original dos JSON não foi guardado (voltam sem as chaves do kit, no formato do JSON.stringify) e a suíte original foi deduzida de test:suite/test:projeto; confira com git status.');

@@ -40,7 +40,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
     if (!texto) { linhas.push(`aviso: o bloco ${nome} saiu do kit; deixei como está`); continue; }
     if (!atual) { conflito(`bloco ${nome} ausente do CLAUDE.md — não recriei`); continue; }
     const novo = blocosDe(texto)[0];
-    const inteiroAtual = claudeAtual.match(new RegExp(`<!-- kit:${nome} v\\d+ -->[\\s\\S]*?<!-- /kit:${nome} -->`))[0];
+    const inteiroAtual = claudeAtual.match(new RegExp(`<!-- kit:${escapar(nome)} v\\d+ -->[\\s\\S]*?<!-- /kit:${escapar(nome)} -->`))[0];
     const eol = claudeAtual.includes('\r\n') ? '\r\n' : '\n';
     const nosso = eol === '\n' ? texto : texto.replace(/\n/g, eol);
     if (inteiroAtual === nosso) { lock.blocos[nome] = { versao: novo.versao, sha256: sha256(blocosDe(nosso)[0].conteudo) }; continue; }
@@ -50,7 +50,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
   // bloco que o modelo tem e o projeto nunca recebeu (novo, ou o novo nome de um renomeado) entra na ordem do modelo, como no iniciar
   if (claude !== null) {
     for (const [nome, texto] of Object.entries(modelo)) {
-      if (nome === 'projeto' || (lock.blocosOmitidos ?? []).includes(nome) || nome in lock.blocos || new RegExp(`<!-- kit:${nome} v\\d+ -->`).test(claude)) continue;
+      if (nome === 'projeto' || (lock.blocosOmitidos ?? []).includes(nome) || nome in lock.blocos || new RegExp(`<!-- kit:${escapar(nome)} v\\d+ -->`).test(claude)) continue;
       claude = inserirBloco(claude, nome, texto, modelo);
       const b = blocosDe(texto)[0];
       lock.blocos[nome] = { versao: b.versao, sha256: sha256(b.conteudo) };

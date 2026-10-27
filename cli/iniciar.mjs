@@ -2,7 +2,7 @@
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { LOCK } from './lock.mjs';
-import { FRASE_TRAVA_COBRE, caminhosDosModelos, aplicarOperador, arquivosDoGate, gravar, lerModelo, pastaDoFront, planejar, planejarOperador, sugestaoDePerfil } from './pacote.mjs';
+import { FRASE_TRAVA_COBRE, caminhosDosModelos, aplicarOperador, arquivosDoGate, existe, gravar, lerModelo, pastaDoFront, planejar, planejarOperador, sugestaoDePerfil } from './pacote.mjs';
 
 /** Devolve { codigo, mensagem } — nada é gravado antes de o plano ser calculado e validado. */
 export function iniciar({ destino, perfil: perfilPedido, versao, design: designPedido }) {
@@ -14,7 +14,7 @@ export function iniciar({ destino, perfil: perfilPedido, versao, design: designP
   if (existsSync(join(destino, LOCK))) return { codigo: 2, mensagem: `kit iniciar: já existe ${LOCK} — o kit já foi posto aqui; use \`kit atualizar\` ou \`kit remover\`` };
   // `.kit-tmp` órfão: um `iniciar` anterior morreu no meio. Recomeça do zero, mas registra as pastas que ele deixou como o `adotar` em recuperação.
   const candidatos = ['CLAUDE.md', 'package.json', '.claude/settings.json', '.claude/kit.json', LOCK, ...arquivosDoGate().map((f) => `scripts/kit/${f}`), ...caminhosDosModelos(front.pasta)];
-  const orfaos = candidatos.filter((rel) => existsSync(join(destino, `${rel}.kit-tmp`)));
+  const orfaos = candidatos.filter((rel) => existe(join(destino, `${rel}.kit-tmp`)));
   const plano = planejar({ destino, perfil, trocarTest: true, nomeScript: 'test:suite', criarClaude: true, recuperando: orfaos.length > 0, design: front.pasta });
   if (plano.erro) return { codigo: 2, mensagem: `kit iniciar: ${plano.erro}` };
   if (plano.conflitos.length) return { codigo: 1, mensagem: `kit iniciar: ${plano.conflitos.length} conflito(s); nada foi gravado.\n${plano.conflitos.map((c) => `conflito: ${c}`).join('\n')}` };

@@ -15,8 +15,10 @@ const HOOK = 'operador-ausente';
 const NAO_HUMANO = /^\s*(<(cross-session-message|side-sessions-event|task-notification|ci-monitor-event)\b|This session is being continued from a previous conversation|Background \(from the session that started this one\))/;
 const LEMBRETES = /^\s*<system-reminder>[\s\S]*?<\/system-reminder>/;
 // "/ausente on" cru, ou o comando expandido (<command-name>/ausente</command-name> … <command-args>on</command-args>).
+// Os dois só no começo do prompt: o expandido colado no meio de um texto (README, issue, página) não é o operador digitando (F200).
 const CRU = /^\s*\/ausente[ \t]+(on|off)\b/i;
-const EXPANDIDO = /<command-name>\/?ausente<\/command-name>[\s\S]*?<command-args>\s*(on|off)\b/i;
+const MSG = String.raw`(?:<command-message>[^<]*<\/command-message>\s*)?`;
+const EXPANDIDO = new RegExp(String.raw`^\s*${MSG}<command-name>\/?ausente<\/command-name>\s*${MSG}<command-args>\s*(on|off)\b`, 'i');
 const PRESENTE = new Set(['human', 'plugin']);
 
 export function comandoDoModo(prompt) {

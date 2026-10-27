@@ -40,7 +40,8 @@ export function periodoDesligado() {
   return { desde: b.desde, ate: b.desligadoEm, por: b.por ?? null };
 }
 
-const arquivoDeEntrega = (desde, projeto) => join(BASE(), 'ausencias', `${String(desde).replaceAll(':', '-')}--${projeto}.json`);
+// o `desde` vira nome de arquivo: só letras, dígitos, `.`, `+` e `-` (o ISO de sempre só troca o `:`), nunca `/` (F200)
+const arquivoDeEntrega = (desde, projeto) => join(BASE(), 'ausencias', `${String(desde).replace(/[^\w.+-]/g, '-')}--${projeto}.json`);
 
 // Período desligado há ≤ 7 dias sem arquivo de entrega do projeto → {desde, ate}; senão null.
 export function pendente(projeto) {
@@ -183,7 +184,10 @@ function main(argv) {
     const p = periodoEscolhido();
     if (!p || ms(p.desde) === null || ms(p.ate) === null) return falha('sem período: a bandeira não tem um período desligado; passe --desde e --ate');
     if (!projeto) return falha('projeto não resolvido: rode dentro do repositório ou passe --projeto');
-    const r = montarResumo({ projeto, desde: p.desde, ate: p.ate, repo, branch: o.branch || 'main' });
+    const branch = o.branch || 'main';
+    // a branch vai ao `git fetch`: começando com `-` viraria opção (ex.: `--upload-pack=`, que executa comando)
+    if (!/^[\w.][\w./-]*$/.test(branch)) return falha(`branch inválida: ${JSON.stringify(branch)}`);
+    const r = montarResumo({ projeto, desde: p.desde, ate: p.ate, repo, branch });
     if (cmd === 'resumo') return o.md ? process.stdout.write(`${emMarkdown(r)}\n`) : sai(r);
     const arq = arquivoDeEntrega(p.desde, projeto);
     mkdirSync(dirname(arq), { recursive: true });

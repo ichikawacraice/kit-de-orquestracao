@@ -3,7 +3,7 @@
 // transcripts sintéticos no formato real (.jsonl), log e estado num diretório temporário.
 // Rodar: node gate/com-fichas.mjs -- node plugins/orquestracao/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync, statSync, unlinkSync } from "node:fs";
 import { tmpdir, homedir, userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -370,6 +370,18 @@ const post = (tool, input, resp, extra = {}) => ({
 const bash = (cmd, stdout, extra) => post('Bash', { command: cmd }, { stdout, stderr: '', interrupted: false }, extra);
 const VITEST = ' FAIL  src/a.test.ts > soma\nAssertionError: expected 3 to be 4\n Tests  1 failed | 41 passed (42)\n';
 const avisos = (eventos) => eventos.map((ev) => rodar('laco-de-comandos.mjs', ev)?.hookSpecificOutput?.additionalContext ?? null);
+
+// F200: o aviso registra o laço sem o comando inteiro (que pode trazer token), e o log nasce legível só pelo dono.
+caso('3.0 o log do laço não guarda o segredo do comando e nasce 0600', () => {
+  const token = 'ghp_' + 'A'.repeat(36);
+  const r = avisos(Array.from({ length: 4 }, () => bash(`curl -H "Authorization: Bearer ${token}" https://api.exemplo.com/user`, '{"message":"Bad credentials"}\n')));
+  igual(r[3] !== null, true, 'precondição: o 4º avisou');
+  const linhas = log().filter((l) => l[2] === 'laco-de-comandos');
+  igual(linhas.length, 1, 'precondição: o aviso foi registrado');
+  igual(linhas[0][4].includes(token), false, `o token foi para o log: ${linhas[0][4]}`);
+  igual(linhas[0][4].includes('curl'), true, 'o log perdeu o nome do comando');
+  igual(statSync(join(base, 'hooks-crewai.log')).mode & 0o777, 0o600, 'permissão do log');
+});
 
 caso('3.1 o mesmo comando 4× com a mesma saída avisa no 4º, só uma vez', () => {
   const r = avisos(Array.from({ length: 5 }, () => bash('pnpm --filter @alfa/runner test', VITEST)));
