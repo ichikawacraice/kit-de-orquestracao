@@ -443,7 +443,8 @@ export function fileteSvg(W: number): { source: string; height: number } {
 }
 
 /** O papel pela 1ª letra do apelido (P1, E3, V4, D1, O…): qualquer outra letra não diz papel. */
-export function papelDe(apelido: string): 'planejadora' | 'executora' | 'validadora' | 'designer' | 'orquestradora' | undefined {
+export function papelDe(apelido: string): 'planejadora' | 'executora' | 'validadora' | 'designer' | 'orquestradora' | 'dona' | undefined {
+  if (apelido.trim().toLowerCase() === 'dona') return 'dona'
   const letra = apelido.trim().charAt(0).toUpperCase()
 
   return ({ P: 'planejadora', E: 'executora', V: 'validadora', D: 'designer', O: 'orquestradora' } as const)[letra as 'P']
@@ -749,11 +750,13 @@ export function sessaoParaAbrirSvg(W: number, c: LinhaDeCartao, agora: number, o
   const tempoW = tempo ? largura(tempo, 12) + 10 : 0
   const papel = papelDe(c.apelido)
   const prefixo = papel ? ` · ${upper(papel)}` : ''
-  const reserva = largura(c.apelido, 11) * 1.1
+  // cartão de dona: o rótulo é o item (`F140 · DONA`), porque a sessão aberta se chama `F<n> · <tema>`
+  const rotulo = papel === 'dona' && c.itens[0] ? c.itens[0].id : c.apelido
+  const reserva = largura(rotulo, 11) * 1.1
   const resto = caber(prefixo, 11, Math.max(0, tw - tempoW - reserva))
   const partes: string[] = [
     `<circle cx="9" cy="9" r="5" fill="none" class="avs" stroke-width="1.3" stroke-dasharray="2 2"/>`,
-    `<text x="${X_FILA}" y="11" font-family="${FONTE}" font-size="11" font-variant-numeric="tabular-nums"><tspan class="t" font-weight="700">${xml(c.apelido)}</tspan><tspan class="m" font-weight="600">${xml(resto)}</tspan></text>`,
+    `<text x="${X_FILA}" y="11" font-family="${FONTE}" font-size="11" font-variant-numeric="tabular-nums"><tspan class="t" font-weight="700">${xml(rotulo)}</tspan><tspan class="m" font-weight="600">${xml(resto)}</tspan></text>`,
   ]
   if (tempo) partes.push(texto(W, 11.5, 12, 'm', xml(tempo), ' text-anchor="end" font-variant-numeric="tabular-nums"'))
   let y = 11
@@ -762,7 +765,7 @@ export function sessaoParaAbrirSvg(W: number, c: LinhaDeCartao, agora: number, o
     y += 19
     partes.push(texto(X_FILA, y, 14, 't', xml(l), ' font-weight="600"'))
   }
-  const alt = [`${c.apelido}, ${papel ?? 'sessão'}, proposta ${tempo ?? 'agora há pouco'}`, c.itens.length > 0 ? `para: ${c.itens.map(i => (i.titulo ? `${i.id} · ${i.titulo}` : i.id)).join('; ')}` : paraQue]
+  const alt = [`${rotulo}, ${papel ?? 'sessão'}, proposta ${tempo ?? 'agora há pouco'}`, c.itens.length > 0 ? `para: ${c.itens.map(i => (i.titulo ? `${i.id} · ${i.titulo}` : i.id)).join('; ')}` : paraQue]
   if (c.itens.length > 1) {
     y += 17
     partes.push(texto(X_FILA, y, 12.5, 's', `+ ${c.itens.length - 1} ${c.itens.length === 2 ? 'item' : 'itens'}`))

@@ -81,6 +81,9 @@ export function afimDe(item, papel, itens, linhas, projetoDe) {
   return null;
 }
 
+// O título da sessão aberta é o do cartão: `<apelido> · …` no pool; no cartão de dona, `F<n> · …` do item do cartão.
+const tituloDoCartao = (titulo, c) => (c.apelido === 'dona' ? (/^(F\d+) · /.exec(titulo || '')?.[1] ?? null) === c.itens?.[0] : apelidoDoTitulo(titulo) === c.apelido);
+
 // Cartões de sessão nova (coleção `cartoes`) que já não esperam o clique: o apelido apareceu vivo no projeto depois de
 // `propostoEm`, ou passou de CARTAO_VALIDADE_H (também quando `propostoEm` não é legível). `linhas` null = sem a lista de
 // sessões: só o prazo vale. Sessão de antes de `propostoEm` com o mesmo apelido é outra e não resolve.
@@ -91,7 +94,7 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs }) {
     const proposto = ms(c?.propostoEm);
     if (proposto === null || agoraMs - proposto >= CARTAO_VALIDADE_H * 3_600_000) { apagar.push(id); continue; }
     const aberto = (linhas ?? []).some((r) => {
-      if (!vivoNaLista(r) || apelidoDoTitulo(r.title) !== c.apelido || projetoDe(r) !== String(c.projeto ?? '').toLowerCase()) return false;
+      if (!vivoNaLista(r) || !tituloDoCartao(r.title, c) || projetoDe(r) !== String(c.projeto ?? '').toLowerCase()) return false;
       const criada = ms(r.createdAt) ?? ms(r.lastActivityAt);
       return criada !== null && criada >= proposto;
     });

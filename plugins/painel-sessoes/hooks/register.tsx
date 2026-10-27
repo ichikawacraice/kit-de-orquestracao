@@ -91,17 +91,19 @@ export function lerDoc(texto: string, nome: string): Doc {
 
 const CARTAO_VALIDADE_MS = 12 * 3_600_000
 
-/** O documento de `cartoes` no contrato (apelido `<P|D|E|V><n>`, papel = a letra, itens `F<n>`, data); fora dele, `undefined`. */
+/** O documento de `cartoes` no contrato (apelido `<P|D|E|V><n>`, papel = a letra, itens `F<n>`, data; ou apelido e papel `dona` com um item só); fora dele, `undefined`. */
 export function lerCartao(d: Doc): CartaoDeSessao | undefined {
   const c = d.data
   const apelido = texto(c.apelido)
   const projeto = texto(c.projeto)
   const orquestradoraId = texto(c.orquestradoraId)
   const propostoEm = texto(c.propostoEm)
-  if (!apelido || !/^[PDEV]\d+$/.test(apelido) || !projeto || !orquestradoraId || !propostoEm || Number.isNaN(Date.parse(propostoEm))) return undefined
-  if (c.papel !== apelido[0] || !Array.isArray(c.itens) || c.itens.some(F => typeof F !== 'string' || !/^F\d+$/.test(F))) return undefined
+  const dona = apelido === 'dona'
+  if (!apelido || !(dona || /^[PDEV]\d+$/.test(apelido)) || !projeto || !orquestradoraId || !propostoEm || Number.isNaN(Date.parse(propostoEm))) return undefined
+  if (c.papel !== (dona ? 'dona' : apelido[0]) || !Array.isArray(c.itens) || c.itens.some(F => typeof F !== 'string' || !/^F\d+$/.test(F))) return undefined
+  if (dona && c.itens.length !== 1) return undefined
 
-  return { id: d.id, projeto: projeto.toLowerCase(), apelido, papel: apelido[0] as CartaoDeSessao['papel'], itens: c.itens as string[], orquestradoraId, propostoEm }
+  return { id: d.id, projeto: projeto.toLowerCase(), apelido, papel: (dona ? 'dona' : apelido[0]) as CartaoDeSessao['papel'], itens: c.itens as string[], orquestradoraId, propostoEm }
 }
 
 /**
@@ -116,7 +118,7 @@ export function cartoesVisiveis(cartoes: CartaoDeSessao[], sessoes: SessaoViva[]
       if (semLista) return true
 
       return !(sessoes ?? []).some(s => {
-        if (!s.title?.startsWith(`${c.apelido} · `)) return false
+        if (!s.title?.startsWith(`${c.apelido === 'dona' ? (c.itens[0] ?? c.apelido) : c.apelido} · `)) return false
         const criada = Date.parse(s.createdAt ?? s.lastActivityAt ?? '')
 
         return !Number.isNaN(criada) && criada >= proposto
@@ -2674,7 +2676,7 @@ export const register: Register = on => {
                 {g.linhas.map(c => (
                   <Box key={`cartao:${c.id}`} flexDirection="column">
                     <Text wrap="wrap">
-                      <Text color="warning">◌</Text> <Text bold>{c.apelido}</Text>
+                      <Text color="warning">◌</Text> <Text bold>{c.apelido === 'dona' ? (c.itens[0]?.id ?? c.apelido) : c.apelido}</Text>
                       <Text>{` ${papelDeDesenho(c.apelido) ?? 'sessão'}`}</Text>
                       <Text dimColor>{` · ${desde(c.propostoEm, agora) ?? 'agora'}`}</Text>
                     </Text>
