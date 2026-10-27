@@ -74,6 +74,11 @@ async function iniciar($: Parameters<TestBody>[0], on: On, opc: Opc = {}) {
     }
     return { result: {}, text: '[]' }
   })
+  const prompts: string[] = []
+  on('prompt.submit', (_, e) => {
+    prompts.push(e.text)
+    return { text: e.text }
+  })
   const execucoes: Array<{ argv: readonly string[]; timeoutMs?: number }> = []
   on('process.run', (_, e) => {
     execucoes.push({ argv: e.argv, timeoutMs: e.init?.timeoutMs })
@@ -89,7 +94,7 @@ async function iniciar($: Parameters<TestBody>[0], on: On, opc: Opc = {}) {
     await relogio.settle()
   }
 
-  return { relogio, arquivos, escritas, logs, chamadas, enviadas, listas, execucoes, nChamadas, rodarMinuto }
+  return { relogio, arquivos, escritas, logs, chamadas, enviadas, listas, execucoes, prompts, nChamadas, rodarMinuto }
 }
 
 const dois = (para: string) => [
@@ -134,6 +139,14 @@ test('o script devolve duas mensagens: dois send_message com o session_id certo'
   await m.rodarMinuto()
   expect(m.enviadas.map(e => e.session_id)).toEqual([OUTRA, 'local_terceira'])
   expect(m.enviadas[0].message).toBe('F1 · item parado')
+})
+
+test('mensagem para a própria sessão (a batida rodando na orquestradora): vai como prompt, não por send_message', async ($, on) => {
+  const m = await iniciar($, on, { mensagens: [{ para: EU, texto: 'Batida 21:12: livres além do teto: E17', item: null, tipo: 'relatorio' }, ...dois(OUTRA).slice(0, 1)] })
+  await m.rodarMinuto()
+  expect(m.enviadas.map(e => e.session_id), 'só a outra recebe send_message').toEqual([OUTRA])
+  expect(m.prompts).toEqual(['Batida 21:12: livres além do teto: E17'])
+  expect(m.arquivos.get(FALHAS), 'nada em falhas.jsonl').toBeUndefined()
 })
 
 test('send_message com erro: linha em falhas.jsonl e nenhuma exceção (e a seguinte ainda sai)', async ($, on) => {
