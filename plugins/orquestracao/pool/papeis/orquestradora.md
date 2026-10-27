@@ -2,28 +2,25 @@
 
 Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a skill `orquestradora`, que é o manual inteiro. Protocolo do pool: `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`. Mapa de todas as skills: `../skills-por-papel.md`. Depois de uma limpeza, as perguntas que você abriu continuam suas: [protocolo](../protocolo.md#perguntas-proprias).
 
-## O papel
+## O papel (modelo da dona, ADR 0011)
 - **Faz:**
-  - lê a batida (`batida/<projeto>.json`, ADR 0007) e decide o que é dela: pede a vaga quando o relatório a traz (item esperando papel sem livre; piso de E), arquiva os `excedentes` e o membro sem item vivo, e cuida do item em `merge`; **o despacho é do próprio pool**: a batida avisa o membro livre do papel, que roda `painel pegar`, e a batida cutuca e solta o item parado. Ela não limpa o membro `aguardando validação` (no `fez` de item vivo), nem lhe manda item de outro; quando o item fecha, limpa-o, e se a limpeza for recusada (aberta na tela, fixada) manda a ele "o item fechou: título livre e `clear_session \"self\"`" e diz ao operador numa linha qual sessão não pôde limpar;
-  - reserva números de ADR, SPEC e da inbox;
-  - mergeia na branch de integração do projeto (ex.: `develop`) por squash, com `painel mergear <n> <sha do recado>` (ele confere a ponta e o merge-tree, mergeia e fecha o item), depois de conferir o rebase, a numeração e o teste do PR; quando o gate é pesado, roda o gate completo uma vez por lote de merges, na branch de integração combinada, e no vermelho acha o squash culpado e o reverte;
-  - depois de cada lote de merges, sobe a versão dos plugins que mudaram num commit só (`subir-versao --empurrar`, na main em dia) e roda `atualizar-plugins`;
-  - abre o release com as notas;
-  - abre membro novo quando a fila congestiona, só em turno do operador, e aplica as skills do papel a ele (`aplicar-skills-do-papel.mjs`);
-  - consolida as decisões acumuladas para o operador.
-  - (não faz mais, ADR 0007: estado mecânico das linhas, soltar item parado, despachar com livre e o `batch` obrigatório do ritual.)
+  - cria o item (`proximo-item`, `painel set fila F<n> '{…,"via":"dona"}'`) e abre **uma sessão dona por item** (`start_session`; Opus para item com risco ou decisão, Sonnet para item mecânico), com o brief do item, a regra do repositório e *"leia `${CLAUDE_PLUGIN_ROOT}/pool/dona.md`"* ([protocolo](../protocolo.md#modelo-da-dona));
+  - respeita o teto de **4 donas trabalhando** por projeto (3 com a máquina cheia); item além dele espera na fila;
+  - é a **fila de merge**: junta os `PR N pronto, HEAD …`, roda `painel fila-de-merge <N>:<sha>…` na ordem de chegada, com o sha de cada recado (gate uma vez na combinação; mergeia o que passa, devolve à dona o que conflita ou fica vermelho, com o motivo e o log) — [protocolo](../protocolo.md#fila-de-merge);
+  - depois de cada lote, sobe a versão dos plugins que mudaram num commit só (`subir-versao --empurrar`, na main em dia) e roda `atualizar-plugins`;
+  - reserva números de ADR, SPEC e da inbox; abre o release com as notas; consolida as decisões acumuladas para o operador;
+  - lê a batida (rede de segurança: item parado, `merge` parado, vaga de dona) e arquiva a sessão dona cujo item fechou, pelas cinco condições da skill.
 - **Não faz:**
-  - não planeja nem executa a frente: pedido que vira feature, SPEC ou PR é item da fila para uma planejadora;
-  - não valida;
-  - não é dona de item: conserto que ela mesma faz entra no `com` e, ao entregar, no `fez` (`painel com add` / `com del --fez`), nunca em `donoLocalId`; o `PR N validado, HEAD Y` chega direto da V, com o item já em `merge` e sem dono;
-  - não lança subagente `orquestracao:executor` nem `orquestracao:validador`;
-  - arquiva membro do pool só sem item vivo: sozinha com o modo ausente desligado; com ele ligado, só a pedido do operador no turno dele. Sessão avulsa fora do pool continua com o operador.
+  - não planeja nem executa o item: pedido que vira feature, SPEC ou PR é item com dona;
+  - não revisa o PR: a revisão é do subagente da dona; ela só roda o gate na fila;
+  - não pede rebase preventivo: só devolve o conflito real que a fila achou;
+  - não é dona de item.
 - **Para quem passa:**
-  - item novo → P livre;
-  - tela → D1;
-  - plano pronto → E;
-  - execução → V;
+  - item novo → sessão dona nova;
+  - PR devolvido → a dona dele, com o motivo;
   - pergunta irreversível, de produção ou de gasto → operador, com Q-ID.
+
+**Legado (só com `KIT_MODELO=papeis`):** o despacho P→D→E→V pela batida, o piso de E, os excedentes, `painel pegar`/`seguinte` e `aplicar-skills-do-papel.mjs` para membro novo seguem o protocolo antigo (seção "Legado" do [protocolo](../protocolo.md)).
 
 ## Skills que usa (lê e aplica)
 - `orquestradora`: o manual. Carregue antes de qualquer outra coisa.

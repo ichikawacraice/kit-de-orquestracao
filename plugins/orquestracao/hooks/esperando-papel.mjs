@@ -28,6 +28,8 @@ export function esperandoPapel(data, agoraMs) {
   if (!papel) return null;
   if (data.espera || data.trava) return null;
   const com = Array.isArray(data.com) ? data.com : [];
+  // ADR 0011: no item da dona (`via: "dona"`) a dona faz todas as etapas; com ela, ou com alguém no `com`, ninguém espera papel.
+  if (data.via === 'dona' && (data.donoLocalId || com.length > 0)) return null;
   const ocupado = (p) => doPapel(data.donoApelido, p) || com.some((c) => doPapel(c?.apelido, p));
   if (ocupado(papel)) return null;
   if (papel === 'V' && ocupado('E')) return null; // E no `com` é o conserto; a V volta depois

@@ -1,4 +1,64 @@
-# Protocolo do pool de sessões (2026-10-24)
+# Protocolo do trabalho em sessões (2026-10-27)
+
+<a id="modelo-da-dona"></a>
+## O modelo da dona (ADR 0011, operador, 27/10, Q469)
+*"Faça tudo e só teste depois, para subirmos LOGO isso."* Medido nos 20 itens desde 26/10: trabalho real de 20–40 min por item, item aberto de 5 a 10 h por esperas de passagem entre papéis. Decisão: [ADR 0011](../../../docs/adr/0011-uma-sessao-dona-do-item-do-plano-ao-pr.md). **Esta seção vale acima de todo o resto do arquivo.** O que vem depois de "Legado" é o pool de papéis, que só vale com `KIT_MODELO=papeis` (ou `~/.claude/orquestracao/modelo.json` com `{"modelo":"papeis"}`) e para os itens antigos que ainda terminam nele.
+
+**O que sai:** os papéis P, D, E e V em sessões separadas; o handoff entre papéis e as mensagens P→E→V; o `painel pegar`, o `painel seguinte` e a afinidade; o piso de uma E livre, os excedentes e o pool padrão do modo ausente; a validadora em sessão; o gate completo em cada PR; o rebase preventivo por merge alheio; a cobrança da dona a cada turno.
+
+**O que fica:** a fila do painel como índice (`painel list|get|update fila`, `com`, `espera`, `trava`, `perguntas`, `depois`); as perguntas com Q-ID; o teto de núcleos e o `com-fichas` ([teto-de-nucleos](#teto-de-nucleos)); a batida como rede de segurança ([batida](#batida)); o handoff do item quando a dona precisa limpar o contexto; `mergear` e `subir-versao`.
+
+### O item e a dona
+- **Um item, uma sessão dona, do plano ao PR.** A orquestradora cria o item (`proximo-item`; `painel set fila F<n> '{"titulo":"…","resumo":"…","tema":"<id>","etapa":"planejamento","via":"dona"}'`) e abre a sessão dona com `start_session`. Modelo pelo risco: **Opus** (`claude-opus-5-5`, esforço alto) para item com decisão, contrato, estado gravado, segurança ou produção; **Sonnet** (`claude-sonnet-5-5`, esforço médio) para item mecânico com o plano já escrito. Título da sessão: o tema do item em palavras do produto, sem `F<n>` e sem `P1/E1/V1` (a dona não é membro do pool).
+- **A dona grava a si mesma no item** no primeiro turno: `painel update fila F<n> '{"donoLocalId":"<seu local_…>","donoApelido":"dona","agora":"começando"}'` e `painel com add F<n> <seu local_…> dona "<o quê>"`. Ela continua dona e no `com` até o item fechar; troca a `etapa` (`planejamento` → `design` só com tela → `execucao` → `validacao` → `merge`) quando muda o trabalho, com o `agora` no mesmo `update`. Não é cobrada a cada turno: grava quando a etapa ou o estado mudam.
+- **O manual da dona** é [`dona.md`](dona.md): o que ela faz em cada etapa, a revisão, os testes e a entrega.
+- **Designer só em item com tela**, e como subagente da dona: `design:revisao-de-arquitetura-de-ui` antes do código e `design:critico-de-ui` depois, com o teto da crítica (24/30, no máximo 2 recríticas).
+
+<a id="skills-da-etapa"></a>
+### Skills por etapa
+A dona é uma sessão só, mas troca de chapéu a cada etapa: **ao entrar numa etapa**, roda `node "${CLAUDE_PLUGIN_ROOT}/pool/skills-da-etapa.mjs" <etapa>` (a lista das skills que valem nela, tirada da coluna do papel que fazia a etapa em `skills-por-papel.json`) e carrega com `Skill` as **fixas** da etapa e as da lista que o trabalho pede. A sessão dona não recebe o filtro do `aplicar-skills-do-papel.mjs`: todas as skills ficam à mão.
+
+| Etapa | Fixas (carrega sempre) | Da lista, quando o trabalho pede |
+|---|---|---|
+| `planejamento` | `superpowers:writing-plans` | `superpowers:brainstorming` (cria algo novo), `processos:spec-driven` (ADR, spec, roadmap), `superpowers:systematic-debugging` (causa de defeito) |
+| `design` | `design:revisao-de-arquitetura-de-ui` (subagente) | `frontend-design`, `impeccable:impeccable`, `agent-browser` (abrir a tela) |
+| `execucao` | `superpowers:test-driven-development`, `superpowers:verification-before-completion` | `processos:auditoria-de-clique` (gesto que grava), `owasp-security`, `supabase`, `vercel-react-best-practices` |
+| `validacao` | `processos:revisar-diff` (no briefing do `orquestracao:validador`) | `differential-review`, `security-audit`, `claude-security:claude-security` (segurança), `agent-browser` (artefato visual) |
+
+<a id="modelo-e-esforco"></a>
+### Modelo e esforço
+- **Da sessão dona:** a ferramenta não deixa a sessão trocar o próprio modelo, então **quem abre a dona** (a orquestradora) escolhe pela classificação do item: **Opus 5.5, esforço alto** quando o item decide algo, mexe em contrato (spec, ADR, schema, API, migration), grava estado, toca segurança, produção ou dinheiro, ou já voltou da fila uma vez; **Sonnet 5.5, esforço médio** quando é mecânico e o plano está escrito (arquivos, passos, critério de pronto medível, fora de escopo, regras do projeto). Na dúvida, Opus. Item que muda de classe no meio (o mecânico que vira decisão): a dona Sonnet devolve à orquestradora, que abre uma dona Opus com o handoff.
+- **Dos subagentes:** quem escolhe é a dona, por chamada (`model` e o papel do agente): `orquestracao:validador` em Opus (o padrão do agente) para item de risco e para o delta de conserto, `model: "sonnet"` para item mecânico; `orquestracao:explorador` em Haiku (o padrão); a crítica de tela no padrão do agente de design. Subagente nunca sobe acima do modelo da dona.
+
+### Revisão por subagente
+- Antes do PR, a dona lança `orquestracao:validador` (só leitura, contexto limpo) com o plano, o diff (`git diff origin/<base>...HEAD`) e o que ela afirma ter feito. O briefing pede **só achados que afetam correção**: resultado errado, regra do projeto quebrada, teste que não mede, caso de borda que quebra. Estilo, nome e comentário ficam de fora ("skip style").
+- Achado médio ou alto: a dona conserta e, em item de risco (contrato, estado gravado, segurança, produção), lança um segundo validador sobre o delta. Achado leve vira nota no PR ou entra em `depois` do item, **nunca item novo** (Q457).
+
+<a id="testes-afetados"></a>
+### Testes: os afetados no trabalho, o gate uma vez na fila
+- Enquanto trabalha, a dona roda **só os testes do que tocou**: `testes-afetados -- <comando de teste do projeto>` (neste kit: `testes-afetados -- node gate/com-fichas.mjs -- node --test`). Ele lista os testes que a branch tocou, os que citam o nome de um arquivo tocado e os que citam um módulo que cita um tocado (um nível); sem `--`, só lista. Limites: import montado em tempo de execução, mais de um nível de dependência e o nome antigo de um arquivo renomeado não aparecem; `.tsx` fica fora do padrão (o mod tem `claude plugin test`); na dúvida, rode o pacote inteiro pelo `com-fichas`.
+- O **gate completo** (`npm test`, ou o do `CLAUDE.md` do projeto) roda **uma vez, na fila de merge**, sobre a combinação. A dona não roda o gate completo antes do PR, salvo quando o diff mexe na própria infraestrutura de teste.
+
+<a id="fila-de-merge"></a>
+### A fila de merge da orquestradora
+- A dona entrega com `PR N pronto, HEAD <sha completo>` à orquestradora, põe o item em `merge` (`{"etapa":"merge","prs":[N],"agora":"PR N na fila de merge"}`) e para. Não rebaseia por merge alheio.
+- A orquestradora junta os PRs prontos e roda `painel fila-de-merge <PR>:<sha> [<PR>:<sha>…] [--gate "<cmd>"] [--preparar "<cmd>"]`, na ordem em que chegaram, com o sha de cada recado (ponta que mudou depois dele volta à dona sem entrar no lote): monta a combinação sobre a base num worktree temporário (squash, um PR por vez), roda o gate **uma vez** nela, mergeia na ordem o que passou (como o `painel mergear`, que fecha o item) e devolve o que conflitou ou ficou vermelho (com a combinação vermelha, testa um PR por vez sobre a parte verde para achar quem quebra). O item devolvido volta a `execucao` com o motivo no `agora`, e a orquestradora manda à dona (`dona` na saída) uma linha com o motivo e o log. `--preparar` instala as dependências na árvore temporária (ex.: `pnpm install --frozen-lockfile`); `--seco` monta e testa sem mergear.
+- Depois do lote, a versão dos plugins sobe num commit só (`subir-versao`).
+
+<a id="teto-de-donas"></a>
+### Quantas donas ao mesmo tempo
+- **No máximo 4 donas trabalhando** por projeto (`KIT_TETO_DE_DONAS`, padrão 4), **3 com a máquina cheia**. Conta o item `via: "dona"` com dona ou `com` em `planejamento`, `design`, `execucao` ou `validacao`; `merge` não conta (a dona só espera). Item além do teto espera na fila sem pedir sessão.
+
+### Despacho por evento
+- A orquestradora abre a dona quando o item nasce e quando uma dona termina (o recado `PR N pronto` e o item devolvido são os eventos). O ritual (`orquestradora-ritual.mjs`) cobra, abaixo do teto, abrir a dona do item que está sem ninguém há 5 min ou mais (`ESPERA_MIN`).
+- A batida segue de 10 em 10 min como rede de segurança: cutuca a dona do item parado, solta o item cuja dona sumiu e relata o `merge` parado e a vaga de dona. Ela não avisa livre, não conta piso nem excedentes.
+- **Item antigo do pool** (sem `via`) ainda vivo: a orquestradora o converte — grava `via: "dona"` e abre a dona com o handoff dele. O script `migrar-para-dona.mjs` faz isso para a fila inteira. Deixar o item terminar no pool exige `KIT_MODELO=papeis` (ou `modelo.json`) na máquina toda, porque a batida e o ritual também leem a chave.
+
+---
+
+# Legado: o pool de papéis (2026-10-24, só com `KIT_MODELO=papeis`)
+
+**Continua valendo no modelo da dona** o que não depende de papel: [a batida](#batida) (como rede de segurança: sem aviso a livre, piso nem excedentes), [as perguntas da própria sessão](#perguntas-proprias), [o teto de núcleos](#teto-de-nucleos), "Nunca travar" (menos os itens sobre membro), [mais de um projeto](#mais-de-um-projeto), "O que vai para o operador", a regra do handoff do item e o contrato dos campos da fila. O resto é do pool.
 
 Decisão do operador em 24/10 (Q197–Q199 aceitas, com ajuste): *"quero ter várias sessões abertas, mesmo que paradas… se eu estiver dormindo essas sessões não vão se criar sozinhas… o importante é nunca travar"*. Estudo: `~/.claude/orquestracao/estudos/2026-10-24-pool-e-fila.md`.
 

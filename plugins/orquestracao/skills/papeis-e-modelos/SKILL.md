@@ -1,11 +1,20 @@
 ---
 name: papeis-e-modelos
-description: Qual modelo e qual papel cada sessão e cada subagente usa — planejador e orquestrador em Opus, executor em Sonnet só com plano pronto, validador em Opus e separado de quem executou, explorador em Haiku só para ler. Use ANTES de abrir sessão nova (start_session, spawn_task) ou lançar subagente (Agent), ao escrever o briefing de quem vai executar, quando um executor voltar com dúvida, e quando o operador perguntar "qual modelo usar", "abre uma sessão para executar", "manda um agente validar", "planeja e depois executa". Vale em todo projeto; a qualidade vem antes da economia.
+description: Qual modelo e qual papel cada sessão e cada subagente usa — a sessão dona do item em Opus (risco ou decisão) ou Sonnet (mecânico), revisão pelo subagente `orquestracao:validador` de contexto limpo, `orquestracao:explorador` em Haiku só para ler, orquestradora em Opus. Use ANTES de abrir sessão nova (start_session, spawn_task) ou lançar subagente (Agent), ao escrever o briefing de quem vai executar, quando um executor voltar com dúvida, e quando o operador perguntar "qual modelo usar", "abre uma sessão para executar", "manda um agente validar", "planeja e depois executa". Vale em todo projeto; a qualidade vem antes da economia.
 ---
 
 # Papéis e modelos
 
 O modelo é função do **papel**, não do gosto de quem abre a sessão. A pergunta é sempre: *o que esta sessão ou este agente vai decidir?* Quem decide usa o modelo mais forte; quem cumpre um plano que já decidiu tudo usa o intermediário; quem só lê usa o mais leve. **Qualidade vem antes de economia**: na dúvida entre dois papéis, use o de cima.
+
+<a id="modelo-da-dona"></a>
+## O modelo da dona (ADR 0011, 27/10) — vale acima do resto desta skill
+- **Uma sessão dona por item, do plano ao PR.** Quem abre a sessão escolhe o modelo pelo risco do item: **Opus 5.5, esforço alto** quando o item decide algo, mexe em contrato (spec, ADR, schema, API, migration), grava estado, toca segurança ou produção; **Sonnet 5.5, esforço médio** quando o item é mecânico e o plano já está escrito (as cinco coisas abaixo). Na dúvida, Opus. A dona planeja, escreve, testa e abre o PR; o manual é `${CLAUDE_PLUGIN_ROOT}/pool/dona.md`.
+- **A dona escreve; subagente só lê ou revisa.** `orquestracao:validador` revisa o diff contra o plano antes do PR (só achados que afetam correção, *skip style*; o leve vai ao PR ou ao `depois`, nunca vira item); `orquestracao:explorador` faz varredura larga; item com tela usa `design:revisao-de-arquitetura-de-ui` e `design:critico-de-ui` como subagentes. Nenhuma trava recusa a dona lançar o validador.
+- **Sem executora nem validadora em sessão.** A tabela de papéis abaixo, a regra "cada papel na sua sessão" e os níveis Leve/Padrão/Robusta descrevem o pool antigo (só com `KIT_MODELO=papeis`). No modelo da dona, a validação é sempre o subagente `orquestracao:validador` em Opus; item de risco ganha um segundo validador sobre o delta do conserto.
+- **Modelo e esforço por item e por subagente:** quem abre a dona escolhe o modelo dela pela classificação do item (a sessão não troca o próprio modelo); a dona escolhe o de cada subagente pelo risco do que ele revisa — tabela e critérios no protocolo, âncora `modelo-e-esforco`. Skills por etapa: âncora `skills-da-etapa` (`skills-da-etapa.mjs <etapa>`).
+- **Testes:** só os afetados durante o trabalho (`testes-afetados -- <comando>`); o gate completo roda uma vez, na fila de merge da orquestradora.
+- **Contexto:** a dona segue a régua do planejador (tabela em [Contexto](#contexto)).
 
 ## Os papéis
 

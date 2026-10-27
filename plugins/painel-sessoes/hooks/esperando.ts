@@ -18,6 +18,7 @@ export function esperandoPapel(data: Record<string, unknown> | null | undefined,
   if (!papel) return null
   if (data.espera || data.trava) return null
   const com = Array.isArray(data.com) ? (data.com as Array<Record<string, unknown> | null>) : []
+  if (data.via === 'dona' && (data.donoLocalId || com.length > 0)) return null
   const ocupado = (p: string): boolean => doPapel(data.donoApelido, p) || com.some(c => doPapel(c?.apelido, p))
   if (ocupado(papel)) return null
   if (papel === 'V' && ocupado('E')) return null

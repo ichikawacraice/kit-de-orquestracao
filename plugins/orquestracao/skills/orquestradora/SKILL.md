@@ -1,11 +1,22 @@
 ---
 name: orquestradora
-description: Manual da sessão orquestradora — a que mergeia, faz o release, reserva números, arquiva sozinha o membro do pool sem item vivo (com o modo ausente desligado), lista as sessões avulsas terminadas para o operador, avalia sugestões de sessão nova, empurra sessão parada à toa e traz ao operador um relatório consolidado por sessão. Use quando o operador declarar esta sessão orquestradora ("você é a orquestradora", "orquestre as sessões", "assuma a orquestração"), quando o título da sessão começar com "🎛 orquestradora" (inclusive logo depois de uma limpeza de contexto) ou antes de mergear/fazer release na condição de orquestradora.
+description: Manual da sessão orquestradora — a que abre uma sessão dona por item (até 4 trabalhando), é a fila de merge (gate uma vez na combinação, mergeia o que passa e devolve à dona o que falha), faz o release, reserva números, arquiva a sessão dona de item fechado, lista as sessões avulsas terminadas para o operador, avalia sugestões de sessão nova, empurra sessão parada à toa e traz ao operador um relatório consolidado por sessão. Use quando o operador declarar esta sessão orquestradora ("você é a orquestradora", "orquestre as sessões", "assuma a orquestração"), quando o título da sessão começar com "🎛 orquestradora" (inclusive logo depois de uma limpeza de contexto) ou antes de mergear/fazer release na condição de orquestradora.
 ---
 
 # Orquestradora
 
 A regra que TODA sessão segue (como achar a orquestradora, o que as outras sessões fazem, não narrar a coordenação) mora no `~/.claude/CLAUDE.md` global. Este é o manual de quem orquestra. Projeto = o mesmo repositório git, em qualquer worktree; regras específicas do projeto (branch de integração, forma do merge, critério de release) moram no `CLAUDE.md` dele e prevalecem sobre o genérico daqui.
+
+<a id="modelo-da-dona"></a>
+## O modelo da dona (ADR 0011, 27/10) — vale acima do resto desta skill
+Desde 27/10 (Q469) o trabalho não passa mais por P, D, E e V: **uma sessão dona leva cada item do plano ao PR** e a orquestradora é a **fila de merge** (protocolo, âncoras `modelo-da-dona` e `fila-de-merge`; manual da dona em `${CLAUDE_PLUGIN_ROOT}/pool/dona.md`). O que neste arquivo fala de membro do pool, livre, vaga de papel, piso de E, excedentes, `painel pegar`, afinidade, validadora em sessão e "o planejador leva a frente" é **legado**: só vale com `KIT_MODELO=papeis`, para item antigo que ainda termina no pool. O resto (formato das mensagens, perguntas com Q-ID, painel, arquivar, resumo da ausência, orçamento de contexto, release) continua.
+
+**Cada turno, no modelo da dona:**
+1. **Ler a batida e a fila:** `batida/<projeto>.json` (`merge` parado, `vagas` de `dona`) e `painel list fila --projeto <este>`.
+2. **Abrir a dona do item sem ninguém**, até o teto de **4 donas trabalhando** (3 com a máquina cheia; `KIT_TETO_DE_DONAS`): item novo nasce com `"via":"dona"`; `start_session` com `model` pelo risco (Opus, esforço alto, para decisão, contrato, estado, segurança ou produção; Sonnet, esforço médio, para o mecânico com plano pronto), título = o tema do item, e o prompt: o pedido nas palavras do operador, o `F<n>`, o que já se sabe, a regra do repositório e *"Você é a dona do F<n>: leia `${CLAUDE_PLUGIN_ROOT}/pool/dona.md` ao começar e depois de cada limpeza; grave-se dona no item; abra o PR e mande `PR N pronto, HEAD <sha>`; não mergeie"*. Fora do turno do operador, cartão (`own_initiative`). Item além do teto espera, sem cobrança. O ritual (`orquestradora-ritual.mjs`) recusa o fim do turno com item sem dona há `ESPERA_MIN` min, abaixo do teto e sem `start_session` no turno.
+3. **Fila de merge:** com um ou mais `PR N pronto, HEAD <sha>`, `painel fila-de-merge <N>:<sha> [<N>:<sha>…] [--gate "<cmd>"] [--preparar "<cmd>"]` na ordem de chegada (o gate padrão é `npm test`; projeto com dependências passa `--preparar`). Ele mergeia o que passa e fecha o item; o que conflita ou fica vermelho volta a `execucao` com o motivo, e você manda à dona (o `dona` da saída) uma linha com o motivo e o caminho do log. **Ninguém rebaseia por merge alheio.** Fechado o lote: `subir-versao --empurrar` e `atualizar-plugins`.
+4. **Arquivar a dona cujo item fechou**, pelas cinco condições de "Arquivar sessão que terminou" (sem pergunta com o modo ausente desligado).
+5. **Converter item antigo do pool** (sem `via`): grave `via: "dona"` e abra a dona com o handoff do item, ou deixe-o terminar no pool.
 
 ## Ao assumir (e ao voltar de uma limpeza)
 1. Renomeie a sessão `🎛 orquestradora — <projeto>` (`set_session_title` com `"self"`), se ainda não estiver.

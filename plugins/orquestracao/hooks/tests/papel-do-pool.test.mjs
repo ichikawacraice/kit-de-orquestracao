@@ -7,6 +7,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// ADR 0011: estes casos medem o pool de papéis, que só vale com KIT_MODELO=papeis (os filhos herdam o ambiente).
+process.env.KIT_MODELO = 'papeis';
 
 const HOOKS = process.env.HOOKS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..');
 let base; let falhas = 0; let FILA = null;
@@ -640,6 +642,26 @@ caso('T3a: bandeira {ligado:false} vale como desligada → start_session em turn
 });
 caso('operador-ausente: /ausente on grava por:"comando"', () => {
   ent('/ausente on'); ok(JSON.parse(readFileSync(bandeiraArq(), 'utf8')).por === 'comando', 'sem por:comando');
+});
+
+// ADR 0011: no modelo da dona (KIT_MODELO=dona) T1, T1c e T8 não valem e o T6 cobre `painel fila-de-merge`.
+const comModelo = (m, fn) => { const antes = process.env.KIT_MODELO; process.env.KIT_MODELO = m; try { fn(); } finally { process.env.KIT_MODELO = antes; } };
+caso('dona: T1 não recusa validador nem executor; T1c deixa a V editar; T8 deixa o com add com a máquina cheia (contraste no pool)', () => {
+  nega(agent('ORQ', 'validador'), 'prova: no pool a orquestradora não lança validador');
+  comModelo('dona', () => {
+    passa(agent('ORQ', 'validador'), 'orquestradora');
+    passa(agent('P1', 'validador'), 'P');
+    passa(agent('E3', 'validador'), 'E');
+    passa(pre('V1', 'Edit', { file_path: join(dir(), 'proj', 'a.mjs') }), 'T1c');
+    fila('F7', { etapa: 'validacao' });
+    passa(comAddComEnv('ORQ', 'F7', { ...maquina(2, 2), KIT_MODELO: 'dona' }), 'T8');
+  });
+});
+caso('T6 (ADR 0011): painel fila-de-merge de quem não é a orquestradora → ask; a orquestradora passa', () => {
+  const repo = repoComOrquestradora();
+  const r = merge('P1', repo, 'painel fila-de-merge 12:abc1234 13');
+  ok(r?.permissionDecision === 'ask', `esperava ask: ${JSON.stringify(r)}`);
+  passa(merge('ORQ', repo, 'painel fila-de-merge 12'), 'orquestradora');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

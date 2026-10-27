@@ -7,6 +7,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// ADR 0011: estes casos medem o pool de papéis, que só vale com KIT_MODELO=papeis (os filhos herdam o ambiente).
+process.env.KIT_MODELO = 'papeis';
 
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 const PAINEL = join(SCRIPTS, 'painel.mjs');
@@ -656,4 +658,20 @@ test('batida (conserto): o aviso do item que voltou para execução vai à E que
   const arq = sessoes(sessao(1, 'E1 · livre', { lastActivityAt: iso(T - 200 * MIN) }), sessao(2, 'E2 · livre', { lastActivityAt: iso(T - 150 * MIN) }), sessao(3, 'E3 · livre', { lastActivityAt: iso(T - 30 * MIN) }));
   const r = batida(arq);
   assert.deepEqual(msgs(r, 'avisar-livre').map((m) => m.para), [lid(3)], r.out);
+});
+
+// ADR 0011: no modelo da dona a batida não avisa livre nem conta piso; o item sem ninguém vira vaga de dona.
+test('batida (dona): esperando sem ninguém → vaga "dona", sem aviso ao livre nem piso de E (contraste no pool)', () => {
+  item('F1', esperandoE());
+  const arq = sessoes(sessao(1, 'E1 · livre'));
+  assert.equal(msgs(batida(arq), 'avisar-livre').length, 1, 'prova: no pool o livre é avisado');
+  const antes = process.env.KIT_MODELO;
+  process.env.KIT_MODELO = 'dona';
+  try {
+    const r = batida(sessoes(sessao(1, 'E1 · livre')), T + 40 * MIN);
+    assert.deepEqual(msgs(r, 'avisar-livre'), []);
+    const vagas = r.json().projetos.kit.vagas;
+    assert.ok(vagas.some((v) => v.papel === 'dona' && v.item === 'F1'), r.out);
+    assert.ok(!vagas.some((v) => v.piso), 'sem piso de E');
+  } finally { process.env.KIT_MODELO = antes; }
 });

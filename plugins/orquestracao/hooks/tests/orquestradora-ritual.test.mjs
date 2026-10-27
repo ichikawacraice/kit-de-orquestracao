@@ -10,6 +10,8 @@ import { beforeEach, afterEach } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { rmSync, existsSync, readFileSync } from 'node:fs';
 import { gitCommonDir, chaveDoPiso } from '../pool-comum.mjs';
+// ADR 0011: estes casos medem o pool de papéis, que só vale com KIT_MODELO=papeis (os filhos herdam o ambiente).
+process.env.KIT_MODELO = 'papeis';
 
 const HOOK = join(dirname(fileURLToPath(import.meta.url)), '..', 'orquestradora-ritual.mjs');
 const haH = (h) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -476,5 +478,33 @@ test('(arq-3) modo ausente ligado: nada se arquiva, então nada se cobra', () =>
   writeFileSync(join(base, 'orq', 'operador-ausente.json'), JSON.stringify({ ligado: true, desde: new Date().toISOString(), por: 'comando' }));
   const r = rodar([]);
   assert.ok(!r || !/além do teto/.test(r.reason), 'ligado: não cobra o arquivamento');
+});
+
+// ADR 0011: o modelo da dona (KIT_MODELO=dona no caso; o arquivo fixa papeis para os de cima).
+const DONA = { env: { KIT_MODELO: 'dona' } };
+const semDona = (F) => item(F, { etapa: 'planejamento', via: 'dona', donoApelido: null, com: [], historico: [{ em: minAtras(10), etapa: 'planejamento', dono: null }] });
+const comDona = (F) => item(F, { via: 'dona', donoLocalId: `local_${F}`, donoApelido: 'dona', com: [{ localId: `local_${F}`, apelido: 'dona' }] });
+test('(dona-1) item sem dona: pede abrir a dona, sem piso nem vaga de papel; start_session ou update de dono no turno satisfaz', () => {
+  semDona('F7');
+  const r = rodar([LIST, GRAVA], DONA);
+  assert.equal(r?.decision, 'block');
+  assert.match(r.reason, /F7 sem dona/); assert.match(r.reason, /0 de 4 donas/);
+  assert.doesNotMatch(r.reason, /Piso|sem E livre|excedente/i);
+  assert.equal(rodar([LIST, GRAVA, START], DONA), null);
+  assert.equal(rodar([LIST, GRAVA, ['Bash', { command: `painel update fila F7 '{"donoLocalId":"local_x","donoApelido":"dona"}'` }]], DONA), null);
+});
+test('(dona-2) teto: com 4 donas trabalhando o item sem dona espera calado; com 3, cobra; a máquina cheia baixa o teto a 3', () => {
+  for (const F of ['F1', 'F2', 'F3']) comDona(F);
+  semDona('F9');
+  assert.match(rodar([LIST, GRAVA], DONA)?.reason ?? '', /3 de 4 donas/, 'prova: abaixo do teto cobra');
+  comDona('F4');
+  assert.equal(rodar([LIST, GRAVA], DONA), null);
+  assert.equal(rodar([LIST, GRAVA], { env: { KIT_MODELO: 'dona', KIT_TETO_DE_DONAS: '5', KIT_CARGA_1MIN: '999' } }), null, 'cheia: teto 3');
+});
+test('(dona-3) sem E livre e com excedentes no relatório: o modelo da dona não cobra piso nem arquivamento', () => {
+  writeFileSync(join(base, 'orq', 'batida', 'proj-a.json'), JSON.stringify({ em: new Date().toISOString(), merge: [], vagas: [], excedentes: [{ papel: 'E', apelido: 'E9', localId: 'local_E9' }] }));
+  livre('local_E9', 'E9 · livre');
+  assert.notEqual(rodar([LIST, GRAVA]), null, 'prova: no pool cobra');
+  assert.equal(rodar([LIST, GRAVA], DONA), null);
 });
 }

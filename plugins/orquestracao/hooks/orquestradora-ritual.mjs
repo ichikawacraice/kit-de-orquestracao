@@ -5,6 +5,8 @@
 // F59: e, havendo período do modo ausente desligado (≤ 7 dias) sem entrega registrada para o projeto, o resumo
 // (skills/orquestradora/scripts/ausencia.mjs, seção `resumo-da-ausencia`).
 // A sessão é orquestradora quando existe ~/.claude/orquestracao/ativas/<session_id>.
+// ADR 0011: com o modelo da dona (padrão) não há piso de E nem excedentes; o item sem ninguém pede abrir a dona, até o teto
+// de donas trabalhando (`KIT_TETO_DE_DONAS`, padrão 4; 3 com a máquina cheia). `KIT_MODELO=papeis` volta ao pool.
 import { readFileSync, existsSync, appendFileSync, readdirSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -12,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { BASE, modoAusente } from './hooks-crewai-comum.mjs';
 import { esperandoPapel, PAPEL_DA_ETAPA } from './esperando-papel.mjs';
 import { filaDir, gitCommonDir, membrosLivres, chaveDoPiso, maquinaCheia } from './pool-comum.mjs';
+import { modeloDaDona, tetoDeDonas, donaTrabalhando } from './modelo-do-kit.mjs';
 import { pendente, projetoDoRepo } from '../skills/orquestradora/scripts/ausencia.mjs';
 
 const AUSENCIA = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'orquestradora', 'scripts', 'ausencia.mjs');
@@ -61,6 +64,21 @@ function itensComEsperaGate(nomeProjeto) {
   return itens;
 }
 
+// Donas trabalhando agora no projeto (item `via: "dona"` com dona ou `com`, fora de `merge`).
+function donasTrabalhando(nomeProjeto) {
+  const dir = filaDir();
+  if (!nomeProjeto || !existsSync(dir)) return 0;
+  let n = 0;
+  for (const nome of readdirSync(dir)) {
+    if (!nome.endsWith('.json')) continue;
+    try {
+      const d = JSON.parse(readFileSync(join(dir, nome), 'utf8'))?.data;
+      if (String(d?.projeto ?? '').toLowerCase() === nomeProjeto && donaTrabalhando(d)) n++;
+    } catch { /* item ilegível: ignora */ }
+  }
+  return n;
+}
+
 const textoDaMaquina = (m) => `${m.tomadas} de ${m.teto} fichas${m.carga >= m.nucleos ? `, carga ${m.carga.toFixed(1)}` : ''}`;
 
 // O que falta por item esperando (F58): pedir a vaga (não há membro livre do papel; havendo, a batida o avisa), cobrar a dona de avançar a
@@ -76,6 +94,16 @@ function cobrancaDeEspera(cwd, nomeProjeto, comandos, usadas, mensagens) {
     }
   }
   if (itens.length === 0) return faltas;
+  if (modeloDaDona()) {
+    // ADR 0011: o item sem ninguém pede a sessão dona, não um papel; acima do teto, espera sem cobrança.
+    if ([...usadas].some((n) => n.endsWith('start_session')) || modoAusente()) return faltas;
+    const teto = maquina.cheia ? Math.min(3, tetoDeDonas()) : tetoDeDonas();
+    const ocupadas = donasTrabalhando(nomeProjeto);
+    if (ocupadas >= teto) return faltas;
+    const semDona = itens.filter((it) => !comandos.some((c) => new RegExp(`\\b${it.id}\\b`).test(c) && /donoLocalId/.test(c)) && !mensagens.some((m) => new RegExp(`\\b${it.id}\\b`).test(m)));
+    for (const it of semDona.slice(0, teto - ocupadas)) faltas.push(`${it.id} sem dona há ${it.minutos} min (${ocupadas} de ${teto} donas trabalhando): abra a sessão dona do item (start_session; fora do turno do operador, cartão)`);
+    return faltas;
+  }
   const repo = gitCommonDir(cwd);
   const livres = membrosLivres(repo);
   const pediuVaga = [...usadas].some((n) => n.endsWith('start_session')) || Boolean(modoAusente());
@@ -126,6 +154,7 @@ function apagarMarca(repo) { try { unlinkSync(marcaDoPiso(repo)); } catch { /* j
 // Piso de uma E livre (ADR 0004): sem E livre e sem start_session no turno cobra a vaga; o start_session de E grava uma marca
 // em BASE/piso que dispensa nova cobrança por PISO_VAGA_MIN min ou até aparecer E livre (a marca some).
 function faltaPiso(cwd, usadas, startsDeE, sessao) {
+  if (modeloDaDona()) return null; // ADR 0011: sem pool, sem piso
   if (maquinaCheia().cheia) return null; // máquina cheia (ADR 0005): pedir vaga agora só pesa mais
   if (modoAusente()) return null;
   const repo = gitCommonDir(cwd);
@@ -150,6 +179,7 @@ function faltaBatida(projeto) {
 // Os livres além do teto de dois por papel (Q394) que a batida relata em `excedentes`: com o modo ausente desligado, o turno arquiva
 // os que seguem livres. Só conta o que ainda é livre agora (o relatório pode ter até 10 min) e não foi arquivado neste turno.
 function faltaArquivar(cwd, projeto, arquivadas) {
+  if (modeloDaDona()) return null; // ADR 0011: sem pool, sem excedentes
   if (modoAusente()) return null;
   let lista = [];
   try { lista = JSON.parse(readFileSync(join(BASE, 'batida', `${projeto}.json`), 'utf8'))?.excedentes ?? []; } catch { /* sem relatório */ }
@@ -214,7 +244,7 @@ function main() {
       `rode \`node "${AUSENCIA}" resumo --md\`, entregue o resumo no formato da skill orquestradora (seção resumo-da-ausencia) e registre com \`node "${AUSENCIA}" entregue\`. `
     : '';
   const paradas = espera.length > 0
-    ? `Item parado sem o papel da etapa (protocolo.md#esperando-papel): ${espera.join(' · ')}.`
+    ? (modeloDaDona() ? `Item sem dona (protocolo.md#modelo-da-dona): ${espera.join(' · ')}.` : `Item parado sem o papel da etapa (protocolo.md#esperando-papel): ${espera.join(' · ')}.`)
     : '';
   process.stdout.write(JSON.stringify({ decision: 'block', reason: [resumo.trim(), paradas, piso, batidaParada, arquivar].filter(Boolean).join('\n') }));
 }
