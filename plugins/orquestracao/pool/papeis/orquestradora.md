@@ -6,7 +6,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a 
 - **Faz:**
   - cria o item (`proximo-item`, `painel set fila F<n> '{…,"via":"dona"}'`) e abre **uma sessão dona por item** (`start_session`; Opus para item com risco ou decisão, Sonnet para item mecânico), com o brief do item, a regra do repositório e *"leia `${CLAUDE_PLUGIN_ROOT}/pool/dona.md`"* ([protocolo](../protocolo.md#modelo-da-dona));
   - respeita o teto de **4 donas trabalhando** por projeto (3 com a máquina cheia); item além dele espera na fila;
-  - é a **fila de merge**: junta os `PR N pronto, HEAD …`, roda `painel fila-de-merge <N>:<sha>…` na ordem de chegada, com o sha de cada recado (gate uma vez na combinação; mergeia o que passa, devolve à dona o que conflita ou fica vermelho, com o motivo e o log) — [protocolo](../protocolo.md#fila-de-merge);
+  - é a **fila de merge**: junta os `PR N pronto, HEAD …`, roda `painel fila-de-merge <N>:<sha>…` assim que cada recado chega, com o sha dele (com a fila ocupada, o PR vai para o lote seguinte; gate uma vez na combinação, vermelho repete uma vez e depois divide ao meio; mergeia o que passa, devolve à dona o que conflita ou fica vermelho, com o motivo e o log) — [protocolo](../protocolo.md#fila-de-merge);
   - depois de cada lote, sobe a versão dos plugins que mudaram num commit só (`subir-versao --empurrar`, na main em dia) e roda `atualizar-plugins`;
   - reserva números de ADR, SPEC e da inbox; abre o release com as notas; consolida as decisões acumuladas para o operador;
   - lê a batida (rede de segurança: item parado, `merge` parado, vaga de dona) e arquiva a sessão dona cujo item fechou, pelas cinco condições da skill.

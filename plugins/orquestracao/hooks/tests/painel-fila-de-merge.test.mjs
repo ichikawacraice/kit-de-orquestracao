@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,9 @@ const GH_FALSO = `#!/usr/bin/env node
 const fs = require('node:fs');
 const a = process.argv.slice(2);
 fs.appendFileSync(process.env.GH_LOG, JSON.stringify(a) + '\\n');
+// GH_FALHA=<PR>: o primeiro \`pr view\` desse PR falha (gh passageiro); a marca fica ao lado do estado
+const marca = process.env.GH_ESTADO + '.falhou';
+if (a[1] === 'view' && a[2] === process.env.GH_FALHA && !fs.existsSync(marca)) { fs.writeFileSync(marca, ''); process.exit(1); }
 const est = JSON.parse(fs.readFileSync(process.env.GH_ESTADO, 'utf8'));
 const pr = est.prs[a[2]];
 if (a[0] === 'pr' && a[1] === 'view') {
@@ -35,7 +38,8 @@ function git(cwd, ...args) {
   return r.stdout.trim();
 }
 
-// PRs: 21 muda a 1ª linha de a.txt; 22 também (conflita com o 21); 23 cria c.txt (o gate do caso 2 o recusa); 24 cria d.txt.
+// PRs: 21 muda a 1ª linha de a.txt; 22 também (conflita com o 21); 23 cria c.txt (o gate do caso 2 o recusa); 24 cria d.txt;
+// 25 e 26 criam e.txt e f.txt; 27 cria g.txt (o segundo culpado da bisseção).
 function montar() {
   const raiz = mkdtempSync(join(tmpdir(), 'fila-de-merge-'));
   const origin = join(raiz, 'origin.git');
@@ -54,6 +58,7 @@ function montar() {
     git(clone, 'checkout', '-q', 'main');
   };
   pr(21, 'a.txt', 'do 21\n'); pr(22, 'a.txt', 'do 22\n'); pr(23, 'c.txt', 'quebra\n'); pr(24, 'd.txt', 'ok\n');
+  pr(25, 'e.txt', 'ok\n'); pr(26, 'f.txt', 'ok\n'); pr(27, 'g.txt', 'quebra\n');
   const gh = join(raiz, 'gh');
   writeFileSync(gh, GH_FALSO); chmodSync(gh, 0o755);
   const estado = join(raiz, 'estado.json');
@@ -62,11 +67,12 @@ function montar() {
   writeFileSync(estado, JSON.stringify({ prs: Object.fromEntries(Object.entries(shas).map(([n, sha]) => [n, { state: 'OPEN', headRefOid: sha, baseRefName: 'main', headRefName: `pr${n}` }])) }));
   mkdirSync(join(raiz, 'painel')); mkdirSync(join(raiz, 'home'));
   writeFileSync(join(raiz, 'painel', 'temas.json'), JSON.stringify([{ id: 'editor', rotulo: 'Editor', projeto: 'projx' }]));
-  const ctx = { raiz, clone, shas };
+  const ctx = { raiz, clone, shas, estadoDaFila: join(raiz, 'fila-de-merge', 'projx.json') };
+  ctx.envExtra = {};
   ctx.painel = (...args) => {
     const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
       cwd: clone, encoding: 'utf8', timeout: 120000, killSignal: 'SIGKILL',
-      env: { ...process.env, ...ENV_GIT, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), HOOKS_CREWAI_BASE: '', CLAUDE_CODE_SESSION_ID: '', GH_BIN: gh, GH_ESTADO: estado, GH_LOG: log },
+      env: { ...process.env, ...ENV_GIT, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), HOOKS_CREWAI_BASE: '', CLAUDE_CODE_SESSION_ID: '', GH_BIN: gh, GH_ESTADO: estado, GH_LOG: log, ...ctx.envExtra },
     });
     assert.ok(!r.error, String(r.error));
     return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -125,7 +131,7 @@ test('conflito e gate vermelho: devolve os dois à dona com o motivo, mergeia o 
     assert.deepEqual(s.devolvidos.map((d) => d.pr), [22, 23]);
     assert.match(s.devolvidos[0].motivo, /conflito/);
     assert.match(s.devolvidos[1].motivo, /gate vermelho/);
-    assert.equal(s.gates, 3, 'lote + um por PR aplicado (21 e 23)');
+    assert.equal(s.gates, 3, 'lote, repetição e o 21 sozinho (o 23 sai por dedução)');
     assert.deepEqual(c.merges(), [21]);
     assert.equal(c.dado('F1').etapa, 'feito');
     for (const F of ['F2', 'F3']) {
@@ -191,5 +197,267 @@ test('arquivo solto que o gate deixa não vira conflito falso do PR seguinte', (
     assert.deepEqual(s.mergeados.map((m) => m.pr), [24]);
     assert.deepEqual(s.devolvidos.map((d) => d.pr), [23]);
     assert.match(s.devolvidos[0].motivo, /gate vermelho/);
+  } finally { limpar(c); }
+});
+
+test('vermelho que passa ao repetir: mergeia tudo e registra a suspeita de teste instável', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F4', 24);
+    const marca = join(c.raiz, 'ja-falhou');
+    // falha só na primeira vez (a marca prova que a primeira rodada caiu no vermelho)
+    const r = c.painel('fila-de-merge', '21', '24', '--gate', `if [ -f ${marca} ]; then true; else touch ${marca}; false; fi`);
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.ok(existsSync(marca), 'a primeira rodada do gate rodou e falhou');
+    assert.equal(s.gates, 2, 'o lote e a repetição');
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [21, 24]);
+    assert.deepEqual(s.devolvidos, []);
+    assert.match(s.suspeitaDeInstavel ?? '', /instável/);
+    assert.match(readFileSync(join(s.logs, 'instavel.txt'), 'utf8'), /passou ao repetir/);
+  } finally { limpar(c); }
+});
+
+test('bisseção: o lado verde entra sem retestar e o culpado no fim sai por dedução', () => {
+  const c = montar();
+  try {
+    for (const [F, n] of [['F4', 24], ['F5', 25], ['F6', 26], ['F3', 23]]) c.item(F, n);
+    const r = c.painel('fila-de-merge', '24', '25', '26', '23', '--gate', 'test ! -f c.txt');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24, 25, 26]);
+    assert.deepEqual(s.devolvidos.map((d) => d.pr), [23]);
+    assert.match(s.devolvidos[0].motivo, /gate vermelho/);
+    // lote, repetição, [24,25] verde, [26] verde; o 23 sobra vermelho sem gate próprio (um por vez seriam 1 + 1 + 4)
+    assert.equal(s.gates, 4);
+    assert.deepEqual(c.merges(), [24, 25, 26]);
+    assert.equal(c.dado('F3').etapa, 'execucao');
+  } finally { limpar(c); }
+});
+
+test('bisseção com dois culpados em metades diferentes devolve os dois', () => {
+  const c = montar();
+  try {
+    const r = c.painel('fila-de-merge', '23', '24', '25', '27', '--gate', 'test ! -f c.txt && test ! -f g.txt', '--seco');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergearia, [24, 25]);
+    assert.deepEqual(s.devolveria.map((d) => d.pr), [23, 27]);
+    // lote, repetição, [23,24] vermelho, [23] vermelho, [24] verde, [25,27] vermelho, [25] verde
+    assert.equal(s.gates, 7);
+  } finally { limpar(c); }
+});
+
+test('um PR só, vermelho: repete uma vez e devolve', () => {
+  const c = montar();
+  try {
+    const r = c.painel('fila-de-merge', '23', '--gate', 'test ! -f c.txt', '--seco');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.devolveria.map((d) => d.pr), [23]);
+    assert.equal(s.gates, 2);
+  } finally { limpar(c); }
+});
+
+test('fila ocupada: o PR que chega entra na lista de pendentes e não monta nada', () => {
+  const c = montar();
+  try {
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    // ocupada por um processo vivo (o do próprio teste)
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: process.pid, desde: new Date().toISOString() }, pendentes: [{ pr: 21 }] }));
+    const r = c.painel('fila-de-merge', `24:${c.shas[24].slice(0, 7)}`, '21');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.equal(s.pendente, true);
+    assert.deepEqual(s.pendentes.map((p) => p.pr), [21, 24], 'na ordem de chegada, sem repetir');
+    const est = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(est.pendentes, [{ pr: 21 }, { pr: 24, sha: c.shas[24].slice(0, 7) }]);
+    assert.deepEqual(c.merges(), []);
+    assert.equal(c.worktrees(), 1, 'não montou árvore');
+  } finally { limpar(c); }
+});
+
+test('o que chega com o gate rodando vira o lote seguinte da mesma chamada', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F4', 24);
+    const marca = join(c.raiz, 'chegou');
+    // o gate da 1ª rodada faz o papel do recado que chega no meio: chama a fila de novo, que só anota o 24
+    const chegada = `node ${join(SCRIPTS, 'painel.mjs')} fila-de-merge 24 > ${join(c.raiz, 'chegada.json')}`;
+    const r = c.painel('fila-de-merge', '21', '--gate', `[ -f ${marca} ] || { touch ${marca}; ${chegada}; }`);
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.equal(JSON.parse(readFileSync(join(c.raiz, 'chegada.json'), 'utf8')).pendente, true, 'a chamada do meio só anotou');
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [21, 24]);
+    assert.equal(s.rodadas.length, 2);
+    assert.deepEqual(s.rodadas.map((x) => x.prs), [[21], [24]]);
+    assert.equal(s.gates, 2);
+    const est = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.equal(est.ocupada, null, 'a fila fica livre ao terminar');
+    assert.deepEqual(est.pendentes, []);
+  } finally { limpar(c); }
+});
+
+test('fila presa por processo morto: a chamada nova assume e leva os pendentes antes', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F4', 24);
+    const morto = spawnSync('true', { timeout: 5000, killSignal: 'SIGKILL' }).pid;
+    assert.ok(morto > 0);
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: morto, desde: '2026-10-27T10:00:00.000Z' }, pendentes: [{ pr: 24 }] }));
+    const r = c.painel('fila-de-merge', '21', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24, 21]);
+    assert.equal(s.gates, 1);
+    assert.equal(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')).ocupada, null);
+  } finally { limpar(c); }
+});
+
+test('--seco não usa nem mexe na lista de pendentes', () => {
+  const c = montar();
+  try {
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    const antes = JSON.stringify({ ocupada: { pid: process.pid, desde: '2026-10-27T10:00:00.000Z' }, pendentes: [{ pr: 24 }] });
+    writeFileSync(c.estadoDaFila, antes);
+    const r = c.painel('fila-de-merge', '21', '--gate', 'true', '--seco');
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.deepEqual(JSON.parse(r.out).mergearia, [21]);
+    assert.equal(readFileSync(c.estadoDaFila, 'utf8'), antes);
+  } finally { limpar(c); }
+});
+
+test('PR da lista de pendentes que fechou no meio tempo sai da fila sem travar o lote', () => {
+  const c = montar();
+  try {
+    c.item('F4', 24); c.item('F1', 21);
+    const est = JSON.parse(readFileSync(join(c.raiz, 'estado.json'), 'utf8'));
+    est.prs[21].state = 'MERGED';
+    writeFileSync(join(c.raiz, 'estado.json'), JSON.stringify(est));
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [{ pr: 21 }] }));
+    const r = c.painel('fila-de-merge', '24', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24]);
+    assert.equal(s.devolvidos[0].pr, 21);
+    assert.match(s.devolvidos[0].motivo, /saiu da fila/);
+    assert.deepEqual(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')), { ocupada: null, pendentes: [], emVoo: [] });
+    assert.equal(c.dado('F4').etapa, 'feito');
+    assert.equal(c.dado('F1').etapa, 'merge', 'mergeado fora da fila: o item não volta à dona');
+  } finally { limpar(c); }
+});
+
+test('PR ilegível na lista e PR de outra base não travam a fila: o primeiro sai no teto de leituras, o segundo vai para a rodada seguinte', () => {
+  const c = montar();
+  try {
+    c.item('F4', 24); c.item('F5', 25);
+    git(c.clone, 'push', '-q', 'origin', 'main:develop');
+    const est = JSON.parse(readFileSync(join(c.raiz, 'estado.json'), 'utf8'));
+    est.prs[25].baseRefName = 'develop';
+    writeFileSync(join(c.raiz, 'estado.json'), JSON.stringify(est));
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    // o 99 não existe: o gh falso falha ao lê-lo
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [{ pr: 99 }] }));
+    const r = c.painel('fila-de-merge', '24', '25', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.rodadas.map((x) => x.prs), [[99, 24], [25]]);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24, 25]);
+    assert.deepEqual(s.releitura, [99]);
+    assert.deepEqual(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')), { ocupada: null, pendentes: [{ pr: 99, leituras: 1 }], emVoo: [] });
+    // 2ª leitura falha e fica; na 3ª sai da fila, sem travar quem chega
+    c.item('F1', 21); c.item('F6', 26);
+    assert.deepEqual(JSON.parse(c.painel('fila-de-merge', '21', '--gate', 'true').out).releitura, [99]);
+    const r3 = c.painel('fila-de-merge', '26', '--gate', 'true');
+    assert.equal(r3.exit, 0, r3.err + r3.out);
+    const s3 = JSON.parse(r3.out);
+    assert.deepEqual(s3.mergeados.map((m) => m.pr), [26]);
+    assert.equal(s3.devolvidos[0].pr, 99);
+    assert.match(s3.devolvidos[0].motivo, /3 tentativas.*saiu da fila/);
+    assert.deepEqual(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')), { ocupada: null, pendentes: [], emVoo: [] });
+  } finally { limpar(c); }
+});
+
+test('erro da rodada inteira não volta à lista: sai no erro com os PRs que não rodaram', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21);
+    const r = c.painel('fila-de-merge', '21', '--gate', 'true', '--preparar', 'false');
+    assert.equal(r.exit, 1, r.out);
+    assert.match(r.err, /preparo falhou/);
+    assert.match(r.err, /não rodaram: #21/);
+    assert.deepEqual(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')), { ocupada: null, pendentes: [], emVoo: [] });
+    assert.deepEqual(c.merges(), []);
+    // a fila segue andando
+    const r2 = c.painel('fila-de-merge', '21', '--gate', 'true');
+    assert.equal(r2.exit, 0, r2.err + r2.out);
+    assert.deepEqual(c.merges(), [21]);
+  } finally { limpar(c); }
+});
+
+test('o lote em voo de um processo que morreu volta à frente na chamada seguinte', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F4', 24); c.item('F5', 25);
+    const morto = spawnSync('true', { timeout: 5000, killSignal: 'SIGKILL' }).pid;
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: morto, desde: '2026-10-27T10:00:00.000Z' }, pendentes: [{ pr: 24 }], emVoo: [{ pr: 21 }] }));
+    const r = c.painel('fila-de-merge', '25', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.deepEqual(JSON.parse(r.out).mergeados.map((m) => m.pr), [21, 24, 25]);
+  } finally { limpar(c); }
+});
+
+test('PR da lista fechado sem merge volta à dona', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21);
+    const est = JSON.parse(readFileSync(join(c.raiz, 'estado.json'), 'utf8'));
+    est.prs[21].state = 'CLOSED';
+    writeFileSync(join(c.raiz, 'estado.json'), JSON.stringify(est));
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [{ pr: 21 }] }));
+    const r = c.painel('fila-de-merge', '24', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.equal(c.dado('F1').etapa, 'execucao');
+    assert.match(c.dado('F1').agora, /não está mais aberto \(CLOSED\)/);
+  } finally { limpar(c); }
+});
+
+test('gh que falha ao ler um PR da lista não o tira da fila: a chamada seguinte o leva', () => {
+  const c = montar();
+  try {
+    c.item('F4', 24); c.item('F5', 25); c.item('F1', 21);
+    c.envExtra = { GH_FALHA: '24' };
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [{ pr: 24 }] }));
+    const r = c.painel('fila-de-merge', '25', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.ok(existsSync(join(c.raiz, 'estado.json.falhou')), 'o gh falhou de fato ao ler o 24');
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [25]);
+    assert.deepEqual(s.releitura, [24]);
+    assert.deepEqual(s.devolvidos, []);
+    assert.equal(c.dado('F4').etapa, 'merge');
+    assert.deepEqual(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')).pendentes, [{ pr: 24, leituras: 1 }]);
+    const r2 = c.painel('fila-de-merge', '21', '--gate', 'true');
+    assert.equal(r2.exit, 0, r2.err + r2.out);
+    assert.deepEqual(JSON.parse(r2.out).mergeados.map((m) => m.pr), [24, 21]);
+  } finally { limpar(c); }
+});
+
+test('erro de preparo diz quem ficou na fila (o PR de outra base)', () => {
+  const c = montar();
+  try {
+    git(c.clone, 'push', '-q', 'origin', 'main:develop');
+    const est = JSON.parse(readFileSync(join(c.raiz, 'estado.json'), 'utf8'));
+    est.prs[25].baseRefName = 'develop';
+    writeFileSync(join(c.raiz, 'estado.json'), JSON.stringify(est));
+    const r = c.painel('fila-de-merge', '21', '25', '--gate', 'true', '--preparar', 'false');
+    assert.equal(r.exit, 1, r.out);
+    assert.match(r.err, /não rodaram: #21 /);
+    assert.match(r.err, /ficaram na fila: #25/);
   } finally { limpar(c); }
 });

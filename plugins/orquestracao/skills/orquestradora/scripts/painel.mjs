@@ -20,7 +20,7 @@
 //   painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]   (ADR 0009) ao terminar, pega o item vivo mais antigo do mesmo projeto e tema do último item por onde a sessão passou (`passaram`) que espera o papel dela (pula o item só se a sessão já passou por ele nesta etapa), como o `pegar` → {pegou:true, item, …} ou {pegou:false, motivo}; recusa com o contexto acima do aviso do papel (E 300 mil, P/D/V 350 mil) ou sem medida do transcript; --tokens só sobrescreve a medida (teste)
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge do PR validado (F150): confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); exit 0 nos dois casos, 1 só em erro de leitura
-//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   (ADR 0011) a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → um PR por vez para achar quem quebra), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar
+//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   (ADR 0011) a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, pede ao membro com título de item fechado que volte a livre, relata merge/vagas/excedentes/títulos velhos à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
@@ -976,35 +976,151 @@ function comandoMergear(args) {
 }
 
 // `fila-de-merge <PR…>` (ADR 0011). Monta e testa fora da trava (é lento); cada merge segue o `mergear`; a devolução grava o item.
+// Lote pela fila ocupada (F182): `<BASE>/../fila-de-merge/<projeto>.json` guarda {ocupada:{pid,desde}|null,
+// pendentes:[{pr,sha?}], emVoo:[{pr,sha?}]}. Com a fila ocupada por um processo vivo, a chamada só anota os PRs em `pendentes`
+// e sai; quem roda, ao terminar a rodada, leva a lista inteira como o lote seguinte, até esvaziar. `emVoo` é o lote da rodada
+// que roda: ocupada por processo morto, a chamada nova assume e leva o `emVoo` e os pendentes antes dos seus. Falha de um PR
+// (fechado, ponta mudou) só o tira do lote; PR que o gh não leu volta aos pendentes para a próxima chamada (`releitura`), até
+// LEITURAS_DA_FILA tentativas; PR de outra base fica para a rodada seguinte; erro da rodada inteira (preparo, git) não volta à
+// lista: sai no erro com os PRs que não rodaram e os que ficaram na fila. `--seco` não usa nem mexe na lista.
+const LEITURAS_DA_FILA = 3;
+const ESTADO_DA_FILA = (projeto) => join(BASE, '..', 'fila-de-merge', `${projeto || 'sem-projeto'}.json`);
+function processoVivo(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; } catch (e) { return e?.code === 'EPERM'; }
+}
+// junta `novos` ao fim de `lista` sem repetir o PR (o sha mais novo vale)
+function juntarPedidos(lista, novos) {
+  const r = lista.map((p) => ({ ...p }));
+  for (const n of novos) {
+    const i = r.findIndex((p) => p.pr === n.pr);
+    if (i < 0) r.push({ ...n });
+    else if (n.sha) r[i] = { ...r[i], sha: n.sha };
+  }
+  return r;
+}
+
 function comandoFilaDeMerge(args) {
   const seco = flag(args, '--seco', false);
   const gate = flag(args, '--gate') ?? GATE_PADRAO;
   const preparar = flag(args, '--preparar');
   const uso = 'uso: painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]';
   // `N:sha` é o sha do recado "PR N pronto, HEAD <sha>": a ponta que mudou depois dele é recusada, como no `mergear` (F150).
-  const pedidos = args.map((a) => /^([1-9]\d*)(?::([0-9a-f]{7,40}))?$/i.exec(String(a)));
-  if (!args.length || pedidos.some((m) => !m)) throw new Error(uso);
+  const casados = args.map((a) => /^([1-9]\d*)(?::([0-9a-f]{7,40}))?$/i.exec(String(a)));
+  if (!args.length || casados.some((m) => !m)) throw new Error(uso);
+  const pedidos = juntarPedidos([], casados.map(([, n, sha]) => (sha ? { pr: Number(n), sha: sha.toLowerCase() } : { pr: Number(n) })));
   const cwd = process.cwd();
-  const recusados = [];
-  const prs = [];
-  for (const [, n, pedido] of pedidos) {
-    const pr = Number(n);
-    if (prs.some((p) => p.pr === pr)) continue;
+  // o PR pedido agora tem de existir e estar aberto (erro de quem pediu, como antes); o resto se confere na rodada
+  for (const { pr } of pedidos) {
     const v = dadosDoPr(pr, cwd);
     if (v.state !== 'OPEN') throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
+  }
+  if (seco) return rodadaDaFila(pedidos, { seco, gate, preparar, cwd });
+  const arquivo = ESTADO_DA_FILA(projetoDoCwd(cwd).projeto);
+  const lista = (v) => (Array.isArray(v) ? v : []);
+  const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };
+  const entrada = comTrava(() => {
+    const e = lerEstado();
+    if (e.ocupada && e.ocupada.pid !== process.pid && processoVivo(e.ocupada.pid)) {
+      const pendentes = juntarPedidos(e.pendentes, pedidos);
+      gravarJson(arquivo, { ...e, pendentes });
+      return { pendente: true, ocupadaDesde: e.ocupada.desde ?? null, pendentes };
+    }
+    const lote = juntarPedidos(juntarPedidos(e.emVoo, e.pendentes), pedidos);
+    gravarJson(arquivo, { ocupada: { pid: process.pid, desde: new Date().toISOString() }, pendentes: [], emVoo: lote });
+    return { lote };
+  });
+  if (entrada.pendente) return entrada;
+  const rodadas = [];
+  let aReler = []; // o que o gh não leu nesta chamada: fica nos pendentes, fora dos lotes seguintes dela
+  try {
+    let lote = entrada.lote;
+    while (lote.length) {
+      let r;
+      try {
+        r = rodadaDaFila(lote, { seco, gate, preparar, cwd });
+      } catch (erro) {
+        // erro da rodada inteira: os PRs dela não voltam à lista (um PR que derruba o preparo travaria a fila para sempre)
+        const adiados = [...(erro?.adiados ?? []), ...(erro?.releitura ?? [])];
+        const naoRodaram = lote.filter((p) => !adiados.some((a) => a.pr === p.pr)).map((p) => p.pr);
+        const ficaram = comTrava(() => {
+          const e = lerEstado();
+          const pendentes = juntarPedidos(adiados, e.pendentes);
+          gravarJson(arquivo, { ...e, pendentes, emVoo: [] });
+          return pendentes.map((p) => p.pr);
+        });
+        const msg = `${String(erro?.message || erro).split('\n')[0]}; não rodaram: ${naoRodaram.map((n) => `#${n}`).join(', ')} (chame de novo com os que seguem valendo)${ficaram.length ? `; ficaram na fila: ${ficaram.map((n) => `#${n}`).join(', ')}` : ''}`;
+        if (!rodadas.length) throw new Error(msg);
+        rodadas.push({ prs: naoRodaram, erro: msg, mergeados: [], devolvidos: [] });
+        break;
+      }
+      const { adiados = [], releitura = [], ...resto } = r;
+      rodadas.push({ prs: lote.filter((p) => !adiados.some((a) => a.pr === p.pr)).map((p) => p.pr), ...resto, ...(releitura.length ? { releitura: releitura.map((p) => p.pr) } : {}) });
+      // ler a lista vazia e soltar a fila no mesmo trecho travado: o PR que chega depois disso acha a fila livre.
+      // O PR que o gh não leu fica nos pendentes, fora do lote seguinte desta chamada: a próxima chamada o tenta de novo.
+      aReler = juntarPedidos(aReler, releitura);
+      const reler = (p) => aReler.some((x) => x.pr === p.pr);
+      lote = comTrava(() => {
+        const e = lerEstado();
+        const seguinte = juntarPedidos(adiados, e.pendentes.filter((p) => !reler(p)));
+        gravarJson(arquivo, { ocupada: seguinte.length ? e.ocupada : null, pendentes: juntarPedidos(aReler, e.pendentes.filter(reler)), emVoo: seguinte });
+        return seguinte;
+      });
+    }
+  } finally {
+    comTrava(() => { const e = lerEstado(); if (e.ocupada?.pid === process.pid) gravarJson(arquivo, { ...e, ocupada: null, emVoo: [] }); });
+  }
+  if (rodadas.length === 1) { const { prs, ...r } = rodadas[0]; return r; }
+  const suspeitas = rodadas.map((r) => r.suspeitaDeInstavel).filter(Boolean);
+  const erros = rodadas.map((r) => r.erro).filter(Boolean);
+  const releitura = rodadas.flatMap((r) => r.releitura ?? []);
+  return {
+    base: rodadas[0].base,
+    gates: rodadas.reduce((n, r) => n + (r.gates ?? 0), 0),
+    logs: rodadas.map((r) => r.logs).filter(Boolean),
+    mergeados: rodadas.flatMap((r) => r.mergeados),
+    devolvidos: rodadas.flatMap((r) => r.devolvidos),
+    ...(suspeitas.length ? { suspeitaDeInstavel: suspeitas.join(' · ') } : {}),
+    ...(erros.length ? { erros } : {}),
+    ...(releitura.length ? { releitura } : {}),
+    rodadas,
+  };
+}
+
+// Uma rodada da fila: confere cada PR, monta o lote e testa, mergeia o que passou e devolve o resto à dona.
+function rodadaDaFila(pedidos, { seco, gate, preparar, cwd }) {
+  const recusados = [];
+  const prs = [];
+  const releitura = [];
+  for (const pedidoDaFila of pedidos) {
+    const { pr, sha: pedido } = pedidoDaFila;
+    // o gh que não leu (rede, limite) não tira o PR da fila: volta aos pendentes, até LEITURAS_DA_FILA tentativas
+    let v;
+    try { v = dadosDoPr(pr, cwd); } catch (e) {
+      const leituras = (pedidoDaFila.leituras ?? 0) + 1;
+      if (leituras < LEITURAS_DA_FILA) releitura.push({ ...pedidoDaFila, leituras });
+      else recusados.push({ pr, sha: '', motivo: `o gh não leu o PR ${pr} em ${leituras} tentativas (${String(e?.message || e).split('\n')[0]}); saiu da fila`, semItem: true });
+      continue;
+    }
+    // mergeado fora da fila: o item já se fechou (ou fecha pelo `mergear`); fechado sem merge volta à dona
+    if (v.state !== 'OPEN') { recusados.push({ pr, sha: '', motivo: `o PR ${pr} não está mais aberto (${v.state}); saiu da fila`, semItem: v.state === 'MERGED' }); continue; }
     const sha = v.headRefOid.toLowerCase();
-    if (pedido && !sha.startsWith(pedido.toLowerCase())) { recusados.push({ pr, sha, motivo: `a ponta mudou: entregue ${pedido}, agora ${sha.slice(0, 7)}; a dona manda de novo PR ${pr} pronto` }); continue; }
+    if (pedido && !sha.startsWith(pedido)) { recusados.push({ pr, sha, motivo: `a ponta mudou: entregue ${pedido}, agora ${sha.slice(0, 7)}; a dona manda de novo PR ${pr} pronto` }); continue; }
     prs.push({ pr, sha, base: v.baseRefName });
   }
-  if (!prs.length) return { mergeados: [], devolvidos: recusados.map(({ pr, motivo }) => ({ pr, motivo, itens: [] })) };
-  const bases = [...new Set(prs.map((p) => p.base))];
-  if (bases.length > 1) throw new Error(`fila-de-merge: os PRs vão para bases diferentes (${bases.join(', ')}); um lote por base`);
-  const lote = montarLote({ prs: prs.map(({ pr, sha }) => ({ pr, sha })), base: bases[0], cwd, gate, preparar });
+  // um lote por base: a do primeiro a chegar; o PR de outra base fica para a rodada seguinte (no `--seco`, só se diz)
+  const base = prs[0]?.base;
+  const adiados = prs.filter((p) => p.base !== base).map(({ pr }) => pedidos.find((x) => x.pr === pr));
+  const doLote = prs.filter((p) => p.base === base);
+  const extra = { ...(adiados.length ? { adiados } : {}), ...(releitura.length ? { releitura } : {}) };
+  // sem PR para montar, a devolução dos recusados segue o mesmo caminho (o item fechado sem merge volta à dona)
+  let lote = { aprovados: [], devolvidos: [], gates: 0 };
+  if (doLote.length) try { lote = montarLote({ prs: doLote.map(({ pr, sha }) => ({ pr, sha })), base, cwd, gate, preparar }); } catch (e) { e.adiados = adiados; e.releitura = releitura; throw e; }
   lote.devolvidos.unshift(...recusados);
   const { projeto } = projetoDoCwd();
   const itensDoPr = (pr) => [...itensVivos()].filter(([, d]) => projeto && String(d?.projeto ?? '').toLowerCase() === projeto && Array.isArray(d.prs) && d.prs.includes(pr));
-  const resumo = { base: lote.base, gates: lote.gates, logs: lote.pasta };
-  if (seco) return { seco: true, ...resumo, mergearia: lote.aprovados.map((a) => a.pr), devolveria: lote.devolvidos.map(({ pr, motivo }) => ({ pr, motivo })) };
+  const resumo = { base: lote.base, gates: lote.gates, logs: lote.pasta, ...(lote.suspeitaDeInstavel ? { suspeitaDeInstavel: lote.suspeitaDeInstavel } : {}) };
+  if (seco) return { seco: true, ...resumo, mergearia: lote.aprovados.map((a) => a.pr), devolveria: lote.devolvidos.map(({ pr, motivo }) => ({ pr, motivo })), ...(adiados.length ? { outraBase: adiados.map((a) => a.pr) } : {}) };
   const mergeados = [];
   for (const { pr, sha } of lote.aprovados) {
     // um merge que falha (gh, fetch) não derruba o lote: vira devolução e os outros seguem
@@ -1013,17 +1129,17 @@ function comandoFilaDeMerge(args) {
     if (r.recusado) lote.devolvidos.push({ pr, sha, motivo: r.motivo });
     else mergeados.push({ pr, itens: r.itens });
   }
-  const devolvidos = lote.devolvidos.map(({ pr, sha, motivo, log }) => {
+  const devolvidos = lote.devolvidos.map(({ pr, sha, motivo, log, semItem }) => {
     // F184: o vermelho do gate mede o acerto dos testes afetados da dona; a medição que falha não pesa na fila
     if (log) try { registrarAcerto({ cwd, pr, sha, base: lote.base, log }); } catch { /* sem medição */ }
-    const itens = comTrava(() => itensDoPr(pr).map(([F, d]) => {
+    const itens = semItem ? [] : comTrava(() => itensDoPr(pr).map(([F, d]) => {
       const agora = `devolvido pela fila de merge (PR ${pr}): ${motivo}`.slice(0, 300);
       efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { etapa: 'execucao', agora } }, undefined, new Map()));
       return { item: F, dona: d.donoLocalId ?? null };
     }));
     return { pr, motivo, ...(log ? { log } : {}), itens };
   });
-  return { ...resumo, mergeados, devolvidos };
+  return { ...resumo, mergeados, devolvidos, ...extra };
 }
 
 const ORQ = () => regras.BASE;
