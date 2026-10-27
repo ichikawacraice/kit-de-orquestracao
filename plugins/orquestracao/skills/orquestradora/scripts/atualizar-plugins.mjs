@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // `atualizar-plugins [--seco] [--json]` (F151): põe os plugins do kit (escopo user) na versão publicada no marketplace.
 // Sequência: lista os instalados → `marketplace update` → confere que o clone está no commit do GitHub (uma nova tentativa) →
-// `plugin update <nome>@kit-de-orquestracao -s user` onde a versão difere → lista de novo. Cópia `project` não se mexe; plugin
+// `plugin update <nome>@kit-de-orquestracao -s user` onde a versão difere → lista de novo e confere que a instalada é a publicada (senão `não pegou`, exit 1). Cópia `project` não se mexe; plugin
 // que falta não se instala. Ambiente: CLAUDE_BIN, GIT_BIN (trocam os executáveis), KIT_MARKETPLACE_DIR (o clone, senão
 // ~/.claude/plugins/marketplaces/kit-de-orquestracao), KIT_UPDATE_TIMEOUT_MS (marketplace e update; padrão 180 s).
 import { execFileSync } from 'node:child_process';
@@ -83,12 +83,16 @@ function main(argv) {
     if (seco) { plugins.push({ id, antes: user.version, publicado, depois: user.version, acao: 'atualizaria' }); continue; }
     const u = claude(['plugin', 'update', id, '--json', '-s', 'user'], LONGO_MS);
     if (u.status !== 0) { falhou = true; plugins.push({ id, antes: user.version, publicado, depois: user.version, acao: 'falhou', mensagem: u.err || `exit ${u.status}` }); continue; }
-    atualizou = true;
-    plugins.push({ id, antes: user.version, publicado, depois: user.version, acao: 'atualizado' });
+    plugins.push({ id, antes: user.version, publicado, depois: user.version, acao: 'conferir' });
   }
-  if (atualizou) {
-    const depois = instalados();
-    for (const p of plugins) if (p.acao === 'atualizado') p.depois = depois.find((x) => x.id === p.id && x.scope === 'user')?.version ?? p.depois;
+  if (plugins.some((p) => p.acao === 'conferir')) {
+    const relidos = instalados();
+    for (const p of plugins.filter((x) => x.acao === 'conferir')) {
+      p.depois = relidos.find((x) => x.id === p.id && x.scope === 'user')?.version ?? null;
+      if (p.depois === p.publicado) { p.acao = 'atualizado'; atualizou = true; continue; }
+      p.acao = 'não pegou'; falhou = true;
+      p.mensagem = p.depois === null ? `instalada sumiu da lista, publicada ${p.publicado}` : `instalada ficou em ${p.depois}, publicada ${p.publicado}`;
+    }
   }
   const resultado = { clone, plugins, reiniciar: atualizou };
   if (json) process.stdout.write(`${JSON.stringify(resultado, null, 2)}\n`);
@@ -96,7 +100,9 @@ function main(argv) {
     const larg = Math.max(...plugins.map((p) => p.id.split('@')[0].length));
     for (const p of plugins) {
       const nome = p.id.split('@')[0].padEnd(larg);
-      const quadro = p.acao === 'atualizado' || p.acao === 'atualizaria' ? `${p.antes} → ${p.publicado}${p.acao === 'atualizaria' ? ' (atualizaria)' : ''}`
+      const quadro = p.acao === 'atualizado' ? `${p.antes} → ${p.depois}`
+        : p.acao === 'atualizaria' ? `${p.antes} → ${p.publicado} (atualizaria)`
+        : p.acao === 'não pegou' ? `${p.antes} (não pegou: ${p.mensagem})`
         : p.acao === 'em dia' ? `${p.antes} (em dia)`
           : p.acao === 'falhou' ? `${p.antes} (falhou: ${p.mensagem})`
             : p.acao.startsWith('não mexido') ? `${p.antes} (${p.acao})` : `(${p.acao})`;
