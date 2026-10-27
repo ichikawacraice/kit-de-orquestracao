@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { tetoDeWorkers } from "../o-teto-de-workers.mjs";
@@ -68,6 +68,21 @@ describe("tetoDeWorkers com o teto da máquina", () => {
     const r = tetoDeWorkers({ KIT_FICHAS_TOMADAS: process.env.KIT_FICHAS_TOMADAS }, 15, 0.25, { pasta, teto: 4, avisar: () => {} });
     assert.deepEqual(r, { maxWorkers: 3, minWorkers: 1 });
     assert.deepEqual(readdirSync(pasta).sort(), antes);
+  });
+
+  it("com a vez do gate tomada por outro dono, não leva ficha da faixa do gate (≤ G) e fica na normal (ADR 0008)", () => {
+    writeFileSync(join(pasta, "gate"), JSON.stringify({ pid: process.pid, token: "gate", worktree: "/wt/gate", projeto: "kit", desde: "2026-10-26T10:00:00.000Z" }));
+    // teto 10 → faixas 7/3; pede 3 (15 × 0,25 = 3): leva 10, 9, 8
+    const r = tetoDeWorkers({}, 15, 0.25, { pasta, teto: 10, avisar: () => {} });
+    assert.deepEqual(r, { maxWorkers: 3, minWorkers: 1 });
+    assert.deepEqual(readdirSync(pasta).sort(), ["10", "8", "9", "gate"]);
+  });
+
+  it("sem gate rodando e com a faixa normal esgotada, empresta da faixa do gate, sem passar do pedido", () => {
+    for (const k of [10, 9, 8]) writeFileSync(join(pasta, String(k)), JSON.stringify({ pid: process.pid, token: "x", worktree: "/wt/x", projeto: "kit", desde: "2026-10-26T10:00:00.000Z" }));
+    const r = tetoDeWorkers({}, 15, 0.25, { pasta, teto: 10, avisar: () => {} });
+    assert.deepEqual(r, { maxWorkers: 3, minWorkers: 1 });
+    assert.deepEqual(readdirSync(pasta).filter((n) => Number(n) <= 7).sort(), ["5", "6", "7"]);
   });
 
   it("o valor de KIT_TESTE_WORKERS inválido continua recusado alto", () => {

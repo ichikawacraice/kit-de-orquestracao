@@ -117,4 +117,41 @@ describe("com-fichas", () => {
     assert.ok(Math.max(...maximos) <= 3, `passou do teto: ${maximos}`);
     assert.deepEqual(readdirSync(pasta), []);
   });
+
+  it("CONCORRÊNCIA com um gate rodando (ADR 0008): teto 10, cinco com-fichas pedindo 3 — nenhum toca 1..7 enquanto a vez do gate existe, e o máximo somado é ≤ 10", async () => {
+    // O "gate" do teste é este processo: toma a vez e as fichas 1..7 (a faixa do gate com teto 10) e as segura até o fim.
+    const { quemSouEuNasFichas, tentarAVezDoGate, tentarTomarFichas } = await import("../o-teto-da-maquina.mjs");
+    const gate = { ...quemSouEuNasFichas(), token: "gate-de-teste" };
+    assert.equal(tentarAVezDoGate(pasta, gate).tomou, true);
+    assert.deepEqual(tentarTomarFichas(pasta, 10, 7, gate).levou, [1, 2, 3, 4, 5, 6, 7]);
+    const medida = join(dir, "medida.jsonl");
+    // Cada comando amostra a pasta a cada 50 ms por 0,5 s: quantas fichas há, e quantas de 1..7 deixaram de ser as do gate.
+    const amostra = `const fs=require('fs');const p=process.env.KIT_NUCLEOS_DIR;let max=0,violacoes=0;const t=setInterval(()=>{const ks=fs.readdirSync(p).filter((x)=>/^[0-9]+$/.test(x));if(ks.length>max)max=ks.length;for(let k=1;k<=7;k++){try{if(JSON.parse(fs.readFileSync(p+'/'+k,'utf8')).token!=='gate-de-teste')violacoes++;}catch{violacoes++;}}},50);setTimeout(()=>{clearInterval(t);fs.appendFileSync(${JSON.stringify(medida)},JSON.stringify({max,violacoes,fichas:process.env.KIT_FICHAS_TOMADAS})+'\\n');},500);`;
+    const codigos = await Promise.all(
+      [1, 2, 3, 4, 5].map(
+        () =>
+          new Promise((resolve) => {
+            // `spawn` com prazo próprio (o único caso assíncrono): o `setTimeout` mata o filho se pendurar.
+            const f = spawn(process.execPath, [SCRIPT, "--quero", "3", "--", process.execPath, "-e", amostra], {
+              env: envDe({ KIT_NUCLEOS_DE_TESTE: "10" }),
+              stdio: "ignore",
+            });
+            const prazo = setTimeout(() => f.kill("SIGKILL"), 60_000);
+            f.on("close", (c) => {
+              clearTimeout(prazo);
+              resolve(c);
+            });
+          }),
+      ),
+    );
+    assert.deepEqual(codigos, [0, 0, 0, 0, 0]);
+    assert.ok(existsSync(medida), "ninguém mediu");
+    const vistos = readFileSync(medida, "utf-8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.equal(vistos.length, 5);
+    assert.ok(Math.max(...vistos.map((v) => v.max)) >= 8, `prova de que a medida enxerga ficha: o gate tem 7 e algum normal tem ≥ 1 — ${JSON.stringify(vistos)}`);
+    assert.ok(Math.max(...vistos.map((v) => v.max)) <= 10, `passou do teto: ${JSON.stringify(vistos)}`);
+    assert.deepEqual(vistos.map((v) => v.violacoes), [0, 0, 0, 0, 0], "ninguém tocou 1..7");
+    assert.deepEqual(vistos.map((v) => v.fichas), ["3", "3", "3", "3", "3"], "cada um levou as 3 normais, esperando a vez dos outros");
+    assert.deepEqual(readdirSync(pasta).sort((a, b) => a.localeCompare(b)), ["1", "2", "3", "4", "5", "6", "7", "gate"]);
+  });
 });
