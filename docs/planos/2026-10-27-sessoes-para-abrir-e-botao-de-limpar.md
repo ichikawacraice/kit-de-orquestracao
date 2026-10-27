@@ -39,22 +39,24 @@ Decisões do operador: Q419 (F144, 27/10) e o pedido no chat da orquestradora (F
 - **D2 · O destaque segue a régua da orquestradora:** abaixo de 150 mil, discreto; a partir de 150 mil (a palavra
   `· limpar` da barra), em destaque. O `Limpar antes de vencer` some: o mesmo botão, destacado quando o cache vence em
   ≤ 10 min com ≥ 150 mil, cobre o caso. *Assumida, a confirmar.*
-- **D3 · O clique limpa sem pergunta e sem janela.** Ele: (a) grava `~/.claude/orquestracao/limpeza/<local_…>.json`
-  `{ "em": "<ISO>", "por": "barra" }` (pasta por `PAINEL_DIR/../limpeza`, como os handoffs); (b) manda à própria sessão,
-  por `$.prompt.submit`, o texto `O operador mandou limpar pelo botão da barra: grave o estado (handoff do que estiver
-  aberto) e limpe-se com clear_session "self".` Estado visível no botão: `Limpando…` até o envio voltar; falha volta o
-  rótulo e vira toast.
-- **D4 · A T7 aceita o arquivo do botão** com `em` de até 30 min e nunca no futuro (mesma janela dos outros oks).
-  **Antes de escrever o ramo, meça:** com o mod mandando um prompt por `$.prompt.submit`, qual é a origem que o
-  `origemDoTurno` lê no transcript. Se for `human`, a T7 já passa e o arquivo é só registro (o ramo novo entra igual:
-  custa pouco e não depende do app). Risco aceito: a orquestradora pode gravar o arquivo pelo Bash, o mesmo risco já
-  aceito no F48 (D6, sessões cooperativas).
+- **D3 · O clique limpa sem pergunta e sem janela.** Ele manda à própria sessão, por `$.prompt.submit`, o texto
+  `O operador mandou limpar pelo botão da barra: grave o estado (handoff do que estiver aberto) e limpe-se com
+  clear_session "self".` Estado visível no botão: `Limpando…` até o envio voltar; falha volta o rótulo e vira toast.
+- **D4 · A prova do ok depende de uma medida, feita antes de qualquer código da T7:** com o mod mandando um prompt por
+  `$.prompt.submit`, qual origem o `origemDoTurno` lê no transcript (cole a linha no PR).
+  - **Origem `human`:** a T7 já libera (`turno do operador`) e **nada muda nela**; não se grava arquivo de ok. É o
+    caminho preferido: não abre porta nova de auto-autorização.
+  - **Outra origem:** o clique grava antes `~/.claude/orquestracao/limpeza/<local_…>.json` `{ "em": "<ISO>", "por":
+    "barra" }` (pasta por `PAINEL_DIR/../limpeza`), e a T7 ganha o ramo que o aceita com `em` de até 30 min e nunca no
+    futuro. Risco aceito: a orquestradora pode gravar o arquivo pelo Bash, o mesmo já aceito no F48 (D6, sessões
+    cooperativas). Só neste caso entram `okDoBotaoDeLimpar` e os testes do ramo.
 - **D5 · Sai o pedido:** a orquestradora não abre mais a pergunta `limpar · orquestradora` nem a janela. Sai do mod o
   pedido na barra (`pedido`, `limpar-pedido`, `FRASE_*`, `OK_ENVIADO`) e o `desenharPedidoNoPane`. A T7 **continua**
   aceitando o "sim" do painel e da janela (pergunta antiga ainda aberta não quebra; remover fica para depois).
-- **D6 · A cobrança dos 150 mil vira lembrete, não bloqueio:** `contexto-do-papel.mjs`, orquestradora presente, ≥ 150 mil:
-  em vez do `block`, uma linha de contexto (`additionalContext`) dizendo que o botão de limpar da barra está destacado e
-  que o estado deve estar escrito; nenhuma pergunta, nenhuma janela. *Assumida, a confirmar.*
+- **D6 · A cobrança dos 150 mil sai, sem lembrete no lugar:** `contexto-do-papel.mjs` é hook de Stop, que só bloqueia
+  ou deixa passar (não injeta texto no modelo). Com o operador presente, a orquestradora acima de 150 mil deixa de ser
+  bloqueada; o sinal passa a ser o botão de limpar destacado na barra (D2), que é para o operador, dono da decisão. O
+  registro (`registrar`) do contexto alto continua. *Assumida, a confirmar.*
 - **D7 · Ícone e cor de cada botão da barra:** limpar, modo (ausente/de volta), painel e selo das perguntas. Exemplo do
   operador: ausente em azul. **A D decide** os glifos e as cores na revisão, com contraste nos dois temas e o que o
   `Button` do motor aceita (medir: cor no `Button` ou num `Text` filho).
@@ -64,21 +66,22 @@ Decisões do operador: Q419 (F144, 27/10) e o pedido no chat da orquestradora (F
 |---|---|
 | `plugins/painel-sessoes/hooks/barra.tsx` | peça `limpar` sempre na orquestradora (antes de `modo`), destaque por D2; sai o pedido (D5); ícones e cores da revisão; `larguraDaFaixa` conta o glifo |
 | `plugins/painel-sessoes/hooks/register.tsx` | ação `limpar` (D3) com estado `Limpando…`; sai `darOkDeLimpar`, `rascunhoDeLimpar` e o pedido do topo do pane; a leitura da barra deixa de procurar a pergunta |
-| `plugins/orquestracao/hooks/papel-do-pool.mjs` | ramo da T7 que aceita `limpeza/<local_…>.json` (D4) |
-| `plugins/orquestracao/hooks/pool-comum.mjs` | `okDoBotaoDeLimpar(localId)`: lê o arquivo, valida `em` (≤ 30 min, não futuro); erro = `null` |
-| `plugins/orquestracao/hooks/contexto-do-papel.mjs` | D6 |
+| `plugins/orquestracao/hooks/papel-do-pool.mjs` | só se a medida de D4 não der `human`: ramo da T7 que aceita `limpeza/<local_…>.json` |
+| `plugins/orquestracao/hooks/pool-comum.mjs` | só nesse caso: `okDoBotaoDeLimpar(localId)` (lê o arquivo, `em` ≤ 30 min e não futuro; erro = `null`) |
+| `plugins/orquestracao/hooks/contexto-do-papel.mjs` | D6: a orquestradora presente acima de 150 mil não bloqueia mais (sai a cobrança da pergunta e da janela) |
 | `plugins/orquestracao/skills/orquestradora/SKILL.md` | seção "Orçamento de contexto": sem pergunta e sem janela; o botão da barra; o que fazer ao receber o prompt do botão |
 | `plugins/orquestracao/pool/protocolo.md` | onde fala do ok de limpar a orquestradora: o botão da barra |
 
 ### Passos (teste antes do código)
 1. Meça a origem do prompt de `$.prompt.submit` (D4) e anote no PR, com a linha do transcript colada.
 2. Testes vermelhos: `barra.test.tsx` (peça `limpar` na orquestradora em toda faixa, antes de `modo`; ausente em outra
-   sessão; destaque a partir de 150 mil; nenhum `pedido` nem `limpar-antes`); `papel-do-pool.test.mjs` (arquivo de 5 min
-   libera; de 31 min nega; `em` no futuro nega; arquivo de outra sessão nega); `contexto-do-papel.test.mjs` (≥ 150 mil
-   presente não bloqueia e devolve o lembrete).
+   sessão; destaque a partir de 150 mil; nenhum `pedido` nem `limpar-antes`); `contexto-do-papel.test.mjs` (orquestradora
+   presente com 200 mil: o Stop sai sem `decision: block`; antes do conserto o mesmo teste falha pelo block); só se D4
+   não deu `human`, `papel-do-pool.test.mjs` (arquivo de 5 min libera; de 31 min nega; `em` no futuro nega; arquivo de
+   outra sessão nega).
 3. Código até verde; `npm test` e `claude plugin test plugins/painel-sessoes`.
 4. Skill e versão dos dois plugins.
-5. Audite o gesto (skill `auditoria-de-clique`): clique → arquivo → prompt → `clear_session` → T7 libera.
+5. Audite o gesto (skill `auditoria-de-clique`): clique → prompt (e o arquivo, se D4 o exigiu) → `clear_session` → T7 libera.
 
 ### Critério de pronto
 - Na barra da orquestradora, o botão de limpar aparece em toda faixa, à esquerda do modo; em outra sessão, não.
