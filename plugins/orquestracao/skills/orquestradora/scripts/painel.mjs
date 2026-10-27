@@ -13,6 +13,7 @@
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_|apelido> [--fez]   tira a sessão do `com` (o apelido E1/V4… vale se for um só no item); --fez a registra em `fez` (quem executou)
+//   painel.mjs fez del <F> <local_|apelido> "<motivo>"   tira do `fez` do item a entrega daquela sessão (registro falso: quem saiu sem entregar); grava `agora` = "fez de <apelido> tirado: <motivo>"; recusa item inexistente, etapa final, motivo vazio, apelido ambíguo e sessão fora do `fez`
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]   os membros livres do papel no projeto, o mais antigo parado primeiro → [{localId, apelido}]; --sessoes é o JSON do list_sessions (sem ele, o registro do app, sem contar a mesma sessão duas vezes)
 //   painel.mjs pegar <F> [<local_>] <apelido>   (o id sai de $CLAUDE_CODE_HOST_SESSION_ID; id de outra sessão, de orquestradora ou de outro apelido é recusado) o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
@@ -326,7 +327,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: fez.em "${e.em}" não é data ISO`);
   });
   if (!viaCom && 'fez' in novo && (op === 'update' || canonico(novo.fez) !== canonico(antes?.fez ?? []))) {
-    throw new Error(`${chave}: o campo "fez" só muda por \`painel com del --fez\` (o ${op} apagaria ou forjaria quem executou)`);
+    throw new Error(`${chave}: o campo "fez" só muda por \`painel com del --fez\` (acrescenta) ou \`painel fez del\` (tira entrega falsa); o ${op} apagaria ou forjaria quem executou`);
   }
   lista('passaram', ['localId', 'apelido', 'papel', 'em'], (e) => {
     if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: passaram.em "${e.em}" não é data ISO`);
@@ -751,6 +752,30 @@ function comandoCom(args) {
   });
 }
 
+// `fez del <F> <local_|apelido> "<motivo>"`: tira a entrega falsa (F169). É a única via que tira de `fez`; o motivo vira o `agora`.
+function comandoFez(args) {
+  const [sub, F, quem, motivo, ...sobra] = args;
+  if (sub !== 'del' || sobra.length) throw new Error('uso: painel.mjs fez del <F> <local_|apelido> "<motivo>" (o motivo vai entre aspas)');
+  if (!ID.test(String(F))) throw new Error(`fez del: id de item inválido "${F}"`);
+  const porApelido = !LOCAL_ID.test(String(quem)) && /^[PDEV]\d+$/.test(String(quem));
+  if (!porApelido && !LOCAL_ID.test(String(quem))) throw new Error(`fez del: "${quem}" não é local_<uuid> nem apelido`);
+  if (!textoNaoVazio(motivo)) throw new Error('fez del: falta o "<motivo>" (vira o `agora` do item)');
+  return comTrava(() => {
+    const atual = ler('fila', F);
+    if (!atual) throw new Error(`fila/${F} não existe`);
+    const d0 = atual.data ?? {};
+    const final = ETAPAS.includes(d0.etapa) ? ETAPAS_FINAIS.has(d0.etapa) : ['feito', 'descartado'].includes(d0.estado);
+    if (final) throw new Error(`fez del: ${F} está em etapa final (${d0.etapa ?? d0.estado}); não há o que tirar`);
+    const fez = Array.isArray(d0.fez) ? d0.fez : [];
+    const achados = fez.filter((f) => (porApelido ? f.apelido === quem : f.localId === quem));
+    if (achados.length === 0) throw new Error(`fez del: ${quem} não está em fez de ${F}`);
+    const locais = new Set(achados.map((f) => f.localId));
+    if (porApelido && locais.size > 1) throw new Error(`fez del: apelido ambíguo, use o local_ (${[...locais].join(', ')})`);
+    const data = { fez: fez.filter((f) => !locais.has(f.localId)), agora: `fez de ${achados[0].apelido} tirado: ${motivo}` };
+    return efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
+  });
+}
+
 // `soltar <F> "<motivo>"`: o único caminho para devolver um item à fila sem dono (hook de Stop e ritual da orquestradora).
 // Grava pela via do `com` (zera o `com`) dentro da trava; não registra `fez`.
 function comandoSoltar(args) {
@@ -851,6 +876,11 @@ function pegarDentro(F, localId, apelido) {
     const data = { com: [...com.filter((c) => c.localId !== localId), { localId, apelido, oQue: d.titulo }], agora: `${apelido} começou`, passaram: comPassagem(d, localId, apelido) };
     if ((d.etapa === 'planejamento' || d.etapa === 'design') && !textoNaoVazio(d.donoLocalId)) { data.donoLocalId = localId; data.donoApelido = apelido; }
     efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
+    // F169: quem pega um item novo deixou os outros; sai do `com` deles sem `fez` (quem entregou já rodou `com del --fez`).
+    for (const [outro, o] of itensVivos()) {
+      if (outro === F || !Array.isArray(o?.com) || !o.com.some((c) => c.localId === localId)) continue;
+      efetivar(planejar({ op: 'update', colecao: 'fila', id: outro, data: { com: o.com.filter((c) => c.localId !== localId) }, [VIA_COM]: true }, undefined, new Map()));
+    }
     const handoff = join(HANDOFFS, `${F}.md`);
     return { pegou: true, item: F, titulo: d.titulo, etapa: d.etapa, handoff: existsSync(handoff) ? handoff : null };
   }
@@ -1100,6 +1130,9 @@ function main(argv) {
       break;
     case 'com':
       saida = comandoCom(resto);
+      break;
+    case 'fez':
+      saida = comandoFez(resto);
       break;
     case 'soltar':
       saida = comandoSoltar(resto);

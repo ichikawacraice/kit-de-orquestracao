@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registrar, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { registroDaSessao, membroDoPool, inicioDoTurno, itensDaSessao, itensDonosDaSessao, declarouLivre, vaiSoltar, tituloLivre, tituloAguardando, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
+import { filaDir, registroDaSessao, membroDoPool, inicioDoTurno, itensDaSessao, itensDonosDaSessao, declarouLivre, vaiSoltar, tituloLivre, tituloAguardando, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'livre-se-limpa';
 const ehSelf = (id) => id === undefined || id === null || id === 'self';
@@ -48,16 +48,34 @@ function painel(args) {
 }
 const msgDe = (e) => String(e?.stderr || e?.message || e).trim().split('\n')[0] || (e?.signal ? `morto por ${e.signal}` : 'sem mensagem');
 const baseDoPainel = () => { const e = painelEnv(); return e.PAINEL_DIR || e.IZANAGI_PAINEL_DIR || join(process.env.HOME || '', '.claude', 'orquestracao', 'painel'); };
-// Tira a sessão de cada `com` (com `--fez` só para a E: quem sai sem entregar não ganha `fez`), solta SÓ O DONO dos itens de que ela é
+// Tira a sessão de cada `com` (com `--fez` só para a E que MOSTRA entrega no item: PR no item e push/PR no transcript desde a entrada; F169), solta SÓ O DONO dos itens de que ela é
 // dona (o `com` das outras sessões fica) e põe a linha dela em `sessoes` como livre (só se a linha já existe; falha ali só vai ao log).
 // → { falhou: [{F, tipo}], erros: [texto] }.
-function soltarDoItem(sessionId, reg, itens, aguardando = false) {
+const PUSH_OU_PR = /\bgit\s+push\b|\bgh\s+pr\s+(create|ready)\b/;
+// F169: a E entregou neste item? O item tem `prs` e o transcript, desde a entrada dela (o `em` dela em `passaram`; sem entrada, o
+// transcript inteiro), tem `git push` ou `gh pr create|ready` num Bash. `linhas` são as linhas do transcript (jsonl).
+export function entregou(item, localId, linhas) {
+  if (!Array.isArray(item?.prs) || item.prs.length === 0) return false;
+  const entrada = (Array.isArray(item.passaram) ? item.passaram : []).find((p) => p?.localId === localId);
+  const desde = entrada ? Date.parse(entrada.em) : -Infinity;
+  for (const l of linhas) {
+    if (!l) continue;
+    let e; try { e = JSON.parse(l); } catch { continue; }
+    if (e.type !== 'assistant' || !(Date.parse(e.timestamp) >= desde) || !Array.isArray(e.message?.content)) continue;
+    for (const b of e.message.content) {
+      if (b?.type === 'tool_use' && b.name === 'Bash' && PUSH_OU_PR.test(semHeredoc(String(b.input?.command || '')))) return true;
+    }
+  }
+  return false;
+}
+const itemDaFila = (F) => { try { return JSON.parse(readFileSync(join(filaDir(), `${F}.json`), 'utf8'))?.data ?? null; } catch { return null; } };
+function soltarDoItem(sessionId, reg, itens, aguardando = false, linhas = []) {
   const falhou = []; const erros = [];
   const papel = membroDoPool(reg?.titulo)?.papel;
   const local = reg?.localId;
   prazoFinal = Date.now() + ORCAMENTO_MS;
   for (const F of itens.com) {
-    try { painel(['com', 'del', F, local, ...(papel === 'E' ? ['--fez'] : [])]); registrar(sessionId, HOOK, 'soltou-com', F); }
+    try { painel(['com', 'del', F, local, ...(papel === 'E' && entregou(itemDaFila(F), local, linhas) ? ['--fez'] : [])]); registrar(sessionId, HOOK, 'soltou-com', F); }
     catch (e) { falhou.push({ F, tipo: 'com' }); erros.push(`com del ${F}: ${msgDe(e)}`); }
   }
   for (const F of itensDonosDaSessao(local)) {
@@ -143,7 +161,7 @@ function main() {
   // cobrar (`vaiSoltar` é a mesma função que o `fila-do-item` usa para deixar de cobrar). Se a escrita falhar ou estourar o
   // orçamento, volta a bloquear dizendo o que faltou (nunca passa calado). Declaração sobre a linha de OUTRA sessão não solta nada.
   if (vaiSoltar(transcript_path, inicio, { sessionId: session_id, localId: regDecl?.localId, titulo: regDecl?.titulo })) {
-    const solto = soltarDoItem(session_id, regDecl, itens, decl.aguardando);
+    const solto = soltarDoItem(session_id, regDecl, itens, decl.aguardando, readFileSync(transcript_path, 'utf8').split('\n'));
     if (solto.falhou.length) {
       const lista = solto.falhou.map((f) => f.F).join(', ');
       registrar(session_id, HOOK, 'erro-ao-soltar', solto.erros.join(' | '));
