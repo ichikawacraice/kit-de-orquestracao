@@ -36,7 +36,7 @@ beforeEach(() => {
 afterEach(() => { rmSync(base, { recursive: true, force: true }); });
 
 const ambiente = (extra = {}) => ({
-  ...process.env, PAINEL_DIR: pastaPainel(), CLAUDE_CODE_SESSION_ID: '', HOME: join(base, 'home'), HOOKS_CREWAI_BASE: pastaOrq(),
+  ...process.env, PAINEL_DIR: pastaPainel(), CLAUDE_CODE_SESSION_ID: '', CLAUDE_CODE_HOST_SESSION_ID: '', HOME: join(base, 'home'), HOOKS_CREWAI_BASE: pastaOrq(),
   POOL_APP_SESSOES_DIR: join(base, 'appsess'), KIT_CARGA_1MIN: '0', KIT_NUCLEOS_DIR: join(base, 'nuc'), KIT_NUCLEOS_DE_TESTE: '4', ...extra,
 });
 function painel(args, { env = {}, cwd = repo } = {}) {
@@ -143,6 +143,40 @@ test('pegar recusa: item que não existe, em merge, final, de outro papel e entr
     assert.deepEqual(lerItem(F).data.com, [], `${F}: não pode mudar`);
   }
   assert.equal(painel(['pegar', 'F4', lid(11), 'E1']).exit, 0, 'o mesmo item serve ao papel certo (a recusa acima não vinha de outra causa)');
+});
+// ---- pegar: o id é o da própria sessão (F155) ----
+const registrar = (n, titulo) => writeFileSync(join(base, 'appsess', `${lid(n)}.json`), JSON.stringify({ sessionId: lid(n), title: titulo, cwd: repo, isArchived: false }));
+test('pegar com o id de outra sessão é recusado e não grava', () => {
+  registrar(11, 'E1 · livre'); registrar(20, '🎛 orquestradora — kit');
+  item('F2', esperandoE());
+  const certo = painel(['pegar', 'F2', lid(11), 'E1'], { env: { CLAUDE_CODE_HOST_SESSION_ID: lid(11) } });
+  assert.equal(certo.exit, 0, certo.err);
+  assert.deepEqual(lerItem('F2').data.com.map((c) => c.localId), [lid(11)], 'a presença: o id da própria sessão grava');
+  item('F1', esperandoE());
+  const antes = readFileSync(arquivoDoItem('F1'), 'utf8');
+  const r = painel(['pegar', 'F1', lid(20), 'E1'], { env: { CLAUDE_CODE_HOST_SESSION_ID: lid(11) } });
+  assert.equal(r.exit, 1, r.out);
+  assert.ok(r.err.includes(lid(20)) && r.err.includes(lid(11)), r.err);
+  assert.equal(readFileSync(arquivoDoItem('F1'), 'utf8'), antes);
+});
+test('pegar sem o id usa o da sessão; sem como saber o id, pede o local_…', () => {
+  item('F1', esperandoE());
+  const r = painel(['pegar', 'F1', 'E1'], { env: { CLAUDE_CODE_HOST_SESSION_ID: lid(11) } });
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(lerItem('F1').data.com[0].localId, lid(11));
+  item('F3', esperandoE());
+  const sem = painel(['pegar', 'F3', 'E1']);
+  assert.equal(sem.exit, 1, sem.out);
+  assert.match(sem.err, /local_/);
+});
+test('pegar com o id da sessão mas o apelido de outro é recusado', () => {
+  registrar(11, 'E1 · livre');
+  item('F1', esperandoE());
+  const r = painel(['pegar', 'F1', lid(11), 'E2']);
+  assert.equal(r.exit, 1, r.out);
+  assert.match(r.err, /E1/);
+  const ok = painel(['pegar', 'F1', lid(11), 'E1']);
+  assert.equal(ok.exit, 0, ok.err);
 });
 test('pegar em corrida: dois livres, um pega e o outro é recusado', async () => {
   item('F1', esperandoE());

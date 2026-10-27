@@ -24,7 +24,7 @@ function novoBase() {
 function run(cmd, args, extraEnv = {}, prazo = 30000) {
   const r = spawnSync(cmd, args, {
     encoding: 'utf8', timeout: prazo, killSignal: 'SIGKILL',
-    env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), ...extraEnv },
+    env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", CLAUDE_CODE_HOST_SESSION_ID: "", HOME: join(base, "home"), ...extraEnv },
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -756,6 +756,35 @@ caso('F30-1: com add duas vezes com sessões diferentes dá duas entradas; repet
   igual(comAdd('F1', LA, 'E1', 'só o conserto').exit, 0, 'add repetido');
   com = json(painel('get', 'fila', 'F1')).data.com;
   igual(com.length, 2, 'continua com duas'); igual(com[0].oQue, 'só o conserto', 'oQue trocado');
+});
+// F155: com add confere o id contra o título no registro do app.
+const registro = (id, titulo) => {
+  const d = join(base, 'appsess'); mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, `${id}.json`), JSON.stringify({ sessionId: id, title: titulo, cwd: base, isArchived: false }));
+};
+const comAddReg = (F, l, ap, o) => run('node', [join(SCRIPTS, 'painel.mjs'), 'com', 'add', F, l, ap, o], { POOL_APP_SESSOES_DIR: join(base, 'appsess') });
+caso('F155: com add com o id da orquestradora é recusado e não grava', () => {
+  semear(); painel('set', 'fila', 'F1', COM());
+  registro(LA, '🎛 orquestradora — kit');
+  const antes = JSON.stringify(json(painel('get', 'fila', 'F1')));
+  const r = comAddReg('F1', LA, 'E18', 'x');
+  igual(r.exit, 1, `exit (${r.out}${r.err})`);
+  igual(JSON.stringify(json(painel('get', 'fila', 'F1'))), antes, 'o item mudou');
+});
+caso('F155: com add com o apelido que não é o do título é recusado; com o certo passa', () => {
+  semear(); painel('set', 'fila', 'F1', COM());
+  registro(LB, 'E21 · acabamento');
+  const r = comAddReg('F1', LB, 'E18', 'x');
+  igual(r.exit, 1, `exit (${r.out}${r.err})`); ok(r.err.includes('E21'), `stderr sem E21: ${r.err}`);
+  const c = comAddReg('F1', LB, 'E21', 'x');
+  igual(c.exit, 0, `E21 (${c.err})`);
+});
+caso('F155: com add com id fora do registro ou título sem apelido passa', () => {
+  semear(); painel('set', 'fila', 'F1', COM());
+  const L30 = 'local_00000000-0000-4000-8000-000000000030'; const L31 = 'local_00000000-0000-4000-8000-000000000031';
+  registro(L31, 'Nova sessão');
+  igual(comAddReg('F1', L30, 'E18', 'x').exit, 0, 'sem registro');
+  igual(comAddReg('F1', L31, 'E19', 'x').exit, 0, 'título sem apelido');
 });
 caso('F30-1: com del tira sem gravar fez; com del --fez grava fez com em; quem não está sai com exit 1', () => {
   semear(); painel('set', 'fila', 'F1', COM());
