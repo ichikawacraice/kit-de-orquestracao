@@ -3,6 +3,8 @@
 // lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain) e não grava estado nenhum.
 //   orquestradora (F147): com o modo ausente ligado segue a régua da planejadora abaixo; com o operador presente o Stop não a bloqueia:
 //     a limpeza é dele, pelo botão `↺ Limpar` da barra (destacado a partir de 150 mil); o hook só registra (`contexto-alto`, ou `limpou`).
+//     No modo ausente o papel é `orquestradora-ausente` (F190): o log e o aviso dizem que a régua vem da bandeira e como desligá-la,
+//     porque a bandeira ligada pelo botão do painel fica ligada até alguém a desligar, mesmo com o operador de volta.
 //   planejadora / design: ≥ 500 mil cobra limpar (só `clear_session` "self" satisfaz); ≥ 350 mil cobra limpar OU
 //     a linha `Contexto: sigo — <o que falta na unidade>`; ≥ 250 mil com o turno terminando esperando o operador (`?` ou `Q<n>` no
 //     último parágrafo) cobra limpar antes.
@@ -23,9 +25,9 @@ export { ALTO, EXEC }; // o `painel seguinte` mede o contexto contra estas régu
 const PEDIR = limite('PEDIR', 150_000);
 const mil = (t) => Math.round(t / 1000);
 
-// Papel pela ordem: orquestradora, executora, membro do pool (P e D = planejadora, V = validadora, E = executora). Sem papel → null.
+// Papel pela ordem: orquestradora (ou orquestradora-ausente), executora, membro do pool (P e D = planejadora, V = validadora, E = executora). Sem papel → null.
 function papelDe(e, transcript, reg) {
-  if (ehOrquestradora(e.session_id, reg?.titulo)) return modoAusente() ? 'planejadora' : 'orquestradora';
+  if (ehOrquestradora(e.session_id, reg?.titulo)) return modoAusente() ? 'orquestradora-ausente' : 'orquestradora';
   if (ehExecutora(e, transcript)) return 'executora';
   const m = membroDoPool(reg?.titulo);
   if (!m) return null;
@@ -71,6 +73,13 @@ function orquestradora(e, sid, transcript, t, det) {
   registrar(sid, HOOK, limpou ? 'limpou' : 'contexto-alto', det);
 }
 
+// ` (desde 12:45 em São Paulo, pelo botão do painel)`: de onde veio a bandeira, para quem lê o aviso conferir.
+function desdeDoModo() {
+  const b = modoAusente(); if (!b) return '';
+  const hora = new Date(b.desdeMs).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+  return ` (desde ${hora} em São Paulo${b.por === 'painel' ? ', pelo botão do painel' : b.por === 'comando' ? ', por `/ausente on`' : ''})`;
+}
+
 function main() {
   const e = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id: sid, transcript_path: transcript, stop_hook_active: ativo } = e;
@@ -102,6 +111,7 @@ function main() {
     cobranca = { desfecho: 'cobrou-150-espera', sigoVale: true, esperando: true, reason: `Contexto em ${mil(t)} mil e o turno termina esperando resposta: limpe antes (retomar custa ~90 mil, reler ${mil(t)} mil a cada turno custa mais).` };
   }
   if (!cobranca) return;
+  if (papel === 'orquestradora-ausente') cobranca.reason += ` Vale porque o modo ausente está ligado${desdeDoModo()}; se o operador está aqui, quem desliga é ele (\`/ausente off\` ou o botão do painel), e aí a limpeza volta a ser dele.`;
 
   const inicio = inicioDoTurno(transcript) ?? 0;
   const { limpou, texto } = doTurno(transcript, inicio, e.last_assistant_message);

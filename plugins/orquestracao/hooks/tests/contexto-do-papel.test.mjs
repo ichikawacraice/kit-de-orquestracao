@@ -207,6 +207,35 @@ test('F147-7. bandeira {ligado:false} vale como desligada: ORQ a 360 mil sem blo
   assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), null);
   assert.doesNotMatch(log(b), /cobrou/);
 }));
+// F190 (medido 27/10): a orquestradora do kit (título com o emoji, marcador em `ativas/`) foi bloqueada a 257 mil com o turno
+// terminando em pergunta e o log disse `planejadora`: o modo ausente seguia ligado pelo botão do painel desde 12:45. A régua vale,
+// mas o log e o aviso dizem que é a orquestradora em modo ausente e como desligá-lo, para quem está presente não ler "planejadora".
+const marcar = (b, sid) => { mkdirSync(join(b, 'orq', 'ativas'), { recursive: true }); writeFileSync(join(b, 'orq', 'ativas', sid), '{}'); };
+const PERGUNTA = 'Fila vazia.\n\nTemos mais algo planejado?';
+test('F190-1. ORQ marcada, modo ausente do painel ligado, 257 mil com "?": cobra dizendo modo ausente e registra orquestradora-ausente', () => com((b) => {
+  marcar(b, ID.ORQ);
+  ligar(b, { frase: 'botão do painel', por: 'painel' });
+  const r = rodar(b, 'ORQ', transcript(b, { tokens: 257_000, texto: PERGUNTA }));
+  cobrou(r, /257 mil.*esperando resposta/s);
+  assert.match(r.reason, /modo ausente/i);
+  assert.match(r.reason, /desde \d{2}:\d{2} em São Paulo, pelo botão do painel/);
+  assert.match(r.reason, /\/ausente off/);
+  assert.match(log(b), /\tcobrou-150-espera\torquestradora-ausente 257 mil/);
+  assert.doesNotMatch(log(b), /planejadora/);
+}));
+test('F190-2. a mesma ORQ marcada com o modo ausente desligado: sem block, registra contexto-alto orquestradora', () => com((b) => {
+  marcar(b, ID.ORQ);
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 257_000, texto: PERGUNTA })), null);
+  assert.match(log(b), /\tcontexto-alto\torquestradora 257 mil/);
+  assert.doesNotMatch(log(b), /cobrou/);
+}));
+test('F190-3. a planejadora não ganha o aviso do modo ausente', () => com((b) => {
+  ligar(b);
+  const r = rodar(b, 'P', transcript(b, { tokens: 360_000 }));
+  cobrou(r, /360 mil/);
+  assert.doesNotMatch(r.reason, /modo ausente/i);
+  assert.match(log(b), /\tcobrou-200\tplanejadora 360 mil/);
+}));
 test('F48-9. planejadora com 360 mil segue cobrando sem bandeira (a mudança é só da orquestradora)', () => com((b) => {
   cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
 }));
