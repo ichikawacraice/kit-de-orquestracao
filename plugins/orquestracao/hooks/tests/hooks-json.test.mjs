@@ -28,6 +28,7 @@ const ESPERADO = [
   ['PreToolUse', `Agent|Task|Bash|${PRE_EDICAO}|mcp__ccd_session_mgmt__archive_session|mcp__ccd_session_mgmt__delete_session|mcp__ccd_session__start_session|mcp__ccd_session_mgmt__clear_session|SendMessage|mcp__ccd_session_mgmt__send_message`, 'papel-do-pool.mjs'],
   ['PreToolUse', 'Skill', 'skill-do-papel.mjs'],
   ['PreToolUse', 'SendMessage|mcp__ccd_session_mgmt__send_message|mcp__ccd_session__start_session|Write|Edit|MultiEdit|Bash', 'segredo-sai.mjs'],
+  ['PreToolUse', 'mcp__ccd_session__start_session', 'titulo-da-dona.mjs'],
   ['SubagentStop', null, 'executor-criterio.mjs'],
   ['PostToolUse', null, 'laco-de-comandos.mjs'],
   ['PostToolUseFailure', null, 'laco-de-comandos.mjs'],
