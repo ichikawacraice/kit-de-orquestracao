@@ -12,11 +12,12 @@
 //   painel.mjs temas list [--projeto <nome>]   os temas do projeto (o da pasta atual); cada tema vale só no projeto dele
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
-//   painel.mjs com del <F> <local_> [--fez]   tira a sessão do `com`; --fez a registra em `fez` (quem executou)
+//   painel.mjs com del <F> <local_|apelido> [--fez]   tira a sessão do `com` (o apelido E1/V4… vale se for um só no item); --fez a registra em `fez` (quem executou)
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]   os membros livres do papel no projeto, o mais antigo parado primeiro → [{localId, apelido}]; --sessoes é o JSON do list_sessions (sem ele, o registro do app, sem contar a mesma sessão duas vezes)
 //   painel.mjs pegar <F> [<local_>] <apelido>   (o id sai de $CLAUDE_CODE_HOST_SESSION_ID; id de outra sessão, de orquestradora ou de outro apelido é recusado) o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
 //   painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]   (ADR 0009) ao terminar, pega o item vivo mais antigo do mesmo projeto e tema do último item por onde a sessão passou (`passaram`) que espera o papel dela, como o `pegar` → {pegou:true, item, …} ou {pegou:false, motivo}; recusa com o contexto acima do aviso do papel (E 300 mil, P/D/V 350 mil) ou sem medida do transcript; --tokens só sobrescreve a medida (teste)
+//   painel.mjs mergear <PR> <sha> [--seco]   o merge do PR validado (F150): confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; --seco só confere
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, pede ao membro com título de item fechado que volte a livre, relata merge/vagas/excedentes/títulos velhos à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
@@ -45,6 +46,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 import { AFINIDADE_MIN, BATIDA_SOLTA_MIN, julgar, livresDe, ocupadosDaFila } from './batida.mjs';
+import { SHA_VALIDADO, conferir, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 // Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
@@ -698,15 +700,24 @@ function comPassagem(d, localId, apelido) {
 
 // `com add|del`: lê, muda e grava a lista dentro da trava do painel; é a única via que grava `com` (e a que acrescenta a `fez`).
 function comandoCom(args) {
-  const [sub, F, localId, ...resto] = args;
-  if (sub !== 'add' && sub !== 'del') throw new Error('uso: painel.mjs com add <F> <local_> <apelido> "<oQue>" | com del <F> <local_> [--fez]');
+  const [sub, F, quem0, ...resto] = args;
+  let localId = quem0;
+  if (sub !== 'add' && sub !== 'del') throw new Error('uso: painel.mjs com add <F> <local_> <apelido> "<oQue>" | com del <F> <local_|apelido> [--fez]');
   if (!ID.test(String(F))) throw new Error(`com: id de item inválido "${F}"`);
-  if (!LOCAL_ID.test(String(localId))) throw new Error(`com: "${localId}" não é local_<uuid>`);
+  // `com del` também aceita o apelido (E1, V4…): resolvido no `com` do item, dentro da trava
+  const porApelido = sub === 'del' && !LOCAL_ID.test(String(quem0)) && /^[PDEV]\d+$/.test(String(quem0));
+  if (!porApelido && !LOCAL_ID.test(String(localId))) throw new Error(`com: "${localId}" não é local_<uuid>`);
   if (sub === 'add') conferirMembro(localId, resto[0], 'com add');
   return comTrava(() => {
     const atual = ler('fila', F);
     if (!atual) throw new Error(`fila/${F} não existe`);
     const com = Array.isArray(atual.data.com) ? atual.data.com : [];
+    if (porApelido) {
+      const achados = com.filter((c) => c.apelido === quem0);
+      if (achados.length === 0) throw new Error(`com del: ${quem0} não está em com de ${F}`);
+      if (achados.length > 1) throw new Error(`com del: apelido ambíguo, use o local_ (${achados.map((c) => c.localId).join(', ')})`);
+      localId = achados[0].localId;
+    }
     let nova; const data = {};
     if (sub === 'add') {
       const [apelido, oQue] = resto;
@@ -878,6 +889,33 @@ function comandoSeguinte(args) {
     }
     return nao(`nenhum item do tema "${tema}" pôde ser pego`);
   });
+}
+
+// `mergear <PR> <sha> [--seco]` (F150). O GitHub fica FORA da trava (é lento); a escrita no painel, dentro dela.
+function comandoMergear(args) {
+  const seco = flag(args, '--seco', false);
+  const [prTexto, sha, ...sobra] = args;
+  const uso = 'uso: painel.mjs mergear <PR> <sha de 7 a 40 hex> [--seco]';
+  if (!/^[1-9]\d*$/.test(String(prTexto)) || !SHA_VALIDADO.test(String(sha)) || sobra.length) throw new Error(uso);
+  const pr = Number(prTexto);
+  const c = conferir(pr, sha, process.cwd());
+  if (c.recusado) return c;
+  const { projeto } = projetoDoCwd();
+  const doPr = () => [...itensVivos()].filter(([, d]) => projeto && String(d?.projeto ?? '').toLowerCase() === projeto && Array.isArray(d.prs) && d.prs.includes(pr)).map(([F, d]) => ({ F, prs: d.prs }));
+  const decidir = () => doPr().map(({ F, prs }) => ({ F, fecha: prs.filter((n) => n !== pr).every((n) => estadoDoPr(n, process.cwd()) === 'MERGED') }));
+  if (seco) return { seco: true, mergearia: { pr, sha: c.sha, base: c.base }, itens: decidir().map(({ F, fecha }) => ({ item: F, fecharia: fecha })) };
+  mergearNoGitHub(pr, c.sha, process.cwd());
+  const decisoes = decidir();
+  const curto = c.sha.slice(0, 7);
+  const itens = comTrava(() => decisoes.map(({ F, fecha }) => {
+    const atual = ler('fila', F);
+    if (!atual || ETAPAS_FINAIS.has(atual.data?.etapa)) return { item: F, fechado: false, agora: null };
+    const agora = fecha ? `mergeado, ponta ${curto}` : 'um PR entrou; falta outro';
+    const data = fecha ? { etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], agora } : { com: [], agora };
+    efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
+    return { item: F, fechado: fecha, agora };
+  }));
+  return { mergeado: true, pr, sha: c.sha, base: c.base, itens };
 }
 
 const ORQ = () => regras.BASE;
@@ -1058,6 +1096,9 @@ function main(argv) {
     case 'handoffs':
       saida = comandoHandoffs(resto);
       break;
+    case 'mergear':
+      saida = comandoMergear(resto);
+      break;
     case 'batch': {
       const ops = JSON.parse(a);
       if (!Array.isArray(ops)) throw new Error('batch: esperava uma lista');
@@ -1065,10 +1106,10 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|batida|handoffs … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|seguinte|batida|mergear|handoffs … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
-  return cmd === 'pegar' && saida.recusado ? 1 : 0;
+  return (cmd === 'pegar' || cmd === 'mergear') && saida.recusado ? 1 : 0;
 }
 
 try {

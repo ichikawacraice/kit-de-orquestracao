@@ -372,6 +372,35 @@ caso('T6: sem orquestradora ativa no repositório → passa', () => {
   execFileSync('git', ['init', '-q', repo], { timeout: 10000, killSignal: 'SIGKILL' });
   passa(merge('P1', repo), 'sem orquestradora');
 });
+caso('T6 (F150): painel mergear de quem não é a orquestradora → ask; a orquestradora e o que só cita o comando passam', () => {
+  const repo = repoComOrquestradora();
+  for (const cmd of ['painel mergear 12 abc1234', 'node /x/scripts/painel.mjs mergear 12 abc1234 --seco', 'cd /x && painel mergear 12 abc1234']) {
+    const r = merge('P1', repo, cmd);
+    ok(r?.permissionDecision === 'ask', `${cmd}: esperava ask: ${JSON.stringify(r)}`);
+  }
+  passa(merge('ORQ', repo, 'painel mergear 12 abc1234'), 'orquestradora');
+  passa(merge('P1', repo, 'echo painel mergear 12'), 'echo');
+  passa(merge('P1', repo, 'painel list fila'), 'outro subcomando');
+});
+// T9 (F150): recado de V com "validado"/"aprovado" sem a linha `PR N validado, HEAD <sha>`.
+const recado = (quem, texto, tool = 'SendMessage') => pre(quem, tool, tool === 'SendMessage' ? { to: 'local_ORQ', message: texto } : { session_id: 'local_ORQ', message: texto });
+caso('T9: V com "aprovado"/"validado" sem a linha do formato → deny com o formato no motivo', () => {
+  for (const t of ['PR 12 aprovado', 'está validado, pode mergear', 'Aprovada — HEAD 320d113', 'validado.\nHEAD 320d113']) {
+    const r = recado('V1', t); nega(r, t);
+    ok(/PR <n> validado, HEAD <sha>/.test(r.permissionDecisionReason), `motivo sem o formato: ${r.permissionDecisionReason}`);
+  }
+  nega(recado('V1', 'aprovado', 'mcp__ccd_session_mgmt__send_message'), 'send_message do MCP');
+});
+caso('T9: V com a linha do formato, com "reprovado" ou sem as palavras passa; outros papéis passam', () => {
+  passa(recado('V1', 'PR 12 validado, HEAD 320d113\nrodei o gate'), 'formato');
+  passa(recado('V1', 'Resultado: PR 12 validado, HEAD 320d113bdbdb2d8d1be9e98ec3d5ce1a05f0ee21'), 'formato com 40 hex');
+  passa(recado('V1', 'reprovado: o teste X falha'), 'reprovado');
+  passa(recado('V1', 'achei um achado em foo.mjs:3'), 'sem as palavras');
+  passa(recado('V1', 'PR 12 validado, HEAD 320d113', 'mcp__ccd_session_mgmt__send_message'), 'formato via MCP');
+  passa(recado('E3', 'validado por mim, aprovado'), 'executora');
+  passa(recado('P1', 'aprovado'), 'planejadora');
+  passa(recado('ORQ', 'aprovado'), 'orquestradora');
+});
 // T8 (ADR 0005, 26/10): com a máquina cheia, a orquestradora não despacha V (`painel com add` de item em validação).
 const maquina = (fichas, teto, carga = '0') => {
   const pasta = dir('nucleos'); rmSync(pasta, { recursive: true, force: true }); mkdirSync(pasta, { recursive: true }); // cada chamada refaz a pasta

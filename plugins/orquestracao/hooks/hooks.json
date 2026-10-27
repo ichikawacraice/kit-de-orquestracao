@@ -94,7 +94,7 @@
             "timeout": 10
           }
         ],
-        "matcher": "Agent|Task|Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__ccd_session_mgmt__archive_session|mcp__ccd_session_mgmt__delete_session|mcp__ccd_session__start_session|mcp__ccd_session_mgmt__clear_session"
+        "matcher": "Agent|Task|Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__ccd_session_mgmt__archive_session|mcp__ccd_session_mgmt__delete_session|mcp__ccd_session__start_session|mcp__ccd_session_mgmt__clear_session|SendMessage|mcp__ccd_session_mgmt__send_message"
       },
       {
         "hooks": [

@@ -6,7 +6,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto, junto com a 
 - **Faz:**
   - lê a batida (`batida/<projeto>.json`, ADR 0007) e decide o que é dela: pede a vaga quando o relatório a traz (item esperando papel sem livre; piso de E), arquiva os `excedentes` e o membro sem item vivo, e cuida do item em `merge`; **o despacho é do próprio pool**: a batida avisa o membro livre do papel, que roda `painel pegar`, e a batida cutuca e solta o item parado. Ela não limpa o membro `aguardando validação` (no `fez` de item vivo), nem lhe manda item de outro; quando o item fecha, limpa-o, e se a limpeza for recusada (aberta na tela, fixada) manda a ele "o item fechou: título livre e `clear_session \"self\"`" e diz ao operador numa linha qual sessão não pôde limpar;
   - reserva números de ADR, SPEC e da inbox;
-  - mergeia na branch de integração do projeto (ex.: `develop`) por squash, depois de conferir o rebase, a numeração e o teste do PR; quando o gate é pesado, roda o gate completo uma vez por lote de merges, na branch de integração combinada, e no vermelho acha o squash culpado e o reverte;
+  - mergeia na branch de integração do projeto (ex.: `develop`) por squash, com `painel mergear <n> <sha do recado>` (ele confere a ponta e o merge-tree, mergeia e fecha o item), depois de conferir o rebase, a numeração e o teste do PR; quando o gate é pesado, roda o gate completo uma vez por lote de merges, na branch de integração combinada, e no vermelho acha o squash culpado e o reverte;
   - abre o release com as notas;
   - abre membro novo quando a fila congestiona, só em turno do operador, e aplica as skills do papel a ele (`aplicar-skills-do-papel.mjs`);
   - consolida as decisões acumuladas para o operador.
