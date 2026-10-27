@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAINEL = join(RAIZ, 'plugins', 'orquestracao', 'skills', 'orquestradora', 'scripts', 'painel.mjs');
 const SKILL = join(RAIZ, 'plugins', 'orquestracao', 'skills', 'orquestradora', 'SKILL.md');
+const LEGADO = join(RAIZ, 'plugins', 'orquestracao', 'skills', 'orquestradora', 'legado-pool.md');
 const git = (d, ...a) => execFileSync('git', ['-C', d, ...a], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
 const novo = () => realpathSync(mkdtempSync(join(tmpdir(), 'kit-c13-')));
 const painel = (dir, ...args) => spawnSync('node', [PAINEL, ...args], {
@@ -88,8 +89,11 @@ describe('c13 — regra do merge sem rebase em dia, genérica, na SKILL da orque
     assert.match(t, /gh pr merge <n> --squash --match-head-commit <Y>/);
     assert.match(t, /só o status 0 mergeia/);
     assert.match(t, /Status 1 com `CONFLICT`/);
-    assert.match(t, /cobra o rebase delas quando o PR tem conflito com a branch de integração/);
-    assert.match(t, /Ela confere que o PR entra sem conflito/);
+    // O texto do planejador que leva a frente é do pool por papéis: mora em legado-pool.md.
+    const legado = readFileSync(LEGADO, 'utf8');
+    assert.ok(legado.length > 1000);
+    assert.match(legado, /cobra o rebase delas quando o PR tem conflito com a branch de integração/);
+    assert.match(legado, /Ela confere que o PR entra sem conflito/);
   });
   it('sem ADR e sem Izanagi na regra', () => {
     const trecho = t.split('\n').filter((l) => /merge-tree|match-head-commit/.test(l)).join('\n');
