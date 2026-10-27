@@ -865,6 +865,7 @@ function comandoSeguinte(args) {
     const candidatos = [];
     for (const [F, d] of todos) {
       if (ETAPAS_FINAIS.has(d?.etapa) || d?.projeto !== projeto || d?.tema !== tema) continue;
+      if ((Array.isArray(d.passaram) ? d.passaram : []).some((p) => p?.localId === localId)) continue; // já passou por ele: a V sai sem `--fez` e o item segue esperando V
       const r = esperandoPapel(d, agora);
       if (!r || r.entregue || r.papel !== apelido[0]) continue;
       candidatos.push({ F, desde: Date.parse(r.desde) });
