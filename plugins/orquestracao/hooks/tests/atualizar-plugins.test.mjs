@@ -25,6 +25,12 @@ else if (a[1] === 'marketplace' && a[2] === 'update') {
 } else if (a[1] === 'update') {
   const id = a[2];
   if (process.env.FAKE_FALHA === id) { process.stderr.write('boom ' + id + '\\n'); process.exit(1); }
+  if (process.env.FAKE_NAO_PEGA === id) { process.stdout.write(JSON.stringify({ outcome: 'ok' }) + '\\n'); process.exit(0); }
+  if (process.env.FAKE_SOME === id) {
+    const e0 = est(); e0.installed = e0.installed.filter((p) => !(p.id === id && p.scope === 'user'));
+    fs.writeFileSync(process.env.FAKE_ESTADO, JSON.stringify(e0));
+    process.stdout.write(JSON.stringify({ outcome: 'ok' }) + '\\n'); process.exit(0);
+  }
   const nome = id.split('@')[0];
   const pub = JSON.parse(fs.readFileSync(process.env.FAKE_CLONE + '/plugins/' + nome + '/.claude-plugin/plugin.json', 'utf8')).version;
   const e = est();
@@ -180,5 +186,38 @@ test('plugin update que sai ≠ 0: "falhou" com a mensagem, os outros seguem, ex
     assert.equal(f.acao, 'falhou'); assert.match(f.mensagem, /boom/);
     assert.equal(achar(s, 'design').acao, 'atualizado');
     assert.equal(c.updates().length, 2);
+  } finally { limpar(c); }
+});
+
+test('plugin update sai 0 sem a versão chegar: "não pegou", exit 1, sem pedir reinício', () => {
+  const c = montar({ orquestracao: '0.1.2' }, [inst('orquestracao', '0.1.1')]);
+  try {
+    const r = c.rodar(['--json'], { FAKE_NAO_PEGA: `orquestracao@${MP}` });
+    assert.equal(r.exit, 1, r.err + r.out);
+    const s = JSON.parse(r.out);
+    const p = achar(s, 'orquestracao');
+    assert.ok(p, r.out);
+    assert.equal(p.acao, 'não pegou');
+    assert.equal(p.depois, '0.1.1');
+    assert.equal(s.reiniciar, false);
+    assert.equal(c.updates().length, 1, 'sem nova tentativa');
+    const txt = c.rodar([], { FAKE_NAO_PEGA: `orquestracao@${MP}` }).out;
+    assert.ok(txt.includes('0.1.1 (não pegou: instalada ficou em 0.1.1, publicada 0.1.2)'), txt);
+    assert.ok(!txt.includes('Reinicie o app'), txt);
+  } finally { limpar(c); }
+});
+
+test('plugin update sai 0 e o plugin some da lista: "não pegou", depois null, exit 1', () => {
+  const c = montar({ orquestracao: '0.1.2' }, [inst('orquestracao', '0.1.1')]);
+  try {
+    const r = c.rodar(['--json'], { FAKE_SOME: `orquestracao@${MP}` });
+    assert.equal(r.exit, 1, r.err + r.out);
+    const s = JSON.parse(r.out);
+    const p = achar(s, 'orquestracao');
+    assert.ok(p, r.out);
+    assert.equal(p.acao, 'não pegou');
+    assert.equal(p.depois, null);
+    assert.match(p.mensagem, /instalada sumiu da lista/);
+    assert.equal(s.reiniciar, false);
   } finally { limpar(c); }
 });
