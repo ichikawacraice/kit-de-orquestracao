@@ -142,6 +142,25 @@ const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'fei
 const FEITOS_MS = 24 * 3600 * 1000
 const SEM_TEMA = 'sem-tema'
 
+const NOME_SOLTO = 20
+
+/**
+ * F189: quem o pane mostra no lugar do apelido `dona`, igual para toda sessão dona. O `F<n>` do título da sessão
+ * (`F<n> · <tema>`) achada pelo `localId` na lista ao vivo (que o pane lê sem as arquivadas); título fora desse formato vai cortado;
+ * sem a sessão na lista, o `F<n>` do item. Apelido do pool antigo (E3, V1…) passa como está.
+ */
+export function nomeDoDono(apelido: string, localId: string, itemId: string, vivas: Vivo[] | null): { apelido: string; titulo?: string; dona?: true } {
+  if (apelido.trim().toLowerCase() !== 'dona') return { apelido }
+  const titulo = texto(vivas?.find(v => v.sessionId === localId)?.title)?.trim()
+  if (!titulo) return { apelido: itemId, dona: true }
+  const F = /^(F\d+) · /.exec(titulo)?.[1]
+  // Por caractere, não por unidade UTF-16: o corte não parte um emoji.
+  const letras = Array.from(titulo)
+  const curto = F ?? (letras.length > NOME_SOLTO ? `${letras.slice(0, NOME_SOLTO - 1).join('').replace(/\s+\S*$/, '')}…` : titulo)
+
+  return { apelido: curto, titulo, dona: true }
+}
+
 const inteiros = (v: unknown): number[] => (Array.isArray(v) ? v.filter((n): n is number => Number.isInteger(n) && n > 0) : [])
 
 /** `temas.json`: lista de `{ id, rotulo, projeto? }`; o que não tiver id e rótulo fica de fora. */
@@ -228,7 +247,7 @@ function montarTodos(
       if (!localId || !apelidoCom) return []
       const vivo = vivos === null ? null : vivos.has(localId)
 
-      return [{ apelido: apelidoCom, localId, oQue: texto(c?.oQue) ?? '', vivo, link: vivo ? linkDe(localId, vivas ?? []) : undefined }]
+      return [{ ...nomeDoDono(apelidoCom, localId, d.id, vivas), localId, oQue: texto(c?.oQue) ?? '', vivo, link: vivo ? linkDe(localId, vivas ?? []) : undefined }]
     })
     const esp = d.data.espera as Record<string, unknown> | null | undefined
     const esperaGravada: LinhaItem['espera'] =
@@ -239,7 +258,7 @@ function montarTodos(
     let situacao: Situacao
     let trava: LinhaItem['trava']
     const donoVivo = donoLocalId !== undefined && vivos !== null && vivos.has(donoLocalId)
-    const dono = donoLocalId && apelido ? { apelido, localId: donoLocalId, link: donoVivo ? linkDe(donoLocalId, vivas ?? []) : undefined } : undefined
+    const dono = donoLocalId && apelido ? { ...nomeDoDono(apelido, donoLocalId, d.id, vivas), localId: donoLocalId, link: donoVivo ? linkDe(donoLocalId, vivas ?? []) : undefined } : undefined
     const t = d.data.trava as Record<string, unknown> | null | undefined
     const travaGravada = t && texto(t.motivo) && texto(t.texto) ? { motivo: texto(t.motivo) as string, texto: texto(t.texto) as string } : undefined
     if (final) {
@@ -249,7 +268,7 @@ function montarTodos(
     } else if (dono) {
       if (vivos && !vivos.has(dono.localId)) {
         situacao = 'travado'
-        trava = { motivo: 'sem-ninguem', texto: `${dono.apelido} não está mais ativa` }
+        trava = { motivo: 'sem-ninguem', texto: `${dono.dona ? 'a dona ' : ''}${dono.apelido} não está mais ativa` }
       } else {
         situacao = travaGravada ? 'travado' : 'andando'
         trava = travaGravada
@@ -1925,7 +1944,7 @@ export const register: Register = on => {
       perguntas: l.perguntas.map(q => q.id),
       itens: (() => {
         const sec = secoes(l.itens, l.temas)
-        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${i.esperando ? ` · ${textoEsperando(i.esperando, Date.now(), i.dona === true)}` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.apelido).join(', ')}` : ''}`
+        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${i.esperando ? ` · ${textoEsperando(i.esperando, Date.now(), i.dona === true)}` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.titulo ?? c.apelido).join(', ')}` : ''}`
 
         return { esperam: sec.esperam.map(dizer), travados: sec.travados.map(dizer), executando: sec.executando.map(dizer), fila: sec.fila.map(dizer), feitos: sec.feitos.map(dizer) }
       })(),
@@ -1965,7 +1984,7 @@ export const register: Register = on => {
     const botoesAbrir = (i: LinhaItem) => {
       if (i.situacao === 'feito') return []
       const vistos = new Set<string>()
-      const quem = [...(i.com ?? []).map(c => ({ apelido: c.apelido, localId: c.localId, link: c.link })), ...(i.dono ? [i.dono] : [])]
+      const quem = [...(i.com ?? []).map(c => ({ apelido: c.apelido, localId: c.localId, link: c.link, titulo: c.titulo, dona: c.dona })), ...(i.dono ? [i.dono] : [])]
 
       return quem.flatMap(q => (q.link && !vistos.has(q.localId) ? (vistos.add(q.localId), [abrir(i.id, q)]) : [])).slice(0, 3)
     }

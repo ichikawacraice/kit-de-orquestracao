@@ -292,21 +292,37 @@ export function quemDoItem(item: LinhaItem): Trecho[] {
   // O estado de antes desta versão (que sobrevive ao reload) não tem `com`.
   const com = item.com ?? []
   const vivos = com.filter(c => c.vivo !== false)
-  if (vivos.length > 0) return vivos.map(c => ({ t: c.apelido, classe: 's' }))
+  if (vivos.length > 0) return vivos.map(c => ({ t: nomeNaLinha(c), classe: 's' }))
 
-  return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ t: item.dono.apelido, classe: 's' }] : []
+  return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ t: nomeNaLinha(item.dono), classe: 's' }] : []
+}
+
+/** F189: o selo da dona é o `F<n>` da sessão, que na linha do próprio item se leria como o número dele; o papel na frente diz que é a sessão. */
+const nomeNaLinha = (p: { apelido: string; dona?: true }): string => (p.dona ? `dona ${p.apelido}` : p.apelido)
+
+/** No alt da linha, a dona vai com o título inteiro da sessão, como no cartão. */
+const nomeNoAlt = (p: { apelido: string; titulo?: string; dona?: true }): string => (p.dona && p.titulo ? `dona ${p.titulo}` : nomeNaLinha(p))
+
+function quemDoItemNoAlt(item: LinhaItem): string[] {
+  const vivos = (item.com ?? []).filter(c => c.vivo !== false)
+  if (vivos.length > 0) return vivos.map(nomeNoAlt)
+
+  return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [nomeNoAlt(item.dono)] : []
 }
 
 /** Quem saiu da lista: vai depois do PR, sem ponto do meio (que leria "saiu" como mais um nome). */
 export function quemSaiu(item: LinhaItem): Trecho[] {
-  return (item.com ?? []).filter(c => c.vivo === false).map(c => ({ t: `${c.apelido} saiu`, classe: 'm' }))
+  // F189: a dona que sumiu já está na trava ("a dona F189 não está mais ativa"); repetir seria um segundo texto sobre ela.
+  const naTrava = item.trava?.motivo === 'sem-ninguem' ? item.dono?.localId : undefined
+
+  return (item.com ?? []).filter(c => c.vivo === false && !(c.dona && c.localId === naTrava)).map(c => ({ t: `${nomeNaLinha(c)} saiu`, classe: 'm' }))
 }
 
 /** O dono que a linha 2 não escreveu porque o `com` ocupou o lugar: fica no alt, onde o plano o mantém. */
 function donoForaDaLinha(item: LinhaItem): string | undefined {
   if (!item.dono || item.trava?.motivo === 'sem-ninguem') return undefined
 
-  return quemDoItem(item).some(q => q.t === item.dono?.apelido) ? undefined : `dono ${item.dono.apelido}`
+  return quemDoItem(item).some(q => q.t === nomeNaLinha(item.dono as NonNullable<LinhaItem['dono']>)) ? undefined : `dono ${item.dono.titulo ?? item.dono.apelido}`
 }
 
 /** O texto da espera com o rótulo que a trava também tem: só o alt o leva, porque o selo da linha 2 já diz quem espera. */
@@ -396,7 +412,7 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   y += 21
   partes.push(`<text x="30" y="${y}" font-family="${FONTE}" font-size="13">${linha2.join('')}</text>`)
 
-  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? tituloDoTema(item) : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, seloDaEspera(item), ...quemDoItem(item).map(q => q.t), ultimoPr, ...quemSaiu(item).map(q => q.t), donoForaDaLinha(item)].filter(Boolean).join(' · ')]
+  const alt = [item.titulo, [item.situacao === 'fila' ? `espera ${rotulo}` : rotulo, opcoes.noTravados ? tituloDoTema(item) : undefined, item.perguntas[0] && `aguarda você · ${item.perguntas[0]}`, seloDaEspera(item), ...quemDoItemNoAlt(item), ultimoPr, ...quemSaiu(item).map(q => q.t), donoForaDaLinha(item)].filter(Boolean).join(' · ')]
   if (item.trava) {
     const trava = quebrar(textoDaTrava(item.trava), 13, tw, 2)
     for (const l of trava) {
@@ -531,13 +547,13 @@ export const textoEsperando = (e: NonNullable<LinhaItem['esperando']>, agora: nu
 
 const upper = (s: string): string => s.toLocaleUpperCase('pt-BR')
 
-type Pessoa = { apelido: string; localId: string }
+type Pessoa = { apelido: string; localId: string; titulo?: string; dona?: true }
 /** As sessões que trabalham no item e seguem vivas; sem `com`, o dono, que sem ninguém já está na trava. */
 function pessoasDoItem(item: LinhaItem): Pessoa[] {
   const vivos = (item.com ?? []).filter(c => c.vivo !== false)
-  if (vivos.length > 0) return vivos.map(c => ({ apelido: c.apelido, localId: c.localId }))
+  if (vivos.length > 0) return vivos.map(c => ({ apelido: c.apelido, localId: c.localId, titulo: c.titulo, dona: c.dona }))
 
-  return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ apelido: item.dono.apelido, localId: item.dono.localId }] : []
+  return item.dono && item.trava?.motivo !== 'sem-ninguem' ? [{ apelido: item.dono.apelido, localId: item.dono.localId, titulo: item.dono.titulo, dona: item.dono.dona }] : []
 }
 
 export const MAX_LINHAS_QUEM = 3
@@ -554,7 +570,8 @@ function linhaQuem(y: number, p: Pessoa, situacao: string | undefined, W: number
   const apelido = p.apelido
   const selo = largura(apelido, 11.5) + 18
   const encerrada = situacao === undefined
-  const papel = papelDe(apelido)
+  // F189: o selo da dona é o F<n> da sessão, que não diz o papel; a marca `dona` diz.
+  const papel = p.dona ? 'dona' : papelDe(apelido)
   const vivo = situacao === 'trabalhando agora'
   const dito = encerrada ? 'sessão encerrada' : situacao
   const xTexto = selo + 8
@@ -566,7 +583,7 @@ function linhaQuem(y: number, p: Pessoa, situacao: string | undefined, W: number
     : `<tspan class="${encerrada ? 'm' : 's'}">${xml(corte)}</tspan>`
 
   return {
-    alt: `${apelido}${papel ? `, ${papel}` : ''}, ${dito}`,
+    alt: `${p.titulo ?? apelido}${papel ? `, ${papel}` : ''}, ${dito}`,
     svg: `<rect class="k" x="0" y="${y}" width="${selo}" height="22" rx="6"/>
 ${texto(selo / 2, y + 15, 11.5, 't', xml(apelido), ' text-anchor="middle" font-weight="700"')}
 ${vivo ? `<circle class="vivo ${ANDA}" cx="${selo - 2}" cy="${y + 2}" r="3.5"/>` : ''}
