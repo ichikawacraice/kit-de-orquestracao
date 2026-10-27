@@ -18,17 +18,17 @@ Branch: `f136-vagas-do-gate-e-dos-testes`, a partir de `origin/main`. Decisão: 
 | `web` | 3 | 3 | 162 s | 14,7 → 10,0 |
 | `web` | 7 | 7 | 108 s | 10,0 → 13,4 |
 
-Todas verdes. Leitura: 7 workers deixam um pacote só **1,5 a 1,7× mais rápido** (runner 223 → 136–157 s; web 163 → 109 s) com **2,3× os núcleos**. Dois testes de 3 juntos terminam os dois em ~3,5 min; os mesmos dois de 7 em fila, em ~4,5 min. **Para a máquina, vários testes de ~3 rendem mais que um de 7**; o de 7 só ganha na espera de quem roda aquele teste. O teste de pacote mais longo levou 4 min sob carga 20.
+Todas verdes. Leitura: 7 workers deixam um pacote só **1,4 a 1,6× mais rápido** (runner 223 → 136–157 s; web 163 → 109 s) com **2,3× os núcleos**. As 8 rodadas foram em fila; o que segue é **estimado**, não medido junto: dois testes de 3 juntos terminariam em ~3,7 min (o mais longo sozinho, runner 223 s), se a carga somada não os atrasar; os mesmos dois de 7 em fila, em ~4,3 min (147 + 109 s). **Pela conta, para a máquina vários testes de ~3 rendem mais que um de 7** (medir dois de 3 juntos fica como pendência do ADR); o de 7 só ganha na espera de quem roda aquele teste. O teste de pacote mais longo levou 4 min sob carga 20.
 
 <a id="desenho"></a>
 ## O desenho (resumo do ADR)
 - **Teto = fração dos núcleos**, padrão 2/3 → 10 em 15. `KIT_FRACAO_DE_TESTE` e `teto.json {"fracao": f}` ajustam; `KIT_NUCLEOS_DE_TESTE` e `teto.json {"nucleos": N}` continuam valendo (contrato do Izanagi), mas o `--teto N` passa a avisar que número fixo não acompanha a máquina.
 - **Duas faixas de fichas no mesmo diretório.** Faixa do gate: fichas `1..G`, G = floor(T × 0,7) (7 em 10). Faixa normal: `G+1..T` (3 em 10). O gate só toma da faixa dele; o teste normal procura de `T` para baixo, então esgota a faixa normal antes de pedir emprestado.
 - **Um gate por vez na máquina.** Arquivo `<pasta>/gate` (`wx`, `{pid, token, worktree, projeto, desde}`), tomado depois da vez do repositório e do verde reconferido; o segundo gate, de qualquer projeto, espera e diz por quem. PID morto é retomado.
-- **Empréstimo.** Sem `<pasta>/gate`, o teste normal leva fichas da faixa do gate. O empréstimo **não aumenta o pedido**: o teste continua pedindo o dele (3 no vitest de pacote, `--quero N` no `com-fichas`), e a vaga emprestada serve para caber mais testes juntos, não um teste maior (medido: vários de ~3 rendem mais que um de 7).
-- **O gate que chega com a vaga emprestada** grava `<pasta>/gate` na hora (nenhum empréstimo novo começa), leva o que está livre da faixa dele e espera a devolução até `PRAZO_DA_DEVOLUCAO` (padrão 5 min); vencido o prazo, começa com o que tem (no mínimo metade da faixa — senão segue esperando e avisa a cada minuto por quem).
+- **Empréstimo.** Sem `<pasta>/gate`, o teste normal leva fichas da faixa do gate. O empréstimo **não aumenta o pedido**: o teste continua pedindo o dele (3 no vitest de pacote, `--quero N` no `com-fichas`), e a vaga emprestada serve para caber mais testes juntos, não um teste maior (pela conta do [medido](#medido): vários de ~3 rendem mais que um de 7).
+- **O gate que chega com a vaga emprestada** grava `<pasta>/gate` na hora (nenhum empréstimo novo começa), leva o que está livre da faixa dele e espera a devolução até `PRAZO_DA_DEVOLUCAO` (padrão 5 min); vencido o prazo, começa com o que tem (no mínimo metade do pedido, `ceil(pedido / 2)` — senão segue esperando e avisa a cada minuto por quem).
 - **Workers do gate.** `porPacote = floor(G / pacotesJuntos)`; o gate pede `pacotesJuntos × porPacote` e a sobra da divisão fica livre na faixa do gate para empréstimo.
-- **A máquina cheia da orquestradora** (`maquinaCheia`) passa a olhar a faixa normal: cheia = nenhuma ficha normal livre e nenhuma emprestável, ou carga ≥ núcleos. Gate rodando sozinho não segura a V.
+- **A máquina cheia da orquestradora** (`maquinaCheia`) passa a olhar a faixa normal: cheia = nenhuma ficha normal livre e nenhuma emprestável, ou carga ≥ núcleos. Gate rodando sozinho não segura a V; a V que roda o `npm test` espera a vez do gate como qualquer gate (desejado, ADR decisão 7).
 
 ## Regras do projeto que valem aqui
 - Node ≥ 20, ESM, só módulos nativos; testes em `node:test`, nunca vitest. Script termina por `process.exitCode`.
@@ -55,17 +55,17 @@ Teste primeiro, em `gate/test/o-teto-da-maquina.test.mjs`.
 
 ### 3. O teste normal: faixa normal primeiro, empréstimo só sem gate (código + teste)
 Em `gate/o-teto-da-maquina.mjs`, função `tomarFichasNormais({ quero, pasta, teto, eu, … })` (async e Sync), usada por `com-fichas.mjs`, pelo `tetoDeWorkers()` e pelo conserto do gate.
-1. Ordem: faixa normal de `T` para baixo; depois, só se `<pasta>/gate` não existe (vivo), a faixa do gate de `G` para baixo, até o limite de empréstimo (passo 3.2). Leva o que houver (mínimo 1); sem nenhuma, espera como hoje.
+1. Ordem: faixa normal de `T` para baixo; depois, só se `<pasta>/gate` não existe (vivo), a faixa do gate de `G` para baixo, até o limite de empréstimo (passo 3.2). Leva o que houver (mínimo 1); sem nenhuma, espera como hoje. A ordem se recalcula a cada tentativa da espera: o teste que esperava com o gate rodando passa a poder pedir emprestado quando o gate solta a vez.
 2. Limite de empréstimo: o próprio `quero` do teste (o empréstimo nunca aumenta o pedido). Nenhum parâmetro novo.
 3. Casos: teto 10 (7/3), quero 3, sem gate → leva `[10, 9, 8]`; segundo pedido de 3 sem gate → leva da faixa do gate (`[7, 6, 5]`); com `<pasta>/gate` vivo → o segundo leva só o que sobrar da faixa normal, e com ela cheia espera; ficha emprestada leva no JSON `"emprestada": true`.
 4. **Concorrência:** teto 10, um "gate" de teste toma a vez e a faixa do gate; cinco `com-fichas --quero 3` juntos → nenhum toca `1..7` enquanto a vez existe (a amostra da pasta a cada 50 ms prova), e o máximo somado é ≤ 10.
 
 ### 4. O gate: uma vez na máquina e a faixa do gate: `gate/a-vez-do-gate.mjs` (código + teste)
-1. Fila `gate` (não o conserto): depois da vez do repositório e do verde reconferido, `esperarAVezDoGate`; depois, as fichas da faixa do gate, de 1 para cima: leva o livre, espera a devolução dos emprestados até `PRAZO_DA_DEVOLUCAO` (`gate.prazos.devolucaoSeg`, padrão 300 s; `KIT_PRAZO_DA_DEVOLUCAO_SEG` para o teste), avisando por quem a cada minuto; vencido o prazo, segue com o que tem se for ≥ metade da faixa, senão continua esperando.
+1. Fila `gate` (não o conserto): depois da vez do repositório e do verde reconferido, `esperarAVezDoGate`; depois, as fichas da faixa do gate, de 1 para cima: leva o livre, espera a devolução dos emprestados até `PRAZO_DA_DEVOLUCAO` (`gate.prazos.devolucaoSeg`, padrão 300 s; `KIT_PRAZO_DA_DEVOLUCAO_SEG` para o teste), avisando por quem a cada minuto; vencido o prazo, segue com o que tem se for ≥ metade do pedido (`ceil(pedido / 2)`, 3 de 6 com teto 10), senão continua esperando.
 2. `fichasDaSuite` no perfil `pnpm-workspace`: `pacotesJuntos × floor(G / pacotesJuntos)`; perfil `comando`: `min(gate.nucleos, G)`. O `KIT_TESTE_WORKERS` do filho continua sendo `floor(levou / pacotesJuntos)`.
 3. A fila do **conserto** (um pacote) passa a tomar como teste normal (`tomarFichasNormais`), não pega a vez da máquina.
 4. Saída solta as fichas, depois a vez da máquina, depois a vez do repositório (nesta ordem; teste que prova a ordem lendo a pasta no `finally`).
-5. Casos com a pasta temporária: dois gates de repositórios diferentes (`KIT_GATE_TRAVA` distintos) → o segundo espera a vez da máquina e diz o worktree do primeiro; gate com 2 fichas emprestadas a um dono vivo → espera; soltas → começa com 7; prazo 1 s vencido com 5 de 7 → começa com 5; com 3 de 7 → não começa.
+5. Casos com a pasta temporária: dois gates de repositórios diferentes (`KIT_GATE_TRAVA` distintos) → o segundo espera a vez da máquina e diz o worktree do primeiro; gate com 2 fichas emprestadas a um dono vivo → espera; soltas → começa com as 6 pedidas; prazo 1 s vencido com 5 de 6 → começa com 5; com 3 de 6 → começa com 3; com 2 de 6 → não começa.
 
 ### 5. O typecheck e o vitest direto (código + teste)
 - `gate/o-typecheck-do-gate.mjs`: toma como teste normal (é curto e roda também fora do gate). Caso: com a vez do gate de outro dono e a faixa normal livre, toma da faixa normal sem esperar.
@@ -84,9 +84,9 @@ Em `gate/o-teto-da-maquina.mjs`, função `tomarFichasNormais({ quero, pasta, te
 `npm test` verde; `claude plugin validate .`; `node gate/o-teto-da-maquina.mjs` na máquina de verdade mostra as duas faixas (cole a saída). Laudo com a saída real.
 
 ## Critério de pronto (medível)
-- Com teto 10: um gate sozinho leva 6 fichas da faixa `1..7`; três `com-fichas --quero 3` simultâneos com o gate rodando levam 3 fichas no total, todas `≥ 8`, e o quarto espera (teste do passo 3.4).
+- Com teto 10: um gate sozinho leva 6 fichas da faixa `1..7`; três `com-fichas --quero 3` simultâneos com o gate rodando: o primeiro leva as 3 da faixa normal (`8..10`) e os seguintes esperam; nenhum toca `1..7` (teste do passo 3.4).
 - Dois gates de projetos diferentes nunca têm fichas ao mesmo tempo (teste do passo 4.5).
-- Sem gate, testes normais somam até 10 fichas; o gate que chega espera a devolução e começa com ≥ 4 de 7 (teste do passo 4.5).
+- Sem gate, testes normais somam até 10 fichas; o gate que chega espera a devolução e começa com ≥ 3 das 6 pedidas (teste do passo 4.5).
 - `tetoDaMaquina({}, 15)` = 10; `faixas(10)` = 7/3; o teste de concordância plugin × gate verde com fração.
 - `npm test` verde.
 
