@@ -7,6 +7,20 @@ export const PAPEL_DA_ETAPA = { planejamento: 'P', design: 'D', execucao: 'E', v
 const ms = (v) => { const t = Date.parse(v); return Number.isNaN(t) ? null : t; };
 const doPapel = (apelido, papel) => typeof apelido === 'string' && apelido.toUpperCase().startsWith(papel);
 
+// Quando o item entrou na etapa atual (ms): a primeira entrada da sequência final do `historico` com essa etapa;
+// sem histórico, `atualizadoEm`. `null` se não der para saber.
+export function entradaNaEtapa(data) {
+  if (!data || typeof data !== 'object') return null;
+  let desde = null;
+  const hist = Array.isArray(data.historico) ? data.historico : [];
+  for (let i = hist.length - 1; i >= 0 && hist[i]?.etapa === data.etapa; i--) {
+    const t = ms(hist[i].em);
+    if (t !== null) desde = t;
+  }
+  if (desde === null && hist.length === 0) desde = ms(data.atualizadoEm);
+  return desde;
+}
+
 // `{ papel, desde (ISO), minutos }` quando o item está esperando alguém do papel da etapa; `null` caso contrário.
 export function esperandoPapel(data, agoraMs) {
   if (!data || typeof data !== 'object') return null;
@@ -18,14 +32,7 @@ export function esperandoPapel(data, agoraMs) {
   if (ocupado(papel)) return null;
   if (papel === 'V' && ocupado('E')) return null; // E no `com` é o conserto; a V volta depois
 
-  // entrada na etapa atual: a primeira entrada da sequência final do `historico` com essa etapa
-  let desde = null;
-  const hist = Array.isArray(data.historico) ? data.historico : [];
-  for (let i = hist.length - 1; i >= 0 && hist[i]?.etapa === data.etapa; i--) {
-    const t = ms(hist[i].em);
-    if (t !== null) desde = t;
-  }
-  if (desde === null && hist.length === 0) desde = ms(data.atualizadoEm);
+  let desde = entradaNaEtapa(data);
   if (desde === null) return null;
   // `entregue`: alguém do papel já entregou a parte (`fez`) nesta etapa; o item não pede despacho, pede à dona avançar a etapa.
   const entrada = desde;
