@@ -340,3 +340,57 @@ test('ensaio do plano: uma sessão parada com três itens → 3 mensagens a ela;
   assert.deepEqual(b.json().soltos.sort(), ['F1', 'F2', 'F3'], b.out);
   for (const F of ['F1', 'F2', 'F3']) assert.deepEqual(lerItem(F).data.com, []);
 });
+
+// ---- batida: o membro que ficou com o título do item que fechou (F134) ----
+test('batida: membro parado com título de item que fechou → uma mensagem a ele e titulosVelhos no relatório; não repete', () => {
+  item('F1', { etapa: 'feito', donoLocalId: lid(6), donoApelido: 'E6', com: [] });
+  const arq = sessoes(sessao(6, 'E6 · histórico das etapas'), sessao(30, '🎛 orquestradora — kit'));
+  const a = batida(arq);
+  assert.equal(a.exit, 0, a.err);
+  const m = msgs(a, 'titulo-velho');
+  assert.equal(m.length, 1, a.out);
+  assert.equal(m[0].para, lid(6));
+  assert.equal(m[0].item, null);
+  assert.match(m[0].texto, /`E6 · livre`/);
+  assert.match(m[0].texto, /clear_session/);
+  assert.deepEqual(a.json().projetos.kit.titulosVelhos, [{ apelido: 'E6', localId: lid(6), titulo: 'E6 · histórico das etapas' }]);
+  assert.match(msgs(a, 'relatorio')[0]?.texto ?? '', /título velho: E6/, a.out);
+  const b = batida(arq, T + 11 * MIN);
+  assert.deepEqual(msgs(b, 'titulo-velho'), [], 'o mesmo título não é avisado duas vezes');
+  assert.deepEqual(msgs(b, 'relatorio'), [], 'o relatório igual não repete');
+});
+test('batida: aguardando validação com o item fechado também é título velho; no fez de item vivo não é', () => {
+  item('F1', { ...semGente, etapa: 'feito', fez: [{ localId: lid(13), apelido: 'E13', oQue: 'fez', em: iso(T - 60 * MIN) }] });
+  item('F2', { ...semGente, etapa: 'validacao', historico: [{ em: iso(T - 40 * MIN), etapa: 'validacao', dono: null }], fez: [{ localId: lid(15), apelido: 'E15', oQue: 'fez', em: iso(T - 40 * MIN) }] });
+  const r = batida(sessoes(sessao(13, 'E13 · aguardando validação'), sessao(15, 'E15 · aguardando validação')));
+  assert.deepEqual(msgs(r, 'titulo-velho').map((m) => m.para), [lid(13)], r.out);
+});
+test('batida: não é título velho — livre, rodando, recém-parado, dono, no com, orquestradora, arquivado, sem apelido', () => {
+  item('F1', { donoLocalId: lid(2), donoApelido: 'P2', com: [{ localId: lid(3), apelido: 'E3', oQue: 'faz' }], atualizadoEm: iso(T - MIN) });
+  const arq = sessoes(
+    sessao(1, 'E1 · livre'), sessao(2, 'P2 · plano do editor'), sessao(3, 'E3 · tela do editor'),
+    sessao(4, 'E4 · coisa velha', { isRunning: true }), sessao(5, 'E5 · coisa velha', { lastActivityAt: iso(T - 2 * MIN) }),
+    sessao(7, 'E7 · coisa velha', { isArchived: true }), sessao(8, 'conversa solta'), sessao(30, '🎛 orquestradora — kit'),
+  );
+  const r = batida(arq);
+  assert.deepEqual(msgs(r, 'titulo-velho'), [], r.out);
+  assert.deepEqual(r.json().projetos.kit.titulosVelhos, []);
+  const prova = batida(sessoes(sessao(5, 'E5 · coisa velha', { lastActivityAt: iso(T - 20 * MIN) })), T + MIN);
+  assert.deepEqual(msgs(prova, 'titulo-velho').map((m) => m.para), [lid(5)], 'prova: a mesma sessão, parada há mais tempo, é avisada');
+});
+test('batida: título velho trocado por outro título velho é avisado de novo; o que virou livre sai do estado', () => {
+  const a = batida(sessoes(sessao(6, 'E6 · item a')));
+  assert.equal(msgs(a, 'titulo-velho').length, 1, a.out);
+  const b = batida(sessoes(sessao(6, 'E6 · item b')), T + 11 * MIN);
+  assert.equal(msgs(b, 'titulo-velho').length, 1, 'título diferente: aviso novo');
+  batida(sessoes(sessao(6, 'E6 · livre')), T + 22 * MIN);
+  const estado = JSON.parse(readFileSync(join(pastaOrq(), 'batida', 'estado.json'), 'utf8'));
+  assert.ok(!Object.keys(estado.avisos ?? {}).some((k) => k.startsWith('titulo:')), JSON.stringify(estado));
+});
+test('batida sem orquestradora: titulosVelhos fica no próximo relatório, como merge e vagas', () => {
+  batida(sessoes(sessao(6, 'E6 · item a')));
+  const rel = JSON.parse(readFileSync(join(pastaOrq(), 'batida', 'kit.json'), 'utf8'));
+  assert.deepEqual(rel.titulosVelhos, [], 'sem orquestradora, o último relatório não absorve o título velho');
+  const r = batida(sessoes(sessao(6, 'E6 · item a'), sessao(30, '🎛 orquestradora — kit')), T + 11 * MIN);
+  assert.match(msgs(r, 'relatorio')[0]?.texto ?? '', /título velho: E6/, r.out);
+});

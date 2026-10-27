@@ -7,6 +7,7 @@ export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta
 export const ESPERA_MIN = 5; // esperando o papel há tanto: avisa o livre
 export const REAVISO_MIN = 30; // o mesmo livre não é avisado de novo do mesmo item antes disso
 export const TETO_DE_LIVRES = 2; // livres por papel por projeto fora do modo ausente
+export const TITULO_VELHO_MIN = 10; // membro parado há tanto, fora de item vivo e sem título livre: o título é de item que fechou
 
 const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
 const ms = (v) => { const t = Date.parse(v); return Number.isNaN(t) ? null : t; };
@@ -31,6 +32,16 @@ export function ocupadosDaFila(itens) {
   return s;
 }
 
+// Quem está no `fez` de um item vivo: guarda a conversa para o conserto, o título dele não é velho.
+export function fezDaFila(itens) {
+  const s = new Set();
+  for (const d of itens.values()) {
+    if (ETAPAS_FINAIS.has(d?.etapa)) continue;
+    for (const f of Array.isArray(d?.fez) ? d.fez : []) if (texto(f?.localId)) s.add(f.localId);
+  }
+  return s;
+}
+
 // Membros livres de um papel num projeto, o mais antigo parado primeiro. → [{ localId, apelido }]
 export function livresDe(linhas, papel, projeto, projetoDe, ocupados) {
   return linhas
@@ -47,7 +58,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, che
   const mensagens = []; const soltar = []; const espera = [];
   const projetos = new Map();
   const projeto = (nome) => {
-    if (!projetos.has(nome)) projetos.set(nome, { orquestradora: null, merge: [], vagas: [], excedentes: [], membros: 0 });
+    if (!projetos.has(nome)) projetos.set(nome, { orquestradora: null, merge: [], vagas: [], excedentes: [], titulosVelhos: [], membros: 0 });
     return projetos.get(nome);
   };
   for (const r of linhas) {
@@ -134,18 +145,41 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, che
     }
   }
 
+  // membro que ficou com o título do item que fechou (F134): parado, fora de dono/`com`/`fez` de item vivo e sem título livre.
+  // Uma mensagem por título (trocou por outro título velho, avisa de novo); quem deixou de ser título velho sai do estado.
+  const noFez = fezDaFila(itens);
+  const velhos = new Set();
+  for (const r of linhas) {
+    const apelido = apelidoDoTitulo(r.title);
+    const p = projetoDe(r);
+    if (!vivoNaLista(r) || r.isRunning === true || !apelido || !p || ehLivre(r.title)) continue;
+    if (ocupados.has(r.sessionId) || noFez.has(r.sessionId)) continue;
+    const t = ms(r.lastActivityAt);
+    if (t !== null && agoraMs - t < TITULO_VELHO_MIN * 60_000) continue;
+    const titulo = String(r.title).trim();
+    velhos.add(r.sessionId);
+    projeto(p).titulosVelhos.push({ apelido, localId: r.sessionId, titulo });
+    const chave = `titulo:${r.sessionId}`;
+    if (avisos[chave]?.titulo === titulo) continue;
+    nova(r.sessionId, `O seu título "${titulo}" é de um item que já fechou: você não é dona, não está no \`com\` nem no \`fez\` de nenhum item vivo. Troque o título para \`${apelido} · livre\` e chame \`clear_session\` com "self".`, null, 'titulo-velho');
+    avisos[chave] = { em: new Date(agoraMs).toISOString(), localId: r.sessionId, titulo };
+  }
+  for (const k of Object.keys(avisos)) if (k.startsWith('titulo:') && !velhos.has(k.slice('titulo:'.length))) delete avisos[k];
+
   // relatório à orquestradora de cada projeto, só quando algo mudou desde o último
   const relatorios = {};
   for (const [nome, proj] of [...projetos].sort(([a], [b]) => a.localeCompare(b))) {
     const { membros, ...conteudo } = proj;
-    const mudou = JSON.stringify([conteudo.merge, conteudo.vagas, conteudo.excedentes]) !== JSON.stringify((() => { const u = ultimo(nome); return u ? [u.merge, u.vagas, u.excedentes] : [[], [], []]; })());
+    const chaves = (x) => [x.merge, x.vagas, x.excedentes, (x.titulosVelhos ?? []).map((v) => [v.localId, v.titulo])];
+    const mudou = JSON.stringify(chaves(conteudo)) !== JSON.stringify((() => { const u = ultimo(nome); return u ? chaves(u) : [[], [], [], []]; })());
     relatorios[nome] = { ...conteudo, mudou };
-    const algo = conteudo.merge.length || conteudo.vagas.length || conteudo.excedentes.length;
+    const algo = conteudo.merge.length || conteudo.vagas.length || conteudo.excedentes.length || conteudo.titulosVelhos.length;
     if (conteudo.orquestradora && algo && mudou) {
       const partes = [];
       if (conteudo.merge.length) partes.push(`merge parado: ${conteudo.merge.join(', ')}`);
       if (conteudo.vagas.length) partes.push(`vaga: ${conteudo.vagas.map((v) => (v.piso ? `${v.papel} (piso)` : `${v.papel} (${v.item})`)).join(', ')}`);
       if (conteudo.excedentes.length) partes.push(`livres além do teto: ${conteudo.excedentes.map((x) => x.apelido).join(', ')}`);
+      if (conteudo.titulosVelhos.length) partes.push(`título velho: ${conteudo.titulosVelhos.map((x) => x.apelido).join(', ')}`);
       const hora = new Date(agoraMs).toTimeString().slice(0, 5);
       nova(conteudo.orquestradora, `Batida ${hora}: ${partes.join('; ')}. Relatório: ${caminhoDoRelatorio(nome)}.`, null, 'relatorio');
     }
