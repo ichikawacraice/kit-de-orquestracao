@@ -1,6 +1,6 @@
 {
   "name": "painel-sessoes",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "Mod /painel e a barra de status acima do prompt: as sessões do pool, as perguntas com Q-ID e a fila.",
   "author": { "name": "ichikawacraice" },
   "types": "./types/index.d.ts"
