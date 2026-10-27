@@ -11,13 +11,15 @@
 // `clear_session` recusado (tool_result com `is_error`) não conta como limpeza (F54).
 // Uma cobrança por turno (`stop_hook_active` deixa passar). Erro nunca prende o turno. Limites: constantes abaixo, com override
 // `CONTEXTO_LIMITE_<NOME>` só para teste. Fonte da regra: skills/papeis-e-modelos/SKILL.md, seção "Contexto".
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { registrar, textoDe, modoAusente } from './hooks-crewai-comum.mjs';
 import { registroDaSessao, membroDoPool, ehOrquestradora, ehExecutora, inicioDoTurno, contextoDoTranscript } from './pool-comum.mjs';
 
 const HOOK = 'contexto-do-papel';
 const limite = (nome, padrao) => { const v = Number(process.env[`CONTEXTO_LIMITE_${nome}`]); return Number.isFinite(v) && v > 0 ? v : padrao; };
 const ESPERA = limite('ESPERA', 250_000); const ALTO = limite('ALTO', 350_000); const TETO = limite('TETO', 500_000); const EXEC = limite('EXEC', 300_000);
+export { ALTO, EXEC }; // o `painel seguinte` mede o contexto contra estas réguas
 const PEDIR = limite('PEDIR', 150_000);
 const mil = (t) => Math.round(t / 1000);
 
@@ -111,7 +113,11 @@ function main() {
   process.stdout.write(JSON.stringify({ decision: 'block', reason: cobranca.reason }));
 }
 
-try { main(); } catch (err) {
-  try { registrar('?', HOOK, 'erro', String(err?.stack || err)); } catch { /* sem log */ }
+// Só roda como hook (script principal); importado pelo painel para ler as réguas, não lê o stdin.
+const principal = (() => { try { return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href; } catch { return false; } })();
+if (principal) {
+  try { main(); } catch (err) {
+    try { registrar('?', HOOK, 'erro', String(err?.stack || err)); } catch { /* sem log */ }
+  }
+  process.exitCode = 0;
 }
-process.exitCode = 0;

@@ -357,11 +357,25 @@ export function gitCommonDir(cwd) {
   } catch { return null; }
 }
 
-function transcriptDe(sessionId) {
+export function transcriptDe(sessionId) {
   const proj = join(H, '.claude', 'projects');
   for (const d of readdirSync(proj)) {
     const f = join(proj, d, `${sessionId}.jsonl`);
     if (existsSync(f)) return f;
+  }
+  return null;
+}
+
+// Transcript da sessão pelo `local_…`, sem cache: o `cliSessionId` muda a cada limpeza de contexto (o `registroDaSessao` não o devolve).
+// → caminho do .jsonl ou null.
+export function transcriptDoLocal(localId) {
+  if (!localId) return null;
+  for (const f of arquivosLocal(SESSOES_DIR())) {
+    if (!f.endsWith(`${localId}.json`)) continue;
+    try {
+      const r = JSON.parse(readFileSync(f, 'utf8'));
+      if (r.sessionId === localId && typeof r.cliSessionId === 'string' && r.cliSessionId) return transcriptDe(r.cliSessionId);
+    } catch { /* registro ilegível */ }
   }
   return null;
 }

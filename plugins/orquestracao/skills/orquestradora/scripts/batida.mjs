@@ -7,6 +7,7 @@ export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta
 export const ESPERA_MIN = 5; // esperando o papel há tanto: avisa o livre
 export const REAVISO_MIN = 30; // o mesmo livre não é avisado de novo do mesmo item antes disso
 export const TETO_DE_LIVRES = 2; // livres por papel por projeto fora do modo ausente
+export const AFINIDADE_MIN = 20; // item do mesmo assunto espera o afim ocupado por tanto; depois, o de sempre (BATIDA_AFINIDADE_MIN troca)
 export const TITULO_VELHO_MIN = 10; // membro parado há tanto, fora de item vivo e sem título livre: o título é de item que fechou
 
 const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
@@ -50,7 +51,29 @@ export function livresDe(linhas, papel, projeto, projetoDe, ocupados) {
     .map((r) => ({ localId: r.sessionId, apelido: apelidoDoTitulo(r.title) }));
 }
 
-export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, cheia, esperandoPapel, ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
+// O membro afim de um item que espera o papel `papel` (ADR 0009): entre os itens do mesmo projeto e tema (vivos ou fechados),
+// quem passou por eles com esse papel (`passaram`; item antigo sem `passaram` vale pelo `fez`), o mais recente cuja sessão ainda
+// está viva na lista do app e com o título começando pelo mesmo apelido. → { localId, apelido } ou null. Puro.
+export function afimDe(item, papel, itens, linhas, projetoDe) {
+  const porId = new Map(linhas.map((r) => [r.sessionId, r]));
+  const nome = String(item?.projeto ?? '').toLowerCase();
+  if (!nome || !texto(item?.tema)) return null;
+  const candidatos = [];
+  for (const d of itens.values()) {
+    if (d === item || String(d?.projeto ?? '').toLowerCase() !== nome || d?.tema !== item.tema) continue;
+    const lista = Array.isArray(d.passaram) ? d.passaram : (Array.isArray(d.fez) ? d.fez.map((f) => ({ ...f, papel: String(f?.apelido ?? '')[0] })) : []);
+    for (const e of lista) if (e?.papel === papel && texto(e.localId) && texto(e.apelido) && ms(e.em) !== null) candidatos.push(e);
+  }
+  candidatos.sort((a, b) => ms(b.em) - ms(a.em));
+  for (const e of candidatos) {
+    const r = porId.get(e.localId);
+    if (!vivoNaLista(r) || !projetoDe(r) || apelidoDoTitulo(r.title) !== e.apelido) continue;
+    return { localId: e.localId, apelido: e.apelido };
+  }
+  return null;
+}
+
+export function julgar({ agoraMs, itens, todos = itens, afinidadeMin = AFINIDADE_MIN, linhas, projetoDe, estado, ausente, cheia, esperandoPapel, ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const ocupados = ocupadosDaFila(itens);
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
@@ -123,8 +146,21 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, che
     }
     if (r.papel === 'V' && cheia()) { espera.push({ F, texto: 'máquina cheia' }); continue; }
     const livres = livresDe(linhas, r.papel, nome, projetoDe, ocupados).filter((l) => !usados.has(l.localId));
-    if (!livres.length) { proj.vagas.push({ papel: r.papel, item: F }); continue; }
-    const livre = livres[0];
+    const afim = afimDe(d, r.papel, todos, linhas, projetoDe);
+    const livreAfim = afim ? livres.find((l) => l.localId === afim.localId) : null;
+    if (!livres.length && !(afim && r.minutos < afinidadeMin)) { proj.vagas.push({ papel: r.papel, item: F }); continue; }
+    let livre = livreAfim ?? livres[0];
+    if (afim) {
+      if (!livreAfim && r.minutos < afinidadeMin) {
+        // afim ocupado (ou livre já avisado de outro item nesta batida): espera por ele, uma vez, sem avisar outro nem pedir vaga
+        const marca = avisos[`afim:${F}`];
+        if (marca?.localId !== afim.localId) {
+          nova(afim.localId, `${F} · ${d.titulo}, do mesmo assunto, espera você: pegue ao terminar o atual (\`painel pegar ${F} ${afim.localId} ${afim.apelido}\`).`, F, 'afinidade');
+          avisos[`afim:${F}`] = { em: new Date(agoraMs).toISOString(), localId: afim.localId };
+        }
+        continue;
+      }
+    }
     const antes = avisos[F];
     if (antes?.localId === livre.localId && agoraMs - ms(antes.em) < REAVISO_MIN * 60_000) { usados.add(livre.localId); continue; }
     nova(livre.localId, `${F} · ${d.titulo} para você: rode \`painel pegar ${F} ${livre.localId} ${livre.apelido}\`, troque o título (\`${livre.apelido} · <o quê>\`) e leia o handoff do item.`, F, 'avisar-livre');
@@ -132,6 +168,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, che
     usados.add(livre.localId);
   }
   for (const F of Object.keys(cutucadas)) if (!vistos.has(F)) delete cutucadas[F];
+  for (const k of Object.keys(avisos)) if (k.startsWith('afim:') && !vistos.has(k.slice('afim:'.length))) delete avisos[k];
 
   // piso de E e excedentes (fora do modo ausente). Livre no `fez` de item vivo não é excedente nem conta para o teto:
   // a trava de arquivamento recusa arquivá-lo (só se arquiva membro sem item vivo).
