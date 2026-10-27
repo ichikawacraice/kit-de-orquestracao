@@ -16,7 +16,7 @@
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]   os membros livres do papel no projeto, o mais antigo parado primeiro → [{localId, apelido}]; --sessoes é o JSON do list_sessions (sem ele, o registro do app, sem contar a mesma sessão duas vezes)
 //   painel.mjs pegar <F> [<local_>] <apelido>   (o id sai de $CLAUDE_CODE_HOST_SESSION_ID; id de outra sessão, de orquestradora ou de outro apelido é recusado) o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
-//   painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]   (ADR 0009) ao terminar, pega o item vivo mais antigo do mesmo projeto e tema do último item por onde a sessão passou (`passaram`) que espera o papel dela, como o `pegar` → {pegou:true, item, …} ou {pegou:false, motivo}; recusa com o contexto acima do aviso do papel (E 300 mil, P/D/V 350 mil) ou sem medida do transcript; --tokens só sobrescreve a medida (teste)
+//   painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]   (ADR 0009) ao terminar, pega o item vivo mais antigo do mesmo projeto e tema do último item por onde a sessão passou (`passaram`) que espera o papel dela (pula o item só se a sessão já passou por ele nesta etapa), como o `pegar` → {pegou:true, item, …} ou {pegou:false, motivo}; recusa com o contexto acima do aviso do papel (E 300 mil, P/D/V 350 mil) ou sem medida do transcript; --tokens só sobrescreve a medida (teste)
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge do PR validado (F150): confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, pede ao membro com título de item fechado que volte a livre, relata merge/vagas/excedentes/títulos velhos à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
@@ -91,9 +91,11 @@ const pool = MEU_CLI
 // invocações não dependem do módulo, nem a cópia do script solta numa pasta sem `hooks/`).
 const DA_BATIDA = ['batida', 'pegar', 'livres', 'seguinte'].includes(process.argv[2]);
 const CONFERE_MEMBRO = DA_BATIDA || process.argv[2] === 'com';
-const esperandoPapel = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
-  ? (await import(pathToFileURL(join(HOOKS_DIR, 'esperando-papel.mjs')).href)).esperandoPapel
+const moduloEsperando = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
+  ? await import(pathToFileURL(join(HOOKS_DIR, 'esperando-papel.mjs')).href)
   : null;
+const esperandoPapel = moduloEsperando?.esperandoPapel ?? null;
+const entradaNaEtapa = moduloEsperando?.entradaNaEtapa ?? null;
 // `batida`, `pegar` e `livres` (e `com`, só para conferir o membro) também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
 const regras = CONFERE_MEMBRO
   ? await import(pathToFileURL(POOL_COMUM).href).catch((e) => {
@@ -888,7 +890,9 @@ function comandoSeguinte(args) {
     const candidatos = [];
     for (const [F, d] of todos) {
       if (ETAPAS_FINAIS.has(d?.etapa) || d?.projeto !== projeto || d?.tema !== tema) continue;
-      if ((Array.isArray(d.passaram) ? d.passaram : []).some((p) => p?.localId === localId)) continue; // já passou por ele: a V sai sem `--fez` e o item segue esperando V
+      // já passou por ele NESTA etapa: a V sai sem `--fez` e o item segue esperando V. Passagem de rodada anterior (conserto, revalidação) não pula.
+      const entrada = entradaNaEtapa(d);
+      if (entrada === null || (Array.isArray(d.passaram) ? d.passaram : []).some((p) => p?.localId === localId && Date.parse(p.em) >= entrada)) continue;
       const r = esperandoPapel(d, agora);
       if (!r || r.entregue || r.papel !== apelido[0]) continue;
       candidatos.push({ F, desde: Date.parse(r.desde) });

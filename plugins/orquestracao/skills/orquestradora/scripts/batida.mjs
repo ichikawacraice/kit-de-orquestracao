@@ -55,20 +55,27 @@ export function livresDe(linhas, papel, projeto, projetoDe, ocupados) {
 // O membro afim de um item que espera o papel `papel` (ADR 0009): entre os itens do mesmo projeto e tema (vivos ou fechados),
 // quem passou por eles com esse papel (`passaram`; item antigo sem `passaram` vale pelo `fez`), o mais recente cuja sessão ainda
 // está viva na lista do app e com o título começando pelo mesmo apelido. → { localId, apelido } ou null. Puro.
+// O próprio item vem primeiro: no conserto (o item volta à execução) quem o fez tem a conversa; só sem ninguém vivo dele valem os outros.
 export function afimDe(item, papel, itens, linhas, projetoDe) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const nome = String(item?.projeto ?? '').toLowerCase();
   if (!nome || !texto(item?.tema)) return null;
+  const daLista = (d) => (Array.isArray(d.passaram) ? d.passaram : (Array.isArray(d.fez) ? d.fez.map((f) => ({ ...f, papel: String(f?.apelido ?? '')[0] })) : []));
+  const vivo = (e) => {
+    const r = porId.get(e.localId);
+    return vivoNaLista(r) && projetoDe(r) && apelidoDoTitulo(r.title) === e.apelido;
+  };
+  const validos = (d) => daLista(d).filter((e) => e?.papel === papel && texto(e.localId) && texto(e.apelido) && ms(e.em) !== null);
+  const doProprio = validos(item).sort((a, b) => ms(b.em) - ms(a.em)).find(vivo);
+  if (doProprio) return { localId: doProprio.localId, apelido: doProprio.apelido };
   const candidatos = [];
   for (const d of itens.values()) {
     if (d === item || String(d?.projeto ?? '').toLowerCase() !== nome || d?.tema !== item.tema) continue;
-    const lista = Array.isArray(d.passaram) ? d.passaram : (Array.isArray(d.fez) ? d.fez.map((f) => ({ ...f, papel: String(f?.apelido ?? '')[0] })) : []);
-    for (const e of lista) if (e?.papel === papel && texto(e.localId) && texto(e.apelido) && ms(e.em) !== null) candidatos.push(e);
+    candidatos.push(...validos(d));
   }
   candidatos.sort((a, b) => ms(b.em) - ms(a.em));
   for (const e of candidatos) {
-    const r = porId.get(e.localId);
-    if (!vivoNaLista(r) || !projetoDe(r) || apelidoDoTitulo(r.title) !== e.apelido) continue;
+    if (!vivo(e)) continue;
     return { localId: e.localId, apelido: e.apelido };
   }
   return null;

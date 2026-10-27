@@ -602,3 +602,58 @@ test('seguinte: a V que acabou de dar o veredito não repega o item de onde saiu
   const outro = painel(['seguinte', lid(7), 'V1', '--tokens', '1000']);
   assert.equal(outro.json().item, 'F2', outro.out);
 });
+
+// ---- F170: a afinidade não se perde quando o item volta para conserto ----
+const conserto = (extra = {}) => ({
+  ...semGente, etapa: 'execucao', tema: 'editor',
+  historico: [
+    { em: iso(T - 100 * MIN), etapa: 'planejamento', dono: null }, { em: iso(T - 80 * MIN), etapa: 'execucao', dono: 'E3' },
+    { em: iso(T - 50 * MIN), etapa: 'validacao', dono: null }, { em: iso(T - 20 * MIN), etapa: 'execucao', dono: null },
+  ],
+  atualizadoEm: iso(T - 20 * MIN), passaram: [passou(3, 'E3', T - 60 * MIN)], ...extra,
+});
+
+test('seguinte (conserto): a E que fez o item numa rodada anterior o pega quando ele volta para execução', () => {
+  item('F1', conserto());
+  const r = painel(['seguinte', lid(3), 'E3', '--tokens', '100000']);
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(r.json().pegou, true, r.out);
+  assert.equal(r.json().item, 'F1', r.out);
+});
+test('seguinte (mesma rodada): a V que saiu sem --fez não repega o item que segue em validação', () => {
+  const emValidacao = { ...semGente, etapa: 'validacao', tema: 'editor', historico: [{ em: iso(T - 20 * MIN), etapa: 'validacao', dono: null }], atualizadoEm: iso(T - 20 * MIN), passaram: [passou(7, 'V3', T - 5 * MIN)] };
+  item('F1', emValidacao);
+  const lista = painel(['list', 'fila']);
+  assert.equal(lista.json().find((x) => x.id === 'F1').esperando?.papel, 'V', 'prova: o item espera V, então só o pulo o protege');
+  const r = painel(['seguinte', lid(7), 'V3', '--tokens', '1000']);
+  assert.equal(r.json().pegou, false, r.out);
+});
+test('seguinte (revalidação): a V da 1ª rodada pega o item quando ele volta para validação', () => {
+  item('F1', {
+    ...semGente, etapa: 'validacao', tema: 'editor', passaram: [passou(7, 'V3', T - 40 * MIN)],
+    historico: [{ em: iso(T - 60 * MIN), etapa: 'validacao', dono: null }, { em: iso(T - 30 * MIN), etapa: 'execucao', dono: 'E3' }, { em: iso(T - 10 * MIN), etapa: 'validacao', dono: null }],
+    atualizadoEm: iso(T - 10 * MIN),
+  });
+  const r = painel(['seguinte', lid(7), 'V3', '--tokens', '1000']);
+  assert.equal(r.json().pegou, true, r.out);
+  assert.equal(r.json().item, 'F1', r.out);
+});
+
+test('afimDe (conserto): quem passou pelo próprio item ganha de quem passou por outro item do tema, mesmo mais recente', async () => {
+  const { afimDe } = await import(pathToFileURL(join(SCRIPTS, 'batida.mjs')).href);
+  const alvo = { projeto: 'kit', tema: 'editor', etapa: 'execucao', passaram: [passou(3, 'E3', T - 60 * MIN), passou(4, 'E4', T - 50 * MIN)] };
+  const outro = { projeto: 'kit', tema: 'editor', etapa: 'feito', passaram: [passou(5, 'E5', T - 10 * MIN)] };
+  const mapa = new Map([['F1', alvo], ['F2', outro]]);
+  const projetoDe = () => 'kit';
+  const vivas = [sessao(3, 'E3 · tela'), sessao(4, 'E4 · tela'), sessao(5, 'E5 · tela')];
+  assert.equal(afimDe(alvo, 'E', mapa, vivas, projetoDe)?.localId, lid(4), 'o mais recente do próprio item');
+  assert.equal(afimDe(alvo, 'E', mapa, [sessao(3, 'E3 · tela'), sessao(4, 'E4 · tela', { isArchived: true }), sessao(5, 'E5 · tela')], projetoDe)?.localId, lid(3), 'morta cai para a seguinte do próprio item');
+  assert.equal(afimDe(alvo, 'E', mapa, [sessao(5, 'E5 · tela')], projetoDe)?.localId, lid(5), 'sem ninguém vivo do próprio item, segue a regra dos outros itens');
+});
+
+test('batida (conserto): o aviso do item que voltou para execução vai à E que o fez, não ao livre mais antigo', () => {
+  item('F1', conserto());
+  const arq = sessoes(sessao(1, 'E1 · livre', { lastActivityAt: iso(T - 200 * MIN) }), sessao(2, 'E2 · livre', { lastActivityAt: iso(T - 150 * MIN) }), sessao(3, 'E3 · livre', { lastActivityAt: iso(T - 30 * MIN) }));
+  const r = batida(arq);
+  assert.deepEqual(msgs(r, 'avisar-livre').map((m) => m.para), [lid(3)], r.out);
+});
