@@ -31,7 +31,9 @@
 //   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
 //   (set em fila/<id> que JÁ existe exige --se-versao N — ou "seVersao" na op do batch —: sem ele, o set apagaria o item em silêncio)
 //
-// Coleções: sessoes, perguntas e fila (itens F<n> do pool; protocolo em pool/protocolo.md#fila-do-pool).
+// Coleções: sessoes, perguntas, fila (itens F<n> do pool; protocolo em pool/protocolo.md#fila-do-pool) e cartoes (cartão de sessão nova
+//   que espera o clique do operador; id = task_id do start_session; { projeto, apelido, papel, itens[F<n>], orquestradoraId, propostoEm };
+//   a orquestradora grava e apaga, e a batida apaga o apelido vivo e o que passou de 12 h).
 //
 // `projeto` (sessoes e fila): ao CRIAR um documento sem o campo, o script o preenche com o nome do repositório git de
 // onde roda (basename da pasta que contém o git common dir, minúsculo; fora de git não preenche). Ambiente: PAINEL_DIR
@@ -45,13 +47,13 @@ import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
-import { AFINIDADE_MIN, BATIDA_SOLTA_MIN, julgar, livresDe, ocupadosDaFila } from './batida.mjs';
+import { AFINIDADE_MIN, BATIDA_SOLTA_MIN, cartoesResolvidos, julgar, livresDe, ocupadosDaFila } from './batida.mjs';
 import { SHA_VALIDADO, conferir, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 // Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
 const HANDOFFS = process.env.PAINEL_HANDOFFS_DIR || ((process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR) ? join(BASE, '..', 'pool', 'handoffs') : join(homedir(), '.claude', 'orquestracao', 'pool', 'handoffs'));
-const COLECOES = new Set(['sessoes', 'perguntas', 'fila']);
+const COLECOES = new Set(['sessoes', 'perguntas', 'fila', 'cartoes']);
 const ID = /^[A-Za-z0-9_.-]{1,120}$/;
 
 // Mesmo cálculo de projetoDaSessao() em hooks/pool-comum.mjs (nome do projeto); mude nos dois.
@@ -116,7 +118,7 @@ function ehMinha(id) {
 }
 
 function caminho(colecao, id) {
-  if (!COLECOES.has(colecao)) throw new Error(`coleção desconhecida: ${colecao} (use sessoes, perguntas ou fila)`);
+  if (!COLECOES.has(colecao)) throw new Error(`coleção desconhecida: ${colecao} (use sessoes, perguntas, fila ou cartoes)`);
   if (id !== undefined && !ID.test(id)) throw new Error(`id inválido: ${id}`);
   return id === undefined ? join(BASE, colecao) : join(BASE, colecao, `${id}.json`);
 }
@@ -376,9 +378,19 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   }
 }
 
+// Cartão de sessão nova que espera o clique do operador (a coleção `cartoes`; id = o task_id do start_session).
+function validarCartao(chave, c) {
+  for (const k of ['projeto', 'orquestradoraId']) if (!textoNaoVazio(c[k])) throw new Error(`${chave}: ${k} é obrigatório`);
+  if (!/^[PDEV]\d+$/.test(String(c.apelido))) throw new Error(`${chave}: apelido "${c.apelido}" não é P<n>, D<n>, E<n> ou V<n>`);
+  if (c.papel !== String(c.apelido)[0]) throw new Error(`${chave}: papel "${c.papel}" não é a letra do apelido ${c.apelido}`);
+  if (!Array.isArray(c.itens) || c.itens.some((F) => !ID.test(String(F)) || !/^F\d+$/.test(String(F)))) throw new Error(`${chave}: itens deve ser a lista de F<n> (vazia no piso de E)`);
+  if (Number.isNaN(Date.parse(c.propostoEm))) throw new Error(`${chave}: propostoEm não é data ISO`);
+}
+
 function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom, antes) {
   const chave = `${colecao}/${id}`;
   if (colecao === 'fila') validarItemDaFila(chave, novo, base, op, existia, viaCom, antes);
+  if (colecao === 'cartoes') validarCartao(chave, base);
   if (colecao === 'perguntas' && base.estado !== 'respondida' && base.estado !== 'cancelada') {
     const solto = itemSoltoNaPergunta(novo);
     if (solto) throw new Error(`${chave}: ${solto.campo} cita "${solto.numero}" solto — na primeira menção escreva "${solto.numero} · <título do item>" (painel get fila ${solto.numero}); o operador não sabe o que é o número (a tecla F5 se descreve por extenso)`);
@@ -945,6 +957,12 @@ function marcadoresMortos(porId, agoraMs) {
   return mortos;
 }
 
+function cartoesDoPainel() {
+  let nomes = [];
+  try { nomes = readdirSync(caminho('cartoes')).filter((n) => n.endsWith('.json')); } catch { return []; }
+  return nomes.flatMap((n) => { try { const d = JSON.parse(readFileSync(join(caminho('cartoes'), n), 'utf8')); return [{ id: n.slice(0, -5), data: d.data ?? {} }]; } catch { return []; } });
+}
+
 function comandoBatida(args) {
   const arquivo = flag(args, '--sessoes');
   const seco = flag(args, '--seco', false);
@@ -967,7 +985,8 @@ function comandoBatida(args) {
       prazoMin: prazoEmMin([]), soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
     });
     const marcadoresApagados = marcadoresMortos(new Map(linhas.map((r) => [r.sessionId, r])), agoraMs);
-    const saida = { mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
+    const cartoesApagados = cartoesResolvidos({ cartoes: cartoesDoPainel(), linhas, projetoDe: projetoDeUmaLinha(), agoraMs });
+    const saida = { cartoesApagados, mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
     if (seco) return saida;
     const soltos = [];
     for (const { F, motivo } of julgado.soltar) {
@@ -986,6 +1005,7 @@ function comandoBatida(args) {
       gravarJson(join(pasta, `${nome}.json`), { ...conteudo, em });
     }
     for (const id of marcadoresApagados) rmSync(join(ORQ(), 'ativas', id), { force: true });
+    for (const id of cartoesApagados) rmSync(caminho('cartoes', id), { force: true });
     return saida;
   };
   return seco ? rodar() : comTrava(rodar);
