@@ -16,8 +16,8 @@
 ## Decisão
 1. **O item registra quem passou por ele:** campo `passaram` (`{localId, apelido, papel, em}`), gravado só pelo `painel` em `com add` e `pegar`. Item antigo usa o `fez`.
 2. **Membro afim** de um item que espera o papel X: quem, do papel X, passou mais recentemente por um item do mesmo projeto e mesmo `tema`, com a sessão viva e o título ainda com o mesmo apelido. Para a designer, "mesma tela" é o mesmo `tema`.
-3. **A batida oferece primeiro ao afim.** Livre: o aviso vai a ele. Ocupado: recebe uma vez "pegue ao terminar o atual", e o item espera por ele até 20 min (`BATIDA_AFINIDADE_MIN`) antes de ir ao livre mais antigo ou virar vaga.
-4. **Quem termina olha o mesmo assunto antes de se limpar:** `painel seguinte <local_…> <apelido> [--tokens N]` pega, dentro da trava, o item mais antigo do mesmo tema que espera o papel dele, e a sessão segue com a conversa. Com o contexto acima do aviso do papel, recusa: a sessão se limpa e o item vai a outro.
+3. **A batida oferece primeiro ao afim.** Livre: o aviso vai a ele (o afim já avisado de outro item na mesma batida conta como ocupado). Ocupado: recebe uma vez "pegue ao terminar o atual", e o item espera por ele até 20 min (`BATIDA_AFINIDADE_MIN`) antes de ir ao livre mais antigo ou virar vaga.
+4. **Quem termina olha o mesmo assunto antes de se limpar:** `painel seguinte <local_…> <apelido>` pega, dentro da trava, o item mais antigo do mesmo tema que espera o papel dele, e a sessão segue com a conversa. O próprio comando mede o contexto da sessão pelo transcript (o modelo não vê o próprio contexto); acima do aviso do papel, ou sem medida, recusa: a sessão se limpa e o item vai a outro.
 5. **Continua:** um item por vez, um PR por item.
 
 <a id="alternativas"></a>

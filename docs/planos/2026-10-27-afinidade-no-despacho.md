@@ -34,7 +34,9 @@ como executar. Tudo marcado *assumida, a confirmar* é reversível e barato.
   - afim **ocupado** (vivo, fora de `livre`) e o item espera há menos de `AFINIDADE_MIN` (padrão **20 min**, env
     `BATIDA_AFINIDADE_MIN`) → manda **uma vez** ao afim `F<n> · <título>, do mesmo assunto, espera você: pegue ao
     terminar o atual` e não avisa outro livre nem pede vaga;
-  - passou de `AFINIDADE_MIN`, ou sem afim → o de sempre (`livres[0]` ou vaga).
+  - passou de `AFINIDADE_MIN`, ou sem afim → o de sempre (`livres[0]` ou vaga);
+  - afim livre que **já recebeu aviso de outro item nesta mesma batida** (está em `usados`) conta como ocupado: recebe
+    o "pegue ao terminar" deste item (uma vez, pela marca em `avisos`), e o item espera por ele no mesmo prazo.
   *Assumida, a confirmar*: 20 min é menos que o `PRAZO_MIN` (30) do item parado e cabe um item pequeno.
 - **A5 · Ao terminar, o membro olha o mesmo assunto antes de se limpar:** comando novo
   `painel seguinte <local_…> <apelido>`, dentro da trava: acha o item mais antigo do mesmo projeto e mesmo `tema` do
@@ -42,10 +44,14 @@ como executar. Tudo marcado *assumida, a confirmar* é reversível e barato.
   `{pegou, item, …}` ou `{pegou:false, motivo}`. O papel de cada membro (`papeis/*.md`, seção "Ao terminar") manda
   rodá-lo **antes** de se declarar livre; pegou → troca o título e segue com a conversa, sem limpar; não pegou → livre e
   limpa, como hoje.
-- **A6 · O teto de contexto manda mais que a afinidade:** o `seguinte` recebe `--tokens <n>` (o membro lê da barra) e
-  recusa quando `n` passa do `aviso` da régua do papel (as mesmas de `contexto-do-papel`: E 300 mil, P/D/V 350 mil),
-  dizendo "contexto alto: livre e limpe-se; o item vai a outro". Sem `--tokens`, pega (*assumida*: quem não sabe o
-  próprio contexto confia na barra que já avisa).
+- **A6 · O teto de contexto manda mais que a afinidade, medido pelo próprio `seguinte`:** ele acha o transcript da
+  sessão pelo `local_…` (registro do app → `cliSessionId` → `~/.claude/projects/*/<cliSessionId>.jsonl`, o mesmo
+  `transcriptDe` do `pool-comum.mjs`, exportado) e mede com `contextoDoTranscript`, o mesmo do hook
+  `contexto-do-papel`. Recusa quando o contexto passa do `aviso` da régua do papel (E 300 mil, P/D/V 350 mil),
+  dizendo "contexto alto: livre e limpe-se; o item vai a outro". **Sem medida (transcript não achado ou sem `usage`),
+  recusa** pelo mesmo motivo: na dúvida, a sessão se limpa. `--tokens <n>` fica só como sobrescrita para os testes.
+  Motivo: o modelo não vê a barra nem o próprio contexto, e a V não é cobrada pelo hook (`contexto-do-papel.mjs` só
+  registra a validadora acima de 350 mil); sem esta medida, uma V encadearia itens sem limite.
 - **A7 · Continua:** um item por vez e um PR por item; o `livre-se-limpa` não muda (quem pegou o seguinte não está
   livre).
 
@@ -57,6 +63,7 @@ como executar. Tudo marcado *assumida, a confirmar* é reversível e barato.
 | `plugins/orquestracao/skills/orquestradora/scripts/painel.mjs` | `passaram` gravado por `com add` e `pegar`, recusado na CLI (A1); comando `seguinte` (A5, A6); cabeçalho do script |
 | `plugins/orquestracao/skills/orquestradora/scripts/batida.mjs` | `afimDe(item, papel, itens, linhas, projetoDe)` puro (A2); `julgar` com A4; `AFINIDADE_MIN` |
 | `plugins/orquestracao/hooks/contexto-do-papel.mjs` | exportar as réguas (`EXEC`, `ALTO`, hoje constantes locais) para o `seguinte` ler dali |
+| `plugins/orquestracao/hooks/pool-comum.mjs` | exportar `transcriptDe`; função `transcriptDoLocal(localId)` (registro → `cliSessionId` → transcript) |
 | `plugins/orquestracao/pool/papeis/{planejadora,design,executora,validadora}.md` | "Ao terminar": `painel seguinte` antes do livre |
 | `plugins/orquestracao/pool/protocolo.md` | "Ao terminar um item" e "Fila do pool": `passaram`, afinidade, `seguinte` |
 | `plugins/orquestracao/skills/orquestradora/SKILL.md` | o despacho à mão segue a mesma afinidade (dar ao afim ocupado em vez do primeiro livre, dentro do prazo) |
@@ -72,7 +79,7 @@ como executar. Tudo marcado *assumida, a confirmar* é reversível e barato.
    - `julgar`: afim livre recebe o aviso no lugar do mais antigo; afim ocupado recebe "pegue ao terminar" uma vez e
      nenhum livre é avisado nem vaga pedida antes de 20 min; depois de 20 min, o primeiro livre; sem afim, igual a hoje
      (os testes atuais da batida seguem verdes sem mudança).
-   - `seguinte`: pega o do mesmo tema e papel; não pega de outro tema; recusa com `--tokens` acima do aviso; sem item,
+   - `seguinte`: pega o do mesmo tema e papel; não pega de outro tema; recusa com o contexto do transcript acima do aviso; recusa sem transcript; `--tokens` sobrescreve; sem item,
      `pegou:false`.
 2. Código até verde; `npm test`.
 3. Papéis, protocolo, skill; ADR; versão do plugin.
@@ -88,7 +95,6 @@ como executar. Tudo marcado *assumida, a confirmar* é reversível e barato.
 ## Fora de escopo
 - Juntar itens num PR (proibido por A7).
 - Afinidade entre projetos, ou por arquivo tocado em vez de tema.
-- Medir o contexto pelo hook dentro do `seguinte` (o membro passa `--tokens`).
 
 ## Regras do projeto que valem aqui
 Node ≥ 20, ESM, sem dependência; `node:test`; `process.exitCode`; testes nunca tocam `~/.claude` real; commit
