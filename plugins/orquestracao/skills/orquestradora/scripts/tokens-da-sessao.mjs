@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Q69 (23/10): o gasto de uma sessão em tokens, para gravar na linha do painel ao arquivá-la.
+// O gasto de uma sessão em tokens. Ferramenta avulsa: desde a Q409 (26/10) a orquestradora não grava
+// mais o gasto no painel ao arquivar.
 // `get_usage` não serve aqui: em sessão ociosa ou arquivada devolve "unavailable" (sem processo),
 // e mesmo viva ele mede a JANELA atual, não o gasto acumulado. O gasto mora no transcript.
 // Uso: node tokens-da-sessao.mjs --cwd <cwd> --titulo "<título exato>" [--desde <createdAt> --ate <lastActivityAt>]
