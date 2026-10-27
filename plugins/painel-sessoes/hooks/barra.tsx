@@ -1,9 +1,8 @@
-import type { Barra, PerguntaAberta } from '../types'
-import { desde } from './desenho'
+import type { Barra } from '../types'
 
 // A barra de status acima do prompt: o relógio do cache de 1 h, o contexto contra a janela de compactação, o selo das perguntas
-// abertas, o botão do painel, o do modo ausente e o ok para a orquestradora se limpar. Só lê arquivos (a cada 30 s e a cada
-// turno); o `list_sessions` fica para o pane aberto. Nunca manda a limpeza: o ok grava a resposta pelo mesmo `responder` do pane.
+// abertas, o botão de limpar (só na orquestradora), o do modo ausente e o do painel, cada um com glifo e cor. Só lê arquivos
+// (a cada 30 s e a cada turno); o `list_sessions` fica para o pane aberto. O clique de limpar manda o prompt à própria sessão.
 
 type Doc = { id: string; data: Record<string, unknown>; version?: number }
 export type Regua = { aviso: number; teto: number }
@@ -12,23 +11,23 @@ export const CACHE_TTL_MS = 3_600_000
 export const LEITURA_MS = 30_000
 export const AVISO_MIN = 20 * 60
 const ALERTA_MIN = 10 * 60
-const LIMPAR_ANTES_SEG = 10 * 60
-const LIMPAR_ANTES_TOKENS = 150_000
-export const PEDIDO_TITULO = 'limpar · orquestradora'
-/** A janela em que o ok do painel vale para a T7 (a trava da limpeza da orquestradora). */
-const OK_VALE_MS = 30 * 60_000
-export const RESPOSTA_DO_OK = 'sim (segue a recomendação)'
-export const RASCUNHO = 'Pode se limpar agora, antes do cache vencer.'
 export const BANDEIRA_DO_APP = 'Library/Application Support/Claude/claude-code-sessions'
 
-export const ROTULO_LIMPAR = 'Pode se limpar'
-export const ROTULO_LIMPAR_ANTES = 'Limpar antes de vencer'
-export const FRASE_DO_PEDIDO = 'A orquestradora pede para se limpar'
-/** A frase do pedido dentro da barra: a longa só na faixa 0, onde há largura. */
-export const FRASE_NA_BARRA = '◆ orquestradora pede limpeza'
-export const FRASE_CURTA_NA_BARRA = '◆ pede limpeza'
-export const OK_ENVIADO = '✓ ok enviado'
-export const ROTULO_ENVIANDO = 'Enviando…'
+/** O que o clique de limpar manda à própria sessão (o prompt chega com origem `plugin`; o ok que a T7 lê é o arquivo gravado antes). */
+export const PROMPT_DE_LIMPAR = 'O operador mandou limpar pelo botão da barra: grave o estado (handoff do que estiver aberto) e limpe-se com clear_session "self".'
+/** O `Limpando…` segue até a leitura ver o contexto abaixo disto, ou até `LIMPANDO_MAX_MS`. */
+export const LIMPANDO_ABAIXO_DE = 150_000
+export const LIMPANDO_MAX_MS = 10 * 60_000
+/**
+ * O glifo de cada botão, 1º caractere do rótulo. A cor própria do glifo que a revisão pedia (`Text color` filho do `Button`) o
+ * motor desta build recusa ("takes one string child, its label, or none"): o destaque do limpar fica só na variante primária.
+ */
+export const GLIFO = {
+  limpar: { g: '↺' },
+  modo: { g: '☾' },
+  painel: { g: '◨' },
+  perguntas: { g: '●' },
+} as const
 /** As palavras do contexto: só elas levam cor; o denominador é a janela, a régua do papel só dá a palavra. */
 export const PALAVRA_ALTO = ' · alto'
 export const PALAVRA_LIMPAR = ' · limpar'
@@ -123,45 +122,6 @@ export function orquestradorasDoProjeto(docs: Doc[], projeto: string | null): st
     .map(d => texto(d.data.sessionId) ?? d.id)
 }
 
-/**
- * O pedido `limpar · orquestradora` aberto de uma orquestradora do projeto (o `sessaoId` está em `ids`); com vários, o de
- * `atualizadoEm` mais recente. Não filtra pelo `projeto` da pergunta: a skill não obriga a gravá-lo.
- */
-export function perguntaDeLimpeza(docs: Doc[], ids: string[], proprio?: string, agora?: number): PerguntaAberta | null {
-  const doOk = (d: Doc) => (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? '')
-  // O sim do painel dado há até 30 min (a janela da T7) atende só as abertas com `atualizadoEm` até o `respondidaEm` dele (o mais recente);
-  // a aberta depois do ok volta, e `atualizadoEm` ilegível conta como anterior.
-  const oks =
-    agora === undefined
-      ? []
-      : docs
-          .filter(d => d.data.estado === 'respondida' && doOk(d) && d.data.respondidaPor === 'painel' && (texto(d.data.resposta) ?? '').trim().toLowerCase().startsWith('sim'))
-          .map(d => Date.parse(texto(d.data.respondidaEm) ?? ''))
-          .filter(q => Number.isFinite(q) && agora - q <= OK_VALE_MS)
-  const okDoPainel = oks.length > 0 ? Math.max(...oks) : -Infinity
-  const quando = (d: Doc) => Date.parse(texto(d.data.atualizadoEm) ?? '') || 0
-  const achadas = docs.filter(d => d.data.estado === 'aberta' && (texto(d.data.titulo) ?? '').trim() === PEDIDO_TITULO && ids.includes(texto(d.data.sessaoId) ?? '') && quando(d) > okDoPainel)
-  const d = achadas.sort((a, b) => quando(b) - quando(a) || numero(b.id) - numero(a.id))[0]
-  if (!d) return null
-  const sessaoId = texto(d.data.sessaoId)
-
-  return {
-    id: d.id,
-    projeto: (texto(d.data.projeto) ?? '?').toLowerCase(),
-    sessao: texto(d.data.sessao) ?? '',
-    titulo: PEDIDO_TITULO,
-    versao: d.version,
-    opcoes: [],
-    sessaoId,
-    propria: proprio !== undefined && sessaoId === proprio,
-    caso: texto(d.data.caso),
-    recomendacao: texto(d.data.recomendacao),
-    seNaoDecidir: texto(d.data.seNaoDecidir),
-    item: texto(d.data.item),
-    atualizadoEm: texto(d.data.atualizadoEm),
-  }
-}
-
 /** As perguntas com `estado: "aberta"`, todas (o selo do pane conta igual). */
 export const abertasDoProjeto = (docs: Doc[]): number => docs.filter(d => d.data.estado === 'aberta').length
 
@@ -192,9 +152,6 @@ export function contarPool(docs: Doc[], projeto: string | null): { e: number; v:
   return { e: e.size, v: v.size }
 }
 
-export const mostraLimparAntes = (a: { ehOrquestradora: boolean; segundos: number | null; trabalhando: boolean; tokens: number | null }): boolean =>
-  a.ehOrquestradora && !a.trabalhando && a.segundos !== null && a.segundos >= 1 && a.segundos <= LIMPAR_ANTES_SEG && a.tokens !== null && a.tokens >= LIMPAR_ANTES_TOKENS
-
 // ---- a faixa de largura ----
 
 export type EstadoBarra = {
@@ -216,19 +173,16 @@ export type EstadoBarra = {
   trocando: boolean
   painelAberto: boolean
   moldura: boolean
-  /** O pedido de limpeza da orquestradora na barra: aberto, com o ok a caminho ou já enviado; `null` sem pedido. */
-  pedido: 'aberto' | 'enviando' | 'enviado' | null
-  /** O pedido é da própria sessão (a orquestradora): só aí o "quem pede" é óbvio e a frase encurta nas faixas 1 e 2. */
-  pedidoProprio: boolean
-  /** O botão `Limpar antes de vencer` (só sem pedido). */
-  limparAntes: boolean
+  /** Esta sessão é a orquestradora (título `🎛 orquestradora`): só nela há o botão de limpar. */
+  ehOrquestradora: boolean
+  /** O limpar já foi mandado e a limpeza ainda não apareceu na leitura. */
+  limpando: boolean
 }
 
 type Peca<K extends string> = { k: K; t: string }
 export type Pecas = {
   esq: Array<Peca<'relogio' | 'contexto' | 'item' | 'pool'>>
-  /** `pedido` é texto (a frase ou o `✓ ok enviado`); as demais são botões. */
-  dir: Array<Peca<'pedido' | 'limpar-pedido' | 'limpar-antes' | 'perguntas' | 'modo' | 'painel'>>
+  dir: Array<Peca<'perguntas' | 'limpar' | 'modo' | 'painel'>>
 }
 
 export const mil = (t: number) => Math.floor(t / 1000)
@@ -247,28 +201,27 @@ export function textoDoContexto(tokens: number, regua: Regua | null, janela: num
   return `${faixa === 0 ? 'contexto ' : ''}${numeros}${palavraDoContexto(tokens, regua)}`
 }
 
-export const rotuloDoSelo = (n: number) => `● ${n} ${n === 1 ? 'pergunta' : 'perguntas'}`
+export const rotuloDoSelo = (n: number) => `${GLIFO.perguntas.g} ${n} ${n === 1 ? 'pergunta' : 'perguntas'}`
+export const rotuloDoLimpar = (limpando: boolean) => `${GLIFO.limpar.g} ${limpando ? 'Limpando…' : 'Limpar'}`
 export const rotuloDoModo = (modo: 'presente' | 'ausente', trocando: boolean) =>
-  trocando ? (modo === 'ausente' ? 'Ligando…' : 'Desligando…') : modo === 'ausente' ? '☾ Estou de volta' : 'Ficar ausente'
-export const rotuloDoPainel = (aberto: boolean) => (aberto ? 'Fechar painel' : 'Abrir painel')
+  `${GLIFO.modo.g} ${trocando ? (modo === 'ausente' ? 'Ligando…' : 'Desligando…') : modo === 'ausente' ? 'Estou de volta' : 'Ficar ausente'}`
+export const rotuloDoPainel = (aberto: boolean) => `${GLIFO.painel.g} ${aberto ? 'Fechar painel' : 'Abrir painel'}`
+
+/** O botão de limpar em destaque: exatamente quando o contexto mostra `· limpar` (a régua do papel). */
+export const limparEmDestaque = (tokens: number | null, regua: Regua | null): boolean => tokens !== null && corDoContexto(tokens, regua) === 'teto'
 
 /** As peças de cada faixa (0 larga, 1 média, 2 estreita): o que cai quando aperta está decidido aqui, não no desenho. */
 export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
-  // Com o pedido (ou o "limpar antes") na barra, item e pool caem em toda faixa e o `Ficar ausente` já na 1.
-  const acao = e.pedido !== null || e.limparAntes
   const esq: Pecas['esq'] = [{ k: 'relogio', t: e.bloco ? ` ⧗ ${e.relogio} ` : `⧗ ${e.relogio}` }]
   if (e.tokens !== null) esq.push({ k: 'contexto', t: textoDoContexto(e.tokens, e.regua, e.janela, faixa) })
-  if (!acao && faixa < 2 && e.item) esq.push({ k: 'item', t: e.item })
-  if (!acao && faixa === 0 && e.pool) esq.push({ k: 'pool', t: e.pool })
+  if (faixa < 2 && e.item) esq.push({ k: 'item', t: e.item })
+  if (faixa === 0 && e.pool) esq.push({ k: 'pool', t: e.pool })
+  // Ordem da direita: selo → limpar → modo → painel. O limpar nunca cai; o modo ausente nunca cai; o presente cai na faixa 2.
   const dir: Pecas['dir'] = []
-  if (e.pedido === 'enviado') dir.push({ k: 'pedido', t: OK_ENVIADO })
-  else if (e.pedido !== null) {
-    dir.push({ k: 'pedido', t: faixa === 0 || !e.pedidoProprio ? FRASE_NA_BARRA : FRASE_CURTA_NA_BARRA })
-    dir.push({ k: 'limpar-pedido', t: e.pedido === 'enviando' ? ROTULO_ENVIANDO : ROTULO_LIMPAR })
-  } else if (e.limparAntes) dir.push({ k: 'limpar-antes', t: ROTULO_LIMPAR_ANTES })
   const selo = e.abertas > 0
   if (selo) dir.push({ k: 'perguntas', t: rotuloDoSelo(e.abertas) })
-  if (e.modo && (e.modo === 'ausente' ? true : acao ? faixa === 0 : faixa < 2)) dir.push({ k: 'modo', t: rotuloDoModo(e.modo, e.trocando) })
+  if (e.ehOrquestradora) dir.push({ k: 'limpar', t: rotuloDoLimpar(e.limpando) })
+  if (e.modo && (e.modo === 'ausente' ? true : faixa < 2)) dir.push({ k: 'modo', t: rotuloDoModo(e.modo, e.trocando) })
   if (faixa < 2 || !selo) dir.push({ k: 'painel', t: rotuloDoPainel(e.painelAberto) })
 
   return { esq, dir }
@@ -276,10 +229,10 @@ export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
 
 /** A largura que a faixa pede, com os textos reais: peça à esquerda com 2 de vão, botão com `[ ]` (+4), texto sem, a moldura +2. */
 export function larguraDaFaixa(e: EstadoBarra, faixa: 0 | 1 | 2): number {
-  // Com pedido a largura é a do repouso (frase + botão + o selo que o conta), também no `Enviando…` e no `✓ ok enviado`: a barra não se rearruma debaixo do clique, nem quando o ok zera as abertas.
-  const { esq, dir } = pecasDaBarra(e.pedido === null ? e : { ...e, pedido: 'aberto', abertas: Math.max(e.abertas, 1) }, faixa)
+  // O limpar conta sempre como `↺ Limpando…`: a barra não se rearruma debaixo do clique.
+  const { esq, dir } = pecasDaBarra({ ...e, limpando: true }, faixa)
   const ladoEsq = esq.reduce((n, p) => n + largura(p.t), 0) + 2 * (esq.length - 1)
-  const ladoDir = dir.reduce((n, p) => n + largura(p.t) + (p.k === 'pedido' ? 0 : 4), 0) + Math.max(0, dir.length - 1)
+  const ladoDir = dir.reduce((n, p) => n + largura(p.t) + 4, 0) + Math.max(0, dir.length - 1)
 
   return ladoEsq + 2 + ladoDir + 2 + (e.moldura ? 2 : 0)
 }
@@ -301,8 +254,8 @@ export type DadosDaBarra = {
   b: Barra
   modo: 'presente' | 'ausente' | null
   trocando: boolean
-  /** A pergunta cuja resposta está sendo enviada. */
-  enviandoQ: string | null
+  /** O limpar foi mandado e a limpeza ainda não apareceu. */
+  limpando: boolean
   painelAberto: boolean
   isWorking: boolean
   bodyColumns: number
@@ -313,8 +266,7 @@ export type AcoesDaBarra = {
   abrirPainel: () => void
   alternarPainel: () => void
   alternarModo: () => void
-  darOk: (limpeza: PerguntaAberta) => void
-  rascunho: () => void
+  limpar: () => void
 }
 
 export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra, acoes: AcoesDaBarra) {
@@ -322,9 +274,7 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
   const nivel = nivelDoCache(b.cache.segundos, d.isWorking)
   const lido = b.lidoEm !== null
   const regua = reguaDoPapel(b.titulo, modo === 'ausente')
-  // O pedido de limpeza vale para toda sessão do projeto e vence o "limpar antes de vencer" (que só a orquestradora vê).
-  const pedido: EstadoBarra['pedido'] = b.limpeza ? (b.okEnviado === b.limpeza.id ? 'enviado' : d.enviandoQ === b.limpeza.id ? 'enviando' : 'aberto') : null
-  const limparAntes = !b.limpeza && b.cache.segundos !== null && mostraLimparAntes({ ehOrquestradora: b.ehOrquestradora, segundos: b.cache.segundos, trabalhando: d.isWorking, tokens: b.tokens })
+  const destaque = limparEmDestaque(b.tokens, regua)
   const estado: EstadoBarra = {
     relogio: d.isWorking ? 'ativo' : relogio(b.cache.segundos),
     bloco: nivel === 'alerta' || nivel === 'venceu',
@@ -338,9 +288,8 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
     trocando,
     painelAberto,
     moldura: nivel !== null,
-    pedido,
-    pedidoProprio: b.limpeza?.propria ?? false,
-    limparAntes,
+    ehOrquestradora: b.ehOrquestradora,
+    limpando: d.limpando,
   }
   const faixa = faixaDaBarra(colunas, estado)
   const { esq, dir: direita } = pecasDaBarra(estado, faixa)
@@ -374,33 +323,25 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
   }
 
   const botaoDir = (p: Pecas['dir'][number]) => {
-    if (p.k === 'pedido') {
-      return (
-        <Text key="pedido">
-          <Text color={pedido === 'enviado' ? 'success' : 'warning'}>{p.t.slice(0, 1)}</Text>
-          {p.t.slice(1)}
-        </Text>
-      )
-    }
-    if (p.k === 'limpar-pedido' && b.limpeza) {
-      const lim = b.limpeza
-
-      return (
-        <Button key="limpar-pedido" variant="primary" onPress={() => acoes.darOk(lim)}>
-          {p.t}
-        </Button>
-      )
-    }
-    if (p.k === 'limpar-antes') {
-      return (
-        <Button key="limpar-antes" variant="secondary" onPress={acoes.rascunho}>
-          {p.t}
-        </Button>
-      )
-    }
     if (p.k === 'perguntas') {
       return (
         <Button key="perguntas" variant="secondary" onPress={acoes.abrirPainel}>
+          {p.t}
+        </Button>
+      )
+    }
+    if (p.k === 'limpar') {
+      // Na régua: primário e cheio; abaixo dela: secundário e apagado.
+      return (
+        <Button
+          key="limpar"
+         
+          variant={destaque ? 'primary' : 'secondary'}
+          dimColor={!destaque}
+          onPress={() => {
+            if (!d.limpando) acoes.limpar()
+          }}
+        >
           {p.t}
         </Button>
       )
@@ -409,6 +350,7 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
       return (
         <Button
           key="modo"
+         
           variant="secondary"
           dimColor={modo === 'presente'}
           onPress={() => {
@@ -438,35 +380,6 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
         <Box flexDirection="row" columnGap={1} flexGrow={1} flexWrap="wrap" justifyContent="flex-end">
           {dir.map(botaoDir)}
         </Box>
-      </Box>
-    </Box>
-  )
-}
-
-/** A faixa do topo do pane com o pedido de limpeza (mesma pergunta e mesmo botão da barra). */
-export function desenharPedidoNoPane(
-  { Box, Text, Button }: Elementos,
-  { limpeza, okEnviado, enviandoQ, agora }: { limpeza: PerguntaAberta | null; okEnviado: string | null; enviandoQ: string | null; agora: number },
-  darOk: (limpeza: PerguntaAberta) => void,
-) {
-  if (!limpeza) return null
-  const quando = desde(limpeza.atualizadoEm, agora)
-
-  return (
-    <Box key="pedido-de-limpeza" flexDirection="column" borderStyle="round" borderColor="warning" paddingX={1}>
-      <Text bold>
-        <Text color="warning">◆</Text>
-        {` ${FRASE_DO_PEDIDO}`}
-      </Text>
-      <Text dimColor>{quando ? `${limpeza.id} · ${quando}` : limpeza.id}</Text>
-      <Box flexDirection="row" justifyContent="flex-end">
-        {okEnviado === limpeza.id ? (
-          <Text color="success">✓ Ok enviado</Text>
-        ) : (
-          <Button key="limpar-pedido" variant="primary" onPress={() => darOk(limpeza)}>
-            {enviandoQ === limpeza.id ? ROTULO_ENVIANDO : ROTULO_LIMPAR}
-          </Button>
-        )}
       </Box>
     </Box>
   )

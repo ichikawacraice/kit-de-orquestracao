@@ -10,7 +10,7 @@
 //       (sem com, fez nem dono) e que não seja a última E livre do projeto (piso, ADR 0004); com ele ligado, só por pedido do operador no turno dele (Q277). Sempre membro do MESMO projeto ou de projeto sem orquestradora.
 //   T3  start_session: negado em turno que não é do operador com o modo ausente ligado (/ausente on) e a membro do pool.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava).
-//   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o sim do painel ou o da janela, F48/F53).
+//   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o botão de limpar da barra, o sim do painel ou o da janela, F48/F53/F147).
 //   T6  Bash `gh pr merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
 //   T8  Bash `painel … com add F<n> …` da orquestradora, item `F<n>` em `etapa: "validacao"` e máquina cheia (todas as fichas do teto
 //       tomadas ou carga ≥ núcleos, ADR 0005) → deny: a V testa logo ao começar. Item em `execucao` passa (a E escreve código antes de testar).
@@ -24,7 +24,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { registrar, lerEntrada, semPrefixoDoPlugin, modoAusente, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, membrosLivres, perguntasDeLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS, filaDir, maquinaCheia, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
+import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, membrosLivres, perguntasDeLimpeza, okDoBotaoDeLimpar, janelasDeLimpeza, SIM_DA_JANELA_MS, filaDir, maquinaCheia, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'papel-do-pool';
 const H = homedir();
@@ -186,6 +186,7 @@ function main() {
     let origem = null;
     try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
     if (origem === 'human') return libera('turno do operador');
+    if (okDoBotaoDeLimpar(reg?.localId)) return libera('botão da barra');
     const ok = perguntasDeLimpeza(reg?.localId).find((d) => d.estado === 'respondida' && d.respondidaPor === 'painel'
       && /^\s*sim/i.test(String(d.resposta ?? '')) && noPrazo(d.respondidaEm));
     if (ok) return libera('sim do painel');
@@ -196,7 +197,7 @@ function main() {
     const dif = (j) => Date.now() - j.respondidaEm;
     const ultima = janelas.filter((j) => Number.isFinite(j.respondidaEm)).sort((a, b) => b.respondidaEm - a.respondidaEm)[0];
     if (ultima && !ultima.recusada && typeof ultima.resposta === 'string' && /^\s*sim\b/i.test(ultima.resposta) && dif(ultima) >= -60_000 && dif(ultima) <= SIM_DA_JANELA_MS) return libera('sim da janela');
-    return nega('T7', 'orquestradora', alvoReal, 'Limpeza inteira só com o ok do operador (F48): ele pode estar lendo. Escreva o estado, abra a pergunta `limpar · orquestradora` (Q-ID, sessaoId, recomendação: limpar) e siga; limpe quando ele disser sim no chat, na janela ou no painel. Com o modo ausente ligado, pode.');
+    return nega('T7', 'orquestradora', alvoReal, 'Limpeza inteira só com o ok do operador (F48): ele pode estar lendo. Escreva o estado e siga; limpe quando ele mandar pelo botão `↺ Limpar` da barra (ou disser sim no chat), ou com o modo ausente ligado.');
   }
 
   if (tool === 'mcp__ccd_session__start_session') {

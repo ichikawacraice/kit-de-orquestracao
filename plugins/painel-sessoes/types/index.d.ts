@@ -114,8 +114,6 @@ export type Leitura = {
   sessoes?: SessaoViva[]
   /** A lista de sessões, ou a própria sessão, não veio: a situação de cada sessão é "sem leitura da sessão". */
   semLista?: boolean
-  /** O pedido de limpeza da orquestradora, achado nas perguntas e sessões desta leitura (a linha do topo do pane). */
-  limpeza?: PerguntaAberta | null
   /** As orquestradoras do painel (`papel: "orquestradora"`, estado fora de `concluida`), com o projeto em minúsculas: para onde vai o pedido de sessão. Ausente no estado de antes desta versão. */
   orquestradoras?: Array<{ id: string; projeto: string }>
   /** O modo ausente da última leitura; `null` = o arquivo não se leu (JSON inválido); ausente (undefined) antes da 1ª leitura e no estado de antes desta versão. */
@@ -131,10 +129,6 @@ export type Barra = {
   lidoEm: number | null
   /** As perguntas com `estado: "aberta"` (todas, como o selo do pane). */
   abertas: number
-  /** O pedido `limpar · orquestradora` aberto da orquestradora do projeto, o mais recente. */
-  limpeza: PerguntaAberta | null
-  /** O Q-ID cujo ok já foi enviado por esta barra; a linha diz "Ok enviado" até a leitura não ver mais a pergunta aberta. */
-  okEnviado: string | null
   /** Esta sessão é a orquestradora do projeto. */
   ehOrquestradora: boolean
   titulo: string | null

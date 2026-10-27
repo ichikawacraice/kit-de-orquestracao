@@ -164,6 +164,19 @@ export function perguntasDeLimpeza(localId) {
   return saida;
 }
 
+// O ok do botão de limpar da barra (F147): o clique grava <PAINEL_DIR>/../limpeza/<local_…>.json `{ "em": "<ISO>", "por": "barra" }` antes de
+// mandar o prompt (que chega com origem `plugin`, nunca `human`). Vale 30 min, nunca no futuro; só `por: "barra"`. Erro de leitura = `null`.
+const limpezaDir = () => join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), '..', 'limpeza');
+export function okDoBotaoDeLimpar(localId) {
+  if (!localId || !/^local_[\w-]+$/.test(localId)) return null;
+  try {
+    const d = JSON.parse(readFileSync(join(limpezaDir(), `${localId}.json`), 'utf8'));
+    const em = Date.parse(d?.em);
+    const dif = Date.now() - em;
+    return d?.por === 'barra' && Number.isFinite(em) && dif >= 0 && dif <= 30 * 60_000 ? { em } : null;
+  } catch { return null; }
+}
+
 // Janela de limpeza (F53): o operador responde à pergunta `limpar · orquestradora` pela janela (AskUserQuestion). Só o termo inteiro vale
 // (sem caixa, espaços em volta do `·` à vontade, seguido de `:`, `?`, `.`, `,`, espaço ou fim): `limpar · orquestradora-velha` não casa.
 export const SIM_DA_JANELA_MS = 30 * 60_000;

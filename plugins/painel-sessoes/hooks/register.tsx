@@ -3,7 +3,7 @@ import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { esperandoPapel } from './esperando'
 import type { Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, LEITURA_MS, RASCUNHO, RESPOSTA_DO_OK, abertasDoProjeto, contarPool, desenharBarra, desenharPedidoNoPane, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, perguntaDeLimpeza, relogio as relogioDoCache } from './barra'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, LEITURA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarPool, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache } from './barra'
 import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
 
@@ -904,14 +904,11 @@ async function ler($: EngineInterface): Promise<void> {
     const dono = q.item ? porId.get(q.item) : undefined
     if (dono) q.rotulo = `${dono.id} · ${dono.titulo}`
   }
-  const projetoDaLeitura = (await read($, barra)).projeto ?? (await projetoDoCwd($))
-  const limpeza = perguntaDeLimpeza(docsPerguntas, orquestradorasDoProjeto(docsSessoes, projetoDaLeitura), proprio, agora)
   const orquestradoras = docsSessoes
     .filter(d => d.data.papel === 'orquestradora' && d.data.estado !== 'concluida')
     .map(d => ({ id: texto(d.data.sessionId) ?? d.id, projeto: (texto(d.data.projeto) ?? '').toLowerCase() }))
   await update($, pedindo, p => podarPedidos(p, itens, agora))
   await update($, leitura, l => ({
-    limpeza,
     orquestradoras,
     avisos: l.avisos ?? [],
     lidoEm: agora,
@@ -951,7 +948,7 @@ let trocandoAgora = false
 /** Depois de um clique: com o pane aberto, a leitura dele; senão só a da barra (a leve, sem `list_sessions`). */
 async function relerDepoisDoClique($: EngineInterface): Promise<void> {
   if (deveFechar(await $.ui.panes())) await atualizar($)
-  else await lerBarra($, true)
+  else await lerBarra($)
 }
 
 /**
@@ -1124,8 +1121,6 @@ async function reabrir($: EngineInterface): Promise<void> {
 const BARRA_VAZIA: Barra = {
   lidoEm: null,
   abertas: 0,
-  limpeza: null,
-  okEnviado: null,
   ehOrquestradora: false,
   titulo: null,
   item: null,
@@ -1137,6 +1132,8 @@ const BARRA_VAZIA: Barra = {
   janela: null,
   erros: [],
 }
+/** Desde quando o limpar foi mandado e a limpeza ainda não apareceu (`null` = nenhum em curso). */
+export const limpando = atom({ plugin: 'painel-sessoes', key: 'limpando' } as const, null as number | null)
 export const barra = atom({ plugin: 'painel-sessoes', key: 'barra' } as const, BARRA_VAZIA)
 const barraEscondida = atom({ plugin: 'painel-sessoes', key: 'barraEscondida' } as const, false)
 
@@ -1146,7 +1143,6 @@ let timerRelogio: { cancel: () => void } | undefined
 let timerLeitura: { cancel: () => void } | undefined
 let timerBatida: { cancel: () => void } | undefined
 let lendoBarra = false
-let okEmCurso = false
 
 const nomeDaPasta = (p: string) => p.replace(/\/+$/, '').split('/').pop() ?? ''
 
@@ -1188,7 +1184,7 @@ async function tituloDoApp($: EngineInterface, home: string | undefined, id: str
 }
 
 /** Uma leitura por vez; falha vira linha em `erros`, nunca exceção solta. Só arquivos: o `list_sessions` fica para o pane aberto. */
-async function lerBarra($: EngineInterface, depoisDoClique = false): Promise<void> {
+async function lerBarra($: EngineInterface): Promise<void> {
   if (lendoBarra) return
   lendoBarra = true
   try {
@@ -1220,8 +1216,6 @@ async function lerBarra($: EngineInterface, depoisDoClique = false): Promise<voi
     const item = host ? meuItem(docsFila, host) : null
     const projeto = item?.projeto ?? (await projetoDoCwd($))
     const orquestradoras = orquestradorasDoProjeto(docsSessoes, projeto)
-    const agoraDaLeitura = await $.clock.now()
-    const pedida = perguntaDeLimpeza(docsPerguntas, orquestradoras, host, agoraDaLeitura)
     await atualizarModo($).catch(err => void erros.push(`modo ausente: ${mensagem(err)}`))
     let tokens: number | null = null
     let janelaDoModelo: number | null = null
@@ -1237,17 +1231,13 @@ async function lerBarra($: EngineInterface, depoisDoClique = false): Promise<voi
     const doSettings = home ? ((await $.fs.read(`${home}/.claude/settings.json`).catch(() => null)) as string | null) : null
     const janela = janelaDeCompactacao({ env: daEnv ?? undefined, settings: doSettings, modelo: janelaDoModelo })
     const agora = await $.clock.now()
+    const desdeLimpar = await read($, limpando)
+    if (desdeLimpar !== null && ((tokens !== null && tokens < LIMPANDO_ABAIXO_DE) || agora - desdeLimpar > LIMPANDO_MAX_MS)) await update($, limpando, () => null)
     await update($, barra, b => {
-      // Logo depois do clique, o pedido que acabou de ser respondido fica na tela para o "✓ Ok enviado"; a próxima leitura o tira.
-      const respondidaAgora = depoisDoClique && b.limpeza !== null && docsPerguntas.some(d => d.id === b.limpeza?.id && d.data.estado === 'respondida' && d.data.respondidaPor === 'painel')
-      const limpeza = pedida ?? (respondidaAgora ? b.limpeza : null)
-
       return {
         ...b,
         lidoEm: agora,
         abertas: abertasDoProjeto(docsPerguntas),
-        limpeza,
-        okEnviado: limpeza && limpeza.id === b.okEnviado ? b.okEnviado : null,
         ehOrquestradora: (host !== undefined && orquestradoras.includes(host)) || papelEApelido(titulo).papel === 'orquestradora',
         titulo,
         item: item ? { id: item.id, titulo: item.titulo, etapa: item.etapa } : null,
@@ -1288,26 +1278,41 @@ async function tiqueDoCache($: EngineInterface): Promise<void> {
   if (alvo > b.avisado) await avisarCache($, alvo === 2 ? 5 : 10)
 }
 
-/** O ok para a orquestradora se limpar: o `responder` do pane, que grava a prova do clique (`respondidaPor`, `respondidaEm`). */
-async function darOkDeLimpar($: EngineInterface, limpeza: PerguntaAberta): Promise<void> {
-  if (okEmCurso) return
-  okEmCurso = true
-  try {
-    const r = await responder($, limpeza, RESPOSTA_DO_OK, 'sim')
-    if (r.gravou) await update($, barra, b => ({ ...b, okEnviado: limpeza.id }))
-    else $.ui.toast(`Não consegui mandar o ok de limpar (${r.motivo ?? 'não gravou'}).`)
-  } finally {
-    okEmCurso = false
+/**
+ * O botão `↺ Limpar` (só na orquestradora): grava o ok que a T7 lê (`limpeza/<local_…>.json`, o prompt do mod chega com origem
+ * `plugin`, nunca `human`) e manda à própria sessão o prompt de limpar. Sem o arquivo, nada é enviado. O `Limpando…` aparece no
+ * mesmo render e segue até a leitura ver o contexto pequeno (ou 10 min); falha volta o botão na hora, com toast e aviso.
+ */
+async function limparPelaBarra($: EngineInterface): Promise<void> {
+  if ((await read($, limpando)) !== null) return
+  const desde = await $.clock.now()
+  await update($, limpando, () => desde)
+  const falhou = async (motivo: string) => {
+    await update($, limpando, () => null)
+    $.ui.toast(motivo)
+    await avisar($, motivo).catch(() => {})
   }
-}
-
-/** "Limpar antes de vencer" sem pedido aberto: só põe o rascunho na caixa do prompt; quem manda é o operador, com Enter. */
-async function rascunhoDeLimpar($: EngineInterface): Promise<void> {
   try {
-    const r = await $.prompt.fill({ text: RASCUNHO })
-    $.ui.toast(r.isFilled ? 'Rascunho na caixa do prompt: aperte Enter para mandar.' : 'Não deu para pôr o rascunho na caixa do prompt.')
+    const host = await sessaoDoApp($)
+    if (!host) return await falhou('Não consegui mandar a limpeza (sessão não identificada).')
+    const pasta = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/limpeza`
+    const arquivo = `${pasta}/${host}.json`
+    const conteudo = `${JSON.stringify({ em: new Date(desde).toISOString(), por: 'barra' })}\n`
+    try {
+      await $.fs.write(arquivo, conteudo)
+    } catch (erroDaEscrita) {
+      // A pasta pode não existir ainda: cria e tenta uma vez mais; se continuar falhando, o motivo é o da escrita.
+      try {
+        await $.process.run(['mkdir', '-p', pasta], { timeoutMs: SCRIPT_TIMEOUT_MS })
+        await $.fs.write(arquivo, conteudo)
+      } catch {
+        throw erroDaEscrita
+      }
+    }
+    const r = await $.prompt.submit({ text: PROMPT_DE_LIMPAR })
+    if (r.drop !== undefined) await falhou(`Não consegui mandar a limpeza (${r.drop || 'o prompt foi recusado'}).`)
   } catch (err) {
-    $.ui.toast(`Não deu para pôr o rascunho na caixa do prompt (${mensagem(err)}).`)
+    await falhou(`Não consegui mandar a limpeza (${mensagem(err)}).`)
   }
 }
 
@@ -1458,7 +1463,6 @@ function registrarBarra(on: On): void {
     if (e.props.hasSurvey || (await read($, barraEscondida))) return next(e)
     const l = await read($, leitura)
     const trocando = await read($, trocandoModo)
-    const emCurso = await read($, enviando)
     const elementos = $.ui.resolve(e)
     const painelAberto = deveFechar(await $.ui.panes())
     const modo = l.ausente === undefined || l.ausente === null ? null : l.ausente.ligado ? 'ausente' : 'presente'
@@ -1469,7 +1473,7 @@ function registrarBarra(on: On): void {
         b,
         modo,
         trocando,
-        enviandoQ: emCurso?.q ?? null,
+        limpando: (await read($, limpando)) !== null,
         painelAberto,
         isWorking: e.props.isWorking,
         bodyColumns: e.props.bodyColumns,
@@ -1479,8 +1483,7 @@ function registrarBarra(on: On): void {
         abrirPainel: () => void abrirPainel($),
         alternarPainel: () => void alternarPainel($),
         alternarModo: () => void alternarModo($),
-        darOk: limpeza => void darOkDeLimpar($, limpeza),
-        rascunho: () => void rascunhoDeLimpar($),
+        limpar: () => void limparPelaBarra($),
       },
     )
   })
@@ -1739,8 +1742,6 @@ export const register: Register = on => {
     const resumo4 = resumo.map(r => ({ ...r, cor: COR_RESUMO[r.cor] ?? 'm' }))
     const lido = l.lidoEm !== null
     const parada = leituraParada(l.lidoEm, agora)
-    // O pedido de limpeza da orquestradora: a mesma pergunta e o mesmo botão da barra, lidos do que ela leu.
-    const pedidoPane = desenharPedidoNoPane(elementos, { limpeza: l.limpeza ?? null, okEnviado: doBarra.okEnviado, enviandoQ: enviandoAgora?.q ?? null, agora }, limpeza => void darOkDeLimpar($, limpeza))
     const situacao = (localId: string) => situacaoDe(localId, l.sessoes ?? [], undefined, l.semLista ?? false, agora)
     const trabalhando = sec.executando.filter(i => pessoasVivas(i).some(p => situacao(p.localId) === 'trabalhando agora')).length
 
@@ -2003,7 +2004,6 @@ export const register: Register = on => {
               </Box>
             </Box>
             {linhaParou && <Svg source={linhaParou.source} alt={linhaParou.alt} width={W} height={linhaParou.height} />}
-            {pedidoPane}
             {faixaModo && <Svg source={faixaModo.source} alt={faixaModo.alt} width={W} height={faixaModo.height} />}
           </Box>
           <Svg source={cartaoResumo.source} alt={resumo4.map(r => `${r.n} ${r.rotulo}`).join(', ')} width={W} height={cartaoResumo.height} />
@@ -2178,7 +2178,6 @@ export const register: Register = on => {
               {botaoAtualizar(parada ? '⚠ ler' : l.lidoEm === null ? '↻ ler' : `↻ ${hora(l.lidoEm)}`, 'atualizar', { autoFocus: true })}
             </Box>
           </Box>
-          {pedidoPane}
           {modo === 'ausente' && (
             <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
               <Text inverse bold>{` ☾ AUSENTE ${modoDescrito(l.ausente?.desde, agora).ha} `}</Text>
