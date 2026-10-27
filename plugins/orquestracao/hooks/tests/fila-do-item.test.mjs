@@ -196,8 +196,8 @@ caso('9d item atualizado ENTRE o turno real (T1) e uma entrada isMeta SEM origem
 
 // ---- F27 fatia 3: a trava cobra o ITEM (donoLocalId + etapa), não o estado antigo ----
 const bloqueia = (data, msg) => { item('F27', data); registroLocal(LOCAL, SID); transcript(turno()); return rodar(stop()); };
-caso('F27-3a: item com dono e etapa "execucao", sem gravação no turno: bloqueia e manda gravar `agora`', () => {
-  const r = bloqueia({ etapa: 'execucao', tema: 'editor', donoLocalId: LOCAL, atualizadoEm: ANTES });
+caso('F27-3a: item com dono e etapa "planejamento", sem gravação no turno: bloqueia e manda gravar `agora`', () => {
+  const r = bloqueia({ etapa: 'planejamento', tema: 'editor', donoLocalId: LOCAL, atualizadoEm: ANTES });
   igual(r?.decision, 'block', 'decisão'); ok(r.reason.includes('F27'), `cita o ID: ${r.reason}`);
   ok(r.reason.includes('"agora"') && !r.reason.includes('"nota"'), `a mensagem manda gravar agora, não nota: ${r.reason}`);
 });
@@ -214,13 +214,47 @@ caso('F27-3c: documento antigo (estado em-andamento, sem etapa): bloqueia — co
 caso('F27-3d: estado "em-execucao" sem etapa: PASSA (o limite que existiu e que a migração elimina)', () => {
   igual(bloqueia({ estado: 'em-execucao', donoLocalId: LOCAL, atualizadoEm: ANTES }), null, 'passa');
 });
-caso('F27-3e: com etapa nova, o estado antigo que sobrou não decide (etapa feito + estado em-andamento passa; etapa execucao + estado feito bloqueia)', () => {
+caso('F27-3e: com etapa nova, o estado antigo que sobrou não decide (etapa feito + estado em-andamento passa; etapa planejamento + estado feito bloqueia)', () => {
   igual(bloqueia({ etapa: 'feito', estado: 'em-andamento', donoLocalId: LOCAL, atualizadoEm: ANTES }), null, 'feito vence');
   rmSync(join(filaDir(), 'F27.json'));
-  igual(bloqueia({ etapa: 'execucao', estado: 'feito', donoLocalId: LOCAL, atualizadoEm: ANTES })?.decision, 'block', 'execucao vence');
+  igual(bloqueia({ etapa: 'planejamento', estado: 'feito', donoLocalId: LOCAL, atualizadoEm: ANTES })?.decision, 'block', 'planejamento vence');
 });
 caso('F27-3f: item com dono e etapa, gravado DEPOIS do início do turno: passa', () => {
   igual(bloqueia({ etapa: 'validacao', donoLocalId: LOCAL, com: [{ apelido: 'V1' }], atualizadoEm: DEPOIS }), null, 'passa');
+});
+
+// ---- F153: a cobrança "grave neste turno" vale só onde a dona trabalha (planejamento, design e o legado) ----
+caso('F153-a: dona de item em execucao com E no com, sem gravar no turno: passa', () => {
+  igual(bloqueia({ etapa: 'execucao', donoLocalId: LOCAL, donoApelido: 'P1', com: [{ apelido: 'E1' }], atualizadoEm: ANTES }), null, 'passa');
+});
+caso('F153-b: dona de item em validacao com V no com, sem gravar no turno: passa', () => {
+  igual(bloqueia({ etapa: 'validacao', donoLocalId: LOCAL, donoApelido: 'P1', com: [{ apelido: 'V1' }], atualizadoEm: ANTES }), null, 'passa');
+});
+caso('F153-c: dona de item em merge, sem gravar no turno: passa', () => {
+  igual(bloqueia({ etapa: 'merge', donoLocalId: LOCAL, donoApelido: 'P1', atualizadoEm: ANTES }), null, 'passa');
+});
+caso('F153-d: dona de item em planejamento ou design, sem gravar no turno: continua bloqueada (a presença é detectada)', () => {
+  for (const etapa of ['planejamento', 'design']) {
+    rmSync(join(filaDir(), 'F27.json'), { force: true });
+    const r = bloqueia({ etapa, donoLocalId: LOCAL, donoApelido: 'P1', atualizadoEm: ANTES });
+    igual(r?.decision, 'block', `etapa ${etapa}`);
+    ok(r.reason.includes('não o atualizou neste turno'), `texto de ${etapa}: ${r.reason}`);
+  }
+});
+caso('F153-e: item em validacao SEM V no com e sem despacho no turno: bloqueia pela mensagem do semDespacho, não pela de "não o atualizou"', () => {
+  const r = bloqueia({ etapa: 'validacao', donoLocalId: LOCAL, donoApelido: 'P1', com: [{ apelido: 'P1' }], historico: [{ em: '2026-10-24T11:50:00.000Z', etapa: 'validacao', dono: 'P1' }], atualizadoEm: ANTES });
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('sem V no item'), `texto: ${r.reason}`);
+  ok(!r.reason.includes('não o atualizou neste turno'), `não cobra gravação: ${r.reason}`);
+});
+caso('F153-f: dona com dois itens, um em planejamento não gravado e um em execucao: a cobrança de gravação cita só o de planejamento', () => {
+  item('F20', { etapa: 'planejamento', donoLocalId: LOCAL, donoApelido: 'P1', atualizadoEm: ANTES });
+  item('F21', { etapa: 'execucao', donoLocalId: LOCAL, donoApelido: 'P1', com: [{ apelido: 'E1' }], atualizadoEm: ANTES });
+  registroLocal(LOCAL, SID);
+  transcript(turno());
+  const r = rodar(stop());
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('item F20 (em andamento)') && !r.reason.includes('F21'), `texto: ${r.reason}`);
 });
 
 const livreNoTurno = () => [...turno(), { type: 'assistant', uuid: 'a2', timestamp: '2026-10-24T12:01:00.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'mcp__ccd_session_mgmt__set_session_title', input: { session_id: 'self', title: 'P1 · livre' } }] } }];
@@ -248,7 +282,7 @@ caso('F32 A1: a dona que grava a linha de OUTRA sessão como livre continua cobr
   igual(desfechos().join(','), 'bloqueou', 'log');
 });
 caso('F32 M4: a dona fora do pool (orquestradora) que se declara livre continua cobrada: ninguém a solta', () => {
-  item('F12', { etapa: 'merge', donoLocalId: LOCAL, atualizadoEm: ANTES });
+  item('F12', { etapa: 'planejamento', donoLocalId: LOCAL, atualizadoEm: ANTES });
   writeFileSync(join(base, 'sessoes', 'conta', 'projeto', `${LOCAL}.json`), JSON.stringify({ sessionId: LOCAL, cliSessionId: SID, priorCliSessionIds: [], title: '🎛 orquestradora — x' }));
   transcript(linhaDeOutra(LOCAL));
   igual(rodar(stop())?.decision, 'block', 'decisão');
@@ -368,11 +402,14 @@ caso('F69-V1b: item em planejamento entregue pela P: o texto diz a próxima etap
   ok(r.reason.includes('F58: a P entregou; avance a etapa (design ou execucao)'), `texto: ${r.reason}`);
   ok(!r.reason.includes('undefined'), `sem undefined: ${r.reason}`);
 });
-caso('F58-4g: item com E no com não é cobrado; as duas faltas (não gravou + espera) saem na mesma razão', () => {
+caso('F58-4g: item com E no com não é cobrado; sem E no com, só a espera é cobrada (a gravação por turno não vale em execução, F153)', () => {
   igual(esperando(turno(), esperaE({ com: [{ apelido: 'P1' }, { apelido: 'E1' }] })), null, 'com E passa');
   rmSync(join(filaDir(), 'F58.json'));
   const r = esperando(turno(), esperaE({ atualizadoEm: ANTES }));
-  ok(r.reason.includes('não o atualizou neste turno') && r.reason.includes('sem nenhuma E no item'), `as duas faltas: ${r.reason}`);
+  ok(r.reason.includes('sem nenhuma E no item') && !r.reason.includes('não o atualizou neste turno'), `só a espera: ${r.reason}`);
+  rmSync(join(filaDir(), 'F58.json'));
+  const duas = esperando(turno(), planejando({ atualizadoEm: ANTES }));
+  ok(duas.reason.includes('não o atualizou neste turno'), `em planejamento a gravação ainda é cobrada: ${duas.reason}`);
 });
 
 caso('F58-4h: item entregue pela E: a dona é cobrada a avançar a etapa, não a despachar', () => {

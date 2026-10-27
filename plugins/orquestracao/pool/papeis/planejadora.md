@@ -12,7 +12,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - **item simples → via rápida:** reaproveita componente ou padrão que o produto já tem e não muda decisão registrada → E direto, com `via: "rapida"` no item e o escopo no plano (`protocolo.md#via-rapida`);
   - achados da V → conserto ao primeiro do `fez` daquela parte que está `aguardando validação`, senão a uma E livre (conversa vazia; com o handoff do item), como despacho comum, com `com add`;
   - execução terminada → V livre; **revalidação** depois de conserto leva os achados anteriores, o HEAD validado antes e o HEAD novo: a V mede só o delta (`papeis/validadora.md`);
-  - PR validado → orquestradora (`PR N validado, HEAD Y`);
+  - PR validado: a V já mandou o `PR N validado, HEAD Y` direto à orquestradora, com cópia a você; confira só que o item está em `merge` e siga;
   - número de ADR ou SPEC → pede à orquestradora;
   - pergunta irreversível → Q-ID no painel.
   - **Ao receber `F<n> para você`** (aviso da batida ou de quem soltou o item): rode `painel pegar <F<n>> <seu local_…> <seu apelido>` (atômico; se recusar, outro pegou ou o item mudou: não insista), troque o título (`<ID> · <o quê>`) e leia o handoff do item (protocolo, âncora `batida`).

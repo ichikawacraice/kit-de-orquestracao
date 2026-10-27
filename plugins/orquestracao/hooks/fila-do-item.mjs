@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Stop hook da fila do pool (estudo de 24/10, passo 3): a sessão que é DONA de um item vivo da fila
 // (coleção `fila` do painel: `donoLocalId` e `etapa` fora de feito/descartado) não termina o turno sem ter
-// gravado algo nele neste turno. Item ainda sem `etapa` (documento não migrado) vale pelo critério antigo,
+// gravado algo nele neste turno — só em planejamento e design, onde ela trabalha (F153: das 389 cobranças medidas em
+// 27/10, 216 eram em execução/validação/merge, com a dona só esperando; a cobrança de despacho segue em todas as etapas).
+// Item ainda sem `etapa` (documento não migrado) vale pelo critério antigo,
 // `estado === 'em-andamento'`; `estado: 'em-execucao'` sem `etapa` NÃO é visto (o limite que a migração eliminou).
 //
 // "Dona" = o `local_…` da sessão (registro do app, achado pelo cliSessionId ou pelos priorCliSessionIds)
@@ -49,6 +51,7 @@ function registrar(sessionId, localId, desfecho, detalhe = '') {
 
 const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'feito', 'descartado'];
 const ETAPAS_FINAIS = ['feito', 'descartado'];
+const ETAPAS_DA_DONA = ['planejamento', 'design'];
 
 // Itens da fila que têm dono e estão vivos: [{ id, dono, atualizadoEm, etapa, data }].
 function itensComDono() {
@@ -174,7 +177,10 @@ function main() {
   try { solta = Boolean(vaiSoltar(tp, inicio, { sessionId: sid, localId: local, titulo: reg.titulo })); } catch { /* segue cobrando */ }
   if (solta) return registrar(sid, local, 'livre-no-turno', meus.map((i) => i.id).join(','));
 
+  // F153: a gravação por turno só é cobrada onde a dona trabalha (planejamento, design e o legado sem etapa); em
+  // execução, validação e merge quem trabalha é a E/V do `com`, e o item parado é da batida.
   const pendentes = meus.filter((i) => {
+    if (i.etapa !== null && !ETAPAS_DA_DONA.includes(i.etapa)) return false;
     const t = Date.parse(i.atualizadoEm);
     return Number.isNaN(t) || t < inicio;
   });
