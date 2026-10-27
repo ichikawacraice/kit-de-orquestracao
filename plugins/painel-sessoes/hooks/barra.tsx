@@ -15,7 +15,7 @@ export const BANDEIRA_DO_APP = 'Library/Application Support/Claude/claude-code-s
 
 /** O que o clique de limpar manda à própria sessão (o prompt chega com origem `plugin`; o ok que a T7 lê é o arquivo gravado antes). */
 export const PROMPT_DE_LIMPAR = 'O operador mandou limpar pelo botão da barra: grave o estado (handoff do que estiver aberto) e limpe-se com clear_session "self".'
-/** O `Limpando…` segue até a leitura ver o contexto abaixo disto, ou até `LIMPANDO_MAX_MS`. */
+/** O `Limpando…` segue até a leitura ver o contexto abaixo disto e, se o clique já foi abaixo disto, abaixo da metade do que era no clique (senão a leitura apagaria o aviso antes da limpeza), ou até `LIMPANDO_MAX_MS`. */
 export const LIMPANDO_ABAIXO_DE = 150_000
 export const LIMPANDO_MAX_MS = 10 * 60_000
 /**

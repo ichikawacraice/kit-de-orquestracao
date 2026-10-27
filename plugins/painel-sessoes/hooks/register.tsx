@@ -1182,7 +1182,7 @@ const BARRA_VAZIA: Barra = {
   erros: [],
 }
 /** Desde quando o limpar foi mandado e a limpeza ainda não apareceu (`null` = nenhum em curso). */
-export const limpando = atom({ plugin: 'painel-sessoes', key: 'limpando' } as const, null as number | null)
+export const limpando = atom({ plugin: 'painel-sessoes', key: 'limpando' } as const, null as { desde: number; tokens: number | null } | null)
 export const barra = atom({ plugin: 'painel-sessoes', key: 'barra' } as const, BARRA_VAZIA)
 const barraEscondida = atom({ plugin: 'painel-sessoes', key: 'barraEscondida' } as const, false)
 
@@ -1281,7 +1281,7 @@ async function lerBarra($: EngineInterface): Promise<void> {
     const janela = janelaDeCompactacao({ env: daEnv ?? undefined, settings: doSettings, modelo: janelaDoModelo })
     const agora = await $.clock.now()
     const desdeLimpar = await read($, limpando)
-    if (desdeLimpar !== null && ((tokens !== null && tokens < LIMPANDO_ABAIXO_DE) || agora - desdeLimpar > LIMPANDO_MAX_MS)) await update($, limpando, () => null)
+    if (desdeLimpar !== null && ((tokens !== null && tokens < LIMPANDO_ABAIXO_DE && (desdeLimpar.tokens === null || desdeLimpar.tokens >= LIMPANDO_ABAIXO_DE || tokens < desdeLimpar.tokens / 2)) || agora - desdeLimpar.desde > LIMPANDO_MAX_MS)) await update($, limpando, () => null)
     await update($, barra, b => {
       return {
         ...b,
@@ -1335,7 +1335,8 @@ async function tiqueDoCache($: EngineInterface): Promise<void> {
 async function limparPelaBarra($: EngineInterface): Promise<void> {
   if ((await read($, limpando)) !== null) return
   const desde = await $.clock.now()
-  await update($, limpando, () => desde)
+  const tokensNoClique = (await read($, barra)).tokens
+  await update($, limpando, () => ({ desde, tokens: tokensNoClique }))
   const falhou = async (motivo: string) => {
     await update($, limpando, () => null)
     $.ui.toast(motivo)
