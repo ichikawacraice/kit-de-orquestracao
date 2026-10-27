@@ -170,8 +170,13 @@ export function testesQueFalharam(texto, conhecidos) {
     const tap = falhou && /^\s*location:\s*'(.+?):\d+:\d+'/.exec(l);
     if (tap) { caminhos.push(tap[1]); falhou = false; }
   }
-  const limpos = caminhos.map((c) => c.replace(/^file:\/\//, ''));
-  return conhecidos.filter((t) => limpos.some((c) => c === t || c.endsWith(`/${t}`)));
+  // cada caminho casa só o conhecido de sufixo mais longo (`t/a.test.mjs` não arrasta um `a.test.mjs` da raiz)
+  const achados = new Set();
+  for (const c of caminhos.map((x) => x.replace(/^file:\/\//, ''))) {
+    const casa = conhecidos.filter((t) => c === t || c.endsWith(`/${t}`)).sort((x, y) => y.length - x.length)[0];
+    if (casa) achados.add(casa);
+  }
+  return conhecidos.filter((t) => achados.has(t));
 }
 
 const pastaDoKit = (env) => env.HOOKS_CREWAI_BASE || join(env.HOME || homedir(), '.claude', 'orquestracao');
@@ -182,7 +187,8 @@ function nomeDoRepo(cwd) {
 
 // O gate da fila ficou vermelho no PR: os testes que falharam no `log` estavam na seleção da dona no `sha`?
 // → o registro gravado: `acerto` true (todos estavam), false (`perdidos` diz quais não) ou null (nenhum teste lido do log).
-export function registrarAcerto({ cwd, pr, sha, base, log, env = process.env }) {
+export function registrarAcerto({ cwd: pedido, pr, sha, base, log, env = process.env }) {
+  const cwd = git(['rev-parse', '--show-toplevel'], pedido).trim(); // de uma subpasta, o ls-tree listaria só ela
   const ref = primeiraRef(cwd, [`origin/${base}`, base]);
   const s = selecao({ cwd, base: ref, sha });
   let texto = '';

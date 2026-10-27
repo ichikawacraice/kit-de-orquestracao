@@ -66,7 +66,7 @@ function montar() {
   ctx.painel = (...args) => {
     const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
       cwd: clone, encoding: 'utf8', timeout: 120000, killSignal: 'SIGKILL',
-      env: { ...process.env, ...ENV_GIT, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), CLAUDE_CODE_SESSION_ID: '', GH_BIN: gh, GH_ESTADO: estado, GH_LOG: log },
+      env: { ...process.env, ...ENV_GIT, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), HOOKS_CREWAI_BASE: '', CLAUDE_CODE_SESSION_ID: '', GH_BIN: gh, GH_ESTADO: estado, GH_LOG: log },
     });
     assert.ok(!r.error, String(r.error));
     return { exit: r.status, out: r.stdout, err: r.stderr };

@@ -162,6 +162,8 @@ test('testes que falharam: lidos do relatório spec e do TAP, só os arquivos de
   assert.deepEqual(testesQueFalharam(SPEC, conhecidos), ['t/a.test.mjs', 't/b.test.mjs']);
   assert.deepEqual(testesQueFalharam(TAP, conhecidos), ['t/b.test.mjs'], 'o `ok` do a.test não conta');
   assert.deepEqual(testesQueFalharam('erro de sintaxe no gate\n', conhecidos), []);
+  // mesmo nome na raiz e numa pasta: só o de sufixo mais longo
+  assert.deepEqual(testesQueFalharam('test at /tmp/arvore/t/a.test.mjs:1:1\n', ['a.test.mjs', 't/a.test.mjs']), ['t/a.test.mjs']);
 });
 
 test('acerto: falhou um teste da seleção → acerto; falhou um de fora → erro, com o teste perdido; sem teste lido → indeterminado', () => {
@@ -172,6 +174,9 @@ test('acerto: falhou um teste da seleção → acerto; falhou um de fora → err
     writeFileSync(log, 'test at /tmp/x/arvore/t/a.test.mjs:1:1\n');
     const a = registrarAcerto({ cwd: c.r, pr: 7, sha: c.sha, base: 'main', log, env: { HOOKS_CREWAI_BASE: base } });
     assert.equal(a.acerto, true);
+    // de uma subpasta do repo, a mesma seleção
+    const sub = registrarAcerto({ cwd: join(c.r, 'src'), pr: 7, sha: c.sha, base: 'main', log, env: { HOOKS_CREWAI_BASE: join(c.raiz, 'outra') } });
+    assert.deepEqual([sub.acerto, sub.selecao], [true, ['t/a.test.mjs']]);
     writeFileSync(log, 'test at t/b.test.mjs:1:1\n');
     const e = registrarAcerto({ cwd: c.r, pr: 8, sha: c.sha, base: 'main', log, env: { HOOKS_CREWAI_BASE: base } });
     assert.equal(e.acerto, false);
