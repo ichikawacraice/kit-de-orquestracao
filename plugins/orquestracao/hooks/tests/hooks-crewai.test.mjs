@@ -235,6 +235,33 @@ caso('2.10b executora do pool (`E3 · …` no registro do app) é cobrada; `P3 �
   if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { session_id: E3 }), { POOL_APP_SESSOES_DIR: app }))) throw new Error('E3 não cobrada');
   igual(rodar('executor-criterio.mjs', stop(f, { session_id: P3 }), { POOL_APP_SESSOES_DIR: app }), null, 'P3');
 });
+caso('2.10c dona de item `via: "dona"` em execução, validação ou merge é cobrada; em planejamento, ou de item do pool, não', () => {
+  const app = join(base, 'app'); mkdirSync(app);
+  const fila = join(base, 'fila'); mkdirSync(fila);
+  const reg = (sessionId, titulo) => writeFileSync(join(app, `local_${sessionId}.json`), JSON.stringify({ sessionId: `local_${sessionId}`, cliSessionId: sessionId, priorCliSessionIds: [], title: titulo, isArchived: false }));
+  const item = (id, data) => writeFileSync(join(fila, `${id}.json`), JSON.stringify({ id, version: 1, data: { titulo: id, ...data } }));
+  const DE = 'dddddddd-0000-0000-0000-000000000001'; const DV = 'dddddddd-0000-0000-0000-000000000002';
+  const DM = 'dddddddd-0000-0000-0000-000000000005';
+  const DP = 'dddddddd-0000-0000-0000-000000000003'; const PO = 'dddddddd-0000-0000-0000-000000000004';
+  for (const s of [DE, DV, DM, DP, PO]) reg(s, 'F9 · tema qualquer');
+  item('F1', { etapa: 'execucao', via: 'dona', donoLocalId: `local_${DE}` });
+  item('F2', { etapa: 'validacao', via: 'dona', donoLocalId: `local_${DV}` });
+  item('F5', { etapa: 'merge', via: 'dona', donoLocalId: `local_${DM}` });
+  item('F3', { etapa: 'planejamento', via: 'dona', donoLocalId: `local_${DP}` });
+  item('F4', { etapa: 'execucao', donoLocalId: `local_${PO}` });
+  const env = { POOL_APP_SESSOES_DIR: app, FILA_DIR: fila };
+  const f = transcript([...trabalho(), fala('Pronto, tudo verde.')]);
+  // Precondição: os cinco itens existem e a sessão que não é dona de nada não é cobrada (o negativo mede algo).
+  igual(['F1', 'F2', 'F3', 'F4', 'F5'].every((id) => existsSync(join(fila, `${id}.json`))), true, 'itens gravados');
+  if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { session_id: DE }), env))) throw new Error('dona em execução não cobrada');
+  if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { session_id: DV }), env))) throw new Error('dona em validação não cobrada');
+  if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { session_id: DM }), env))) throw new Error('dona em merge (conserto) não cobrada');
+  igual(rodar('executor-criterio.mjs', stop(f, { session_id: DP }), env), null, 'dona em planejamento');
+  igual(rodar('executor-criterio.mjs', stop(f, { session_id: PO }), env), null, 'dono de item do pool');
+  // Com a saída real colada, a dona passa.
+  const ok = transcript([...trabalho(), usa('Bash', { command: 'npm test; echo "exit=$?"' }, 't9'), resultado('t9', '# pass 12\nexit=0'), fala('Testes afetados verdes: exit=0.')]);
+  igual(rodar('executor-criterio.mjs', stop(ok, { session_id: DE }), env), null, 'dona com exit=0');
+});
 caso('2.11 sessão --agent executor (agent_type sem agent_id) é cobrada', () => {
   const f = transcript([...trabalho(), fala('Pronto.')]);
   if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { agent_type: 'executor' })))) throw new Error('não cobrou');

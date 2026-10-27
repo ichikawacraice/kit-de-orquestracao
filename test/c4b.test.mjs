@@ -208,7 +208,7 @@ describe('baixos — modelo e prosa', () => {
     assert.doesNotMatch(bloco, /Processo filho de teste é síncrono/);
   });
   it('"commit em português" não é regra do modelo: vira campo a preencher no bloco projeto', () => {
-    const operacao = modelo.match(/<!-- kit:regras-de-operacao v1 -->[\s\S]*?<!-- \/kit:regras-de-operacao -->/)?.[0] ?? '';
+    const operacao = modelo.match(/<!-- kit:regras-de-operacao v\d+ -->[\s\S]*?<!-- \/kit:regras-de-operacao -->/)?.[0] ?? '';
     assert.ok(operacao.length > 100);
     assert.doesNotMatch(operacao, /português/i);
     const projeto = modelo.match(/<!-- kit:projeto v1 -->[\s\S]*?<!-- \/kit:projeto -->/)?.[0] ?? '';

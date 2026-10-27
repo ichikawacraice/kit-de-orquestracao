@@ -7,19 +7,23 @@ As seções marcadas `kit:` são do kit de orquestração: o `kit atualizar` tro
 <!-- preencher: o que é, para quem, stack, pastas principais, idioma e formato dos commits (ex.: convencional) -->
 <!-- /kit:projeto -->
 
-<!-- kit:comandos v2 -->
+<!-- kit:comandos v3 -->
 ## Comandos
 Lidos de `.claude/kit.json`:
-- **Gate completo** (`gate.comandoCompleto`): roda antes de empurrar; só um gate por vez na máquina.
+- **Gate completo** (`gate.comandoCompleto`): roda uma vez, na fila de merge da orquestradora, sobre a combinação dos PRs; sem orquestradora, antes de empurrar. Só um gate por vez na máquina.
+- **Testes afetados** (durante o trabalho): `testes-afetados -- node scripts/kit/com-fichas.mjs -- <comando de teste>` (sem `--`, só lista o que a branch tocou).
 - **Teste parcial** (`gate.comandoPorPacote`): só o pacote que o diff toca.
 - **Typecheck** (`gate.typecheck`), se o projeto tiver.
 - **Teste isolado:** `node scripts/kit/com-fichas.mjs -- <comando>` (teto de núcleos da máquina, somando todas as sessões; o gate completo tem faixa e vez próprias).
 <!-- /kit:comandos -->
 
-<!-- kit:regras-de-operacao v1 -->
+<!-- kit:regras-de-operacao v2 -->
 ## Regras de operação
-- Um gate por vez; gate verde sobre a mesma árvore não se repete (o verde é guardado pela árvore exata).
-- Rebase em vez de merge commit; PR sempre com o rebase em dia sobre a branch de integração do projeto.
+- **Uma sessão dona por item, do plano ao PR:** ela planeja, escreve, testa, revisa e abre o PR. Título da sessão: `F<n> · <tema em palavras do produto>`. Modelo pelo risco: Opus para item com decisão, contrato, estado gravado, segurança ou produção; Sonnet para item mecânico com o plano escrito.
+- **Revisão por subagente** `orquestracao:validador` de contexto limpo antes do PR: só achados que afetam correção; o leve vai ao PR ou ao `depois` do item, nunca vira item.
+- **Durante o trabalho, só os testes afetados;** o gate completo roda uma vez, na fila de merge da orquestradora. Um gate por vez; gate verde sobre a mesma árvore não se repete (o verde é guardado pela árvore exata).
+- **A dona mantém o próprio item no painel** a cada passo (`agora`, etapa, PR); a orquestradora grava ao abrir a dona e ao mergear.
+- **Ninguém rebaseia por merge alheio:** a fila devolve à dona só o conflito real ou o gate vermelho. Rebase em vez de merge commit quando rebasear.
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
 <!-- /kit:regras-de-operacao -->
 
@@ -65,9 +69,9 @@ Vale para o projeto que tem front. As pastas e os globs de tela vêm de `.claude
 - O defeito não pode falhar como o que ele é: o teste vermelho falha pelo motivo certo.
 <!-- /kit:convencoes-de-teste -->
 
-<!-- kit:orquestradora v1 -->
+<!-- kit:orquestradora v2 -->
 ## Orquestradora
-- Com uma sessão `🎛 orquestradora — <projeto>` ativa, só ela mergeia, faz release e reserva números de documento; as demais sessões abrem PR e mandam o número a ela.
-- Sem orquestradora ativa, mergeie normalmente.
+- Com uma sessão `🎛 orquestradora — <projeto>` ativa, só ela abre as sessões donas, mergeia (é a fila de merge), faz release e reserva números de documento; a dona abre o PR, sem subir versão, e manda a ela `PR N pronto, HEAD <sha>`.
+- Sem orquestradora ativa, mergeie normalmente, com o gate completo antes de empurrar.
 - O estado do pool (painel, fila, contadores) mora em `~/.claude/orquestracao/`, não neste repositório.
 <!-- /kit:orquestradora -->

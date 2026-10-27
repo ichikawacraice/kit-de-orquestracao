@@ -3,6 +3,7 @@
 // (coleção `fila` do painel: `donoLocalId` e `etapa` fora de feito/descartado) não termina o turno sem ter
 // gravado algo nele neste turno — só em planejamento e design, onde ela trabalha (F153: das 389 cobranças medidas em
 // 27/10, 216 eram em execução/validação/merge, com a dona só esperando; a cobrança de despacho segue em todas as etapas).
+// Item da dona do item inteiro (`via: "dona"`, ADR 0011): em qualquer etapa viva, só no turno que mudou algo (F179).
 // Item ainda sem `etapa` (documento não migrado) vale pelo critério antigo,
 // `estado === 'em-andamento'`; `estado: 'em-execucao'` sem `etapa` NÃO é visto (o limite que a migração eliminou).
 //
@@ -118,6 +119,24 @@ function inicioDoTurno(transcriptPath) {
   return null;
 }
 
+// F179: o turno da dona do item inteiro (`via: "dona"`) que MUDOU algo — editou arquivo, commitou, empurrou ou abriu/editou PR —
+// a partir do início do turno. É nesse turno que ela grava o item (`agora`, etapa, PR); o turno que só leu ou esperou não é cobrado.
+const EDITA = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
+const BASH_MUDA = /\bgit\s+(?:-C\s+\S+\s+)?(commit|push)\b|\b(sed|perl)\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*i\b|\bgh\s+pr\s+(create|edit|ready)\b/;
+function mudouNoTurno(transcriptPath, inicio) {
+  for (const l of readFileSync(transcriptPath, 'utf8').split('\n')) {
+    if (!l) continue;
+    let e;
+    try { e = JSON.parse(l); } catch { continue; }
+    if (e.type !== 'assistant' || !Array.isArray(e.message?.content) || !(Date.parse(e.timestamp) >= inicio)) continue;
+    for (const b of e.message.content) {
+      if (b?.type !== 'tool_use') continue;
+      if (EDITA.has(b.name) || (b.name === 'Bash' && BASH_MUDA.test(String(b.input?.command ?? '')))) return true;
+    }
+  }
+  return false;
+}
+
 // F58 (D4): a dona de item esperando o papel da etapa não termina o turno sem ter, DEPOIS do `desde` da espera, rodado
 // `painel com add <F>` ou mandado mensagem (SendMessage / send_message) que cite o `F<n>`. Procura no transcript inteiro.
 function despachos(transcriptPath) {
@@ -179,9 +198,13 @@ function main() {
 
   // F153: a gravação por turno só é cobrada onde a dona trabalha (planejamento, design e o legado sem etapa); em
   // execução, validação e merge quem trabalha é a E/V do `com`, e o item parado é da batida.
+  // F179: a dona do item inteiro (ADR 0011) não é cobrada a cada turno, só no que mudou algo, em qualquer etapa viva.
+  let mudou = null;
   const pendentes = meus.filter((i) => {
-    if (i.etapa !== null && !ETAPAS_DA_DONA.includes(i.etapa)) return false;
-    if (i.data?.via === 'dona') return false; // ADR 0011: a dona do item inteiro grava quando a etapa muda, não a cada turno
+    if (i.data?.via === 'dona') {
+      if (mudou === null) mudou = mudouNoTurno(tp, inicio);
+      if (!mudou) return false;
+    } else if (i.etapa !== null && !ETAPAS_DA_DONA.includes(i.etapa)) return false;
     const t = Date.parse(i.atualizadoEm);
     return Number.isNaN(t) || t < inicio;
   });
