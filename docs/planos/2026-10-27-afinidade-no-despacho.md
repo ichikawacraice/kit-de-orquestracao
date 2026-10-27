@@ -63,7 +63,7 @@ como executar. Tudo marcado *assumida, a confirmar* é reversível e barato.
 | `plugins/orquestracao/skills/orquestradora/scripts/painel.mjs` | `passaram` gravado por `com add` e `pegar`, recusado na CLI (A1); comando `seguinte` (A5, A6); cabeçalho do script |
 | `plugins/orquestracao/skills/orquestradora/scripts/batida.mjs` | `afimDe(item, papel, itens, linhas, projetoDe)` puro (A2); `julgar` com A4; `AFINIDADE_MIN` |
 | `plugins/orquestracao/hooks/contexto-do-papel.mjs` | exportar as réguas (`EXEC`, `ALTO`, hoje constantes locais) para o `seguinte` ler dali |
-| `plugins/orquestracao/hooks/pool-comum.mjs` | exportar `transcriptDe`; função `transcriptDoLocal(localId)` (registro → `cliSessionId` → transcript) |
+| `plugins/orquestracao/hooks/pool-comum.mjs` | exportar `transcriptDe`; função `transcriptDoLocal(localId)`: varre o registro do app sem cache (o `cliSessionId` muda a cada limpeza) e lê o `cliSessionId` direto do JSON (o `registroDaSessao` não o devolve), depois `transcriptDe` |
 | `plugins/orquestracao/pool/papeis/{planejadora,design,executora,validadora}.md` | "Ao terminar": `painel seguinte` antes do livre |
 | `plugins/orquestracao/pool/protocolo.md` | "Ao terminar um item" e "Fila do pool": `passaram`, afinidade, `seguinte` |
 | `plugins/orquestracao/skills/orquestradora/SKILL.md` | o despacho à mão segue a mesma afinidade (dar ao afim ocupado em vez do primeiro livre, dentro do prazo) |
