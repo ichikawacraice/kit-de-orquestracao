@@ -1106,7 +1106,7 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|batida|mergear|handoffs … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|seguinte|batida|mergear|handoffs … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
   return (cmd === 'pegar' || cmd === 'mergear') && saida.recusado ? 1 : 0;
