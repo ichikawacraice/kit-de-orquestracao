@@ -12,9 +12,14 @@ import { fileURLToPath } from 'node:url';
 // as pastas livres da trava (caso 4.5) incluem /tmp, então um HOME ali dá falso vermelho (o que devia ser negado passa).
 // Mesma regra de LIVRES das travas (`/tmp`, `/var/folders` e tmpdir): HOME nesses caminhos faz passar o que deve ser negado.
 const CAI_NOS_LIVRES = (p) => /^\/(private\/)?tmp\//.test(`${p}/`) || `${p}/`.startsWith('/var/folders/') || `${p}/`.startsWith('/private/var/folders/') || `${p}/`.startsWith(`${realpathSync(tmpdir())}/`);
-// Procura onde criar o HOME fora dos LIVRES: primeiro ao lado do teste, depois no HOME do usuário (checkout sob /tmp).
+// Procura onde criar o HOME fora dos LIVRES: primeiro em `.tmp-testes/` na raiz do checkout, depois no HOME do usuário (checkout sob /tmp ou fora do git).
+// Nunca ao lado do teste: c5, c14 e hooks-json copiam `hooks/` inteira e o cli.test varre `hooks/tests`, e um HOME que some no meio da cópia derruba quem copia.
+function raizDoGit(d) {
+  for (let p = d; ; p = dirname(p)) { if (existsSync(join(p, '.git'))) return p; if (dirname(p) === p) return null; }
+}
 function criarHomeDoTeste(candidatas, prefixo) {
-  for (const base of candidatas) {
+  for (const base of candidatas.filter(Boolean)) {
+    mkdirSync(base, { recursive: true });
     if (CAI_NOS_LIVRES(realpathSync(base))) continue;
     const h = mkdtempSync(join(base, prefixo));
     if (!CAI_NOS_LIVRES(realpathSync(h))) return h;
@@ -22,7 +27,8 @@ function criarHomeDoTeste(candidatas, prefixo) {
   }
   throw new Error(`precondição: não achei pasta fora das livres da trava (/tmp, /var/folders, ${realpathSync(tmpdir())}) para o HOME do teste; as candidatas foram ${candidatas.join(', ')}`);
 }
-const HOME_DO_TESTE = criarHomeDoTeste([dirname(fileURLToPath(import.meta.url)), userInfo().homedir], '.home-');
+const GIT = raizDoGit(dirname(fileURLToPath(import.meta.url)));
+const HOME_DO_TESTE = criarHomeDoTeste([GIT && join(GIT, '.tmp-testes'), userInfo().homedir], '.home-crewai-');
 process.on('exit', () => rmSync(HOME_DO_TESTE, { recursive: true, force: true }));
 process.env.HOME = HOME_DO_TESTE;
 if (CAI_NOS_LIVRES(realpathSync(HOME_DO_TESTE))) throw new Error('precondição: o HOME do teste está nas livres da trava');
