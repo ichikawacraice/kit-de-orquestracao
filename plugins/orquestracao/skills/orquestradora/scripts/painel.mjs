@@ -19,6 +19,7 @@
 //   painel.mjs pegar <F> [<local_>] <apelido>   (o id sai de $CLAUDE_CODE_HOST_SESSION_ID; id de outra sessão, de orquestradora ou de outro apelido é recusado) o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
 //   painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]   (ADR 0009) ao terminar, pega o item vivo mais antigo do mesmo projeto e tema do último item por onde a sessão passou (`passaram`) que espera o papel dela (pula o item só se a sessão já passou por ele nesta etapa), como o `pegar` → {pegou:true, item, …} ou {pegou:false, motivo}; recusa com o contexto acima do aviso do papel (E 300 mil, P/D/V 350 mil) ou sem medida do transcript; --tokens só sobrescreve a medida (teste)
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge do PR validado (F150): confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
+//   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); exit 0 nos dois casos, 1 só em erro de leitura
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, pede ao membro com título de item fechado que volte a livre, relata merge/vagas/excedentes/títulos velhos à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
@@ -50,6 +51,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 import { AFINIDADE_MIN, BATIDA_SOLTA_MIN, cartoesResolvidos, julgar, livresDe, ocupadosDaFila } from './batida.mjs';
 import { SHA_VALIDADO, conferir, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
+import { julgarReinicio, lerFichas, lerPs, textoDoReinicio } from './pode-reiniciar.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 // Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
@@ -91,7 +93,8 @@ const pool = MEU_CLI
 // `esperando` da `list fila` (F58): a regra mora em hooks/esperando-papel.mjs; só `list fila` a carrega (as outras
 // invocações não dependem do módulo, nem a cópia do script solta numa pasta sem `hooks/`).
 const DA_BATIDA = ['batida', 'pegar', 'livres', 'seguinte'].includes(process.argv[2]);
-const CONFERE_MEMBRO = DA_BATIDA || process.argv[2] === 'com';
+const DO_REINICIO = process.argv[2] === 'pode-reiniciar';
+const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || process.argv[2] === 'com';
 const moduloEsperando = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
   ? await import(pathToFileURL(join(HOOKS_DIR, 'esperando-papel.mjs')).href)
   : null;
@@ -100,7 +103,7 @@ const entradaNaEtapa = moduloEsperando?.entradaNaEtapa ?? null;
 // `batida`, `pegar` e `livres` (e `com`, só para conferir o membro) também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
 const regras = CONFERE_MEMBRO
   ? await import(pathToFileURL(POOL_COMUM).href).catch((e) => {
-    if (DA_BATIDA) throw e;
+    if (DA_BATIDA || DO_REINICIO) throw e;
     process.stderr.write(`painel.mjs: aviso: não consegui importar ${POOL_COMUM} (${e.message}); o id do membro não foi conferido\n`);
     return null;
   })
@@ -997,6 +1000,44 @@ function cartoesDoPainel() {
   return nomes.flatMap((n) => { try { const d = JSON.parse(readFileSync(join(caminho('cartoes'), n), 'utf8')); return [{ id: n.slice(0, -5), data: d.data ?? {} }]; } catch { return []; } });
 }
 
+// `pode-reiniciar` (F152): o julgamento é de pode-reiniciar.mjs; aqui ficam os argumentos, a identidade da própria sessão e o arquivo.
+// O arquivo guarda TODOS os motivos (a sessão que rodou incluída, cada motivo de sessão com `localId`): a barra das outras sessões não
+// pode ler "pode" quando quem gravou estava trabalhando. Só a saída do comando tira a própria sessão.
+function eusDestaSessao() {
+  const s = new Set([MEU_CLI, process.env.CLAUDE_CODE_HOST_SESSION_ID].filter(textoNaoVazio));
+  try { const l = regras?.registroDaSessao(MEU_CLI)?.localId; if (l) s.add(l); } catch { /* sem registro */ }
+  return s;
+}
+function conferirReinicio({ linhas, listaEm, sessoesDe, agoraMs = Date.now() }) {
+  const euPid = new Set([process.pid, process.ppid]);
+  const motivos = julgarReinicio({ sessoes: linhas, fichas: lerFichas(regras.pastaDoTeto(process.env)), ps: lerPs(process.env), euPid });
+  const em = new Date(agoraMs).toISOString();
+  const completo = { pode: motivos.length === 0, motivos, sessoesDe, em, listaEm: new Date(listaEm).toISOString() };
+  const idadeMin = Math.max(0, Math.round((agoraMs - listaEm) / 60_000));
+  const eu = eusDestaSessao();
+  const visiveis = motivos.filter((m) => !(m.tipo === 'sessao' && eu.has(m.localId)));
+  const saida = { pode: visiveis.length === 0, motivos: visiveis, sessoesDe, ...(sessoesDe === 'batida' ? { idadeMin } : {}), em };
+  return { completo, saida };
+}
+const gravarReinicio = (completo) => gravarJson(join(ORQ(), 'batida', 'pode-reiniciar.json'), completo);
+function comandoPodeReiniciar(args) {
+  const arquivo = flag(args, '--sessoes');
+  const listaEmIso = flag(args, '--lista-em');
+  const comoJson = flag(args, '--json', false);
+  if (args.length) throw new Error('uso: painel.mjs pode-reiniciar [--sessoes <arquivo>] [--lista-em <ISO>] [--json]');
+  const fonte = arquivo ?? join(ORQ(), 'batida', 'sessoes.json');
+  let listaEm = listaEmIso ? Date.parse(listaEmIso) : null;
+  if (listaEmIso && Number.isNaN(listaEm)) throw new Error(`--lista-em: "${listaEmIso}" não é data ISO`);
+  let linhas;
+  try {
+    linhas = lerSessoes(fonte);
+    if (listaEm === null) listaEm = statSync(fonte).mtimeMs;
+  } catch (e) { throw new Error(`não consegui ler a lista de sessões ${fonte}: ${e?.message || e}`); }
+  const { completo, saida } = conferirReinicio({ linhas, listaEm, sessoesDe: arquivo ? 'lista' : 'batida' });
+  gravarReinicio(completo);
+  return { saida, comoJson };
+}
+
 function comandoBatida(args) {
   const arquivo = flag(args, '--sessoes');
   const seco = flag(args, '--seco', false);
@@ -1040,6 +1081,8 @@ function comandoBatida(args) {
     }
     for (const id of marcadoresApagados) rmSync(join(ORQ(), 'ativas', id), { force: true });
     for (const id of cartoesApagados) rmSync(caminho('cartoes', id), { force: true });
+    // o mesmo julgamento de `pode-reiniciar`, com a lista que a batida já tem (F152); falhar aqui não derruba a batida
+    try { gravarReinicio(conferirReinicio({ linhas, listaEm: statSync(arquivo).mtimeMs, sessoesDe: 'lista', agoraMs }).completo); } catch (e) { process.stderr.write(`batida: não gravei pode-reiniciar.json: ${e?.message || e}\n`); }
     return saida;
   };
   return seco ? rodar() : comTrava(rodar);
@@ -1156,6 +1199,12 @@ function main(argv) {
     case 'mergear':
       saida = comandoMergear(resto);
       break;
+    case 'pode-reiniciar': {
+      const { saida: r, comoJson } = comandoPodeReiniciar(resto);
+      if (!comoJson) { process.stdout.write(textoDoReinicio(r)); return 0; }
+      saida = r;
+      break;
+    }
     case 'batch': {
       const ops = JSON.parse(a);
       if (!Array.isArray(ops)) throw new Error('batch: esperava uma lista');
@@ -1163,7 +1212,7 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|seguinte|batida|mergear|handoffs … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|seguinte|batida|mergear|pode-reiniciar|handoffs … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
   return (cmd === 'pegar' || cmd === 'mergear') && saida.recusado ? 1 : 0;

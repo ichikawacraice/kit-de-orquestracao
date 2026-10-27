@@ -951,3 +951,115 @@ export function rotuloModoSvg(modo: 'presente' | 'desconhecido'): { source: stri
 export function parouSvg(W: number, dito: string): { source: string; height: number; alt: string } {
   return { height: 20, alt: dito, source: svg(W, 20, texto(0, 14, 12, ERRO, xml(caber(dito, 12, W)))) }
 }
+
+// ---- o reinício do app (F152): a linha do topo do pane sem aviso e o bloco emoldurado com o aviso ligado ----
+
+export type ReinicioDesenhado = {
+  estado: 'pode' | 'espere' | 'conferindo' | 'sem-dado'
+  rodando: number
+  motivos: Array<{ tipo: 'sessao' | 'teste' | 'merge'; texto: string }>
+  conferidoEm: number | null
+  razao?: string
+  /** O aviso ligado (`avisadoEm` = quando a notificação saiu); `null` = a linha discreta, sem moldura. */
+  aviso: { avisadoEm?: string } | null
+}
+
+/** Quantos motivos o bloco lista antes do `+ N mais`. */
+export const MOTIVOS_NO_BLOCO = 4
+
+const hhmm_ = (ms: number): string => {
+  const d = new Date(ms)
+
+  return `${dois_(d.getHours())}:${dois_(d.getMinutes())}`
+}
+
+/** A contagem por tipo, na ordem sessão, teste, merge; tipo com zero não aparece: `4 sessões trabalhando, 1 teste`. */
+export function contagemDoReinicio(motivos: Array<{ tipo: string }>): string {
+  const n = (t: string) => motivos.filter(m => m.tipo === t).length
+  const nome = (k: number, um: string, varios: string) => `${k} ${k === 1 ? um : varios}`
+
+  return [
+    n('sessao') > 0 ? nome(n('sessao'), 'sessão trabalhando', 'sessões trabalhando') : '',
+    n('teste') > 0 ? nome(n('teste'), 'teste', 'testes') : '',
+    n('merge') > 0 ? nome(n('merge'), 'merge', 'merges') : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
+const conferido = (ms: number | null): string => (ms === null ? 'sem conferência' : `conferido às ${hhmm_(ms)}`)
+
+/**
+ * O reinício no topo do pane. Sem aviso: UMA linha de 20 px (a frase da resposta; o botão `Me avise` é um `Button` ao lado, fora do
+ * SVG, e `W` já desconta o botão). Com aviso: o bloco emoldurado do modo ausente (`rx 8`, traço 1,5, título 13 px, linhas 12 px):
+ * `ans` (azul, em curso) esperando, `oks` (verde) podendo, `ms` (cinza) conferindo ou sem dado. O `alt` lê todos os motivos, inteiros.
+ */
+export function reinicioSvg(W: number, r: ReinicioDesenhado): { source: string; height: number; alt: string } {
+  const util = W - 24
+  const porTipo = contagemDoReinicio(r.motivos)
+  if (r.aviso === null) {
+    const glifo = (c: string) => `<tspan class="${c}">⏻</tspan>`
+    if (r.estado === 'pode') {
+      const resto = r.conferidoEm === null ? '' : ` · conferido às ${hhmm_(r.conferidoEm)}`
+      const frase = caber('Pode reiniciar o app', 12.5, Math.max(40, W - largura(resto, 12.5) - 18))
+
+      return {
+        height: 20,
+        alt: `Pode reiniciar o app, ${conferido(r.conferidoEm)}.`,
+        source: svg(W, 20, `<text x="0" y="14" font-family="${FONTE}" font-size="12.5">${glifo(OK)}<tspan class="${OK}" font-weight="600"> ${xml(frase)}</tspan><tspan class="m">${xml(resto)}</tspan></text>`),
+      }
+    }
+    const espere = r.estado === 'espere'
+    const dito = espere ? `Reiniciar: espere · ${r.rodando} rodando` : 'Reiniciar: não sei'
+
+    return {
+      height: 20,
+      alt: espere ? `Reiniciar o app: espere, ${r.rodando} rodando — ${porTipo}.` : `Reiniciar o app: não sei — ${r.razao ?? 'ainda não conferi'}.`,
+      source: svg(W, 20, `<text x="0" y="14" font-family="${FONTE}" font-size="12.5">${glifo('m')}<tspan class="s" font-weight="600"> ${xml(caber(dito, 12.5, W - 18))}</tspan></text>`),
+    }
+  }
+
+  const ligado = 'aviso ligado'
+  let titulo: string
+  let classe: string
+  let moldura: string
+  let linhas: string[]
+  let alt: string
+  if (r.estado === 'espere') {
+    const visiveis = r.motivos.slice(0, MOTIVOS_NO_BLOCO)
+    const mais = r.motivos.length - visiveis.length
+    titulo = `Espere · ${r.rodando} rodando`
+    classe = 't'
+    moldura = 'ans'
+    linhas = [...visiveis.map(m => `· ${m.texto}`), `${mais > 0 ? `+ ${mais} mais · ` : ''}${conferido(r.conferidoEm)} · ${ligado}`]
+    alt = `Aviso de reinício ligado: ${r.rodando} rodando — ${r.motivos.map(m => m.texto).join('; ')}; ${conferido(r.conferidoEm)}.`
+  } else if (r.estado === 'pode') {
+    titulo = 'Pode reiniciar o app'
+    classe = OK
+    moldura = 'oks'
+    linhas = [`nada rodando · ${conferido(r.conferidoEm)}`, ...(r.aviso.avisadoEm ? [`avisei às ${hhmm_(Date.parse(r.aviso.avisadoEm))}`] : [])]
+    alt = `Aviso de reinício ligado: pode reiniciar o app — nada rodando, ${conferido(r.conferidoEm)}${r.aviso.avisadoEm ? `; avisei às ${hhmm_(Date.parse(r.aviso.avisadoEm))}` : ''}.`
+  } else if (r.estado === 'conferindo') {
+    titulo = 'Aviso ligado · conferindo'
+    classe = 't'
+    moldura = 'ms'
+    linhas = ['a primeira conferência sai em instantes']
+    alt = 'Aviso de reinício ligado: conferindo, a primeira conferência sai em instantes.'
+  } else {
+    titulo = `Não sei · ${ligado}`
+    classe = 't'
+    moldura = 'ms'
+    linhas = [r.razao ?? 'ainda não conferi']
+    alt = `Aviso de reinício ligado: não sei — ${r.razao ?? 'ainda não conferi'}.`
+  }
+  const altura = 24 + 16 * linhas.length + 10
+  const glifoDoTitulo = r.estado === 'pode' ? OK : 'm'
+  const partes = [`<text x="12" y="24" font-family="${FONTE}" font-size="13" font-weight="700"><tspan class="${glifoDoTitulo}">⏻</tspan><tspan class="${classe}"> ${xml(caber(titulo, 13, util - 20))}</tspan></text>`]
+  linhas.forEach((l, k) => partes.push(texto(12, 40 + 16 * k, 12, k === linhas.length - 1 && (r.estado === 'espere' || (r.estado === 'pode' && k > 0)) ? 'm' : 's', xml(caber(l, 12, util)))))
+
+  return {
+    height: altura,
+    alt,
+    source: svg(W, altura, `<rect class="${moldura}" fill="none" stroke-width="1.5" x=".75" y=".75" width="${W - 1.5}" height="${altura - 1.5}" rx="8"/>${partes.join('')}`),
+  }
+}

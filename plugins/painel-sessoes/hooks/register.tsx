@@ -2,10 +2,11 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { esperandoPapel } from './esperando'
-import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, LEITURA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarPool, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache } from './barra'
+import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema } from '../types'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarPool, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
+import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
-import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
+import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -897,6 +898,19 @@ async function ler($: EngineInterface): Promise<void> {
     erros.push(`esta sessão (get_session): ${mensagem(err)}`)
   }
 
+  // O reinício do app: o pane aberto confere com a lista que acabou de ler e guarda o resultado no arquivo que a barra lê.
+  let falhouReinicio = false
+  if (vivasLidas && proprio !== undefined) {
+    try {
+      await conferirReinicio($, vivas)
+    } catch (err) {
+      falhouReinicio = true
+      erros.push(`reinício: ${mensagem(err)}`)
+    }
+  }
+  await lerReinicio($, erros).catch(err => void erros.push(`reinício: ${mensagem(err)}`))
+  await update($, reinicio, r => ({ ...r, falhou: falhouReinicio }))
+
   // O nome que a pergunta mostra: o `sessao` dela, senão o título da sessão pelo sessaoId — nunca o id cru.
   const pareceId = (t: string) => /^(local_)?[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(t)
   const nomeDaSessao = (sessao: string | undefined, sessaoId: string | undefined) => {
@@ -1266,6 +1280,7 @@ async function lerBarra($: EngineInterface): Promise<void> {
     const projeto = item?.projeto ?? (await projetoDoCwd($))
     const orquestradoras = orquestradorasDoProjeto(docsSessoes, projeto)
     await atualizarModo($).catch(err => void erros.push(`modo ausente: ${mensagem(err)}`))
+    await lerReinicio($).catch(() => undefined)
     let tokens: number | null = null
     let janelaDoModelo: number | null = null
     try {
@@ -1366,6 +1381,241 @@ async function limparPelaBarra($: EngineInterface): Promise<void> {
   }
 }
 
+
+// ---- o reinício do app (F152): quando dá para reiniciar sem derrubar trabalho, e o aviso "me avise" ----
+// O julgamento é do script (`painel pode-reiniciar`, que grava `batida/pode-reiniciar.json`); aqui ficam a leitura dos dois arquivos
+// de `batida/`, o aviso (`aviso-de-reinicio.json`), a vigia (o mod da sessão que ligou o aviso confere a cada minuto) e os gestos.
+
+export const reinicio = atom({ plugin: 'painel-sessoes', key: 'reinicio' } as const, { arquivo: null, aviso: null, falhou: false } as Reinicio)
+/** O botão do aviso está gravando: `Ligando…` ou `Desligando…`, e o clique repetido é ignorado. */
+export const reiniciando = atom({ plugin: 'painel-sessoes', key: 'reiniciando' } as const, null as 'ligando' | 'desligando' | null)
+
+const ARQUIVO_DO_REINICIO = 'pode-reiniciar.json'
+const ARQUIVO_DO_AVISO = 'aviso-de-reinicio.json'
+const ARQUIVO_DA_LISTA = 'sessoes-reinicio.json'
+let vigiando = false
+let timerVigia: { cancel: () => void } | undefined
+
+const validoArquivo = (v: unknown): v is ArquivoDeReinicio =>
+  typeof v === 'object' && v !== null && typeof (v as ArquivoDeReinicio).em === 'string' && Array.isArray((v as ArquivoDeReinicio).motivos)
+const validoAviso = (v: unknown): v is AvisoDeReinicio =>
+  typeof v === 'object' && v !== null && typeof (v as AvisoDeReinicio).ligadoEm === 'string' && typeof (v as AvisoDeReinicio).vigia === 'string'
+
+/** Um arquivo de `batida/`: ausente = `null` sem erro; ilegível ou fora do formato = `null` e a linha em `erros`. */
+async function lerArquivoDaBatida<T>($: EngineInterface, pasta: string, nome: string, valido: (v: unknown) => v is T, erros: string[]): Promise<T | null> {
+  try {
+    const entradas = await $.fs.list(pasta)
+    if (!entradas.some(x => x.kind === 'file' && x.name === nome)) return null
+  } catch {
+    return null
+  }
+  try {
+    const v = JSON.parse((await $.fs.read(`${pasta}/${nome}`)) as string) as unknown
+    if (!valido(v)) throw new Error('fora do formato')
+
+    return v
+  } catch (err) {
+    erros.push(`${nome}: ${mensagem(err)}`)
+
+    return null
+  }
+}
+
+/** Os dois arquivos do reinício para o átomo; durante o clique do botão o aviso na tela vale mais que o do disco. */
+async function lerReinicio($: EngineInterface, erros: string[] = []): Promise<Pick<Reinicio, 'arquivo' | 'aviso'>> {
+  const pasta = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/batida`
+  const arquivo = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_REINICIO, validoArquivo, erros)
+  const aviso = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_AVISO, validoAviso, erros)
+  const gravando = (await read($, reiniciando)) !== null
+  await update($, reinicio, r => ({ ...r, arquivo, aviso: gravando ? r.aviso : aviso }))
+
+  return { arquivo, aviso }
+}
+
+/** A lista fresca de sessões do app, com a própria (o `list_sessions` não a traz): a mesma que a batida monta. */
+async function listaFresca($: EngineInterface): Promise<Vivo[]> {
+  const lista = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__list_sessions', linked: false, include_archived: false, limit: 200 })
+  if (lista.deny !== undefined || lista.isError) throw new Error(`list_sessions: ${lista.deny ?? lista.text ?? 'erro sem texto'}`)
+  const texto_ = lista.text ?? ''
+  const vivas = JSON.parse(texto_.slice(Math.max(0, texto_.indexOf('[')))) as Vivo[]
+  const eu = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__get_session', session_id: 'self' })
+  if (eu.deny !== undefined || eu.isError) throw new Error(`get_session: ${eu.deny ?? eu.text ?? 'erro sem texto'}`)
+  const proprio = JSON.parse(eu.text ?? '') as Vivo
+
+  return [...vivas.filter(v => v.sessionId !== proprio.sessionId), proprio]
+}
+
+/**
+ * Roda `painel pode-reiniciar` com a lista dada (que vai para `batida/sessoes-reinicio.json`) e deixa o resultado em
+ * `batida/pode-reiniciar.json`. Sem o plugin orquestracao instalado não há comando: segue sem ele (a tela diz "não sei").
+ */
+async function conferirReinicio($: EngineInterface, vivas: Vivo[]): Promise<void> {
+  const home = await $.env.get('HOME')
+  if (!home) return
+  const script = await caminhoDoPainel($, home)
+  if (!script) {
+    $.ui.log('reinício sem o plugin orquestracao')
+
+    return
+  }
+  const lista = `${home}/${BASE_ORQUESTRACAO}/batida/${ARQUIVO_DA_LISTA}`
+  await $.fs.write(lista, JSON.stringify(vivas))
+  const r = await $.process.run(['node', script, 'pode-reiniciar', '--sessoes', lista, '--json'], { timeoutMs: SCRIPT_TIMEOUT_MS })
+  if (r.exitCode !== 0) throw new Error(`painel pode-reiniciar saiu com ${r.exitCode}: ${r.stderr.slice(0, 200)}`)
+}
+
+async function gravarAviso($: EngineInterface, aviso: AvisoDeReinicio): Promise<void> {
+  const pasta = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/batida`
+  const arquivo = `${pasta}/${ARQUIVO_DO_AVISO}`
+  const conteudo = `${JSON.stringify(aviso, null, 2)}\n`
+  try {
+    await $.fs.write(arquivo, conteudo)
+  } catch (erroDaEscrita) {
+    try {
+      await $.process.run(['mkdir', '-p', pasta], { timeoutMs: SCRIPT_TIMEOUT_MS })
+      await $.fs.write(arquivo, conteudo)
+    } catch {
+      throw erroDaEscrita
+    }
+  }
+}
+
+async function apagarAviso($: EngineInterface): Promise<void> {
+  const arquivo = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/batida/${ARQUIVO_DO_AVISO}`
+  const r = await $.process.run(['rm', '-f', arquivo], { timeoutMs: SCRIPT_TIMEOUT_MS })
+  if (r.exitCode !== 0) throw new Error(`rm saiu com ${r.exitCode}: ${r.stderr.slice(0, 200)}`)
+}
+
+const falhouOAviso = async ($: EngineInterface, texto_: string) => {
+  $.ui.toast(texto_)
+  await avisar($, texto_).catch(() => {})
+}
+
+/**
+ * `Me avise`: o bloco "Aviso ligado · conferindo" entra na hora, grava `aviso-de-reinicio.json` com esta sessão como vigia e
+ * confere já. A recusa desfaz, com toast e a faixa "Ação não concluída" do pane.
+ */
+export async function ligarAviso($: EngineInterface): Promise<void> {
+  if ((await read($, reiniciando)) !== null) return
+  await update($, reiniciando, () => 'ligando')
+  const antes = (await read($, reinicio)).aviso
+  let ligou = false
+  try {
+    const vigia = await sessaoDoApp($)
+    if (!vigia) throw new Error('sessão não identificada')
+    const appInicio = await inicioDoApp($)
+    const aviso: AvisoDeReinicio = { ligadoEm: new Date(await $.clock.now()).toISOString(), vigia, naoPodeSeguidos: 0, ...(appInicio ? { appInicio } : {}) }
+    await update($, reinicio, r => ({ ...r, aviso }))
+    await gravarAviso($, aviso)
+    ligou = true
+    $.ui.toast('Aviso ligado. A notificação chega quando der para reiniciar o app.')
+  } catch (err) {
+    await update($, reinicio, r => ({ ...r, aviso: antes }))
+    await falhouOAviso($, `Não consegui ligar o aviso (${mensagem(err)}).`)
+  } finally {
+    await update($, reiniciando, () => null)
+  }
+  if (ligou) await vigiar($)
+}
+
+/** `Não avisar mais`: o bloco volta à linha na hora e o arquivo é apagado; a recusa traz o bloco de volta, com toast e faixa. */
+export async function desligarAviso($: EngineInterface): Promise<void> {
+  if ((await read($, reiniciando)) !== null) return
+  await update($, reiniciando, () => 'desligando')
+  const antes = (await read($, reinicio)).aviso
+  try {
+    await update($, reinicio, r => ({ ...r, aviso: null }))
+    await apagarAviso($)
+  } catch (err) {
+    await update($, reinicio, r => ({ ...r, aviso: antes }))
+    await falhouOAviso($, `Não consegui desligar o aviso (${mensagem(err)}).`)
+  } finally {
+    await update($, reiniciando, () => null)
+  }
+}
+
+async function notificarReinicio($: EngineInterface, hhmm_: string): Promise<void> {
+  const aviso = `Pode reiniciar o app. Nenhuma sessão trabalhando, nenhum teste nem merge rodando (${hhmm_}).`
+  try {
+    const r = await $.tool.call({ tool: 'PushNotification', message: aviso, status: 'proactive' })
+    if (r.deny !== undefined || r.isError) $.ui.toast(aviso)
+  } catch {
+    $.ui.toast(aviso)
+  }
+}
+
+/**
+ * A vigia, a cada minuto, em toda sessão (só age quem é a vigia do aviso ligado; se a vigia sumiu há mais de 3 min, a próxima
+ * sessão que passa por aqui assume): confere com a lista fresca, notifica UMA vez quando passa a poder, rearma depois de dois
+ * "não pode" seguidos e desliga o aviso 30 min depois do aviso. Nunca lança.
+ */
+async function vigiar($: EngineInterface): Promise<void> {
+  if (vigiando) return
+  vigiando = true
+  try {
+    const pasta = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/batida`
+    let aviso = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_AVISO, validoAviso, [])
+    if (aviso === null) return
+    const eu = await sessaoDoApp($)
+    if (!eu) return
+    const agora = await $.clock.now()
+    if (aviso.vigia !== eu) {
+      if (!vigiaSumiu({ aviso, agora })) return
+      await gravarAviso($, { ...aviso, vigia: eu, vigiaEm: new Date(agora).toISOString() })
+      aviso = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_AVISO, validoAviso, [])
+      if (aviso?.vigia !== eu) return
+    }
+    await conferirReinicio($, await listaFresca($))
+    const lido = await lerReinicio($)
+    // quem desligou o aviso no meio da conferência vence
+    if (lido.aviso === null) return
+    const estado = estadoDoReinicio({ arquivo: lido.arquivo, aviso: lido.aviso, eu, trabalhandoEu: trabalhandoNaBarra, agora: await $.clock.now() })
+    const passo = proximoDaVigia({ aviso: lido.aviso, estado: estado.estado, agora: await $.clock.now() })
+    if (passo.aviso === null) {
+      await apagarAviso($)
+      await update($, reinicio, r => ({ ...r, aviso: null }))
+    } else {
+      // a conferência da vigia fica marcada no aviso (`vigiaEm`), junto com o boot do app em que ele nasceu (`appInicio`)
+      const appInicio = passo.aviso.appInicio ?? (await inicioDoApp($)) ?? undefined
+      const gravar: AvisoDeReinicio = { ...passo.aviso, vigiaEm: new Date(await $.clock.now()).toISOString(), ...(appInicio ? { appInicio } : {}) }
+      await gravarAviso($, gravar)
+      await update($, reinicio, r => ({ ...r, aviso: gravar }))
+    }
+    if (passo.notificar) await notificarReinicio($, hhmm(await $.clock.now()))
+  } catch (err) {
+    $.ui.log(`vigia do reinício: ${mensagem(err)}`)
+  } finally {
+    vigiando = false
+  }
+}
+
+/**
+ * O instante de início do processo principal do app (`ps -axo pid=,lstart=,command=`, linha cujo comando termina em
+ * `Claude.app/Contents/MacOS/Claude`): só um reinício do app o muda; sessão nova e `clear_session` não. `null` = não medi.
+ */
+async function inicioDoApp($: EngineInterface): Promise<string | null> {
+  try {
+    const r = await $.process.run(['ps', '-axo', 'pid=,lstart=,command='], { timeoutMs: SCRIPT_TIMEOUT_MS })
+    if (r.exitCode !== 0) return null
+    for (const linha of r.stdout.split('\n')) {
+      const m = /^\s*\d+\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.+?)\s*$/.exec(linha)
+      if (m?.[2]?.endsWith('Claude.app/Contents/MacOS/Claude')) return m[1].replace(/\s+/g, ' ')
+    }
+  } catch {
+    // sem medida o aviso fica (o desligamento de 30 min cobre)
+  }
+
+  return null
+}
+
+/** Ao carregar o mod: aviso já dado (`avisadoEm`) só é apagado se o app reiniciou: o início do processo dele mudou desde que o aviso nasceu. */
+async function limparAvisoVelho($: EngineInterface): Promise<void> {
+  const pasta = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/batida`
+  const aviso = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_AVISO, validoAviso, [])
+  if (!aviso?.avisadoEm || !aviso.appInicio) return
+  const agoraDoApp = await inicioDoApp($)
+  if (agoraDoApp !== null && agoraDoApp !== aviso.appInicio) await apagarAviso($)
+}
 // A batida (ADR 0007): de 10 em 10 min, UMA das sessões vivas roda `painel batida` (o julgamento é do script) e leva as
 // mensagens que ele devolveu às sessões certas. Sem modelo e sem turno: só `$.process.run` e `send_message`.
 // A vez mora em arquivo (`batida/vez.json`): cada sessão tem o próprio relógio, e a que grava a vez e se relê dona dela roda.
@@ -1480,6 +1730,9 @@ async function iniciarBarra($: EngineInterface): Promise<void> {
   timerRelogio = $.clock.every(1000, () => void tiqueDoCache($).catch(() => {}))
   timerLeitura = $.clock.every(LEITURA_MS, () => void lerBarra($))
   timerBatida = $.clock.every(BATIDA_TIQUE_MS, () => void batida($))
+  timerVigia?.cancel()
+  timerVigia = $.clock.every(VIGIA_MS, () => void vigiar($))
+  await limparAvisoVelho($).catch(err => void $.ui.log(`reinício: ${mensagem(err)}`))
   await lerBarra($)
 }
 
@@ -1516,6 +1769,9 @@ function registrarBarra(on: On): void {
     const elementos = $.ui.resolve(e)
     const painelAberto = deveFechar(await $.ui.panes())
     const modo = l.ausente === undefined || l.ausente === null ? null : l.ausente.ligado ? 'ausente' : 'presente'
+    // O reinício só fala com o aviso ligado (o "pode" permanente seria ruído o dia inteiro); a própria sessão entra ao vivo.
+    const rn = await read($, reinicio)
+    const doReinicio = rn.aviso ? estadoDoReinicio({ arquivo: rn.arquivo, aviso: rn.aviso, eu: await sessaoDoApp($), trabalhandoEu: e.props.isWorking || trabalhandoNaBarra, agora: await $.clock.now(), erro: rn.falhou }) : null
 
     return desenharBarra(
       elementos,
@@ -1527,6 +1783,7 @@ function registrarBarra(on: On): void {
         painelAberto,
         isWorking: e.props.isWorking,
         bodyColumns: e.props.bodyColumns,
+        reinicio: doReinicio,
         item: b.item ? `${b.item.id} · ${ROTULO_ETAPA_TERMINAL[b.item.etapa] ?? b.item.etapa}` : null,
       },
       {
@@ -1897,6 +2154,32 @@ export const register: Register = on => {
       )
     }
 
+    // O reinício do app: a linha discreta (sem aviso) ou o bloco emoldurado (com aviso); nada antes da 1ª leitura.
+    const rn = await read($, reinicio)
+    const gravandoAviso = await read($, reiniciando)
+    const doReinicio = estadoDoReinicio({ arquivo: rn.arquivo, aviso: rn.aviso, eu: await sessaoDoApp($), trabalhandoEu: trabalhandoNaBarra, agora, erro: rn.falhou })
+    const botaoDoAviso = rn.aviso ? (
+      <Button
+        key="reinicio"
+        variant="secondary"
+        onPress={() => {
+          if (gravandoAviso === null) void desligarAviso($)
+        }}
+      >
+        {gravandoAviso === 'ligando' ? 'Ligando…' : 'Não avisar mais'}
+      </Button>
+    ) : doReinicio.estado !== 'pode' || gravandoAviso === 'desligando' ? (
+      <Button
+        key="reinicio"
+        variant="secondary"
+        onPress={() => {
+          if (gravandoAviso === null) void ligarAviso($)
+        }}
+      >
+        {gravandoAviso === 'desligando' ? 'Desligando…' : 'Me avise'}
+      </Button>
+    ) : null
+    const dadosDoReinicio = { ...doReinicio, aviso: rn.aviso ? { avisadoEm: rn.aviso.avisadoEm } : null }
     // O modo da leitura: `undefined` é antes da 1ª leitura; `null`, o arquivo que não se leu; senão a bandeira.
     const modo: 'lendo' | 'presente' | 'ausente' | 'desconhecido' = l.ausente === undefined ? 'lendo' : l.ausente === null ? 'desconhecido' : l.ausente.ligado ? 'ausente' : 'presente'
     // O botão do modo fica no canto esquerdo da fileira e o rótulo é o gesto; sem ler o modo não há botão (gravar por cima esconderia o problema).
@@ -2057,6 +2340,22 @@ export const register: Register = on => {
             {linhaParou && <Svg source={linhaParou.source} alt={linhaParou.alt} width={W} height={linhaParou.height} />}
             {faixaModo && <Svg source={faixaModo.source} alt={faixaModo.alt} width={W} height={faixaModo.height} />}
           </Box>
+          {lido && (() => {
+            // Sem aviso: a linha de 20 px com o botão ao lado (a largura do SVG desconta o botão); com aviso: o bloco e o botão embaixo.
+            const r = reinicioSvg(rn.aviso || !botaoDoAviso ? W : W - 96, dadosDoReinicio)
+
+            return rn.aviso ? (
+              <Box key="bloco-do-reinicio" flexDirection="column" gap={1} alignItems="flex-start">
+                <Svg source={r.source} alt={r.alt} width={W} height={r.height} />
+                {botaoDoAviso}
+              </Box>
+            ) : (
+              <Box key="bloco-do-reinicio" flexDirection="row" alignItems="center" columnGap={1} flexWrap="wrap">
+                <Svg source={r.source} alt={r.alt} width={botaoDoAviso ? W - 96 : W} height={r.height} />
+                {botaoDoAviso}
+              </Box>
+            )
+          })()}
           <Svg source={cartaoResumo.source} alt={resumo4.map(r => `${r.n} ${r.rotulo}`).join(', ')} width={W} height={cartaoResumo.height} />
 
           {erroLido && (
@@ -2261,6 +2560,50 @@ export const register: Register = on => {
               <Text dimColor>· sessões novas só abrem com você</Text>
             </Box>
           )}
+          {lido && (() => {
+            const cor = doReinicio.estado === 'pode' ? GLIFO_REINICIO.pode : GLIFO_REINICIO.esperando
+            const hora_ = doReinicio.conferidoEm === null ? 'sem conferência' : `conferido às ${hhmm(doReinicio.conferidoEm)}`
+            const titulo_ = rn.aviso
+              ? doReinicio.estado === 'pode' ? 'Pode reiniciar o app' : doReinicio.estado === 'espere' ? `Espere · ${doReinicio.rodando} rodando` : doReinicio.estado === 'conferindo' ? 'Aviso ligado · conferindo' : 'Não sei · aviso ligado'
+              : doReinicio.estado === 'pode' ? 'Pode reiniciar o app' : doReinicio.estado === 'espere' ? `Reiniciar: espere · ${doReinicio.rodando} rodando` : 'Reiniciar: não sei'
+            const titulo = (
+              <Text key="titulo" wrap="truncate-end">
+                <Text color={cor}>{GLIFO_REINICIO.g}</Text>
+                <Text bold> {titulo_}</Text>
+                {!rn.aviso && doReinicio.estado === 'pode' && <Text dimColor>{` · ${hora_}`}</Text>}
+              </Text>
+            )
+            if (!rn.aviso) {
+              return (
+                <Box key="bloco-do-reinicio" flexDirection="row" flexWrap="wrap" columnGap={1}>
+                  {titulo}
+                  {botaoDoAviso}
+                </Box>
+              )
+            }
+            const visiveis = doReinicio.motivos.slice(0, 4)
+            const mais = doReinicio.motivos.length - visiveis.length
+            const linhas =
+              doReinicio.estado === 'espere'
+                ? [...visiveis.map(m => `· ${m.texto}`), `${mais > 0 ? `+ ${mais} mais · ` : ''}${hora_} · aviso ligado`]
+                : doReinicio.estado === 'pode'
+                  ? [`nada rodando · ${hora_}`, ...(rn.aviso.avisadoEm ? [`avisei às ${hhmm(Date.parse(rn.aviso.avisadoEm))}`] : [])]
+                  : doReinicio.estado === 'conferindo'
+                    ? ['a primeira conferência sai em instantes']
+                    : [doReinicio.razao ?? 'ainda não conferi']
+
+            return (
+              <Box key="bloco-do-reinicio" flexDirection="column" gap={1} alignItems="flex-start">
+                <Box flexDirection="column">
+                  {titulo}
+                  {linhas.map((t, i) => (
+                    <Text key={`${i}:${t}`} dimColor wrap="truncate-end">{t}</Text>
+                  ))}
+                </Box>
+                {botaoDoAviso}
+              </Box>
+            )
+          })()}
           <Box flexDirection="row" columnGap={2} flexWrap="wrap">
             {resumo.every(r => r.n === 0) && <Text dimColor>{lido ? 'nada em andamento' : 'ainda não lido'}</Text>}
             {resumo.filter(r => r.n > 0).map(r => (
