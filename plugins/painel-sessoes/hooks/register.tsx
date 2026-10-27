@@ -1600,11 +1600,11 @@ async function vigiar($: EngineInterface): Promise<void> {
 
 /**
  * O instante de início do processo principal do app (`ps -axo pid=,lstart=,command=`, linha cujo comando termina em
- * `Claude.app/Contents/MacOS/Claude`): só um reinício do app o muda; sessão nova e `clear_session` não. `null` = não medi.
+ * `Claude.app/Contents/MacOS/Claude`; `LC_ALL=C` porque o `lstart` segue o idioma do sistema): só um reinício do app o muda; sessão nova e `clear_session` não. `null` = não medi.
  */
 async function inicioDoApp($: EngineInterface): Promise<string | null> {
   try {
-    const r = await $.process.run(['ps', '-axo', 'pid=,lstart=,command='], { timeoutMs: SCRIPT_TIMEOUT_MS })
+    const r = await $.process.run(['ps', '-axo', 'pid=,lstart=,command='], { timeoutMs: SCRIPT_TIMEOUT_MS, env: { LC_ALL: 'C' } })
     if (r.exitCode !== 0) return null
     for (const linha of r.stdout.split('\n')) {
       const m = /^\s*\d+\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.+?)\s*$/.exec(linha)

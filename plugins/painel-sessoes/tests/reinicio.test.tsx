@@ -327,9 +327,11 @@ function engine(on: On, opc: Opc = {}) {
     return { value: undefined }
   })
   const execucoes: string[][] = []
+  const envs: (Record<string, string> | undefined)[] = []
   on('process.run', (_, e) => {
     const argv = [...e.argv]
     execucoes.push(argv)
+    if (argv[0] === 'ps') envs.push((e.init as { env?: Record<string, string> } | undefined)?.env)
     const ok = { exitCode: 0, stdout: '{}', stderr: '', isStdoutTruncated: false, isStderrTruncated: false }
     if (argv.includes('pode-reiniciar')) {
       if (opc.comandoFalha) return { value: { ...ok, exitCode: 1, stderr: 'quebrou' } }
@@ -365,7 +367,7 @@ function engine(on: On, opc: Opc = {}) {
     return { result: {}, text: '[]' }
   })
 
-  return { relogio, tempo, arquivos, estado, escritasDoAviso, execucoes, toasts, logs, chamadas, notificacoes, avisoNoDisco: () => (arquivos.has(AVISO) ? (JSON.parse(arquivos.get(AVISO) ?? '{}') as AvisoDeReinicio) : null) }
+  return { relogio, tempo, arquivos, estado, escritasDoAviso, execucoes, envs, toasts, logs, chamadas, notificacoes, avisoNoDisco: () => (arquivos.has(AVISO) ? (JSON.parse(arquivos.get(AVISO) ?? '{}') as AvisoDeReinicio) : null) }
 }
 
 async function iniciar($: Parameters<TestBody>[0], on: On, opc: Opc = {}) {
@@ -522,6 +524,12 @@ test('o app reiniciou: o aviso com avisadoEm de OUTRO boot do app é apagado ao 
   expect(m.execucoes.some(a => a[0] === 'ps'), 'prova: o início do app foi medido').toBe(true)
   expect(m.execucoes.some(a => a[0] === 'rm'), 'prova: o apagar acontece').toBe(true)
   expect(m.avisoNoDisco(), 'o reinício foi o fim natural do aviso').toBeNull()
+})
+
+test('F178: o ps do início do app roda com LC_ALL=C (lstart segue o idioma do sistema)', async ($, on) => {
+  const m = await iniciar($, on, { aviso: aviso({ avisadoEm: iso(AGORA - 5 * MIN), appInicio: 'Sun Oct 26 20:00:00 2026' }) })
+  expect(m.envs.length, 'prova: o ps rodou').toBeGreaterThan(0)
+  for (const env of m.envs) expect(env?.LC_ALL).toBe('C')
 })
 
 test('M1: sessão nova no MESMO boot do app não apaga o aviso (dois session.start seguidos)', async ($, on) => {
