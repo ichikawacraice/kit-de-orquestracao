@@ -2,7 +2,7 @@
 
 - **Data:** 2026-10-26 (SP), nome do arquivo pelo plano
 - **Autora:** D1, designer do pool
-- **Estado:** em crítica. Crítica 1: 23/30, sem ressalva alta, cinco médias e baixas aplicadas nesta versão ([§Crítica](#critica)).
+- **Estado:** aprovada com ressalvas (crítica 2, 26/30, sem ressalva alta; [§Crítica](#critica)). Liberada para execução.
 - **Plano de origem:** [`docs/planos/2026-10-27-sessoes-para-abrir-e-botao-de-limpar.md`](../../planos/2026-10-27-sessoes-para-abrir-e-botao-de-limpar.md) (PR 55). O comportamento (o que o clique grava, a T7, a coleção `cartoes`, quem grava e quem apaga) é do plano. Esta revisão decide os glifos, as cores, a ordem e o destaque dos botões da barra (D7, D1, D2), o estado `Limpando…` (D3), a seção "Sessões para abrir" (D10) e o que sai do pane e da barra.
 - **Base:** a revisão da barra ([`2026-10-26-barra-de-status.md`](2026-10-26-barra-de-status.md), com os deltas F65 e F71). O que esta revisão não cita da barra continua como lá: o relógio, o contexto contra a janela, as palavras `· alto` e `· limpar`, a moldura do cache, as `key` fixas, o "antes da 1ª leitura só o relógio".
 - **Fontes lidas:** o plano (PR 55); os handoffs F144 e F147; `plugins/painel-sessoes/hooks/barra.tsx` (`pecasDaBarra`, `larguraDaFaixa`, `desenharBarra`, `desenharPedidoNoPane`); `register.tsx` (o desenho do pane nas duas superfícies: o SVG do desktop e o `Text` do terminal; `topoDaFila`, `acaoDoPedido`, `botaoOrquestradora`, `resumo`); `desenho.ts` (`CSS`, `secaoSvg`, `filaSvg`, `modoSvg`, `fileteSvg`); os tipos do motor desta build (`ButtonProps`, `TextProps`, `ThemeKey`).
@@ -110,7 +110,7 @@ abaixo de 62:     o flexWrap quebra o grupo da direita entre os botões, como ho
 
 **Peso:** cada linha pesa como uma linha da Na fila (≈ 64 px a W = 360, uma linha de título), nunca como um cartão de item: é um lembrete de clique, não um objeto de trabalho. Com três cartões, a seção inteira cabe em ≈ 260 px, abaixo do que duas perguntas ocupam.
 
-**A faixa da seção** (`secaoSvg`, como as outras): título `Sessões para abrir`, pílula com o número de linhas visíveis, legenda `clique lá` (cabe a partir de W ≈ 238; some abaixo, como as outras), tom **`av`** com **`tracejado: true`** (o filete âmbar tracejado, opção que o `secaoSvg` já tem). Âmbar porque é a mesma natureza de "Esperam você": o próximo passo é do operador. O que separa as duas seções vizinhas é a **forma**, que vale em toda largura: o filete tracejado da faixa ecoa o anel tracejado de cada linha ("sessão que ainda não existe"), contra o filete cheio e os cartões emoldurados de "Esperam você"; e o título. A legenda é reforço, não a pista principal.
+**A faixa da seção** (`secaoSvg`, como as outras): título `Sessões para abrir`, pílula com o número de linhas visíveis, legenda `na orquestradora` (cabe a partir de W ≈ 293; abaixo some, como as outras, e a frase do grupo diz o mesmo), tom **`av`** com **`tracejado: true`** (o filete âmbar tracejado, opção que o `secaoSvg` já tem). Âmbar porque é a mesma natureza de "Esperam você": o próximo passo é do operador. O que separa as duas seções vizinhas é a **forma**, que vale em toda largura: o filete tracejado da faixa ecoa o anel tracejado de cada linha ("sessão que ainda não existe"), contra o filete cheio e os cartões emoldurados de "Esperam você"; e o título. A legenda é reforço, não a pista principal.
 
 **A linha de um cartão** (desktop, SVG; peça nova `sessaoParaAbrirSvg` em `desenho.ts`, mesma anatomia do `filaSvg`):
 
@@ -164,7 +164,7 @@ Os cartões estão na conversa da orquestradora de kit-de-orquestracao
 | `↺ Limpar` em destaque | barra da orquestradora, no botão | enquanto o contexto está na régua | `ruim` (o glifo) | o operador, na orquestradora |
 | `↺ Limpando…` | no botão, onde clicou | do clique até o envio voltar (D3; [§Estados](#estados-barra)) | `espera` | idem |
 | `Não consegui mandar a limpeza (<motivo>).` | toast + a faixa de avisos do pane (`avisar`) | some sozinho (toast); até fechar (pane) | `ruim` | idem |
-| `Não consegui gravar o ok de limpar (<motivo>).` | idem | idem | `ruim` | idem |
+| `Não consegui gravar o ok de limpar (<motivo>).` (só no ramo da D4 que grava o arquivo) | idem | idem | `ruim` | idem |
 | O prompt `O operador mandou limpar pelo botão da barra: …` | a conversa da orquestradora (é o efeito do clique) | permanente, na conversa | `neutro` | o operador e a orquestradora |
 | Linha de cartão | pane, seção "Sessões para abrir" | até o apelido aparecer vivo, o cartão ser retirado ou passar de 12 h | `espera` | o operador |
 | `Abrindo…` | no `Abrir a orquestradora` | do clique até o app abrir a conversa | `espera` | o operador |
@@ -174,8 +174,8 @@ Os cartões estão na conversa da orquestradora de kit-de-orquestracao
 
 | Região | Componentes | Peça nova? |
 |---|---|---|
-| Barra, grupo da direita | `Button` do motor com filho `Text color` no glifo; `pecasDaBarra`, `larguraDaFaixa`, `desenharBarra` em `barra.tsx` | Não. Uma constante `GLIFO` (`{ limpar: ['↺', 'error'], modo: ['☾', 'suggestion'], painel: ['◨', 'planMode'], perguntas: ['●', 'warning'] }`) em `barra.tsx`, para o teste comparar o glifo de cada peça com o desenho |
-| Pane desktop, faixa da seção | `secaoSvg` (tom `av`) | Não |
+| Barra, grupo da direita | `Button` do motor com filho `Text color` no glifo; `pecasDaBarra`, `larguraDaFaixa`, `desenharBarra` em `barra.tsx` | Não. Uma constante `GLIFO` (`{ limpar: { g: '↺', repouso: 'subtle', regua: 'error' }, modo: { g: '☾', cor: 'suggestion' }, painel: { g: '◨', cor: 'planMode' }, perguntas: { g: '●', cor: 'warning' } }`, ou forma equivalente) em `barra.tsx`, para o teste comparar o glifo e a cor de cada peça com o desenho; o teste do limpar cobre os dois estados |
+| Pane desktop, faixa da seção | `secaoSvg` (tom `av`, `tracejado: true`) | Não |
 | Pane desktop, linha de cartão | **`sessaoParaAbrirSvg(W, cartao, agora, titulos)`** em `desenho.ts`: anatomia do `filaSvg` (coluna do glifo, linha "sobre", título em até 2 linhas, linha `+ N itens` opcional, filete) | **Sim**, para o kit do pane (`desenho.ts`), com teste próprio |
 | Pane desktop, frase do grupo | `texto` em `s` 12,5 num SVG de W (até 2 linhas, `quebrar`); estado "orquestradora não aberta" em `er` | Não (parte da mesma função ou uma `grupoDeCartoesSvg` ao lado, à escolha da E) |
 | Pane desktop, botão do grupo | `botaoOrquestradora` de `register.tsx` | Não |
@@ -191,7 +191,7 @@ Os cartões estão na conversa da orquestradora de kit-de-orquestracao
 | antes da 1ª leitura | nada à direita (como hoje): o limpar não aparece antes de saber o título |
 | repouso, abaixo da régua | `↺ Limpar` secundário, apagado, `↺` em `subtle` |
 | repouso, na régua | `↺ Limpar` primário, cheio, `↺` em `error`; `· limpar` à esquerda |
-| clicou | `↺ Limpando…` no mesmo render (otimista); cliques ignorados. A ordem do gesto (D3, D4): grava o arquivo do ok → manda o prompt. O arquivo é gravado **sempre**, qualquer que seja a origem que a E medir: a D4 diz que, se a origem for `human`, o arquivo vira só registro e "o ramo novo entra igual". Se o arquivo falha, **não** manda o prompt |
+| clicou | `↺ Limpando…` no mesmo render (otimista); cliques ignorados. A ordem do gesto (D3, D4 do plano em `5e2378c`): se a medida da D4 der origem `human`, **só o prompt** (nenhum arquivo); com outra origem ou `null`, grava o arquivo do ok → manda o prompt, e se o arquivo falha **não** manda o prompt |
 | envio voltou | volta a `↺ Limpar` (D3, literal). O prompt aparece na conversa da orquestradora, que é o efeito visível do clique. Segurar o `Limpando…` até a limpeza acontecer é [pendência à planejadora](#pendencias) |
 | a limpeza aconteceu | a próxima leitura vê o contexto pequeno: o botão fica apagado |
 | falhou (arquivo ou envio) | `↺ Limpar` no mesmo render em que a falha chega; toast com o motivo; aviso na faixa do pane |
@@ -252,7 +252,7 @@ Nenhuma trava a execução; as três são *assumidas, a confirmar*, reversíveis
 
 ## Gestos para a auditoria de clique (E)
 
-- `↺ Limpar`: clique → arquivo `limpeza/<local_…>.json` → prompt na própria sessão → `clear_session "self"` → T7 libera; e o caminho de falha (arquivo não grava → nada é enviado; envio falha → rótulo volta + toast).
+- `↺ Limpar`: clique → (só no ramo da D4 sem `human`: arquivo `limpeza/<local_…>.json`) → prompt na própria sessão → `clear_session "self"` → T7 libera; e o caminho de falha (no ramo do arquivo: arquivo não grava → nada é enviado; envio falha → rótulo volta + toast).
 - `Abrir a orquestradora` do grupo: clique → `abrirSessao` com o `localId` do grupo → `Abrindo…` → a conversa abre; e a linha que some quando o apelido aparece vivo.
 
 <a id="critica"></a>
@@ -263,7 +263,18 @@ Nenhuma trava a execução; as três são *assumidas, a confirmar*, reversíveis
 | Problema | Peso | O que mudou nesta versão |
 |---|---|---|
 | P1 · as larguras das faixas não contavam a reserva do `Limpando…`, e o "cresce 6 células" do membro estava errado | média | faixas refeitas: 125 / 105 / 62 (+1 com `Fechar painel`); membro: +4 presente, +2 ausente, 0 na faixa 2 com selo |
-| P2 · os estados do limpar iam além da D3 e da D2 | média | `Limpando…` volta a ser "até o envio voltar" (D3 literal); o `Limpando…` estendido e o destaque com o ausente ligado viraram [pendências à planejadora](#pendencias). **Não aplicado:** a leitura de que o arquivo da D4 só existe se a origem não for `human`. A D4 diz que, se for `human`, "o arquivo é só registro (o ramo novo entra igual)": ele é gravado sempre, e a tabela agora diz isso com a citação |
-| P3 · a legenda da seção não cabia em W 360 nem 288, e era uma das pistas que separavam a seção de "Esperam você" | média | a faixa passa a `tracejado: true` (a pista vira a forma, em toda largura); legenda curta `clique lá` |
+| P2 · os estados do limpar iam além da D3 e da D2 | média | `Limpando…` volta a ser "até o envio voltar" (D3 literal); o `Limpando…` estendido e o destaque com o ausente ligado viraram [pendências à planejadora](#pendencias); o arquivo de ok só no ramo da D4 sem `human` (corrigido na rodada 2) |
+| P3 · a legenda da seção não cabia em W 360 nem 288, e era uma das pistas que separavam a seção de "Esperam você" | média | a faixa passa a `tracejado: true` (a pista vira a forma, em toda largura); legenda curta |
 | P4 · o `↺` vermelho em repouso gastava o vermelho da barra | média | `↺` em `subtle` abaixo da régua e em `error` na régua; a decisão "Cor do limpar" registra a alternativa; tirada a razão de contraste que nenhuma fonte media |
 | P5 · "na conversa da orquestradora de…" repetido em toda linha | baixa | a frase vai uma vez por grupo, acima do botão; a linha 3 fica só com `+ N itens` |
+
+**Rodada 2 (recrítica 1): 26/30, aprovada com ressalvas**, hierarquia 5 · densidade 5 · consistência 4 · ruído 4 · ação primária 4 · aderência 4. Sem ressalva alta; as quatro, de texto, aplicadas sem nova rodada:
+
+| Problema | Peso | O que mudou |
+|---|---|---|
+| P1 · a revisão citava a D4 da 1ª versão do plano (`29fd8f4`); a de hoje (`ac2383e`, `5e2378c`) não grava arquivo com origem `human` | média | estados, mensagens e gestos: o arquivo só no ramo da D4 sem `human` |
+| P2 · a constante `GLIFO` tinha uma cor só para o limpar | baixa | `repouso: subtle`, `regua: error`; o teste cobre os dois |
+| P3 · a tabela de componentes não dizia `tracejado: true` | baixa | dito |
+| P4 · `clique lá` sem referente no cabeçalho | baixa | `na orquestradora` |
+
+O crítico observou que a recrítica saiu do mesmo contexto da 1ª rodada (a skill pede crítico novo). As mudanças da rodada 2 são de texto e alinham a revisão ao plano; se a orquestradora quiser a regra à letra, um crítico novo confirma a nota antes da execução.
