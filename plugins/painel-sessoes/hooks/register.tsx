@@ -146,7 +146,7 @@ const NOME_SOLTO = 20
 
 /**
  * F189: quem o pane mostra no lugar do apelido `dona`, igual para toda sessão dona. O `F<n>` do título da sessão
- * (`F<n> · <tema>`) achada pelo `localId` na lista ao vivo, arquivada inclusive; título fora desse formato vai cortado;
+ * (`F<n> · <tema>`) achada pelo `localId` na lista ao vivo (que o pane lê sem as arquivadas); título fora desse formato vai cortado;
  * sem a sessão na lista, o `F<n>` do item. Apelido do pool antigo (E3, V1…) passa como está.
  */
 export function nomeDoDono(apelido: string, localId: string, itemId: string, vivas: Vivo[] | null): { apelido: string; titulo?: string; dona?: true } {
@@ -154,7 +154,9 @@ export function nomeDoDono(apelido: string, localId: string, itemId: string, viv
   const titulo = texto(vivas?.find(v => v.sessionId === localId)?.title)?.trim()
   if (!titulo) return { apelido: itemId, dona: true }
   const F = /^(F\d+) · /.exec(titulo)?.[1]
-  const curto = F ?? (titulo.length > NOME_SOLTO ? `${titulo.slice(0, NOME_SOLTO - 1).replace(/\s+\S*$/, '')}…` : titulo)
+  // Por caractere, não por unidade UTF-16: o corte não parte um emoji.
+  const letras = Array.from(titulo)
+  const curto = F ?? (letras.length > NOME_SOLTO ? `${letras.slice(0, NOME_SOLTO - 1).join('').replace(/\s+\S*$/, '')}…` : titulo)
 
   return { apelido: curto, titulo, dona: true }
 }

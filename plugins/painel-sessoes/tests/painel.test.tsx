@@ -3205,10 +3205,21 @@ test('F189: sem a sessão na lista (ou sem lista), a dona cai no F<n> do item e 
   expect(semLista?.dono?.apelido).toBe('F189')
 })
 
-test('F189: a arquivada ainda dá o título (a lista a traz), e o item segue sem ninguém', () => {
-  const [item] = monta([DONA_DOC()], [{ ...VIVA_DONA, isArchived: true }])
-  expect(item?.dono?.apelido).toBe('F189')
-  expect(item?.trava?.texto).toBe('a dona F189 não está mais ativa')
+test('F189: a arquivada que vier na lista ainda dá o título, e o item segue sem ninguém', () => {
+  const [item] = monta([DONA_DOC()], [{ sessionId: 'local_d', title: 'F150 · Outro tema', isArchived: true }])
+  expect(item?.dono?.apelido, 'o F<n> vem do título, não do item').toBe('F150')
+  expect(item?.trava?.texto).toBe('a dona F150 não está mais ativa')
+})
+
+test('F189: o corte do título solto não parte emoji', () => {
+  // 18 letras e um emoji na 19ª posição: por unidade UTF-16 o corte deixaria meio emoji.
+  const [item] = monta([DONA_DOC()], [{ sessionId: 'local_d', title: 'abcdefghijklmnopqr😀😀z' }])
+  expect(item?.dono?.apelido).toBe('abcdefghijklmnopqr😀…')
+})
+
+test('F189: título solto curto fica inteiro', () => {
+  const [item] = monta([DONA_DOC()], [{ sessionId: 'local_d', title: 'Painel curto' }])
+  expect(item?.dono?.apelido).toBe('Painel curto')
 })
 
 test('F189: item do pool antigo (E3, V1) segue com o apelido gravado, sem título nem marca de dona', () => {
@@ -3222,9 +3233,24 @@ test('F189 desenho: a linha e o cartão mostram o F<n> no selo, "dona" por exten
   const [item] = monta([DONA_DOC()], [VIVA_DONA])
   const linhaSvg = itemSvg(360, item as never, AGORA)
   expect(linhaSvg.source).toContain('F189')
-  expect(linhaSvg.source).toContain('<tspan class="s"> · F189</tspan>')
+  expect(linhaSvg.source).toContain('<tspan class="s"> · dona F189</tspan>')
   expect(linhaSvg.source, 'o selo da linha não diz mais só "dona"').not.toContain(' · dona</tspan>')
+  expect(linhaSvg.alt, 'o alt da linha leva o título da sessão, como o cartão').toContain('dona F189 · O painel diz qual sessão é a dona')
   const cartao = cartaoSvg(360, item as never, AGORA, { situacao: () => 'trabalhando agora' })
   expect(cartao.source).toContain('>F189<')
   expect(cartao.alt).toContain('F189 · O painel diz qual sessão é a dona, dona, trabalhando agora')
+})
+
+test('F189 desenho: a dona que sumiu fica só na trava, sem "F189 saiu" na linha nem no cartão', () => {
+  const [item] = monta([DONA_DOC()], [{ sessionId: 'local_outra' }])
+  expect(item?.trava?.texto, 'o item tem de sair travado sem ninguém').toBe('a dona F189 não está mais ativa')
+  expect(item?.com[0]?.vivo, 'o com da dona tem de sair morto').toBe(false)
+  expect(D.quemSaiu(item as never)).toEqual([])
+  expect(itemSvg(360, item as never, AGORA).source).not.toContain('saiu')
+  expect(cartaoSvg(360, item as never, AGORA, { situacao: () => undefined }).source).not.toContain('saiu')
+})
+
+test('F189 desenho: a dona que saiu do com sem travar o item diz "dona F<n> saiu"', () => {
+  const [item] = monta([DONA_DOC({ donoLocalId: 'local_e', donoApelido: 'E3' })], [{ sessionId: 'local_e' }])
+  expect(D.quemSaiu(item as never).map(q => q.t)).toEqual(['dona F189 saiu'])
 })
