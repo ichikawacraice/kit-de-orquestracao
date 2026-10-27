@@ -46,7 +46,7 @@ Decisões do operador: Q419 (F144, 27/10) e o pedido no chat da orquestradora (F
   `$.prompt.submit`, qual origem o `origemDoTurno` lê no transcript (cole a linha no PR).
   - **Origem `human`:** a T7 já libera (`turno do operador`) e **nada muda nela**; não se grava arquivo de ok. É o
     caminho preferido: não abre porta nova de auto-autorização.
-  - **Outra origem:** o clique grava antes `~/.claude/orquestracao/limpeza/<local_…>.json` `{ "em": "<ISO>", "por":
+  - **Outra origem, ou nenhuma (`null`):** o clique grava antes `~/.claude/orquestracao/limpeza/<local_…>.json` `{ "em": "<ISO>", "por":
     "barra" }` (pasta por `PAINEL_DIR/../limpeza`), e a T7 ganha o ramo que o aceita com `em` de até 30 min e nunca no
     futuro. Risco aceito: a orquestradora pode gravar o arquivo pelo Bash, o mesmo já aceito no F48 (D6, sessões
     cooperativas). Só neste caso entram `okDoBotaoDeLimpar` e os testes do ramo.
@@ -86,7 +86,7 @@ Decisões do operador: Q419 (F144, 27/10) e o pedido no chat da orquestradora (F
 ### Critério de pronto
 - Na barra da orquestradora, o botão de limpar aparece em toda faixa, à esquerda do modo; em outra sessão, não.
 - Um clique leva a orquestradora a se limpar sem nenhuma pergunta nem janela (conferido numa sessão de verdade ou, sem
-  ela, pelo teste ponta a ponta da T7 com o arquivo real).
+  ela, pela medida da origem colada no PR e, só no ramo do arquivo, pelo teste ponta a ponta da T7 com o arquivo real).
 - O `contexto-do-papel` não bloqueia mais o turno da orquestradora presente por contexto.
 - Gate verde e os testes do mod verdes.
 
