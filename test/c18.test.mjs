@@ -43,7 +43,7 @@ const diffDe = (stdout) => { const l = stdout.split('\n'); const i = l.findIndex
 
 // ---- 0a: o diff do `adotar --simular` bate com o `adotar` real: aplicado numa cópia dá o mesmo resultado, e linha que só ganhou vírgula não parece remoção
 describe('c18.0 o diff do --simular diz a verdade sobre o adotar real', () => {
-  it('settings do Izanagi (impeccable por último, sem vírgula): o diff aplicado = o adotar real; nenhuma linha some', (t) => {
+  it('settings do Alfa (impeccable por último, sem vírgula): o diff aplicado = o adotar real; nenhuma linha some', (t) => {
     const a = ambiente(t);
     const settings = '{\n  "enabledPlugins": {\n    "impeccable@impeccable": true\n  }\n}\n';
     const d = a.projeto('p0', { 'CLAUDE.md': '# Meu\n\nTexto.\n', 'package.json': '{\n  "name": "meu",\n  "private": true,\n  "scripts": { "test": "node --test" }\n}\n', '.claude/settings.json': settings });
@@ -91,15 +91,15 @@ describe('c18.1 trava-edicao-repos.txt', () => {
   it('com lista: iniciar acrescenta o repo; rodar de novo não duplica; remover tira só a linha (o arquivo nunca some); sem lista, nada é criado (c18b)', (t) => {
     const a = ambiente(t); const d = a.projeto('p2');
     assert.equal(a.lista('trava-edicao-repos.txt'), null, 'precondição: sem lista');
-    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n');
+    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Alfa/.git\n');
     const r = a.kit(d, 'iniciar'); assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.equal(a.lista('trava-edicao-repos.txt'), `/Users/x/Izanagi/.git\n${join(d, '.git')}\n`);
+    assert.equal(a.lista('trava-edicao-repos.txt'), `/Users/x/Alfa/.git\n${join(d, '.git')}\n`);
     const e = a.projeto('p3'); assert.equal(a.kit(e, 'iniciar').status, 0);
-    assert.deepEqual(a.lista('trava-edicao-repos.txt').split('\n').filter(Boolean), ['/Users/x/Izanagi/.git', join(d, '.git'), join(e, '.git')]);
+    assert.deepEqual(a.lista('trava-edicao-repos.txt').split('\n').filter(Boolean), ['/Users/x/Alfa/.git', join(d, '.git'), join(e, '.git')]);
     assert.equal(a.kit(d, 'remover').status, 0);
-    assert.deepEqual(a.lista('trava-edicao-repos.txt').split('\n').filter(Boolean), ['/Users/x/Izanagi/.git', join(e, '.git')], 'só a linha do d saiu');
+    assert.deepEqual(a.lista('trava-edicao-repos.txt').split('\n').filter(Boolean), ['/Users/x/Alfa/.git', join(e, '.git')], 'só a linha do d saiu');
     assert.equal(a.kit(e, 'remover').status, 0);
-    assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n');
+    assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Alfa/.git\n');
   });
   it('adotar acrescenta sem duplicar; linha que já existia antes do kit não sai no remover', (t) => {
     const a = ambiente(t);
@@ -118,9 +118,9 @@ describe('c18.1 trava-edicao-repos.txt', () => {
   });
   it('--simular não grava a lista; a trava de verdade passa a perguntar no repo novo (hook com a lista)', (t) => {
     const a = ambiente(t); const d = a.projeto('p6', { 'CLAUDE.md': '# Meu\n' });
-    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n');
+    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Alfa/.git\n');
     const s = a.kit(d, 'adotar', '--simular'); assert.match(s.stdout, /gravaria: .* em trava-edicao-repos\.txt/);
-    assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n', 'o --simular não gravou');
+    assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Alfa/.git\n', 'o --simular não gravou');
     assert.equal(a.kit(d, 'adotar').status, 0);
     const hook = join(RAIZ, 'plugins', 'orquestracao', 'hooks', 'orquestradora-nao-edita.mjs');
     assert.ok(existsSync(hook), 'o hook existe');
@@ -219,8 +219,8 @@ describe('c18.5 pnpm-workspace.yaml', () => {
 // ---- 6: um projeto que já tem as suas regras
 describe('c18.6 adotar num projeto com guarda própria, gate próprio e CLAUDE.md próprio', () => {
   const projetoComRegras = (a, nome) => a.projeto(nome, {
-    'CLAUDE.md': '# Izanagi\n\n## Regras\n1. Spec-driven é obrigatório.\n\n## O que é este projeto\nLoja.\n',
-    'package.json': { name: 'izanagi', private: true, scripts: { test: 'node scripts/a-vez-do-gate.mjs' } },
+    'CLAUDE.md': '# Alfa\n\n## Regras\n1. Spec-driven é obrigatório.\n\n## O que é este projeto\nLoja.\n',
+    'package.json': { name: 'alfa', private: true, scripts: { test: 'node scripts/a-vez-do-gate.mjs' } },
     'scripts/a-vez-do-gate.mjs': '// gate do projeto\n',
     'scripts/guarda-de-operacao.mjs': '// guarda do projeto\n',
     '.claude/settings.json': { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'node scripts/guarda-de-operacao.mjs' }] }] } },

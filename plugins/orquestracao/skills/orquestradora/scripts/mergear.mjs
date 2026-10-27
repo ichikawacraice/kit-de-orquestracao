@@ -22,16 +22,20 @@ const gh = (args, cwd) => {
 const git = (args, cwd) => rodar(process.env.GIT_BIN || 'git', args, cwd);
 
 export function dadosDoPr(pr, cwd) {
-  const v = JSON.parse(gh(['pr', 'view', String(pr), '--json', 'number,state,headRefOid,baseRefName,headRefName'], cwd));
+  const v = JSON.parse(gh(['pr', 'view', String(pr), '--json', 'number,state,headRefOid,baseRefName,headRefName,isCrossRepository'], cwd));
   if (!v || typeof v.headRefOid !== 'string') throw new Error(`gh pr view ${pr}: resposta sem headRefOid`);
   return v;
 }
+// F200: o PR de fork traz código de fora; a fila roda o gate dele na máquina (com os tokens do ambiente) e o mergearia.
+export const deFork = (v) => v?.isCrossRepository === true;
+export const MOTIVO_DO_FORK = (pr) => `o PR ${pr} vem de um fork (outro repositório): a fila não roda o gate nem mergeia código de fora; quem é dono do repositório revisa e mergeia à mão`;
 export const estadoDoPr = (pr, cwd) => String(JSON.parse(gh(['pr', 'view', String(pr), '--json', 'state'], cwd))?.state ?? '');
 
 // Confere o PR contra o sha validado. Devolve { ok:true, pr, sha, base } ou { recusado:true, motivo, … }.
 export function conferir(pr, shaCurto, cwd) {
   const v = dadosDoPr(pr, cwd);
   if (v.state !== 'OPEN') return { recusado: true, pr, motivo: `o PR não está aberto (${v.state})` };
+  if (deFork(v)) return { recusado: true, pr, motivo: MOTIVO_DO_FORK(pr) };
   const pedido = shaCurto.toLowerCase();
   if (!v.headRefOid.toLowerCase().startsWith(pedido)) {
     return { recusado: true, pr, motivo: `a ponta mudou: validado ${shaCurto}, agora ${v.headRefOid.slice(0, 7)}; peça nova validação` };

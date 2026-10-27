@@ -214,18 +214,4 @@ describe('baixos — modelo e prosa', () => {
     const projeto = modelo.match(/<!-- kit:projeto v1 -->[\s\S]*?<!-- \/kit:projeto -->/)?.[0] ?? '';
     assert.match(projeto, /commit/i);
   });
-  it('a prosa do plugin e do mod não cita o Izanagi (só os nomes de env de compatibilidade e os testes)', () => {
-    const achados = [];
-    const varre = (dir) => {
-      for (const n of readdirSync(dir)) {
-        if (['node_modules', 'tests', 'test', '.git'].includes(n)) continue;
-        const p = join(dir, n);
-        if (statSync(p).isDirectory()) { varre(p); continue; }
-        if (!/\.(md|mjs|tsx|ts|json|sh)$/.test(n) && n !== 'painel' && n !== 'proxima-pergunta' && n !== 'proximo-item') continue;
-        ler(RAIZ, relative(RAIZ, p)).split('\n').forEach((l, i) => { if (/izanagi/i.test(l.replace(/IZANAGI_(?:PAINEL|NUCLEOS_DE_TESTE)\w*/g, ''))) achados.push(`${relative(RAIZ, p)}:${i + 1}`); });
-      }
-    };
-    for (const d of ['plugins', 'modelos', 'cli']) varre(join(RAIZ, d));
-    assert.deepEqual(achados, []);
-  });
 });

@@ -7,7 +7,7 @@ export const FILA_REAL: Record<string, Record<string, unknown>> = {
     "etapa": "execucao",
     "tema": "orquestracao",
     "donoApelido": "P7",
-    "donoLocalId": "local_112bbb1c-9e59-4f31-9f65-7c3a31f6160f",
+    "donoLocalId": "local_00000000-0000-4000-8000-0000000000f7",
     "agora": "travas (E4) e desenho do painel (E1) em execução no kit",
     "resumo": "O painel passa a mostrar a fila de pedidos por tema, com o que está em sessão e onde, em vez da lista de sessões.",
     "depois": [
@@ -30,7 +30,7 @@ export const FILA_REAL: Record<string, Record<string, unknown>> = {
       1129
     ],
     "donoApelido": "P2",
-    "donoLocalId": "local_d985d448-ecd4-40a1-b7ea-eb327779056b",
+    "donoLocalId": "local_00000000-0000-4000-8000-0000000000f2",
     "resumo": "O container do editor e o caminho do navegador até a prévia da loja (SPEC-155, fatias 2 e 5).",
     "atualizadoEm": "2026-10-25T13:34:28.409Z"
   },
@@ -42,7 +42,7 @@ export const FILA_REAL: Record<string, Record<string, unknown>> = {
       1128
     ],
     "donoApelido": "P1",
-    "donoLocalId": "local_c19b5998-5821-4435-91f3-320eac727d3b",
+    "donoLocalId": "local_00000000-0000-4000-8000-0000000000f1",
     "resumo": "As 8 melhorias de tela do editor da loja, fatia por fatia, cada uma até o PR validado.",
     "atualizadoEm": "2026-10-25T13:34:28.409Z"
   },
@@ -51,10 +51,10 @@ export const FILA_REAL: Record<string, Record<string, unknown>> = {
     "atualizadoEm": "2026-10-25T14:03:47.713Z",
     "etapa": "execucao",
     "tema": "kit",
-    "donoLocalId": "local_7723bebb-d428-4bb6-ab63-37354ead5c78",
+    "donoLocalId": "local_00000000-0000-4000-8000-0000000000e8",
     "donoApelido": "E8",
     "agora": "K8 migrada; c14 com E8 (nomes orquestracao:<agente> nas travas e prompts + baixos c13); SessionStart/painel conferidos no proximo turno do operador",
-    "resumo": "O jeito de orquestrar sessões vira um kit que serve a qualquer projeto, não só ao Izanagi."
+    "resumo": "O jeito de orquestrar sessões vira um kit que serve a qualquer projeto, não só ao Alfa."
   },
   "F8": {
     "titulo": "painel do componente da loja: mesmo padrão do DS, menos texto, IA com um ícone",
@@ -102,11 +102,11 @@ export const FILA_REAL: Record<string, Record<string, unknown>> = {
 }
 
 export const TEMAS_REAIS = [
-  { id: 'editor', rotulo: 'Editor da loja', projeto: 'izanagi' },
-  { id: 'motor', rotulo: 'Motor dos jobs', projeto: 'izanagi' },
-  { id: 'gate', rotulo: 'Gate e testes', projeto: 'izanagi' },
-  { id: 'orquestracao', rotulo: 'Sessões e painel', projeto: 'izanagi' },
-  { id: 'kit', rotulo: 'Kit de orquestração', projeto: 'izanagi' },
+  { id: 'editor', rotulo: 'Editor da loja', projeto: 'alfa' },
+  { id: 'motor', rotulo: 'Motor dos jobs', projeto: 'alfa' },
+  { id: 'gate', rotulo: 'Gate e testes', projeto: 'alfa' },
+  { id: 'orquestracao', rotulo: 'Sessões e painel', projeto: 'alfa' },
+  { id: 'kit', rotulo: 'Kit de orquestração', projeto: 'alfa' },
 ]
 
 const TEMAS_DOS_SINTETICOS = ['editor', 'motor', 'gate', 'orquestracao', 'kit']
@@ -130,8 +130,8 @@ export function filaCompleta(): Record<string, Record<string, unknown>> {
       etapa: n === 42 ? 'planejamento' : n === 44 ? 'design' : n === 43 ? 'execucao' : n % 7 === 0 ? 'descartado' : 'feito',
       feitoEm: n >= 42 ? undefined : '2026-10-20T10:00:00.000Z',
       atualizadoEm: '2026-10-25T13:34:28.409Z',
-      projeto: kit ? 'kit-de-orquestracao' : 'izanagi',
-      ...(n === 43 ? { donoApelido: 'E1', donoLocalId: 'local_9862c732-e6a6-4cff-bb2d-cc9087f9d50d' } : {}),
+      projeto: kit ? 'kit-de-orquestracao' : 'alfa',
+      ...(n === 43 ? { donoApelido: 'E1', donoLocalId: 'local_00000000-0000-4000-8000-0000000000e1' } : {}),
     }
   }
   fila.F43!.titulo = 'o painel diz o que é cada item citado pelo número'

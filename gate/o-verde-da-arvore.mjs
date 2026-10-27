@@ -114,7 +114,7 @@ export function arvoreDoWorktree(raiz = RAIZ) {
 
 /** Os nomes das variáveis que entram na chave, ordenados. */
 export function nomesDoEnv(env = process.env, arvore = carregarConfig(RAIZ).arvore) {
-  const prefixos = [...new Set([...arvore.prefixosEnv, "KIT_", "IZANAGI_"])];
+  const prefixos = [...new Set([...arvore.prefixosEnv, "KIT_"])];
   // As variáveis do próprio gate (a trava, o diretório do verde, o desligar do cache) não mudam o que se mede.
   const fora = new Set(prefixos.flatMap((p) => arvore.foraDaChave.map((n) => p + n)));
   return Object.keys(env)
@@ -360,7 +360,7 @@ function gitOuMotivo(args, raiz) {
 }
 
 /**
- * Onde mora o registro: `KIT_GATE_VERDE_DIR` (ou o legado `IZANAGI_`), senão o diretório comum do
+ * Onde mora o registro: `KIT_GATE_VERDE_DIR`, senão o diretório comum do
  * git (o mesmo da trava, um só para todos os worktrees), senão `os.tmpdir()`
  * — e aí devolve o aviso.
  */
@@ -438,7 +438,7 @@ export function linhaDoPulo(registro) {
   );
 }
 
-/** `KIT_GATE_SEM_CACHE=1` (ou o legado `IZANAGI_`) mede de novo e regrava. */
+/** `KIT_GATE_SEM_CACHE=1` mede de novo e regrava. */
 export const semCache = (env = process.env) => envKit(env, "GATE_SEM_CACHE") === "1";
 
 /**

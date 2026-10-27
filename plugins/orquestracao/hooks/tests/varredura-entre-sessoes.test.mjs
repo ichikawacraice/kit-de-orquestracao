@@ -304,8 +304,8 @@ test('F39 marcadores: os marcadores ancorados em português passam; nada passa p
 test('F39 chave=valor: valor literal em atribuição de nome de segredo é recusado; referência e marcador passam', () => {
   const real = 'aB3dE5gH7jK9';
   const recusados = ['DB_SEN' + `HA=${real}`, 'password' + `: "${real}"`, 'api_key' + `='${real}'`, 'MY_SECRET_TOKEN' + `: ${real}`, 'senha' + `: ${real}`];
-  const aceitos = ['DB_SENHA=${DB_SENHA}', 'password: secret:DB', 'IZANAGI_SECRET_FOO=<sua-chave>', 'token: process.env.TOKEN', 'DB_SENHA=sua_senha', 'DB_SENHA=$DB_SENHA', 'password: SEU_SEGREDO_AQUI',
-    'password: secret:DB2', 'token: process.env.TOKEN_2', 'IZANAGI_SECRET_FOO=<sua-chave-1>', 'DB_SENHA=$DB_SENHA_2', 'senha: SEU_SEGREDO_AQUI',
+  const aceitos = ['DB_SENHA=${DB_SENHA}', 'password: secret:DB', 'APP_SECRET_FOO=<sua-chave>', 'token: process.env.TOKEN', 'DB_SENHA=sua_senha', 'DB_SENHA=$DB_SENHA', 'password: SEU_SEGREDO_AQUI',
+    'password: secret:DB2', 'token: process.env.TOKEN_2', 'APP_SECRET_FOO=<sua-chave-1>', 'DB_SENHA=$DB_SENHA_2', 'senha: SEU_SEGREDO_AQUI',
     'max_tokens: 4096', 'token: aprovado', 'o token expira em 24h', 'senha = getSecret("db")', 'const token = `${process.pid}-${randomBytes(6).toString("hex")}`;'];
   assert.ok(recusados.length > 0 && aceitos.length > 0);
   for (const t of recusados) assert.ok(segredosEm(t).some((a) => a.padrao === 'chave-valor'), `aceito por engano: ${t.slice(0, 12)}…`);
@@ -314,7 +314,7 @@ test('F39 chave=valor: valor literal em atribuição de nome de segredo é recus
 
 test('O1: chave=valor só aceita marcador INTEIRO ou referência; valor que apenas o contém é segredo', () => {
   const recusados = ['DB_SENHA=minha-senha-forte-7', 'password: "Example2024x"', 'token: exemplo2024abc', 'api_key=sua_senha_forte9', 'DB_SENHA=troque-isto-ja-3'];
-  const aceitos = ['DB_SENHA=${DB_SENHA}', 'password: secret:DB', 'IZANAGI_SECRET_FOO=<sua-chave>', 'token: process.env.TOKEN', 'DB_SENHA=sua_senha', 'password: secret:DB2', 'token: process.env.TOKEN_2'];
+  const aceitos = ['DB_SENHA=${DB_SENHA}', 'password: secret:DB', 'APP_SECRET_FOO=<sua-chave>', 'token: process.env.TOKEN', 'DB_SENHA=sua_senha', 'password: secret:DB2', 'token: process.env.TOKEN_2'];
   assert.ok(recusados.length > 0 && aceitos.length > 0);
   for (const t of recusados) assert.ok(segredosEm(t).some((a) => a.padrao === 'chave-valor'), `aceito por engano: ${t.slice(0, 14)}`);
   for (const t of aceitos) assert.deepEqual(segredosEm(t), [], `falso positivo: ${t}`);

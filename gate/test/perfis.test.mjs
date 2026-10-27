@@ -12,7 +12,7 @@ import { expect } from "./expect.mjs";
 
 /**
  * **Os perfis do gate**: o projeto `npm` simples (só `kit.json` mínimo), o
- * workspace `pnpm` do Izanagi lido do disco, e a configuração em si. Cada caso
+ * workspace `pnpm` do Alfa lido do disco, e a configuração em si. Cada caso
  * monta o seu repositório num diretório temporário — a trava e o verde de
  * verdade (do diretório comum do git) nunca são tocados.
  */
@@ -113,34 +113,34 @@ describe("(a) projeto npm simples, só com kit.json mínimo", () => {
   });
 });
 
-describe("(b) perfil pnpm-workspace reproduz a lista de pacotes do Izanagi", () => {
+describe("(b) perfil pnpm-workspace reproduz a lista de pacotes do Alfa", () => {
   const pacote = (nome, extra = {}) => ({ name: nome, version: "0.0.0", ...extra });
   const montar = () =>
     repo({
       "pnpm-workspace.yaml": 'packages:\n  - "packages/*"\n  - "apps/*"\n',
       "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
-      "packages/shared/package.json": pacote("@izanagi/shared", { main: "dist/index.js", types: "dist/index.d.ts" }),
-      "packages/adapters/package.json": pacote("@izanagi/adapters", { main: "./dist/index.js" }),
-      "packages/runner/package.json": pacote("@izanagi/runner", { exports: { ".": { types: "./dist/index.d.ts" } } }),
-      "apps/web/package.json": pacote("@izanagi/web"),
+      "packages/shared/package.json": pacote("@alfa/shared", { main: "dist/index.js", types: "dist/index.d.ts" }),
+      "packages/adapters/package.json": pacote("@alfa/adapters", { main: "./dist/index.js" }),
+      "packages/runner/package.json": pacote("@alfa/runner", { exports: { ".": { types: "./dist/index.d.ts" } } }),
+      "apps/web/package.json": pacote("@alfa/web"),
       ".claude/kit.json": { gate: { perfil: "pnpm-workspace" } },
     });
 
-  it("`pacotes: auto` lê os quatro `@izanagi/*` do workspace e os filtros certos saem", () => {
+  it("`pacotes: auto` lê os quatro `@alfa/*` do workspace e os filtros certos saem", () => {
     const raiz = montar();
     try {
       const cfg = carregarConfig(raiz);
       expect(cfg.gate.pacotes).toBe("auto");
       const achados = pacotesDoGate(raiz, cfg);
       expect(achados.map((p) => p.curto).sort()).toEqual(["adapters", "runner", "shared", "web"]);
-      expect(achados.map((p) => p.filtro).sort()).toEqual(["@izanagi/adapters", "@izanagi/runner", "@izanagi/shared", "@izanagi/web"]);
-      expect(pacoteDoArgv(["web"], raiz, cfg).filtro).toBe("@izanagi/web");
-      expect(comandoDaSuite({}, ["runner", "x.test.ts"], raiz, cfg)).toEqual({ cmd: "pnpm", args: ["--filter", "@izanagi/runner", "test", "x.test.ts"] });
+      expect(achados.map((p) => p.filtro).sort()).toEqual(["@alfa/adapters", "@alfa/runner", "@alfa/shared", "@alfa/web"]);
+      expect(pacoteDoArgv(["web"], raiz, cfg).filtro).toBe("@alfa/web");
+      expect(comandoDaSuite({}, ["runner", "x.test.ts"], raiz, cfg)).toEqual({ cmd: "pnpm", args: ["--filter", "@alfa/runner", "test", "x.test.ts"] });
       expect(comandoDaSuite({}, [], raiz, cfg)).toEqual({ cmd: "pnpm", args: ["-r", "--workspace-concurrency=2", "test"] });
       expect(comandoDaSuite({ CI: "1" }, [], raiz, cfg)).toEqual({ cmd: "pnpm", args: ["-r", "test"] });
       expect(() => pacoteDoArgv(["nada"], raiz, cfg)).toThrow(/adapters, runner, shared, web|shared/);
       // O que o gate constrói: só quem tem porta de entrada em dist/ (web nunca entra).
-      expect(pacotesConsumidosCompilados(raiz)).toEqual(["@izanagi/adapters", "@izanagi/runner", "@izanagi/shared"]);
+      expect(pacotesConsumidosCompilados(raiz)).toEqual(["@alfa/adapters", "@alfa/runner", "@alfa/shared"]);
     } finally {
       rmSync(raiz, { recursive: true, force: true });
     }
@@ -162,14 +162,14 @@ describe("a configuração", () => {
     }
   });
 
-  it("KIT_* vence IZANAGI_*, e o nome antigo ainda vale quando é o único", () => {
-    expect(envKit({ KIT_GATE_VAGAS: "2", IZANAGI_GATE_VAGAS: "5" }, "GATE_VAGAS")).toBe("2");
-    expect(envKit({ IZANAGI_GATE_VAGAS: "5" }, "GATE_VAGAS")).toBe("5");
-    expect(vagas({ IZANAGI_GATE_VAGAS: "3" })).toBe(3);
+  it("só KIT_* vale: o mesmo sufixo com outro prefixo não entra, e vazio é ausente", () => {
+    expect(envKit({ KIT_GATE_VAGAS: "2", OUTRO_GATE_VAGAS: "5" }, "GATE_VAGAS")).toBe("2");
+    expect(envKit({ OUTRO_GATE_VAGAS: "5", GATE_VAGAS: "5" }, "GATE_VAGAS")).toBeUndefined();
+    expect(vagas({ KIT_GATE_VAGAS: "3" })).toBe(3);
     expect(envKit({ KIT_GATE_VAGAS: "" }, "GATE_VAGAS")).toBeUndefined();
   });
 
-  it("o teto de workers: CI sem teto, quarto da máquina, KIT_/IZANAGI_TESTE_WORKERS manda, inválido recusado", () => {
+  it("o teto de workers: CI sem teto, quarto da máquina, KIT_TESTE_WORKERS manda, inválido recusado", () => {
     // `VITEST_WORKER_ID` é o ramo de "um worker do vitest": o número de hoje, sem tomar ficha do teto da máquina (esse ramo
     // tem o teste dele em `o-teto-de-workers.test.mjs`, com pasta temporária — aqui a pasta de verdade nunca é tocada).
     const worker = { VITEST_WORKER_ID: "1" };
@@ -178,7 +178,6 @@ describe("a configuração", () => {
     expect(tetoDeWorkers({ ...worker }, 2)).toEqual({ maxWorkers: 1, minWorkers: 1 });
     expect(tetoDeWorkers({ ...worker }, 16, 0.5)).toEqual({ maxWorkers: 8, minWorkers: 1 });
     expect(tetoDeWorkers({ ...worker, KIT_TESTE_WORKERS: "5" }, 15)).toEqual({ maxWorkers: 5, minWorkers: 1 });
-    expect(tetoDeWorkers({ ...worker, IZANAGI_TESTE_WORKERS: "4" }, 15)).toEqual({ maxWorkers: 4, minWorkers: 1 });
     expect(() => tetoDeWorkers({ KIT_TESTE_WORKERS: "0" }, 15)).toThrow(/inteiro ≥ 1/);
     expect(() => tetoDeWorkers({ KIT_TESTE_WORKERS: "dois" }, 15)).toThrow(/inteiro ≥ 1/);
   });

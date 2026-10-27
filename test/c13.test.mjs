@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nomesDoAutorEm } from './nomes-do-autor.mjs';
 
 // c13: temas.json semeado pelo painel na primeira gravação, o doutor diz se existe, e a regra do merge sem rebase em dia na SKILL.
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -67,7 +68,7 @@ describe('c13 — temas.json semeado pelo painel', () => {
       writeFileSync(join(d, 'package.json'), JSON.stringify({ name: 'r', version: '1.0.0', scripts: { test: 'node -e "0"' } }));
       writeFileSync(join(d, '.claude', 'settings.json'), '{}\n'); git(d, 'add', '-A'); git(d, 'commit', '-qm', 'b');
       const env = { ...process.env, HOME: home, CI: '', KIT_GATE_TRAVA: join(home, 'gate.trava'), KIT_GATE_VERDE_DIR: join(home, 'verde') };
-      delete env.PAINEL_DIR; delete env.IZANAGI_PAINEL_DIR;
+      delete env.PAINEL_DIR;
       const kit = (...a) => spawnSync('node', [join(RAIZ, 'cli', 'kit.mjs'), ...a], { cwd: d, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env });
       assert.equal(kit('adotar').status, 0);
       assert.match(kit('doutor').stdout, /info: temas\.json ausente/);
@@ -90,9 +91,10 @@ describe('c13 — regra do merge sem rebase em dia, genérica, na SKILL da orque
     assert.match(t, /Status 1 com `CONFLICT`/);
     assert.match(t, /devolve à dona para rebasear/);
   });
-  it('sem ADR e sem Izanagi na regra', () => {
+  it('sem ADR e sem projeto do autor na regra', () => {
     const trecho = t.split('\n').filter((l) => /merge-tree|match-head-commit/.test(l)).join('\n');
     assert.ok(trecho.length > 0);
-    assert.doesNotMatch(trecho, /izanagi|ADR \d|develop|pnpm/i);
+    assert.doesNotMatch(trecho, /ADR \d|develop|pnpm/i);
+    assert.deepEqual(nomesDoAutorEm(trecho), []);
   });
 });

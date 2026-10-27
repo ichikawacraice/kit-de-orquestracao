@@ -71,7 +71,8 @@ function main() {
   if (vezes !== LIMIAR_VEZES) return;
 
   const quem = e.agent_id ? `subagente ${e.agent_type || e.agent_id}` : 'principal';
-  registrar(e.session_id, HOOK, 'avisou', `${quem}: ${cmd}`);
+  // só o programa e o tamanho: o comando inteiro pode trazer token (`curl -H "Authorization: …"`), e o log fica no disco (F200)
+  registrar(e.session_id, HOOK, 'avisou', `${quem}: ${cmd.trim().split(/\s+/).find((p) => !/^[A-Za-z_]\w*=/.test(p)) ?? ''} (${cmd.length} caracteres)`);
   process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: e.hook_event_name === 'PostToolUseFailure' ? 'PostToolUseFailure' : 'PostToolUse',

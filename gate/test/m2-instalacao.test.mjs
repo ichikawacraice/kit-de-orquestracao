@@ -9,7 +9,7 @@ import { expect } from "./expect.mjs";
 
 /**
  * **M2 (laudo V1 sobre a K6)**: o gate `pnpm-workspace` não exige o formato do
- * Izanagi. Sem `node_modules/.pnpm/lock.yaml` mas com `node_modules` segue;
+ * Alfa. Sem `node_modules/.pnpm/lock.yaml` mas com `node_modules` segue;
  * sem pacote com `main` em `dist` pula o build com aviso. O perfil que exige
  * (`gate.exigeDist: true`) continua recusando nos dois casos.
  */
@@ -33,7 +33,7 @@ const mudo = () => {
   return { avisar: (m) => linhas.push(m), linhas };
 };
 
-describe("M2 — o gate pnpm-workspace sem o formato do Izanagi", () => {
+describe("M2 — o gate pnpm-workspace sem o formato do Alfa", () => {
   it("sem node_modules/.pnpm/lock.yaml, com node_modules: a conferência segue", () => {
     const raiz = workspace();
     try {

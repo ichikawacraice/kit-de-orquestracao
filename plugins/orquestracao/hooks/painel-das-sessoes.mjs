@@ -50,7 +50,7 @@ function citaPerguntaDestaSessao(texto, sessionId) {
     try { appendFileSync(LOG, `${new Date().toISOString()} sem local_ para ${sessionId}: Qnn não contado (${ids.join(',')})\n`); } catch { /* sem log */ }
     return false;
   }
-  const painel = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(BASE, 'painel');
+  const painel = process.env.PAINEL_DIR || join(BASE, 'painel');
   return ids.some((q) => {
     // F183: a pergunta fechada mora no arquivo; acharPergunta olha a pasta quente e depois ele
     try { const f = acharPergunta(join(painel, 'perguntas'), q); return Boolean(f) && JSON.parse(readFileSync(f, 'utf8')).data?.sessaoId === local; } catch { return false; }
@@ -64,7 +64,7 @@ const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'fei
 function itensDaSessao(sessionId) {
   const local = registroDaSessao(sessionId)?.localId;
   if (!local) return [];
-  const dir = join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(BASE, 'painel'), 'fila');
+  const dir = join(process.env.PAINEL_DIR || join(BASE, 'painel'), 'fila');
   if (!existsSync(dir)) return [];
   const ids = [];
   for (const nome of readdirSync(dir)) {

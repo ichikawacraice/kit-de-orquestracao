@@ -3,7 +3,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { diffTexto, linhasApagadas } from './diff.mjs';
 import { LOCK } from './lock.mjs';
-import { FRASE_TRAVA_COBRE, caminhosDosModelos, aplicarOperador, arquivosDoGate, esqueletoDe, gravar, lerModelo, lerTexto, avisoDasRegras, pastaDoFront, planejar, planejarOperador, semBom, semOsBlocos, sugestaoDePerfil } from './pacote.mjs';
+import { FRASE_TRAVA_COBRE, caminhosDosModelos, aplicarOperador, arquivosDoGate, esqueletoDe, existe, gravar, lerModelo, lerTexto, avisoDasRegras, pastaDoFront, planejar, planejarOperador, semBom, semOsBlocos, sugestaoDePerfil } from './pacote.mjs';
 
 /** Devolve { codigo, saida, erro }. */
 export function adotar({ destino, perfil: perfilPedido, versao, simular = false, trocarTest = false, parcial = false, design: designPedido }) {
@@ -14,7 +14,7 @@ export function adotar({ destino, perfil: perfilPedido, versao, simular = false,
   if (existsSync(join(destino, LOCK))) return { codigo: 2, saida: '', erro: `kit adotar: já existe ${LOCK} — o kit já foi adotado; para trazer a versão nova use \`kit atualizar\`` };
   // Instalação interrompida (processo morto no meio): `.kit-tmp` órfão ou `test` que já é o gate, sem lock. O `adotar` reconhece, conclui e grava o lock.
   const candidatos = ['CLAUDE.md', 'package.json', '.claude/settings.json', '.claude/kit.json', LOCK, ...arquivosDoGate().map((f) => `scripts/kit/${f}`), ...caminhosDosModelos(front.pasta)];
-  const orfaos = candidatos.filter((rel) => existsSync(join(destino, `${rel}.kit-tmp`)));
+  const orfaos = candidatos.filter((rel) => existe(join(destino, `${rel}.kit-tmp`)));
   let testJaEhGate = false;
   try { testJaEhGate = JSON.parse(semBom(lerTexto(destino, 'package.json') ?? '{}')).scripts?.test === lerModelo().perfis[perfil]?.scripts?.test; } catch { /* JSON ilegível: o planejador recusa abaixo */ }
   const recuperando = orfaos.length > 0 || testJaEhGate;

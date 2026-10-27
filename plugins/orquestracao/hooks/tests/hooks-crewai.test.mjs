@@ -3,7 +3,7 @@
 // transcripts sintéticos no formato real (.jsonl), log e estado num diretório temporário.
 // Rodar: node gate/com-fichas.mjs -- node plugins/orquestracao/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync, statSync, unlinkSync } from "node:fs";
 import { tmpdir, homedir, userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,7 +61,7 @@ function igual(a, b, msg) { if (a !== b) throw new Error(`${msg}: esperado ${JSO
 
 // ---------- ideia 1: orquestradora não edita ----------
 const SID = '6a6d90b1-2fe5-4255-a082-ecb2a2ebf520';
-const REPO = join(homedir(), 'Developer/Projects/Izanagi');
+const REPO = join(homedir(), 'Developer/Projects/Alfa');
 const pre = (tool, input, extra = {}) => ({
   session_id: SID, transcript_path: '/x.jsonl', cwd: REPO, permission_mode: 'bypassPermissions',
   hook_event_name: 'PreToolUse', tool_name: tool, tool_input: input, tool_use_id: 'toolu_1', ...extra,
@@ -95,10 +95,10 @@ caso('1.5 orquestradora: NotebookEdit pergunta', () => {
   igual(decisao(rodar('orquestradora-nao-edita.mjs', pre('NotebookEdit', { notebook_path: `${REPO}/n.ipynb`, new_source: 'x' }))), 'ask', 'decisão');
 });
 for (const [nome, p] of [
-  ['estado da orquestração', () => join(base, 'izanagi.md')],
+  ['estado da orquestração', () => join(base, 'alfa.md')],
   ['notas de release', () => `${REPO}/docs/releases/2026-10-23-1.md`],
-  ['notas de release em worktree', () => join(homedir(), 'Developer/Projects/Izanagi-wt-rel/docs/releases/2026-10-23-2.md')],
-  ['memória', () => join(homedir(), '.claude/projects/-Users-x-Izanagi/memory/a.md')],
+  ['notas de release em worktree', () => join(homedir(), 'Developer/Projects/Alfa-wt-rel/docs/releases/2026-10-23-2.md')],
+  ['memória', () => join(homedir(), '.claude/projects/-Users-x-Alfa/memory/a.md')],
   ['scratchpad', () => '/private/tmp/claude-501/proj/sessao/scratchpad/a.md'],
   ['notas entre sessões', () => join(homedir(), 'Library/Application Support/Claude/side-session-notes/local_x/n.md')],
 ]) {
@@ -116,7 +116,7 @@ caso('1.7 orquestradora: Bash não é coberto (nem pergunta, nem registra)', () 
 caso('1.8 só nos repositórios listados: repo fora da lista passa calado, repo da lista pergunta', () => {
   marcar();
   const ev = pre('Edit', { file_path: `${REPO}/apps/web/a.ts`, old_string: 'a', new_string: 'b' });
-  writeFileSync(join(base, 'trava-edicao-repos.txt'), '/Users/x/Developer/Projects/battlewand/.git\n');
+  writeFileSync(join(base, 'trava-edicao-repos.txt'), '/Users/x/Developer/Projects/beta/.git\n');
   igual(rodar('orquestradora-nao-edita.mjs', ev), null, 'fora da lista');
   writeFileSync(join(base, 'trava-edicao-repos.txt'), `/Users/x/outro/.git\n${REPO}/.git\n`);
   igual(decisao(rodar('orquestradora-nao-edita.mjs', ev)), 'ask', 'na lista');
@@ -371,8 +371,30 @@ const bash = (cmd, stdout, extra) => post('Bash', { command: cmd }, { stdout, st
 const VITEST = ' FAIL  src/a.test.ts > soma\nAssertionError: expected 3 to be 4\n Tests  1 failed | 41 passed (42)\n';
 const avisos = (eventos) => eventos.map((ev) => rodar('laco-de-comandos.mjs', ev)?.hookSpecificOutput?.additionalContext ?? null);
 
+// F200: o aviso registra o laço sem o comando inteiro (que pode trazer token), e o log nasce legível só pelo dono.
+caso('3.0 o log do laço não guarda o segredo do comando e nasce 0600', () => {
+  const token = 'ghp_' + 'A'.repeat(36);
+  const r = avisos(Array.from({ length: 4 }, () => bash(`curl -H "Authorization: Bearer ${token}" https://api.exemplo.com/user`, '{"message":"Bad credentials"}\n')));
+  igual(r[3] !== null, true, 'precondição: o 4º avisou');
+  const linhas = log().filter((l) => l[2] === 'laco-de-comandos');
+  igual(linhas.length, 1, 'precondição: o aviso foi registrado');
+  igual(linhas[0][4].includes(token), false, `o token foi para o log: ${linhas[0][4]}`);
+  igual(linhas[0][4].includes('curl'), true, 'o log perdeu o nome do comando');
+  igual(statSync(join(base, 'hooks-crewai.log')).mode & 0o777, 0o600, 'permissão do log');
+});
+caso('3.0b atribuição na frente do comando (GH_TOKEN=… gh) não vai para o log; log antigo 0644 vira 0600', () => {
+  writeFileSync(join(base, 'hooks-crewai.log'), '', { mode: 0o644 });
+  const token = 'ghp_' + 'B'.repeat(36);
+  const r = avisos(Array.from({ length: 4 }, () => bash(`GH_TOKEN=${token} gh api user`, '{"message":"Bad credentials"}\n')));
+  igual(r[3] !== null, true, 'precondição: o 4º avisou');
+  const linha = log().find((l) => l[2] === 'laco-de-comandos');
+  igual(linha?.[4]?.includes(token), false, `o token foi para o log: ${linha?.[4]}`);
+  igual(linha?.[4]?.includes('gh'), true, 'o log perdeu o programa');
+  igual(statSync(join(base, 'hooks-crewai.log')).mode & 0o777, 0o600, 'o log antigo ficou 0644');
+});
+
 caso('3.1 o mesmo comando 4× com a mesma saída avisa no 4º, só uma vez', () => {
-  const r = avisos(Array.from({ length: 5 }, () => bash('pnpm --filter @izanagi/runner test', VITEST)));
+  const r = avisos(Array.from({ length: 5 }, () => bash('pnpm --filter @alfa/runner test', VITEST)));
   igual(r.map(Boolean).join(','), 'false,false,false,true,false', 'avisos');
   igual(log().map((l) => l[3]).join(','), 'avisou', 'log');
 });
@@ -402,7 +424,7 @@ caso('3.6 a sequência é por agente: o principal e um subagente não se somam',
 });
 caso('3.8 o teste vermelho repetido chega como PostToolUseFailure (error, sem tool_response) e avisa', () => {
   const falha = { session_id: SID, transcript_path: '/x.jsonl', cwd: REPO, hook_event_name: 'PostToolUseFailure', tool_name: 'Bash',
-    tool_input: { command: 'pnpm --filter @izanagi/runner test' }, tool_use_id: 'toolu_1', error: `Exit code 1\n${VITEST}`, is_interrupt: false };
+    tool_input: { command: 'pnpm --filter @alfa/runner test' }, tool_use_id: 'toolu_1', error: `Exit code 1\n${VITEST}`, is_interrupt: false };
   const r = Array.from({ length: 4 }, () => rodar('laco-de-comandos.mjs', falha));
   igual(r.slice(0, 3).every((x) => x === null), true, '1º–3º');
   igual(r[3]?.hookSpecificOutput?.hookEventName, 'PostToolUseFailure', 'evento do aviso');

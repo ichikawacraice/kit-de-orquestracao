@@ -32,7 +32,7 @@ const iso = (ms: number) => new Date(ms).toISOString()
 
 type Motivo = ArquivoDeReinicio['motivos'][number]
 const sessao = (n: number, titulo = `E${n} · tela`): Motivo => ({ tipo: 'sessao', texto: `${titulo} trabalhando`, localId: `local_${n}` })
-const teste: Motivo = { tipo: 'teste', texto: 'teste de izanagi em apps-web (2 fichas)' }
+const teste: Motivo = { tipo: 'teste', texto: 'teste de alfa em apps-web (2 fichas)' }
 const merge: Motivo = { tipo: 'merge', texto: 'merge/rebase no meio: gh pr merge 63 --squash' }
 const arquivo = (motivos: Motivo[], idadeMin = 0, extra: Partial<ArquivoDeReinicio> = {}, agora = AGORA): ArquivoDeReinicio => ({
   pode: motivos.length === 0,
@@ -584,7 +584,7 @@ test('pane sem aviso: a linha discreta diz espere · N rodando e o botão Me avi
   const texto = await lido(ui)
   expect(texto).toContain('Reiniciar: espere · 3 rodando')
   expect((await ui.find({ key: 'reinicio' }))?.text).toBe('Me avise')
-  expect(texto, 'sem aviso os motivos não aparecem').not.toContain('teste de izanagi')
+  expect(texto, 'sem aviso os motivos não aparecem').not.toContain('teste de alfa')
   m.estado.motivos = []
   await ui.press({ key: 'atualizar' })
   await m.relogio.settle()

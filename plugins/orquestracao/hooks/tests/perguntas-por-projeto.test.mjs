@@ -52,10 +52,10 @@ const ids = (lista) => lista.map((d) => d.id).sort();
 
 // ---- o slug e o lugar no arquivo ----
 test('slugDoProjeto: minúsculo, [a-z0-9-], sem traço nas pontas; vazio vira null', () => {
-  assert.equal(slugDoProjeto('Izanagi'), 'izanagi');
+  assert.equal(slugDoProjeto('Alfa'), 'alfa');
   assert.equal(slugDoProjeto('Meu_Repo.git'), 'meu-repo-git');
   assert.equal(slugDoProjeto('  kit-de-orquestracao '), 'kit-de-orquestracao');
-  assert.equal(slugDoProjeto('Wicomm IA'), 'wicomm-ia');
+  assert.equal(slugDoProjeto('Loja Azul IA'), 'loja-azul-ia');
   assert.equal(slugDoProjeto('__'), null);
   assert.equal(slugDoProjeto(undefined), null);
 });
@@ -68,23 +68,23 @@ test('mesDe usa o horário de São Paulo e a data da resposta antes das outras',
 });
 
 test('caminhoNoArquivo: projeto em slug, sem projeto vai para sem-projeto', () => {
-  assert.equal(caminhoNoArquivo('/p', 'Q1', { projeto: 'Izanagi', respondidaEm: '2026-10-20T12:00:00Z' }), join('/p', 'arquivo', 'izanagi', '2026-10', 'Q1.json'));
+  assert.equal(caminhoNoArquivo('/p', 'Q1', { projeto: 'Alfa', respondidaEm: '2026-10-20T12:00:00Z' }), join('/p', 'arquivo', 'alfa', '2026-10', 'Q1.json'));
   assert.equal(caminhoNoArquivo('/p', 'Q1', { respondidaEm: '2026-10-20T12:00:00Z' }), join('/p', 'arquivo', 'sem-projeto', '2026-10', 'Q1.json'));
 });
 
 test('acharPergunta: a quente primeiro, depois o arquivo; ausente = null', () => {
   pergunta('Q1', { estado: 'aberta' });
-  pergunta('Q2', { estado: 'respondida' }, join(pasta(), 'arquivo', 'izanagi', '2026-10'));
+  pergunta('Q2', { estado: 'respondida' }, join(pasta(), 'arquivo', 'alfa', '2026-10'));
   assert.equal(acharPergunta(pasta(), 'Q1'), quente('Q1'));
-  assert.equal(acharPergunta(pasta(), 'Q2'), noArquivo('izanagi', '2026-10', 'Q2'));
+  assert.equal(acharPergunta(pasta(), 'Q2'), noArquivo('alfa', '2026-10', 'Q2'));
   assert.equal(acharPergunta(pasta(), 'Q3'), null);
 });
 
 // ---- escrita: projeto num nome só ----
 test('gravar projeto fora do slug é recusado e nada é gravado', () => {
-  const r = painel(['set', 'perguntas', 'Q1', JSON.stringify({ estado: 'aberta', sessaoId: LOCAL(1), projeto: 'Izanagi' })]);
+  const r = painel(['set', 'perguntas', 'Q1', JSON.stringify({ estado: 'aberta', sessaoId: LOCAL(1), projeto: 'Alfa' })]);
   assert.equal(r.exit, 1, r.out);
-  assert.match(r.err, /projeto "Izanagi".*izanagi/);
+  assert.match(r.err, /projeto "Alfa".*alfa/);
   assert.ok(!existsSync(quente('Q1')));
   const s = painel(['set', 'sessoes', LOCAL(2), JSON.stringify({ estado: 'parada', projeto: 'Kit De' })]);
   assert.equal(s.exit, 1, 'vale para todas as coleções');
@@ -97,18 +97,18 @@ test('pergunta nova sem projeto ganha o slug da raiz do git', () => {
 });
 
 test('update de documento antigo com projeto em caixa alta, sem mexer no projeto, não é recusado', () => {
-  pergunta('Q1', { estado: 'assumida', sessaoId: LOCAL(1), projeto: 'Izanagi' });
+  pergunta('Q1', { estado: 'assumida', sessaoId: LOCAL(1), projeto: 'Alfa' });
   const r = painel(['update', 'perguntas', 'Q1', '{"nota":"x"}']);
   assert.equal(r.exit, 0, r.err);
 });
 
 // ---- a pasta quente ----
 test('fechar pela painel move para o arquivo; reabrir traz de volta; get acha nos dois lugares', () => {
-  pergunta('Q1', { estado: 'aberta', sessaoId: LOCAL(1), projeto: 'izanagi', titulo: 't' });
+  pergunta('Q1', { estado: 'aberta', sessaoId: LOCAL(1), projeto: 'alfa', titulo: 't' });
   const r = painel(['update', 'perguntas', 'Q1', JSON.stringify({ estado: 'respondida', resposta: 'sim', atualizadoEm: '2026-10-20T15:00:00Z' })]);
   assert.equal(r.exit, 0, r.err);
   assert.ok(!existsSync(quente('Q1')), 'saiu da pasta quente');
-  const arq = noArquivo('izanagi', '2026-10', 'Q1');
+  const arq = noArquivo('alfa', '2026-10', 'Q1');
   assert.ok(existsSync(arq), 'foi para o arquivo do projeto e do mês');
   assert.equal(lerJson(arq).version, 2);
   assert.equal(painel(['get', 'perguntas', 'Q1']).json().data.resposta, 'sim');
@@ -125,7 +125,7 @@ test('assumida fica na pasta quente', () => {
 });
 
 test('delete apaga a pergunta onde ela estiver', () => {
-  pergunta('Q2', { estado: 'respondida', projeto: 'izanagi' }, join(pasta(), 'arquivo', 'izanagi', '2026-10'));
+  pergunta('Q2', { estado: 'respondida', projeto: 'alfa' }, join(pasta(), 'arquivo', 'alfa', '2026-10'));
   assert.equal(painel(['delete', 'perguntas', 'Q2']).exit, 0);
   assert.equal(acharPergunta(pasta(), 'Q2'), null);
 });
@@ -145,7 +145,7 @@ test('list perguntas: o projeto da pasta atual e só a pasta quente; --todos, --
 });
 
 test('perguntas arquivar: --seco só conta; sem ele leva as fechadas da pasta quente (a resposta gravada pelo pane)', () => {
-  pergunta('Q1', { estado: 'respondida', projeto: 'izanagi', respondidaPor: 'painel', respondidaEm: '2026-10-20T15:00:00Z' });
+  pergunta('Q1', { estado: 'respondida', projeto: 'alfa', respondidaPor: 'painel', respondidaEm: '2026-10-20T15:00:00Z' });
   pergunta('Q2', { estado: 'cancelada', atualizadoEm: '2026-09-02T15:00:00Z' });
   pergunta('Q3', { estado: 'aberta', sessaoId: LOCAL(1) });
   pergunta('Q4', { estado: 'assumida', sessaoId: LOCAL(1) });
@@ -155,9 +155,9 @@ test('perguntas arquivar: --seco só conta; sem ele leva as fechadas da pasta qu
   assert.ok(existsSync(quente('Q1')), '--seco não move');
   const r = painel(['perguntas', 'arquivar']);
   assert.equal(r.exit, 0, r.err);
-  assert.ok(existsSync(noArquivo('izanagi', '2026-10', 'Q1')) && !existsSync(quente('Q1')));
+  assert.ok(existsSync(noArquivo('alfa', '2026-10', 'Q1')) && !existsSync(quente('Q1')));
   assert.ok(existsSync(noArquivo('sem-projeto', '2026-09', 'Q2')));
-  assert.equal(lerJson(noArquivo('izanagi', '2026-10', 'Q1')).data.respondidaPor, 'painel', 'move sem mexer no conteúdo');
+  assert.equal(lerJson(noArquivo('alfa', '2026-10', 'Q1')).data.respondidaPor, 'painel', 'move sem mexer no conteúdo');
   assert.deepEqual(readdirSync(pasta()).filter((n) => n.endsWith('.json')).sort(), ['Q3.json', 'Q4.json']);
 });
 
@@ -166,12 +166,12 @@ function registro(n, cwd) {
   writeFileSync(join(base, 'app', `local_${n}.json`), JSON.stringify({ sessionId: LOCAL(n), cliSessionId: `cli-${n}`, title: 't', cwd, originCwd: cwd }));
 }
 test('perguntas migrar: --seco não grava; depois, backup, slug, projeto pela sessão e o resto em sem-projeto', () => {
-  pergunta('Q1', { estado: 'aberta', sessaoId: LOCAL(1), projeto: 'Izanagi' });
+  pergunta('Q1', { estado: 'aberta', sessaoId: LOCAL(1), projeto: 'Alfa' });
   pergunta('Q2', { estado: 'respondida', sessaoId: LOCAL(2), respondidaEm: '2026-10-20T15:00:00Z' });
   pergunta('Q3', { estado: 'assumida', sessaoId: LOCAL(3) });
   pergunta('Q4', { estado: 'respondida', atualizadoEm: '2026-10-21T15:00:00Z' });
   pergunta('Q5', { estado: 'assumida', sessao: LOCAL(2) });
-  writeFileSync(join(base, 'painel', 'sessoes', `${LOCAL(2)}.json`), JSON.stringify({ id: LOCAL(2), version: 1, data: { sessionId: LOCAL(2), projeto: 'Battlewand' } }));
+  writeFileSync(join(base, 'painel', 'sessoes', `${LOCAL(2)}.json`), JSON.stringify({ id: LOCAL(2), version: 1, data: { sessionId: LOCAL(2), projeto: 'Beta' } }));
   writeFileSync(join(base, 'painel', 'sessoes', `${LOCAL(9)}.json`), JSON.stringify({ id: LOCAL(9), version: 1, data: { sessionId: LOCAL(9) } }));
   registro(3, outro);
 
@@ -179,20 +179,20 @@ test('perguntas migrar: --seco não grava; depois, backup, slug, projeto pela se
   assert.equal(seco.exit, 0, seco.err);
   const s = seco.json();
   assert.equal(s.seco, true);
-  assert.deepEqual(s.projeto, { Q1: 'izanagi', Q2: 'battlewand', Q3: 'outro', Q4: 'sem-projeto', Q5: 'battlewand', [`sessoes/${LOCAL(2)}`]: 'battlewand', [`sessoes/${LOCAL(9)}`]: 'sem-projeto' });
+  assert.deepEqual(s.projeto, { Q1: 'alfa', Q2: 'beta', Q3: 'outro', Q4: 'sem-projeto', Q5: 'beta', [`sessoes/${LOCAL(2)}`]: 'beta', [`sessoes/${LOCAL(9)}`]: 'sem-projeto' });
   assert.deepEqual(s.arquivadas.sort(), ['Q2', 'Q4']);
-  assert.equal(lerJson(quente('Q1')).data.projeto, 'Izanagi', '--seco não grava');
+  assert.equal(lerJson(quente('Q1')).data.projeto, 'Alfa', '--seco não grava');
   assert.ok(!existsSync(join(base, 'backups')), '--seco não faz backup');
 
   const r = painel(['perguntas', 'migrar']);
   assert.equal(r.exit, 0, r.err);
   const feito = r.json();
   assert.ok(feito.backup && existsSync(join(feito.backup, 'perguntas', 'Q1.json')), 'o backup tem o estado de antes');
-  assert.equal(lerJson(join(feito.backup, 'perguntas', 'Q1.json')).data.projeto, 'Izanagi');
-  assert.equal(lerJson(quente('Q1')).data.projeto, 'izanagi');
+  assert.equal(lerJson(join(feito.backup, 'perguntas', 'Q1.json')).data.projeto, 'Alfa');
+  assert.equal(lerJson(quente('Q1')).data.projeto, 'alfa');
   assert.equal(lerJson(quente('Q1')).version, 2, 'mudou o conteúdo, sobe a versão');
   assert.equal(lerJson(quente('Q3')).data.projeto, 'outro');
-  assert.equal(lerJson(noArquivo('battlewand', '2026-10', 'Q2')).data.projeto, 'battlewand');
+  assert.equal(lerJson(noArquivo('beta', '2026-10', 'Q2')).data.projeto, 'beta');
   assert.ok(existsSync(noArquivo('sem-projeto', '2026-10', 'Q4')));
   assert.equal(lerJson(join(base, 'painel', 'sessoes', `${LOCAL(9)}.json`)).data.projeto, 'sem-projeto');
 
@@ -203,9 +203,9 @@ test('perguntas migrar: --seco não grava; depois, backup, slug, projeto pela se
 // ---- leitores do arquivo ----
 test('perguntasDaSessao lê a respondida recente no arquivo e pula o arquivo velho', () => {
   const agora = Date.parse('2026-10-26T12:00:00Z');
-  pergunta('Q1', { estado: 'respondida', sessaoId: 'A', resposta: 'sim', respondidaEm: '2026-10-26T10:00:00Z' }, join(pasta(), 'arquivo', 'izanagi', '2026-10'));
-  pergunta('Q2', { estado: 'respondida', sessaoId: 'A', resposta: 'não', respondidaEm: '2026-10-20T10:00:00Z' }, join(pasta(), 'arquivo', 'izanagi', '2026-10'));
-  utimesSync(join(pasta(), 'arquivo', 'izanagi', '2026-10', 'Q2.json'), new Date('2026-10-20T10:00:00Z'), new Date('2026-10-20T10:00:00Z'));
+  pergunta('Q1', { estado: 'respondida', sessaoId: 'A', resposta: 'sim', respondidaEm: '2026-10-26T10:00:00Z' }, join(pasta(), 'arquivo', 'alfa', '2026-10'));
+  pergunta('Q2', { estado: 'respondida', sessaoId: 'A', resposta: 'não', respondidaEm: '2026-10-20T10:00:00Z' }, join(pasta(), 'arquivo', 'alfa', '2026-10'));
+  utimesSync(join(pasta(), 'arquivo', 'alfa', '2026-10', 'Q2.json'), new Date('2026-10-20T10:00:00Z'), new Date('2026-10-20T10:00:00Z'));
   pergunta('Q3', { estado: 'aberta', sessaoId: 'A' });
   const r = perguntasDaSessao('A', { dir: pasta(), agora });
   assert.deepEqual(r.abertas.map((p) => p.id), ['Q3']);
@@ -222,7 +222,7 @@ test('fechadasRecentes: só o arquivo mudado no período, de todos os projetos',
 });
 
 test('com migração pendente a batida não arquiva; depois dela, leva a resposta que o pane deixou na pasta quente (--seco não)', () => {
-  pergunta('Q1', { estado: 'respondida', projeto: 'Izanagi', respondidaPor: 'painel', respondidaEm: '2026-10-20T15:00:00Z' });
+  pergunta('Q1', { estado: 'respondida', projeto: 'Alfa', respondidaPor: 'painel', respondidaEm: '2026-10-20T15:00:00Z' });
   const lista = join(base, 'sessoes.json');
   writeFileSync(lista, '[]');
   const antes = painel(['batida', '--sessoes', lista]);
@@ -230,50 +230,50 @@ test('com migração pendente a batida não arquiva; depois dela, leva a respost
   assert.deepEqual(antes.json().perguntasArquivadas, [], 'sem a migração (o ok do operador), a batida não move o estado real');
   assert.ok(existsSync(quente('Q1')));
   assert.equal(painel(['perguntas', 'migrar']).exit, 0);
-  pergunta('Q2', { estado: 'respondida', projeto: 'izanagi', respondidaPor: 'painel', respondidaEm: '2026-10-21T15:00:00Z' });
+  pergunta('Q2', { estado: 'respondida', projeto: 'alfa', respondidaPor: 'painel', respondidaEm: '2026-10-21T15:00:00Z' });
   const seco = painel(['batida', '--sessoes', lista, '--seco']);
   assert.equal(seco.exit, 0, seco.err);
   assert.ok(existsSync(quente('Q2')), 'a presença seria detectada: --seco deixa onde está');
   const r = painel(['batida', '--sessoes', lista]);
   assert.equal(r.exit, 0, r.err);
   assert.deepEqual(r.json().perguntasArquivadas, ['Q2']);
-  assert.ok(!existsSync(quente('Q2')) && existsSync(noArquivo('izanagi', '2026-10', 'Q2')));
+  assert.ok(!existsSync(quente('Q2')) && existsSync(noArquivo('alfa', '2026-10', 'Q2')));
 });
 
 test('a migração também conserta a pergunta que já estava no arquivo (arquivar antes de migrar)', () => {
   pergunta('Q2', { estado: 'respondida', sessaoId: LOCAL(2), respondidaEm: '2026-10-20T15:00:00Z' });
-  pergunta('Q7', { estado: 'respondida', projeto: 'Izanagi', respondidaEm: '2026-10-20T15:00:00Z' });
-  writeFileSync(join(base, 'painel', 'sessoes', `${LOCAL(2)}.json`), JSON.stringify({ id: LOCAL(2), version: 1, data: { sessionId: LOCAL(2), projeto: 'battlewand' } }));
+  pergunta('Q7', { estado: 'respondida', projeto: 'Alfa', respondidaEm: '2026-10-20T15:00:00Z' });
+  writeFileSync(join(base, 'painel', 'sessoes', `${LOCAL(2)}.json`), JSON.stringify({ id: LOCAL(2), version: 1, data: { sessionId: LOCAL(2), projeto: 'beta' } }));
   assert.equal(painel(['perguntas', 'arquivar']).exit, 0);
   assert.ok(existsSync(noArquivo('sem-projeto', '2026-10', 'Q2')), 'precondição: arquivada sem o projeto da sessão');
-  assert.equal(lerJson(noArquivo('izanagi', '2026-10', 'Q7')).data.projeto, 'Izanagi', 'precondição: arquivada com a caixa de antes');
+  assert.equal(lerJson(noArquivo('alfa', '2026-10', 'Q7')).data.projeto, 'Alfa', 'precondição: arquivada com a caixa de antes');
   const seco = painel(['perguntas', 'migrar', '--seco']).json();
-  assert.deepEqual(seco.projeto, { Q2: 'battlewand', Q7: 'izanagi' });
+  assert.deepEqual(seco.projeto, { Q2: 'beta', Q7: 'alfa' });
   assert.equal(painel(['perguntas', 'migrar']).exit, 0);
-  assert.ok(existsSync(noArquivo('battlewand', '2026-10', 'Q2')) && !existsSync(noArquivo('sem-projeto', '2026-10', 'Q2')), 'mudou de pasta com o projeto');
-  assert.equal(lerJson(noArquivo('izanagi', '2026-10', 'Q7')).data.projeto, 'izanagi');
-  assert.deepEqual(ids(painel(['list', 'perguntas', 'respondida', '--projeto', 'battlewand']).json()), ['Q2']);
+  assert.ok(existsSync(noArquivo('beta', '2026-10', 'Q2')) && !existsSync(noArquivo('sem-projeto', '2026-10', 'Q2')), 'mudou de pasta com o projeto');
+  assert.equal(lerJson(noArquivo('alfa', '2026-10', 'Q7')).data.projeto, 'alfa');
+  assert.deepEqual(ids(painel(['list', 'perguntas', 'respondida', '--projeto', 'beta']).json()), ['Q2']);
 });
 
 test('--projeto sem-projeto lista quem não tem o campo; delete leva as duas cópias da corrida com o pane', () => {
   pergunta('Q3', { estado: 'aberta', sessaoId: LOCAL(1) });
   pergunta('Q4', { estado: 'aberta', sessaoId: LOCAL(1), projeto: 'outro' });
   assert.deepEqual(ids(painel(['list', 'perguntas', '--projeto', 'sem-projeto']).json()), ['Q3']);
-  pergunta('Q5', { estado: 'respondida', projeto: 'izanagi' });
-  pergunta('Q5', { estado: 'respondida', projeto: 'izanagi' }, join(pasta(), 'arquivo', 'izanagi', '2026-10'));
+  pergunta('Q5', { estado: 'respondida', projeto: 'alfa' });
+  pergunta('Q5', { estado: 'respondida', projeto: 'alfa' }, join(pasta(), 'arquivo', 'alfa', '2026-10'));
   assert.equal(painel(['delete', 'perguntas', 'Q5']).exit, 0);
   assert.equal(acharPergunta(pasta(), 'Q5'), null);
 });
 
 test('ehDaOrquestradora compara pelo mesmo slug do painel', async () => {
   const { ehDaOrquestradora } = await import('../../skills/orquestradora/scripts/batida.mjs');
-  assert.equal(ehDaOrquestradora('🎛 orquestradora — Wicomm IA', 'wicomm-ia'), true);
-  assert.equal(ehDaOrquestradora('🎛 orquestradora — Izanagi', 'izanagi'), true);
-  assert.equal(ehDaOrquestradora('🎛 orquestradora — Izanagi', 'outro'), false);
+  assert.equal(ehDaOrquestradora('🎛 orquestradora — Loja Azul IA', 'loja-azul-ia'), true);
+  assert.equal(ehDaOrquestradora('🎛 orquestradora — Alfa', 'alfa'), true);
+  assert.equal(ehDaOrquestradora('🎛 orquestradora — Alfa', 'outro'), false);
 });
 
 test('painel novo, sem nada a migrar: a primeira batida grava a marca e já arquiva', () => {
-  pergunta('Q1', { estado: 'respondida', projeto: 'izanagi', respondidaEm: '2026-10-20T15:00:00Z' });
+  pergunta('Q1', { estado: 'respondida', projeto: 'alfa', respondidaEm: '2026-10-20T15:00:00Z' });
   const lista = join(base, 'sessoes.json');
   writeFileSync(lista, '[]');
   const r = painel(['batida', '--sessoes', lista]);
@@ -283,9 +283,9 @@ test('painel novo, sem nada a migrar: a primeira batida grava a marca e já arqu
 });
 
 test('migração com a mesma pergunta na pasta quente e no arquivo: fica a de versão maior, a outra sai', () => {
-  writeFileSync(quente('Q5'), JSON.stringify({ id: 'Q5', version: 3, data: { estado: 'respondida', projeto: 'Izanagi', resposta: 'PANE-NOVA', respondidaEm: '2026-10-20T15:00:00Z' } }));
-  mkdirSync(join(pasta(), 'arquivo', 'izanagi', '2026-10'), { recursive: true });
-  writeFileSync(noArquivo('izanagi', '2026-10', 'Q5'), JSON.stringify({ id: 'Q5', version: 2, data: { estado: 'respondida', projeto: 'Izanagi', resposta: 'PAINEL-VELHA', respondidaEm: '2026-10-20T15:00:00Z' } }));
+  writeFileSync(quente('Q5'), JSON.stringify({ id: 'Q5', version: 3, data: { estado: 'respondida', projeto: 'Alfa', resposta: 'PANE-NOVA', respondidaEm: '2026-10-20T15:00:00Z' } }));
+  mkdirSync(join(pasta(), 'arquivo', 'alfa', '2026-10'), { recursive: true });
+  writeFileSync(noArquivo('alfa', '2026-10', 'Q5'), JSON.stringify({ id: 'Q5', version: 2, data: { estado: 'respondida', projeto: 'Alfa', resposta: 'PAINEL-VELHA', respondidaEm: '2026-10-20T15:00:00Z' } }));
   const lista = join(base, 'sessoes.json');
   writeFileSync(lista, '[]');
   assert.deepEqual(painel(['batida', '--sessoes', lista]).json().perguntasArquivadas, [], 'com o que migrar, a batida espera');
@@ -294,9 +294,9 @@ test('migração com a mesma pergunta na pasta quente e no arquivo: fica a de ve
   const r = painel(['perguntas', 'migrar']);
   assert.equal(r.exit, 0, r.err);
   assert.ok(!existsSync(quente('Q5')));
-  const ficou = lerJson(noArquivo('izanagi', '2026-10', 'Q5'));
+  const ficou = lerJson(noArquivo('alfa', '2026-10', 'Q5'));
   assert.equal(ficou.data.resposta, 'PANE-NOVA');
-  assert.equal(ficou.data.projeto, 'izanagi');
+  assert.equal(ficou.data.projeto, 'alfa');
 });
 
 test('projeto null conta como ausente: a batida espera a migração', () => {

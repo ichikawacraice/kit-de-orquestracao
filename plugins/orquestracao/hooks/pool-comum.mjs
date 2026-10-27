@@ -23,7 +23,7 @@ const fracaoValida = (v, aberta = false) => { if (v === null || v === undefined 
 const vivo = (pid) => { if (!Number.isInteger(pid) || pid <= 0) return false; try { process.kill(pid, 0); return true; } catch (e) { return e?.code === 'EPERM'; } };
 export const pastaDoTeto = (env = process.env) => env.KIT_NUCLEOS_DIR || join(H, '.claude', 'orquestracao', 'nucleos-de-teste');
 export function tetoDaMaquina(env = process.env, nucleos = availableParallelism(), pasta = pastaDoTeto(env)) {
-  for (const nome of ['KIT_NUCLEOS_DE_TESTE', 'IZANAGI_NUCLEOS_DE_TESTE']) {
+  for (const nome of ['KIT_NUCLEOS_DE_TESTE']) {
     const v = env[nome];
     if (v !== undefined && v !== '' && inteiroPositivo(Number(v))) return Number(v);
   }
@@ -145,9 +145,9 @@ function varrerRegistro(id) {
 
 // Itens vivos da fila em que a sessão aparece (F30): `com` = trabalhando agora; `fez` = executou parte e o item ainda espera
 // validação, conserto ou merge. Pasta: FILA_DIR, ou <PAINEL_DIR>/fila. Erro de leitura = lista vazia (o hook deixa passar).
-export const filaDir = () => process.env.FILA_DIR || join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'fila');
+export const filaDir = () => process.env.FILA_DIR || join(process.env.PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'fila');
 // Perguntas `limpar · orquestradora` da sessão (F48; só o título exato vale, outra `limpar · …` não é pedido nem ok): documentos de <PAINEL_DIR>/perguntas. Erro de leitura = lista vazia.
-const perguntasDir = () => join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'perguntas');
+const perguntasDir = () => join(process.env.PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'perguntas');
 // F183: a respondida pode já estar no arquivo; o "sim" vale 30 min, então do arquivo só se lê o que mudou no último dia.
 export function perguntasDeLimpeza(localId) {
   const saida = [];
@@ -166,7 +166,7 @@ export function perguntasDeLimpeza(localId) {
 
 // O ok do botão de limpar da barra (F147): o clique grava <PAINEL_DIR>/../limpeza/<local_…>.json `{ "em": "<ISO>", "por": "barra" }` antes de
 // mandar o prompt (que chega com origem `plugin`, nunca `human`). Vale 30 min, nunca no futuro; só `por: "barra"`. Erro de leitura = `null`.
-const limpezaDir = () => join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), '..', 'limpeza');
+const limpezaDir = () => join(process.env.PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), '..', 'limpeza');
 export function okDoBotaoDeLimpar(localId) {
   if (!localId || !/^local_[\w-]+$/.test(localId)) return null;
   try {
