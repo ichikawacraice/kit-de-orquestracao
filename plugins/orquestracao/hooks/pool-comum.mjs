@@ -46,6 +46,17 @@ export function maquinaCheia({ env = process.env, pasta, teto, carga, nucleos = 
   return { cheia: tomadas >= limite || cargaAgora >= nucleos, tomadas, teto: limite, carga: cargaAgora, nucleos, pasta: dir };
 }
 const SESSOES_DIR = () => process.env.POOL_APP_SESSOES_DIR || join(H, 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
+// O registro tem uma pasta por conta do app; a de outra conta fica no disco com sessões que o app já não mostra (F142, medido
+// em 26/10: os 7 livres fantasmas, de dois projetos, eram todos da conta antiga). Pasta da conta atual = `lastKnownAccountUuid`
+// do config.json do app, irmão do registro. Sem config, sem a chave ou sem a pasta: o registro inteiro, como antes.
+function sessoesDaConta() {
+  const dir = SESSOES_DIR();
+  try {
+    const conta = JSON.parse(readFileSync(join(dirname(dir), 'config.json'), 'utf8'))?.lastKnownAccountUuid;
+    if (typeof conta === 'string' && /^[\w-]+$/.test(conta) && existsSync(join(dir, conta))) return join(dir, conta);
+  } catch { /* sem config: o registro inteiro */ }
+  return dir;
+}
 
 function* arquivosLocal(dir) {
   let entradas;
@@ -236,11 +247,11 @@ export function projetoDaSessao(reg) {
 }
 
 // Membros do pool livres do projeto (F58): sessões NÃO arquivadas com título `<P|D|E|V><n> · livre` cujo projeto é o `repo`
-// (git common dir). Varre o registro do app uma vez. → [{ apelido, papel, localId }]
+// (git common dir). Varre a pasta da conta atual do registro do app uma vez. → [{ apelido, papel, localId }]
 export function membrosLivres(repo) {
   const livres = [];
   if (!repo) return livres;
-  for (const f of arquivosLocal(SESSOES_DIR())) {
+  for (const f of arquivosLocal(sessoesDaConta())) {
     let r;
     try { r = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
     if (!r || r.isArchived || !/^[PDEV]\d+ · livre\s*$/.test(r.title || '')) continue;
@@ -335,7 +346,7 @@ export function repoDoMarcador(texto) {
 // órfã o marcador): a orquestradora que só o título denuncia. Só lê arquivo que contém o texto do título.
 function orquestradorasSoPorTitulo(meuId, comMarcador) {
   const achadas = [];
-  for (const f of arquivosLocal(SESSOES_DIR())) {
+  for (const f of arquivosLocal(sessoesDaConta())) {
     let texto;
     try { texto = readFileSync(f, 'utf8'); } catch { continue; }
     if (!texto.includes('🎛 orquestradora')) continue;
