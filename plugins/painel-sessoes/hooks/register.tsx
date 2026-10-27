@@ -2544,7 +2544,7 @@ export const register: Register = on => {
               ? doReinicio.estado === 'pode' ? 'Pode reiniciar o app' : doReinicio.estado === 'espere' ? `Espere · ${doReinicio.rodando} rodando` : doReinicio.estado === 'conferindo' ? 'Aviso ligado · conferindo' : 'Não sei · aviso ligado'
               : doReinicio.estado === 'pode' ? 'Pode reiniciar o app' : doReinicio.estado === 'espere' ? `Reiniciar: espere · ${doReinicio.rodando} rodando` : 'Reiniciar: não sei'
             const titulo = (
-              <Text key="titulo">
+              <Text key="titulo" wrap="truncate-end">
                 <Text color={cor}>{GLIFO_REINICIO.g}</Text>
                 <Text bold> {titulo_}</Text>
                 {!rn.aviso && doReinicio.estado === 'pode' && <Text dimColor>{` · ${hora_}`}</Text>}
@@ -2573,8 +2573,8 @@ export const register: Register = on => {
               <Box key="bloco-do-reinicio" flexDirection="column" gap={1} alignItems="flex-start">
                 <Box flexDirection="column">
                   {titulo}
-                  {linhas.map(t => (
-                    <Text key={t} dimColor wrap="truncate-end">{t}</Text>
+                  {linhas.map((t, i) => (
+                    <Text key={`${i}:${t}`} dimColor wrap="truncate-end">{t}</Text>
                   ))}
                 </Box>
                 {botaoDoAviso}
