@@ -78,6 +78,19 @@ describe("tetoDeWorkers com o teto da máquina", () => {
     assert.deepEqual(readdirSync(pasta).sort(), ["10", "8", "9", "gate"]);
   });
 
+  it("com a vez do gate tomada e a faixa normal CHEIA, espera em vez de emprestar (5..7 ficam livres)", () => {
+    writeFileSync(join(pasta, "gate"), JSON.stringify({ pid: process.pid, token: "gate", worktree: "/wt/gate", projeto: "kit", desde: "2026-10-26T10:00:00.000Z" }));
+    for (const k of [10, 9, 8]) writeFileSync(join(pasta, String(k)), JSON.stringify({ pid: process.pid, token: "x", worktree: "/wt/x", projeto: "kit", desde: "2026-10-26T10:00:00.000Z" }));
+    let esperou = 0;
+    assert.throws(
+      () => tetoDeWorkers({}, 15, 0.25, { pasta, teto: 10, avisar: () => {}, dormir: () => { esperou += 1; throw new Error("ESPEROU"); } }),
+      /ESPEROU/,
+      "devia esperar uma ficha normal; se levou da faixa do gate, emprestou com o gate rodando",
+    );
+    assert.equal(esperou, 1);
+    assert.deepEqual(readdirSync(pasta).filter((n) => Number(n) <= 7), [], "nenhuma ficha de 1 a 7");
+  });
+
   it("sem gate rodando e com a faixa normal esgotada, empresta da faixa do gate, sem passar do pedido", () => {
     for (const k of [10, 9, 8]) writeFileSync(join(pasta, String(k)), JSON.stringify({ pid: process.pid, token: "x", worktree: "/wt/x", projeto: "kit", desde: "2026-10-26T10:00:00.000Z" }));
     const r = tetoDeWorkers({}, 15, 0.25, { pasta, teto: 10, avisar: () => {} });

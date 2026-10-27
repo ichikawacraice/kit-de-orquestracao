@@ -118,15 +118,16 @@ describe("com-fichas", () => {
     assert.deepEqual(readdirSync(pasta), []);
   });
 
-  it("CONCORRÊNCIA com um gate rodando (ADR 0008): teto 10, cinco com-fichas pedindo 3 — nenhum toca 1..7 enquanto a vez do gate existe, e o máximo somado é ≤ 10", async () => {
-    // O "gate" do teste é este processo: toma a vez e as fichas 1..7 (a faixa do gate com teto 10) e as segura até o fim.
+  it("CONCORRÊNCIA com um gate rodando (ADR 0008): teto 10, cinco com-fichas pedindo 3 — com a faixa do gate meio livre, ninguém empresta enquanto a vez existe, e o máximo somado é ≤ 10", async () => {
+    // O "gate" do teste é este processo: toma a vez e só as fichas 1..4 da faixa do gate (1..7 com teto 10): 5..7 ficam LIVRES, de propósito —
+    // um empréstimo que ignorasse o gate rodando as levaria (a faixa normal, de 3, não dá para cinco).
     const { quemSouEuNasFichas, tentarAVezDoGate, tentarTomarFichas } = await import("../o-teto-da-maquina.mjs");
     const gate = { ...quemSouEuNasFichas(), token: "gate-de-teste" };
     assert.equal(tentarAVezDoGate(pasta, gate).tomou, true);
-    assert.deepEqual(tentarTomarFichas(pasta, 10, 7, gate).levou, [1, 2, 3, 4, 5, 6, 7]);
+    assert.deepEqual(tentarTomarFichas(pasta, 10, 4, gate).levou, [1, 2, 3, 4]);
     const medida = join(dir, "medida.jsonl");
-    // Cada comando amostra a pasta a cada 50 ms por 0,5 s: quantas fichas há, e quantas de 1..7 deixaram de ser as do gate.
-    const amostra = `const fs=require('fs');const p=process.env.KIT_NUCLEOS_DIR;let max=0,violacoes=0;const t=setInterval(()=>{const ks=fs.readdirSync(p).filter((x)=>/^[0-9]+$/.test(x));if(ks.length>max)max=ks.length;for(let k=1;k<=7;k++){try{if(JSON.parse(fs.readFileSync(p+'/'+k,'utf8')).token!=='gate-de-teste')violacoes++;}catch{violacoes++;}}},50);setTimeout(()=>{clearInterval(t);fs.appendFileSync(${JSON.stringify(medida)},JSON.stringify({max,violacoes,fichas:process.env.KIT_FICHAS_TOMADAS})+'\\n');},500);`;
+    // Cada comando amostra a pasta a cada 50 ms por 0,5 s: quantas fichas há, e quantas violações há (1..4 deixaram de ser as do gate, ou 5..7 existem).
+    const amostra = `const fs=require('fs');const p=process.env.KIT_NUCLEOS_DIR;let max=0,violacoes=0;const t=setInterval(()=>{const ks=fs.readdirSync(p).filter((x)=>/^[0-9]+$/.test(x));if(ks.length>max)max=ks.length;for(let k=1;k<=7;k++){let t=null;try{t=JSON.parse(fs.readFileSync(p+'/'+k,'utf8')).token;}catch{}if(k<=4?t!=='gate-de-teste':t!==null)violacoes++;}},50);setTimeout(()=>{clearInterval(t);fs.appendFileSync(${JSON.stringify(medida)},JSON.stringify({max,violacoes,fichas:process.env.KIT_FICHAS_TOMADAS})+'\\n');},500);`;
     const codigos = await Promise.all(
       [1, 2, 3, 4, 5].map(
         () =>
@@ -148,11 +149,11 @@ describe("com-fichas", () => {
     assert.ok(existsSync(medida), "ninguém mediu");
     const vistos = readFileSync(medida, "utf-8").trim().split("\n").map((l) => JSON.parse(l));
     assert.equal(vistos.length, 5);
-    assert.ok(Math.max(...vistos.map((v) => v.max)) >= 8, `prova de que a medida enxerga ficha: o gate tem 7 e algum normal tem ≥ 1 — ${JSON.stringify(vistos)}`);
+    assert.ok(Math.max(...vistos.map((v) => v.max)) >= 5, `prova de que a medida enxerga ficha: o gate tem 4 e algum normal tem ≥ 1 — ${JSON.stringify(vistos)}`);
     assert.ok(Math.max(...vistos.map((v) => v.max)) <= 10, `passou do teto: ${JSON.stringify(vistos)}`);
-    assert.deepEqual(vistos.map((v) => v.violacoes), [0, 0, 0, 0, 0], "ninguém tocou 1..7");
+    assert.deepEqual(vistos.map((v) => v.violacoes), [0, 0, 0, 0, 0], "ninguém tocou 1..4 nem emprestou 5..7");
     // leva o que houver livre: com a faixa normal (3) dividida entre os cinco, cada um leva de 1 a 3 — nunca da faixa do gate
     assert.ok(vistos.every((v) => Number(v.fichas) >= 1 && Number(v.fichas) <= 3), `cada um leva de 1 a 3 fichas: ${JSON.stringify(vistos)}`);
-    assert.deepEqual(readdirSync(pasta).sort((a, b) => a.localeCompare(b)), ["1", "2", "3", "4", "5", "6", "7", "gate"]);
+    assert.deepEqual(readdirSync(pasta).sort((a, b) => a.localeCompare(b)), ["1", "2", "3", "4", "gate"]);
   });
 });

@@ -271,6 +271,7 @@ caso('membrosLivres: livre da pasta de outra conta não conta; sem config do app
     writeFileSync(join(base, 'config.json'), JSON.stringify({ lastKnownAccountUuid: 'conta-sem-pasta' }));
     ok(ids() === 'local_fantasma,local_viva', `conta sem pasta no disco não esconde todos: ${ids()}`);
   } finally { process.env.POOL_APP_SESSOES_DIR = antes; rmSync(join(base, 'config.json'), { force: true }); }
+});
 // ADR 0008 (26/10): o teto tem a faixa do gate (1..G) e a normal (G+1..T); a máquina está cheia para a V quando falta ficha NORMAL e não há o que emprestar.
 caso('maquinaCheia (ADR 0008): gate rodando com a faixa normal livre → não cheia; faixa normal cheia com gate rodando → cheia; sem gate, faixa normal cheia e a do gate livre → não cheia', () => {
   const pasta = join(base, 'nucleos-faixas'); mkdirSync(pasta);
