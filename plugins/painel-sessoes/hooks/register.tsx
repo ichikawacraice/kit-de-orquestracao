@@ -119,7 +119,8 @@ export function cartoesVisiveis(cartoes: CartaoDeSessao[], sessoes: SessaoViva[]
         if (!s.title?.startsWith(`${c.itens[0] ?? c.apelido} · `)) return false
         const criada = Date.parse(s.createdAt ?? s.lastActivityAt ?? '')
 
-        return !Number.isNaN(criada) && criada >= proposto
+        // propostoEm no futuro é hora escrita errada (a batida a trata igual): vale qualquer sessão viva do item
+        return !Number.isNaN(criada) && (criada >= proposto || proposto > agora)
       })
     })
     .sort((a, b) => Date.parse(a.propostoEm) - Date.parse(b.propostoEm))

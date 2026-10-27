@@ -2936,6 +2936,16 @@ test('F144: o apelido que já aparece vivo depois do pedido esconde a linha na h
   expect(lido.terminal).toMatch(/Sessões para abrir · 1/)
 })
 
+test('F202: cartão com propostoEm no futuro some quando a sessão do item já está viva', async ($, on) => {
+  const vivas = JSON.stringify([
+    { sessionId: 'local_orq_iz', title: '🎛 orquestradora — izanagi', isRunning: true, isArchived: false },
+    { sessionId: 'local_nova', title: 'F68 · editor da loja', isRunning: false, isArchived: false, createdAt: iso5(1) },
+  ])
+  const errado = cartaoDe('task_errado', { propostoEm: iso5(-180) })
+  const { lido } = await lerPane($, on, comCartoes([errado], { vivas }))
+  expect(lido.terminal).not.toContain('Sessões para abrir')
+})
+
 test('F144: cartão de mais de 12 h não aparece', async ($, on) => {
   const velho = cartaoDe('task_velho', { propostoEm: iso5(13 * 60) })
   const { lido } = await lerPane($, on, comCartoes([velho, CARTAO_F68]))
