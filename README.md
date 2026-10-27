@@ -9,6 +9,10 @@ Em construção:
 - [ADRs](docs/adr/README.md) · [docs](docs/README.md)
 - [Fase 2: o pacote (fatias K1–K9)](docs/planos/2026-10-24-fase-2-o-pacote.md)
 
+## Atualizar os plugins na máquina
+
+`atualizar-plugins [--seco] [--json]` (no `bin/` do plugin `orquestracao`) atualiza o clone do marketplace e os plugins do kit instalados em `user`; o app precisa reiniciar para valer.
+
 ## Comportamentos do CLI que surpreendem
 
 - **Bloco renomeado aparece duas vezes.** Quando uma versão nova do kit renomeia um bloco do `CLAUDE.md`, o `kit atualizar` não apaga o antigo (pode ter texto seu): avisa `o bloco X saiu do kit; deixei como está` e acrescenta o novo no fim (`novo: Y`). Os dois ficam até você apagar o antigo.
