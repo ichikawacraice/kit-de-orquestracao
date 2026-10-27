@@ -394,3 +394,19 @@ test('batida sem orquestradora: titulosVelhos fica no próximo relatório, como 
   const r = batida(sessoes(sessao(6, 'E6 · item a'), sessao(30, '🎛 orquestradora — kit')), T + 11 * MIN);
   assert.match(msgs(r, 'relatorio')[0]?.texto ?? '', /título velho: E6/, r.out);
 });
+test('batida: avisado que acorda e não troca o título não é reavisado (F134, achado 1 da V2)', () => {
+  const a = batida(sessoes(sessao(6, 'E6 · item a')));
+  assert.equal(msgs(a, 'titulo-velho').length, 1, a.out);
+  batida(sessoes(sessao(6, 'E6 · item a', { isRunning: true })), T + 10 * MIN);
+  batida(sessoes(sessao(6, 'E6 · item a', { lastActivityAt: iso(T + 10 * MIN) })), T + 12 * MIN);
+  const c = batida(sessoes(sessao(6, 'E6 · item a', { lastActivityAt: iso(T + 10 * MIN) })), T + 21 * MIN);
+  assert.deepEqual(msgs(c, 'titulo-velho'), [], 'rodar ou estar recente não zera o aviso');
+});
+test('batida: a mesma lista de títulos velhos em outra ordem não repete o relatório (F134, achado 2 da V2)', () => {
+  const orq = sessao(30, '🎛 orquestradora — kit');
+  const a = batida(sessoes(sessao(6, 'E6 · a'), sessao(12, 'E12 · b'), orq));
+  assert.equal(msgs(a, 'relatorio').length, 1, a.out);
+  assert.deepEqual(a.json().projetos.kit.titulosVelhos.map((x) => x.apelido), ['E6', 'E12']);
+  const b = batida(sessoes(sessao(12, 'E12 · b'), sessao(6, 'E6 · a'), orq), T + 11 * MIN);
+  assert.deepEqual(msgs(b, 'relatorio'), [], b.out);
+});

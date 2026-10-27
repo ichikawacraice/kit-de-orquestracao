@@ -146,18 +146,20 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, che
   }
 
   // membro que ficou com o título do item que fechou (F134): parado, fora de dono/`com`/`fez` de item vivo e sem título livre.
-  // Uma mensagem por título (trocou por outro título velho, avisa de novo); quem deixou de ser título velho sai do estado.
+  // Uma mensagem por título (trocou por outro título velho, avisa de novo). O aviso só sai do estado quando o título deixa de ser
+  // velho pela fila ou pelo título (livre, dono, `com`, `fez`, arquivado): rodar ou estar recente não conta, senão a própria
+  // mensagem acordaria o membro e o reaviso viria na batida seguinte.
   const noFez = fezDaFila(itens);
   const velhos = new Set();
   for (const r of linhas) {
     const apelido = apelidoDoTitulo(r.title);
     const p = projetoDe(r);
-    if (!vivoNaLista(r) || r.isRunning === true || !apelido || !p || ehLivre(r.title)) continue;
+    if (!vivoNaLista(r) || !apelido || !p || ehLivre(r.title)) continue;
     if (ocupados.has(r.sessionId) || noFez.has(r.sessionId)) continue;
-    const t = ms(r.lastActivityAt);
-    if (t !== null && agoraMs - t < TITULO_VELHO_MIN * 60_000) continue;
-    const titulo = String(r.title).trim();
     velhos.add(r.sessionId);
+    const t = ms(r.lastActivityAt);
+    if (r.isRunning === true || (t !== null && agoraMs - t < TITULO_VELHO_MIN * 60_000)) continue;
+    const titulo = String(r.title).trim();
     projeto(p).titulosVelhos.push({ apelido, localId: r.sessionId, titulo });
     const chave = `titulo:${r.sessionId}`;
     if (avisos[chave]?.titulo === titulo) continue;
@@ -165,6 +167,8 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, ausente, che
     avisos[chave] = { em: new Date(agoraMs).toISOString(), localId: r.sessionId, titulo };
   }
   for (const k of Object.keys(avisos)) if (k.startsWith('titulo:') && !velhos.has(k.slice('titulo:'.length))) delete avisos[k];
+  // em ordem de apelido: a mesma lista em outra ordem do list_sessions não conta como mudança no relatório
+  for (const proj of projetos.values()) proj.titulosVelhos.sort((a, b) => a.apelido.localeCompare(b.apelido, 'en', { numeric: true }));
 
   // relatório à orquestradora de cada projeto, só quando algo mudou desde o último
   const relatorios = {};
