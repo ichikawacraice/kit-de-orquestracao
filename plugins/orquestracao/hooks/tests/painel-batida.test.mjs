@@ -284,6 +284,18 @@ test('batida: quatro E livres → duas excedentes (as mais antigas); modo ausent
   const semE = batida(sessoes(sessao(1, 'P1 · a')));
   assert.deepEqual(semE.json().projetos.kit.vagas, [], 'ausente: o piso de E não pede vaga');
 });
+test('batida: livre no fez de item vivo não é excedente nem conta para o teto; com o item fechado, o mais antigo é', () => {
+  const arq = sessoes(sessao(1, 'D1 · livre'), sessao(2, 'D2 · livre'), sessao(3, 'D3 · livre'));
+  const fez = [{ localId: lid(1), apelido: 'D1', oQue: 'fez', em: iso(T - 60 * MIN) }];
+  item('F1', { ...semGente, etapa: 'validacao', historico: [{ em: iso(T - 40 * MIN), etapa: 'validacao', dono: null }], fez });
+  const vivo = batida(arq);
+  assert.equal(vivo.exit, 0, vivo.err);
+  assert.deepEqual(vivo.json().projetos.kit.excedentes, [], vivo.out);
+  item('F1', { ...semGente, etapa: 'feito', fez });
+  rmSync(join(pastaOrq(), 'batida'), { recursive: true, force: true });
+  const fechado = batida(arq);
+  assert.deepEqual(fechado.json().projetos.kit.excedentes.map((x) => x.apelido), ['D1'], fechado.out);
+});
 test('batida: sem nenhuma E livre, fora do ausente, o piso pede a vaga', () => {
   const r = batida(sessoes(sessao(1, 'P1 · a')));
   assert.ok(r.json().projetos.kit.vagas.some((v) => v.papel === 'E' && v.piso === true), r.out);
