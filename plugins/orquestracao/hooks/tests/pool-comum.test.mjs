@@ -23,7 +23,7 @@ git(A, 'worktree', 'add', '-q', join(base, 'alfa-wt'), '-b', 'wt');
 const SEM = join(base, 'semgit'); mkdirSync(SEM);
 
 process.env.HOME = join(base, 'home'); mkdirSync(join(base, 'home', '.claude', 'projects', 'p'), { recursive: true });
-const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre, ocupacaoDaSessao, janelasDeLimpeza, ehPerguntaDeLimpeza, maquinaCheia } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
+const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre, ocupacaoDaSessao, janelasDeLimpeza, ehPerguntaDeLimpeza, maquinaCheia, membrosLivres } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
 function reg(k, campos) {
   writeFileSync(join(base, 'app', 'conta', `local_${k}.json`), JSON.stringify({ sessionId: `local_${k}`, cliSessionId: `cli-${k}`, title: `E1 · x`, ...campos }));
   return registroDaSessao(`cli-${k}`, { fresco: true });
@@ -254,6 +254,23 @@ caso('maquinaCheia: pasta, teto e carga vêm do env (KIT_NUCLEOS_DIR, KIT_NUCLEO
   ok(r.cheia === false && r.teto === 2, `teto 2: ${JSON.stringify(r)}`);
   r = maquinaCheia({ env: { ...env, KIT_NUCLEOS_DE_TESTE: '2', KIT_CARGA_1MIN: '99' } });
   ok(r.cheia === true && r.carga === 99, `carga pelo env: ${JSON.stringify(r)}`);
+});
+// F142: o registro do app guarda uma pasta por conta (`<SESSOES_DIR>/<conta>/…`) e a de outra conta fica no disco. Os livres
+// só saem da pasta da conta atual (`lastKnownAccountUuid` do config.json do app); sem config, varre tudo como antes.
+caso('membrosLivres: livre da pasta de outra conta não conta; sem config do app, conta', () => {
+  const app = join(base, 'app-contas'); const atual = join(app, 'conta-atual', 'org'); const velha = join(app, 'conta-velha', 'org');
+  mkdirSync(atual, { recursive: true }); mkdirSync(velha, { recursive: true });
+  writeFileSync(join(atual, 'local_viva.json'), JSON.stringify({ sessionId: 'local_viva', title: 'P1 · livre', isArchived: false, cwd: A }));
+  writeFileSync(join(velha, 'local_fantasma.json'), JSON.stringify({ sessionId: 'local_fantasma', title: 'P2 · livre', isArchived: false, cwd: A }));
+  const antes = process.env.POOL_APP_SESSOES_DIR; process.env.POOL_APP_SESSOES_DIR = app;
+  try {
+    const ids = () => membrosLivres(projetoDaSessao({ cwd: A }).repo).map((l) => l.localId).sort().join(',');
+    ok(ids() === 'local_fantasma,local_viva', `sem config, as duas pastas: ${ids()}`);
+    writeFileSync(join(base, 'config.json'), JSON.stringify({ lastKnownAccountUuid: 'conta-atual' }));
+    ok(ids() === 'local_viva', `com a conta atual, só a viva: ${ids()}`);
+    writeFileSync(join(base, 'config.json'), JSON.stringify({ lastKnownAccountUuid: 'conta-sem-pasta' }));
+    ok(ids() === 'local_fantasma,local_viva', `conta sem pasta no disco não esconde todos: ${ids()}`);
+  } finally { process.env.POOL_APP_SESSOES_DIR = antes; rmSync(join(base, 'config.json'), { force: true }); }
 });
 rmSync(base, { recursive: true, force: true });
 console.log(falhas ? `\n${falhas} caso(s) falharam` : '\ntodos verdes');
