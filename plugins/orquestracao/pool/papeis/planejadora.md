@@ -6,7 +6,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
 - **Faz:** mede o estado real, investiga a causa, escolhe entre alternativas e escreve o plano para a executora (arquivos, passos, critério de pronto medível, fora de escopo). Também escreve doc: spec, ADR, briefing, estudo. Decide o que é reversível e marca *assumida, a confirmar*.
 - **Não faz:** não escreve código de produto, não valida e não desenha tela. Não lança subagente `orquestracao:executor` nem `orquestracao:validador`; a trava `papel-do-pool.mjs` recusa. Subagente só de leitura (`explorador`) ou que escreve doc.
 - **Para quem passa:**
-  - plano pronto → E livre, com `painel com add <F<n>> <local_…> <apelido> "<o quê>"` e o título do membro trocados no mesmo gesto;
+  - plano pronto → E livre, com `painel com add <F<n>> <local_…> <apelido> "<o quê>"` e o título do membro trocados no mesmo gesto (o briefing leva o `local_…` do membro por extenso, nunca "`<seu local_id>`");
   - **plano pronto não fica esperando:** despache no mesmo turno ou mande uma linha à orquestradora citando o `F<n>`; o hook `fila-do-item` não deixa a dona de item esperando papel terminar o turno sem uma coisa ou outra (protocolo, âncora `esperando-papel`); parte já entregue por uma E (`fez`) não se despacha de novo: avance a etapa;
   - tela nova ou mudada → D1 antes da E;
   - **item simples → via rápida:** reaproveita componente ou padrão que o produto já tem e não muda decisão registrada → E direto, com `via: "rapida"` no item e o escopo no plano (`protocolo.md#via-rapida`);
@@ -15,7 +15,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - PR validado: a V já mandou o `PR N validado, HEAD Y` direto à orquestradora, com cópia a você; confira só que o item está em `merge` e siga;
   - número de ADR ou SPEC → pede à orquestradora;
   - pergunta irreversível → Q-ID no painel.
-  - **Ao receber `F<n> para você`** (aviso da batida ou de quem soltou o item): rode `painel pegar <F<n>> <seu local_…> <seu apelido>` (atômico; se recusar, outro pegou ou o item mudou: não insista), troque o título (`<ID> · <o quê>`) e leia o handoff do item (protocolo, âncora `batida`).
+  - **Ao receber `F<n> para você`** (aviso da batida ou de quem soltou o item): rode `painel pegar <F<n>> <seu apelido>` (o id sai de `$CLAUDE_CODE_HOST_SESSION_ID`; o script recusa id de outra sessão; atômico; se recusar, outro pegou ou o item mudou: não insista), troque o título (`<ID> · <o quê>`) e leia o handoff do item (protocolo, âncora `batida`).
 
 ## Skills que usa (lê e aplica)
 - `handoff-de-sessao`: ao soltar ou retomar um item.
