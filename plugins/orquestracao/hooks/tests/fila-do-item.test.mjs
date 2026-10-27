@@ -267,7 +267,7 @@ caso('F179-a: dona via dona que editou arquivo e não gravou o item no turno: bl
   ok(r.reason.includes('F40') && r.reason.includes('"agora"'), `texto: ${r.reason}`);
 });
 caso('F179-b: dona via dona que commitou, empurrou ou abriu PR sem gravar: bloqueia (em qualquer etapa viva, inclusive merge)', () => {
-  for (const [etapa, cmd] of [['planejamento', 'git commit -m x'], ['validacao', 'git push -u origin b'], ['merge', 'gh pr create --title x']]) {
+  for (const [etapa, cmd] of [['planejamento', 'git commit -m x'], ['validacao', 'git push -u origin b'], ['merge', 'gh pr create --title x'], ['execucao', 'git -C /r/wt commit -m x'], ['execucao', 'sed -i s/a/b/ /r/a.mjs']]) {
     rmSync(join(filaDir(), 'F40.json'), { force: true });
     item('F40', { etapa, via: 'dona', donoLocalId: LOCAL, atualizadoEm: ANTES });
     igual(turnoDaDona(usaNoTurno('Bash', { command: cmd }))?.decision, 'block', `${etapa}: ${cmd}`);

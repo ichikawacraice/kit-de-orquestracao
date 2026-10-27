@@ -122,7 +122,7 @@ function inicioDoTurno(transcriptPath) {
 // F179: o turno da dona do item inteiro (`via: "dona"`) que MUDOU algo — editou arquivo, commitou, empurrou ou abriu/editou PR —
 // a partir do início do turno. É nesse turno que ela grava o item (`agora`, etapa, PR); o turno que só leu ou esperou não é cobrado.
 const EDITA = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
-const BASH_MUDA = /\bgit\s+(commit|push)\b|\bgh\s+pr\s+(create|edit|ready)\b/;
+const BASH_MUDA = /\bgit\s+(?:-C\s+\S+\s+)?(commit|push)\b|\b(sed|perl)\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*i\b|\bgh\s+pr\s+(create|edit|ready)\b/;
 function mudouNoTurno(transcriptPath, inicio) {
   for (const l of readFileSync(transcriptPath, 'utf8').split('\n')) {
     if (!l) continue;
