@@ -26,10 +26,8 @@ export type LinhaItem = {
   com: Array<{ apelido: string; localId: string; oQue: string; vivo: boolean | null; link?: string; titulo?: string; dona?: true }>
   /** Esperando o operador ou o gate: não é trava, e o item fica no bloco do tema. */
   espera?: { motivo: 'operador' | 'gate'; texto: string }
-  /** Esperando alguém do papel da etapa (P, D, E ou V) desde `desde`; ausente quando há quem trabalhe, ou o item espera de propósito. `entregue`: o papel já entregou a parte; falta a dona avançar a etapa. */
-  esperando?: { papel: 'P' | 'D' | 'E' | 'V'; desde: string; entregue: boolean }
-  /** ADR 0011: item de uma sessão dona do plano ao PR (`via: "dona"`); o que falta a ele é a dona, não um papel. */
-  dona?: boolean
+  /** Sem dona numa etapa de trabalho desde `desde`; ausente quando há quem trabalhe, ou o item espera de propósito. */
+  esperando?: { desde: string }
   prs: number[]
   /** O que fica para depois; `item` é o F<n> quando o documento o liga a outro item. */
   depois: Array<{ texto: string; item?: string }>
@@ -99,7 +97,7 @@ export type PerguntaAnterior = {
 export type SessaoViva = { sessionId: string; isRunning?: boolean; lastActivityAt?: string; title?: string; createdAt?: string }
 
 /** Um cartão de sessão nova que espera o clique do operador (coleção `cartoes` do painel; `id` = o task_id do start_session). */
-export type CartaoDeSessao = { id: string; projeto: string; apelido: string; papel: PapelDoPedido | 'dona'; itens: string[]; orquestradoraId: string; propostoEm: string }
+export type CartaoDeSessao = { id: string; projeto: string; apelido: string; papel: PapelDoPedido; itens: string[]; orquestradoraId: string; propostoEm: string }
 
 export type Leitura = {
   lidoEm: number | null
@@ -131,7 +129,8 @@ export type Leitura = {
 }
 
 /** Onde está o pedido de sessão de um item: saindo, no campo do prompt (esperando o Enter), ou enviado à orquestradora (esperando o operador iniciar o cartão). */
-export type PapelDoPedido = 'P' | 'D' | 'E' | 'V'
+/** O que se pede pelo painel: a sessão dona do item. */
+export type PapelDoPedido = 'dona'
 export type EstadoPedido = { estado: 'enviando' } | { estado: 'prompt'; em: number; papel: PapelDoPedido } | { estado: 'pedido'; em: number; papel: PapelDoPedido }
 
 /** O aviso de reinício e a conferência que a tela lê: os dois arquivos de `batida/` (F152), cada um com o próprio erro. */
@@ -153,7 +152,7 @@ export type Barra = {
   ehOrquestradora: boolean
   titulo: string | null
   item: { id: string; titulo: string; etapa: string } | null
-  pool: { e: number; v: number }
+  donas: number
   projeto: string | null
   /** `expiraEm` é o fim do cache de 1 h desde a última resposta; `segundos` o que falta (null sem resposta ainda). */
   cache: { expiraEm: number | null; segundos: number | null }

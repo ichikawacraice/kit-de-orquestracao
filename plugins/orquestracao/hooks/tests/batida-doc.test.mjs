@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BATIDA_SOLTA_MIN, PRAZO_MIN, ESPERA_MIN, REAVISO_MIN, TETO_DE_LIVRES, TITULO_VELHO_MIN } from '../../skills/orquestradora/scripts/batida.mjs';
+import { BATIDA_SOLTA_MIN, PRAZO_MIN, ESPERA_MIN, CARTAO_VALIDADE_H } from '../../skills/orquestradora/scripts/batida.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const ler = (...p) => readFileSync(join(RAIZ, ...p), 'utf8');
@@ -26,20 +26,11 @@ test('a seção cita as variáveis e os padrões que o código usa', () => {
   assert.ok(painel.includes('PAINEL_PRAZO_MIN') && painel.includes('BATIDA_SOLTA_MIN'), 'o código não lê as variáveis');
   assert.ok(secao.includes('`BATIDA_MIN`') && mod.includes("'BATIDA_MIN'"), 'BATIDA_MIN: doc ou mod discorda');
   assert.ok(secao.includes('`BATIDA=off`') && mod.includes("'BATIDA'"), 'BATIDA=off: doc ou mod discorda');
-  assert.ok(secao.includes(`${ESPERA_MIN} min`) && secao.includes(`${REAVISO_MIN} min`) && secao.includes(`dois livres`) && TETO_DE_LIVRES === 2, 'prazos de espera, reaviso e teto de livres');
+  assert.ok(secao.includes(`há ${ESPERA_MIN} min`), `a seção não diz o prazo do item sem dona (${ESPERA_MIN} min)`);
+  assert.ok(secao.includes(`${CARTAO_VALIDADE_H} h`), `a seção não diz a validade do cartão (${CARTAO_VALIDADE_H} h)`);
 });
-test('a seção e a skill dizem o título velho com o prazo e o campo que o código usa (F134)', () => {
-  const skill = ler('plugins', 'orquestracao', 'skills', 'orquestradora', 'SKILL.md');
-  const batida = ler('plugins', 'orquestracao', 'skills', 'orquestradora', 'scripts', 'batida.mjs');
-  assert.ok(batida.includes("'titulo-velho'") && batida.includes('titulosVelhos'), 'o código não tem o tipo nem o campo');
-  assert.ok(secao.includes('**Título velho') && secao.includes(`${TITULO_VELHO_MIN} min`), `a seção não diz o título velho com ${TITULO_VELHO_MIN} min`);
-  assert.ok(secao.includes('`titulosVelhos`') && skill.includes('`titulosVelhos`'), 'o relatório: seção ou skill não citam titulosVelhos');
-});
-test('o ritual cita a mesma folga de batida velha que o código, e os papéis citam painel pegar', () => {
+test('o ritual cita a mesma folga de batida velha que o código', () => {
   const ritual = ler('plugins', 'orquestracao', 'hooks', 'orquestradora-ritual.mjs');
   assert.ok(ritual.includes('BATIDA_VELHA_MIN') && /: 30; \}\)\(\)/.test(ritual), 'o hook não tem o padrão de 30 min');
   assert.ok(secao.includes('mais de 30 min'), 'a seção não diz os 30 min do aviso');
-  for (const papel of ['planejadora', 'design', 'executora', 'validadora']) {
-    assert.ok(ler('plugins', 'orquestracao', 'pool', 'papeis', `${papel}.md`).includes('painel pegar <F<n>>'), `${papel}.md não manda usar painel pegar`);
-  }
 });

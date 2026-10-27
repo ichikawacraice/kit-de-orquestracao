@@ -1,5 +1,5 @@
 #!/bin/bash
-# Devolve o próximo ID de item da fila do pool (F1, F2, …), único entre TODAS as sessões desta máquina.
+# Devolve o próximo ID de item da fila (F1, F2, …), único entre TODAS as sessões desta máquina.
 # Trava por mkdir (atômico), com prazo. Molde: proxima-pergunta.sh.
 # O próximo é sempre DEPOIS do maior entre o contador (quando numérico) e o maior F<n> que já exista na coleção `fila` do
 # painel (painel/fila/F<n>.json) ou entre os itens antigos (pool/itens/F<n>.md).

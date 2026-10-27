@@ -41,13 +41,10 @@ if (projeto) {
 
 // cada trava dispara uma vez: os testes sintéticos do plugin, contra o hooks/ instalado
 const TESTES = [
-  ['T1 T2 T3 T5 T6 (papel-do-pool)', 'papel-do-pool.test.mjs'],
-  ['orquestradora-nao-edita, subagente-nao-edita, executor-criterio, ritual, T1c (hooks-crewai)', 'hooks-crewai.test.mjs'],
-  ['executor-anuncia (F28)', 'executor-anuncia.test.mjs'],
-  ['livre-se-limpa', 'livre-se-limpa.test.mjs'],
+  ['T3 T5 T6 T7 (travas-da-sessao)', 'travas-da-sessao.test.mjs'],
+  ['orquestradora-nao-edita, subagente-nao-edita, criterio-da-dona, ritual (hooks-crewai)', 'hooks-crewai.test.mjs'],
   ['painel-das-sessoes', 'painel-das-sessoes.test.mjs'],
   ['fila-do-item', 'fila-do-item.test.mjs'],
-  ['skill-do-papel', 'skills-do-papel.test.mjs'],
   ['pool-comum', 'pool-comum.test.mjs'],
 ];
 for (const [nome, arq] of TESTES) {

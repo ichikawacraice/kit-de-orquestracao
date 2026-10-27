@@ -23,7 +23,7 @@ git(A, 'worktree', 'add', '-q', join(base, 'alfa-wt'), '-b', 'wt');
 const SEM = join(base, 'semgit'); mkdirSync(SEM);
 
 process.env.HOME = join(base, 'home'); mkdirSync(join(base, 'home', '.claude', 'projects', 'p'), { recursive: true });
-const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, tituloAguardando, declarouLivre, ocupacaoDaSessao, janelasDeLimpeza, ehPerguntaDeLimpeza, maquinaCheia, membrosLivres } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
+const { registroDaSessao, projetoDaSessao, repoDoMarcador, projetoTemOrquestradora, inicioDoTurno, origemDoTurno, janelasDeLimpeza, ehPerguntaDeLimpeza, maquinaCheia, sessoesDaConta } = await import(pathToFileURL(join(HOOKS, 'pool-comum.mjs')).href);
 function reg(k, campos) {
   writeFileSync(join(base, 'app', 'conta', `local_${k}.json`), JSON.stringify({ sessionId: `local_${k}`, cliSessionId: `cli-${k}`, title: `E1 · x`, ...campos }));
   return registroDaSessao(`cli-${k}`, { fresco: true });
@@ -161,40 +161,6 @@ caso_repoDoMarcador();
     console.log(`ok   ${nome}`);
   } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
 }
-{
-  const nome = 'F49: tituloAguardando e declarouLivre reconhecem o título aguardando validação';
-  try {
-    const eq = (a, b, m) => { if (a !== b) throw new Error(`${m}: esperava ${b}, veio ${a}`); };
-    eq(tituloAguardando('E2 · aguardando validação'), true, 'título aguardando');
-    eq(tituloAguardando('E2 · livre'), false, 'livre não é aguardando');
-    eq(tituloAguardando('E2 · aguardando validação do X'), false, 'texto depois não vale');
-    const t = (title) => { const f = join(base, 'dl.jsonl'); writeFileSync(f, `${JSON.stringify({ type: 'assistant', timestamp: new Date().toISOString(), message: { content: [{ type: 'tool_use', name: 'mcp__ccd_session_mgmt__set_session_title', input: { session_id: 'self', title } }] } })}\n`); return f; };
-    const a = declarouLivre(t('E2 · aguardando validação'), 0, []);
-    eq(a?.como, 'título aguardando', 'como'); eq(a?.aguardando, true, 'aguardando'); eq(a?.propria, true, 'propria');
-    const l = declarouLivre(t('E2 · livre'), 0, []);
-    eq(l?.como, 'título livre', 'como livre'); eq(l?.aguardando, false, 'aguardando do livre');
-    console.log(`ok   ${nome}`);
-  } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
-}
-{
-  const nome = 'B1 ocupacaoDaSessao: pasta da fila ausente (ENOENT) → ocupação vazia; arquivo no lugar da pasta e item ilegível → null';
-  try {
-    const eq = (a, b, m) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${m}: esperava ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
-    const antes = process.env.FILA_DIR;
-    const fila = join(base, 'fila-b1');
-    process.env.FILA_DIR = fila;
-    eq(ocupacaoDaSessao('local_X'), { com: [], fez: [], dono: [] }, 'pasta ausente');
-    mkdirSync(fila);
-    writeFileSync(join(fila, 'F1.json'), JSON.stringify({ id: 'F1', data: { etapa: 'execucao', com: [{ localId: 'local_X' }] } }));
-    eq(ocupacaoDaSessao('local_X'), { com: ['F1'], fez: [], dono: [] }, 'prova: a presença é detectada');
-    writeFileSync(join(fila, 'F2.json'), '{parcial');
-    eq(ocupacaoDaSessao('local_X'), null, 'item ilegível');
-    const arq = join(base, 'fila-arquivo'); writeFileSync(arq, 'x'); process.env.FILA_DIR = arq;
-    eq(ocupacaoDaSessao('local_X'), null, 'arquivo no lugar da pasta');
-    if (antes === undefined) delete process.env.FILA_DIR; else process.env.FILA_DIR = antes;
-    console.log(`ok   ${nome}`);
-  } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); }
-}
 caso_janelas();
 function caso_janelas() {
   const nome = 'F53: ehPerguntaDeLimpeza (termo inteiro) e janelasDeLimpeza (lê o par tool_use/tool_result do transcript)';
@@ -255,21 +221,18 @@ caso('maquinaCheia: pasta, teto e carga vêm do env (KIT_NUCLEOS_DIR, KIT_NUCLEO
   r = maquinaCheia({ env: { ...env, KIT_NUCLEOS_DE_TESTE: '2', KIT_CARGA_1MIN: '99' } });
   ok(r.cheia === true && r.carga === 99, `carga pelo env: ${JSON.stringify(r)}`);
 });
-// F142: o registro do app guarda uma pasta por conta (`<SESSOES_DIR>/<conta>/…`) e a de outra conta fica no disco. Os livres
-// só saem da pasta da conta atual (`lastKnownAccountUuid` do config.json do app); sem config, varre tudo como antes.
-caso('membrosLivres: livre da pasta de outra conta não conta; sem config do app, conta', () => {
-  const app = join(base, 'app-contas'); const atual = join(app, 'conta-atual', 'org'); const velha = join(app, 'conta-velha', 'org');
-  mkdirSync(atual, { recursive: true }); mkdirSync(velha, { recursive: true });
-  writeFileSync(join(atual, 'local_viva.json'), JSON.stringify({ sessionId: 'local_viva', title: 'P1 · livre', isArchived: false, cwd: A }));
-  writeFileSync(join(velha, 'local_fantasma.json'), JSON.stringify({ sessionId: 'local_fantasma', title: 'P2 · livre', isArchived: false, cwd: A }));
+// O registro do app guarda uma pasta por conta (`<SESSOES_DIR>/<conta>/…`) e a de outra conta fica no disco. As travas só leem
+// a pasta da conta atual (`lastKnownAccountUuid` do config.json do app); sem config, ou com a conta sem pasta, o registro inteiro.
+caso('sessoesDaConta: com a conta atual no config, a pasta dela; sem config ou com conta sem pasta, o registro inteiro', () => {
+  const app = join(base, 'app-contas');
+  mkdirSync(join(app, 'conta-atual', 'org'), { recursive: true }); mkdirSync(join(app, 'conta-velha', 'org'), { recursive: true });
   const antes = process.env.POOL_APP_SESSOES_DIR; process.env.POOL_APP_SESSOES_DIR = app;
   try {
-    const ids = () => membrosLivres(projetoDaSessao({ cwd: A }).repo).map((l) => l.localId).sort().join(',');
-    ok(ids() === 'local_fantasma,local_viva', `sem config, as duas pastas: ${ids()}`);
+    ok(sessoesDaConta() === app, `sem config, o registro inteiro: ${sessoesDaConta()}`);
     writeFileSync(join(base, 'config.json'), JSON.stringify({ lastKnownAccountUuid: 'conta-atual' }));
-    ok(ids() === 'local_viva', `com a conta atual, só a viva: ${ids()}`);
+    ok(sessoesDaConta() === join(app, 'conta-atual'), `com a conta atual, só ela: ${sessoesDaConta()}`);
     writeFileSync(join(base, 'config.json'), JSON.stringify({ lastKnownAccountUuid: 'conta-sem-pasta' }));
-    ok(ids() === 'local_fantasma,local_viva', `conta sem pasta no disco não esconde todos: ${ids()}`);
+    ok(sessoesDaConta() === app, `conta sem pasta no disco não esconde todos: ${sessoesDaConta()}`);
   } finally { process.env.POOL_APP_SESSOES_DIR = antes; rmSync(join(base, 'config.json'), { force: true }); }
 });
 // ADR 0008 (26/10): o teto tem a faixa do gate (1..G) e a normal (G+1..T); a máquina está cheia para a V quando falta ficha NORMAL e não há o que emprestar.

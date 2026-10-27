@@ -335,7 +335,7 @@ export function decidir(evento, papelArg, ctx) {
         permissionDecision: "deny",
         permissionDecisionReason:
           "O designer especifica e não implementa: a revisão vai para a pasta de revisões de design (ou o rascunho), " +
-          "e quem escreve o código de tela é o executor, a partir da revisão aprovada pelo crítico.",
+          "e quem escreve o código de tela é a dona do item, a partir da revisão aprovada pelo crítico.",
       },
     };
   }

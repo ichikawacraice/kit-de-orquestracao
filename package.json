@@ -1,7 +1,7 @@
 {
   "name": "kit-de-orquestracao",
   "version": "0.1.0",
-  "description": "Kit de orquestração de sessões do Claude Code: pool de papéis, travas por hook, painel e gates.",
+  "description": "Kit de orquestração de sessões do Claude Code: uma sessão dona por item, travas por hook, painel, fila de merge e teto de testes.",
   "private": true,
   "type": "module",
   "bin": { "kit": "cli/kit.mjs" },

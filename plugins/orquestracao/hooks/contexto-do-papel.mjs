@@ -1,37 +1,32 @@
 #!/usr/bin/env node
-// Stop hook (F35): cobra a regra de contexto por papel da skill `papeis-e-modelos` ("Contexto"), que só valia se a sessão
+// Stop hook: cobra a regra de contexto por papel da skill `papeis-e-modelos` ("Contexto"), que só valeria se a sessão
 // lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain) e não grava estado nenhum.
-//   orquestradora (F147): com o modo ausente ligado segue a régua da planejadora abaixo; com o operador presente o Stop não a bloqueia:
-//     a limpeza é dele, pelo botão `↺ Limpar` da barra (destacado a partir de 150 mil); o hook só registra (`contexto-alto`, ou `limpou`).
-//     No modo ausente o papel é `orquestradora-ausente` (F190): o log e o aviso dizem que a régua vem da bandeira e como desligá-la,
-//     porque a bandeira ligada pelo botão do painel fica ligada até alguém a desligar, mesmo com o operador de volta.
-//   planejadora / design: ≥ 500 mil cobra limpar (só `clear_session` "self" satisfaz); ≥ 350 mil cobra limpar OU
-//     a linha `Contexto: sigo — <o que falta na unidade>`; ≥ 250 mil com o turno terminando esperando o operador (`?` ou `Q<n>` no
-//     último parágrafo) cobra limpar antes.
-//   executora (F49): ≥ 300 mil cobra limpar (só `clear_session` "self" satisfaz; a linha `Parei em:` sozinha não).
-//   validadora: nunca cobra (não limpa no meio); só registra `validadora-<mil>` a partir de 350 mil.
-// `clear_session` recusado (tool_result com `is_error`) não conta como limpeza (F54).
+//   orquestradora: com o operador presente o Stop não a bloqueia: a limpeza é dele, pelo botão `↺ Limpar` da barra (destacado
+//     a partir de 150 mil); o hook só registra (`contexto-alto`, ou `limpou`). Com o modo ausente ligado o papel é
+//     `orquestradora-ausente` e segue a régua da dona; o aviso diz que a régua vem da bandeira e como desligá-la, porque a
+//     bandeira ligada pelo botão do painel fica ligada até alguém a desligar, mesmo com o operador de volta.
+//   dona (a sessão é `donoLocalId` de item vivo da fila): ≥ 500 mil cobra limpar (só `clear_session` "self" satisfaz);
+//     ≥ 350 mil cobra limpar OU a linha `Contexto: sigo — <o que falta na unidade>`; ≥ 250 mil com o turno terminando
+//     esperando o operador (`?` ou `Q<n>` no último parágrafo) cobra limpar antes.
+// `clear_session` recusado (tool_result com `is_error`) não conta como limpeza.
 // Uma cobrança por turno (`stop_hook_active` deixa passar). Erro nunca prende o turno. Limites: constantes abaixo, com override
 // `CONTEXTO_LIMITE_<NOME>` só para teste. Fonte da regra: skills/papeis-e-modelos/SKILL.md, seção "Contexto".
 import { readFileSync, realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { registrar, textoDe, modoAusente } from './hooks-crewai-comum.mjs';
-import { registroDaSessao, membroDoPool, ehOrquestradora, ehExecutora, inicioDoTurno, contextoDoTranscript } from './pool-comum.mjs';
+import { registroDaSessao, ehOrquestradora, itensDonosDaSessao, inicioDoTurno, contextoDoTranscript } from './pool-comum.mjs';
 
 const HOOK = 'contexto-do-papel';
 const limite = (nome, padrao) => { const v = Number(process.env[`CONTEXTO_LIMITE_${nome}`]); return Number.isFinite(v) && v > 0 ? v : padrao; };
-const ESPERA = limite('ESPERA', 250_000); const ALTO = limite('ALTO', 350_000); const TETO = limite('TETO', 500_000); const EXEC = limite('EXEC', 300_000);
-export { ALTO, EXEC }; // o `painel seguinte` mede o contexto contra estas réguas
+const ESPERA = limite('ESPERA', 250_000); const ALTO = limite('ALTO', 350_000); const TETO = limite('TETO', 500_000);
 const PEDIR = limite('PEDIR', 150_000);
 const mil = (t) => Math.round(t / 1000);
 
-// Papel pela ordem: orquestradora (ou orquestradora-ausente), executora, membro do pool (P e D = planejadora, V = validadora, E = executora). Sem papel → null.
-function papelDe(e, transcript, reg) {
+// Papel pela ordem: orquestradora (ou orquestradora-ausente), dona de item vivo. Sem papel → null.
+function papelDe(e, reg) {
   if (ehOrquestradora(e.session_id, reg?.titulo)) return modoAusente() ? 'orquestradora-ausente' : 'orquestradora';
-  if (ehExecutora(e, transcript)) return 'executora';
-  const m = membroDoPool(reg?.titulo);
-  if (!m) return null;
-  return m.papel === 'V' ? 'validadora' : m.papel === 'E' ? 'executora' : 'planejadora';
+  if (itensDonosDaSessao(reg?.localId).length > 0) return 'dona';
+  return null;
 }
 
 // O que o turno que começou em `inicio` (ms) fez e disse: chamou `clear_session` "self"? e o último texto (a última entrada com texto).
@@ -58,14 +53,14 @@ function doTurno(transcript, inicio, ultimaMensagem) {
   return { limpou, texto };
 }
 
-// O turno termina esperando o operador: `?` ou `Q<n>` no último parágrafo. O `?` de uma URL com query (`…/a?b=1`) não é pergunta
-// (O3 do F35); o `?` solto, mesmo colado numa URL, continua valendo.
+// O turno termina esperando o operador: `?` ou `Q<n>` no último parágrafo. O `?` de uma URL com query (`…/a?b=1`) não é pergunta;
+// o `?` solto, mesmo colado numa URL, continua valendo.
 function terminaEsperando(texto) {
   const ultimoParagrafo = (texto.split(/\n\s*\n/).pop() || '').replace(/https?:\/\/\S*\?\S+/g, '');
   return /\?|\bQ\d+\b/.test(ultimoParagrafo);
 }
 
-// Orquestradora com o operador presente (F147): a limpeza é dele e o sinal é o botão `↺ Limpar` da barra, destacado a partir de
+// Orquestradora com o operador presente: a limpeza é dele e o sinal é o botão `↺ Limpar` da barra, destacado a partir de
 // 150 mil. O Stop não bloqueia (não há pergunta nem janela a cobrar); só registra, para o histórico.
 function orquestradora(e, sid, transcript, t, det) {
   if (t < PEDIR) return;
@@ -88,22 +83,14 @@ function main() {
   const ctx = contextoDoTranscript(transcript);
   if (!ctx) { registrar(sid, HOOK, 'sem-usage'); return; }
   const reg = registroDaSessao(sid);
-  const papel = papelDe(e, transcript, reg);
+  const papel = papelDe(e, reg);
   if (!papel) return;
   const t = ctx.tokens; const det = `${papel} ${mil(t)} mil`;
 
-  if (papel === 'validadora') { if (t >= ALTO) registrar(sid, HOOK, `validadora-${mil(t)}`, det); return; }
   if (papel === 'orquestradora') return orquestradora(e, sid, transcript, t, det);
   // O que cobraria, nesta ordem de gravidade. `sigoVale`: a linha de escape não vale no teto.
   let cobranca = null;
-  if (papel === 'executora') {
-    if (t >= EXEC) cobranca = { desfecho: 'cobrou-exec-150', sigoVale: false, reason:
-      `Contexto em ${mil(t)} mil, acima de ${mil(EXEC)} mil: a próxima etapa começa com a conversa vazia. Não compacte. Antes de limpar, conforme o caso: ` +
-      'acabou de receber item (novo ou conserto) → grave no item `{"agora":"recebido; limpo antes de começar"}` e mande a quem despachou "limpa a ' + mil(t) + ' mil; reenvie o briefing"; ' +
-      'no meio do item → commite o que está pronto e mande a quem despachou o relatório com `Parei em: <passo exato>`; ' +
-      'entregou à validação → grave no handoff do item o que o conserto vai precisar e ponha o título `<ID> · livre`. ' +
-      'Depois chame clear_session com session_id "self" e termine o turno.' };
-  } else if (t >= TETO) {
+  if (t >= TETO) {
     cobranca = { desfecho: 'cobrou-300', sigoVale: false, reason: `Contexto em ${mil(t)} mil. Não pegue trabalho novo. Escreva o estado (o próximo passo exato) e chame clear_session "self".` };
   } else if (t >= ALTO) {
     cobranca = { desfecho: 'cobrou-200', sigoVale: true, reason: `Contexto em ${mil(t)} mil, acima de ${mil(ALTO)} mil. Se a unidade de trabalho acabou, escreva o estado e chame clear_session "self"; se não acabou, diga numa linha \`Contexto: sigo — <o que falta na unidade>\`.` };

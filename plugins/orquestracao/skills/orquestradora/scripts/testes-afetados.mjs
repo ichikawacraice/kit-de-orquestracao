@@ -6,7 +6,7 @@
 // O que conta como tocado: `git diff --name-only <merge-base com a base>` (commits da branch + árvore de trabalho) e os
 // arquivos novos ainda fora do índice; com `--sha`, só os commits até ele, lidos do git (sem checkout). Base: `--base`,
 // `KIT_BASE`, `origin/HEAD`, `origin/main`, `main`, nessa ordem.
-// Teste afetado: o arquivo de teste tocado, ou o que cita o NOME de um arquivo tocado (`papel-do-pool.mjs`, `protocolo.md`;
+// Teste afetado: o arquivo de teste tocado, ou o que cita o NOME de um arquivo tocado (`travas-da-sessao.mjs`, `protocolo.md`;
 // em código, também o nome sem extensão depois de `/`, como em `from './x'`), ou o que cita um módulo que cita um tocado,
 // em cadeia (fecho transitivo dos dependentes por citação de nome).
 // Volta "todos" (F184), porque aí o efeito pode ser indireto: (1) tocou um gatilho global (`GATILHOS_PADRAO` mais

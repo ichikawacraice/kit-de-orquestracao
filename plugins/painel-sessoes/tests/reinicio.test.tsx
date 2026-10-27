@@ -138,7 +138,7 @@ test('vigiaSumiu mede a conferência DA VIGIA (vigiaEm), não o arquivo que qual
 // ---- a peça da barra: texto, glifo, largura reservada e nunca cai ----
 
 const REF: EstadoBarra = {
-  relogio: '47:12', bloco: false, tokens: 142_000, janela: 600_000, regua: { aviso: 200_000, teto: 300_000 }, item: 'F52 · design', pool: 'E 2 · V 1',
+  relogio: '47:12', bloco: false, tokens: 142_000, janela: 600_000, regua: { aviso: 200_000, teto: 300_000 }, item: 'F52 · design', donas: 'donas 2',
   abertas: 3, modo: 'ausente', trocando: false, painelAberto: true, moldura: false, ehOrquestradora: false, limpando: false,
 }
 const ORQ: EstadoBarra = { ...REF, tokens: 198_000, regua: { aviso: 150_000, teto: 150_000 }, item: null, modo: 'presente', painelAberto: false, ehOrquestradora: true }
@@ -171,7 +171,7 @@ test('larguraDaFaixa: a peça soma 17 (16 do ⏻ Pode reiniciar + 1 de vão) em 
       expect(larguraDaFaixa({ ...ORQ, reinicio, rodando }, f), `${reinicio}, faixa ${f}`).toBe(sem + 17)
     }
   }
-  expect([0, 1, 2].map(f => larguraDaFaixa({ ...ORQ, reinicio: 'pode' }, f as 0 | 1 | 2)), 'a orquestradora da base (125/105/62) + 17').toEqual([142, 122, 79])
+  expect([0, 1, 2].map(f => larguraDaFaixa({ ...ORQ, reinicio: 'pode' }, f as 0 | 1 | 2)), 'a orquestradora da base (123/105/62) + 17').toEqual([140, 122, 79])
   expect(larguraDaFaixa({ ...REF, reinicio: 'esperando', rodando: 12 }, 0), 'a largura não muda com o número').toBe(larguraDaFaixa({ ...REF, reinicio: 'pode' }, 0))
 })
 

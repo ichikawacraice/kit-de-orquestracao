@@ -2,7 +2,7 @@
 // PreToolUse (F181, Q473): start_session cujo prompt é de dona ("Você é a dona do F<n>") só passa com título que começa por `F<n> · `.
 // O ID primeiro dá ao operador a referência do item; a regra só no texto da skill foi violada (F140, F172, F174).
 // A recusa traz o título certo. Sem título nem prompt (`proposal_id` sozinho) passa: o cartão já foi checado ao nascer.
-// Erro do próprio hook vai para o log e DEIXA PASSAR: a trava não pode derrubar o pool.
+// Erro do próprio hook vai para o log e DEIXA PASSAR: a trava não pode derrubar as sessões.
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registrar, lerEntrada } from './hooks-crewai-comum.mjs';

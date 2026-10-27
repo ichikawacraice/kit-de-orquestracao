@@ -38,7 +38,7 @@ Veredito: aprovada com ressalvas (24 ou mais, sem ressalva alta) | volta (abaixo
 - **Onde:** arquivo:linha, ou a seção da revisão, ou a região da tela
 - **O que se vê:** o fato medido (contagem, valor, print)
 - **Por que pesa:** a consequência para quem usa
-- **Correção:** componente/token do kit e o lugar certo (pela ANATOMIA) — concreta o bastante para um executor cumprir
+- **Correção:** componente/token do kit e o lugar certo (pela ANATOMIA) — concreta o bastante para a dona do item cumprir
 
 ### P2 …
 (até P5, do maior impacto para o menor)
@@ -54,8 +54,8 @@ Mais de 5 problemas: escolha os 5 de maior impacto e diga numa linha quantos fic
 
 - **De 24/30 para cima e sem ressalva alta, a crítica aprova com ressalvas:** a revisão ou a tela está liberada para execução ou para merge.
 - **Ressalva alta volta para conserto, mesmo com 24 ou mais:** nota boa não esconde problema grave.
-- **Ressalva média ou baixa não volta para conserto.** Ela vira item próprio na fila, e o trabalho segue.
-- **No máximo 2 recríticas por PR ou por revisão.** Na terceira, o que ainda estiver abaixo de 24 sobe à planejadora, que decide ou leva ao operador.
+- **Ressalva média ou baixa não volta para conserto.** Ela vai para o `depois` do item, e o trabalho segue.
+- **No máximo 2 recríticas por PR ou por revisão.** Na terceira, o que ainda estiver abaixo de 24 vai à dona do item, que decide ou leva ao operador.
 - **O porquê:** sem teto, um redesenho fica parado por rodadas de crítica polindo ressalva baixa.
 
 O veredito vai logo abaixo da nota: *aprovada com ressalvas* com 24 ou mais e nenhuma ressalva alta; *volta* abaixo de 24 ou com alguma ressalva alta.
@@ -65,4 +65,4 @@ O veredito vai logo abaixo da nota: *aprovada com ressalvas* com 24 ou mais e ne
 - Não edita arquivo nem propõe código pronto; a correção é instrução, não patch.
 - Não reabre decisão registrada: se uma decisão parece produzir o problema, o achado diz qual e manda para *Decisões ao operador* da revisão.
 - Não julga a mesma revisão duas vezes no mesmo contexto: a segunda rodada é crítico novo, com os achados da primeira e o delta.
-- Não pede uma terceira recrítica: depois de 2, o que ficou abaixo de 24 sobe à planejadora (o teto da crítica, acima).
+- Não pede uma terceira recrítica: depois de 2, o que ficou abaixo de 24 vai à dona do item (o teto da crítica, acima).

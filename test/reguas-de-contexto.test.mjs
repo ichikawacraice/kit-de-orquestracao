@@ -27,20 +27,16 @@ const REGUA_LIDA = /regua\??\.(teto|aviso)/;
 
 describe('réguas de contexto: barra × hook', () => {
   it('os números do hook existem e não são zero', () => {
-    for (const n of ['ALTO', 'TETO', 'EXEC', 'PEDIR']) assert.ok(doHook(n) > 0, n);
+    for (const n of ['ALTO', 'TETO', 'PEDIR']) assert.ok(doHook(n) > 0, n);
   });
 
-  it('executora: o teto da barra é o EXEC do hook', () => {
-    assert.equal(daBarra('E').teto, doHook('EXEC'));
+  it('dona: aviso = ALTO e teto = TETO', () => {
+    assert.deepEqual(daBarra('dona'), { aviso: doHook('ALTO'), teto: doHook('TETO') });
   });
 
-  it('planejadora, design e validadora: aviso = ALTO e teto = TETO', () => {
-    for (const p of ['P', 'D', 'V']) assert.deepEqual(daBarra(p), { aviso: doHook('ALTO'), teto: doHook('TETO') }, p);
-  });
-
-  it('orquestradora com o operador presente: aviso e teto = PEDIR; ausente segue a planejadora', () => {
+  it('orquestradora com o operador presente: aviso e teto = PEDIR; ausente segue a dona', () => {
     assert.deepEqual(daBarra('orquestradora'), { aviso: doHook('PEDIR'), teto: doHook('PEDIR') });
-    assert.deepEqual(daBarra('orquestradoraAusente'), daBarra('P'));
+    assert.deepEqual(daBarra('orquestradoraAusente'), daBarra('dona'));
   });
 
   it('o denominador do contexto é a janela, não a régua: textoDoContexto não usa regua.teto', () => {

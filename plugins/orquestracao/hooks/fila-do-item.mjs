@@ -1,16 +1,12 @@
 #!/usr/bin/env node
-// Stop hook da fila do pool (estudo de 24/10, passo 3): a sessão que é DONA de um item vivo da fila
-// (coleção `fila` do painel: `donoLocalId` e `etapa` fora de feito/descartado) não termina o turno sem ter
-// gravado algo nele neste turno — só em planejamento e design, onde ela trabalha (F153: das 389 cobranças medidas em
-// 27/10, 216 eram em execução/validação/merge, com a dona só esperando; a cobrança de despacho segue em todas as etapas).
-// Item da dona do item inteiro (`via: "dona"`, ADR 0011): em qualquer etapa viva, só no turno que mudou algo (F179).
-// Item ainda sem `etapa` (documento não migrado) vale pelo critério antigo,
-// `estado === 'em-andamento'`; `estado: 'em-execucao'` sem `etapa` NÃO é visto (o limite que a migração eliminou).
+// Stop hook: a sessão que é DONA de um item vivo da fila (coleção `fila` do painel: `donoLocalId` e `etapa` fora de
+// feito/descartado) não termina o turno que MUDOU algo (editou arquivo, commitou, empurrou, abriu ou editou PR) sem ter
+// gravado o item nesse turno. O turno que só leu ou esperou passa: o item parado é da batida.
 //
 // "Dona" = o `local_…` da sessão (registro do app, achado pelo cliSessionId ou pelos priorCliSessionIds)
 // é o `donoLocalId` do item. "Gravou neste turno" = `atualizadoEm` do item não é anterior ao início do
 // turno (a última entrada `user` com `origin.kind` do transcript, o mesmo critério do painel-das-sessoes).
-// Protocolo: ~/.claude/orquestracao/pool/protocolo.md#fila-do-pool
+// Protocolo: pool/protocolo.md#painel-em-dia
 //
 // Erro do próprio hook vai para o log e DEIXA PASSAR. Variáveis para teste: FILA_DIR, FILA_APP_SESSOES_DIR, FILA_LOG.
 import { readFileSync, existsSync, appendFileSync, readdirSync, mkdirSync } from 'node:fs';
@@ -19,28 +15,13 @@ import { join, dirname } from 'node:path';
 
 // O aviso de injeção é opcional: se a varredura faltar ou falhar ao carregar, o hook segue sem ele.
 // Hoje ele não protege nada (a razão do bloqueio só cita ids de item); prepara o caso de o texto do painel entrar aqui.
-// Idem o pool-comum: sem ele não há como saber quem vai se soltar, e o hook cobra como sempre.
-let vaiSoltar = () => false;
-try {
-  // Versão velha do pool-comum no cache pode carregar sem a função (B11): só adota o que é função.
-  const m = await import('./pool-comum.mjs');
-  if (typeof m.vaiSoltar === 'function') vaiSoltar = m.vaiSoltar;
-} catch { /* sem a soltura */ }
-
-// A regra "esperando papel" é de um módulo puro; se faltar no cache, o hook segue sem a cobrança nova.
-let esperandoPapel = () => null;
-try { ({ esperandoPapel } = await import('./esperando-papel.mjs')); } catch { /* sem a cobrança de espera */ }
-
 let avisoDeInjecao = () => '';
 try { ({ avisoDeInjecao } = await import('./varredura-entre-sessoes.mjs')); } catch { /* sem aviso */ }
 
 const FILA_DIR = process.env.FILA_DIR || join(homedir(), '.claude', 'orquestracao', 'painel', 'fila');
 const SESSOES_DIR = process.env.FILA_APP_SESSOES_DIR || join(homedir(), 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
 const LOG = process.env.FILA_LOG || join(homedir(), '.claude', 'orquestracao', 'fila-hook.log');
-const PROTOCOLO = '~/.claude/orquestracao/pool/protocolo.md#fila-do-pool';
-const PROTOCOLO_ESPERA = '~/.claude/orquestracao/pool/protocolo.md#esperando-papel';
-const NOME_DA_ETAPA = { P: 'planejamento', D: 'design', E: 'execução', V: 'validação' };
-const PROXIMA_ETAPA = { P: 'design ou execucao', D: 'execucao', E: 'validacao com uma V no com', V: 'merge' };
+const PROTOCOLO = 'pool/protocolo.md#painel-em-dia';
 
 function registrar(sessionId, localId, desfecho, detalhe = '') {
   try {
@@ -52,9 +33,8 @@ function registrar(sessionId, localId, desfecho, detalhe = '') {
 
 const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'feito', 'descartado'];
 const ETAPAS_FINAIS = ['feito', 'descartado'];
-const ETAPAS_DA_DONA = ['planejamento', 'design'];
 
-// Itens da fila que têm dono e estão vivos: [{ id, dono, atualizadoEm, etapa, data }].
+// Itens da fila que têm dono e estão vivos: [{ id, dono, atualizadoEm }].
 function itensComDono() {
   if (!existsSync(FILA_DIR)) return [];
   const itens = [];
@@ -63,9 +43,8 @@ function itensComDono() {
     try {
       const doc = JSON.parse(readFileSync(join(FILA_DIR, nome), 'utf8'));
       const d = doc?.data;
-      const vivo = ETAPAS.includes(d?.etapa) ? !ETAPAS_FINAIS.includes(d.etapa) : d?.estado === 'em-andamento';
-      if (vivo && d?.donoLocalId) {
-        itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), dono: d.donoLocalId, atualizadoEm: d.atualizadoEm, etapa: ETAPAS.includes(d.etapa) ? d.etapa : null, data: d });
+      if (ETAPAS.includes(d?.etapa) && !ETAPAS_FINAIS.includes(d.etapa) && d?.donoLocalId) {
+        itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), dono: d.donoLocalId, atualizadoEm: d.atualizadoEm });
       }
     } catch { /* arquivo parcial ou ilegível: ignora este item */ }
   }
@@ -119,7 +98,7 @@ function inicioDoTurno(transcriptPath) {
   return null;
 }
 
-// F179: o turno da dona do item inteiro (`via: "dona"`) que MUDOU algo — editou arquivo, commitou, empurrou ou abriu/editou PR —
+// O turno da dona que MUDOU algo — editou arquivo, commitou, empurrou ou abriu/editou PR —
 // a partir do início do turno. É nesse turno que ela grava o item (`agora`, etapa, PR); o turno que só leu ou esperou não é cobrado.
 const EDITA = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
 const BASH_MUDA = /\bgit\s+(?:-C\s+\S+\s+)?(commit|push)\b|\b(sed|perl)\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*i\b|\bgh\s+pr\s+(create|edit|ready)\b/;
@@ -135,36 +114,6 @@ function mudouNoTurno(transcriptPath, inicio) {
     }
   }
   return false;
-}
-
-// F58 (D4): a dona de item esperando o papel da etapa não termina o turno sem ter, DEPOIS do `desde` da espera, rodado
-// `painel com add <F>` ou mandado mensagem (SendMessage / send_message) que cite o `F<n>`. Procura no transcript inteiro.
-function despachos(transcriptPath) {
-  const achados = [];
-  for (const l of readFileSync(transcriptPath, 'utf8').split('\n')) {
-    if (!l) continue;
-    let e;
-    try { e = JSON.parse(l); } catch { continue; }
-    const c = e.type === 'assistant' && Array.isArray(e.message?.content) ? e.message.content : [];
-    const t = Date.parse(e.timestamp);
-    if (Number.isNaN(t)) continue;
-    for (const b of c) {
-      if (b?.type !== 'tool_use') continue;
-      if (b.name === 'Bash') achados.push({ t, tipo: 'com', texto: String(b.input?.command ?? '') });
-      else if (/(^|__)(SendMessage|send_message)$/.test(b.name)) achados.push({ t, tipo: 'msg', texto: JSON.stringify(b.input ?? {}) });
-    }
-  }
-  return achados;
-}
-function semDespacho(meus, transcriptPath) {
-  const esperando = meus.map((i) => ({ i, e: esperandoPapel(i.data, Date.now()) })).filter((x) => x.e);
-  if (esperando.length === 0) return [];
-  const feitos = despachos(transcriptPath);
-  return esperando.filter(({ i, e }) => {
-    const desde = Date.parse(e.desde);
-    const cita = new RegExp(`\\b${i.id}\\b`);
-    return !feitos.some((f) => f.t > desde && cita.test(f.texto) && (f.tipo === 'msg' || new RegExp(`\\bcom\\s+add\\s+${i.id}\\b`).test(f.texto)));
-  }).map(({ i, e }) => ({ id: i.id, papel: e.papel, entregue: e.entregue }));
 }
 
 let sessaoAtual = '';
@@ -191,50 +140,23 @@ function main() {
   const inicio = inicioDoTurno(tp);
   if (inicio === null) return registrar(sid, local, 'sem-inicio');
 
-  // F32: quem se declarou livre SOBRE SI neste turno e é membro do pool é solta pelo `livre-se-limpa` (mesmo fim de turno, mesma função `vaiSoltar`): aqui não se cobra.
-  let solta = false;
-  try { solta = Boolean(vaiSoltar(tp, inicio, { sessionId: sid, localId: local, titulo: reg.titulo })); } catch { /* segue cobrando */ }
-  if (solta) return registrar(sid, local, 'livre-no-turno', meus.map((i) => i.id).join(','));
-
-  // F153: a gravação por turno só é cobrada onde a dona trabalha (planejamento, design e o legado sem etapa); em
-  // execução, validação e merge quem trabalha é a E/V do `com`, e o item parado é da batida.
-  // F179: a dona do item inteiro (ADR 0011) não é cobrada a cada turno, só no que mudou algo, em qualquer etapa viva.
-  let mudou = null;
+  if (!mudouNoTurno(tp, inicio)) return registrar(sid, local, 'passou-sem-mudar', meus.map((i) => i.id).join(','));
   const pendentes = meus.filter((i) => {
-    if (i.data?.via === 'dona') {
-      if (mudou === null) mudou = mudouNoTurno(tp, inicio);
-      if (!mudou) return false;
-    } else if (i.etapa !== null && !ETAPAS_DA_DONA.includes(i.etapa)) return false;
     const t = Date.parse(i.atualizadoEm);
     return Number.isNaN(t) || t < inicio;
   });
-  const parados = semDespacho(meus, tp);
-  if (pendentes.length === 0 && parados.length === 0) return registrar(sid, local, 'passou', meus.map((i) => i.id).join(','));
+  if (pendentes.length === 0) return registrar(sid, local, 'passou', meus.map((i) => i.id).join(','));
 
   const ids = pendentes.map((i) => i.id);
   const lista = ids.length === 1 ? `do item ${ids[0]} (em andamento)` : `dos itens ${ids.join(', ')} (em andamento)`;
   const cmds = ids.map((id) => `\`painel update fila ${id} '{"agora":"…"}'\``).join(' · ');
   // O texto do painel (ids dos itens) é dado de outra sessão: com padrão de injeção, o aviso vai antes.
-  const aviso = avisoDeInjecao([...ids, ...parados.map((p) => p.id)].join('\n'));
-  const partes = [];
-  if (pendentes.length > 0) {
-    partes.push(`Você é dona ${lista} e não o atualizou neste turno. Grave o estado antes de terminar: ${cmds}, ou solte o item (protocolo em ${PROTOCOLO}).`);
-  }
-  for (const p of parados) {
-    const ref = `(protocolo em ${PROTOCOLO_ESPERA})`;
-    if (p.entregue) {
-      partes.push(`${p.id}: a ${p.papel} entregou; avance a etapa (${PROXIMA_ETAPA[p.papel]}) ou mande uma linha à orquestradora citando ${p.id} ${ref}.`);
-    } else if (p.papel === 'V') {
-      partes.push(`${p.id} sem V no item: se o laudo já voltou, avance a etapa (merge) ou mande o conserto; senão, despache uma V (\`painel com add ${p.id} <local_> <apelido> "<oQue>"\` e mensagem a ela) ou mande uma linha à orquestradora citando ${p.id} ${ref}.`);
-    } else {
-      partes.push(`${p.id} está em ${NOME_DA_ETAPA[p.papel]} sem nenhuma ${p.papel} no item. Antes de terminar: despache (título da sessão livre, \`painel com add ${p.id} <local_> <apelido> "<oQue>"\` e mensagem a ela) ou mande mensagem (SendMessage) que cite ${p.id} à orquestradora pedindo a vaga ${ref}.`);
-    }
-  }
+  const aviso = avisoDeInjecao(ids.join('\n'));
   process.stdout.write(JSON.stringify({
     decision: 'block',
-    reason: (aviso ? `${aviso}\n` : '') + partes.join('\n'),
+    reason: `${aviso ? `${aviso}\n` : ''}Você é dona ${lista}, mudou algo neste turno e não o gravou. Grave o estado antes de terminar: ${cmds} (protocolo em ${PROTOCOLO}).`,
   }));
-  registrar(sid, local, 'bloqueou', [...ids, ...parados.map((p) => p.id)].join(','));
+  registrar(sid, local, 'bloqueou', ids.join(','));
 }
 
 try {

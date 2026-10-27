@@ -1,9 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
-import { esperandoPapel } from './esperando'
+import { semDona } from './sem-dona'
 import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarPool, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
@@ -91,19 +91,17 @@ export function lerDoc(texto: string, nome: string): Doc {
 
 const CARTAO_VALIDADE_MS = 12 * 3_600_000
 
-/** O documento de `cartoes` no contrato (apelido `<P|D|E|V><n>`, papel = a letra, itens `F<n>`, data; ou apelido e papel `dona` com um item só); fora dele, `undefined`. */
+/** O documento de `cartoes` no contrato (apelido e papel `dona`, um item `F<n>`, data); fora dele, `undefined`. */
 export function lerCartao(d: Doc): CartaoDeSessao | undefined {
   const c = d.data
   const apelido = texto(c.apelido)
   const projeto = texto(c.projeto)
   const orquestradoraId = texto(c.orquestradoraId)
   const propostoEm = texto(c.propostoEm)
-  const dona = apelido === 'dona'
-  if (!apelido || !(dona || /^[PDEV]\d+$/.test(apelido)) || !projeto || !orquestradoraId || !propostoEm || Number.isNaN(Date.parse(propostoEm))) return undefined
-  if (c.papel !== (dona ? 'dona' : apelido[0]) || !Array.isArray(c.itens) || c.itens.some(F => typeof F !== 'string' || !/^F\d+$/.test(F))) return undefined
-  if (dona && c.itens.length !== 1) return undefined
+  if (apelido !== 'dona' || !projeto || !orquestradoraId || !propostoEm || Number.isNaN(Date.parse(propostoEm))) return undefined
+  if (c.papel !== 'dona' || !Array.isArray(c.itens) || c.itens.length !== 1 || c.itens.some(F => typeof F !== 'string' || !/^F\d+$/.test(F))) return undefined
 
-  return { id: d.id, projeto: projeto.toLowerCase(), apelido, papel: (dona ? 'dona' : apelido[0]) as CartaoDeSessao['papel'], itens: c.itens as string[], orquestradoraId, propostoEm }
+  return { id: d.id, projeto: projeto.toLowerCase(), apelido, papel: 'dona', itens: c.itens as string[], orquestradoraId, propostoEm }
 }
 
 /**
@@ -118,7 +116,7 @@ export function cartoesVisiveis(cartoes: CartaoDeSessao[], sessoes: SessaoViva[]
       if (semLista) return true
 
       return !(sessoes ?? []).some(s => {
-        if (!s.title?.startsWith(`${c.apelido === 'dona' ? (c.itens[0] ?? c.apelido) : c.apelido} · `)) return false
+        if (!s.title?.startsWith(`${c.itens[0] ?? c.apelido} · `)) return false
         const criada = Date.parse(s.createdAt ?? s.lastActivityAt ?? '')
 
         return !Number.isNaN(criada) && criada >= proposto
@@ -147,7 +145,7 @@ const NOME_SOLTO = 20
 /**
  * F189: quem o pane mostra no lugar do apelido `dona`, igual para toda sessão dona. O `F<n>` do título da sessão
  * (`F<n> · <tema>`) achada pelo `localId` na lista ao vivo (que o pane lê sem as arquivadas); título fora desse formato vai cortado;
- * sem a sessão na lista, o `F<n>` do item. Apelido do pool antigo (E3, V1…) passa como está.
+ * sem a sessão na lista, o `F<n>` do item. Outro apelido passa como está.
  */
 export function nomeDoDono(apelido: string, localId: string, itemId: string, vivas: Vivo[] | null): { apelido: string; titulo?: string; dona?: true } {
   if (apelido.trim().toLowerCase() !== 'dona') return { apelido }
@@ -289,9 +287,8 @@ function montarTodos(
       com,
       // Trava vence espera: o item travado já diz o que o prende, e o selo de espera seria um segundo recado.
       espera: final || situacao === 'travado' ? undefined : esperaGravada,
-      // Sem E (ou D, ou V) no item há tempo: some quando o item está final ou travado (a trava já diz o que o prende).
-      esperando: final || situacao === 'travado' ? undefined : (e => (e ? { papel: e.papel, desde: e.desde, entregue: e.entregue } : undefined))(esperandoPapel(d.data, agora)),
-      ...(d.data.via === 'dona' ? { dona: true } : {}),
+      // Sem dona no item há tempo: some quando o item está final ou travado (a trava já diz o que o prende).
+      esperando: final || situacao === 'travado' ? undefined : (s => (s ? { desde: s.desde } : undefined))(semDona(d.data, agora)),
       prs: inteiros(d.data.prs),
       depois: Array.isArray(d.data.depois)
         ? d.data.depois.flatMap(x => {
@@ -650,20 +647,18 @@ async function abrirSessao($: EngineInterface, dono: NonNullable<LinhaItem['dono
 /** Valor gravado por versão anterior (só o id da sessão) vale nenhum. */
 const normalizarAbrindo = (v: unknown): { localId: string; botao: string } | null => (v !== null && typeof v === 'object' ? (v as { localId: string; botao: string }) : null)
 
-// ── F69: pedir a sessão que falta a um item ────────────────────────────────────────────────────────────────────────────
+// ── pedir a sessão dona que falta a um item ────────────────────────────────────────────────────────────────────────────
 
-export type PapelPedido = 'P' | 'D' | 'E' | 'V'
-const PAPEL_DA_ETAPA_PEDIDO: Record<string, PapelPedido> = { planejamento: 'P', design: 'D', execucao: 'E', validacao: 'V' }
-const ROTULO_DO_PAPEL: Record<PapelPedido, string> = { P: 'planejadora', D: 'designer', E: 'executora', V: 'validadora' }
+export type PapelPedido = 'dona'
+const ETAPAS_DE_TRABALHO = ['planejamento', 'design', 'execucao', 'validacao']
 /** O "No prompt" some depois disto (o Enter costuma vir em segundos); o "Pedido às", depois do segundo. */
 const PROMPT_MS = 5 * 60_000
 const PEDIDO_MS = 30 * 60_000
 
-/** O papel que falta ao item: na fila, o da etapa (planejamento, design, execução, validação); andando, o do chip "esperando" que ainda não entregou. `espera` e `trava` não têm. */
+/** Falta a dona ao item na fila numa etapa de trabalho; `espera` e `trava` não pedem, e o item que anda já tem quem trabalhe. */
 export function papelQueFalta(i: LinhaItem): PapelPedido | undefined {
   if (i.espera || i.trava) return undefined
-  if (i.situacao === 'fila') return PAPEL_DA_ETAPA_PEDIDO[i.etapa]
-  if (i.situacao === 'andando') return i.esperando && !i.esperando.entregue ? i.esperando.papel : undefined
+  if (i.situacao === 'fila') return ETAPAS_DE_TRABALHO.includes(i.etapa) ? 'dona' : undefined
 
   return undefined
 }
@@ -680,16 +675,10 @@ export function orquestradoraDoProjeto(projeto: string, orqs: Array<{ id: string
 }
 
 /** O texto que vai à orquestradora (D7 do plano): a skill dela o atende pela âncora `vaga-pelo-painel`. */
-export function textoDoPedidoDeVaga(projeto: string, itens: Array<{ id: string; titulo: string; papel: PapelPedido; dona?: boolean }>, agora: number): string {
-  // ADR 0011: item da dona pede a sessão dona (a orquestradora a abre até o teto de donas), não um membro do papel.
-  if (itens.length > 0 && itens.every(i => i.dona)) {
-    const lista = itens.map(i => `${i.id} · ${i.titulo}`).join('; ')
+export function textoDoPedidoDeVaga(projeto: string, itens: Array<{ id: string; titulo: string }>, agora: number): string {
+  const lista = itens.map(i => `${i.id} · ${i.titulo}`).join('; ')
 
-    return `Pedido do operador pelo painel (${hora(agora).slice(0, 5)}): abra a sessão dona de cada item sem dona em ${projeto} — ${lista}. Num turno do operador, abra a dona (start_session, modelo pelo risco do item, até o teto de donas); fora dele, proponha o cartão. Skill orquestradora, âncora modelo-da-dona.`
-  }
-  const lista = itens.map(i => `${i.id} · ${i.titulo} (espera ${i.dona ? 'a dona' : i.papel})`).join('; ')
-
-  return `Pedido do operador pelo painel (${hora(agora).slice(0, 5)}): abra ou despache a sessão de cada item que espera papel em ${projeto} — ${lista}. Num turno do operador, abra o membro do papel (ou despache a um livre); fora dele, proponha um cartão \`<ID> · livre\` por vaga. Skill orquestradora, âncora vaga-pelo-painel.`
+  return `Pedido do operador pelo painel (${hora(agora).slice(0, 5)}): abra a sessão dona de cada item sem dona em ${projeto} — ${lista}. Num turno do operador, abra a dona (start_session, modelo pelo risco do item, até o teto de donas); fora dele, proponha o cartão. Skill orquestradora, âncora vaga-pelo-painel.`
 }
 
 /** O estado ainda vale no instante `agora`? `enviando` vale até acabar; o resto, até o prazo. */
@@ -715,7 +704,7 @@ const curto = (t: string) => (t.length > 40 ? `${t.slice(0, 39)}…` : t)
 const hhmm = (ms: number) => hora(ms).slice(0, 5)
 
 /**
- * O clique em "Pedir <papel>" (`ids` com um item) ou em "Pedir n sessões": um pedido por orquestradora de projeto. A própria sessão
+ * O clique em "Pedir dona" (`ids` com um item) ou em "Pedir n sessões": um pedido por orquestradora de projeto. A própria sessão
  * recebe o texto no campo do prompt (o Enter é do operador, e só um turno dele abre sessão); outra recebe `send_message` e responde
  * com um cartão. Cada item sai do gesto num estado visível; a falha volta o botão e vai para os avisos.
  */
@@ -774,7 +763,7 @@ async function enviarPedidos(
   const propria = await sessaoDoApp($)
   const saiu: Array<{ kind: 'prompt' | 'mensagem'; projeto: string; n: number; orq: string }> = []
   for (const [projeto, g] of grupos) {
-    const texto = textoDoPedidoDeVaga(projeto, g.alvos.map(a => ({ id: a.item.id, titulo: a.item.titulo, papel: a.papel, dona: a.item.dona === true })), agora)
+    const texto = textoDoPedidoDeVaga(projeto, g.alvos.map(a => ({ id: a.item.id, titulo: a.item.titulo })), agora)
     const kind = g.orq === propria ? 'prompt' : 'mensagem'
     let erro: string | undefined
     try {
@@ -1101,7 +1090,7 @@ async function relerDepoisDoClique($: EngineInterface): Promise<void> {
  * O botão do modo: o efeito entra na hora (`leitura.ausente` já é o modo novo) e a recusa desfaz, dizendo o motivo.
  * Liga gravando `{desde, frase, sessionId, por: "painel"}`; desliga gravando `{ligado: false, desde, desligadoEm, por: "painel"}`
  * (o pane não apaga arquivo; o `desde` do período fica para o resumo da ausência) e pede a cada orquestradora ativa o resumo
- * (skill orquestradora, seção resumo-da-ausencia). Não abre sessão nem pré-abre o pool: isso é do `/ausente on`.
+ * (skill orquestradora, seção resumo-da-ausencia). Não abre sessão: isso é do `/ausente on`.
  */
 export async function alternarModo($: EngineInterface): Promise<void> {
   if (trocandoAgora) return
@@ -1124,7 +1113,7 @@ export async function alternarModo($: EngineInterface): Promise<void> {
     await $.fs.write(`${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/${BANDEIRA}`, `${JSON.stringify(conteudo, null, 2)}\n`)
     geracaoModo++
     if (ligando) {
-      $.ui.toast('Modo ausente ligado. Para pré-abrir o pool, use /ausente on no chat.')
+      $.ui.toast('Modo ausente ligado. Para abrir as donas que faltam antes de sair, use /ausente on no chat.')
     } else {
       const pedidas = await pedirResumo($, antes.desde, agora)
       $.ui.toast(pedidas > 0 ? 'Modo ausente desligado. A orquestradora traz o resumo.' : 'Modo ausente desligado')
@@ -1270,7 +1259,7 @@ const BARRA_VAZIA: Barra = {
   ehOrquestradora: false,
   titulo: null,
   item: null,
-  pool: { e: 0, v: 0 },
+  donas: 0,
   projeto: null,
   cache: { expiraEm: null, segundos: null },
   avisado: 0,
@@ -1388,7 +1377,7 @@ async function lerBarra($: EngineInterface): Promise<void> {
         ehOrquestradora: (host !== undefined && orquestradoras.includes(host)) || papelEApelido(titulo).papel === 'orquestradora',
         titulo,
         item: item ? { id: item.id, titulo: item.titulo, etapa: item.etapa } : null,
-        pool: contarPool(docsFila, projeto),
+        donas: contarDonas(docsFila, projeto),
         projeto,
         tokens,
         janela,
@@ -1944,7 +1933,7 @@ export const register: Register = on => {
       perguntas: l.perguntas.map(q => q.id),
       itens: (() => {
         const sec = secoes(l.itens, l.temas)
-        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${i.esperando ? ` · ${textoEsperando(i.esperando, Date.now(), i.dona === true)}` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.titulo ?? c.apelido).join(', ')}` : ''}`
+        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${i.esperando ? ` · ${textoEsperando(i.esperando, Date.now())}` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.titulo ?? c.apelido).join(', ')}` : ''}`
 
         return { esperam: sec.esperam.map(dizer), travados: sec.travados.map(dizer), executando: sec.executando.map(dizer), fila: sec.fila.map(dizer), feitos: sec.feitos.map(dizer) }
       })(),
@@ -2039,7 +2028,7 @@ export const register: Register = on => {
             if (!enviando) void pedirSessoes($, [i.id], i.id, e.surface)
           }}
         >
-          {enviando ? 'Pedindo…' : `Pedir ${i.dona ? 'dona' : ROTULO_DO_PAPEL[p.papel]}`}
+          {enviando ? 'Pedindo…' : 'Pedir dona'}
         </Button>
       )
       const linha =

@@ -152,14 +152,12 @@ test('conflito com a base: recusa com conflito:true e os arquivos, sem merge', (
   } finally { limpar(c); }
 });
 
-test('item com o PR: fecha (feito, sem dono, com vazio), fez intacto, agora com o sha curto; item de outro projeto não muda', () => {
+test('item com o PR: fecha (feito, sem dono, com vazio), agora com o sha curto; item de outro projeto não muda', () => {
   const c = montar();
   try {
     c.item('F1');
-    assert.equal(c.painel('com', 'del', 'F1', LB, '--fez').exit, 0);
-    c.painel('com', 'add', 'F1', LB, 'V4', 'a validação');
-    const fezAntes = c.dado('F1').fez;
-    assert.ok(Array.isArray(fezAntes) && fezAntes.length === 1, 'fez montado');
+    c.painel('com', 'add', 'F1', LB, 'ajuda', 'a revisão');
+    assert.ok(c.dado('F1').com.length >= 1, 'com montado');
     // item de outro projeto, mesmo número de PR
     const outro = c.painel('set', 'fila', 'F2', JSON.stringify({ titulo: 'T', etapa: 'merge', tema: 'editor', projeto: 'outro', prs: [12] }));
     assert.equal(outro.exit, 0, outro.err);
@@ -169,7 +167,6 @@ test('item com o PR: fecha (feito, sem dono, com vazio), fez intacto, agora com 
     assert.equal(d.etapa, 'feito');
     assert.equal(d.donoLocalId, undefined); assert.equal(d.donoApelido, undefined);
     assert.deepEqual(d.com, []);
-    assert.deepEqual(d.fez, fezAntes);
     assert.ok(d.agora.includes(c.sha.slice(0, 7)), d.agora);
     assert.equal(c.dado('F2').etapa, 'merge');
     const s = JSON.parse(r.out);

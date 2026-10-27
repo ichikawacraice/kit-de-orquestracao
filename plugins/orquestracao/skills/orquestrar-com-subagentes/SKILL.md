@@ -9,7 +9,7 @@ O dono pediu duas garantias, e tudo aqui existe para elas:
 1. **Nenhum comando dele se perde, e nada em andamento é interrompido.**
 2. **A sessão principal só orquestra.** Executar é com os subagentes e as sessões irmãs; a principal planeja, escreve os briefings, revisa, consolida e devolve as respostas ao dono.
 
-**Quem escreve é sessão (Q154, 23/10).** Subagente só lê, mede ou devolve achados; trabalho que grava arquivo, commita ou abre PR vai para uma sessão irmã (`start_session`, worktree próprio), que aparece na lista e no painel e pode ser conduzida. O porquê e os casos estão na seção *Quem escreve é sessão* da skill `papeis-e-modelos` (`~/.claude/skills/papeis-e-modelos/SKILL.md#quem-escreve-e-sessao`). Esta skill continua valendo inteira para os dois: o registro de pedidos, o briefing e a revisão antes de "feito" cobrem o subagente e a sessão do mesmo jeito. **Exceção:** o subagente `orquestracao:executor` grava (Q196, confirmada na Q197). Nenhum subagente grava por Bash para contornar a trava.
+**Quem escreve é sessão.** Subagente só lê, mede ou devolve achados; trabalho que grava arquivo, commita ou abre PR vai para uma sessão irmã (`start_session`, worktree próprio), que aparece na lista e no painel e pode ser conduzida. O porquê e os casos estão na seção *Quem escreve é sessão* da skill `papeis-e-modelos` (`${CLAUDE_PLUGIN_ROOT}/skills/papeis-e-modelos/SKILL.md#quem-escreve-e-sessao`). Esta skill continua valendo inteira para os dois: o registro de pedidos, o briefing e a revisão antes de "feito" cobrem o subagente e a sessão do mesmo jeito. Nenhum subagente grava por Bash para contornar a trava.
 
 O motivo: a conversa da sessão principal é o único lugar que enxerga o todo. Se ela gasta contexto lendo arquivos, rodando teste e escrevendo código, perde o fio dos pedidos, e um pedido do meio vira esquecido. Delegando, ela fica leve, e o trabalho anda em paralelo.
 
@@ -59,7 +59,7 @@ Status: ⏳ fila · 🔄 em andamento · ✅ feito · ⛔ bloqueado pelo dono ·
 - **Quebre em blocos independentes** e lance todos de uma vez, numa única mensagem com várias chamadas `Agent` (`run_in_background: true`). Cada bloco ganha uma linha no registro, ou uma sub-linha `P-02a`, `P-02b` se veio do mesmo pedido.
 - **Sequencie só o que depende de outro bloco.** O dependente fica ⏳ com "aguarda P-02a" na coluna Resultado, e é lançado assim que a notificação do anterior chega.
 - **Bloco que grava vai para sessão irmã, não para `Agent`.** Cada sessão no seu worktree, com a faixa de arquivos dela escrita no briefing; duas sessões nunca tocam os mesmos arquivos. O subagente lançado aqui leva no prompt *"não grave arquivo; devolva no relatório"* — e, se tentar, o hook `subagente-nao-edita` recusa o `Edit`/`Write` fora de `~/.claude/` e do rascunho.
-- **Escolha o papel pela skill `papeis-e-modelos`:** `orquestracao:explorador` (Haiku) para varrer e trazer a conclusão, `orquestracao:planejador` (Opus) para decidir e desenhar, `orquestracao:validador` (Opus) para conferir o que outro fez — nunca quem executou —, todos como subagente; o `orquestracao:executor` (Sonnet), só com plano pronto, roda como sessão `exec · …`. Agente especializado de leitura (revisor de PR, `claude-security`) quando existir para o trabalho.
+- **Escolha o papel pela skill `papeis-e-modelos`:** `orquestracao:explorador` (Haiku) para varrer e trazer a conclusão e `orquestracao:validador` (Opus) para conferir o que outro fez — nunca quem escreveu —, ambos como subagente; o que decide e grava fica com a própria sessão ou vai a uma sessão irmã com plano pronto. Agente especializado de leitura (revisor de PR, `claude-security`) quando existir para o trabalho.
 - **Decisão que não trava o fluxo não para a sessão** (regra "Não parar à toa" do `CLAUDE.md`): o que não depende dela segue sendo lançado.
 
 ## 3. Briefing de subagente
@@ -68,7 +68,7 @@ O subagente não vê esta conversa. Tudo que ele precisa saber tem de estar no p
 - contexto mínimo autocontido (o que é o projeto, por que esta tarefa existe, o ID `P-NN`);
 - arquivos a ler antes de começar;
 - escopo exato, incluindo o que **não** fazer (e quais arquivos ele não pode tocar);
-- para o `orquestracao:executor`: as cinco coisas do plano pronto da skill `papeis-e-modelos` — faltando uma, o bloco vai a um `orquestracao:planejador`, não ao executor;
+- para a sessão irmã que vai gravar: as cinco coisas do plano pronto da skill `papeis-e-modelos` — faltando uma, o bloco fica com quem decide;
 - convenções do projeto (idioma do código e dos docs, estilo, comandos de gate);
 - verificação obrigatória antes de dizer que terminou;
 - formato da entrega;

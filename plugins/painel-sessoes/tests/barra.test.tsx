@@ -11,7 +11,7 @@ import {
   PALAVRA_LIMPAR,
   REGUAS,
   abertasDoProjeto,
-  contarPool,
+  contarDonas,
   corDoContexto,
   faixaDaBarra,
   janelaDeCompactacao,
@@ -47,15 +47,13 @@ const sessaoOrq = (extra: Record<string, unknown> = {}) => doc(ORQ, { projeto: '
 
 test('reguaDoPapel: o teto sai do papel do título', () => {
   expect(REGUAS, 'as réguas existem').toBeTruthy()
-  expect(reguaDoPapel('E2 · x')?.teto).toBe(REGUAS.E.teto)
-  expect(reguaDoPapel('P1 · x')?.teto).toBe(REGUAS.P.teto)
-  expect(reguaDoPapel('D1 · x')?.teto).toBe(REGUAS.D.teto)
-  expect(reguaDoPapel('V3 · x')?.teto).toBe(REGUAS.V.teto)
+  expect(reguaDoPapel('F12 · editor')?.teto, 'a sessão dona').toBe(REGUAS.dona.teto)
   expect(reguaDoPapel('🎛 orquestradora — kit')?.teto).toBe(REGUAS.orquestradora.teto)
-  expect(reguaDoPapel('🎛 orquestradora — kit', true)?.teto, 'ausente: a orquestradora segue a régua da planejadora').toBe(REGUAS.P.teto)
+  expect(reguaDoPapel('🎛 orquestradora — kit', true)?.teto, 'ausente: a orquestradora segue a régua da dona').toBe(REGUAS.dona.teto)
   expect(reguaDoPapel('qualquer coisa')).toBeNull()
   expect(reguaDoPapel(null)).toBeNull()
-  expect(papelEApelido('E2 · x')).toEqual({ papel: 'E', apelido: 'E2' })
+  expect(papelEApelido('F12 · editor')).toEqual({ papel: 'dona', apelido: 'F12' })
+  expect(papelEApelido('E2 · x').papel, 'o título do pool antigo não diz papel').toBeNull()
   expect(papelEApelido('🎛 orquestradora — kit').papel).toBe('orquestradora')
   expect(papelEApelido('nada').papel).toBeNull()
 })
@@ -112,24 +110,26 @@ const item = (id: string, data: Record<string, unknown>) => doc(id, { projeto: '
 
 test('meuItem: o dono vence o com, e o feito é ignorado', () => {
   const docs = [
-    item('F10', { com: [{ localId: EU, apelido: 'E1' }] }),
-    item('F20', { donoLocalId: EU, donoApelido: 'E1' }),
-    item('F30', { donoLocalId: EU, donoApelido: 'E1', etapa: 'feito' }),
+    item('F10', { com: [{ localId: EU, apelido: 'dona' }] }),
+    item('F20', { donoLocalId: EU, donoApelido: 'dona' }),
+    item('F30', { donoLocalId: EU, donoApelido: 'dona', etapa: 'feito' }),
   ]
   expect(meuItem(docs, EU)?.id).toBe('F20')
   expect(meuItem([docs[0]!, docs[2]!], EU)?.id, 'sem dono vivo, vale o com').toBe('F10')
   expect(meuItem([docs[2]!], EU)).toBeNull()
 })
 
-test('contarPool: sessões distintas por apelido, só itens vivos do projeto', () => {
+test('contarDonas: itens do projeto em etapa de trabalho com dona ou alguém no com', () => {
   const docs = [
-    item('F1', { com: [{ localId: 'a', apelido: 'E1' }, { localId: 'b', apelido: 'V1' }] }),
-    item('F2', { com: [{ localId: 'a', apelido: 'E1' }, { localId: 'c', apelido: 'E2' }] }),
-    item('F3', { projeto: 'outro', com: [{ localId: 'd', apelido: 'E9' }] }),
-    item('F4', { etapa: 'feito', com: [{ localId: 'e', apelido: 'V7' }] }),
+    item('F1', { donoLocalId: 'a', donoApelido: 'dona' }),
+    item('F2', { com: [{ localId: 'b', apelido: 'dona' }] }),
+    item('F3', { projeto: 'outro', donoLocalId: 'c', donoApelido: 'dona' }),
+    item('F4', { etapa: 'merge', donoLocalId: 'd', donoApelido: 'dona' }),
+    item('F5', { etapa: 'feito', donoLocalId: 'e', donoApelido: 'dona' }),
+    item('F6', {}),
   ]
-  expect(contarPool(docs, 'kit'), 'um item vivo com E1 é contado').toEqual({ e: 2, v: 1 })
-  expect(contarPool(docs, 'outro')).toEqual({ e: 1, v: 0 })
+  expect(contarDonas(docs, 'kit'), 'merge, feito, outro projeto e item sem ninguém não contam').toBe(2)
+  expect(contarDonas(docs, 'outro')).toBe(1)
 })
 
 test('limparEmDestaque: exatamente quando o contexto mostra · limpar (a régua do papel)', () => {
@@ -137,7 +137,7 @@ test('limparEmDestaque: exatamente quando o contexto mostra · limpar (a régua 
   expect(limparEmDestaque(149_999, REGUAS.orquestradora)).toBe(false)
   expect(limparEmDestaque(null, REGUAS.orquestradora)).toBe(false)
   expect(limparEmDestaque(260_000, null), 'sem régua não há palavra').toBe(false)
-  expect(limparEmDestaque(260_000, REGUAS.orquestradoraAusente), 'ausente: a régua da planejadora, a palavra e o botão juntos').toBe(false)
+  expect(limparEmDestaque(260_000, REGUAS.orquestradoraAusente), 'ausente: a régua da dona, a palavra e o botão juntos').toBe(false)
   expect(limparEmDestaque(500_000, REGUAS.orquestradoraAusente)).toBe(true)
   for (const t of [100_000, 150_000, 300_000, 500_000]) {
     expect(limparEmDestaque(t, REGUAS.orquestradora), `${t}`).toBe(palavraDoContexto(t, REGUAS.orquestradora) === PALAVRA_LIMPAR)
@@ -151,7 +151,7 @@ const REFERENCIA: EstadoBarra = {
   janela: 600_000,
   regua: { aviso: 200_000, teto: 300_000 },
   item: 'F52 · design',
-  pool: 'E 2 · V 1',
+  donas: 'donas 2',
   abertas: 3,
   modo: 'ausente',
   trocando: false,
@@ -163,35 +163,35 @@ const REFERENCIA: EstadoBarra = {
 
 test('faixaDaBarra: a mais rica cuja soma cabe, com os textos reais', () => {
   const f = (cols: number, extra: Partial<EstadoBarra> = {}) => faixaDaBarra(cols, { ...REFERENCIA, ...extra })
-  expect([f(116), f(115), f(96), f(95), f(40)]).toEqual([0, 1, 1, 2, 2])
-  expect(f(116, { tokens: 250_000, regua: { aviso: 200_000, teto: 300_000 } }), 'palavra alto').toBe(1)
+  expect([f(114), f(113), f(96), f(95), f(40)]).toEqual([0, 1, 1, 2, 2])
+  expect(f(114, { tokens: 250_000, regua: { aviso: 200_000, teto: 300_000 } }), 'palavra alto').toBe(1)
   expect(f(96, { tokens: 250_000 })).toBe(2)
-  expect(f(116, { moldura: true })).toBe(1)
-  expect(f(116, { abertas: 12 })).toBe(1)
+  expect(f(114, { moldura: true })).toBe(1)
+  expect(f(114, { abertas: 12 })).toBe(1)
 })
 
-test('faixaDaBarra: a palavra · limpar conta na soma (P a 510 mil, 123 colunas)', () => {
-  const p: EstadoBarra = { ...REFERENCIA, tokens: 510_000, regua: REGUAS.P, modo: 'presente', painelAberto: false }
-  expect(larguraDaFaixa(p, 0), 'a soma: 63 + 2 + 56 + 2 (a revisão do botão de limpar: +2 do ◨ e +2 do ☾)').toBe(123)
-  expect([faixaDaBarra(123, p), faixaDaBarra(122, p)]).toEqual([0, 1])
+test('faixaDaBarra: a palavra · limpar conta na soma (dona a 510 mil, 121 colunas)', () => {
+  const p: EstadoBarra = { ...REFERENCIA, tokens: 510_000, regua: REGUAS.dona, modo: 'presente', painelAberto: false }
+  expect(larguraDaFaixa(p, 0), 'a soma: 61 + 2 + 56 + 2 (a revisão do botão de limpar: +2 do ◨ e +2 do ☾)').toBe(121)
+  expect([faixaDaBarra(121, p), faixaDaBarra(120, p)]).toEqual([0, 1])
 })
 
 test('faixaDaBarra: o relógio em bloco (alerta e venceu) soma as duas células do respiro', () => {
   const base = larguraDaFaixa(REFERENCIA, 0)
-  expect(base, 'a referência soma 116').toBe(116)
+  expect(base, 'a referência soma 114').toBe(114)
   expect(larguraDaFaixa({ ...REFERENCIA, bloco: true }, 0)).toBe(base + 2)
-  expect(faixaDaBarra(116, REFERENCIA)).toBe(0)
-  expect(faixaDaBarra(116, { ...REFERENCIA, bloco: true }), 'com o bloco a faixa 0 já não cabe').toBe(1)
+  expect(faixaDaBarra(114, REFERENCIA)).toBe(0)
+  expect(faixaDaBarra(114, { ...REFERENCIA, bloco: true }), 'com o bloco a faixa 0 já não cabe').toBe(1)
 })
 
 // A orquestradora da revisão: 198 mil (acima de 150 mil), sem item, 3 perguntas, presente, painel fechado.
 const ORQ_BARRA: EstadoBarra = { ...REFERENCIA, tokens: 198_000, regua: REGUAS.orquestradora, item: null, abertas: 3, modo: 'presente', painelAberto: false, ehOrquestradora: true }
 
-test('faixaDaBarra: o limpar entra na soma como ↺ Limpando… (a reserva): 125, 105 e 62, e +1 com Fechar painel', () => {
-  expect([0, 1, 2].map(f => larguraDaFaixa(ORQ_BARRA, f as 0 | 1 | 2)), 'as somas da revisão').toEqual([125, 105, 62])
-  expect([0, 1, 2].map(f => larguraDaFaixa({ ...ORQ_BARRA, painelAberto: true }, f as 0 | 1 | 2))).toEqual([126, 106, 62])
+test('faixaDaBarra: o limpar entra na soma como ↺ Limpando… (a reserva): 123, 105 e 62, e +1 com Fechar painel', () => {
+  expect([0, 1, 2].map(f => larguraDaFaixa(ORQ_BARRA, f as 0 | 1 | 2)), 'as somas da revisão').toEqual([123, 105, 62])
+  expect([0, 1, 2].map(f => larguraDaFaixa({ ...ORQ_BARRA, painelAberto: true }, f as 0 | 1 | 2))).toEqual([124, 106, 62])
   const f = (cols: number, extra: Partial<EstadoBarra> = {}) => faixaDaBarra(cols, { ...ORQ_BARRA, ...extra })
-  expect([f(125), f(124), f(105), f(104), f(62), f(40)]).toEqual([0, 1, 1, 2, 2, 2])
+  expect([f(123), f(122), f(105), f(104), f(62), f(40)]).toEqual([0, 1, 1, 2, 2, 2])
   expect(f(114), 'a 114 colunas a orquestradora cai na faixa 1, com os quatro botões').toBe(1)
   expect(pecasDaBarra(ORQ_BARRA, 1).dir.map(p => p.k)).toEqual(['perguntas', 'limpar', 'modo', 'painel'])
 })
@@ -221,9 +221,9 @@ test('pecasDaBarra: a ordem é selo → limpar → modo → painel; o limpar só
   expect(pecasDaBarra({ ...ORQ_BARRA, trocando: true, modo: 'ausente' }, 0).dir.find(p => p.k === 'modo')?.t).toBe('☾ Ligando…')
 })
 
-test('pecasDaBarra: sem pedido, item e pool voltam à esquerda em qualquer momento (o pedido de limpeza acabou)', () => {
-  const completo = { ...ORQ_BARRA, item: 'F52 · design', pool: 'E 2 · V 1' }
-  expect(pecasDaBarra(completo, 0).esq.map(p => p.k)).toEqual(['relogio', 'contexto', 'item', 'pool'])
+test('pecasDaBarra: sem pedido, item e donas voltam à esquerda em qualquer momento (o pedido de limpeza acabou)', () => {
+  const completo = { ...ORQ_BARRA, item: 'F52 · design', donas: 'donas 2' }
+  expect(pecasDaBarra(completo, 0).esq.map(p => p.k)).toEqual(['relogio', 'contexto', 'item', 'donas'])
   expect(pecasDaBarra(completo, 2).esq.map(p => p.k)).toEqual(['relogio', 'contexto'])
 })
 
@@ -253,15 +253,13 @@ test('textoDoContexto: a janela é o denominador; a régua só dá a palavra', (
   expect(PALAVRA_LIMPAR).toBe(' · limpar')
   expect(textoDoContexto(98_000, REGUAS.orquestradora, 600_000, 0)).toBe('contexto 98/600 mil')
   expect(textoDoContexto(260_000, REGUAS.orquestradora, 600_000, 0)).toBe('contexto 260/600 mil · limpar')
-  expect(textoDoContexto(360_000, REGUAS.P, 600_000, 0)).toBe('contexto 360/600 mil · alto')
-  expect(textoDoContexto(510_000, REGUAS.P, 600_000, 0)).toBe('contexto 510/600 mil · limpar')
-  expect(textoDoContexto(312_000, REGUAS.E, 600_000, 0)).toBe('contexto 312/600 mil · limpar')
-  expect(textoDoContexto(500_000, REGUAS.V, 600_000, 0), 'a V também ganha o limpar aos 500 mil').toBe('contexto 500/600 mil · limpar')
+  expect(textoDoContexto(360_000, REGUAS.dona, 600_000, 0)).toBe('contexto 360/600 mil · alto')
+  expect(textoDoContexto(510_000, REGUAS.dona, 600_000, 0)).toBe('contexto 510/600 mil · limpar')
   expect(textoDoContexto(260_000, REGUAS.orquestradora, 600_000, 1)).toBe('260/600 mil · limpar')
   expect(textoDoContexto(260_000, REGUAS.orquestradora, 600_000, 2)).toBe('260 mil · limpar')
   expect(textoDoContexto(142_000, null, 600_000, 0), 'papel desconhecido: com a janela, sem palavra').toBe('contexto 142/600 mil')
   expect(textoDoContexto(98_000, REGUAS.orquestradora, null, 0), 'sem janela, sem /').toBe('contexto 98 mil')
-  expect(textoDoContexto(510_000, REGUAS.P, null, 0)).toBe('contexto 510 mil · limpar')
+  expect(textoDoContexto(510_000, REGUAS.dona, null, 0)).toBe('contexto 510 mil · limpar')
   expect(textoDoContexto(98_000, REGUAS.orquestradora, null, 1)).toBe('98 mil')
   // a ausência mede: o mesmo estado, só a janela muda, e o `/` aparece
   expect(textoDoContexto(98_000, REGUAS.orquestradora, 600_000, 0)).toContain('/')
@@ -579,8 +577,8 @@ test('contexto no limpar: só a palavra leva cor (error e negrito), o número fi
   await ui.unmount()
 })
 
-test('contexto no alto: P a 360 mil → · alto, warning só na palavra; E a 300 mil → direto ao · limpar', async ($, on) => {
-  await iniciar($, on, { titulo: 'P1 · x', tokens: 360_000 })
+test('contexto no alto: a dona a 360 mil → · alto, warning só na palavra', async ($, on) => {
+  await iniciar($, on, { titulo: 'F1 · x', tokens: 360_000 })
   const p = await montar($, 'terminal')
   expect(await lido(p)).toMatch(/contexto 360\/600 mil · alto/)
   const alto = (await p.findAll({ type: 'Text' })).find(t => t.text === ' · alto')
@@ -589,10 +587,10 @@ test('contexto no alto: P a 360 mil → · alto, warning só na palavra; E a 300
   await p.unmount()
 })
 
-test('contexto da E no teto: 300/600 mil · limpar', async ($, on) => {
-  await iniciar($, on, { titulo: 'E2 · x', tokens: 300_000 })
+test('contexto da dona no teto: 500/600 mil · limpar', async ($, on) => {
+  await iniciar($, on, { titulo: 'F2 · x', tokens: 500_000 })
   const ui = await montar($, 'terminal')
-  expect(await lido(ui)).toMatch(/300\/600 mil · limpar/)
+  expect(await lido(ui)).toMatch(/500\/600 mil · limpar/)
   expect(await lido(ui)).not.toMatch(/teto/)
   await ui.unmount()
 })
@@ -672,8 +670,8 @@ test('limpar: só na barra da orquestradora, à esquerda do modo, em toda faixa 
   expect(await (async () => botoesDe(await montar($, 'terminal', { bodyColumns: 114 })))()).toEqual(['perguntas', 'limpar', 'modo', 'painel'])
 })
 
-test('limpar: em outra sessão (membro do pool) não existe, nem apagado', async ($, on) => {
-  await iniciar($, on, { titulo: 'E1 · x', perguntas: abertas(3), sessoes: [] })
+test('limpar: em outra sessão (uma dona) não existe, nem apagado', async ($, on) => {
+  await iniciar($, on, { titulo: 'F1 · x', perguntas: abertas(3), sessoes: [] })
   for (const surface of SUPERFICIES) {
     const ui = await montar($, surface, { bodyColumns: 140 })
     const chaves = await botoesDe(ui)
@@ -824,16 +822,16 @@ test('a barra não tem mais pedido de limpeza nem Limpar antes de vencer (a perg
   await ui.unmount()
 })
 
-test('item e pool aparecem na faixa larga da barra de um membro (nada cai por causa de pedido)', async ($, on) => {
+test('item e donas aparecem na faixa larga da barra de uma dona (nada cai por causa de pedido)', async ($, on) => {
   await iniciar($, on, {
-    titulo: 'E1 · x',
+    titulo: 'F1 · x',
     perguntas: abertas(1),
-    fila: [item('F1', { donoLocalId: EU, com: [{ localId: EU, apelido: 'E1' }, { localId: 'b', apelido: 'V1' }] })],
+    fila: [item('F1', { donoLocalId: EU, donoApelido: 'dona', com: [{ localId: EU, apelido: 'dona' }] })],
   })
   const ui = await montar($, 'terminal', { bodyColumns: 140 })
   const t = await lido(ui)
   expect(t).toMatch(/F1 ·/)
-  expect(t).toMatch(/E 1 · V 1/)
+  expect(t).toMatch(/donas 1/)
   await ui.unmount()
 })
 
@@ -940,12 +938,12 @@ test('antes da primeira leitura só o relógio; sem a bandeira legível não há
   await ui.unmount()
 })
 
-test('pool: E n · V m na faixa larga', async ($, on) => {
+test('donas: quantas trabalham no projeto, na faixa larga', async ($, on) => {
   await iniciar($, on, {
-    fila: [item('F1', { com: [{ localId: 'a', apelido: 'E1' }, { localId: 'b', apelido: 'V1' }] }), item('F2', { com: [{ localId: 'c', apelido: 'E2' }] })],
+    fila: [item('F1', { com: [{ localId: 'a', apelido: 'dona' }] }), item('F2', { donoLocalId: 'c', donoApelido: 'dona' }), item('F3', { etapa: 'merge', donoLocalId: 'd', donoApelido: 'dona' })],
   })
   const ui = await montar($, 'terminal')
-  expect(await lido(ui)).toMatch(/E 2 · V 1/)
+  expect(await lido(ui)).toMatch(/donas 2/)
   await ui.unmount()
 })
 

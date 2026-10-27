@@ -51,7 +51,7 @@ As pastas são as de `.claude/kit.json` (seção `documentos`); sem a seção va
 <!-- kit:design v1 -->
 ## Design de interface
 Vale para o projeto que tem front. As pastas e os globs de tela vêm de `.claude/kit.json` (seção `design`).
-- **O fluxo:** o designer escreve a revisão em `docs/design/revisoes/` antes de qualquer tela; a executora cumpre a revisão sem redesenhar; o crítico de UI julga depois. Nota abaixo de 24/30 volta para correção, com no máximo 2 recríticas. Item simples (reaproveita componente que já existe e não muda decisão registrada) pode ir pela via rápida: sem revisão, com uma crítica só depois do código.
+- **O fluxo:** o designer escreve a revisão em `docs/design/revisoes/` antes de qualquer tela; a dona do item cumpre a revisão sem redesenhar; o crítico de UI julga depois. Nota abaixo de 24/30 volta para correção, com no máximo 2 recríticas. Item simples (reaproveita componente que já existe e não muda decisão registrada) pode ir pela via rápida: sem revisão, com uma crítica só depois do código.
 - **`ANATOMIA.md` e `DESIGN.md` não se repetem:** o primeiro diz o que vai onde, o segundo como parece.
 - **Texto de UI não cita spec, ADR nem doc:** quem usa a tela não conhece o repositório.
 - **Ação assíncrona tem estado visível** (carregando, feito, falhou) no lugar onde a pessoa agiu.
@@ -73,5 +73,5 @@ Vale para o projeto que tem front. As pastas e os globs de tela vêm de `.claude
 ## Orquestradora
 - Com uma sessão `🎛 orquestradora — <projeto>` ativa, só ela abre as sessões donas, mergeia (é a fila de merge), faz release e reserva números de documento; a dona abre o PR, sem subir versão, e manda a ela `PR N pronto, HEAD <sha>`.
 - Sem orquestradora ativa, mergeie normalmente, com o gate completo antes de empurrar.
-- O estado do pool (painel, fila, contadores) mora em `~/.claude/orquestracao/`, não neste repositório.
+- O estado das sessões (painel, fila, contadores) mora em `~/.claude/orquestracao/`, não neste repositório.
 <!-- /kit:orquestradora -->
