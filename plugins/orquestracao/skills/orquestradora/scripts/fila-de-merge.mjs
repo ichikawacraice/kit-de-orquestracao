@@ -1,8 +1,10 @@
 // `painel fila-de-merge <PR…> [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]` (ADR 0011, decisão 4): a parte que monta a
 // combinação e roda o gate. Num worktree temporário destacado em `origin/<base>`, aplica cada PR na ordem dada por squash
 // (`git merge --squash` + commit); o que conflita sai do lote. Roda o gate UMA vez na combinação. Verde: todos os aplicados
-// passam. Vermelho: refaz do zero, um PR por vez, com o gate depois de cada um; o que deixa vermelho sai do lote e o verde
-// acumula. O merge no GitHub e a escrita no painel ficam no painel.mjs (só ele tem a trava). GIT_BIN troca o git (teste).
+// passam. Vermelho: roda de novo uma vez (verde na repetição passa o lote e registra a suspeita de teste instável em
+// `instavel.txt`); ainda vermelho, bisseção: divide ao meio sobre a parte verde, a metade verde entra sem retestar e a
+// vermelha divide de novo, até sobrar o PR que quebra. O merge no GitHub e a escrita no painel ficam no painel.mjs (só ele
+// tem a trava). GIT_BIN troca o git (teste).
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, openSync, closeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -85,18 +87,55 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
     const todos = gateAqui('lote');
     if (todos.ok) return { base, aprovados: aplicados, devolvidos, gates, pasta };
     if (todos.preparo) throw new Error(`o preparo falhou (exit ${todos.status}); veja ${todos.log}`);
-    // vermelho: um por vez sobre a parte verde, para achar quem quebra
-    limpar(wt, `origin/${base}`);
-    const aprovados = [];
-    for (const item of aplicados) {
-      const a = aplicar(wt, item.pr, item.sha);
-      if (!a.ok) { devolvidos.push({ ...item, motivo: `conflito com ${base} + a parte verde em ${a.arquivos.join(', ')}`, arquivos: a.arquivos }); continue; }
-      limpar(wt, 'HEAD'); // o gate do lote pode ter deixado arquivo solto
-      const g = gateAqui(`pr-${item.pr}`);
-      if (g.ok) { aprovados.push(item); continue; }
-      devolvidos.push({ ...item, motivo: `gate vermelho (exit ${g.status}) com o PR sobre ${base}${aprovados.length ? ` + ${aprovados.map((x) => `#${x.pr}`).join(', ')}` : ''}`, log: g.log });
-      limpar(wt, 'HEAD~1');
+    // vermelho: uma repetição na mesma árvore antes de culpar alguém (o gate pode ter deixado arquivo solto)
+    limpar(wt, 'HEAD');
+    const repeticao = gateAqui('lote-repeticao');
+    if (repeticao.preparo) throw new Error(`o preparo falhou (exit ${repeticao.status}); veja ${repeticao.log}`);
+    if (repeticao.ok) {
+      const suspeitaDeInstavel = `o gate do lote falhou (exit ${todos.status}) e passou ao repetir: suspeita de teste instável; logs ${todos.log} e ${repeticao.log}`;
+      writeFileSync(join(pasta, 'instavel.txt'), `${suspeitaDeInstavel}\nPRs: ${aplicados.map((x) => `#${x.pr}`).join(', ')}\n`);
+      return { base, aprovados: aplicados, devolvidos, gates, pasta, suspeitaDeInstavel };
     }
+    // bisseção sobre a parte verde (`refVerde`): o que entra verde não se retesta
+    const aprovados = [];
+    let refVerde = `origin/${base}`;
+    const sobre = () => `${base}${aprovados.length ? ` + ${aprovados.map((x) => `#${x.pr}`).join(', ')}` : ''}`;
+    // monta `grupo` sobre a parte verde e roda o gate; o que conflita aqui sai do lote
+    const testar = (grupo) => {
+      limpar(wt, refVerde);
+      const montado = [];
+      for (const item of grupo) {
+        const a = aplicar(wt, item.pr, item.sha);
+        if (a.ok) montado.push(item);
+        else devolvidos.push({ ...item, motivo: `conflito com ${sobre()} em ${a.arquivos.join(', ')}`, arquivos: a.arquivos });
+      }
+      if (!montado.length) return { ok: true, grupo: montado };
+      const g = gateAqui(`pr-${montado.map((x) => x.pr).join('-')}`);
+      if (g.preparo) throw new Error(`o preparo falhou (exit ${g.status}); veja ${g.log}`);
+      return { ...g, grupo: montado };
+    };
+    const aceitar = (grupo) => { aprovados.push(...grupo); refVerde = gitOk(['rev-parse', 'HEAD'], wt).trim(); };
+    // `grupo` é sabido vermelho sobre `refVerde` (`g` é o gate que o mostrou)
+    const resolver = (grupo, g) => {
+      if (grupo.length === 1) {
+        devolvidos.push({ ...grupo[0], motivo: `gate vermelho (exit ${g.status}) com o PR sobre ${sobre()}`, log: g.log });
+        return;
+      }
+      const meio = Math.ceil(grupo.length / 2);
+      const esquerda = grupo.slice(0, meio);
+      const direita = grupo.slice(meio);
+      const e = testar(esquerda);
+      if (e.ok) {
+        aceitar(e.grupo);
+        // a parte verde + a esquerda + a direita é a árvore vermelha de antes: a direita é vermelha sem novo gate,
+        // a menos que algum PR da esquerda tenha saído por conflito (aí a árvore já não é a mesma)
+        if (e.grupo.length === esquerda.length) { resolver(direita, g); return; }
+      } else resolver(e.grupo, e);
+      const d = testar(direita);
+      if (d.ok) aceitar(d.grupo);
+      else resolver(d.grupo, d);
+    };
+    resolver(aplicados, repeticao);
     return { base, aprovados, devolvidos, gates, pasta };
   } finally {
     git(['worktree', 'remove', '--force', wt], cwd);
