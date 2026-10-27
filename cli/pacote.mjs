@@ -147,9 +147,9 @@ export function gitDirComum(destino) {
 
 /** O estado do operador (fora do projeto): onde as travas por hook leem as listas. */
 export const baseDaOrquestracao = () => process.env.HOOKS_CREWAI_BASE || join(homedir(), '.claude', 'orquestracao');
-const CABECALHO_SUBAGENTES = `# subagent_type que pode gravar arquivo do projeto mesmo como subagente (exceção ao Q154).
+const CABECALHO_SUBAGENTES = `# subagent_type que pode gravar arquivo do projeto mesmo como subagente (exceção à regra "quem escreve é sessão").
 # Lido por hooks/subagente-nao-edita.mjs. Um por linha; \`*\` no fim casa prefixo.
-# Vazio de propósito: o executor é sessão, não subagente (Q197); nenhuma lista o libera por padrão.
+# Vazio de propósito: quem escreve é a sessão dona do item, não um subagente; nenhuma lista libera por padrão.
 `;
 const linhasDaLista = (texto) => texto.split('\n').map((l) => l.trim()).filter(Boolean);
 

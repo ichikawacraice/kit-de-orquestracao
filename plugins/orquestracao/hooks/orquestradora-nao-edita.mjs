@@ -33,7 +33,7 @@ const LIVRES = [
 ];
 
 // Só nos repositórios listados em trava-edicao-repos.txt (o git dir, um por linha, como no
-// marcador). O battlewand manda a orquestradora delegar código a subagentes (CLAUDE.md dele),
+// marcador). Projeto cujo CLAUDE.md manda a orquestradora delegar código a subagentes
 // e a trava lá daria centenas de perguntas falsas (validação de 23/10: 480 em 14 sessões).
 // Sem o arquivo, vale em todo repositório com marcador. Marcador sem repo (formato antigo, vazio,
 // ou `null` quando o gitCommonDir falhou) resolve o repo pelo cwd; sem conseguir, pergunta —
