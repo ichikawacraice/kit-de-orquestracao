@@ -2,7 +2,8 @@
 // Stop + SubagentStop (Q62, ideia 2 do estudo CrewAI — Task.guardrail + guardrail_max_retries):
 // o executor só termina o turno com a SAÍDA REAL do comando de critério no relatório.
 // Quem é executor: subagente `executor` (agent_type), sessão aberta com --agent executor,
-// sessão cujo título começa com "exec ·", ou executora do pool (título `E<n> · …` no registro do app).
+// sessão cujo título começa com "exec ·", executora do pool (título `E<n> · …` no registro do app) ou
+// dona de item `via: "dona"` em execução, validação ou merge (F179; ADR 0011: a dona escreve o código).
 // Só cobra turno que editou arquivo — por Edit/Write ou por Bash que grava (57% dos executores
 // reais editam só por Bash). Status ("exit=0", "Found 0 errors") e contagem ("98 passed") só valem
 // se aparecem na saída real do turno (Bash, Read de .output/.log, Monitor, TaskOutput, notificação).
@@ -17,7 +18,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { BASE, registrar, lerEntrada, lerTranscript, semPrefixoDoPlugin, textoDe, conteudoDe, aberturaDoTurno, devolveuDuvida, lerEstadoDe, gravarEstadoDe } from './hooks-crewai-comum.mjs';
-import { ehExecutora } from './pool-comum.mjs';
+import { ehExecutora, registroDaSessao, itensDaDonaComCriterio } from './pool-comum.mjs';
 
 const HOOK = 'executor-criterio';
 const ESTADO = join(BASE, 'hooks-crewai-estado.json');
@@ -256,7 +257,7 @@ function main() {
   if (sub && tipo !== 'executor') return;
   const transcript = sub ? e.agent_transcript_path : e.transcript_path;
   if (!transcript || !existsSync(transcript)) return;
-  if (!sub && !ehExecutora(e, transcript)) return;
+  if (!sub && !ehExecutora(e, transcript) && !itensDaDonaComCriterio(registroDaSessao(e.session_id)?.localId).length) return;
 
   const turno = turnoAtual(lerTranscript(transcript));
   const sessao = e.session_id;

@@ -259,6 +259,24 @@ export function itensDonosDaSessao(localId) {
   return saida;
 }
 
+// F179: a sessão é dona de item `via: "dona"` (ADR 0011) na etapa em que escreve código — execução, validação e merge (o
+// conserto devolvido pela fila). Em planejamento e design a dona escreve plano e revisão, não roda critério. → [ids]
+const ETAPAS_DE_CRITERIO = ['execucao', 'validacao', 'merge'];
+export function itensDaDonaComCriterio(localId) {
+  const saida = [];
+  if (!localId) return saida;
+  let nomes; try { nomes = readdirSync(filaDir()); } catch { return saida; }
+  for (const nome of nomes) {
+    if (!nome.endsWith('.json')) continue;
+    try {
+      const doc = JSON.parse(readFileSync(join(filaDir(), nome), 'utf8'));
+      const d = doc?.data;
+      if (d?.via === 'dona' && d.donoLocalId === localId && ETAPAS_DE_CRITERIO.includes(d.etapa)) saida.push(doc?.id ?? nome.replace(/\.json$/, ''));
+    } catch { /* arquivo parcial: ignora este item */ }
+  }
+  return saida;
+}
+
 // F49/D8: tudo o que prende a sessão a item vivo (etapa ≠ feito/descartado): `com`, `fez` (de QUALQUER etapa viva) e dono. Quem decide arquivar
 // não pode tratar erro como "sem item": pasta da fila ilegível (≠ ausente: sem pasta não há item vivo), ou item que não se lê, → null (quem chama nega). Os outros helpers não mudam.
 export function ocupacaoDaSessao(localId) {
