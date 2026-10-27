@@ -3,8 +3,10 @@ import type { On } from 'claude-code'
 import type { TestBody } from 'claude-code/testing'
 import {
   CACHE_TTL_MS,
-  FRASE_CURTA_NA_BARRA,
-  FRASE_NA_BARRA,
+  LEITURA_MS,
+  GLIFO,
+  LIMPANDO_ABAIXO_DE,
+  PROMPT_DE_LIMPAR,
   PALAVRA_ALTO,
   PALAVRA_LIMPAR,
   REGUAS,
@@ -15,12 +17,12 @@ import {
   janelaDeCompactacao,
   larguraDaFaixa,
   meuItem,
-  mostraLimparAntes,
+  limparEmDestaque,
   nivelDoCache,
   orquestradorasDoProjeto,
   papelEApelido,
+  palavraDoContexto,
   pecasDaBarra,
-  perguntaDeLimpeza,
   reguaDoPapel,
   relogio,
   textoDoContexto,
@@ -38,8 +40,6 @@ const PASTA = `${HOME}/.claude/orquestracao/painel`
 const BANDEIRA = `${HOME}/.claude/orquestracao/operador-ausente.json`
 const REGISTRO_DO_APP = `${HOME}/Library/Application Support/Claude/claude-code-sessions/conta/org/${EU}.json`
 const AGORA = Date.UTC(2026, 9, 26, 12)
-const RESPOSTA = 'sim (segue a recomendação)'
-const PEDIDO = 'limpar · orquestradora'
 
 // ---- funções puras ----
 
@@ -103,69 +103,8 @@ test('orquestradorasDoProjeto: pelo papel e pelo título, só as do projeto', ()
   expect(orquestradorasDoProjeto(docs, 'outro')).toEqual(['local_outra'])
 })
 
-const limpar = (id: string, extra: Record<string, unknown> = {}, versao = 1) =>
-  doc(id, { projeto: 'kit', sessao: 'orq', sessaoId: ORQ, titulo: PEDIDO, estado: 'aberta', atualizadoEm: '2026-10-26T10:00:00Z', ...extra }, versao)
-
-test('perguntaDeLimpeza: só a pedido de limpeza aberto da orquestradora do projeto', () => {
-  const ids = [ORQ]
-  const achada = perguntaDeLimpeza([limpar('Q290')], ids)
-  expect(achada?.id, 'achou uma').toBe('Q290')
-  expect(achada?.sessaoId).toBe(ORQ)
-  expect(perguntaDeLimpeza([limpar('Q290', { projeto: undefined })], ids)?.id, 'sem o campo projeto').toBe('Q290')
-  expect(perguntaDeLimpeza([limpar('Q290', { estado: 'respondida' })], ids)).toBeNull()
-  expect(perguntaDeLimpeza([limpar('Q290', { sessaoId: 'local_outra' })], ids), 'sessaoId de outra sessão').toBeNull()
-  expect(perguntaDeLimpeza([limpar('Q290', { titulo: 'limpar · outra-coisa' })], ids)).toBeNull()
-  expect(perguntaDeLimpeza([limpar('Q290', { titulo: `  ${PEDIDO}  ` })], ids)?.id).toBe('Q290')
-  expect(perguntaDeLimpeza([limpar('Q290')], [])).toBeNull()
-  // a mais recente vale, tenha ela o número maior ou o menor
-  const velha = limpar('Q290', { atualizadoEm: '2026-10-26T09:00:00Z' })
-  const nova = limpar('Q300', { atualizadoEm: '2026-10-26T11:00:00Z' })
-  expect(perguntaDeLimpeza([velha, nova], ids)?.id).toBe('Q300')
-  const novaMenor = limpar('Q280', { atualizadoEm: '2026-10-26T12:00:00Z' })
-  expect(perguntaDeLimpeza([velha, novaMenor], ids)?.id).toBe('Q280')
-  expect(perguntaDeLimpeza([limpar('Q290')], ids, EU)?.propria).toBe(false)
-  expect(perguntaDeLimpeza([limpar('Q290', { sessaoId: EU })], [EU], EU)?.propria).toBe(true)
-})
-
-test('perguntaDeLimpeza: o sim do painel há até 30 min vale para a T7 e esconde as outras abertas da mesma orquestradora', () => {
-  const ids = [ORQ]
-  const agora = Date.parse('2026-10-26T12:00:00Z')
-  const velha = limpar('Q99051', { atualizadoEm: '2026-10-26T10:00:00Z' })
-  const nova = limpar('Q99052', { atualizadoEm: '2026-10-26T11:00:00Z' })
-  const ok = (id: string, minutos: number, extra: Record<string, unknown> = {}) =>
-    limpar(id, { estado: 'respondida', resposta: RESPOSTA, respondidaPor: 'painel', respondidaEm: new Date(agora - minutos * 60_000).toISOString(), ...extra })
-  expect(perguntaDeLimpeza([velha, nova], ids, undefined, agora)?.id, 'sem ok, a mais nova').toBe('Q99052')
-  expect(perguntaDeLimpeza([velha, ok('Q99053', 5), nova], ids, undefined, agora), 'ok na mais nova: nada a pedir').toBeNull()
-  expect(perguntaDeLimpeza([velha, ok('Q99053', 30), nova], ids, undefined, agora), 'no limite dos 30 min').toBeNull()
-  expect(perguntaDeLimpeza([velha, ok('Q99053', 31), nova], ids, undefined, agora)?.id, 'há 31 min o ok venceu').toBe('Q99052')
-  expect(perguntaDeLimpeza([velha, ok('Q99053', 5, { sessaoId: 'local_outra' }), nova], ids, undefined, agora)?.id, 'sim de outra sessaoId').toBe('Q99052')
-  expect(perguntaDeLimpeza([velha, ok('Q99053', 5, { resposta: 'não' }), nova], ids, undefined, agora)?.id, 'resposta não').toBe('Q99052')
-  expect(perguntaDeLimpeza([velha, ok('Q99053', 5, { respondidaPor: 'sessao' }), nova], ids, undefined, agora)?.id, 'não foi o painel').toBe('Q99052')
-  expect(perguntaDeLimpeza([velha, ok('Q99053', 5, { titulo: 'limpar · outra-coisa' }), nova], ids, undefined, agora)?.id, 'outro título').toBe('Q99052')
-})
-
-test('perguntaDeLimpeza: o pedido aberto depois do ok volta; o anterior ou do mesmo instante segue escondido', () => {
-  const ids = [ORQ]
-  const agora = Date.parse('2026-10-26T12:00:00Z')
-  const ok = (id: string, minutos: number) =>
-    limpar(id, { estado: 'respondida', resposta: RESPOSTA, respondidaPor: 'painel', respondidaEm: new Date(agora - minutos * 60_000).toISOString() })
-  // o sim é das 11:55
-  expect(perguntaDeLimpeza([ok('Q99053', 5), limpar('Q99054', { atualizadoEm: '2026-10-26T11:58:00Z' })], ids, undefined, agora)?.id, 'aberta depois do ok').toBe('Q99054')
-  expect(perguntaDeLimpeza([ok('Q99053', 5), limpar('Q99054', { atualizadoEm: '2026-10-26T11:55:00Z' })], ids, undefined, agora), 'empate: escondida').toBeNull()
-  expect(perguntaDeLimpeza([ok('Q99053', 5), limpar('Q99054', { atualizadoEm: '2026-10-26T11:50:00Z' })], ids, undefined, agora), 'aberta antes do ok').toBeNull()
-  // dois sins na janela (11:55 e 11:40) e a aberta das 11:50 entre eles: vale o sim mais recente
-  expect(perguntaDeLimpeza([ok('Q99053', 5), ok('Q99055', 20), limpar('Q99054', { atualizadoEm: '2026-10-26T11:50:00Z' })], ids, undefined, agora), 'vale o sim mais recente').toBeNull()
-  expect(perguntaDeLimpeza([ok('Q99053', 5), limpar('Q99054', { atualizadoEm: 'lixo' })], ids, undefined, agora), 'atualizadoEm ilegível: anterior').toBeNull()
-  // entre as candidatas vale a mais recente, como sem ok
-  const novaA = limpar('Q99056', { atualizadoEm: '2026-10-26T11:57:00Z' })
-  const novaB = limpar('Q99057', { atualizadoEm: '2026-10-26T11:59:00Z' })
-  expect(perguntaDeLimpeza([ok('Q99053', 5), novaA, novaB], ids, undefined, agora)?.id).toBe('Q99057')
-  // sim vencido (31 min) não esconde nada, como antes
-  expect(perguntaDeLimpeza([ok('Q99053', 31), limpar('Q99054', { atualizadoEm: '2026-10-26T11:20:00Z' })], ids, undefined, agora)?.id).toBe('Q99054')
-})
-
 test('abertasDoProjeto conta as abertas, todas', () => {
-  const docs = [limpar('Q1'), limpar('Q2', { estado: 'respondida' }), doc('Q3', { estado: 'aberta', titulo: 'x' })]
+  const docs = [doc('Q1', { estado: 'aberta', titulo: 'x' }), doc('Q2', { estado: 'respondida', titulo: 'x' }), doc('Q3', { estado: 'aberta', titulo: 'x' })]
   expect(abertasDoProjeto(docs)).toBe(2)
 })
 
@@ -193,16 +132,16 @@ test('contarPool: sessões distintas por apelido, só itens vivos do projeto', (
   expect(contarPool(docs, 'outro')).toEqual({ e: 1, v: 0 })
 })
 
-test('mostraLimparAntes: só orquestradora, 1–600 s, parada, com 150 mil', () => {
-  const ok = { ehOrquestradora: true, segundos: 480, trabalhando: false, tokens: 212_000 }
-  expect(mostraLimparAntes(ok)).toBe(true)
-  expect(mostraLimparAntes({ ...ok, ehOrquestradora: false })).toBe(false)
-  expect(mostraLimparAntes({ ...ok, segundos: 601 })).toBe(false)
-  expect(mostraLimparAntes({ ...ok, segundos: 0 })).toBe(false)
-  expect(mostraLimparAntes({ ...ok, segundos: null })).toBe(false)
-  expect(mostraLimparAntes({ ...ok, trabalhando: true })).toBe(false)
-  expect(mostraLimparAntes({ ...ok, tokens: 149_999 })).toBe(false)
-  expect(mostraLimparAntes({ ...ok, tokens: null })).toBe(false)
+test('limparEmDestaque: exatamente quando o contexto mostra · limpar (a régua do papel)', () => {
+  expect(limparEmDestaque(150_000, REGUAS.orquestradora)).toBe(true)
+  expect(limparEmDestaque(149_999, REGUAS.orquestradora)).toBe(false)
+  expect(limparEmDestaque(null, REGUAS.orquestradora)).toBe(false)
+  expect(limparEmDestaque(260_000, null), 'sem régua não há palavra').toBe(false)
+  expect(limparEmDestaque(260_000, REGUAS.orquestradoraAusente), 'ausente: a régua da planejadora, a palavra e o botão juntos').toBe(false)
+  expect(limparEmDestaque(500_000, REGUAS.orquestradoraAusente)).toBe(true)
+  for (const t of [100_000, 150_000, 300_000, 500_000]) {
+    expect(limparEmDestaque(t, REGUAS.orquestradora), `${t}`).toBe(palavraDoContexto(t, REGUAS.orquestradora) === PALAVRA_LIMPAR)
+  }
 })
 
 const REFERENCIA: EstadoBarra = {
@@ -218,114 +157,95 @@ const REFERENCIA: EstadoBarra = {
   trocando: false,
   painelAberto: true,
   moldura: false,
-  pedido: null,
-  pedidoProprio: false,
-  limparAntes: false,
+  ehOrquestradora: false,
+  limpando: false,
 }
 
 test('faixaDaBarra: a mais rica cuja soma cabe, com os textos reais', () => {
   const f = (cols: number, extra: Partial<EstadoBarra> = {}) => faixaDaBarra(cols, { ...REFERENCIA, ...extra })
-  expect([f(114), f(113), f(94), f(93), f(40)]).toEqual([0, 1, 1, 2, 2])
-  expect(f(114, { tokens: 250_000, regua: { aviso: 200_000, teto: 300_000 } }), 'palavra alto').toBe(1)
-  expect(f(94, { tokens: 250_000 })).toBe(2)
-  expect(f(114, { moldura: true })).toBe(1)
-  expect(f(114, { abertas: 12 })).toBe(1)
+  expect([f(116), f(115), f(96), f(95), f(40)]).toEqual([0, 1, 1, 2, 2])
+  expect(f(116, { tokens: 250_000, regua: { aviso: 200_000, teto: 300_000 } }), 'palavra alto').toBe(1)
+  expect(f(96, { tokens: 250_000 })).toBe(2)
+  expect(f(116, { moldura: true })).toBe(1)
+  expect(f(116, { abertas: 12 })).toBe(1)
 })
 
-test('faixaDaBarra: a palavra · limpar conta na soma (P a 510 mil, 119 colunas)', () => {
+test('faixaDaBarra: a palavra · limpar conta na soma (P a 510 mil, 123 colunas)', () => {
   const p: EstadoBarra = { ...REFERENCIA, tokens: 510_000, regua: REGUAS.P, modo: 'presente', painelAberto: false }
-  expect(larguraDaFaixa(p, 0), 'a soma é a da revisão: 63 + 2 + 52 + 2').toBe(119)
-  expect([faixaDaBarra(119, p), faixaDaBarra(118, p)]).toEqual([0, 1])
+  expect(larguraDaFaixa(p, 0), 'a soma: 63 + 2 + 56 + 2 (a revisão do botão de limpar: +2 do ◨ e +2 do ☾)').toBe(123)
+  expect([faixaDaBarra(123, p), faixaDaBarra(122, p)]).toEqual([0, 1])
 })
 
 test('faixaDaBarra: o relógio em bloco (alerta e venceu) soma as duas células do respiro', () => {
   const base = larguraDaFaixa(REFERENCIA, 0)
-  expect(base, 'a referência soma 114').toBe(114)
+  expect(base, 'a referência soma 116').toBe(116)
   expect(larguraDaFaixa({ ...REFERENCIA, bloco: true }, 0)).toBe(base + 2)
-  expect(faixaDaBarra(114, REFERENCIA)).toBe(0)
-  expect(faixaDaBarra(114, { ...REFERENCIA, bloco: true }), 'com o bloco a faixa 0 já não cabe').toBe(1)
+  expect(faixaDaBarra(116, REFERENCIA)).toBe(0)
+  expect(faixaDaBarra(116, { ...REFERENCIA, bloco: true }), 'com o bloco a faixa 0 já não cabe').toBe(1)
 })
 
-// O caso do print: orquestradora, 253 mil, 1 pergunta, presente, pane aberto, pedido aberto (revisão, teste 10).
-const COM_PEDIDO: EstadoBarra = { ...REFERENCIA, tokens: 253_000, regua: REGUAS.orquestradora, item: null, pool: null, abertas: 1, modo: 'presente', pedido: 'aberto', pedidoProprio: true }
+// A orquestradora da revisão: 198 mil (acima de 150 mil), sem item, 3 perguntas, presente, painel fechado.
+const ORQ_BARRA: EstadoBarra = { ...REFERENCIA, tokens: 198_000, regua: REGUAS.orquestradora, item: null, abertas: 3, modo: 'presente', painelAberto: false, ehOrquestradora: true }
 
-test('faixaDaBarra: o pedido de limpeza entra na soma, com a frase e o botão reais', () => {
-  expect([0, 1, 2].map(f => larguraDaFaixa(COM_PEDIDO, f as 0 | 1 | 2)), 'as somas da revisão').toEqual([142, 101, 79])
-  const f = (cols: number, extra: Partial<EstadoBarra> = {}) => faixaDaBarra(cols, { ...COM_PEDIDO, ...extra })
-  expect([f(142), f(141), f(114), f(101), f(100), f(94), f(79), f(78)]).toEqual([0, 1, 1, 1, 2, 2, 2, 2])
-  expect(larguraDaFaixa({ ...COM_PEDIDO, modo: 'ausente' }, 2), 'ausente com selo: 100').toBe(100)
+test('faixaDaBarra: o limpar entra na soma como ↺ Limpando… (a reserva): 125, 105 e 62, e +1 com Fechar painel', () => {
+  expect([0, 1, 2].map(f => larguraDaFaixa(ORQ_BARRA, f as 0 | 1 | 2)), 'as somas da revisão').toEqual([125, 105, 62])
+  expect([0, 1, 2].map(f => larguraDaFaixa({ ...ORQ_BARRA, painelAberto: true }, f as 0 | 1 | 2))).toEqual([126, 106, 62])
+  const f = (cols: number, extra: Partial<EstadoBarra> = {}) => faixaDaBarra(cols, { ...ORQ_BARRA, ...extra })
+  expect([f(125), f(124), f(105), f(104), f(62), f(40)]).toEqual([0, 1, 1, 2, 2, 2])
+  expect(f(114), 'a 114 colunas a orquestradora cai na faixa 1, com os quatro botões').toBe(1)
+  expect(pecasDaBarra(ORQ_BARRA, 1).dir.map(p => p.k)).toEqual(['perguntas', 'limpar', 'modo', 'painel'])
 })
 
-// A barra de uma E ou P (o pedido não é da própria sessão): a frase diz sempre quem pede.
-const DE_OUTRA: EstadoBarra = { ...REFERENCIA, tokens: 142_000, item: null, pool: null, abertas: 3, modo: 'presente', painelAberto: false, pedido: 'aberto', pedidoProprio: false }
-
-test('pecasDaBarra: pedido de outra sessão usa a frase longa em toda faixa; o da própria, a curta na 1 e na 2', () => {
-  const frase = (e: EstadoBarra, f: 0 | 1 | 2) => pecasDaBarra(e, f).dir.find(p => p.k === 'pedido')?.t
-  for (const f of [0, 1, 2] as const) expect(frase(DE_OUTRA, f), `de outra, faixa ${f}`).toBe(FRASE_NA_BARRA)
-  const propria = { ...DE_OUTRA, pedidoProprio: true }
-  expect([0, 1, 2].map(f => frase(propria, f as 0 | 1 | 2))).toEqual([FRASE_NA_BARRA, FRASE_CURTA_NA_BARRA, FRASE_CURTA_NA_BARRA])
+test('faixaDaBarra: Limpar e Limpando… somam o mesmo, e a faixa não muda debaixo do clique', () => {
+  for (const faixa of [0, 1, 2] as const) {
+    expect(larguraDaFaixa({ ...ORQ_BARRA, limpando: true }, faixa), `faixa ${faixa}`).toBe(larguraDaFaixa(ORQ_BARRA, faixa))
+  }
+  for (const cols of [125, 124, 105, 104, 62]) {
+    expect(faixaDaBarra(cols, { ...ORQ_BARRA, limpando: true }), `${cols} colunas`).toBe(faixaDaBarra(cols, ORQ_BARRA))
+  }
 })
 
-test('faixaDaBarra: a barra de uma E com pedido aberto a 142 mil soma 133, 106 e 85', () => {
-  expect([0, 1, 2].map(f => larguraDaFaixa(DE_OUTRA, f as 0 | 1 | 2))).toEqual([133, 106, 85])
-  const f = (cols: number) => faixaDaBarra(cols, DE_OUTRA)
-  expect([f(133), f(132), f(106), f(105)]).toEqual([0, 1, 1, 2])
+test('pecasDaBarra: a ordem é selo → limpar → modo → painel; o limpar só na orquestradora e nunca cai', () => {
+  const dir = (e: EstadoBarra, f: 0 | 1 | 2) => pecasDaBarra(e, f).dir.map(p => p.k)
+  expect(dir(ORQ_BARRA, 0)).toEqual(['perguntas', 'limpar', 'modo', 'painel'])
+  expect(dir(ORQ_BARRA, 2), 'faixa 2 presente: sem modo, e o painel cai com selo').toEqual(['perguntas', 'limpar'])
+  expect(dir({ ...ORQ_BARRA, modo: 'ausente' }, 2), 'o ☾ Estou de volta nunca cai').toEqual(['perguntas', 'limpar', 'modo'])
+  expect(dir({ ...ORQ_BARRA, abertas: 0 }, 2), 'sem selo o painel fica').toEqual(['limpar', 'painel'])
+  expect(dir({ ...ORQ_BARRA, ehOrquestradora: false }, 0), 'em outra sessão não existe, nem apagado').toEqual(['perguntas', 'modo', 'painel'])
+  expect(dir({ ...ORQ_BARRA, ehOrquestradora: false }, 2).includes('limpar')).toBe(false)
+  const rotulos = pecasDaBarra({ ...ORQ_BARRA, modo: 'ausente', painelAberto: true }, 0).dir.map(p => p.t)
+  expect(rotulos).toEqual(['● 3 perguntas', '↺ Limpar', '☾ Estou de volta', '◨ Fechar painel'])
+  expect(pecasDaBarra({ ...ORQ_BARRA, limpando: true }, 0).dir.find(p => p.k === 'limpar')?.t).toBe('↺ Limpando…')
+  expect(pecasDaBarra(ORQ_BARRA, 0).dir.find(p => p.k === 'modo')?.t).toBe('☾ Ficar ausente')
+  expect(pecasDaBarra({ ...ORQ_BARRA, trocando: true }, 0).dir.find(p => p.k === 'modo')?.t).toBe('☾ Desligando…')
+  expect(pecasDaBarra({ ...ORQ_BARRA, trocando: true, modo: 'ausente' }, 0).dir.find(p => p.k === 'modo')?.t).toBe('☾ Ligando…')
 })
 
-test('faixaDaBarra: o ok que zera as abertas (o pedido era a única) não muda a faixa a 120 colunas', () => {
-  const unica = { ...DE_OUTRA, abertas: 1 }
-  const antes = faixaDaBarra(120, { ...unica, pedido: 'aberto' })
-  expect(antes, 'a 120 a barra de uma E com o pedido como única pergunta não cabe na faixa 0').toBe(1)
-  for (const pedido of ['enviando', 'enviado'] as const) expect(faixaDaBarra(120, { ...unica, abertas: 0, pedido }), `${pedido} com abertas 1→0`).toBe(antes)
-  expect([0, 1, 2].map(f => larguraDaFaixa({ ...unica, abertas: 0, pedido: 'enviado' }, f as 0 | 1 | 2))).toEqual([0, 1, 2].map(f => larguraDaFaixa({ ...unica, pedido: 'aberto' }, f as 0 | 1 | 2)))
+test('pecasDaBarra: sem pedido, item e pool voltam à esquerda em qualquer momento (o pedido de limpeza acabou)', () => {
+  const completo = { ...ORQ_BARRA, item: 'F52 · design', pool: 'E 2 · V 1' }
+  expect(pecasDaBarra(completo, 0).esq.map(p => p.k)).toEqual(['relogio', 'contexto', 'item', 'pool'])
+  expect(pecasDaBarra(completo, 2).esq.map(p => p.k)).toEqual(['relogio', 'contexto'])
 })
 
-test('barra: o grupo da direita quebra a linha a 40 colunas, com pedido aberto', async ($, on) => {
-  await iniciar($, on, { titulo: 'E1 · x', perguntas: [limpar('Q290')] })
+test('os glifos: cada botão tem o seu, o da barra e o da constante concordam, e as quatro formas diferem', () => {
+  expect(GLIFO.limpar.g).toBe('↺')
+  expect(GLIFO.modo.g).toBe('☾')
+  expect(GLIFO.painel.g).toBe('◨')
+  expect(GLIFO.perguntas.g).toBe('●')
+  expect(new Set([GLIFO.limpar.g, GLIFO.modo.g, GLIFO.painel.g, GLIFO.perguntas.g]).size).toBe(4)
+  const todas = pecasDaBarra({ ...ORQ_BARRA, modo: 'ausente' }, 0).dir
+  expect(todas.length, 'os quatro botões').toBe(4)
+  const g = (k: string) => todas.find(p => p.k === k)?.t[0]
+  expect([g('perguntas'), g('limpar'), g('modo'), g('painel')]).toEqual([GLIFO.perguntas.g, GLIFO.limpar.g, GLIFO.modo.g, GLIFO.painel.g])
+})
+
+test('barra: o grupo da direita quebra a linha a 40 colunas', async ($, on) => {
+  await iniciar($, on)
   const ui = await montar($, 'terminal', { bodyColumns: 40 })
   const direita = (await ui.findAll({ type: 'Box' })).filter(b => b.props.justifyContent === 'flex-end')
   expect(direita.length, 'o grupo da direita desenhou').toBe(1)
   expect(direita[0]?.props.flexWrap).toBe('wrap')
   await ui.unmount()
-})
-
-test('faixaDaBarra: com pedido, aberto, Enviando… e ✓ ok enviado somam a mesma largura (a do repouso), e a faixa não muda debaixo do clique', () => {
-  const estados = ['aberto', 'enviando', 'enviado'] as const
-  const repouso = larguraDaFaixa(COM_PEDIDO, 0)
-  expect(repouso, 'o repouso soma 142').toBe(142)
-  for (const f of [0, 1, 2] as const) {
-    const somas = estados.map(pedido => larguraDaFaixa({ ...COM_PEDIDO, pedido }, f))
-    expect(new Set(somas).size, `faixa ${f}: ${somas.join('/')}`).toBe(1)
-  }
-  for (const cols of [140, 137, 114, 107, 101]) {
-    const faixas = estados.map(pedido => faixaDaBarra(cols, { ...COM_PEDIDO, pedido }))
-    expect(new Set(faixas).size, `${cols} colunas: ${faixas.join('/')}`).toBe(1)
-  }
-  expect(faixaDaBarra(137, { ...COM_PEDIDO, pedido: 'enviando' }), 'a 137 o repouso não cabe na 0, e o Enviando… também não').toBe(1)
-})
-
-test('pecasDaBarra: o pedido abre o grupo da direita; item, pool e o Ficar ausente caem', () => {
-  const dir = (e: EstadoBarra, f: 0 | 1 | 2) => pecasDaBarra(e, f).dir.map(p => p.k)
-  expect(dir(COM_PEDIDO, 0)).toEqual(['pedido', 'limpar-pedido', 'perguntas', 'modo', 'painel'])
-  expect(dir(COM_PEDIDO, 1), 'faixa 1: o Ficar ausente já caiu').toEqual(['pedido', 'limpar-pedido', 'perguntas', 'painel'])
-  expect(dir(COM_PEDIDO, 2)).toEqual(['pedido', 'limpar-pedido', 'perguntas'])
-  expect(dir({ ...COM_PEDIDO, modo: 'ausente' }, 1), 'o ☾ Estou de volta nunca cai').toEqual(['pedido', 'limpar-pedido', 'perguntas', 'modo', 'painel'])
-  expect(dir({ ...COM_PEDIDO, pedido: 'enviado' }, 1)).toEqual(['pedido', 'perguntas', 'painel'])
-  const completo = { ...COM_PEDIDO, item: 'F52 · design', pool: 'E 2 · V 1' }
-  expect(pecasDaBarra(completo, 0).esq.map(p => p.k), 'com o pedido, sem item nem pool').toEqual(['relogio', 'contexto'])
-  expect(pecasDaBarra({ ...completo, pedido: null }, 0).esq.map(p => p.k), 'sem o pedido, item e pool voltam').toEqual(['relogio', 'contexto', 'item', 'pool'])
-  const frase = (f: 0 | 1 | 2) => pecasDaBarra(COM_PEDIDO, f).dir[0]?.t
-  expect([frase(0), frase(1), frase(2)]).toEqual(['◆ orquestradora pede limpeza', '◆ pede limpeza', '◆ pede limpeza'])
-  expect(pecasDaBarra({ ...COM_PEDIDO, pedido: 'enviado' }, 0).dir[0]?.t).toBe('✓ ok enviado')
-})
-
-test('pecasDaBarra: o limpar antes é só o botão, com as mesmas quedas e sem frase', () => {
-  const e: EstadoBarra = { ...REFERENCIA, modo: 'presente', limparAntes: true }
-  const p = pecasDaBarra(e, 1)
-  expect(p.dir.map(x => x.k)).toEqual(['limpar-antes', 'perguntas', 'painel'])
-  expect(p.dir.some(x => x.t.includes('◆')), 'sem frase').toBe(false)
-  expect(p.esq.map(x => x.k)).toEqual(['relogio', 'contexto'])
-  expect(pecasDaBarra({ ...e, pedido: 'aberto' }, 1).dir.map(x => x.k), 'o pedido vence o limpar antes').toEqual(['pedido', 'limpar-pedido', 'perguntas', 'painel'])
 })
 
 test('textoDoContexto: a janela é o denominador; a régua só dá a palavra', () => {
@@ -380,6 +300,10 @@ type Opcoes = {
   bandeira?: string
   semUsage?: boolean
   fillRecusa?: boolean
+  /** O `prompt.submit` devolve este `drop` (o app recusou o prompt). */
+  submitDrop?: string
+  /** O `fs.write` da pasta `limpeza/` falha com este motivo. */
+  limpezaFalha?: string
   envioFalha?: string
   notificacaoFalha?: boolean
   painelAbertoNoInicio?: boolean
@@ -422,9 +346,10 @@ function engine(on: On, opc: Opcoes = {}) {
   on('turn.complete', (_, e) => ({ text: e.answer }))
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('session.cwd', () => ({ value: opc.cwd ?? '/work/kit' }))
+  let tokensAgora: number | null = opc.tokens === undefined ? 142_000 : opc.tokens
   on('session.usage', () => {
     if (opc.semUsage) throw new Error('sem usage')
-    return { value: { startedAt: 0, context: { tokens: opc.tokens === undefined ? 142_000 : (opc.tokens ?? undefined), window: opc.janelaDoModelo === null ? undefined : (opc.janelaDoModelo ?? 1_000_000) }, rateLimits: [] } }
+    return { value: { startedAt: 0, context: { tokens: tokensAgora ?? undefined, window: opc.janelaDoModelo === null ? undefined : (opc.janelaDoModelo ?? 1_000_000) }, rateLimits: [] } }
   })
   const arquivos = new Map<string, string>()
   for (const d of opc.perguntas ?? []) arquivos.set(`${PASTA}/perguntas/${d.id}.json`, JSON.stringify(d))
@@ -445,7 +370,15 @@ function engine(on: On, opc: Opcoes = {}) {
     if (t === undefined) throw new Error(`ENOENT ${e.path}`)
     return { value: t }
   })
+  const limpezas: Array<{ path: string; data: Record<string, unknown> }> = []
   on('fs.write', (_, e) => {
+    if (e.path.includes('/limpeza/')) {
+      if (opc.limpezaFalha) throw new Error(opc.limpezaFalha)
+      limpezas.push({ path: e.path, data: JSON.parse(e.text) as Record<string, unknown> })
+      arquivos.set(e.path, e.text)
+
+      return { value: undefined }
+    }
     arquivos.set(e.path, e.text)
     if (e.path === BANDEIRA) bandeiras.push(JSON.parse(e.text) as Record<string, unknown>)
     else escritas.push({ path: e.path, data: (JSON.parse(e.text) as Doc).data, texto: e.text })
@@ -460,6 +393,8 @@ function engine(on: On, opc: Opcoes = {}) {
   const prompts: string[] = []
   on('prompt.submit', (_, e) => {
     prompts.push(e.text)
+    if (opc.submitDrop !== undefined) return { drop: opc.submitDrop }
+
     return { text: e.text }
   })
   const chamadas: string[] = []
@@ -482,7 +417,7 @@ function engine(on: On, opc: Opcoes = {}) {
     return { result: {}, text: '[]' }
   })
 
-  return { relogio: relogioDeTeste, escritas, bandeiras, fills, prompts, toasts, chamadas, enviadas, notificacoes, arquivos, aberturas, painelAberto: () => aberto }
+  return { relogio: relogioDeTeste, limpezas, definirTokens: (t: number | null) => { tokensAgora = t }, escritas, bandeiras, fills, prompts, toasts, chamadas, enviadas, notificacoes, arquivos, aberturas, painelAberto: () => aberto }
 }
 
 const BARRA = {
@@ -588,12 +523,12 @@ test('sem perguntas abertas o selo some', async ($, on) => {
 test('botão do painel: aberto fecha, fechado abre', async ($, on) => {
   const m = await iniciar($, on)
   const ui = await montar($, 'terminal')
-  expect((await ui.find({ key: 'painel' }))?.text).toBe('Abrir painel')
+  expect((await ui.find({ key: 'painel' }))?.text).toBe('◨ Abrir painel')
   await ui.press({ key: 'painel' })
   await m.relogio.settle()
   expect(m.painelAberto()).toBe(true)
   const ui2 = await montar($, 'terminal')
-  expect((await ui2.find({ key: 'painel' }))?.text).toBe('Fechar painel')
+  expect((await ui2.find({ key: 'painel' }))?.text).toBe('◨ Fechar painel')
   await ui2.press({ key: 'painel' })
   await m.relogio.settle()
   expect(m.painelAberto()).toBe(false)
@@ -601,11 +536,11 @@ test('botão do painel: aberto fecha, fechado abre', async ($, on) => {
   await ui2.unmount()
 })
 
-test('ordem: à esquerda relógio e contexto; à direita selo, modo e painel', async ($, on) => {
+test('ordem: à esquerda relógio e contexto; à direita selo, limpar, modo e painel', async ($, on) => {
   await iniciar($, on, { perguntas: abertas(3) })
   const ui = await montar($, 'terminal')
   const botoes = (await ui.findAll({ type: 'Button' })).map(b => b.props.key)
-  expect(botoes).toEqual(['perguntas', 'modo', 'painel'])
+  expect(botoes).toEqual(['perguntas', 'limpar', 'modo', 'painel'])
   const texto = await lido(ui)
   expect(texto.indexOf('⧗'), 'relógio antes do contexto').toBeLessThan(texto.indexOf('contexto'))
   const selo = (await ui.findAll({ type: 'Button' })).find(b => b.props.key === 'perguntas')
@@ -718,164 +653,170 @@ test('contexto de papel desconhecido: com a janela e sem palavra', async ($, on)
   await ui.unmount()
 })
 
-test('pedido de limpeza: o botão aparece em toda sessão do projeto, e o clique grava a prova do painel sem o pane nunca aberto', async ($, on) => {
-  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
-  const ui = await montar($, 'terminal')
-  const texto = await lido(ui)
-  expect(texto, 'a barra de outra sessão diz quem pede').toMatch(/◆ orquestradora pede limpeza/)
-  expect(texto, 'o Q-ID não entra na barra').not.toMatch(/Q290/)
-  const botao = await ui.find({ key: 'limpar-pedido' })
-  expect(botao?.text).toBe('Pode se limpar')
-  expect(botao?.props.variant).toBe('primary')
-  expect((await ui.findAll({ type: 'Button' })).filter(b => b.props.variant === 'primary').length, 'o único primário').toBe(1)
-  await ui.press({ key: 'limpar-pedido' })
-  await m.relogio.settle()
-  const gravada = m.escritas.find(e => e.path.endsWith('Q290.json'))
-  expect(gravada, 'gravou a pergunta').toBeTruthy()
-  expect(gravada?.data.estado).toBe('respondida')
-  expect(gravada?.data.resposta).toBe(RESPOSTA)
-  expect(gravada?.data.respondidaPor).toBe('painel')
-  expect(typeof gravada?.data.respondidaEm).toBe('string')
-  expect(gravada?.data.respondidaEm).toBe(gravada?.data.atualizadoEm)
-  expect(Number.isNaN(Date.parse(String(gravada?.data.respondidaEm)))).toBe(false)
-  expect(m.enviadas.length).toBe(1)
-  expect(m.enviadas[0]?.session_id).toBe(ORQ)
-  await ui.unmount()
-})
+const botoesDe = async (ui: Awaited<ReturnType<typeof montar>>) => (await ui.findAll({ type: 'Button' })).map(b => b.props.key)
 
-test('pedido de limpeza: o ok enviado troca o botão por ✓ e o clique repetido grava uma vez', async ($, on) => {
-  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290')] })
-  const ui = await montar($, 'terminal')
-  await Promise.all([ui.press({ key: 'limpar-pedido' }), ui.press({ key: 'limpar-pedido' })])
-  await m.relogio.settle()
-  expect(m.escritas.filter(e => e.path.endsWith('Q290.json')).length).toBe(1)
-  const u2 = await montar($, 'terminal')
-  expect(await lido(u2)).toMatch(/✓ ok enviado/)
-  expect(await u2.find({ key: 'limpar-pedido' })).toBeUndefined()
-  await ui.unmount()
-  await u2.unmount()
-})
-
-test('pedido de limpeza: pergunta apagada antes do clique dá toast e não grava nada', async ($, on) => {
-  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
-  m.arquivos.delete(`${PASTA}/perguntas/Q290.json`)
-  const ui = await montar($, 'terminal')
-  await ui.press({ key: 'limpar-pedido' })
-  await m.relogio.settle()
-  expect(m.toasts.at(-1)).toMatch(/Não consegui mandar o ok de limpar \(/)
-  expect(m.escritas.filter(e => e.path.endsWith('Q290.json')), 'nada gravado').toEqual([])
-  await ui.unmount()
-})
-
-test('pedido de limpeza: versão mudada entre a leitura e o clique dá toast, não grava e o botão volta', async ($, on) => {
-  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
-  const ui = await montar($, 'terminal')
-  expect((await ui.find({ key: 'limpar-pedido' }))?.text, 'o botão existe antes do clique').toBe('Pode se limpar')
-  m.arquivos.set(`${PASTA}/perguntas/Q290.json`, JSON.stringify(limpar('Q290', {}, 5)))
-  await ui.press({ key: 'limpar-pedido' })
-  await m.relogio.settle()
-  expect(m.toasts.at(-1)).toMatch(/Não consegui mandar o ok de limpar \(/)
-  expect(m.escritas.filter(e => e.path.endsWith('Q290.json')), 'nada gravado').toEqual([])
-  expect(m.enviadas).toEqual([])
-  expect((await ui.find({ key: 'limpar-pedido' }))?.text, 'o botão volta na mesma montagem').toBe('Pode se limpar')
-  const u2 = await montar($, 'terminal')
-  expect((await u2.find({ key: 'limpar-pedido' }))?.text, 'e numa montagem nova').toBe('Pode se limpar')
-  expect(await lido(ui)).not.toMatch(/✓ ok enviado/)
-  expect(await lido(u2)).not.toMatch(/✓ ok enviado/)
-  await ui.unmount()
-  await u2.unmount()
-})
-
-test('pedido de limpeza: não há linha acima; a barra tem uma linha principal com o botão do pedido, em 94, 114 e 140 colunas, no terminal e no desktop', async ($, on) => {
-  await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290')] })
+test('limpar: só na barra da orquestradora, à esquerda do modo, em toda faixa e nas duas superfícies', async ($, on) => {
+  await iniciar($, on, { perguntas: abertas(3) })
   for (const surface of SUPERFICIES) {
-    for (const bodyColumns of [94, 114, 140]) {
+    for (const bodyColumns of [62, 94, 114, 140]) {
       const ui = await montar($, surface, { bodyColumns })
-      const caixas = await ui.findAll({ type: 'Box' })
-      const rotulo = `${surface} ${bodyColumns}`
-      expect(caixas.length, `${rotulo}: a barra desenhou caixas`).toBeGreaterThan(0)
-      expect(caixas.some(b => b.props.key === 'linha-do-pedido'), `${rotulo}: não há Box linha-do-pedido`).toBe(false)
-      expect(caixas.filter(b => b.props.flexDirection === 'column').length, `${rotulo}: só a coluna da moldura`).toBe(1)
-      // A linha de fora e o grupo da direita quebram; nenhuma outra caixa em linha tem wrap (não há linha do pedido).
-      expect(caixas.filter(b => b.props.flexDirection === 'row' && b.props.flexWrap === 'wrap').length, `${rotulo}: a linha principal e o grupo da direita`).toBe(2)
-      const botao = await ui.find({ key: 'limpar-pedido' })
-      expect(botao?.text, `${rotulo}: o botão do pedido`).toBe('Pode se limpar')
-      const t = await lido(ui)
-      expect(t.indexOf('⧗'), `${rotulo}: relógio antes da frase`).toBeLessThan(t.indexOf('◆'))
-      expect(t, `${rotulo}: a frase diz quem pede`).toMatch(/◆ orquestradora pede limpeza/)
-      expect(t, `${rotulo}: sem Q-ID`).not.toMatch(/Q290/)
-      expect((await ui.findAll({ type: 'Button' })).map(b => b.props.key)[0], `${rotulo}: o pedido abre o grupo da direita`).toBe('limpar-pedido')
+      const chaves = await botoesDe(ui)
+      expect(chaves.includes('limpar'), `${surface} ${bodyColumns}: o limpar existe`).toBe(true)
+      expect(chaves[0], `${surface} ${bodyColumns}: o selo abre o grupo`).toBe('perguntas')
+      expect(chaves[1], `${surface} ${bodyColumns}: o limpar vem logo depois do selo`).toBe('limpar')
+      if (chaves.includes('modo')) expect(chaves.indexOf('limpar')).toBeLessThan(chaves.indexOf('modo'))
+      expect((await ui.find({ key: 'limpar' }))?.text).toBe('↺ Limpar')
       await ui.unmount()
     }
   }
+  expect(await (async () => botoesDe(await montar($, 'terminal', { bodyColumns: 114 })))()).toEqual(['perguntas', 'limpar', 'modo', 'painel'])
 })
 
-test('pedido de limpeza: item e pool caem enquanto ele está aberto; o Ficar ausente cai já a 114', async ($, on) => {
-  await iniciar($, on, {
-    titulo: 'E1 · x',
-    perguntas: [limpar('Q290')],
-    fila: [item('F1', { donoLocalId: EU, com: [{ localId: EU, apelido: 'E1' }, { localId: 'b', apelido: 'V1' }] })],
-  })
+test('limpar: em outra sessão (membro do pool) não existe, nem apagado', async ($, on) => {
+  await iniciar($, on, { titulo: 'E1 · x', perguntas: abertas(3), sessoes: [] })
+  for (const surface of SUPERFICIES) {
+    const ui = await montar($, surface, { bodyColumns: 140 })
+    const chaves = await botoesDe(ui)
+    expect(chaves, `${surface}: os outros botões desenharam`).toEqual(['perguntas', 'modo', 'painel'])
+    expect(await ui.find({ key: 'limpar' })).toBeUndefined()
+    await ui.unmount()
+  }
+})
+
+test('limpar: abaixo da régua é discreto (secundário, apagado, sem a palavra · limpar)', async ($, on) => {
+  await iniciar($, on, { tokens: 142_000 })
+  const baixo = await montar($, 'terminal', { bodyColumns: 140 })
+  const repouso = await baixo.find({ key: 'limpar' })
+  expect(repouso?.props.variant).toBe('secondary')
+  expect(repouso?.props.dimColor).toBe(true)
+  expect(await lido(baixo)).not.toMatch(/· limpar/)
+  expect((await baixo.findAll({ type: 'Button' })).filter(b => b.props.variant === 'primary').length).toBe(0)
+  await baixo.unmount()
+})
+
+test('limpar: na régua é o único primário, cheio, e a palavra · limpar acende junto', async ($, on) => {
+  await iniciar($, on, { tokens: 212_000 })
+  const alto = await montar($, 'terminal', { bodyColumns: 140 })
+  const destaque = await alto.find({ key: 'limpar' })
+  expect(destaque?.props.variant).toBe('primary')
+  expect(destaque?.props.dimColor).not.toBe(true)
+  expect(destaque?.text, 'o rótulo não muda com o destaque').toBe('↺ Limpar')
+  expect(await lido(alto), 'a palavra e o botão acendem juntos').toMatch(/· limpar/)
+  expect((await alto.findAll({ type: 'Button' })).filter(b => b.props.variant === 'primary').map(b => b.props.key)).toEqual(['limpar'])
+  await alto.unmount()
+})
+
+test('os glifos da barra: cada botão leva o seu no rótulo (o motor só aceita um filho string no Button)', async ($, on) => {
+  await iniciar($, on, { perguntas: abertas(3) })
+  for (const surface of SUPERFICIES) {
+    const ui = await montar($, surface, { bodyColumns: 140 })
+    expect((await ui.find({ key: 'perguntas' }))?.text, `${surface} selo`).toBe('● 3 perguntas')
+    expect((await ui.find({ key: 'limpar' }))?.text, `${surface} limpar`).toBe('↺ Limpar')
+    expect((await ui.find({ key: 'modo' }))?.text).toBe('☾ Ficar ausente')
+    expect((await ui.find({ key: 'painel' }))?.text).toBe('◨ Abrir painel')
+    await ui.unmount()
+  }
+})
+
+test('o clique de limpar: grava o ok da barra, manda o prompt à própria sessão, mostra Limpando… e nunca chama clear_session', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.limpezas.length, 'gravou o ok').toBe(1)
+  expect(m.limpezas[0]?.path).toBe(`${HOME}/.claude/orquestracao/limpeza/${EU}.json`)
+  expect(m.limpezas[0]?.data).toEqual({ em: new Date(AGORA).toISOString(), por: 'barra' })
+  expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+  expect(PROMPT_DE_LIMPAR).toMatch(/clear_session "self"/)
+  expect(m.toasts, 'sem toast no caminho feliz').toEqual([])
+  expect(m.escritas.filter(e => e.path.includes('/perguntas/')), 'não grava pergunta nenhuma').toEqual([])
+  expect(m.chamadas.includes('mcp__ccd_session_mgmt__clear_session'), 'quem limpa é a orquestradora, com a T7').toBe(false)
+  const depois = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await depois.find({ key: 'limpar' }))?.text, 'segue Limpando… com o contexto ainda alto').toBe('↺ Limpando…')
+  await depois.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.prompts.length, 'o clique repetido é ignorado').toBe(1)
+  await ui.unmount()
+  await depois.unmount()
+})
+
+test('Limpando… volta quando a leitura vê o contexto abaixo de 150 mil, e não antes', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  await m.relogio.advance(LEITURA_MS + 1000)
+  expect((await (await montar($, 'terminal', { bodyColumns: 140 })).find({ key: 'limpar' }))?.text, 'contexto ainda alto na leitura: segue').toBe('↺ Limpando…')
+  m.definirTokens(LIMPANDO_ABAIXO_DE - 1)
+  await m.relogio.advance(LEITURA_MS + 1000)
+  const livre = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await livre.find({ key: 'limpar' }))?.text, 'contexto pequeno: o botão volta').toBe('↺ Limpar')
+  expect((await livre.find({ key: 'limpar' }))?.props.variant, 'e apagado de novo').toBe('secondary')
+  await ui.unmount()
+  await livre.unmount()
+})
+
+test('Limpando… volta sozinho aos 10 min, mesmo com o contexto alto', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  await m.relogio.advance(9 * 60_000)
+  expect((await (await montar($, 'terminal', { bodyColumns: 140 })).find({ key: 'limpar' }))?.text, 'aos 9 min segue').toBe('↺ Limpando…')
+  await m.relogio.advance(2 * 60_000)
+  expect((await (await montar($, 'terminal', { bodyColumns: 140 })).find({ key: 'limpar' }))?.text, 'passados os 10 min volta').toBe('↺ Limpar')
+  await ui.unmount()
+})
+
+test('limpar: o app recusa o prompt → toast com o motivo e o botão volta na hora', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000, submitDrop: 'fila cheia' })
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.toasts.at(-1)).toBe('Não consegui mandar a limpeza (fila cheia).')
+  const depois = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await depois.find({ key: 'limpar' }))?.text).toBe('↺ Limpar')
+  await ui.unmount()
+  await depois.unmount()
+})
+
+test('limpar: o ok não grava → nenhum prompt é enviado, toast e o botão volta', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000, limpezaFalha: 'disco cheio' })
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.prompts, 'sem o ok a T7 nega: nada é enviado').toEqual([])
+  expect(m.toasts.at(-1)).toMatch(/^Não consegui mandar a limpeza \(/)
+  const depois = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await depois.find({ key: 'limpar' }))?.text).toBe('↺ Limpar')
+  await ui.unmount()
+  await depois.unmount()
+})
+
+test('a barra não tem mais pedido de limpeza nem Limpar antes de vencer (a pergunta antiga aberta não desenha nada)', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000, perguntas: [doc('Q290', { projeto: 'kit', sessao: 'orq', sessaoId: ORQ, titulo: 'limpar · orquestradora', estado: 'aberta' })] })
+  await $.turn.complete(turnoCompleto())
+  await m.relogio.advance((3600 - 480) * 1000)
   const ui = await montar($, 'terminal', { bodyColumns: 140 })
   const t = await lido(ui)
-  expect(t, 'sem o pedido item e pool existiriam: o item é F1').not.toMatch(/F1 ·/)
-  expect(t).not.toMatch(/E 1 · V 1/)
+  expect(t, 'o contexto desenhou').toMatch(/contexto 212\/600 mil/)
+  expect(t).not.toMatch(/◆|pede limpeza|Pode se limpar|Limpar antes de vencer|ok enviado/)
+  expect(await ui.find({ key: 'limpar-pedido' })).toBeUndefined()
+  expect(await ui.find({ key: 'limpar-antes' })).toBeUndefined()
+  expect((await botoesDe(ui)).filter(k => String(k).startsWith('limpar'))).toEqual(['limpar'])
   await ui.unmount()
-  const m = await montar($, 'terminal', { bodyColumns: 114 })
-  expect((await m.findAll({ type: 'Button' })).map(b => b.props.key)).toEqual(['limpar-pedido', 'perguntas', 'painel'])
-  await m.unmount()
 })
 
-test('pedido de limpeza: o item e o pool voltam sem o pedido (a ausência acima mede)', async ($, on) => {
+test('item e pool aparecem na faixa larga da barra de um membro (nada cai por causa de pedido)', async ($, on) => {
   await iniciar($, on, {
     titulo: 'E1 · x',
+    perguntas: abertas(1),
     fila: [item('F1', { donoLocalId: EU, com: [{ localId: EU, apelido: 'E1' }, { localId: 'b', apelido: 'V1' }] })],
   })
   const ui = await montar($, 'terminal', { bodyColumns: 140 })
   const t = await lido(ui)
   expect(t).toMatch(/F1 ·/)
   expect(t).toMatch(/E 1 · V 1/)
-  await ui.unmount()
-})
-
-test('limpar antes de vencer: sem pedido aberto o clique põe o rascunho e nunca chama clear_session', async ($, on) => {
-  const m = await iniciar($, on, { tokens: 212_000 })
-  await $.turn.complete(turnoCompleto())
-  await m.relogio.advance((3600 - 480) * 1000)
-  const ui = await montar($, 'terminal')
-  const texto = await lido(ui)
-  expect(texto, 'a barra desenhou o contexto').toMatch(/contexto 212\/600 mil/)
-  expect(texto, 'o limpar antes é só o botão, sem frase').not.toMatch(/◆|Cache vence/)
-  const botao = await ui.find({ key: 'limpar-antes' })
-  expect(botao?.text).toBe('Limpar antes de vencer')
-  expect(botao?.props.variant).toBe('secondary')
-  await ui.press({ key: 'limpar-antes' })
-  await m.relogio.settle()
-  expect(m.fills).toEqual(['Pode se limpar agora, antes do cache vencer.'])
-  expect(m.toasts.at(-1)).toBe('Rascunho na caixa do prompt: aperte Enter para mandar.')
-  expect(m.escritas.filter(e => e.path.includes('/perguntas/'))).toEqual([])
-  expect(m.chamadas.includes('mcp__ccd_session_mgmt__clear_session')).toBe(false)
-  await ui.unmount()
-})
-
-test('limpar antes de vencer: caixa recusa o rascunho → toast que não deu; com pedido aberto vale só o pedido', async ($, on) => {
-  const m = await iniciar($, on, { tokens: 212_000, fillRecusa: true })
-  await $.turn.complete(turnoCompleto())
-  await m.relogio.advance((3600 - 480) * 1000)
-  const ui = await montar($, 'terminal')
-  await ui.press({ key: 'limpar-antes' })
-  await m.relogio.settle()
-  expect(m.toasts.at(-1)).toMatch(/Não deu para pôr o rascunho/)
-  await ui.unmount()
-})
-
-test('orquestradora com pedido aberto e cache a 8 min: uma linha, a do pedido, com a key limpar-pedido', async ($, on) => {
-  const m = await iniciar($, on, { tokens: 212_000, perguntas: [limpar('Q290')] })
-  await $.turn.complete(turnoCompleto())
-  await m.relogio.advance((3600 - 480) * 1000)
-  const ui = await montar($, 'terminal')
-  expect(await ui.find({ key: 'limpar-antes' })).toBeUndefined()
-  expect((await ui.findAll({ type: 'Button' })).filter(b => String(b.props.key).startsWith('limpar')).map(b => b.props.key)).toEqual(['limpar-pedido'])
   await ui.unmount()
 })
 
@@ -940,7 +881,7 @@ test('aviso do cache: notificação não entregue vira toast', async ($, on) => 
 test('modo ausente com o pane nunca aberto: a barra lê e o botão grava a bandeira', async ($, on) => {
   const m = await iniciar($, on)
   const ui = await montar($, 'terminal')
-  expect((await ui.find({ key: 'modo' }))?.text).toBe('Ficar ausente')
+  expect((await ui.find({ key: 'modo' }))?.text).toBe('☾ Ficar ausente')
   await ui.press({ key: 'modo' })
   await m.relogio.settle()
   expect(m.bandeiras.length).toBe(1)
@@ -954,15 +895,15 @@ test('modo ausente com o pane nunca aberto: a barra lê e o botão grava a bande
 
 test('clique na barra com o pane nunca aberto não dispara a leitura pesada (list_sessions/get_session)', async ($, on) => {
   const pesadas = (c: string[]) => c.filter(t => t.endsWith('__list_sessions') || t.endsWith('__get_session'))
-  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
+  const m = await iniciar($, on, { tokens: 212_000 })
   const ui = await montar($, 'terminal', { bodyColumns: 140 })
   expect(pesadas(m.chamadas), 'a leitura da barra não chama').toEqual([])
   await ui.press({ key: 'modo' })
   await m.relogio.settle()
   expect(m.bandeiras.length, 'o clique do modo gravou').toBe(1)
-  await ui.press({ key: 'limpar-pedido' })
+  await ui.press({ key: 'limpar' })
   await m.relogio.settle()
-  expect(m.escritas.some(e => e.path.endsWith('Q290.json')), 'o clique do pedido gravou').toBe(true)
+  expect(m.prompts.length, 'o clique do limpar mandou o prompt').toBe(1)
   expect(pesadas(m.chamadas), 'nenhuma leitura pesada depois dos cliques').toEqual([])
   await ui.unmount()
   // prova de que o detector enxerga: com o pane aberto a leitura pesada acontece
@@ -1016,62 +957,16 @@ const PANE = {
   props: { title: 'Sessões', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} },
 } as const
 
-test('pane: o pedido de limpeza vem na faixa do topo, com o botão que grava como o da barra; a pergunta segue em Esperam você', async ($, on) => {
-  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', {}, 4)] })
+test('pane: a pergunta de limpeza antiga aberta fica só em Esperam você; o pane não tem mais a faixa do pedido nem o botão', async ($, on) => {
+  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [doc('Q290', { projeto: 'kit', sessao: 'orq', sessaoId: ORQ, titulo: 'limpar · orquestradora', estado: 'aberta', atualizadoEm: '2026-10-26T10:00:00Z' }, 4)] })
   await $.command.run({ command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
   await m.relogio.settle()
   for (const surface of SUPERFICIES) {
     const ui = await $.ui.mount({ ...PANE, surface })
     const t = await lido(ui)
-    expect(t).toMatch(/A orquestradora pede para se limpar/)
-    expect(t).toMatch(/Esperam você/)
-    const botao = await ui.find({ key: 'limpar-pedido' })
-    expect(botao?.text).toBe('Pode se limpar')
-    expect(botao?.props.variant).toBe('primary')
+    expect(t, `${surface}: a pergunta segue em Esperam você (o teste mede a presença)`).toMatch(/Esperam você/)
+    expect(t, `${surface}: sem a faixa do pedido`).not.toMatch(/pede para se limpar|Pode se limpar|Ok enviado/)
+    expect(await ui.find({ key: 'limpar-pedido' })).toBeUndefined()
     await ui.unmount()
   }
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'limpar-pedido' })
-  await m.relogio.settle()
-  const gravada = m.escritas.find(e => e.path.endsWith('Q290.json'))
-  expect(gravada?.data.respondidaPor).toBe('painel')
-  expect(gravada?.data.resposta).toBe(RESPOSTA)
-  await ui.unmount()
-})
-
-test('pane: o ok já dado esconde a linha mesmo com outra aberta da mesma orquestradora', async ($, on) => {
-  const ok = limpar('Q290', { estado: 'respondida', resposta: RESPOSTA, respondidaPor: 'painel', respondidaEm: new Date(AGORA - 60_000).toISOString() })
-  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [ok, limpar('Q291', {}, 2)] })
-  await $.command.run({ command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
-  await m.relogio.settle()
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await lido(ui)).not.toMatch(/pede para se limpar/)
-  expect(await ui.find({ key: 'limpar-pedido' })).toBeUndefined()
-  await ui.unmount()
-})
-
-test('barra e pane: o pedido aberto 2 min atrás volta mesmo com o sim de 5 min', async ($, on) => {
-  const ok = limpar('Q290', { estado: 'respondida', resposta: RESPOSTA, respondidaPor: 'painel', respondidaEm: new Date(AGORA - 5 * 60_000).toISOString() })
-  const novo = limpar('Q291', { atualizadoEm: new Date(AGORA - 2 * 60_000).toISOString() }, 2)
-  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [ok, novo] })
-  const ui = await montar($, 'terminal')
-  expect(await lido(ui), 'a barra mostra o pedido novo').toMatch(/◆ orquestradora pede limpeza/)
-  expect((await ui.find({ key: 'limpar-pedido' }))?.text).toBe('Pode se limpar')
-  await ui.unmount()
-  await $.command.run({ command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
-  await m.relogio.settle()
-  const pane = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await lido(pane), 'o pane também').toMatch(/A orquestradora pede para se limpar/)
-  expect((await pane.find({ key: 'limpar-pedido' }))?.text).toBe('Pode se limpar')
-  await pane.unmount()
-})
-
-test('pane: sem o pedido (ou só limpar · outra-coisa) a linha não aparece', async ($, on) => {
-  const m = await iniciar($, on, { titulo: 'P3 · barra', perguntas: [limpar('Q290', { titulo: 'limpar · outra-coisa' })] })
-  await $.command.run({ command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
-  await m.relogio.settle()
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await lido(ui)).not.toMatch(/pede para se limpar/)
-  expect(await ui.find({ key: 'limpar-pedido' })).toBeUndefined()
-  await ui.unmount()
 })

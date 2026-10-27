@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const POOL = join(PLUGIN, 'pool');
@@ -27,15 +27,16 @@ test('cada papel e a skill orquestradora apontam para a âncora', () => {
   assert.match(skill, /^4\. As perguntas que você abriu antes da limpeza continuam suas/m);
 });
 
-// F53: o formato da janela escrito na skill é o que o código reconhece.
-test('a seção "Orçamento de contexto" da skill descreve a janela de limpeza e o exemplo dela casa com ehPerguntaDeLimpeza', async () => {
+// F147: o prompt que a skill descreve é o que o botão da barra manda (doc × código), e a skill não ensina mais a pedir.
+test('a seção "Orçamento de contexto" da skill descreve o botão de limpar e o prompt dela é o que o mod manda', () => {
   const skill = readFileSync(join(PLUGIN, 'skills', 'orquestradora', 'SKILL.md'), 'utf8');
   const secao = skill.slice(skill.indexOf('## Orçamento de contexto'));
   assert.ok(secao.length > 100, 'seção ausente');
-  for (const t of ['limpar · orquestradora', 'Sim, pode limpar', 'AskUserQuestion']) assert.ok(secao.includes(t), `a seção não cita ${t}`);
-  const exemplo = secao.match(/`question` = `([^`]+)`/)?.[1];
-  assert.ok(exemplo, 'a skill não traz o exemplo de `question`');
-  const { ehPerguntaDeLimpeza } = await import(pathToFileURL(join(PLUGIN, 'hooks', 'pool-comum.mjs')).href);
-  assert.equal(ehPerguntaDeLimpeza(exemplo), true, `o exemplo da skill não casa: ${exemplo}`);
-  assert.equal(ehPerguntaDeLimpeza(exemplo.replace('orquestradora', 'orquestradora-velha')), false, 'contraste: título parecido não casa');
+  for (const t of ['↺ Limpar', 'limpeza/<local_…>.json', 'clear_session "self"']) assert.ok(secao.includes(t), `a seção não cita ${t}`);
+  const mod = readFileSync(join(PLUGIN, '..', 'painel-sessoes', 'hooks', 'barra.tsx'), 'utf8');
+  const prompt = mod.match(/PROMPT_DE_LIMPAR = '([^']+)'/)?.[1];
+  assert.ok(prompt, 'o mod não traz o PROMPT_DE_LIMPAR');
+  assert.ok(secao.includes(prompt), `a skill não traz o prompt do botão: ${prompt}`);
+  assert.doesNotMatch(secao, /abre a janela \(`AskUserQuestion`\)/, 'a skill ainda manda abrir a janela');
+  assert.doesNotMatch(secao, /grava o estado, abre a pergunta/, 'a skill ainda manda abrir a pergunta');
 });

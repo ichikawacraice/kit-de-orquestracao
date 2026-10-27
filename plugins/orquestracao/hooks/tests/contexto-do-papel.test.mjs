@@ -166,140 +166,49 @@ test('O3c. precondição: sem URL, o `?` sozinho dispara (o teste mede a URL, n�
   cobrou(rodar(b, 'P', transcript(b, { tokens: 260_000, texto: 'pronto\n\nposso seguir?' })), /260 mil/);
 }));
 
-// F48: a orquestradora com o operador presente só pede o ok (150 mil); com o modo ausente ligado vale a régua de antes.
-const agora = () => new Date().toISOString(); const haMin = (m) => new Date(Date.now() - m * 60_000).toISOString();
+// F147: com o operador presente a orquestradora não é mais bloqueada por contexto (o sinal é o botão de limpar da barra); com o
+// modo ausente ligado vale a régua da planejadora, que cobra.
+const agora = () => new Date().toISOString();
 const LIMPAR = (extra = {}) => ({ titulo: 'limpar · orquestradora', sessaoId: 'local_ORQ', estado: 'aberta', atualizadoEm: agora(), ...extra });
-test('F118-1. ORQ com 160 mil, sem bandeira nem pergunta: cobra pedir (PEDIR em 150 mil)', () => com((b) => {
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 160_000 })), /limpar · orquestradora/);
-  assert.match(log(b), /\tcobrou-pedir\t/);
+test('F147-1. ORQ presente a 160, 260 e 360 mil, sem pergunta nem janela: o Stop sai sem block e registra o contexto alto', () => com((b) => {
+  for (const tokens of [160_000, 260_000, 360_000]) {
+    assert.equal(rodar(b, 'ORQ', transcript(b, { tokens })), null, `${tokens}`);
+    assert.match(log(b), new RegExp(`\\tcontexto-alto\\torquestradora ${tokens / 1000} mil`));
+  }
+  assert.doesNotMatch(log(b), /cobrou/);
 }));
-test('F118-2. ORQ com 140 mil: não é cobrada', () => com((b) => {
+test('F147-2. ORQ presente a 260 mil com "?" no fim: também sem block (nem pedido, nem janela)', () => com((b) => {
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), null);
+  assert.doesNotMatch(log(b), /cobrou/);
+}));
+test('F147-3. ORQ a 140 mil: nada é registrado (abaixo da régua do botão)', () => com((b) => {
   assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 140_000 })), null);
-  assert.doesNotMatch(log(b), /cobrou-pedir/);
+  assert.doesNotMatch(log(b), /contexto-alto/);
 }));
-test('F48-1. ORQ com 260 mil, sem bandeira nem pergunta: cobra pedir (cobrou-pedir)', () => com((b) => {
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
-  assert.match(log(b), /\tcobrou-pedir\t/);
-}));
-test('F48-2. ORQ com 260 mil e pergunta de limpeza aberta dela: passa (satisfeito-pediu)', () => com((b) => {
-  pergunta(b, 'Q1', LIMPAR());
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null);
-  assert.match(log(b), /\tsatisfeito-pediu\t/);
-}));
-test('F48-3. a pergunta de limpeza é de outra sessão: cobra', () => com((b) => {
-  pergunta(b, 'Q1', LIMPAR({ sessaoId: 'local_P' }));
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
-}));
-test('F48-4. pergunta respondida "não" há 1 h segura a cobrança; há 3 h não', () => com((b) => {
-  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: haMin(60) }));
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null);
-  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: haMin(180) }));
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
-}));
-test('F48-5. ORQ com 260 mil que chamou clear_session "self" no turno: passa (limpou)', () => com((b) => {
+test('F147-4. ORQ a 260 mil que chamou clear_session "self" no turno: registra limpou', () => com((b) => {
   assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, ferramentas: [LIMPA] })), null);
   assert.match(log(b), /\tlimpou\t/);
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/); // sem a chamada no turno a mesma entrada cobra: o teste mede a limpeza
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, anterior: [LIMPA] })), /limpar · orquestradora/);
+  assert.doesNotMatch(log(b), /contexto-alto/);
 }));
-test('F48-6. ORQ com "?" no fim: sem bandeira, a 260 mil, cobra pedir (não espera); com bandeira cobra cobrou-150-espera', () => com((b) => {
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /limpar · orquestradora/);
-  assert.match(log(b), /\tcobrou-pedir\t/); assert.doesNotMatch(log(b), /cobrou-150-espera/);
-  ligar(b);
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
-  assert.match(log(b), /\tcobrou-150-espera\t/);
+test('F147-5. pergunta `limpar · orquestradora` antiga aberta não muda nada (nem cobra, nem some o registro)', () => com((b) => {
+  pergunta(b, 'Q1', LIMPAR());
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null);
+  assert.match(log(b), /\tcontexto-alto\t/);
 }));
-test('F48-7. ORQ a 360 mil: sem bandeira cobra pedir; com bandeira cobra cobrou-200', () => com((b) => {
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /limpar · orquestradora/);
-  assert.match(log(b), /\tcobrou-pedir\t/); assert.doesNotMatch(log(b), /cobrou-200/);
+test('F147-6. contraste: com o modo ausente ligado a ORQ segue a régua da planejadora e cobra (360 mil → cobrou-200; 260 mil com "?" → cobrou-150-espera)', () => com((b) => {
   ligar(b);
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /360 mil/);
   assert.match(log(b), /\tcobrou-200\t/);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
+  assert.match(log(b), /\tcobrou-150-espera\t/);
 }));
-test('F48-8. bandeira {ligado:false} vale como desligada: ORQ a 360 mil cobra pedir, não cobrou-200', () => com((b) => {
+test('F147-7. bandeira {ligado:false} vale como desligada: ORQ a 360 mil sem block', () => com((b) => {
   ligar(b, { ligado: false, desligadoEm: agora(), por: 'painel' });
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /limpar · orquestradora/);
-  assert.match(log(b), /\tcobrou-pedir\t/); assert.doesNotMatch(log(b), /cobrou-200/);
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), null);
+  assert.doesNotMatch(log(b), /cobrou/);
 }));
 test('F48-9. planejadora com 360 mil segue cobrando sem bandeira (a mudança é só da orquestradora)', () => com((b) => {
   cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
-}));
-test('M1. pergunta `limpar · worktrees órfãos` aberta não satisfaz o pedido: cobra (cobrou-pedir)', () => com((b) => {
-  pergunta(b, 'Q1', LIMPAR({ titulo: 'limpar · worktrees órfãos' }));
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
-  assert.match(log(b), /\tcobrou-pedir\t/);
-  pergunta(b, 'Q1', LIMPAR()); // contraste: com o título exato a mesma fixture passa
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null);
-}));
-test('B1. trégua conta do respondidaEm: "não" do painel há 3 h com atualizadoEm de agora (uma nota) cobra; atualizadoEm em 2099 não segura', () => com((b) => {
-  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', respondidaPor: 'painel', respondidaEm: haMin(180), atualizadoEm: agora() }));
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
-  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: '2099-01-01T00:00:00.000Z' }));
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), /limpar · orquestradora/);
-  pergunta(b, 'Q1', LIMPAR({ estado: 'respondida', resposta: 'não', respondidaPor: 'painel', respondidaEm: haMin(60), atualizadoEm: agora() }));
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000 })), null); // contraste: "não" de 1 h segura
-}));
-
-// F53: com o turno terminando esperando o operador, a orquestradora abre a janela (AskUserQuestion) com a pergunta de limpeza.
-const PJ = 'Q9 · limpar · orquestradora: estou com 260 mil de contexto e o estado está salvo. Posso me limpar?';
-const ABRE = [['AskUserQuestion', { questions: [{ question: PJ, header: 'Q9 limpar', options: [{ label: 'Sim, pode limpar (Recommended)' }, { label: 'Não, agora não' }] }] }]];
-// Janela respondida como entrada `user` com o tool_result (forma medida), `quando` em ms.
-const respondida = (quando, resposta) => [
-  { type: 'assistant', timestamp: new Date(quando - 1000).toISOString(), message: { content: [{ type: 'tool_use', id: 'tu1', name: 'AskUserQuestion', input: { questions: [{ question: PJ }] } }] } },
-  { type: 'user', timestamp: new Date(quando).toISOString(), message: { content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'ok' }] }, toolUseResult: { questions: [{ question: PJ }], answers: { [PJ]: resposta } } },
-];
-const ESPERA_Q = 'pronto.\n\nQ9: posso seguir?';
-test('F53-1. ORQ 260 mil, pergunta aberta, turno termina esperando e sem janela: cobra a janela (cobrou-janela)', () => com((b) => {
-  pergunta(b, 'Q9', LIMPAR());
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q })), /AskUserQuestion/);
-  assert.match(log(b), /\tcobrou-janela\t/);
-  const b2 = novo(); try { // contraste: com a janela aberta neste turno a mesma entrada passa
-    pergunta(b2, 'Q9', LIMPAR());
-    assert.equal(rodar(b2, 'ORQ', transcript(b2, { tokens: 260_000, texto: ESPERA_Q, ferramentas: ABRE })), null);
-    assert.match(log(b2), /\tsatisfeito-janela\t/); assert.doesNotMatch(log(b2), /cobrou/);
-  } finally { rmSync(b2, { recursive: true, force: true }); }
-}));
-test('F53-2. janela respondida "Não" há 1 h segura; há 3 h cobra de novo', () => com((b) => {
-  pergunta(b, 'Q9', LIMPAR());
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q, extra: respondida(Date.now() - 3600_000, 'Não, agora não') })), null);
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q, extra: respondida(Date.now() - 3 * 3600_000, 'Não, agora não') })), /AskUserQuestion/);
-  assert.match(log(b), /\tcobrou-janela\t/);
-}));
-test('F53-3. turno que não termina esperando (sem ? nem Q-ID) com pergunta aberta: satisfeito-pediu, sem cobrar janela', () => com((b) => {
-  pergunta(b, 'Q9', LIMPAR());
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'feito.' })), null);
-  assert.match(log(b), /\tsatisfeito-pediu\t/); assert.doesNotMatch(log(b), /janela/);
-}));
-test('F53-4. sem pergunta no painel: cobrou-pedir; o motivo cita a janela só quando o turno termina esperando', () => com((b) => {
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /janela/);
-  assert.match(log(b), /\tcobrou-pedir\t/);
-  const r = rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'feito.' }));
-  cobrou(r, /limpar · orquestradora/); assert.doesNotMatch(r.reason, /janela/);
-}));
-test('F53-5. stop_hook_active no cobrou-janela: deixa passar (deixou-passar)', () => com((b) => {
-  pergunta(b, 'Q9', LIMPAR());
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q }), { stop_hook_active: true }), null);
-  assert.match(log(b), /\tdeixou-passar\tcobrou-janela/);
-}));
-test('F53-6. com a bandeira ligada, 260 mil e "?": segue cobrou-150-espera (a janela não entra no modo ausente)', () => com((b) => {
-  ligar(b); pergunta(b, 'Q9', LIMPAR());
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'pronto.\n\nPosso seguir?' })), /esperando resposta/);
-  assert.match(log(b), /\tcobrou-150-espera\t/); assert.doesNotMatch(log(b), /janela/);
-}));
-test('F53-7. janela de outra pergunta (merge) não satisfaz: cobra a janela', () => com((b) => {
-  pergunta(b, 'Q9', LIMPAR());
-  const outra = [['AskUserQuestion', { questions: [{ question: 'Q10 · merge do PR 7?' }] }]];
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: ESPERA_Q, ferramentas: outra })), /AskUserQuestion/);
-}));
-
-test('A1. pergunta de outra coisa respondida há 26 h não segura a janela; respondida há 1 h (trégua de limpeza) segura', () => com((b) => {
-  pergunta(b, 'Q9', LIMPAR());
-  pergunta(b, 'Q284', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: haMin(26 * 60) }));
-  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'Q9: posso seguir?' })), /AskUserQuestion/);
-  assert.match(log(b), /\tcobrou-janela\t/);
-  pergunta(b, 'Q284', LIMPAR({ estado: 'respondida', resposta: 'não', atualizadoEm: haMin(60) }));
-  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 260_000, texto: 'Q9: posso seguir?' })), null);
-  assert.match(log(b), /\tsatisfeito-pediu\t/);
 }));
 
 // F49: executora cheia termina com a limpeza.

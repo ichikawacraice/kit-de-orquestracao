@@ -501,6 +501,19 @@ caso('T7: o sim do painel libera (≤ 30 min, respondidaPor painel, resposta sim
   perguntaLimpar(OKP({ titulo: 'limpar · worktrees órfãos' })); nega7(limpa('ORQ', depeer()), 'M1: outra pergunta `limpar · …`');
   perguntaLimpar(OKP({ titulo: ' limpar · orquestradora ' })); passa(limpa('ORQ', depeer()), 'título exato com espaços nas pontas');
 });
+// F147: o botão de limpar da barra grava <PAINEL_DIR>/../limpeza/<local_…>.json antes de mandar o prompt (origem `plugin`, medida em transcript real).
+const okDoBotao = (data, nome = 'local_ORQ') => { mkdirSync(dir('limpeza'), { recursive: true }); writeFileSync(dir('limpeza', `${nome}.json`), typeof data === 'string' ? data : JSON.stringify(data)); };
+caso('F147 T7: o ok do botão da barra libera em turno peer (≤ 30 min, por barra, da própria sessão); o resto nega', () => {
+  nega7(limpa('ORQ', depeer()), 'sem arquivo (o contraste: o teste mede a presença)');
+  okDoBotao({ em: haMin(5), por: 'barra' }); passa(limpa('ORQ', depeer()), 'arquivo de 5 min');
+  ok(/botão da barra/.test(log()), `log sem o motivo: ${log()}`);
+  okDoBotao({ em: haMin(31), por: 'barra' }); nega7(limpa('ORQ', depeer()), 'arquivo de 31 min');
+  okDoBotao({ em: new Date(Date.now() + 3600_000).toISOString(), por: 'barra' }); nega7(limpa('ORQ', depeer()), 'em no futuro');
+  okDoBotao({ em: haMin(5), por: 'bash' }); nega7(limpa('ORQ', depeer()), 'por diferente de barra');
+  okDoBotao({ por: 'barra' }); nega7(limpa('ORQ', depeer()), 'sem em');
+  okDoBotao('{nao json'); nega7(limpa('ORQ', depeer()), 'arquivo ilegível');
+  okDoBotao({ em: haMin(5), por: 'barra' }, 'local_P1'); okDoBotao({ em: haMin(500), por: 'barra' }); nega7(limpa('ORQ', depeer()), 'arquivo de outra sessão não vale para esta');
+});
 caso('T7: orquestradora limpando um membro passa; P1 limpando "self" passa', () => {
   passa(limpa('ORQ', depeer(), 'local_E1'), 'orquestradora limpa membro');
   passa(limpa('P1', depeer()), 'P1 self');
