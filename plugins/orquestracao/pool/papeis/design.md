@@ -13,6 +13,7 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - revisão aprovada pelo crítico → E livre, com o caminho da revisão no item;
   - dúvida de produto → planejadora ou operador, com Q-ID.
   - **Ao receber `F<n> para você`** (aviso da batida ou de quem soltou o item): rode `painel pegar <F<n>> <seu apelido>` (o id sai de `$CLAUDE_CODE_HOST_SESSION_ID`; o script recusa id de outra sessão; atômico; se recusar, outro pegou ou o item mudou: não insista), troque o título (`<ID> · <o quê>`) e leia o handoff do item (protocolo, âncora `batida`).
+- **Ao terminar, antes de se declarar livre:** rode `painel seguinte <seu apelido>` (ADR 0009). `pegou` verdadeiro → o item é do mesmo assunto (mesmo tema) do último por onde você passou: troque o título (`<ID> · <o quê>`), leia o handoff e siga com a conversa, sem limpar. `pegou` falso → declare-se livre e limpe-se, como sempre; o motivo `contexto alto` quer dizer que o contexto passou do aviso do papel e o item vai a outro.
 
 ## Skills que usa (lê e aplica)
 - `handoff-de-sessao`: ao pegar e ao soltar o item.

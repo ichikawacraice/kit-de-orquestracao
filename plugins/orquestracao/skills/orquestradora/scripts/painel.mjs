@@ -16,12 +16,14 @@
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]   os membros livres do papel no projeto, o mais antigo parado primeiro → [{localId, apelido}]; --sessoes é o JSON do list_sessions (sem ele, o registro do app, sem contar a mesma sessão duas vezes)
 //   painel.mjs pegar <F> [<local_>] <apelido>   (o id sai de $CLAUDE_CODE_HOST_SESSION_ID; id de outra sessão, de orquestradora ou de outro apelido é recusado) o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
+//   painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]   (ADR 0009) ao terminar, pega o item vivo mais antigo do mesmo projeto e tema do último item por onde a sessão passou (`passaram`) que espera o papel dela, como o `pegar` → {pegou:true, item, …} ou {pegou:false, motivo}; recusa com o contexto acima do aviso do papel (E 300 mil, P/D/V 350 mil) ou sem medida do transcript; --tokens só sobrescreve a medida (teste)
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, pede ao membro com título de item fechado que volte a livre, relata merge/vagas/excedentes/títulos velhos à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
 //   (item que vira feito/descartado arquiva os próprios handoffs e roda a limpeza; reaberto, eles voltam. Pasta: PAINEL_HANDOFFS_DIR, senão PAINEL_DIR/../pool/handoffs, senão ~/.claude/orquestracao/pool/handoffs)
 //   painel.mjs list fila vencidos [--min N]   itens vivos com dono ou `com`, sem `espera` nem `trava`, parados há mais de N min (padrão 30 ou PAINEL_PRAZO_MIN)
 //   painel.mjs list fila esperando   itens vivos esperando o papel da etapa (D, E ou V) sem ninguém dele no item; todo documento de `list fila` sai com `esperando` ({papel, desde, minutos} ou null) FORA de `data`, calculado na hora e nunca gravado
+//   (`passaram`, a lista de quem passou pelo item, só muda por `com add` e `pegar`; set/update/batch a recusam)
 //   (`com` e `fez` só mudam por `com add|del [--fez]`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
 //   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
@@ -42,7 +44,7 @@ import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
-import { BATIDA_SOLTA_MIN, julgar, livresDe, ocupadosDaFila } from './batida.mjs';
+import { AFINIDADE_MIN, BATIDA_SOLTA_MIN, julgar, livresDe, ocupadosDaFila } from './batida.mjs';
 
 const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 // Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
@@ -83,7 +85,7 @@ const pool = MEU_CLI
   : null;
 // `esperando` da `list fila` (F58): a regra mora em hooks/esperando-papel.mjs; só `list fila` a carrega (as outras
 // invocações não dependem do módulo, nem a cópia do script solta numa pasta sem `hooks/`).
-const DA_BATIDA = ['batida', 'pegar', 'livres'].includes(process.argv[2]);
+const DA_BATIDA = ['batida', 'pegar', 'livres', 'seguinte'].includes(process.argv[2]);
 const CONFERE_MEMBRO = DA_BATIDA || process.argv[2] === 'com';
 const esperandoPapel = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
   ? (await import(pathToFileURL(join(HOOKS_DIR, 'esperando-papel.mjs')).href)).esperandoPapel
@@ -96,6 +98,8 @@ const regras = CONFERE_MEMBRO
     return null;
   })
   : null;
+// As réguas de contexto por papel moram no hook contexto-do-papel (que só roda quando é o script principal); o `seguinte` as lê dali.
+const reguas = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'contexto-do-papel.mjs')).href) : null;
 const crewai = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'hooks-crewai-comum.mjs')).href) : null;
 let meusIds; // Set de ids que contam como "a própria sessão"; null = não resolvido
 function ehMinha(id) {
@@ -303,9 +307,11 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
       if (!e || typeof e !== 'object' || Array.isArray(e)) throw new Error(`${chave}: ${k} é uma lista de {${campos.join(', ')}}`);
       if (!LOCAL_ID.test(String(e.localId))) throw new Error(`${chave}: ${k}.localId "${e.localId}" não é local_<uuid>`);
       if (!textoNaoVazio(e.apelido)) throw new Error(`${chave}: ${k}.apelido não pode ser vazio`);
-      if (!textoNaoVazio(e.oQue)) throw new Error(`${chave}: ${k}.oQue não pode ser vazio`);
-      const citado = String(e.oQue).match(CITA_NUMERO);
-      if (citado) throw new Error(`${chave}: ${k}.oQue não cita item nem PR ("${citado[0]}"); o pane mostra o número ao lado do tema`);
+      if (campos.includes('oQue')) {
+        if (!textoNaoVazio(e.oQue)) throw new Error(`${chave}: ${k}.oQue não pode ser vazio`);
+        const citado = String(e.oQue).match(CITA_NUMERO);
+        if (citado) throw new Error(`${chave}: ${k}.oQue não cita item nem PR ("${citado[0]}"); o pane mostra o número ao lado do tema`);
+      }
       if (vistos.has(e.localId)) throw new Error(`${chave}: ${k} repete ${e.localId}`);
       vistos.add(e.localId);
       extra?.(e);
@@ -317,6 +323,13 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   });
   if (!viaCom && 'fez' in novo && (op === 'update' || canonico(novo.fez) !== canonico(antes?.fez ?? []))) {
     throw new Error(`${chave}: o campo "fez" só muda por \`painel com del --fez\` (o ${op} apagaria ou forjaria quem executou)`);
+  }
+  lista('passaram', ['localId', 'apelido', 'papel', 'em'], (e) => {
+    if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: passaram.em "${e.em}" não é data ISO`);
+    if (!['P', 'D', 'E', 'V'].includes(e.papel)) throw new Error(`${chave}: passaram.papel "${e.papel}" não é P, D, E ou V`);
+  });
+  if (!viaCom && 'passaram' in novo && (op === 'update' || canonico(novo.passaram) !== canonico(antes?.passaram ?? []))) {
+    throw new Error(`${chave}: o campo "passaram" só muda por \`painel com add\` e \`painel pegar\` (o ${op} apagaria ou forjaria quem passou pelo item)`);
   }
   if (tem('espera')) {
     const e = novo.espera;
@@ -446,6 +459,7 @@ function planejar(o, seVersao, vista) {
   }
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.com) && atual.data.com.length) base.com = atual.data.com;
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.fez)) base.fez = atual.data.fez;
+  if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.passaram)) base.passaram = atual.data.passaram;
   if ((colecao === 'sessoes' || colecao === 'fila') && !base.projeto && (op === 'set' || !atual)) {
     const { projeto, motivo } = projetoDoCwd();
     if (projeto) base.projeto = projeto;
@@ -676,6 +690,11 @@ function conferirMembro(localId, apelido, onde) {
   const m = regras.membroDoPool(titulo);
   if (m && m.id !== apelido) throw new Error(`${onde}: ${localId} é a ${m.id} ("${titulo}"), não a ${apelido}`);
 }
+// `passaram` (ADR 0009): quem passou pelo item, com o papel (letra do apelido) e quando; a mesma sessão só aparece uma vez (o `em` se renova).
+function comPassagem(d, localId, apelido) {
+  const lista = Array.isArray(d.passaram) ? d.passaram : [];
+  return [...lista.filter((p) => p.localId !== localId), { localId, apelido, papel: String(apelido)[0], em: new Date().toISOString() }];
+}
 
 // `com add|del`: lê, muda e grava a lista dentro da trava do painel; é a única via que grava `com` (e a que acrescenta a `fez`).
 function comandoCom(args) {
@@ -693,6 +712,7 @@ function comandoCom(args) {
       const [apelido, oQue] = resto;
       if (!textoNaoVazio(apelido) || !textoNaoVazio(oQue)) throw new Error('com add: faltam <apelido> e "<oQue>"');
       nova = com.some((c) => c.localId === localId) ? com.map((c) => (c.localId === localId ? { ...c, apelido, oQue } : c)) : [...com, { localId, apelido, oQue }];
+      if (/^[PDEV]\d+$/.test(apelido)) data.passaram = comPassagem(atual.data, localId, apelido);
     } else {
       const quem = com.find((c) => c.localId === localId);
       if (!quem) throw new Error(`com del: ${localId} não está em com de ${F}`);
@@ -789,8 +809,12 @@ function comandoPegar(args) {
   if (!LOCAL_ID.test(String(localId))) throw new Error(`pegar: "${localId}" não é local_<uuid>`);
   if (propria && localId !== propria) throw new Error(`pegar: ${localId} não é esta sessão (${propria}); pegar é sempre para a própria sessão: painel.mjs pegar ${F} ${apelido}`);
   conferirMembro(localId, apelido, 'pegar');
+  return comTrava(() => pegarDentro(F, localId, apelido));
+}
+// O corpo do `pegar`, já dentro da trava (o `seguinte` o reusa).
+function pegarDentro(F, localId, apelido) {
   const recusa = (motivo) => ({ recusado: true, item: F, motivo });
-  return comTrava(() => {
+  {
     const atual = ler('fila', F);
     if (!atual) return recusa(`fila/${F} não existe`);
     const d = atual.data ?? {};
@@ -801,11 +825,58 @@ function comandoPegar(args) {
     if (r.papel !== apelido[0]) return recusa(`o item espera o papel ${r.papel}, não o ${apelido[0]}`);
     if (r.entregue) return recusa(`a parte do papel ${r.papel} já foi entregue; o item espera a dona avançar a etapa`);
     const com = Array.isArray(d.com) ? d.com : [];
-    const data = { com: [...com.filter((c) => c.localId !== localId), { localId, apelido, oQue: d.titulo }], agora: `${apelido} começou` };
+    const data = { com: [...com.filter((c) => c.localId !== localId), { localId, apelido, oQue: d.titulo }], agora: `${apelido} começou`, passaram: comPassagem(d, localId, apelido) };
     if ((d.etapa === 'planejamento' || d.etapa === 'design') && !textoNaoVazio(d.donoLocalId)) { data.donoLocalId = localId; data.donoApelido = apelido; }
     efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
     const handoff = join(HANDOFFS, `${F}.md`);
     return { pegou: true, item: F, titulo: d.titulo, etapa: d.etapa, handoff: existsSync(handoff) ? handoff : null };
+  }
+}
+
+// `seguinte` (ADR 0009): ao terminar, o membro olha o mesmo assunto antes de se declarar livre. Acha o item vivo mais antigo do mesmo
+// projeto e tema do último item por onde esta sessão passou que espera o papel dela, e faz o `pegar`. O teto de contexto manda mais:
+// acima do aviso da régua do papel (ou sem medida) recusa, e a sessão se limpa.
+function comandoSeguinte(args) {
+  const tokens = flag(args, '--tokens');
+  const dado = LOCAL_ID.test(String(args[0])) ? args.shift() : null;
+  const [apelido, ...sobra] = args;
+  if (!/^[PDEV]\d+$/.test(String(apelido)) || sobra.length) throw new Error('uso: painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]');
+  const localId = dado ?? idDestaSessao();
+  if (!localId) throw new Error('seguinte: não sei o id desta sessão (sem $CLAUDE_CODE_HOST_SESSION_ID); passe o <local_…>');
+  const nao = (motivo) => ({ pegou: false, motivo });
+  const aviso = apelido[0] === 'E' ? reguas.EXEC : reguas.ALTO;
+  let medido = tokens === null ? null : Number(tokens);
+  if (tokens === null) {
+    try { const f = regras.transcriptDoLocal(localId); medido = f ? regras.contextoDoTranscript(f)?.tokens ?? null : null; } catch { medido = null; }
+  }
+  if (!Number.isFinite(medido)) return nao('contexto sem medida (transcript não achado ou sem usage): livre e limpe-se; o item vai a outro');
+  if (medido >= aviso) return nao(`contexto alto (${Math.round(medido / 1000)} mil, aviso do papel ${apelido[0]}: ${Math.round(aviso / 1000)} mil): livre e limpe-se; o item vai a outro`);
+  return comTrava(() => {
+    const todos = itensDaFila();
+    let ultimo = null;
+    for (const d of todos.values()) {
+      for (const p of Array.isArray(d?.passaram) ? d.passaram : []) {
+        if (p?.localId === localId && (!ultimo || Date.parse(p.em) > Date.parse(ultimo.p.em))) ultimo = { d, p };
+      }
+    }
+    if (!ultimo) return nao('esta sessão não passou por nenhum item registrado: não há assunto para seguir');
+    const { projeto, tema } = ultimo.d;
+    const agora = Date.now();
+    const candidatos = [];
+    for (const [F, d] of todos) {
+      if (ETAPAS_FINAIS.has(d?.etapa) || d?.projeto !== projeto || d?.tema !== tema) continue;
+      if ((Array.isArray(d.passaram) ? d.passaram : []).some((p) => p?.localId === localId)) continue; // já passou por ele: a V sai sem `--fez` e o item segue esperando V
+      const r = esperandoPapel(d, agora);
+      if (!r || r.entregue || r.papel !== apelido[0]) continue;
+      candidatos.push({ F, desde: Date.parse(r.desde) });
+    }
+    candidatos.sort((a, b) => a.desde - b.desde);
+    if (!candidatos.length) return nao(`nenhum item do tema "${tema}" espera o papel ${apelido[0]}`);
+    for (const { F } of candidatos) {
+      const r = pegarDentro(F, localId, apelido);
+      if (r.pegou) return r;
+    }
+    return nao(`nenhum item do tema "${tema}" pôde ser pego`);
   });
 }
 
@@ -851,7 +922,8 @@ function comandoBatida(args) {
     const julgado = julgar({
       agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(),
       estado: arquivoJson(join(pasta, 'estado.json'), {}), ausente: Boolean(crewai.modoAusente()),
-      cheia: () => regras.maquinaCheia().cheia, esperandoPapel,
+      cheia: () => regras.maquinaCheia().cheia, esperandoPapel, todos: itensDaFila(),
+      afinidadeMin: Number.isFinite(Number(process.env.BATIDA_AFINIDADE_MIN)) && Number(process.env.BATIDA_AFINIDADE_MIN) > 0 ? Number(process.env.BATIDA_AFINIDADE_MIN) : AFINIDADE_MIN,
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
       caminhoDoRelatorio: (nome) => join(pasta, `${nome}.json`),
       prazoMin: prazoEmMin([]), soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
@@ -964,6 +1036,9 @@ function main(argv) {
       break;
     case 'temas':
       saida = comandoTemas(resto);
+      break;
+    case 'seguinte':
+      saida = comandoSeguinte(resto);
       break;
     case 'com':
       saida = comandoCom(resto);

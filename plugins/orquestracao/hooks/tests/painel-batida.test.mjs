@@ -6,7 +6,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 const PAINEL = join(SCRIPTS, 'painel.mjs');
@@ -464,4 +464,141 @@ test('batida: o avisado que acorda continua em titulosVelhos, sem relatório a m
   assert.deepEqual(msgs(b, 'relatorio'), []);
   const c = batida(sessoes(sessao(6, 'E6 · a', { lastActivityAt: iso(T + 10 * MIN) }), orq), T + 21 * MIN);
   assert.deepEqual(msgs(c, 'relatorio'), [], c.out);
+});
+
+// ---- F143: afinidade no despacho (ADR 0009) ----
+const passou = (n, apelido, em, extra = {}) => ({ localId: lid(n), apelido, papel: apelido[0], em: iso(em), ...extra });
+const esperandoDesde = (min, extra = {}) => esperandoE({ historico: [{ em: iso(T - min * MIN), etapa: 'execucao', dono: null }], atualizadoEm: iso(T - min * MIN), ...extra });
+
+test('passaram: pegar e com add registram quem passou pelo item (papel e em); repetir atualiza; update recusa o campo', () => {
+  item('F1', esperandoE());
+  const a = painel(['pegar', 'F1', lid(3), 'E3']);
+  assert.equal(a.exit, 0, a.err);
+  const p1 = lerItem('F1').data.passaram;
+  assert.equal(p1.length, 1);
+  assert.deepEqual({ ...p1[0], em: undefined }, { localId: lid(3), apelido: 'E3', papel: 'E', em: undefined });
+  assert.ok(!Number.isNaN(Date.parse(p1[0].em)));
+  assert.equal(painel(['com', 'add', 'F1', lid(4), 'E4', 'ajuda']).exit, 0);
+  assert.equal(painel(['com', 'add', 'F1', lid(3), 'E3', 'segue']).exit, 0);
+  const p2 = lerItem('F1').data.passaram;
+  assert.deepEqual(p2.map((x) => x.apelido).sort(), ['E3', 'E4']);
+  assert.ok(Date.parse(p2.find((x) => x.apelido === 'E3').em) >= Date.parse(p1[0].em));
+  const u = painel(['update', 'fila', 'F1', '{"passaram":[]}']);
+  assert.notEqual(u.exit, 0, u.out);
+  assert.match(u.err, /passaram/);
+  assert.equal(lerItem('F1').data.passaram.length, 2, 'o update recusado não apagou nada');
+});
+
+test('afimDe: o mais recente do mesmo projeto, tema e papel, vivo e com o mesmo apelido no título', async () => {
+  const { afimDe } = await import(pathToFileURL(join(SCRIPTS, 'batida.mjs')).href);
+  const alvo = { projeto: 'kit', tema: 'editor', etapa: 'execucao' };
+  const antigo = { projeto: 'kit', tema: 'editor', etapa: 'feito', passaram: [passou(3, 'E3', T - 60 * MIN), passou(5, 'E5', T - 10 * MIN)] };
+  const mapa = (...ds) => new Map([['F9', alvo], ...ds.map((d, i) => [`F${i + 1}`, d])]);
+  const projetoDe = () => 'kit';
+  const vivas = [sessao(3, 'E3 · livre'), sessao(5, 'E5 · tela do editor')];
+  const a = afimDe(alvo, 'E', mapa(antigo), vivas, projetoDe);
+  assert.ok(a, 'achou o afim');
+  assert.equal(a.localId, lid(5));
+  assert.equal(a.apelido, 'E5');
+  assert.equal(afimDe(alvo, 'E', mapa({ ...antigo, tema: 'quadro' }), vivas, projetoDe), null, 'outro tema não conta');
+  assert.equal(afimDe(alvo, 'E', mapa({ ...antigo, projeto: 'outro' }), vivas, projetoDe), null, 'outro projeto não conta');
+  assert.equal(afimDe(alvo, 'V', mapa(antigo), vivas, projetoDe), null, 'outro papel não conta');
+  assert.equal(afimDe(alvo, 'E', mapa(antigo), [sessao(3, 'E3 · livre'), sessao(5, 'E5 · tela', { isArchived: true })], projetoDe).localId, lid(3), 'arquivada não conta: cai no seguinte');
+  assert.equal(afimDe(alvo, 'E', mapa(antigo), [sessao(3, 'D3 · livre'), sessao(5, 'V5 · algo')], projetoDe), null, 'título de outro apelido não conta');
+  const soFez = { projeto: 'kit', tema: 'editor', etapa: 'feito', fez: [{ localId: lid(3), apelido: 'E3', oQue: 'fez', em: iso(T - 30 * MIN) }] };
+  assert.equal(afimDe(alvo, 'E', mapa(soFez), vivas, projetoDe).localId, lid(3), 'item antigo só com fez conta');
+});
+
+test('batida (afinidade): o afim livre recebe o aviso no lugar do livre mais antigo', () => {
+  item('F1', { ...semGente, etapa: 'feito', tema: 'editor', passaram: [passou(5, 'E5', T - 90 * MIN)] });
+  item('F9', esperandoDesde(10));
+  const r = batida(sessoes(sessao(1, 'E1 · livre'), sessao(5, 'E5 · livre')));
+  assert.deepEqual(msgs(r, 'avisar-livre').map((m) => m.para), [lid(5)], r.out);
+});
+
+test('batida (afinidade): afim ocupado recebe "pegue ao terminar" uma vez; ninguém mais é avisado nem vaga é pedida; passou do prazo, o de sempre', () => {
+  item('F1', { ...semGente, etapa: 'feito', tema: 'editor', passaram: [passou(5, 'E5', T - 90 * MIN)] });
+  item('F9', esperandoDesde(10));
+  const arq = sessoes(sessao(1, 'E1 · livre'), sessao(5, 'E5 · tela do editor'));
+  const a = batida(arq);
+  assert.deepEqual(msgs(a, 'afinidade').map((m) => m.para), [lid(5)], a.out);
+  assert.match(msgs(a, 'afinidade')[0].texto, /pegue ao terminar/);
+  assert.deepEqual(msgs(a, 'avisar-livre'), [], 'o livre não é avisado dentro do prazo');
+  assert.deepEqual(a.json().projetos.kit.vagas, []);
+  assert.deepEqual(msgs(batida(arq, T + 2 * MIN), 'afinidade'), [], 'uma vez só');
+  const tarde = batida(arq, T + 15 * MIN);
+  assert.deepEqual(msgs(tarde, 'avisar-livre').map((m) => m.para), [lid(1)], tarde.out);
+});
+
+test('batida (afinidade): sem afim, o aviso é do livre mais antigo, como antes', () => {
+  item('F1', { ...semGente, etapa: 'feito', tema: 'quadro', passaram: [passou(5, 'E5', T - 90 * MIN)] });
+  item('F9', esperandoDesde(10));
+  const r = batida(sessoes(sessao(1, 'E1 · livre'), sessao(5, 'E5 · livre')));
+  assert.deepEqual(msgs(r, 'avisar-livre').map((m) => m.para), [lid(1)], r.out);
+});
+
+test('batida (afinidade): o afim livre já avisado de outro item nesta batida conta como ocupado', () => {
+  item('F1', { ...semGente, etapa: 'feito', tema: 'editor', passaram: [passou(5, 'E5', T - 90 * MIN)] });
+  item('F8', esperandoDesde(12));
+  item('F9', esperandoDesde(10));
+  const r = batida(sessoes(sessao(1, 'E1 · livre'), sessao(5, 'E5 · livre')));
+  assert.deepEqual(msgs(r, 'avisar-livre').map((m) => [m.item, m.para]), [['F8', lid(5)]], r.out);
+  assert.deepEqual(msgs(r, 'afinidade').map((m) => [m.item, m.para]), [['F9', lid(5)]], r.out);
+});
+
+function transcriptDoE3(tokens) {
+  writeFileSync(join(base, 'appsess', `${lid(3)}.json`), JSON.stringify({ sessionId: lid(3), cliSessionId: 'cli-e3', title: 'E3 · tela', cwd: repo, isArchived: false }));
+  const dir = join(base, 'home', '.claude', 'projects', 'proj');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'cli-e3.jsonl'), `${JSON.stringify({ type: 'assistant', timestamp: iso(T), message: { model: 'x', usage: { input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: tokens } } })}\n`);
+}
+test('seguinte: pega o item mais antigo do mesmo tema e papel que espera; outro tema, sem passagem e sem item dão pegou:false', () => {
+  item('F1', { ...semGente, etapa: 'feito', tema: 'editor', passaram: [passou(3, 'E3', T - 90 * MIN)] });
+  item('F4', esperandoDesde(10));
+  item('F2', esperandoDesde(30));
+  item('F3', esperandoDesde(50, { tema: 'quadro' }));
+  const r = painel(['seguinte', lid(3), 'E3', '--tokens', '100000']);
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(r.json().pegou, true, r.out);
+  assert.equal(r.json().item, 'F2', r.out);
+  assert.ok(lerItem('F2').data.com.some((c) => c.localId === lid(3)));
+  const b = painel(['seguinte', lid(3), 'E3', '--tokens', '100000']);
+  assert.equal(b.json().item, 'F4', 'pega o seguinte do mesmo tema');
+  const c = painel(['seguinte', lid(3), 'E3', '--tokens', '100000']);
+  assert.equal(c.json().pegou, false, 'só sobrou o de outro tema');
+  assert.match(c.json().motivo, /tema|nenhum/i);
+  assert.equal(painel(['seguinte', lid(9), 'E9', '--tokens', '100000']).json().pegou, false, 'sem passagem registrada');
+});
+test('seguinte: o teto de contexto manda mais — acima do aviso do papel recusa; mede o transcript; sem medida recusa; --tokens sobrescreve', () => {
+  item('F1', { ...semGente, etapa: 'feito', tema: 'editor', passaram: [passou(3, 'E3', T - 90 * MIN)] });
+  item('F2', esperandoDesde(30));
+  const sem = painel(['seguinte', lid(3), 'E3']);
+  assert.equal(sem.json().pegou, false, sem.out);
+  assert.match(sem.json().motivo, /contexto/i);
+  transcriptDoE3(320_000);
+  const alto = painel(['seguinte', lid(3), 'E3']);
+  assert.equal(alto.json().pegou, false, alto.out);
+  assert.match(alto.json().motivo, /contexto alto/);
+  assert.equal(lerItem('F2').data.com.length, 0, 'recusado não grava');
+  transcriptDoE3(100_000);
+  const baixo = painel(['seguinte', lid(3), 'E3']);
+  assert.equal(baixo.json().pegou, true, baixo.out);
+});
+test('seguinte: sem o local_, o id da própria sessão sai de CLAUDE_CODE_HOST_SESSION_ID', () => {
+  item('F1', { ...semGente, etapa: 'feito', tema: 'editor', passaram: [passou(3, 'E3', T - 90 * MIN)] });
+  item('F2', esperandoDesde(30));
+  const r = painel(['seguinte', 'E3', '--tokens', '1000'], { env: { CLAUDE_CODE_HOST_SESSION_ID: lid(3) } });
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(r.json().item, 'F2', r.out);
+});
+test('seguinte: a V que acabou de dar o veredito não repega o item de onde saiu; pega outro do mesmo tema', () => {
+  const emValidacao = (extra = {}) => ({ ...semGente, etapa: 'validacao', historico: [{ em: iso(T - 20 * MIN), etapa: 'validacao', dono: null }], atualizadoEm: iso(T - 20 * MIN), ...extra });
+  item('F1', emValidacao({ passaram: [passou(7, 'V1', T - 5 * MIN)] })); // a V1 passou por ele e saiu sem --fez: o item segue esperando V
+  const sozinha = painel(['seguinte', lid(7), 'V1', '--tokens', '1000']);
+  assert.equal(sozinha.exit, 0, sozinha.err);
+  assert.equal(sozinha.json().pegou, false, sozinha.out);
+  assert.equal(lerItem('F1').data.com.length, 0, 'não gravou nada no item de origem');
+  item('F2', emValidacao({ historico: [{ em: iso(T - 10 * MIN), etapa: 'validacao', dono: null }] }));
+  const outro = painel(['seguinte', lid(7), 'V1', '--tokens', '1000']);
+  assert.equal(outro.json().item, 'F2', outro.out);
 });
