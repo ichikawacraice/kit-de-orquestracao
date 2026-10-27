@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Migração do estado para o modelo da dona (ADR 0011). Sem `--aplicar` só mostra o plano (seco é o padrão).
-//   node migrar-para-dona.mjs [--aplicar] [--projetos kit-de-orquestracao,izanagi]
+//   node migrar-para-dona.mjs [--aplicar] [--projetos <a>,<b>]   (sem --projetos: os projetos dos itens da fila)
 // Com `--aplicar`, na pasta do estado (`HOOKS_CREWAI_BASE`, padrão ~/.claude/orquestracao; painel em `PAINEL_DIR`, padrão <base>/painel):
 //   1. move para `backups/migracao-dona-<data>/` a fila do painel, os handoffs do pool, a batida e os arquivos de estado dos projetos;
 //   2. recria a fila só com os itens vivos (fora de feito/descartado), no formato novo: `via: "dona"`, sem dona, `com`, `fez` nem
@@ -36,12 +36,13 @@ export function itemMigrado(doc, agoraIso) {
   return { id: doc.id, version: 1, data };
 }
 
-export function planejar({ env = process.env, projetos = ['kit-de-orquestracao', 'izanagi'], agora = new Date() } = {}) {
+export function planejar({ env = process.env, projetos: pedidos, agora = new Date() } = {}) {
   const p = pastas(env);
   const carimbo = agora.toISOString().replace(/[:.]/g, '-');
   const backup = join(p.base, 'backups', `migracao-dona-${carimbo}`);
   const itens = existsSync(p.fila) ? readdirSync(p.fila).filter((n) => n.endsWith('.json')).map((n) => lerJson(join(p.fila, n))).filter(Boolean) : [];
   const vivos = itens.filter((d) => d?.id && !FINAIS.has(d?.data?.etapa));
+  const projetos = pedidos ?? [...new Set(itens.map((d) => String(d?.data?.projeto ?? '').toLowerCase()).filter(Boolean))].sort();
   const handoffs = existsSync(p.handoffs) ? readdirSync(p.handoffs) : [];
   const mover = [
     [p.fila, join(backup, 'painel', 'fila')],
