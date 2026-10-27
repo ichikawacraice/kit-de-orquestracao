@@ -1,6 +1,6 @@
 // Comum às duas travas copiadas da CrewAI (Q62, 23/10): log do piloto e leitura de transcript.
 // Estudo: estudo de CrewAI/swarms do operador (notas em ~/.claude/orquestracao), seção 5.
-import { appendFileSync, readFileSync, writeFileSync, renameSync, existsSync, openSync, readSync, closeSync, fstatSync, statSync, unlinkSync } from 'node:fs';
+import { appendFileSync, chmodSync, readFileSync, writeFileSync, renameSync, existsSync, openSync, readSync, closeSync, fstatSync, statSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -16,6 +16,7 @@ export function registrar(sessao, hook, desfecho, detalhe = '') {
   try {
     const d = String(detalhe).replace(/\s+/g, ' ').slice(0, 300);
     appendFileSync(LOG, `${new Date().toISOString()}\t${sessao || '-'}\t${hook}\t${desfecho}\t${d}\n`, { mode: 0o600 }); // o modo vale ao criar
+    chmodSync(LOG, 0o600); // e o log que já existia (0644) também fica só do dono
   } catch { /* sem log, segue */ }
 }
 

@@ -1,8 +1,8 @@
 // O que o kit põe num projeto e como: o plano é calculado em memória (iniciar, adotar e --simular usam o mesmo) e só então gravado.
-import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
-import { basename, dirname, isAbsolute, join, relative } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { LOCK, blocosDe, sha256 } from './lock.mjs';
@@ -24,20 +24,25 @@ export const COMPARTILHADOS = new Set(['CLAUDE.md', 'package.json', '.claude/set
 export const existe = (p) => { try { lstatSync(p); return true; } catch { return false; } };
 
 /**
- * Por que o kit não pode gravar nem apagar `rel` em `destino`, ou `null` quando pode: o caminho tem de ficar dentro do projeto
- * (sem absoluto, sem `..`) e não passar por link simbólico, nem ser um. O repositório pode ser de outra pessoa: um link
- * versionado faria o kit escrever onde o link aponta (ex.: um arquivo do shell na pasta pessoal).
+ * Onde o kit grava `rel` de verdade: `{ rel }`, o caminho real relativo ao projeto (o link que aponta para dentro dele é seguido,
+ * ex. `CLAUDE.md -> AGENTS.md`), ou `{ erro }` quando o caminho sai do projeto: absoluto, `..`, link quebrado ou link que resolve
+ * para fora. O repositório pode ser de outra pessoa: um link versionado faria o kit escrever onde ele aponta (ex.: `~/.zshenv`).
  */
-export function foraDoProjeto(destino, rel) {
-  if (typeof rel !== 'string' || rel === '' || isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) return `${rel}: caminho fora do projeto`;
-  let atual = destino;
-  for (const parte of rel.split(/[\\/]/).filter(Boolean)) {
-    atual = join(atual, parte);
-    let st; try { st = lstatSync(atual); } catch { return null; }
-    if (st.isSymbolicLink()) return `${rel}: ${relative(destino, atual)} é link simbólico — o kit não grava nem apaga através de link`;
-  }
-  return null;
+export function noProjeto(destino, rel) {
+  if (typeof rel !== 'string' || rel === '' || isAbsolute(rel) || rel.split(/[\\/]/).includes('..')) return { erro: `${rel}: caminho fora do projeto` };
+  const raiz = realpathSync(destino);
+  const partes = rel.split(/[\\/]/).filter(Boolean);
+  // resolve o trecho mais fundo que existe (o arquivo, ou a última pasta); o resto ainda não existe e nasce dentro dele
+  let i = partes.length;
+  while (i > 0 && !existe(join(destino, ...partes.slice(0, i)))) i--;
+  const trecho = partes.slice(0, i).join('/');
+  let real;
+  try { real = realpathSync(join(destino, ...partes.slice(0, i))); } catch { return { erro: `${rel}: ${trecho} é link quebrado — o kit não grava nem apaga através dele` }; }
+  if (real !== raiz && !real.startsWith(raiz + sep)) return { erro: `${rel}: ${trecho} é link para fora do projeto — o kit não grava nem apaga através dele` };
+  return { rel: relative(raiz, join(real, ...partes.slice(i))) };
 }
+/** O motivo de `noProjeto`, ou `null` quando o caminho fica no projeto. */
+export const foraDoProjeto = (destino, rel) => noProjeto(destino, rel).erro ?? null;
 
 export const lerTexto = (destino, rel) => (existsSync(join(destino, rel)) ? readFileSync(join(destino, rel), 'utf8') : null);
 export const lerModelo = () => JSON.parse(readFileSync(join(RAIZ_DO_KIT, 'modelos', 'kit.json'), 'utf8'));
@@ -211,10 +216,11 @@ export function aplicarOperador(operador) {
 }
 
 /** Desfaz o que `aplicarOperador` fez (só o que o lock diz que foi do kit). Devolve as linhas `removido:`/`deixado`. */
-export function desfazerOperador(operador, { simular = false } = {}) {
+export function desfazerOperador(operador, { simular = false, destino } = {}) {
   const base = baseDaOrquestracao(); const linhas = [];
   const arq = join(base, 'trava-edicao-repos.txt');
-  if (operador?.trava?.adicionou && existsSync(arq)) {
+  // o lock é do repositório: só sai a linha que é o git dir DESTE projeto, nunca a de outro que o lock nomeie (F200)
+  if (operador?.trava?.adicionou && existsSync(arq) && destino !== undefined && operador.trava.linha === gitDirComum(destino)) {
     const todas = readFileSync(arq, 'utf8').split('\n');
     if (todas.some((l) => l.trim() === operador.trava.linha)) {
       const resto = todas.filter((l) => l.trim() !== operador.trava.linha);
@@ -507,32 +513,30 @@ export function gravar(destino, mudancas, lock) {
     if (!lock.pastasCriadas.length) delete lock.pastasCriadas;
     itens.push({ arquivo: LOCK, antigo: lerTexto(destino, LOCK), novo: `${JSON.stringify(lock, null, 2)}\n` });
   }
-  for (const m of itens) { const motivo = foraDoProjeto(destino, m.arquivo); if (motivo) return { erro: `não gravei nada: ${motivo}` }; }
+  // cada arquivo é gravado no caminho real (o link de dentro do projeto é seguido); o que sai do projeto recusa tudo
+  const reais = new Map();
+  for (const m of itens) { const r = noProjeto(destino, m.arquivo); if (r.erro) return { erro: `não gravei nada: ${r.erro}` }; reais.set(m, join(destino, r.rel)); }
   const criadas = []; const temporarios = []; const renomeados = [];
   let onde = '';
   try {
     for (const d of aCriar) { onde = d; mkdirSync(join(destino, d)); criadas.push(d); }
     for (const m of itens) {
       onde = m.arquivo;
-      const t = `${join(destino, m.arquivo)}.kit-tmp`;
+      const t = `${reais.get(m)}.kit-tmp`;
       temporarios.push(t);
       rmSync(t, { force: true }); // `.kit-tmp` que já existe (órfão, ou link plantado) sai; o `wx` cria um arquivo novo e não segue link
       writeFileSync(t, m.novo, { flag: 'wx' });
-      if (m.antigo !== null) chmodSync(t, statSync(join(destino, m.arquivo)).mode & 0o7777);
+      if (m.antigo !== null) chmodSync(t, statSync(reais.get(m)).mode & 0o7777);
     }
-    for (const m of itens) { onde = m.arquivo; renomeado(m, destino, renomeados); }
+    for (const m of itens) { onde = m.arquivo; renameSync(`${reais.get(m)}.kit-tmp`, reais.get(m)); renomeados.push(m); }
   } catch (e) {
     const sobrou = [];
     for (const t of temporarios) { try { rmSync(t, { force: true }); } catch { /* já não existe */ } }
     for (const m of renomeados.reverse()) {
-      try { if (m.antigo === null) rmSync(join(destino, m.arquivo), { force: true }); else writeFileSync(join(destino, m.arquivo), m.antigo); } catch (e2) { sobrou.push(`${m.arquivo} (${e2.message})`); }
+      try { if (m.antigo === null) rmSync(reais.get(m), { force: true }); else writeFileSync(reais.get(m), m.antigo); } catch (e2) { sobrou.push(`${m.arquivo} (${e2.message})`); }
     }
     for (const d of criadas.reverse()) { try { rmdirSync(join(destino, d)); } catch { /* não está vazia ou já não existe */ } }
     return { erro: `não consegui gravar ${onde}: ${e.message}. ${sobrou.length ? `Não consegui desfazer: ${sobrou.join('; ')} — confira com git status.` : 'Nada ficou gravado: o que já tinha sido escrito foi desfeito.'}` };
   }
   return {};
-}
-function renomeado(m, destino, lista) {
-  renameSync(`${join(destino, m.arquivo)}.kit-tmp`, join(destino, m.arquivo));
-  lista.push(m);
 }

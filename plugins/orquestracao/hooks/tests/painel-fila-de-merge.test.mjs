@@ -23,7 +23,10 @@ const est = JSON.parse(fs.readFileSync(process.env.GH_ESTADO, 'utf8'));
 const pr = est.prs[a[2]];
 if (a[0] === 'pr' && a[1] === 'view') {
   if (!pr) process.exit(1);
-  process.stdout.write(JSON.stringify({ number: Number(a[2]), ...pr }));
+  // só os campos pedidos no --json, como o gh de verdade: um campo que o código deixa de pedir some da resposta
+  const campos = a[a.indexOf('--json') + 1]?.split(',') ?? [];
+  const todo = { number: Number(a[2]), ...pr };
+  process.stdout.write(JSON.stringify(Object.fromEntries(campos.filter((c) => c in todo).map((c) => [c, todo[c]]))));
 } else if (a[0] === 'pr' && a[1] === 'merge') {
   if (!pr) process.exit(1);
   pr.state = 'MERGED';

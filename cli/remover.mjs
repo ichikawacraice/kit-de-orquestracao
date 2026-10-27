@@ -152,7 +152,7 @@ export function remover({ destino, simular = false }) {
     // só as pastas que o lock diz que o kit criou, da mais funda para a mais rasa, e só se ficaram vazias
     for (const dir of (lock.pastasCriadas ?? []).filter((p) => !foraDoProjeto(destino, p)).sort((a, b) => b.split('/').length - a.split('/').length)) { try { if (!readdirSync(join(destino, dir)).length) rmdirSync(join(destino, dir)); } catch { /* não existe ou não está vazia */ } }
   }
-  linhas.push(...desfazerOperador(lock.operador, { simular }));
+  linhas.push(...desfazerOperador(lock.operador, { simular, destino }));
   if (lock.recuperado) linhas.push('aviso: instalação recuperada de uma interrompida — o texto original dos JSON não foi guardado (voltam sem as chaves do kit, no formato do JSON.stringify) e a suíte original foi deduzida de test:suite/test:projeto; confira com git status.');
   linhas.push(`kit remover${simular ? ' --simular' : ''}: ${simular ? 'nada foi gravado' : `lock ${LOCK} removido`}.`);
   return { codigo: 0, saida: `${linhas.join('\n')}\n`, erro: '' };

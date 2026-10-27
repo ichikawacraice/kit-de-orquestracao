@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -100,5 +100,33 @@ describe('o CLI não grava nem apaga fora do projeto', () => {
     c.kit('remover');
     assert.ok(existsSync(alvo), 'o remover apagou o arquivo de fora');
     assert.ok(existsSync(join(c.base, 'code', 'pasta-vazia')), 'o remover apagou a pasta de fora');
+  });
+
+  it('o link que fica dentro do projeto (CLAUDE.md -> AGENTS.md) segue valendo: o kit grava no alvo e o link fica', (t) => {
+    const c = cenario(t);
+    writeFileSync(join(c.repo, 'AGENTS.md'), readFileSync(join(c.repo, 'CLAUDE.md'), 'utf8'));
+    rmSync(join(c.repo, 'CLAUDE.md'));
+    symlinkSync('AGENTS.md', join(c.repo, 'CLAUDE.md'));
+    const r = c.kit('adotar');
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.ok(lstatSync(join(c.repo, 'CLAUDE.md')).isSymbolicLink(), 'o kit trocou o link por arquivo');
+    assert.match(readFileSync(join(c.repo, 'AGENTS.md'), 'utf8'), /<!-- kit:/, 'os blocos não foram para o alvo do link');
+    const rem = c.kit('remover');
+    assert.equal(rem.status, 0, rem.stderr + rem.stdout);
+  });
+
+  it('remover: a linha da trava do operador que o lock nomeia só sai se for o git dir deste projeto', (t) => {
+    const c = cenario(t);
+    const base = join(c.casa, '.claude', 'orquestracao');
+    mkdirSync(base, { recursive: true });
+    writeFileSync(join(base, 'trava-edicao-repos.txt'), '/outro/repo/.git\n');
+    assert.equal(c.kit('adotar').status, 0);
+    const lista = () => readFileSync(join(base, 'trava-edicao-repos.txt'), 'utf8').split('\n').filter(Boolean);
+    assert.ok(lista().length === 2 && lista().includes('/outro/repo/.git'), `precondição: o adotar pôs este projeto na trava: ${lista()}`);
+    const lock = JSON.parse(readFileSync(join(c.repo, '.claude', 'kit.lock.json'), 'utf8'));
+    lock.operador.trava = { linha: '/outro/repo/.git', adicionou: true };
+    writeFileSync(join(c.repo, '.claude', 'kit.lock.json'), JSON.stringify(lock));
+    c.kit('remover');
+    assert.ok(lista().includes('/outro/repo/.git'), 'o lock tirou outro repositório da trava');
   });
 });

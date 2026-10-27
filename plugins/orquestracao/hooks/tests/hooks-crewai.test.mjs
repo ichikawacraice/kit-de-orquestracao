@@ -382,6 +382,16 @@ caso('3.0 o log do laço não guarda o segredo do comando e nasce 0600', () => {
   igual(linhas[0][4].includes('curl'), true, 'o log perdeu o nome do comando');
   igual(statSync(join(base, 'hooks-crewai.log')).mode & 0o777, 0o600, 'permissão do log');
 });
+caso('3.0b atribuição na frente do comando (GH_TOKEN=… gh) não vai para o log; log antigo 0644 vira 0600', () => {
+  writeFileSync(join(base, 'hooks-crewai.log'), '', { mode: 0o644 });
+  const token = 'ghp_' + 'B'.repeat(36);
+  const r = avisos(Array.from({ length: 4 }, () => bash(`GH_TOKEN=${token} gh api user`, '{"message":"Bad credentials"}\n')));
+  igual(r[3] !== null, true, 'precondição: o 4º avisou');
+  const linha = log().find((l) => l[2] === 'laco-de-comandos');
+  igual(linha?.[4]?.includes(token), false, `o token foi para o log: ${linha?.[4]}`);
+  igual(linha?.[4]?.includes('gh'), true, 'o log perdeu o programa');
+  igual(statSync(join(base, 'hooks-crewai.log')).mode & 0o777, 0o600, 'o log antigo ficou 0644');
+});
 
 caso('3.1 o mesmo comando 4× com a mesma saída avisa no 4º, só uma vez', () => {
   const r = avisos(Array.from({ length: 5 }, () => bash('pnpm --filter @alfa/runner test', VITEST)));
