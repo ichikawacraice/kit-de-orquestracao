@@ -25,6 +25,8 @@ export type LinhaItem = {
   espera?: { motivo: 'operador' | 'gate'; texto: string }
   /** Esperando alguém do papel da etapa (P, D, E ou V) desde `desde`; ausente quando há quem trabalhe, ou o item espera de propósito. `entregue`: o papel já entregou a parte; falta a dona avançar a etapa. */
   esperando?: { papel: 'P' | 'D' | 'E' | 'V'; desde: string; entregue: boolean }
+  /** ADR 0011: item de uma sessão dona do plano ao PR (`via: "dona"`); o que falta a ele é a dona, não um papel. */
+  dona?: boolean
   prs: number[]
   /** O que fica para depois; `item` é o F<n> quando o documento o liga a outro item. */
   depois: Array<{ texto: string; item?: string }>

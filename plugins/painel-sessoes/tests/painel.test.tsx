@@ -3084,3 +3084,20 @@ test('F144: cartoes ilegível vai para a faixa de erro e a seção não aparece'
   expect(lido.terminal).toMatch(/cartoes\/task_ruim: fora do contrato/)
   expect(lido.terminal).not.toContain('Sessões para abrir')
 })
+
+test('ADR 0011: item da dona pede a sessão dona, não um papel', () => {
+  const so = R.textoDoPedidoDeVaga('kit', [{ id: 'F9', titulo: 'fila de merge', papel: 'E', dona: true }], AGORA)
+  expect(so).toContain('abra a sessão dona')
+  expect(so).toContain('F9 · fila de merge')
+  expect(so).toContain('modelo-da-dona')
+  expect(so).not.toContain('espera E')
+  // o pedido do pool continua igual para item antigo (a diferença é medível)
+  const pool = R.textoDoPedidoDeVaga('kit', [{ id: 'F9', titulo: 'fila de merge', papel: 'E' }], AGORA)
+  expect(pool).toContain('F9 · fila de merge (espera E)')
+})
+
+test('ADR 0011: o chip do item da dona sem ninguém diz "sem dona", o do pool segue "esperando <papel>"', () => {
+  const e = { papel: 'P' as const, desde: new Date(AGORA - 12 * 60_000).toISOString(), entregue: false }
+  expect(D.textoEsperando(e, AGORA, true)).toBe('sem dona · 12 min')
+  expect(D.textoEsperando(e, AGORA)).toBe('esperando P · 12 min')
+})
