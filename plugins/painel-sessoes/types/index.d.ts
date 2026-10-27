@@ -96,7 +96,7 @@ export type PerguntaAnterior = {
 export type SessaoViva = { sessionId: string; isRunning?: boolean; lastActivityAt?: string; title?: string; createdAt?: string }
 
 /** Um cartão de sessão nova que espera o clique do operador (coleção `cartoes` do painel; `id` = o task_id do start_session). */
-export type CartaoDeSessao = { id: string; projeto: string; apelido: string; papel: PapelDoPedido; itens: string[]; orquestradoraId: string; propostoEm: string }
+export type CartaoDeSessao = { id: string; projeto: string; apelido: string; papel: PapelDoPedido | 'dona'; itens: string[]; orquestradoraId: string; propostoEm: string }
 
 export type Leitura = {
   lidoEm: number | null

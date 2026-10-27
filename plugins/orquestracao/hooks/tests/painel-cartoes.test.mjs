@@ -62,6 +62,30 @@ for (const [nome, extra, trecho] of [
     assert.ok(!existsSync(arq('task_x')));
   });
 }
+// ---- cartão de sessão dona (ADR 0011): apelido `dona`, papel `dona`, um item F<n>; a sessão aberta se chama `F<n> · <tema>` ----
+const cartaoDona = (extra = {}) => cartao({ apelido: 'dona', papel: 'dona', itens: ['F140'], ...extra });
+test('cartoes: cartão de sessão dona (apelido dona, um item F<n>) é gravado', () => {
+  const r = painel(['set', 'cartoes', 'task_d', JSON.stringify(cartaoDona())]);
+  assert.equal(r.exit, 0, r.err);
+  assert.ok(existsSync(arq('task_d')));
+});
+for (const [nome, extra, trecho] of [
+  ['dona sem item', { itens: [] }, 'itens'],
+  ['dona com mais de um item', { itens: ['F140', 'F141'] }, 'itens'],
+  ['dona com papel de pool', { papel: 'E' }, 'papel'],
+  ['apelido de dona com maiúscula', { apelido: 'Dona' }, 'apelido'],
+]) {
+  test(`cartoes: recusa ${nome}`, () => {
+    const r = painel(['set', 'cartoes', 'task_x', JSON.stringify(cartaoDona(extra))]);
+    assert.equal(r.exit, 1, r.out);
+    assert.ok(r.err.includes(trecho), r.err);
+    assert.ok(!existsSync(arq('task_x')));
+  });
+}
+test('cartoes: apelido de pool com papel dona continua recusado', () => {
+  assert.equal(painel(['set', 'cartoes', 'task_x', JSON.stringify(cartao({ papel: 'dona' }))]).exit, 1);
+});
+
 test('cartoes: delete apaga o documento (a orquestradora retira o cartão)', () => {
   painel(['set', 'cartoes', 'task_a', JSON.stringify(cartao())]);
   assert.ok(existsSync(arq('task_a')));
@@ -77,6 +101,12 @@ const doc = (id, extra = {}) => ({ id, data: cartao(extra) });
 test('cartoesResolvidos: apelido vivo criado depois de propostoEm apaga', () => {
   assert.deepEqual(cartoesResolvidos({ cartoes: [doc('a')], linhas: [linha('E21 · livre')], projetoDe, agoraMs: T }), ['a']);
   assert.deepEqual(cartoesResolvidos({ cartoes: [doc('a')], linhas: [linha('E21 · plano das sessões')], projetoDe, agoraMs: T }), ['a']);
+});
+test('cartoesResolvidos: cartão de dona resolve quando abre a sessão `F<n> · <tema>` do item; outro F não resolve', () => {
+  const d = { cartoes: [doc('d', { apelido: 'dona', papel: 'dona', itens: ['F140'] })], projetoDe, agoraMs: T };
+  assert.deepEqual(cartoesResolvidos({ ...d, linhas: [linha('F140 · cartão da dona')] }), ['d']);
+  assert.deepEqual(cartoesResolvidos({ ...d, linhas: [linha('F141 · outro item'), linha('F1400 · não é o F140')] }), []);
+  assert.deepEqual(cartoesResolvidos({ ...d, linhas: [linha('F140 · cartão da dona', { createdAt: iso(T - 3 * H), lastActivityAt: iso(T - 3 * H) })] }), []);
 });
 test('cartoesResolvidos: apelido vivo de ANTES de propostoEm fica (é a sessão antiga de mesmo apelido)', () => {
   const antiga = linha('E21 · livre', { createdAt: iso(T - 3 * H), lastActivityAt: iso(T - 3 * H) });

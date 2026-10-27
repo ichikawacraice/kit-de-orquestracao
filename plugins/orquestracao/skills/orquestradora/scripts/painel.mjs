@@ -35,7 +35,7 @@
 //   (set em fila/<id> que JÁ existe exige --se-versao N — ou "seVersao" na op do batch —: sem ele, o set apagaria o item em silêncio)
 //
 // Coleções: sessoes, perguntas, fila (itens F<n> do pool; protocolo em pool/protocolo.md#fila-do-pool) e cartoes (cartão de sessão nova
-//   que espera o clique do operador; id = task_id do start_session; { projeto, apelido, papel, itens[F<n>], orquestradoraId, propostoEm };
+//   que espera o clique do operador; id = task_id do start_session; { projeto, apelido, papel, itens[F<n>], orquestradoraId, propostoEm }; cartão de dona: apelido e papel `dona`, um item só;
 //   a orquestradora grava e apaga, e a batida apaga o apelido vivo e o que passou de 12 h).
 //
 // `projeto` (sessoes e fila): ao CRIAR um documento sem o campo, o script o preenche com o nome do repositório git de
@@ -391,9 +391,12 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
 // Cartão de sessão nova que espera o clique do operador (a coleção `cartoes`; id = o task_id do start_session).
 function validarCartao(chave, c) {
   for (const k of ['projeto', 'orquestradoraId']) if (!textoNaoVazio(c[k])) throw new Error(`${chave}: ${k} é obrigatório`);
-  if (!/^[PDEV]\d+$/.test(String(c.apelido))) throw new Error(`${chave}: apelido "${c.apelido}" não é P<n>, D<n>, E<n> ou V<n>`);
-  if (c.papel !== String(c.apelido)[0]) throw new Error(`${chave}: papel "${c.papel}" não é a letra do apelido ${c.apelido}`);
+  // Cartão de sessão dona (ADR 0011): apelido e papel `dona`, exatamente um item; a sessão aberta se chama `F<n> · <tema>`.
+  const dona = c.apelido === 'dona';
+  if (!dona && !/^[PDEV]\d+$/.test(String(c.apelido))) throw new Error(`${chave}: apelido "${c.apelido}" não é dona, P<n>, D<n>, E<n> ou V<n>`);
+  if (c.papel !== (dona ? 'dona' : String(c.apelido)[0])) throw new Error(`${chave}: papel "${c.papel}" não é ${dona ? 'dona (o do apelido dona)' : `a letra do apelido ${c.apelido}`}`);
   if (!Array.isArray(c.itens) || c.itens.some((F) => !ID.test(String(F)) || !/^F\d+$/.test(String(F)))) throw new Error(`${chave}: itens deve ser a lista de F<n> (vazia no piso de E)`);
+  if (dona && c.itens.length !== 1) throw new Error(`${chave}: o cartão de dona leva exatamente um item F<n> em itens`);
   if (Number.isNaN(Date.parse(c.propostoEm))) throw new Error(`${chave}: propostoEm não é data ISO`);
 }
 

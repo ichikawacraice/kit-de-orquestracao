@@ -2971,6 +2971,24 @@ test('F144 pura: lerCartao aceita o contrato e recusa apelido, papel, itens e da
     expect(R.lerCartao({ id: 't', data: { ...ok, ...ruim }, version: 1 }), JSON.stringify(ruim)).toBeUndefined()
 })
 
+test('F180 pura: lerCartao aceita o cartão de dona (apelido dona, um F<n>) e cartoesVisiveis o some quando abre `F<n> · …`', () => {
+  const ok = { projeto: 'Izanagi', apelido: 'dona', papel: 'dona', itens: ['F140'], orquestradoraId: 'local_o', propostoEm: iso5(10) }
+  const c = R.lerCartao({ id: 'd', data: ok, version: 1 })
+  expect(c).toEqual({ id: 'd', projeto: 'izanagi', apelido: 'dona', papel: 'dona', itens: ['F140'], orquestradoraId: 'local_o', propostoEm: iso5(10) })
+  for (const ruim of [{ itens: [] }, { itens: ['F140', 'F141'] }, { papel: 'E' }]) expect(R.lerCartao({ id: 'd', data: { ...ok, ...ruim }, version: 1 }), JSON.stringify(ruim)).toBeUndefined()
+  const viva = (title: string, createdAt: string) => ({ sessionId: 'local_x', title, createdAt })
+  expect(R.cartoesVisiveis([c!], [], false, AGORA).map(x => x.id)).toEqual(['d'])
+  expect(R.cartoesVisiveis([c!], [viva('F140 · cartão da dona', iso5(1))], false, AGORA)).toEqual([])
+  expect(R.cartoesVisiveis([c!], [viva('F141 · outro', iso5(1))], false, AGORA).map(x => x.id)).toEqual(['d'])
+})
+
+test('F180 desenho: a linha de dona diz "dona", o item e o tema', () => {
+  const l = D.sessaoParaAbrirSvg(360, { apelido: 'dona', itens: [{ id: 'F140', titulo: 'editor da loja' }], propostoEm: iso5(4) }, AGORA)
+  expect(l.alt).toContain('dona')
+  expect(l.alt).toContain('F140 · editor da loja')
+  expect(l.source).toContain('DONA')
+})
+
 test('F144 pura: cartoesVisiveis — apelido vivo depois do pedido some, o de antes fica, 12 h some, sem lista só o prazo vale', () => {
   const c = (id: string, apelido: string, min: number) => ({ id, projeto: 'izanagi', apelido, papel: apelido[0] as 'E', itens: [], orquestradoraId: 'local_o', propostoEm: iso5(min) })
   const cartoes = [c('b', 'E22', 6), c('a', 'E21', 10), c('v', 'E23', 13 * 60)]
