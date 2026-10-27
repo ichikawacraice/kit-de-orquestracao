@@ -8,6 +8,7 @@ export const ESPERA_MIN = 5; // esperando o papel há tanto: avisa o livre
 export const REAVISO_MIN = 30; // o mesmo livre não é avisado de novo do mesmo item antes disso
 export const TETO_DE_LIVRES = 2; // livres por papel por projeto fora do modo ausente
 export const AFINIDADE_MIN = 20; // item do mesmo assunto espera o afim ocupado por tanto; depois, o de sempre (BATIDA_AFINIDADE_MIN troca)
+export const CARTAO_VALIDADE_H = 12; // cartão de sessão nova sem clique há tanto: a orquestradora já o terá reproposto (a mesma régua da Q379)
 export const TITULO_VELHO_MIN = 10; // membro parado há tanto, fora de item vivo e sem título livre: o título é de item que fechou
 
 const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
@@ -71,6 +72,25 @@ export function afimDe(item, papel, itens, linhas, projetoDe) {
     return { localId: e.localId, apelido: e.apelido };
   }
   return null;
+}
+
+// Cartões de sessão nova (coleção `cartoes`) que já não esperam o clique: o apelido apareceu vivo no projeto depois de
+// `propostoEm`, ou passou de CARTAO_VALIDADE_H (também quando `propostoEm` não é legível). `linhas` null = sem a lista de
+// sessões: só o prazo vale. Sessão de antes de `propostoEm` com o mesmo apelido é outra e não resolve.
+// `cartoes`: [{ id, data }] → ids a apagar.
+export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs }) {
+  const apagar = [];
+  for (const { id, data: c } of cartoes) {
+    const proposto = ms(c?.propostoEm);
+    if (proposto === null || agoraMs - proposto >= CARTAO_VALIDADE_H * 3_600_000) { apagar.push(id); continue; }
+    const aberto = (linhas ?? []).some((r) => {
+      if (!vivoNaLista(r) || apelidoDoTitulo(r.title) !== c.apelido || projetoDe(r) !== String(c.projeto ?? '').toLowerCase()) return false;
+      const criada = ms(r.createdAt) ?? ms(r.lastActivityAt);
+      return criada !== null && criada >= proposto;
+    });
+    if (aberto) apagar.push(id);
+  }
+  return apagar;
 }
 
 export function julgar({ agoraMs, itens, todos = itens, afinidadeMin = AFINIDADE_MIN, linhas, projetoDe, estado, ausente, cheia, esperandoPapel, ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {

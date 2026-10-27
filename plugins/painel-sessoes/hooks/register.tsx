@@ -2,10 +2,10 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { esperandoPapel } from './esperando'
-import type { Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
+import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Situacao, Tema } from '../types'
 import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, LEITURA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarPool, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache } from './barra'
 import type { Barra } from '../types'
-import { papelDe as papelDeDesenho, altDosCitados, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
+import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -74,6 +74,7 @@ type Vivo = {
   prNumber?: number
   prState?: string
   lastActivityAt?: string
+  createdAt?: string
   link?: string
 }
 
@@ -85,6 +86,42 @@ export function lerDoc(texto: string, nome: string): Doc {
   if (!v || typeof v.data !== 'object' || v.data === null) throw new Error(`${nome}: sem o campo data`)
 
   return { id: typeof v.id === 'string' ? v.id : nome.replace(/\.json$/, ''), data: v.data, version: v.version }
+}
+
+const CARTAO_VALIDADE_MS = 12 * 3_600_000
+
+/** O documento de `cartoes` no contrato (apelido `<P|D|E|V><n>`, papel = a letra, itens `F<n>`, data); fora dele, `undefined`. */
+export function lerCartao(d: Doc): CartaoDeSessao | undefined {
+  const c = d.data
+  const apelido = texto(c.apelido)
+  const projeto = texto(c.projeto)
+  const orquestradoraId = texto(c.orquestradoraId)
+  const propostoEm = texto(c.propostoEm)
+  if (!apelido || !/^[PDEV]\d+$/.test(apelido) || !projeto || !orquestradoraId || !propostoEm || Number.isNaN(Date.parse(propostoEm))) return undefined
+  if (c.papel !== apelido[0] || !Array.isArray(c.itens) || c.itens.some(F => typeof F !== 'string' || !/^F\d+$/.test(F))) return undefined
+
+  return { id: d.id, projeto: projeto.toLowerCase(), apelido, papel: apelido[0] as CartaoDeSessao['papel'], itens: c.itens as string[], orquestradoraId, propostoEm }
+}
+
+/**
+ * Os cartões que ainda esperam o clique: o apelido não aparece vivo na lista que o pane leu (criado depois de `propostoEm`; a
+ * mesma régua da batida) e não passou de 12 h. Sem a lista (`semLista`), só o prazo vale. Mais antigo primeiro.
+ */
+export function cartoesVisiveis(cartoes: CartaoDeSessao[], sessoes: SessaoViva[] | undefined, semLista: boolean, agora: number): CartaoDeSessao[] {
+  return cartoes
+    .filter(c => {
+      const proposto = Date.parse(c.propostoEm)
+      if (Number.isNaN(proposto) || agora - proposto >= CARTAO_VALIDADE_MS) return false
+      if (semLista) return true
+
+      return !(sessoes ?? []).some(s => {
+        if (!s.title?.startsWith(`${c.apelido} · `)) return false
+        const criada = Date.parse(s.createdAt ?? s.lastActivityAt ?? '')
+
+        return !Number.isNaN(criada) && criada >= proposto
+      })
+    })
+    .sort((a, b) => Date.parse(a.propostoEm) - Date.parse(b.propostoEm))
 }
 
 /** O array JSON do list_sessions. */
@@ -798,6 +835,7 @@ async function ler($: EngineInterface): Promise<void> {
   let docsSessoes: Doc[] = []
   let docsPerguntas: Doc[] = []
   let docsFila: Doc[] = []
+  let docsCartoes: Doc[] = []
   let temas: Tema[] = []
   let vivas: Vivo[] = []
   let vivasLidas = false
@@ -818,6 +856,10 @@ async function ler($: EngineInterface): Promise<void> {
     lerColecao('fila').then(
       d => void (docsFila = d),
       err => void erros.push(`fila do painel: ${mensagem(err)}`),
+    ),
+    lerColecao('cartoes').then(
+      d => void (docsCartoes = d),
+      err => void erros.push(`cartoes do painel: ${mensagem(err)}`),
     ),
     // Sem a lista de temas os itens caem em "Sem tema": a falta é erro de leitura, não lista vazia calada.
     $.fs.read(`${pasta}/temas.json`).then(
@@ -907,9 +949,16 @@ async function ler($: EngineInterface): Promise<void> {
   const orquestradoras = docsSessoes
     .filter(d => d.data.papel === 'orquestradora' && d.data.estado !== 'concluida')
     .map(d => ({ id: texto(d.data.sessionId) ?? d.id, projeto: (texto(d.data.projeto) ?? '').toLowerCase() }))
+  const cartoes = docsCartoes.flatMap(d => {
+    const c = lerCartao(d)
+    if (!c) erros.push(`cartoes/${d.id}: fora do contrato`)
+
+    return c ? [c] : []
+  })
   await update($, pedindo, p => podarPedidos(p, itens, agora))
   await update($, leitura, l => ({
     orquestradoras,
+    cartoes,
     avisos: l.avisos ?? [],
     lidoEm: agora,
     lendo: false,
@@ -920,7 +969,7 @@ async function ler($: EngineInterface): Promise<void> {
     perguntas,
     assumidas,
     anteriores,
-    sessoes: vivas.map(({ sessionId, isRunning, lastActivityAt }) => ({ sessionId, isRunning, lastActivityAt })),
+    sessoes: vivas.map(({ sessionId, isRunning, lastActivityAt, title, createdAt }) => ({ sessionId, isRunning, lastActivityAt, title, createdAt })),
     semLista: !(vivasLidas && proprio !== undefined),
     ausente: geracao === geracaoModo && !trocandoAgora ? ausente : l.ausente,
   }))
@@ -1661,7 +1710,7 @@ export const register: Register = on => {
 
       return { linha, botao, orq: p.estado?.estado === 'pedido' && !naFila ? botaoOrquestradora(`orq:${i.id}`, p.projeto, p.destino.id) : undefined }
     }
-    // O topo da Na fila: "Pedir n sessões", um grupo por projeto em "Pedido" (a frase e, embaixo, o "Abrir a orquestradora") e os avisos de projeto.
+    // O topo da Na fila: "Pedir n sessões" e os avisos de projeto (os cartões esperando o clique moram em "Sessões para abrir").
     const topoDaFila = (naFila: LinhaItem[]) => {
       const podem = naFila.filter(i => {
         const p = pedidoDe(i)
@@ -1681,17 +1730,6 @@ export const register: Register = on => {
             {loteEnviando ? 'Pedindo…' : `Pedir ${podem.length} sessões`}
           </Button>
         ) : undefined
-      // Só os itens da Na fila contam: o cartão em Executando tem o próprio botão.
-      const emPedido = new Map<string, { id: string; n: number }>()
-      for (const i of naFila) {
-        const p = pedidoDe(i)
-        if (p?.estado?.estado === 'pedido' && 'id' in p.destino) emPedido.set(p.projeto, { id: p.destino.id, n: (emPedido.get(p.projeto)?.n ?? 0) + 1 })
-      }
-      const grupos = [...emPedido].map(([projeto, o]) => ({
-        projeto,
-        frase: `${o.n} ${o.n === 1 ? 'cartão da fila espera' : 'cartões da fila esperam'} você na conversa da orquestradora de ${projeto}`,
-        botao: botaoOrquestradora(`orq:${projeto}`, projeto, o.id),
-      }))
       const avisosDeProjeto: string[] = []
       const contados = new Map<string, { d: Destino; n: number }>()
       for (const i of naFila) {
@@ -1701,25 +1739,17 @@ export const register: Register = on => {
       if ([...contados.values()].some(c => 'semLista' in c.d)) avisosDeProjeto.push(textoDoAviso('', { semLista: true }))
       else for (const [projeto, c] of contados) avisosDeProjeto.push(textoDoAviso(projeto, c.d, c.n))
 
-      return { lote, grupos, avisosDeProjeto }
+      return { lote, avisosDeProjeto }
     }
-    // O topo inteiro numa coluna recuada como a linha da fila; cada projeto é um grupo com a frase colada ao botão.
+    // O topo inteiro numa coluna recuada como a linha da fila.
     const desenharTopo = (t: ReturnType<typeof topoDaFila>, paddingLeft: number, paddingBottom?: number) =>
-      t.lote === undefined && t.grupos.length === 0 && t.avisosDeProjeto.length === 0 ? null : (
+      t.lote === undefined && t.avisosDeProjeto.length === 0 ? null : (
         <Box flexDirection="column" gap={1} paddingLeft={paddingLeft} paddingBottom={paddingBottom}>
           {t.lote && (
             <Box flexDirection="row" alignItems="center">
               {t.lote}
             </Box>
           )}
-          {t.grupos.map(g => (
-            <Box key={`grupo:${g.projeto}`} flexDirection="column">
-              <Text color="warning" wrap="wrap">{g.frase}</Text>
-              <Box flexDirection="row" alignItems="center">
-                {g.botao}
-              </Box>
-            </Box>
-          ))}
           {t.avisosDeProjeto.map(a => <Text key={`aviso:${a}`} dimColor wrap="wrap">{a}</Text>)}
         </Box>
       )
@@ -1763,6 +1793,26 @@ export const register: Register = on => {
     const citadosDaPergunta = (q: PerguntaAberta) => citadosDe([q.titulo, q.caso ?? '', q.seNaoDecidir ?? '', q.recomendacao ?? ''], [], q.item ?? '', mapa)
     const achados = filtrarIndice(indice, filtro)
     const comProjeto = new Set(indice.flatMap(i => (i.projeto ? [i.projeto] : []))).size > 1
+    // "Sessões para abrir": os cartões que a orquestradora propôs e ainda esperam o clique, agrupados por orquestradora (o mais antigo primeiro).
+    // A seção só nasce depois da 1ª leitura; sem a lista de sessões não se sabe qual orquestradora está aberta, e o botão fica.
+    const idsDaLista = l.semLista ? null : new Set((l.sessoes ?? []).map(v => v.sessionId))
+    const gruposDeCartoes = !lido
+      ? []
+      : [
+          ...cartoesVisiveis(l.cartoes ?? [], l.sessoes, l.semLista ?? false, agora).reduce((por, c) => por.set(c.orquestradoraId, [...(por.get(c.orquestradoraId) ?? []), c]), new Map<string, CartaoDeSessao[]>()),
+        ].map(([orqId, cs]) => {
+          const viva = idsDaLista === null || idsDaLista.has(orqId)
+          const projeto = cs[0]!.projeto
+
+          return {
+            orqId,
+            projeto,
+            viva,
+            frase: viva ? `${cs.length === 1 ? 'O cartão está' : 'Os cartões estão'} na conversa da orquestradora de ${projeto}` : 'A orquestradora destes cartões não está aberta',
+            linhas: cs.map(c => ({ id: c.id, papel: c.papel, apelido: c.apelido, propostoEm: c.propostoEm, itens: c.itens.map(id => ({ id, titulo: mapa.get(id)?.titulo })) })),
+          }
+        })
+    const totalDeCartoes = gruposDeCartoes.reduce((n, g) => n + g.linhas.length, 0)
 
     // Os botões de uma pergunta: as opções dela (Q67) ou Sim/Não/Adiar/Responder, que vão à sessão que perguntou.
     // Só o botão pressionado vira "Enviando…"; enquanto a resposta da pergunta está em curso, os irmãos ignoram o clique.
@@ -2044,6 +2094,30 @@ export const register: Register = on => {
               {sec.esperam.map(i => cartao(i, 'warning'))}
             </Box>
           )}
+          {totalDeCartoes > 0 && (
+            <Box flexDirection="column" gap={1}>
+              {faixa({ titulo: 'Sessões para abrir', n: totalDeCartoes, tom: 'av', legenda: 'na orquestradora', tracejado: true })}
+              {gruposDeCartoes.map(g => {
+                const frase = fraseDoGrupoSvg(W, g.frase, !g.viva)
+
+                return (
+                  <Box key={`grupo-cartoes:${g.orqId}`} flexDirection="column">
+                    {g.linhas.map(c => {
+                      const r = sessaoParaAbrirSvg(W, c, agora)
+
+                      return <Svg key={`cartao:${c.id}`} source={r.source} alt={`${r.alt}, na conversa da orquestradora de ${g.projeto}`} width={W} height={r.height} />
+                    })}
+                    <Svg source={frase.source} alt={frase.alt} width={W} height={frase.height} />
+                    {g.viva && (
+                      <Box flexDirection="row" justifyContent="flex-end">
+                        {botaoOrquestradora(`cartoes:${g.orqId}`, g.projeto, g.orqId)}
+                      </Box>
+                    )}
+                  </Box>
+                )
+              })}
+            </Box>
+          )}
           {lido && sec.travados.length > 0 && (
             <Box flexDirection="column" gap={1}>
               {faixa({ titulo: 'Travados', n: contagem.travados, tom: 'er', legenda: 'pedem alguém agir' })}
@@ -2239,6 +2313,28 @@ export const register: Register = on => {
               </Box>
             ))}
             {sec.esperam.map(i => linhaItem(i))}
+          </Box>
+        )}
+        {totalDeCartoes > 0 && (
+          <Box flexDirection="column" gap={1}>
+            {tituloDaSecao('Sessões para abrir', totalDeCartoes, 'warning')}
+            {gruposDeCartoes.map(g => (
+              <Box key={`grupo-cartoes:${g.orqId}`} flexDirection="column">
+                {g.linhas.map(c => (
+                  <Box key={`cartao:${c.id}`} flexDirection="column">
+                    <Text wrap="wrap">
+                      <Text color="warning">◌</Text> <Text bold>{c.apelido}</Text>
+                      <Text>{` ${papelDeDesenho(c.apelido) ?? 'sessão'}`}</Text>
+                      <Text dimColor>{` · ${desde(c.propostoEm, agora) ?? 'agora'}`}</Text>
+                    </Text>
+                    <Text wrap="wrap">{`  ${paraQueDoCartao(c)}`}</Text>
+                    {c.itens.length > 1 && <Text dimColor wrap="wrap">{`  + ${c.itens.length - 1} ${c.itens.length === 2 ? 'item' : 'itens'}`}</Text>}
+                  </Box>
+                ))}
+                <Text dimColor={g.viva} color={g.viva ? undefined : 'error'} wrap="wrap">{g.frase}</Text>
+                {g.viva && <Box flexDirection="row">{botaoOrquestradora(`cartoes:${g.orqId}`, g.projeto, g.orqId)}</Box>}
+              </Box>
+            ))}
           </Box>
         )}
         {lido && sec.travados.length > 0 && (
