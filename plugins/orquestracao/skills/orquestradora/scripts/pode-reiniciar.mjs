@@ -41,9 +41,11 @@ export function lerPs(env = process.env) {
 }
 
 const EXECUTORES_DE_TESTE = new Set(['node', 'npx', 'pnpm', 'yarn', 'bun', 'vitest', 'jest', 'sh', 'bash', 'zsh']);
+// grep/rg que PROCURA a palavra (puro ou dentro de um `zsh -c`) não roda teste: o trecho do grep sai antes de olhar
+const semBusca = (command) => command.replace(/(^|[;&|(]\s*|\s)(?:e?grep|rg|ag|ack)\s[^;&|]*/g, '$1');
 const ehTeste = (command) => {
   const t = command.split(/\s+/);
-  return EXECUTORES_DE_TESTE.has(basename(t[0])) && /vitest|jest|node(\s+\S+)*\s+--test/.test(command);
+  return EXECUTORES_DE_TESTE.has(basename(t[0])) && /vitest|jest|node(\s+\S+)*\s+--test/.test(semBusca(command));
 };
 // git: pula as opções que levam valor (-C dir, -c k=v) e olha o primeiro argumento solto
 const ehMerge = (command) => {
@@ -84,10 +86,24 @@ export function julgarReinicio({ sessoes, fichas, ps, euPid = new Set() }) {
     for (let n = 0, atual = p; atual && n < 50; n += 1, atual = dePid.get(atual.ppid)) if (porPid.has(atual.pid)) return true;
     return false;
   };
+  // os pais do dono da ficha (o `zsh -c` que o lançou, o `npm test`) são o mesmo teste, não outro
+  const paisDeFicha = new Set();
+  for (const pid of porPid.keys()) {
+    for (let n = 0, atual = dePid.get(dePid.get(pid)?.ppid); atual && n < 50; n += 1, atual = dePid.get(atual.ppid)) paisDeFicha.add(atual.pid);
+  }
+  const candidatos = ps.filter((p) => !euPid.has(p.pid) && ehTeste(p.command) && !dentroDeFicha(p) && !paisDeFicha.has(p.pid));
+  // só a folha: o pai de outro candidato (o `zsh -c` de cima do gate na fila) é o mesmo teste
+  const paisDeCandidato = new Set();
+  for (const c of candidatos) {
+    for (let n = 0, atual = dePid.get(c.ppid); atual && n < 50; n += 1, atual = dePid.get(atual.ppid)) paisDeCandidato.add(atual.pid);
+  }
   for (const p of ps) {
     if (euPid.has(p.pid)) continue;
-    if (ehTeste(p.command) && !dentroDeFicha(p)) motivos.push({ tipo: 'teste', texto: `teste fora do teto: ${curto(p.command)}` });
-    else if (ehMerge(p.command)) motivos.push({ tipo: 'merge', texto: `merge/rebase no meio: ${curto(p.command)}` });
+    if (candidatos.includes(p)) {
+      if (paisDeCandidato.has(p.pid)) continue;
+      const fila = /com-fichas\.mjs/.test(p.command);
+      motivos.push({ tipo: 'teste', texto: `teste ${fila ? 'na fila do teto' : 'fora do teto'}: ${curto(p.command)}` });
+    } else if (ehMerge(p.command)) motivos.push({ tipo: 'merge', texto: `merge/rebase no meio: ${curto(p.command)}` });
   }
   return motivos;
 }

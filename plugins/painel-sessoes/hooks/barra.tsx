@@ -162,7 +162,8 @@ export type MotivoDeReinicio = { tipo: 'sessao' | 'teste' | 'merge'; texto: stri
 /** O que `painel pode-reiniciar` grava em `batida/pode-reiniciar.json`: TODOS os motivos, a sessão que rodou incluída. */
 export type ArquivoDeReinicio = { pode: boolean; motivos: MotivoDeReinicio[]; sessoesDe?: string; em: string; listaEm?: string }
 /** `batida/aviso-de-reinicio.json`: o aviso que o operador ligou; a `vigia` é a sessão que confere a cada minuto. */
-export type AvisoDeReinicio = { ligadoEm: string; vigia: string; avisadoEm?: string; naoPodeSeguidos: number }
+/** `appInicio`: o instante de início do processo do app quando o aviso foi ligado (só o reinício do app o muda); `vigiaEm`: a hora da última conferência da vigia. */
+export type AvisoDeReinicio = { ligadoEm: string; vigia: string; avisadoEm?: string; naoPodeSeguidos: number; appInicio?: string; vigiaEm?: string }
 
 /** "Pode" só com a lista de sessões e o arquivo de até 2 min; "espere" vale com o arquivo de até 15; fora disso, "não sei". */
 export const PODE_MAX_MS = 2 * 60_000
@@ -247,9 +248,9 @@ export function proximoDaVigia({ aviso, estado, agora }: { aviso: AvisoDeReinici
   return { aviso, notificar: false }
 }
 
-/** A vigia sumiu: o aviso está ligado e a última conferência (ou o clique) é de mais de 3 min. */
-export function vigiaSumiu({ aviso, arquivo, agora }: { aviso: AvisoDeReinicio; arquivo: ArquivoDeReinicio | null; agora: number }): boolean {
-  const ultima = Math.max(emMs(arquivo?.em) ?? 0, emMs(aviso.ligadoEm) ?? 0)
+/** A vigia sumiu: a última conferência DELA (`vigiaEm`; sem ela, o clique) é de mais de 3 min. O arquivo não serve: qualquer pane o renova. */
+export function vigiaSumiu({ aviso, agora }: { aviso: AvisoDeReinicio; agora: number }): boolean {
+  const ultima = emMs(aviso.vigiaEm) ?? emMs(aviso.ligadoEm) ?? 0
 
   return agora - ultima >= VIGIA_SUMIU_MS
 }

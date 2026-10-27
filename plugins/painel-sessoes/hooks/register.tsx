@@ -1503,7 +1503,8 @@ export async function ligarAviso($: EngineInterface): Promise<void> {
   try {
     const vigia = await sessaoDoApp($)
     if (!vigia) throw new Error('sessão não identificada')
-    const aviso: AvisoDeReinicio = { ligadoEm: new Date(await $.clock.now()).toISOString(), vigia, naoPodeSeguidos: 0 }
+    const appInicio = await inicioDoApp($)
+    const aviso: AvisoDeReinicio = { ligadoEm: new Date(await $.clock.now()).toISOString(), vigia, naoPodeSeguidos: 0, ...(appInicio ? { appInicio } : {}) }
     await update($, reinicio, r => ({ ...r, aviso }))
     await gravarAviso($, aviso)
     ligou = true
@@ -1559,9 +1560,8 @@ async function vigiar($: EngineInterface): Promise<void> {
     if (!eu) return
     const agora = await $.clock.now()
     if (aviso.vigia !== eu) {
-      const arquivo = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_REINICIO, validoArquivo, [])
-      if (!vigiaSumiu({ aviso, arquivo, agora })) return
-      await gravarAviso($, { ...aviso, vigia: eu })
+      if (!vigiaSumiu({ aviso, agora })) return
+      await gravarAviso($, { ...aviso, vigia: eu, vigiaEm: new Date(agora).toISOString() })
       aviso = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_AVISO, validoAviso, [])
       if (aviso?.vigia !== eu) return
     }
@@ -1574,9 +1574,12 @@ async function vigiar($: EngineInterface): Promise<void> {
     if (passo.aviso === null) {
       await apagarAviso($)
       await update($, reinicio, r => ({ ...r, aviso: null }))
-    } else if (JSON.stringify(passo.aviso) !== JSON.stringify(lido.aviso)) {
-      await gravarAviso($, passo.aviso)
-      await update($, reinicio, r => ({ ...r, aviso: passo.aviso }))
+    } else {
+      // a conferência da vigia fica marcada no aviso (`vigiaEm`), junto com o boot do app em que ele nasceu (`appInicio`)
+      const appInicio = passo.aviso.appInicio ?? (await inicioDoApp($)) ?? undefined
+      const gravar: AvisoDeReinicio = { ...passo.aviso, vigiaEm: new Date(await $.clock.now()).toISOString(), ...(appInicio ? { appInicio } : {}) }
+      await gravarAviso($, gravar)
+      await update($, reinicio, r => ({ ...r, aviso: gravar }))
     }
     if (passo.notificar) await notificarReinicio($, hhmm(await $.clock.now()))
   } catch (err) {
@@ -1586,13 +1589,33 @@ async function vigiar($: EngineInterface): Promise<void> {
   }
 }
 
-/** Ao carregar o mod: aviso com `avisadoEm` que sobrou de antes é de um app que já reiniciou (o fim natural do aviso). */
+/**
+ * O instante de início do processo principal do app (`ps -axo pid=,lstart=,command=`, linha cujo comando termina em
+ * `Claude.app/Contents/MacOS/Claude`): só um reinício do app o muda; sessão nova e `clear_session` não. `null` = não medi.
+ */
+async function inicioDoApp($: EngineInterface): Promise<string | null> {
+  try {
+    const r = await $.process.run(['ps', '-axo', 'pid=,lstart=,command='], { timeoutMs: SCRIPT_TIMEOUT_MS })
+    if (r.exitCode !== 0) return null
+    for (const linha of r.stdout.split('\n')) {
+      const m = /^\s*\d+\s+(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.+?)\s*$/.exec(linha)
+      if (m?.[2]?.endsWith('Claude.app/Contents/MacOS/Claude')) return m[1].replace(/\s+/g, ' ')
+    }
+  } catch {
+    // sem medida o aviso fica (o desligamento de 30 min cobre)
+  }
+
+  return null
+}
+
+/** Ao carregar o mod: aviso já dado (`avisadoEm`) só é apagado se o app reiniciou: o início do processo dele mudou desde que o aviso nasceu. */
 async function limparAvisoVelho($: EngineInterface): Promise<void> {
   const pasta = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/batida`
   const aviso = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_AVISO, validoAviso, [])
-  if (aviso?.avisadoEm) await apagarAviso($)
+  if (!aviso?.avisadoEm || !aviso.appInicio) return
+  const agoraDoApp = await inicioDoApp($)
+  if (agoraDoApp !== null && agoraDoApp !== aviso.appInicio) await apagarAviso($)
 }
-
 // A batida (ADR 0007): de 10 em 10 min, UMA das sessões vivas roda `painel batida` (o julgamento é do script) e leva as
 // mensagens que ele devolveu às sessões certas. Sem modelo e sem turno: só `$.process.run` e `send_message`.
 // A vez mora em arquivo (`batida/vez.json`): cada sessão tem o próprio relógio, e a que grava a vez e se relê dona dela roda.

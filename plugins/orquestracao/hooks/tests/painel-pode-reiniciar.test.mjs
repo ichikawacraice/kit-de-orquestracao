@@ -119,6 +119,47 @@ test('vitest no ps sem ficha: teste fora do teto; filho de pid com ficha não co
   assert.equal(j.motivos.filter((m) => m.tipo === 'teste').length, 2, 'a ficha e o vitest solto');
 });
 
+test('M3: o zsh -c pai do dono da ficha não conta; o vitest solto de verdade conta (prova que a detecção funciona)', () => {
+  ficha(1, { pid: process.pid });
+  const ps = psCom([
+    '80001 1 zsh -c source /Users/x/.claude/shell-snapshots/s.sh && eval node gate/com-fichas.mjs -- node --test test/a.test.mjs',
+    `${process.pid} 80001 node /x/gate/com-fichas.mjs -- node --test test/a.test.mjs`,
+    `80002 ${process.pid} node --test test/a.test.mjs`,
+    '80003 1 node /x/node_modules/.bin/vitest run apps/web',
+  ]);
+  const j = painel(['pode-reiniciar', '--sessoes', sessoes(), '--json'], { PODE_REINICIAR_PS: ps }).json();
+  const testes = j.motivos.filter((m) => m.tipo === 'teste');
+  assert.equal(testes.length, 2, JSON.stringify(j.motivos));
+  assert.ok(testes.some((m) => /^teste fora do teto: .*vitest run apps\/web/.test(m.texto)), 'o vitest solto conta');
+  assert.ok(!testes.some((m) => /zsh|shell-snapshots/.test(m.texto)), 'o zsh pai não conta');
+});
+
+test('M3: com-fichas.mjs sem ficha é "teste na fila do teto", uma vez só, sem contar o zsh pai nem o npm', () => {
+  const ps = psCom([
+    '81001 1 zsh -c source /Users/x/.claude/shell-snapshots/s.sh && eval node gate/com-fichas.mjs --quero 4 -- node --test test/b.test.mjs',
+    '81002 81001 npm test',
+    '81003 81002 node gate/com-fichas.mjs --quero 4 -- node --test --test-concurrency=4',
+  ]);
+  const j = painel(['pode-reiniciar', '--sessoes', sessoes(), '--json'], { PODE_REINICIAR_PS: ps }).json();
+  const testes = j.motivos.filter((m) => m.tipo === 'teste');
+  assert.equal(testes.length, 1, JSON.stringify(j.motivos));
+  assert.match(testes[0].texto, /^teste na fila do teto: node gate\/com-fichas\.mjs/);
+  assert.doesNotMatch(testes[0].texto, /fora do teto/);
+});
+
+test('M3: grep/rg por vitest ou jest (puro ou dentro de zsh -c) não é teste', () => {
+  const ps = psCom([
+    '82001 1 grep -r vitest packages/',
+    '82002 1 rg --files-with-matches jest apps',
+    '82003 1 zsh -c cd /x && grep -rn "node --test" docs | head',
+    '82004 1 zsh -c cd /x && vitest run apps/web',
+  ]);
+  const j = painel(['pode-reiniciar', '--sessoes', sessoes(), '--json'], { PODE_REINICIAR_PS: ps }).json();
+  const testes = j.motivos.filter((m) => m.tipo === 'teste');
+  assert.equal(testes.length, 1, JSON.stringify(j.motivos));
+  assert.match(testes[0].texto, /vitest run apps\/web/, 'o zsh -c com vitest de verdade conta (prova)');
+});
+
 test('gh pr merge, git rebase, git merge e git cherry-pick no ps são merge no meio; git merge-tree e vim não', () => {
   const ps = psCom([
     '80001 1 gh pr merge 63 --squash --match-head-commit abc',

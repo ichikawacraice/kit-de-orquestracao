@@ -126,12 +126,13 @@ test('proximoDaVigia: sem dado não muda nada; 30 min depois do aviso, ainda pod
   expect(proximoDaVigia({ aviso: { ...a, avisadoEm: iso(AGORA - AVISO_VALE_MS + MIN) }, estado: 'pode', agora: AGORA }).aviso, 'um minuto antes ainda vale').not.toBeNull()
 })
 
-test('vigiaSumiu: 3 min sem conferência com o aviso ligado', () => {
-  const a = aviso({ ligadoEm: iso(AGORA - 10 * MIN) })
-  expect(vigiaSumiu({ aviso: a, arquivo: arquivo([], 2), agora: AGORA })).toBe(false)
-  expect(vigiaSumiu({ aviso: a, arquivo: arquivo([], 3), agora: AGORA })).toBe(true)
-  expect(vigiaSumiu({ aviso: a, arquivo: null, agora: AGORA }), 'sem arquivo vale o clique').toBe(true)
-  expect(vigiaSumiu({ aviso: aviso({ ligadoEm: iso(AGORA - MIN) }), arquivo: null, agora: AGORA }), 'acabou de ligar').toBe(false)
+test('vigiaSumiu mede a conferência DA VIGIA (vigiaEm), não o arquivo que qualquer pane renova (M2)', () => {
+  const velha = aviso({ ligadoEm: iso(AGORA - 30 * MIN), vigiaEm: iso(AGORA - 20 * MIN) })
+  expect(vigiaSumiu({ aviso: velha, agora: AGORA }), 'vigiaEm de 20 min: assume').toBe(true)
+  expect(vigiaSumiu({ aviso: aviso({ ligadoEm: iso(AGORA - 30 * MIN), vigiaEm: iso(AGORA - 2 * MIN) }), agora: AGORA }), 'vigiaEm de 2 min: viva').toBe(false)
+  expect(vigiaSumiu({ aviso: aviso({ ligadoEm: iso(AGORA - 30 * MIN), vigiaEm: iso(AGORA - 3 * MIN) }), agora: AGORA }), 'exatamente 3 min').toBe(true)
+  expect(vigiaSumiu({ aviso: aviso({ ligadoEm: iso(AGORA - 10 * MIN) }), agora: AGORA }), 'sem vigiaEm vale o clique').toBe(true)
+  expect(vigiaSumiu({ aviso: aviso({ ligadoEm: iso(AGORA - MIN) }), agora: AGORA }), 'acabou de ligar').toBe(false)
 })
 
 // ---- a peça da barra: texto, glifo, largura reservada e nunca cai ----
@@ -253,6 +254,8 @@ type Opc = {
   rmFalha?: boolean
   gravarAvisoFalha?: string
   notificacaoFalha?: boolean
+  /** O instante de início do processo do app que o `ps` mostra; `null` = o `ps` não traz a linha do app; omitido = a mesma manhã. */
+  appInicio?: string | null
 }
 
 const ABRIR = { command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as const
@@ -299,7 +302,7 @@ function engine(on: On, opc: Opc = {}) {
   if (!opc.semPlugin) arquivos.set(INSTALADOS, JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user', installPath: '/cache/orquestracao/1' }] } }))
   if (opc.arquivo) arquivos.set(ARQ, JSON.stringify(opc.arquivo))
   if (opc.aviso) arquivos.set(AVISO, JSON.stringify(opc.aviso))
-  const estado = { motivos: opc.motivos ?? [] as Motivo[] }
+  const estado = { motivos: opc.motivos ?? [] as Motivo[], appInicio: opc.appInicio === undefined ? 'Mon Oct 27 08:00:00 2026' : opc.appInicio }
   /** O relógio do teste: o que o mock do motor diz, para o comando falso gravar `em` na mesma hora. */
   const tempo = { agora: AGORA }
   on('fs.list', (_, e) => {
@@ -332,6 +335,11 @@ function engine(on: On, opc: Opc = {}) {
       if (opc.comandoFalha) return { value: { ...ok, exitCode: 1, stderr: 'quebrou' } }
       // o comando de verdade grava o arquivo; aqui o teste o imita com o que ele julgaria
       arquivos.set(ARQ, JSON.stringify(arquivo(estado.motivos, 0, {}, tempo.agora)))
+    }
+    if (argv[0] === 'ps') {
+      const app = estado.appInicio === null ? '' : `  4242 ${estado.appInicio} /Applications/Claude.app/Contents/MacOS/Claude\n`
+
+      return { value: { ...ok, stdout: `    1 Sat Oct 25 07:00:00 2026 /sbin/launchd\n  777 Mon Oct 27 09:00:00 2026 /Applications/Claude.app/Contents/MacOS/Claude --type=renderer\n${app}` } }
     }
     if (argv[0] === 'rm') {
       if (opc.rmFalha) return { value: { ...ok, exitCode: 1, stderr: 'sem permissão' } }
@@ -495,10 +503,10 @@ test('a vigia: 30 min depois do aviso, ainda podendo, o aviso desliga sozinho se
 })
 
 test('vigia de outra sessão com conferência recente: esta não age', async ($, on) => {
-  const m = await iniciar($, on, { aviso: aviso({ vigia: OUTRA, ligadoEm: iso(AGORA - 10 * MIN) }), arquivo: arquivo([sessao(7)], 0), motivos: [sessao(7)] })
+  const m = await iniciar($, on, { aviso: aviso({ vigia: OUTRA, ligadoEm: iso(AGORA - 10 * MIN), vigiaEm: iso(AGORA - 30_000) }), arquivo: arquivo([sessao(7)], 0), motivos: [sessao(7)] })
   m.arquivos.set(ARQ, JSON.stringify(arquivo([sessao(7)], 0, {}, AGORA + MIN)))
   await minuto(m)
-  expect(m.avisoNoDisco()?.vigia, 'a vigia está viva (o arquivo é recente): fica com ela').toBe(OUTRA)
+  expect(m.avisoNoDisco()?.vigia, 'a vigia conferiu há pouco: fica com ela').toBe(OUTRA)
   expect(m.execucoes.filter(a => a.includes('pode-reiniciar'))).toEqual([])
 })
 
@@ -509,10 +517,50 @@ test('vigia de outra sessão que sumiu (sem conferência há 10 min): esta assum
   expect(m.execucoes.some(a => a.includes('pode-reiniciar')), 'e confere').toBe(true)
 })
 
-test('o app reiniciou: o aviso com avisadoEm que sobrou é apagado ao carregar', async ($, on) => {
-  const m = await iniciar($, on, { aviso: aviso({ avisadoEm: iso(AGORA - 5 * MIN) }) })
+test('o app reiniciou: o aviso com avisadoEm de OUTRO boot do app é apagado ao carregar (M1)', async ($, on) => {
+  const m = await iniciar($, on, { aviso: aviso({ avisadoEm: iso(AGORA - 5 * MIN), appInicio: 'Sun Oct 26 20:00:00 2026' }) })
+  expect(m.execucoes.some(a => a[0] === 'ps'), 'prova: o início do app foi medido').toBe(true)
   expect(m.execucoes.some(a => a[0] === 'rm'), 'prova: o apagar acontece').toBe(true)
   expect(m.avisoNoDisco(), 'o reinício foi o fim natural do aviso').toBeNull()
+})
+
+test('M1: sessão nova no MESMO boot do app não apaga o aviso (dois session.start seguidos)', async ($, on) => {
+  const m = await iniciar($, on, { aviso: aviso({ avisadoEm: iso(AGORA - 5 * MIN), appInicio: 'Mon Oct 27 08:00:00 2026' }) })
+  expect(m.execucoes.some(a => a[0] === 'ps'), 'prova: mediu').toBe(true)
+  await $.session.start({ cwd: '/work/kit', surface: 'desktop', isInteractive: true })
+  await m.relogio.settle()
+  expect(m.execucoes.some(a => a[0] === 'rm')).toBe(false)
+  expect(m.avisoNoDisco()?.avisadoEm, 'o aviso e o rearme seguem').toBeDefined()
+})
+
+test('M1: sem medir o início do app (o ps não traz a linha), o aviso não é apagado', async ($, on) => {
+  const a = await iniciar($, on, { aviso: aviso({ avisadoEm: iso(AGORA - 5 * MIN), appInicio: 'Sun Oct 26 20:00:00 2026' }), appInicio: null })
+  expect(a.execucoes.some(x => x[0] === 'ps'), 'prova: tentou medir').toBe(true)
+  expect(a.avisoNoDisco(), 'medida ausente não apaga').not.toBeNull()
+})
+
+test('M1: aviso com avisadoEm mas sem appInicio gravado não é apagado', async ($, on) => {
+  const m = await iniciar($, on, { aviso: aviso({ avisadoEm: iso(AGORA - 5 * MIN) }) })
+  expect(m.avisoNoDisco()).not.toBeNull()
+})
+
+test('a vigia grava o início do app e a própria conferência (appInicio, vigiaEm) no aviso (M1, M2)', async ($, on) => {
+  const m = await iniciar($, on, { aviso: aviso({ ligadoEm: iso(AGORA) }), motivos: [sessao(7)] })
+  expect(m.avisoNoDisco()?.appInicio, 'antes da vigia: nada').toBeUndefined()
+  await minuto(m)
+  expect(m.avisoNoDisco()?.appInicio).toBe('Mon Oct 27 08:00:00 2026')
+  const vigiaEm1 = m.avisoNoDisco()?.vigiaEm
+  expect(vigiaEm1).toBeDefined()
+  await minuto(m)
+  expect(Date.parse(m.avisoNoDisco()?.vigiaEm ?? '') - Date.parse(vigiaEm1 ?? ''), 'a cada minuto, a hora da conferência anda').toBe(MIN)
+})
+
+test('M2: pane de outra sessão renovando o arquivo não segura a vigia sumida; vigiaEm velho → esta assume', async ($, on) => {
+  const m = await iniciar($, on, { aviso: aviso({ vigia: OUTRA, ligadoEm: iso(AGORA - 30 * MIN), vigiaEm: iso(AGORA - 20 * MIN) }), arquivo: arquivo([sessao(7)], 0), motivos: [sessao(7)] })
+  m.arquivos.set(ARQ, JSON.stringify(arquivo([sessao(7)], 0, {}, AGORA + MIN)))
+  await minuto(m)
+  expect(m.avisoNoDisco()?.vigia, 'o arquivo é fresco mas a conferência da vigia é velha: assume').toBe(EU)
+  expect(m.execucoes.some(a => a.includes('pode-reiniciar'))).toBe(true)
 })
 
 test('o app reiniciou: sem avisadoEm o aviso ainda espera', async ($, on) => {
@@ -574,8 +622,10 @@ test('Me avise: grava o aviso com esta sessão como vigia, mostra o bloco, o toa
   const ui = await abrirPane($, m, 'terminal')
   await ui.press({ key: 'reinicio' })
   await m.relogio.settle()
-  expect(m.escritasDoAviso.length).toBe(1)
-  expect(m.escritasDoAviso[0]).toMatchObject({ vigia: EU, naoPodeSeguidos: 0, ligadoEm: iso(AGORA) })
+  expect(m.escritasDoAviso.length, 'o clique grava e a conferência da vigia marca vigiaEm').toBe(2)
+  expect(m.escritasDoAviso[0]).toMatchObject({ vigia: EU, naoPodeSeguidos: 0, ligadoEm: iso(AGORA), appInicio: 'Mon Oct 27 08:00:00 2026' })
+  expect(m.escritasDoAviso[0].vigiaEm, 'o clique ainda não é conferência').toBeUndefined()
+  expect(m.escritasDoAviso[1].vigiaEm).toBeDefined()
   expect(m.toasts).toContain('Aviso ligado. A notificação chega quando der para reiniciar o app.')
   expect(m.execucoes.some(a => a.includes('pode-reiniciar')), 'a vigia conferiu na hora').toBe(true)
   const texto = await lido(ui)
@@ -595,7 +645,7 @@ test('Me avise: o bloco entra no mesmo render (antes da gravação), o clique re
   await ui.press({ key: 'reinicio' })
   await ui.press({ key: 'reinicio' })
   await m.relogio.settle()
-  expect(m.escritasDoAviso.length, 'só uma gravação').toBe(1)
+  expect(m.escritasDoAviso.filter(a => a.vigiaEm === undefined).length, 'só uma gravação do clique').toBe(1)
   await ui.unmount()
 })
 
