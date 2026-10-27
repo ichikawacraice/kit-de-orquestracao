@@ -2938,7 +2938,7 @@ test('F144: o apelido que já aparece vivo depois do pedido esconde a linha na h
 
 test('F202: cartão com propostoEm no futuro some quando a sessão do item já está viva', async ($, on) => {
   const vivas = JSON.stringify([
-    { sessionId: 'local_orq_iz', title: '🎛 orquestradora — izanagi', isRunning: true, isArchived: false },
+    { sessionId: 'local_orq_iz', title: '🎛 orquestradora — alfa', isRunning: true, isArchived: false },
     { sessionId: 'local_nova', title: 'F68 · editor da loja', isRunning: false, isArchived: false, createdAt: iso5(1) },
   ])
   const errado = cartaoDe('task_errado', { propostoEm: iso5(-180) })
