@@ -16,7 +16,7 @@
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]   os membros livres do papel no projeto, o mais antigo parado primeiro → [{localId, apelido}]; --sessoes é o JSON do list_sessions (sem ele, o registro do app, sem contar a mesma sessão duas vezes)
 //   painel.mjs pegar <F> <local_> <apelido>   o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
-//   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, relata merge/vagas/excedentes à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
+//   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, pede ao membro com título de item fechado que volte a livre, relata merge/vagas/excedentes/títulos velhos à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
 //   (item que vira feito/descartado arquiva os próprios handoffs e roda a limpeza; reaberto, eles voltam. Pasta: PAINEL_HANDOFFS_DIR, senão PAINEL_DIR/../pool/handoffs, senão ~/.claude/orquestracao/pool/handoffs)
@@ -838,7 +838,7 @@ function comandoBatida(args) {
     for (const [nome, p] of Object.entries(julgado.projetos)) {
       const { mudou, ...conteudo } = p;
       // o relatório só passa a ser "o último" quando a orquestradora existe para recebê-lo: sem ela, a próxima batida o oferece de novo
-      if (mudou && !conteudo.orquestradora) { const antes = arquivoJson(join(pasta, `${nome}.json`), null); gravarJson(join(pasta, `${nome}.json`), { ...conteudo, merge: antes?.merge ?? [], vagas: antes?.vagas ?? [], excedentes: antes?.excedentes ?? [], em }); continue; }
+      if (mudou && !conteudo.orquestradora) { const antes = arquivoJson(join(pasta, `${nome}.json`), null); gravarJson(join(pasta, `${nome}.json`), { ...conteudo, merge: antes?.merge ?? [], vagas: antes?.vagas ?? [], excedentes: antes?.excedentes ?? [], titulosVelhos: antes?.titulosVelhos ?? [], em }); continue; }
       gravarJson(join(pasta, `${nome}.json`), { ...conteudo, em });
     }
     for (const id of marcadoresApagados) rmSync(join(ORQ(), 'ativas', id), { force: true });
