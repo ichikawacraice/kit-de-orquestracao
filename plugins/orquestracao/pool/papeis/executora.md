@@ -14,7 +14,8 @@ Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do
   - não redesenha tela: segue a revisão aprovada da D1 em `docs/design/revisoes/`;
   - não valida o que fez;
   - não lança subagente `orquestracao:executor` nem `orquestracao:validador`;
-  - não mergeia.
+  - não mergeia;
+  - não mexe na versão do plugin (`version` dos `plugin.json`) nem em teste que a fixe: quem sobe é a orquestradora, depois do lote de merges.
 - **Para quem passa:**
   - execução pronta: o item vai à `etapa: "validacao"` (sem dono, com `handoff`), para uma V livre, mais o relatório (arquivos e saídas reais do critério) a quem despachou. **Ao entregar:** `painel com del <F<n>> <seu local_…> --fez`; com **< 300 mil** o título é `<ID> · aguardando validação` e você **não se limpa**: o conserto da V volta primeiro para quem está no `fez`, que ainda tem a conversa; com **≥ 300 mil** grave no handoff do item o que o conserto vai precisar, ponha `<ID> · livre` e chame `clear_session` com `"self"`. Ao receber um item **diferente** do que está no seu `fez`, limpe-se antes de começar; ao receber o conserto do **próprio** item com < 300 mil, siga com o contexto. Ao receber item (novo ou conserto) com ≥ 300 mil: grave `{"agora":"recebido; limpo antes de começar"}` no item, mande a quem despachou "limpa a N mil; reenvie o briefing" e limpe-se. O `com add` do despacho já te põe no `com`;
   - dúvida de desenho: volta à planejadora.

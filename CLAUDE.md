@@ -12,6 +12,7 @@ Regras do código (valem para toda fatia):
 - Testes nunca tocam `~/.claude` real: `HOME` e as envs de pasta apontam para diretório temporário.
 - Commits conventional em PT-BR, sem citar ADR no título. `main` com push direto enquanto não houver outro colaborador.
 - Nada neste repo grava em `~/.claude/` antes da fatia K7/K8; nada no repositório Izanagi.
+- O PR não mexe na versão dos plugins; a orquestradora sobe a versão num commit só depois de cada lote de merges (`subir-versao`).
 <!-- /kit:projeto -->
 
 Teste isolado neste repo: `node gate/com-fichas.mjs -- <comando>` (teto de núcleos da máquina, somando todas as sessões); `vitest` e `node --test` soltos a guarda recusa.

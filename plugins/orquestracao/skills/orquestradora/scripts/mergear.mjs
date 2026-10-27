@@ -50,7 +50,23 @@ export function conferir(pr, shaCurto, cwd) {
     return { recusado: true, conflito: true, pr, arquivos, motivo: `conflito com ${base} em ${arquivos.join(', ') || 'arquivos não listados'}; devolva à dona` };
   }
   if (m.status !== 0) throw new Error(`git merge-tree saiu com ${m.status}: ${(m.out + (m.err ?? '')).trim()}`);
-  return { ok: true, pr, sha, base };
+  const aviso = avisoDeVersao(base, sha, cwd);
+  return { ok: true, pr, sha, base, ...(aviso ? { aviso } : {}) };
+}
+
+// F173: o PR de item não sobe a `version` dos plugins (a orquestradora sobe depois do lote). PR já aberto com bump passa, só avisa.
+function avisoDeVersao(base, sha, cwd) {
+  const d = git(['diff', '-U0', `origin/${base}...${sha}`, '--', 'plugins/*/.claude-plugin/plugin.json'], cwd);
+  if (d.status !== 0) return null;
+  const plugins = new Set();
+  let atual = null;
+  for (const l of d.out.split('\n')) {
+    const arq = /^\+\+\+ b\/plugins\/([^/]+)\/\.claude-plugin\/plugin\.json$/.exec(l);
+    if (arq) { atual = arq[1]; continue; }
+    if (atual && /^[+-]\s*"version"/.test(l)) plugins.add(atual);
+  }
+  if (plugins.size === 0) return null;
+  return `o PR sobe a versão de ${[...plugins].join(', ')}; a versão é da orquestradora depois do lote (rode subir-versao)`;
 }
 
 export function mergearNoGitHub(pr, sha, cwd) {

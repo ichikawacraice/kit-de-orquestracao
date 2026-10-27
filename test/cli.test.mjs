@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,14 +40,14 @@ test('package.json: bin, engines, test e type module', () => {
   assert.equal(p.dependencies, undefined, 'o kit não traz dependência npm');
 });
 
-test('marketplace.json lista os plugins do kit, cada um com a versão esperada no plugin.json', () => {
+test('marketplace.json lista os plugins do kit, cada um com versão semver no plugin.json', () => {
   const m = json('.claude-plugin', 'marketplace.json');
   const nomes = m.plugins.map((p) => p.name).sort();
   assert.deepEqual(nomes, ['design', 'orquestracao', 'painel-sessoes', 'processos']);
   for (const pl of m.plugins) {
     const pj = json(pl.source, '.claude-plugin', 'plugin.json');
     assert.equal(pj.name, pl.name);
-    assert.match(pj.version, /^\d+\.\d+\.\d+$/); if (pl.name === 'orquestracao') assert.equal(pj.version, '0.1.58'); // o cache do plugin só se renova quando a versão muda
+    assert.match(pj.version, /^\d+\.\d+\.\d+$/);
   }
 });
 
@@ -66,4 +66,27 @@ test('CLAUDE.md do repo traz todos os blocos do modelo (escrito a partir dele)',
   const modelo = blocos(readFileSync(join(RAIZ, 'modelos', 'CLAUDE.md'), 'utf8'));
   const meu = blocos(readFileSync(join(RAIZ, 'CLAUDE.md'), 'utf8'));
   assert.deepEqual(meu.map((x) => x.nome), modelo.map((x) => x.nome));
+});
+
+test('nenhum teste fixa a versão atual de um plugin (a versão sobe no lote, pela orquestradora)', () => {
+  const m = json('.claude-plugin', 'marketplace.json');
+  const versoes = m.plugins.map((p) => json(p.source, '.claude-plugin', 'plugin.json').version);
+  const testes = [];
+  const varrer = (dir) => {
+    if (!existsSync(dir)) return;
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules') varrer(p); } else if (e.name.endsWith('.test.mjs')) testes.push(p);
+    }
+  };
+  varrer(join(RAIZ, 'test'));
+  for (const pl of readdirSync(join(RAIZ, 'plugins'))) varrer(join(RAIZ, 'plugins', pl, 'hooks', 'tests'));
+  assert.ok(versoes.length >= 4, `achei só ${versoes.length} plugin.json`);
+  assert.ok(testes.length >= 20, `achei só ${testes.length} arquivos de teste`);
+  const achados = [];
+  for (const f of testes) {
+    const t = readFileSync(f, 'utf8');
+    for (const v of versoes) if (t.includes(`'${v}'`) || t.includes(`"${v}"`)) achados.push(`${f.slice(RAIZ.length + 1)}: ${v}`);
+  }
+  assert.deepEqual(achados, [], 'teste com a versão atual de um plugin como literal: a versão é da orquestradora, depois do lote');
 });

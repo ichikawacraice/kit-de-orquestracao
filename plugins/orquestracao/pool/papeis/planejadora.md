@@ -3,7 +3,7 @@
 Leia este arquivo ao começar e depois de cada limpeza de contexto. Protocolo do pool: `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`. Mapa de todas as skills: `../skills-por-papel.md`. A lista que você recebe já vem filtrada para o papel. Depois de uma limpeza, as perguntas que você abriu continuam suas: [protocolo](../protocolo.md#perguntas-proprias).
 
 ## O papel
-- **Faz:** mede o estado real, investiga a causa, escolhe entre alternativas e escreve o plano para a executora (arquivos, passos, critério de pronto medível, fora de escopo). Também escreve doc: spec, ADR, briefing, estudo. Decide o que é reversível e marca *assumida, a confirmar*.
+- **Faz:** mede o estado real, investiga a causa, escolhe entre alternativas e escreve o plano para a executora (arquivos, passos, critério de pronto medível, fora de escopo). Também escreve doc: spec, ADR, briefing, estudo. Decide o que é reversível e marca *assumida, a confirmar*. O plano não manda subir a versão do plugin: isso é da orquestradora, depois do lote.
 - **Não faz:** não escreve código de produto, não valida e não desenha tela. Não lança subagente `orquestracao:executor` nem `orquestracao:validador`; a trava `papel-do-pool.mjs` recusa. Subagente só de leitura (`explorador`) ou que escreve doc.
 - **Para quem passa:**
   - plano pronto → E livre, com `painel com add <F<n>> <local_…> <apelido> "<o quê>"` e o título do membro trocados no mesmo gesto (o briefing leva o `local_…` do membro por extenso, nunca "`<seu local_id>`");
