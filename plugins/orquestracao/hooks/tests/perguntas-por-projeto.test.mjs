@@ -298,3 +298,11 @@ test('migração com a mesma pergunta na pasta quente e no arquivo: fica a de ve
   assert.equal(ficou.data.resposta, 'PANE-NOVA');
   assert.equal(ficou.data.projeto, 'izanagi');
 });
+
+test('projeto null conta como ausente: a batida espera a migração', () => {
+  pergunta('Q1', { estado: 'respondida', projeto: null, respondidaEm: '2026-10-20T15:00:00Z' });
+  const lista = join(base, 'sessoes.json');
+  writeFileSync(lista, '[]');
+  assert.deepEqual(painel(['batida', '--sessoes', lista]).json().perguntasArquivadas, []);
+  assert.deepEqual(painel(['perguntas', 'migrar', '--seco']).json().projeto, { Q1: 'sem-projeto' });
+});

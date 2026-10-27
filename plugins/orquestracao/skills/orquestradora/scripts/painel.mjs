@@ -1345,8 +1345,8 @@ function migracaoFeita() {
     const pergunta = f.startsWith(dir);
     if (pergunta && vistos.has(doc?.id)) return false;
     if (pergunta) vistos.add(doc?.id);
-    const p = doc?.data?.projeto;
-    if ((p === undefined && (pergunta || f.startsWith(caminho('sessoes')))) || (p !== undefined && !arq.SLUG.test(String(p)))) return false;
+    const p = doc?.data?.projeto; // `null` gravado por set conta como ausente, como na migração
+    if ((p == null && (pergunta || f.startsWith(caminho('sessoes')))) || (p != null && !arq.SLUG.test(String(p)))) return false;
   }
   writeFileSync(MARCA_DA_MIGRACAO(), `${JSON.stringify({ em: new Date().toISOString(), semMigrar: true })}\n`);
   return true;
