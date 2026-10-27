@@ -1,6 +1,6 @@
 # F143 — itens parecidos vão ao mesmo membro (afinidade no despacho)
 
-Decisão do operador: Q418 (27/10, "sim, segue a recomendação"). A decisão de desenho fica no ADR do item; este plano diz
+Decisão do operador: Q418 (27/10, "sim, segue a recomendação"). A decisão de desenho está no [ADR 0009](../adr/0009-afinidade-no-despacho.md); este plano diz
 como executar. Tudo marcado *assumida, a confirmar* é reversível e barato.
 
 <a id="medido"></a>
@@ -60,7 +60,7 @@ como executar. Tudo marcado *assumida, a confirmar* é reversível e barato.
 | `plugins/orquestracao/pool/papeis/{planejadora,design,executora,validadora}.md` | "Ao terminar": `painel seguinte` antes do livre |
 | `plugins/orquestracao/pool/protocolo.md` | "Ao terminar um item" e "Fila do pool": `passaram`, afinidade, `seguinte` |
 | `plugins/orquestracao/skills/orquestradora/SKILL.md` | o despacho à mão segue a mesma afinidade (dar ao afim ocupado em vez do primeiro livre, dentro do prazo) |
-| `docs/adr/NNNN-…md` e `docs/adr/README.md` | o ADR (número com a orquestradora) |
+| `docs/adr/0009-afinidade-no-despacho.md` e `docs/adr/README.md` | o ADR (já escrito, com o plano) |
 
 <a id="passos"></a>
 ## Passos (teste antes do código)

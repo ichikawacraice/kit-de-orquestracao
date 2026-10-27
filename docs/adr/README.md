@@ -32,3 +32,4 @@ O que muda para quem usa; o que fica mais difícil.
 | [0006](0006-o-diario-tem-uma-entrada-por-arquivo.md) | Cada entrada nova do diário é um arquivo próprio em `diario/AAAA-MM/DD-<ancora>.md`; o acervo fica, e o gate confere o formato | Aceito |
 | [0007](0007-cada-sessao-cuida-do-proprio-item-e-a-batida-roda-no-mod.md) | Cada sessão grava o próprio item; a batida de 10 min roda no mod sem modelo, cutuca e solta o parado e avisa o livre; a orquestradora só lê, mergeia, pede vaga e arquiva | Proposto |
 | [0008](0008-vaga-do-gate-e-vaga-dos-testes-no-teto-da-maquina.md) | O teto da máquina vira 2/3 dos núcleos, partido em vaga do gate (70%, um gate por vez na máquina) e vaga dos testes normais; sem gate, a vaga dele se empresta | Proposto |
+| [0009](0009-afinidade-no-despacho.md) | Item do mesmo tema vai primeiro ao membro que passou pelo último (`passaram`); o afim ocupado segura o item até 20 min; quem termina roda `painel seguinte` antes de se limpar | Proposto |
