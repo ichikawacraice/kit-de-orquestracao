@@ -64,3 +64,34 @@ test('skills por etapa: as fixas da tabela do protocolo estão na lista do scrip
   }
   assert.throws(() => skillsDaEtapa('merge'), /não é/);
 });
+
+// F179: os textos que a dona e as outras sessões leem concordam na regra do título e no modelo da dona.
+test('título da dona é `F<n> · <tema>` em todo texto que o diz; o resumo de início e o modelo de CLAUDE.md não falam do pool', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const plugin = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const ler = (...p) => readFileSync(join(...p), 'utf8');
+  const textos = {
+    dona: ler(plugin, 'pool', 'dona.md'),
+    protocolo: ler(plugin, 'pool', 'protocolo.md').split('# Legado')[0],
+    orquestradora: ler(plugin, 'skills', 'orquestradora', 'SKILL.md'),
+    papeis: ler(plugin, 'skills', 'papeis-e-modelos', 'SKILL.md'),
+    resumo: ler(plugin, 'hooks', 'regras-globais.md'),
+    modelo: ler(plugin, '..', '..', 'modelos', 'CLAUDE.md'),
+  };
+  for (const [nome, t] of Object.entries(textos)) {
+    assert.ok(t.length > 500, `insumo vazio: ${nome}`);
+    assert.ok(t.includes('`F<n> · <tema'), `${nome} não diz o título \`F<n> · <tema…>\``);
+  }
+  // A regra velha ("sem `F<n>`" no título da dona) sumiu; o que mede pegaria a frase de antes.
+  const velha = /Título da sessão: o tema do item[^.]*sem `F<n>`/;
+  assert.ok(velha.test('Título da sessão: o tema do item, sem `F<n>`.'), 'precondição: a regex pega a frase antiga');
+  for (const nome of ['dona', 'protocolo', 'orquestradora']) assert.doesNotMatch(textos[nome], velha, nome);
+  assert.doesNotMatch(textos.resumo, /executar plano pronto em Sonnet|O modelo sai do papel/);
+  for (const frase of ['dona', 'orquestracao:validador', 'fila de merge', 'testes-afetados']) assert.ok(textos.resumo.includes(frase), `o resumo não diz "${frase}"`);
+  for (const frase of ['dona', 'orquestracao:validador', 'fila de merge']) assert.ok(textos.modelo.includes(frase), `o modelo de CLAUDE.md não diz "${frase}"`);
+  // Quem mantém o painel: a âncora existe no protocolo e a dona e a skill apontam para ela.
+  assert.ok(textos.protocolo.includes('<a id="painel-em-dia"></a>') && textos.dona.includes('<a id="painel-em-dia"></a>'));
+  assert.ok(textos.orquestradora.includes('protocolo.md#painel-em-dia'));
+});
