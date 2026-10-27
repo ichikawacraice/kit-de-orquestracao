@@ -57,6 +57,18 @@ test('título com outro ID, ou com o ID em formato errado, é recusado e o ID ve
   assert.equal(tituloSugerido('F181', '  '), 'F181 · <tema em palavras do produto>');
 });
 
+test('o ID é o da frase "você é a dona do", não o de outra dona citada no prompt', () => {
+  const prompt = 'Pedido: a dona do F174 abriu sem ID. Contexto do F150. Você é a dona do F181: leia dona.md';
+  assert.equal(decidir(TOOL, { title: 'F181 · Trava', prompt }), null);
+  assert.ok(decidir(TOOL, { title: 'F174 · Trava', prompt })?.includes('"F181 · Trava"'), 'devia sugerir o F181');
+  assert.equal(decidir(TOOL, { title: 'Investigar gate', prompt: 'Investigue o gate lento; avise a dona do F150 quando terminar.' }), null);
+});
+
+test('ID entre crases conta; título só com o ID, sem tema, é recusado', () => {
+  assert.ok(decidir(TOOL, { title: 'Trava', prompt: 'Você é a dona do `F181`: leia dona.md' })?.includes('"F181 · Trava"'));
+  assert.ok(decidir(TOOL, { title: 'F181 · ', prompt: PROMPT })?.includes('"F181 · <tema em palavras do produto>"'));
+});
+
 test('prompt de dona sem título é recusado com o modelo do título', () => {
   const motivo = decidir(TOOL, { prompt: PROMPT });
   assert.ok(motivo?.includes('F181 · '), `devia recusar: ${motivo}`);
