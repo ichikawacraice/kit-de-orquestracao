@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pode reiniciar — mock</title>
+<style>
+:root{--bg:#fbfaf8;--fg:#1f1f1f;--dim:#6f6f6b;--s:#6b6b68;--warn:#9a6210;--err:#b8452c;--li:#5b5cd6;--acc:#3a68c8;--ok:#2e7d4a;--pm:#2a8a8a;--tile:#f4f3f0;--ln:#e8e7e3;--btn:#ecebe8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1c1b;--fg:#ececec;--dim:#93938f;--s:#a8a8a4;--warn:#d9962b;--err:#e0846b;--li:#8b8cf8;--acc:#5b8def;--ok:#4caf6e;--pm:#4fb3b3;--tile:#262625;--ln:#2f2f2d;--btn:#2c2c2b}}
+:root[data-theme="dark"]{--bg:#1c1c1b;--fg:#ececec;--dim:#93938f;--s:#a8a8a4;--warn:#d9962b;--err:#e0846b;--li:#8b8cf8;--acc:#5b8def;--ok:#4caf6e;--pm:#4fb3b3;--tile:#262625;--ln:#2f2f2d;--btn:#2c2c2b}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,system-ui,sans-serif}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;margin:28px 0 6px}p.n{color:var(--dim);margin:0 0 8px;max-width:72ch}
+.tema{margin:8px 0 16px}.tema button{font:inherit;margin-right:6px}
+.term{font:13px/1.5 ui-monospace,Menlo,monospace;background:var(--tile);border:1px solid var(--ln);padding:6px 0;overflow-x:auto;white-space:pre;margin-top:6px}
+.cols{display:inline-block;border-left:1px dashed var(--ln);border-right:1px dashed var(--ln)}
+.d{color:var(--dim)}.w{color:var(--warn)}.e{color:var(--err)}.l{color:var(--acc)}.c{color:var(--pm)}.ok{color:var(--ok)}.b{font-weight:700}.i{font-style:italic}.p{color:var(--acc);font-weight:700}
+.desk{max-width:760px;border:1px solid var(--ln);border-radius:10px;padding:10px 12px;background:var(--tile)}
+.row{display:flex;flex-wrap:wrap;align-items:center;column-gap:16px;row-gap:6px}
+.grow{display:flex;flex-wrap:wrap;column-gap:6px;flex-grow:1;justify-content:flex-end;align-items:center}
+.btn{border:1px solid var(--ln);background:var(--btn);border-radius:6px;padding:2px 9px;font:13px system-ui;color:var(--fg)}
+.btn.dim{color:var(--dim)}.btn[disabled]{opacity:.7}
+.panes{display:flex;flex-wrap:wrap;gap:16px}
+.pane{width:288px;box-sizing:border-box;border:1px solid var(--ln);background:var(--bg);padding:8px;border-radius:8px}
+.pane .cap{font-size:11px;color:var(--dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.fil{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;color:var(--s);margin-bottom:6px}
+.r1{font-size:12.5px;font-weight:600;color:var(--s)}.r2{font-size:12.5px;color:var(--s)}
+.blk{border:1.5px solid var(--acc);border-radius:8px;padding:6px 12px;margin-top:2px}
+.blk.okb{border-color:var(--ok)}.blk.ms{border-color:var(--dim)}
+.blk .t{font-size:13px;font-weight:700}.blk .m{font-size:12px;color:var(--s);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.blk .h{font-size:12px;color:var(--dim)}
+.resumo{margin-top:8px;height:36px;background:var(--tile);border-radius:8px;display:flex;align-items:center;padding:0 10px;color:var(--dim);font-size:12px}
+.gap{height:6px}
+.tp{font:12.5px/1.5 ui-monospace,Menlo,monospace;white-space:pre;background:var(--tile);border:1px solid var(--ln);padding:8px;display:inline-block;margin-right:12px;vertical-align:top}
+</style>
+</head>
+<body>
+<h1>Quando dá para reiniciar o app — mock</h1>
+<p class="n">Estático. A barra é desenhada em células reais (a borda tracejada marca a largura); a base é a barra já revisada (glifos, ordem <code>selo → limpar → modo → painel</code>). Cores pelas chaves de tema do motor; aqui, os valores do pane. O pane está a W = 288, o pior caso.</p>
+<div class="tema"><button onclick="document.documentElement.dataset.theme='light'">Claro</button><button onclick="document.documentElement.dataset.theme='dark'">Escuro</button></div>
+
+<h2>1 · A barra sem o aviso (o de todo dia): nada muda</h2>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="d">142/600 mil</span>  <span class="d">F52 · design</span>                      [ <span class="w">●</span> 3 perguntas ] <span class="d">[ </span><span class="l">☾</span><span class="d"> Ficar ausente ]</span> <span class="d">[ </span><span class="c">◨</span><span class="d"> Abrir painel ]</span> </span></div>
+<p class="n">Membro do pool, 114 células. Sem o aviso ligado, a barra não fala de reinício: a pergunta só importa quando o operador quer reiniciar.</p>
+
+<h2>2 · Aviso ligado, esperando (membro, 114 e 140)</h2>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="d">142/600 mil</span>  <span class="d">F52 · design</span>          <span class="d">⏻</span><span class="d"> 3 rodando</span> [ <span class="w">●</span> 3 perguntas ] <span class="d">[ </span><span class="l">☾</span><span class="d"> Ficar ausente ]</span> <span class="d">[ </span><span class="c">◨</span><span class="d"> Abrir painel ]</span> </span></div>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="d">contexto 142/600 mil</span>  <span class="d">F52 · design</span>  <span class="d">E 2 · V 1</span>                <span class="d">⏻</span><span class="d"> 3 rodando</span> [ <span class="w">●</span> 3 perguntas ] <span class="d">[ </span><span class="l">☾</span><span class="d"> Ficar ausente ]</span> <span class="d">[ </span><span class="c">◨</span><span class="d"> Abrir painel ]</span> </span></div>
+<p class="n">A peça é texto, não botão: abre o grupo da direita, antes do selo. A largura reserva a forma mais longa (<code>⏻ Pode reiniciar</code>, 16): a barra não se rearruma quando o estado vira.</p>
+
+<h2>3 · Aviso ligado, já pode (membro 114; orquestradora 114 e 126; 40)</h2>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="d">142/600 mil</span>  <span class="d">F52 · design</span>     <span class="ok">⏻</span><span class="b"> Pode reiniciar</span> [ <span class="w">●</span> 3 perguntas ] <span class="d">[ </span><span class="l">☾</span><span class="d"> Ficar ausente ]</span> <span class="d">[ </span><span class="c">◨</span><span class="d"> Abrir painel ]</span> </span></div>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="d">198 mil</span><span class="e b"> · limpar</span>                                        <span class="ok">⏻</span><span class="b"> Pode reiniciar</span> [ <span class="w">●</span> 3 perguntas ] <span class="p">[ </span><span class="e">↺</span><span class="p"> Limpar ]</span> </span></div>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="d">198/600 mil</span><span class="e b"> · limpar</span>         <span class="ok">⏻</span><span class="b"> Pode reiniciar</span> [ <span class="w">●</span> 3 perguntas ] <span class="p">[ </span><span class="e">↺</span><span class="p"> Limpar ]</span> <span class="d">[ </span><span class="l">☾</span><span class="d"> Ficar ausente ]</span> <span class="d">[ </span><span class="c">◨</span><span class="d"> Abrir painel ]</span> </span></div>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="d">142 mil</span>                       
+     <span class="ok">⏻</span><span class="b"> Pode reiniciar</span> [ <span class="w">●</span> 3 perguntas ] </span></div>
+<p class="n">A notificação do app sai uma vez, no instante em que passa a poder; a barra de toda sessão mostra <code>⏻ Pode reiniciar</code> enquanto continuar valendo. A orquestradora com o contexto em <code>· limpar</code> (198 mil) soma 122 na faixa 1 e cai para a 2 a 114: perde o modo presente e o painel. Abaixo da régua (142 mil) a faixa 1 soma 113 e cabe a 114, com os quatro botões. A 40, o grupo da direita quebra inteiro para a linha de baixo.</p>
+
+<h2>4 · Aviso ligado, sem dado fresco (vigia sumiu, arquivo velho ou ilegível)</h2>
+<div class="term"><span class="cols"> ⧗ 47:12  <span class="d">142/600 mil</span>  <span class="d">F52 · design</span>            <span class="d">⏻</span><span class="d"> não sei</span> [ <span class="w">●</span> 3 perguntas ] <span class="d">[ </span><span class="l">☾</span><span class="d"> Ficar ausente ]</span> <span class="d">[ </span><span class="c">◨</span><span class="d"> Abrir painel ]</span> </span></div>
+<p class="n"><code>⏻ não sei</code>, a mesma palavra do pane: nunca diz "pode" com dado velho, e não promete conferência que ninguém faz. <code>⏻ conferindo</code> só existe entre o clique em Me avise e a primeira conferência.</p>
+
+<h2>5 · Topo do pane, aviso desligado (W = 288)</h2>
+<div class="panes">
+ <div class="pane"><div class="cap">não pode</div>
+  <div class="fil"><button class="btn">Ficar ausente</button><span>Presente &nbsp;<button class="btn">↻ 21:14</button></span></div>
+  <div class="fil" style="margin:0"><span class="r1"><span class="d">⏻</span> Reiniciar: espere · 5 rodando</span><button class="btn">Me avise</button></div>
+  <div class="resumo">resumo: Esperam você · Travados · …</div>
+ </div>
+ <div class="pane"><div class="cap">pode</div>
+  <div class="fil"><button class="btn">Ficar ausente</button><span>Presente &nbsp;<button class="btn">↻ 21:15</button></span></div>
+  <div class="r1"><span class="ok">⏻ Pode reiniciar o app</span> <span class="d" style="font-weight:400">· conferido às 21:15</span></div>
+  <div class="resumo">resumo: Esperam você · Travados · …</div>
+ </div>
+ <div class="pane"><div class="cap">não sei</div>
+  <div class="fil"><button class="btn">Ficar ausente</button><span>Presente &nbsp;<button class="btn">↻ ler</button></span></div>
+  <div class="fil" style="margin:0"><span class="r1"><span class="d">⏻</span> Reiniciar: não sei</span><button class="btn">Me avise</button></div>
+  <div class="resumo">resumo: Esperam você · Travados · …</div>
+ </div>
+</div>
+
+<h2>6 · Topo do pane, aviso ligado (W = 288)</h2>
+<div class="panes">
+ <div class="pane"><div class="cap">esperando</div>
+  <div class="blk"><div class="t"><span class="d">⏻</span> Espere · 6 rodando</div>
+   <div class="m">· merge/rebase no meio: gh pr merge 60</div>
+   <div class="m">· teste de izanagi em apps/web (2 fichas)</div>
+   <div class="m">· esta sessão trabalhando</div>
+   <div class="m">· E2 · tela do painel trabalhando</div>
+   <div class="h">+ 2 mais · conferido às 21:14 · aviso ligado</div></div>
+  <div class="gap"></div><button class="btn">Não avisar mais</button>
+ </div>
+ <div class="pane"><div class="cap">pode (avisado)</div>
+  <div class="blk okb"><div class="t"><span class="ok">⏻ Pode reiniciar o app</span></div>
+   <div class="m">nada rodando · conferido às 21:31</div>
+   <div class="h">avisei às 21:31</div></div>
+  <div class="gap"></div><button class="btn">Não avisar mais</button>
+ </div>
+ <div class="pane"><div class="cap">acabou de ligar</div>
+  <div class="blk ms"><div class="t"><span class="d">⏻</span> Aviso ligado · conferindo</div>
+   <div class="h">a primeira conferência sai em instantes</div></div>
+  <div class="gap"></div><button class="btn" disabled>Ligando…</button>
+ </div>
+</div>
+
+<h2>7 · O mesmo no pane do terminal</h2>
+<div class="tp"><span class="d">⏻</span> Reiniciar: espere · 5 rodando  [ Me avise ]</div><div class="tp"><span class="d">⏻</span> <b>Espere · 6 rodando</b>
+<span class="d">· merge/rebase no meio: gh pr merge…
+· teste de izanagi em apps/web (2 fic…
+· esta sessão trabalhando
+· E2 · tela do painel trabalhando
++ 2 mais · conferido às 21:14 · aviso ligado</span>
+[ Não avisar mais ]</div><div class="tp"><span class="ok">⏻</span> <b>Pode reiniciar o app</b>
+<span class="d">nada rodando · conferido às 21:31
+avisei às 21:31</span>
+[ Não avisar mais ]</div>
+
+<h2>8 · A notificação</h2>
+<div class="desk" style="max-width:360px"><b>Pode reiniciar o app</b><br><span class="d">Nenhuma sessão trabalhando, nenhum teste nem merge rodando (21:31).</span></div>
+<p class="n">Notificação do app, uma por vez que passa a poder; se ela for recusada, o mesmo texto vira toast na sessão que vigia.</p>
+</body>
+</html>
