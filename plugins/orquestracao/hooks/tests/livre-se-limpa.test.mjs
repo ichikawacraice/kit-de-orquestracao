@@ -259,14 +259,48 @@ function pessoal() {
 const real = (id) => JSON.parse(readFileSync(join(base, 'fila', `${id}.json`), 'utf8')).data;
 const livre = (n) => ['mcp__ccd_session_mgmt__set_session_title', { session_id: 'self', title: `${n} · livre` }];
 const comDe = (l, ap) => [{ localId: l, apelido: ap, oQue: 'parte' }];
-caso('F32: E livre no com → o hook tira com `fez`, não bloqueia, e o item fica sem a sessão', () => {
-  pessoal(); item('F1', { etapa: 'execucao', com: comDe(UE5, 'E5') });
-  const r = rodar('E5', transcript([livre('E5'), LIMPA]));
+const PUSH = ['Bash', { command: 'git push -u origin minha-branch' }];
+const PR_CREATE = ['Bash', { command: 'gh pr create --title "fix(x): y" --body z' }];
+const passou = (l, ap, em) => [{ localId: l, apelido: ap, papel: ap[0], em }];
+const haceMin = (m) => new Date(Date.now() - m * 60_000).toISOString();
+caso('F32: E livre no com com PR no item e push no transcript → o hook tira com `fez`, não bloqueia, e o item fica sem a sessão', () => {
+  pessoal(); item('F1', { etapa: 'execucao', prs: [7], com: comDe(UE5, 'E5') });
+  const r = rodar('E5', transcript([PUSH, livre('E5'), LIMPA]));
   ok(r === null, `esperava passar, veio ${JSON.stringify(r)}`);
   const d = real('F1');
   ok(Array.isArray(d.com) && d.com.length === 0, `com devia ficar vazio: ${JSON.stringify(d.com)}`);
   ok(d.fez?.length === 1 && d.fez[0].localId === UE5, `a E devia ficar no fez: ${JSON.stringify(d.fez)}`);
   ok(/soltou-com/.test(log()), 'log sem soltou-com');
+});
+caso('F169: E livre no com sem PR no item → sai do com e o fez NÃO ganha a entrada, mesmo com push no transcript', () => {
+  pessoal(); item('F1', { etapa: 'execucao', prs: [], com: comDe(UE5, 'E5') });
+  ok(rodar('E5', transcript([PUSH, livre('E5'), LIMPA])) === null, 'esperava passar');
+  const d = real('F1');
+  ok(d.com.length === 0, `devia sair do com: ${JSON.stringify(d.com)}`);
+  ok(d.fez === undefined, `o fez não pode ganhar a entrada: ${JSON.stringify(d.fez)}`);
+});
+caso('F169: E com PR no item mas sem push nem gh pr no transcript → não ganha fez', () => {
+  pessoal(); item('F1', { etapa: 'execucao', prs: [7], com: comDe(UE5, 'E5') });
+  ok(rodar('E5', transcript([['Bash', { command: 'git status' }], livre('E5'), LIMPA])) === null, 'esperava passar');
+  const d = real('F1');
+  ok(d.com.length === 0 && d.fez === undefined, `sem entrega, sem fez: ${JSON.stringify(d)}`);
+});
+caso('F169: gh pr create no transcript, desde a entrada em passaram → ganha fez; push ANTES da entrada não conta', () => {
+  pessoal();
+  item('F1', { etapa: 'execucao', prs: [7], com: comDe(UE5, 'E5'), passaram: passou(UE5, 'E5', haceMin(5)) });
+  ok(rodar('E5', transcript([PR_CREATE, livre('E5'), LIMPA])) === null, 'esperava passar');
+  ok(real('F1').fez?.length === 1 && real('F1').fez[0].localId === UE5, `devia ganhar o fez: ${JSON.stringify(real('F1').fez)}`);
+  item('F2', { etapa: 'execucao', prs: [8], com: comDe(UE5, 'E5'), passaram: passou(UE5, 'E5', new Date(Date.now() + 60_000).toISOString()) });
+  ok(rodar('E5', transcript([PUSH, livre('E5'), LIMPA])) === null, 'esperava passar');
+  ok(real('F2').com.length === 0 && real('F2').fez === undefined, `push antes da entrada não conta: ${JSON.stringify(real('F2'))}`);
+});
+caso('F169: E em dois itens, só o que tem PR ganha o fez', () => {
+  pessoal();
+  item('F1', { etapa: 'execucao', prs: [7], com: comDe(UE5, 'E5') });
+  item('F2', { etapa: 'execucao', prs: [], com: comDe(UE5, 'E5') });
+  ok(rodar('E5', transcript([PUSH, livre('E5'), LIMPA])) === null, 'esperava passar');
+  ok(real('F1').fez?.length === 1, `F1 devia ganhar: ${JSON.stringify(real('F1').fez)}`);
+  ok(real('F2').com.length === 0 && real('F2').fez === undefined, `F2 não devia: ${JSON.stringify(real('F2'))}`);
 });
 caso('F32: V livre no com → tira sem `fez`', () => {
   pessoal(); item('F1', { etapa: 'validacao', com: comDe(UV5, 'V5') });
@@ -360,10 +394,10 @@ caso('F32 B10: o hook confere a linha de `sessoes` na pasta de IZANAGI_PAINEL_DI
   ok(l.estado === 'parada' && l.etapa === 'livre', `linha: ${JSON.stringify(l)}`);
 });
 caso('F49.e: E ainda no com e linha de sessoes: título aguardando → solta com fez e a linha vira aguardando validação', () => {
-  pessoal(); item('F1', { etapa: 'execucao', com: comDe(UE5, 'E5') });
+  pessoal(); item('F1', { etapa: 'execucao', prs: [7], com: comDe(UE5, 'E5') });
   mkdirSync(join(base, 'sessoes'), { recursive: true });
   writeFileSync(join(base, 'sessoes', `${UE5}.json`), JSON.stringify({ id: UE5, version: 1, data: { estado: 'trabalhando', etapa: 'x' } }));
-  const r = rodar('E5', transcript([['mcp__ccd_session_mgmt__set_session_title', { session_id: 'self', title: 'E5 · aguardando validação' }]]));
+  const r = rodar('E5', transcript([PR_CREATE, ['mcp__ccd_session_mgmt__set_session_title', { session_id: 'self', title: 'E5 · aguardando validação' }]]));
   ok(r === null, `esperava passar, veio ${JSON.stringify(r)}`);
   const d = real('F1');
   ok(d.com.length === 0 && d.fez?.length === 1 && d.fez[0].localId === UE5, `fez: ${JSON.stringify(d)}`);
