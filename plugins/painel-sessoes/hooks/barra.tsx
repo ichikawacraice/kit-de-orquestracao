@@ -28,6 +28,10 @@ export const GLIFO = {
   painel: { g: '◨' },
   perguntas: { g: '●' },
 } as const
+/** O glifo do aviso de reinício e a cor dele por estado (`Text color` filho, como o contexto); `⏻` (U+23FB) é o liga/desliga: nenhuma seta nova. */
+export const GLIFO_REINICIO = { g: '⏻', esperando: 'subtle', pode: 'success', semDado: 'subtle' } as const
+/** A forma mais longa da peça, que a largura reserva em todo estado (a barra não se rearruma quando o estado vira). */
+export const TEXTO_MAIS_LONGO_DO_REINICIO = `${GLIFO_REINICIO.g} Pode reiniciar`
 /** As palavras do contexto: só elas levam cor; o denominador é a janela, a régua do papel só dá a palavra. */
 export const PALAVRA_ALTO = ' · alto'
 export const PALAVRA_LIMPAR = ' · limpar'
@@ -152,6 +156,107 @@ export function contarPool(docs: Doc[], projeto: string | null): { e: number; v:
   return { e: e.size, v: v.size }
 }
 
+// ---- o aviso de reinício (F152) ----
+
+export type MotivoDeReinicio = { tipo: 'sessao' | 'teste' | 'merge'; texto: string; localId?: string }
+/** O que `painel pode-reiniciar` grava em `batida/pode-reiniciar.json`: TODOS os motivos, a sessão que rodou incluída. */
+export type ArquivoDeReinicio = { pode: boolean; motivos: MotivoDeReinicio[]; sessoesDe?: string; em: string; listaEm?: string }
+/** `batida/aviso-de-reinicio.json`: o aviso que o operador ligou; a `vigia` é a sessão que confere a cada minuto. */
+export type AvisoDeReinicio = { ligadoEm: string; vigia: string; avisadoEm?: string; naoPodeSeguidos: number }
+
+/** "Pode" só com a lista de sessões e o arquivo de até 2 min; "espere" vale com o arquivo de até 15; fora disso, "não sei". */
+export const PODE_MAX_MS = 2 * 60_000
+export const ESPERE_MAX_MS = 15 * 60_000
+/** Do clique em `Me avise` até a 1ª conferência da vigia (que confere no ato e depois a cada minuto). */
+export const PRIMEIRA_CONFERENCIA_MS = 90_000
+export const VIGIA_MS = 60_000
+/** Sem conferência há tanto com o aviso ligado, a vigia sumiu: a próxima sessão que ler assume. */
+export const VIGIA_SUMIU_MS = 3 * 60_000
+/** Depois de avisar, ainda podendo e ninguém reiniciou: o aviso desliga sozinho. */
+export const AVISO_VALE_MS = 30 * 60_000
+/** Rearmar o aviso pede dois "não pode" seguidos (dois minutos de margem para não piscar). */
+export const NAO_PODE_PARA_REARMAR = 2
+
+export type EstadoDoReinicio = {
+  estado: 'pode' | 'espere' | 'conferindo' | 'sem-dado'
+  /** O número de motivos (sessões + testes + merges, a própria sessão incluída). */
+  rodando: number
+  /** Merge, depois teste, depois sessão; a própria sessão (ao vivo) primeiro entre as sessões. */
+  motivos: MotivoDeReinicio[]
+  conferidoEm: number | null
+  /** Por que não se sabe (só no `sem-dado`). */
+  razao?: string
+}
+
+const ORDEM_DO_MOTIVO = { merge: 0, teste: 1, sessao: 2 } as const
+export const PROPRIA_TRABALHANDO = 'esta sessão trabalhando'
+const emMs = (iso: string | undefined): number | null => {
+  const t = iso === undefined ? NaN : Date.parse(iso)
+
+  return Number.isNaN(t) ? null : t
+}
+
+/**
+ * O que a tela diz do reinício. A régua de idade é assimétrica: o erro caro é dizer "pode" com dado velho. A própria sessão é ao
+ * vivo: o motivo dela que estiver no arquivo sai e entra o de agora (`esta sessão trabalhando`). `conferindo` só com o aviso
+ * ligado há menos tempo que a 1ª conferência da vigia e sem conferência posterior ao clique.
+ */
+export function estadoDoReinicio({ arquivo, aviso, eu, trabalhandoEu, agora, erro = false }: { arquivo: ArquivoDeReinicio | null; aviso: AvisoDeReinicio | null; eu: string | null | undefined; trabalhandoEu: boolean; agora: number; erro?: boolean }): EstadoDoReinicio {
+  const em = emMs(arquivo?.em)
+  const ligadoEm = emMs(aviso?.ligadoEm)
+  if (aviso !== null && ligadoEm !== null && (em === null || em < ligadoEm) && agora - ligadoEm < PRIMEIRA_CONFERENCIA_MS) {
+    return { estado: 'conferindo', rodando: 0, motivos: [], conferidoEm: null }
+  }
+  if (arquivo === null || em === null) return { estado: 'sem-dado', rodando: 0, motivos: [], conferidoEm: null, razao: erro ? 'não consegui conferir agora' : 'ainda não conferi' }
+  const outros = arquivo.motivos.filter(m => !(m.tipo === 'sessao' && eu && m.localId === eu))
+  const motivos = [...(trabalhandoEu ? [{ tipo: 'sessao' as const, texto: PROPRIA_TRABALHANDO, localId: eu ?? undefined }] : []), ...outros].sort((a, b) => ORDEM_DO_MOTIVO[a.tipo] - ORDEM_DO_MOTIVO[b.tipo])
+  const idadeDoArquivo = agora - em
+  const idadeDaLista = agora - (emMs(arquivo.listaEm) ?? em)
+  const base = { rodando: motivos.length, motivos, conferidoEm: em }
+  if (motivos.length === 0 && idadeDoArquivo <= PODE_MAX_MS && idadeDaLista <= PODE_MAX_MS) return { estado: 'pode', ...base }
+  if (motivos.length > 0 && idadeDoArquivo <= ESPERE_MAX_MS) return { estado: 'espere', ...base }
+
+  return { estado: 'sem-dado', ...base, razao: erro ? 'não consegui conferir agora' : `a última conferência é de há ${Math.max(1, Math.round(idadeDoArquivo / 60_000))} min` }
+}
+
+/**
+ * O passo da vigia depois de conferir: notifica uma vez quando passa a poder, rearma depois de dois "não pode" seguidos
+ * (o aviso volta a esperar e notifica de novo), e desliga sozinho 30 min depois do aviso se ainda pode. `null` = apaga o aviso.
+ */
+export function proximoDaVigia({ aviso, estado, agora }: { aviso: AvisoDeReinicio; estado: EstadoDoReinicio['estado']; agora: number }): { aviso: AvisoDeReinicio | null; notificar: boolean } {
+  const avisadoEm = emMs(aviso.avisadoEm)
+  if (estado === 'pode') {
+    if (avisadoEm === null) return { aviso: { ...aviso, avisadoEm: new Date(agora).toISOString(), naoPodeSeguidos: 0 }, notificar: true }
+    if (agora - avisadoEm >= AVISO_VALE_MS) return { aviso: null, notificar: false }
+
+    return { aviso: { ...aviso, naoPodeSeguidos: 0 }, notificar: false }
+  }
+  if (estado === 'espere') {
+    // Sem aviso já dado não há o que rearmar: nada a contar nem a gravar a cada minuto.
+    if (avisadoEm === null) return { aviso, notificar: false }
+    const seguidos = aviso.naoPodeSeguidos + 1
+    if (seguidos >= NAO_PODE_PARA_REARMAR) {
+      const { avisadoEm: _, ...semAviso } = aviso
+
+      return { aviso: { ...semAviso, naoPodeSeguidos: 0 }, notificar: false }
+    }
+
+    return { aviso: { ...aviso, naoPodeSeguidos: seguidos }, notificar: false }
+  }
+
+  return { aviso, notificar: false }
+}
+
+/** A vigia sumiu: o aviso está ligado e a última conferência (ou o clique) é de mais de 3 min. */
+export function vigiaSumiu({ aviso, arquivo, agora }: { aviso: AvisoDeReinicio; arquivo: ArquivoDeReinicio | null; agora: number }): boolean {
+  const ultima = Math.max(emMs(arquivo?.em) ?? 0, emMs(aviso.ligadoEm) ?? 0)
+
+  return agora - ultima >= VIGIA_SUMIU_MS
+}
+
+export const textoDoReinicioNaBarra = (r: Pick<EstadoDoReinicio, 'estado' | 'rodando'>): string =>
+  `${GLIFO_REINICIO.g} ${r.estado === 'pode' ? 'Pode reiniciar' : r.estado === 'espere' ? `${r.rodando} rodando` : r.estado === 'conferindo' ? 'conferindo' : 'não sei'}`
+
 // ---- a faixa de largura ----
 
 export type EstadoBarra = {
@@ -177,12 +282,15 @@ export type EstadoBarra = {
   ehOrquestradora: boolean
   /** O limpar já foi mandado e a limpeza ainda não apareceu na leitura. */
   limpando: boolean
+  /** O aviso de reinício: `null` (ou ausente) com o aviso desligado, e a barra não diz nada. */
+  reinicio?: 'esperando' | 'pode' | 'sem-dado' | 'conferindo' | null
+  rodando?: number
 }
 
 type Peca<K extends string> = { k: K; t: string }
 export type Pecas = {
   esq: Array<Peca<'relogio' | 'contexto' | 'item' | 'pool'>>
-  dir: Array<Peca<'perguntas' | 'limpar' | 'modo' | 'painel'>>
+  dir: Array<Peca<'reinicio' | 'perguntas' | 'limpar' | 'modo' | 'painel'>>
 }
 
 export const mil = (t: number) => Math.floor(t / 1000)
@@ -216,8 +324,9 @@ export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
   if (e.tokens !== null) esq.push({ k: 'contexto', t: textoDoContexto(e.tokens, e.regua, e.janela, faixa) })
   if (faixa < 2 && e.item) esq.push({ k: 'item', t: e.item })
   if (faixa === 0 && e.pool) esq.push({ k: 'pool', t: e.pool })
-  // Ordem da direita: selo → limpar → modo → painel. O limpar nunca cai; o modo ausente nunca cai; o presente cai na faixa 2.
+  // Ordem da direita: reinício → selo → limpar → modo → painel. O reinício (só com o aviso ligado), o limpar e o modo ausente nunca caem; o modo presente cai na faixa 2.
   const dir: Pecas['dir'] = []
+  if (e.reinicio) dir.push({ k: 'reinicio', t: textoDoReinicioNaBarra({ estado: e.reinicio === 'esperando' ? 'espere' : e.reinicio, rodando: e.rodando ?? 0 }) })
   const selo = e.abertas > 0
   if (selo) dir.push({ k: 'perguntas', t: rotuloDoSelo(e.abertas) })
   if (e.ehOrquestradora) dir.push({ k: 'limpar', t: rotuloDoLimpar(e.limpando) })
@@ -227,12 +336,13 @@ export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
   return { esq, dir }
 }
 
-/** A largura que a faixa pede, com os textos reais: peça à esquerda com 2 de vão, botão com `[ ]` (+4), texto sem, a moldura +2. */
+/** A largura que a faixa pede, com os textos reais: peça à esquerda com 2 de vão, botão com `[ ]` (+4), texto sem (o reinício, 16), a moldura +2. */
 export function larguraDaFaixa(e: EstadoBarra, faixa: 0 | 1 | 2): number {
   // O limpar conta sempre como `↺ Limpando…`: a barra não se rearruma debaixo do clique.
   const { esq, dir } = pecasDaBarra({ ...e, limpando: true }, faixa)
   const ladoEsq = esq.reduce((n, p) => n + largura(p.t), 0) + 2 * (esq.length - 1)
-  const ladoDir = dir.reduce((n, p) => n + largura(p.t) + 4, 0) + Math.max(0, dir.length - 1)
+  // O reinício é texto (sem `[ ]`) e conta sempre como `⏻ Pode reiniciar`, a forma mais longa.
+  const ladoDir = dir.reduce((n, p) => n + (p.k === 'reinicio' ? largura(TEXTO_MAIS_LONGO_DO_REINICIO) : largura(p.t) + 4), 0) + Math.max(0, dir.length - 1)
 
   return ladoEsq + 2 + ladoDir + 2 + (e.moldura ? 2 : 0)
 }
@@ -261,6 +371,8 @@ export type DadosDaBarra = {
   bodyColumns: number
   /** `F52 · design`, quando esta sessão tem item. */
   item: string | null
+  /** O estado do reinício com o aviso ligado; `null` = o aviso desligado (a barra não diz nada). */
+  reinicio?: Pick<EstadoDoReinicio, 'estado' | 'rodando'> | null
 }
 export type AcoesDaBarra = {
   abrirPainel: () => void
@@ -290,6 +402,8 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
     moldura: nivel !== null,
     ehOrquestradora: b.ehOrquestradora,
     limpando: d.limpando,
+    reinicio: d.reinicio ? (d.reinicio.estado === 'espere' ? 'esperando' : d.reinicio.estado) : null,
+    rodando: d.reinicio?.rodando ?? 0,
   }
   const faixa = faixaDaBarra(colunas, estado)
   const { esq, dir: direita } = pecasDaBarra(estado, faixa)
@@ -323,6 +437,18 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
   }
 
   const botaoDir = (p: Pecas['dir'][number]) => {
+    if (p.k === 'reinicio') {
+      // Texto, não botão: o gesto de desligar mora no pane. `⏻` em `subtle` (espere, conferindo, não sei) ou `success` (pode, a única vez que a barra diz "vá").
+      const pode = d.reinicio?.estado === 'pode'
+      const cor = pode ? GLIFO_REINICIO.pode : GLIFO_REINICIO.esperando
+
+      return (
+        <Text key="reinicio">
+          <Text color={cor}>{GLIFO_REINICIO.g}</Text>
+          {pode ? <Text bold>{p.t.slice(1)}</Text> : <Text dimColor italic={d.reinicio?.estado === 'conferindo'}>{p.t.slice(1)}</Text>}
+        </Text>
+      )
+    }
     if (p.k === 'perguntas') {
       return (
         <Button key="perguntas" variant="secondary" onPress={acoes.abrirPainel}>

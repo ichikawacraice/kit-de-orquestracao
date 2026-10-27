@@ -129,6 +129,16 @@ export type Leitura = {
 export type PapelDoPedido = 'P' | 'D' | 'E' | 'V'
 export type EstadoPedido = { estado: 'enviando' } | { estado: 'prompt'; em: number; papel: PapelDoPedido } | { estado: 'pedido'; em: number; papel: PapelDoPedido }
 
+/** O aviso de reinício e a conferência que a tela lê: os dois arquivos de `batida/` (F152), cada um com o próprio erro. */
+export type Reinicio = {
+  /** `batida/pode-reiniciar.json`; `null` = ausente ou ilegível. */
+  arquivo: { pode: boolean; motivos: Array<{ tipo: 'sessao' | 'teste' | 'merge'; texto: string; localId?: string }>; sessoesDe?: string; em: string; listaEm?: string } | null
+  /** `batida/aviso-de-reinicio.json`; `null` = desligado (ou ilegível). */
+  aviso: { ligadoEm: string; vigia: string; avisadoEm?: string; naoPodeSeguidos: number } | null
+  /** A última conferência pelo comando falhou (o pane diz "não consegui conferir agora"). */
+  falhou: boolean
+}
+
 /** O que a barra de status lê, de leve, a cada 30 s e a cada turno: só arquivos, nunca `list_sessions`. */
 export type Barra = {
   lidoEm: number | null
@@ -177,6 +187,10 @@ declare module 'claude-code' {
       trocandoModo: boolean
       /** A leitura leve da barra de status acima do prompt. */
       barra: Barra
+      /** O aviso de reinício e o arquivo da conferência, como a última leitura os viu. */
+      reinicio: Reinicio
+      /** O botão do aviso de reinício está gravando (`Ligando…` / `Desligando…`). */
+      reiniciando: 'ligando' | 'desligando' | null
       /** O `/barra` escondeu a barra nesta sessão. */
       barraEscondida: boolean
       /** O `↺ Limpando…` da barra: a hora do clique e o contexto lido nele; `null` fora da limpeza. */
