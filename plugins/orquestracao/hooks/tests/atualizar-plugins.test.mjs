@@ -167,7 +167,7 @@ test('cópia scope project: "não mexido (projeto …)", sem plugin update para 
 });
 
 test('plugin do marketplace sem instalação: "não instalado", e não é instalado', () => {
-  const c = montar({ orquestracao: '0.1.2', processos: '0.2.1' }, [inst('orquestracao', '0.1.2')]);
+  const c = montar({ orquestracao: '0.1.2', processos: '0.2.9' }, [inst('orquestracao', '0.1.2')]);
   try {
     const r = c.rodar();
     assert.equal(r.exit, 0, r.err);
@@ -177,7 +177,7 @@ test('plugin do marketplace sem instalação: "não instalado", e não é instal
 });
 
 test('plugin update que sai ≠ 0: "falhou" com a mensagem, os outros seguem, exit 1', () => {
-  const c = montar({ orquestracao: '0.1.2', design: '0.2.1' }, [inst('orquestracao', '0.1.1'), inst('design', '0.2.0')]);
+  const c = montar({ orquestracao: '0.1.2', design: '0.2.9' }, [inst('orquestracao', '0.1.1'), inst('design', '0.2.0')]);
   try {
     const r = c.rodar(['--json'], { FAKE_FALHA: `orquestracao@${MP}` });
     assert.equal(r.exit, 1);

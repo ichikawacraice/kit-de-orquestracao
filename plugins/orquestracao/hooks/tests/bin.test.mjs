@@ -38,7 +38,7 @@ caso('proxima-pergunta e proximo-item (bin) contam a partir de 1, sem repetir', 
 });
 caso('todo comando de bin/ é executável e os textos do plugin não citam o caminho antigo dos scripts', () => {
   const cmds = readdirSync(BIN);
-  ok(cmds.join() === 'atualizar-plugins,painel,proxima-pergunta,proximo-item', `bin/: ${cmds.join()}`);
+  ok(cmds.join() === 'atualizar-plugins,painel,proxima-pergunta,proximo-item,subir-versao', `bin/: ${cmds.join()}`);
   for (const c of cmds) ok(statSync(join(BIN, c)).mode & 0o100, `${c} sem permissão de execução`);
   const arquivos = [];
   const varre = (d) => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = join(d, f.name); if (f.isDirectory()) varre(p); else if (/\.md$/.test(f.name)) arquivos.push(p); } };

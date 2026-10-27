@@ -38,16 +38,20 @@ function git(cwd, ...args) {
 }
 
 // Monta: origin bare, clone `projx` (o nome da pasta é o projeto), PR 12 = commit em refs/pull/12/head.
-function montar({ conflito = false } = {}) {
+function montar({ conflito = false, bump = false } = {}) {
   const raiz = mkdtempSync(join(tmpdir(), 'painel-mergear-'));
   const origin = join(raiz, 'origin.git');
   const clone = join(raiz, 'projx');
   git(raiz, 'init', '-q', '--bare', '-b', 'main', origin);
   git(raiz, 'clone', '-q', origin, clone);
   writeFileSync(join(clone, 'a.txt'), 'base\n');
+  const pluginJson = join(clone, 'plugins', 'p', '.claude-plugin', 'plugin.json');
+  mkdirSync(dirname(pluginJson), { recursive: true });
+  writeFileSync(pluginJson, '{\n  "name": "p",\n  "version": "0.1.0"\n}\n');
   git(clone, 'add', '.'); git(clone, 'commit', '-qm', 'base'); git(clone, 'branch', '-M', 'main'); git(clone, 'push', '-q', 'origin', 'main');
   git(clone, 'checkout', '-q', '-b', 'pr');
   writeFileSync(join(clone, conflito ? 'a.txt' : 'b.txt'), 'do pr\n');
+  if (bump) writeFileSync(pluginJson, '{\n  "name": "p",\n  "version": "0.1.1"\n}\n');
   git(clone, 'add', '.'); git(clone, 'commit', '-qm', 'pr');
   const sha = git(clone, 'rev-parse', 'HEAD');
   git(clone, 'push', '-q', 'origin', 'pr:refs/pull/12/head');
@@ -225,4 +229,29 @@ test('PR que o gh não conhece: erro legível, exit ≠ 0, sem merge', () => {
     assert.ok(existsSync(c.log));
     assert.equal(c.merges().length, 0);
   } finally { limpar(c); }
+});
+
+test('F173: PR que sobe a version de um plugin → merge feito e `aviso` citando o plugin (também no --seco)', () => {
+  const c = montar({ bump: true });
+  try {
+    const seco = c.painel('mergear', '12', c.sha.slice(0, 10), '--seco');
+    assert.equal(seco.exit, 0, seco.err);
+    assert.match(JSON.parse(seco.out).aviso, /sobe a versão de p; a versão é da orquestradora depois do lote \(rode subir-versao\)/);
+    const r = c.painel('mergear', '12', c.sha.slice(0, 10));
+    assert.equal(r.exit, 0, r.err);
+    const j = JSON.parse(r.out);
+    assert.equal(j.mergeado, true);
+    assert.match(j.aviso, /sobe a versão de p/);
+    assert.equal(c.merges().length, 1);
+  } finally { rmSync(c.raiz, { recursive: true, force: true }); }
+});
+test('F173: PR sem bump → mergeia sem `aviso` (a fixture tem plugin.json, então a ausência é medida)', () => {
+  const c = montar();
+  try {
+    assert.ok(existsSync(join(c.clone, 'plugins', 'p', '.claude-plugin', 'plugin.json')), 'a fixture precisa ter o plugin.json');
+    const r = c.painel('mergear', '12', c.sha.slice(0, 10));
+    assert.equal(r.exit, 0, r.err);
+    assert.equal(JSON.parse(r.out).mergeado, true);
+    assert.equal(JSON.parse(r.out).aviso, undefined);
+  } finally { rmSync(c.raiz, { recursive: true, force: true }); }
 });
