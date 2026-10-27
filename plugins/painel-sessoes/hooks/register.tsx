@@ -270,6 +270,7 @@ function montarTodos(
       espera: final || situacao === 'travado' ? undefined : esperaGravada,
       // Sem E (ou D, ou V) no item há tempo: some quando o item está final ou travado (a trava já diz o que o prende).
       esperando: final || situacao === 'travado' ? undefined : (e => (e ? { papel: e.papel, desde: e.desde, entregue: e.entregue } : undefined))(esperandoPapel(d.data, agora)),
+      ...(d.data.via === 'dona' ? { dona: true } : {}),
       prs: inteiros(d.data.prs),
       depois: Array.isArray(d.data.depois)
         ? d.data.depois.flatMap(x => {
@@ -647,8 +648,14 @@ export function orquestradoraDoProjeto(projeto: string, orqs: Array<{ id: string
 }
 
 /** O texto que vai à orquestradora (D7 do plano): a skill dela o atende pela âncora `vaga-pelo-painel`. */
-export function textoDoPedidoDeVaga(projeto: string, itens: Array<{ id: string; titulo: string; papel: PapelPedido }>, agora: number): string {
-  const lista = itens.map(i => `${i.id} · ${i.titulo} (espera ${i.papel})`).join('; ')
+export function textoDoPedidoDeVaga(projeto: string, itens: Array<{ id: string; titulo: string; papel: PapelPedido; dona?: boolean }>, agora: number): string {
+  // ADR 0011: item da dona pede a sessão dona (a orquestradora a abre até o teto de donas), não um membro do papel.
+  if (itens.length > 0 && itens.every(i => i.dona)) {
+    const lista = itens.map(i => `${i.id} · ${i.titulo}`).join('; ')
+
+    return `Pedido do operador pelo painel (${hora(agora).slice(0, 5)}): abra a sessão dona de cada item sem dona em ${projeto} — ${lista}. Num turno do operador, abra a dona (start_session, modelo pelo risco do item, até o teto de donas); fora dele, proponha o cartão. Skill orquestradora, âncora modelo-da-dona.`
+  }
+  const lista = itens.map(i => `${i.id} · ${i.titulo} (espera ${i.dona ? 'a dona' : i.papel})`).join('; ')
 
   return `Pedido do operador pelo painel (${hora(agora).slice(0, 5)}): abra ou despache a sessão de cada item que espera papel em ${projeto} — ${lista}. Num turno do operador, abra o membro do papel (ou despache a um livre); fora dele, proponha um cartão \`<ID> · livre\` por vaga. Skill orquestradora, âncora vaga-pelo-painel.`
 }
@@ -735,7 +742,7 @@ async function enviarPedidos(
   const propria = await sessaoDoApp($)
   const saiu: Array<{ kind: 'prompt' | 'mensagem'; projeto: string; n: number; orq: string }> = []
   for (const [projeto, g] of grupos) {
-    const texto = textoDoPedidoDeVaga(projeto, g.alvos.map(a => ({ id: a.item.id, titulo: a.item.titulo, papel: a.papel })), agora)
+    const texto = textoDoPedidoDeVaga(projeto, g.alvos.map(a => ({ id: a.item.id, titulo: a.item.titulo, papel: a.papel, dona: a.item.dona === true })), agora)
     const kind = g.orq === propria ? 'prompt' : 'mensagem'
     let erro: string | undefined
     try {
@@ -1861,7 +1868,7 @@ export const register: Register = on => {
       perguntas: l.perguntas.map(q => q.id),
       itens: (() => {
         const sec = secoes(l.itens, l.temas)
-        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${i.esperando ? ` · ${textoEsperando(i.esperando, Date.now())}` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.apelido).join(', ')}` : ''}`
+        const dizer = (i: LinhaItem) => `${i.titulo} · ${i.etapa}${i.trava ? ` · trava (${i.trava.motivo})` : ''}${i.espera ? ` · espera (${i.espera.motivo})` : ''}${i.esperando ? ` · ${textoEsperando(i.esperando, Date.now(), i.dona === true)}` : ''}${(i.com ?? []).length > 0 ? ` · com ${(i.com ?? []).map(c => c.apelido).join(', ')}` : ''}`
 
         return { esperam: sec.esperam.map(dizer), travados: sec.travados.map(dizer), executando: sec.executando.map(dizer), fila: sec.fila.map(dizer), feitos: sec.feitos.map(dizer) }
       })(),
@@ -1956,7 +1963,7 @@ export const register: Register = on => {
             if (!enviando) void pedirSessoes($, [i.id], i.id, e.surface)
           }}
         >
-          {enviando ? 'Pedindo…' : `Pedir ${ROTULO_DO_PAPEL[p.papel]}`}
+          {enviando ? 'Pedindo…' : `Pedir ${i.dona ? 'dona' : ROTULO_DO_PAPEL[p.papel]}`}
         </Button>
       )
       const linha =

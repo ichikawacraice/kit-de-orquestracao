@@ -360,7 +360,7 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
     item.situacao === 'fila'
       ? { t: item.esperando?.entregue ? textoEsperando(item.esperando, agora) : `espera ${rotulo}${item.esperando ? textoEsperando(item.esperando, agora).replace(/^esperando \S+/, '') : ''}`, classe: 's', peso: true }
       : { t: rotulo, classe: cor, peso: true },
-    ...(item.esperando && item.situacao !== 'fila' ? [{ t: textoEsperando(item.esperando, agora), classe: 's', peso: true }] : []),
+    ...(item.esperando && item.situacao !== 'fila' ? [{ t: textoEsperando(item.esperando, agora, item.dona === true), classe: 's', peso: true }] : []),
     ...(opcoes.noTravados ? [{ t: tituloDoTema(item), classe: 's' }] : []),
     ...(item.perguntas.length > 0 ? [{ t: `aguarda você · ${item.perguntas[0]}`, classe: AVISO, peso: true }] : []),
     ...(seloDaEspera(item) ? [{ t: seloDaEspera(item) as string, classe: item.espera?.motivo === 'operador' ? AVISO : 's', peso: true }] : []),
@@ -520,8 +520,10 @@ const chipDoPr = (item: LinhaItem): Chip[] => {
 const chipDaEtapa = (item: LinhaItem): Chip => ({ t: ROTULO_ETAPA[item.etapa] ?? item.etapa, texto: COR_ETAPA[item.etapa] ?? 's', fundo: 'tile' })
 
 /** `esperando E · 35 min`; quando o papel já entregou, `entregue · avance a etapa · 15 min` (F58). Os minutos saem de `desde` e da hora do desenho. */
-export const textoEsperando = (e: NonNullable<LinhaItem['esperando']>, agora: number): string => {
+export const textoEsperando = (e: NonNullable<LinhaItem['esperando']>, agora: number, dona = false): string => {
   const min = Math.max(0, Math.floor((agora - Date.parse(e.desde)) / 60000))
+  // ADR 0011: no item da dona o que falta é a sessão dona, não o papel da etapa.
+  if (dona) return `sem dona · ${min} min`
 
   return e.entregue ? `entregue · avance a etapa · ${min} min` : `esperando ${e.papel} · ${min} min`
 }
@@ -590,7 +592,7 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   }
 
   const chips: Chip[] = [chipDaEtapa(item)]
-  if (item.esperando) chips.push({ t: textoEsperando(item.esperando, agora), texto: 's', traco: 'ms' })
+  if (item.esperando) chips.push({ t: textoEsperando(item.esperando, agora, item.dona === true), texto: 's', traco: 'ms' })
   if (item.perguntas.length > 0) chips.push({ t: `aguarda você · ${item.perguntas[0]}`, texto: 'pt', fundo: AVISO })
   const selo = seloDaEspera(item)
   if (selo && item.espera?.motivo === 'gate') chips.push({ t: selo, texto: 's', traco: 'ms' })
