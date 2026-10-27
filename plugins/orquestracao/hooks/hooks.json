@@ -115,6 +115,16 @@
           }
         ],
         "matcher": "SendMessage|mcp__ccd_session_mgmt__send_message|mcp__ccd_session__start_session|Write|Edit|MultiEdit|Bash"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/titulo-da-dona.mjs\"",
+            "timeout": 10
+          }
+        ],
+        "matcher": "mcp__ccd_session__start_session"
       }
     ],
     "SubagentStop": [
