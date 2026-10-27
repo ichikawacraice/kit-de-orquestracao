@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Testes das travas da CrewAI (Q62): eventos JSON no formato do Claude Code 2.1.289,
 // transcripts sintéticos no formato real (.jsonl), log e estado num diretório temporário.
-// Rodar: node ~/.claude/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
+// Rodar: node gate/com-fichas.mjs -- node plugins/orquestracao/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync, unlinkSync } from 'node:fs';
 import { tmpdir, homedir, userInfo } from 'node:os';
@@ -146,7 +146,7 @@ caso('1.9 entrada quebrada: sai 0, sem saída, erro no log', () => {
   igual(log()[0][3], 'erro', 'log');
 });
 
-// ---------- ideia 2: executor só termina com a saída real ----------
+// ---------- ideia 2: a dona só termina com a saída real ----------
 let n = 0;
 const id = () => `u${++n}`;
 const abertura = (texto, extra = {}) => ({ type: 'user', uuid: id(), message: { role: 'user', content: texto }, ...extra });
@@ -168,15 +168,25 @@ const trabalho = (bashSaida = SAIDA_VITEST) => [
   usa('Bash', { command: 'npx vitest run a.test.ts; echo exit=$?' }, 't2'),
   resultado('t2', bashSaida + '\nexit=0'),
 ];
-const subStop = (f, relatorio, extra = {}) => ({
-  session_id: SID, transcript_path: '/pai.jsonl', cwd: '/r', hook_event_name: 'SubagentStop', stop_hook_active: false,
-  agent_id: 'a77', agent_type: 'executor', agent_transcript_path: f, last_assistant_message: relatorio, background_tasks: [], ...extra,
+// A sessão que roda é dona de um item em execução: o registro do app e a fila moram em `base`, e cada `sid` ganha o seu item.
+const dona = (sid, etapa = 'execucao') => {
+  mkdirSync(join(base, 'app'), { recursive: true }); mkdirSync(join(base, 'fila'), { recursive: true });
+  writeFileSync(join(base, 'app', `local_${sid}.json`), JSON.stringify({ sessionId: `local_${sid}`, cliSessionId: sid, priorCliSessionIds: [], title: 'F9 · tema qualquer', isArchived: false }));
+  writeFileSync(join(base, 'fila', `F-${sid}.json`), JSON.stringify({ id: `F-${sid}`, version: 1, data: { titulo: 'x', etapa, donoLocalId: `local_${sid}` } }));
+  return sid;
+};
+const rc = (ev, env = {}) => rodar('criterio-da-dona.mjs', ev, { POOL_APP_SESSOES_DIR: join(base, 'app'), FILA_DIR: join(base, 'fila'), ...env });
+// Cada `chave` vira uma dona própria (estado de cobrança próprio): é o que deixa o mesmo caso medir vários relatórios.
+const sidDe = (chave) => `eeeeeeee-0000-0000-0000-${Buffer.from(String(chave)).toString('hex').padStart(12, '0').slice(-12)}`;
+const subStop = (f, relatorio, { chave = 'a77', ...extra } = {}) => ({
+  session_id: dona(sidDe(chave)), transcript_path: f, cwd: '/r', hook_event_name: 'Stop', stop_hook_active: false,
+  last_assistant_message: relatorio, background_tasks: [], ...extra,
 });
 const bloqueou = (r) => r?.decision === 'block';
 
-caso('2.1 executor subagente: relatório sem saída é cobrado', () => {
+caso('2.1 dona: relatório sem saída é cobrado', () => {
   const f = transcript(trabalho());
-  const r = rodar('executor-criterio.mjs', subStop(f, 'Pronto, editei a.ts e os testes passaram.'));
+  const r = rc(subStop(f, 'Pronto, editei a.ts e os testes passaram.'));
   if (!bloqueou(r)) throw new Error('não cobrou');
   if (!r.reason.includes('cobrança 1 de 2')) throw new Error(`motivo: ${r.reason}`);
   igual(log()[0][3], 'cobrou-1', 'log');
@@ -184,166 +194,124 @@ caso('2.1 executor subagente: relatório sem saída é cobrado', () => {
 caso('2.2 no máximo 2 cobranças; a terceira deixa passar e registra', () => {
   const f = transcript(trabalho());
   const ev = subStop(f, 'Pronto, testes passaram.');
-  if (!bloqueou(rodar('executor-criterio.mjs', ev))) throw new Error('1ª não cobrou');
-  if (!bloqueou(rodar('executor-criterio.mjs', { ...ev, stop_hook_active: true }))) throw new Error('2ª não cobrou');
-  igual(rodar('executor-criterio.mjs', { ...ev, stop_hook_active: true }), null, '3ª');
+  if (!bloqueou(rc(ev))) throw new Error('1ª não cobrou');
+  if (!bloqueou(rc({ ...ev, stop_hook_active: true }))) throw new Error('2ª não cobrou');
+  igual(rc({ ...ev, stop_hook_active: true }), null, '3ª');
   igual(log().map((l) => l[3]).join(','), 'cobrou-1,cobrou-2,deixou-passar-apos-2', 'log');
 });
 caso('2.3 saída colada em bloco de código (igual à do Bash) passa', () => {
   const f = transcript(trabalho());
-  igual(rodar('executor-criterio.mjs', subStop(f, 'Feito.\n```\n      Tests  98 passed (98)\n```')), null, 'saída');
+  igual(rc(subStop(f, 'Feito.\n```\n      Tests  98 passed (98)\n```')), null, 'saída');
   igual(log()[0][3], 'passou-com-saida', 'log');
 });
 caso('2.3b critério que não é teste (grep): a linha colada igual à saída passa', () => {
   const f = transcript(trabalho('apps/web/src/a.ts:12:export const ROTULO = "Publicar"'));
-  igual(rodar('executor-criterio.mjs', subStop(f, 'Critério do plano:\n```\napps/web/src/a.ts:12:export const ROTULO = "Publicar"\n```')), null, 'saída');
+  igual(rc(subStop(f, 'Critério do plano:\n```\napps/web/src/a.ts:12:export const ROTULO = "Publicar"\n```')), null, 'saída');
   igual(log()[0][3], 'passou-com-saida', 'log');
 });
 caso('2.4 bloco de código inventado (não está na saída do Bash) é cobrado', () => {
   const f = transcript(trabalho());
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, 'Feito.\n```\n      Tests  120 passed (120)\n```')))) throw new Error('não cobrou');
+  if (!bloqueou(rc(subStop(f, 'Feito.\n```\n      Tests  120 passed (120)\n```')))) throw new Error('não cobrou');
 });
 caso('2.5 status exit=0 com Bash rodado passa; sem Bash no turno é cobrado', () => {
-  igual(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Gate: exit=0')), null, 'com Bash');
+  igual(rc(subStop(transcript(trabalho()), 'Gate: exit=0')), null, 'com Bash');
   const semBash = transcript([abertura('Plano'), usa('Edit', { file_path: '/r/a.ts' }, 't1'), resultado('t1', 'ok')]);
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(semBash, 'Gate: exit=0', { agent_id: 'a78' })))) throw new Error('sem Bash não cobrou');
+  if (!bloqueou(rc(subStop(semBash, 'Gate: exit=0', { chave: 'a78' })))) throw new Error('sem Bash não cobrou');
 });
 caso('2.6 paráfrase em PT com número que confere passa; número que não confere é cobrado', () => {
-  igual(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), '4 arquivos, 98 testes verdes.')), null, 'confere');
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), '4 arquivos, 99 testes verdes.', { agent_id: 'a79' })))) throw new Error('não conferiu e passou');
+  igual(rc(subStop(transcript(trabalho()), '4 arquivos, 98 testes verdes.')), null, 'confere');
+  if (!bloqueou(rc(subStop(transcript(trabalho()), '4 arquivos, 99 testes verdes.', { chave: 'a79' })))) throw new Error('não conferiu e passou');
 });
-caso('2.7 executor que devolve dúvida não é cobrado', () => {
-  igual(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Parei no passo 3: o arquivo b.ts não existe como o plano descreve. Sigo com c.ts?')), null, 'pergunta');
-  igual(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Devolvo: o plano não decide entre X e Y. Recomendo X.', { agent_id: 'a80' })), null, 'devolvo');
+caso('2.7 dona que devolve dúvida não é cobrada', () => {
+  igual(rc(subStop(transcript(trabalho()), 'Parei no passo 3: o arquivo b.ts não existe como o plano descreve. Sigo com c.ts?')), null, 'pergunta');
+  igual(rc(subStop(transcript(trabalho()), 'Devolvo: o plano não decide entre X e Y. Recomendo X.', { chave: 'a80' })), null, 'devolvo');
   igual(log().map((l) => l[3]).join(','), 'passou-duvida,passou-duvida', 'log');
 });
-caso('2.8 outro papel (validador) não é cobrado', () => {
-  igual(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Achados: nenhum.', { agent_type: 'validador' })), null, 'saída');
-  igual(log().length, 0, 'log');
-});
-caso('2.9 executor que não editou (conferência mecânica) não é cobrado', () => {
+caso('2.9 dona que não editou (só conferiu) não é cobrada', () => {
   const f = transcript([abertura('rode o gate'), usa('Bash', { command: 'pnpm test' }, 't2'), resultado('t2', 'ok')]);
-  igual(rodar('executor-criterio.mjs', subStop(f, 'Gate rodado, verde.')), null, 'saída');
+  igual(rc(subStop(f, 'Gate rodado, verde.')), null, 'saída');
 });
-const stop = (f, extra = {}) => ({ session_id: SID, transcript_path: f, cwd: '/r', hook_event_name: 'Stop', stop_hook_active: false, background_tasks: [], ...extra });
-caso('2.10 sessão "exec ·" no fio principal é cobrada; sessão de outro título não', () => {
-  const ex = transcript([...trabalho(), fala('Pronto, tudo verde.')], 'exec · SPEC-150 rotas');
-  if (!bloqueou(rodar('executor-criterio.mjs', stop(ex)))) throw new Error('exec não cobrado');
-  const pl = transcript([...trabalho(), fala('Pronto, tudo verde.')], 'plano · SPEC-150');
-  igual(rodar('executor-criterio.mjs', stop(pl)), null, 'plano');
-});
-caso('2.10b executora do pool (`E3 · …` no registro do app) é cobrada; `P3 · …` não', () => {
-  const app = join(base, 'app'); mkdirSync(app);
-  const reg = (sessionId, titulo) => writeFileSync(join(app, `local_${sessionId}.json`), JSON.stringify({ sessionId: `local_${sessionId}`, cliSessionId: sessionId, priorCliSessionIds: [], title: titulo, isArchived: false }));
-  const E3 = 'cccccccc-0000-0000-0000-000000000003'; const P3 = 'cccccccc-0000-0000-0000-000000000099';
-  reg(E3, 'E3 · histórico das etapas'); reg(P3, 'P3 · plano do editor');
+const stop = (f, extra = {}) => ({ session_id: dona(SID), transcript_path: f, cwd: '/r', hook_event_name: 'Stop', stop_hook_active: false, background_tasks: [], ...extra });
+caso('2.10 a dona em execução, validação ou merge é cobrada; em planejamento ou design, ou sem item, não', () => {
   const f = transcript([...trabalho(), fala('Pronto, tudo verde.')]);
-  if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { session_id: E3 }), { POOL_APP_SESSOES_DIR: app }))) throw new Error('E3 não cobrada');
-  igual(rodar('executor-criterio.mjs', stop(f, { session_id: P3 }), { POOL_APP_SESSOES_DIR: app }), null, 'P3');
-});
-caso('2.10c dona de item `via: "dona"` em execução, validação ou merge é cobrada; em planejamento, ou de item do pool, não', () => {
-  const app = join(base, 'app'); mkdirSync(app);
-  const fila = join(base, 'fila'); mkdirSync(fila);
-  const reg = (sessionId, titulo) => writeFileSync(join(app, `local_${sessionId}.json`), JSON.stringify({ sessionId: `local_${sessionId}`, cliSessionId: sessionId, priorCliSessionIds: [], title: titulo, isArchived: false }));
-  const item = (id, data) => writeFileSync(join(fila, `${id}.json`), JSON.stringify({ id, version: 1, data: { titulo: id, ...data } }));
-  const DE = 'dddddddd-0000-0000-0000-000000000001'; const DV = 'dddddddd-0000-0000-0000-000000000002';
-  const DM = 'dddddddd-0000-0000-0000-000000000005';
-  const DP = 'dddddddd-0000-0000-0000-000000000003'; const PO = 'dddddddd-0000-0000-0000-000000000004';
-  for (const s of [DE, DV, DM, DP, PO]) reg(s, 'F9 · tema qualquer');
-  item('F1', { etapa: 'execucao', via: 'dona', donoLocalId: `local_${DE}` });
-  item('F2', { etapa: 'validacao', via: 'dona', donoLocalId: `local_${DV}` });
-  item('F5', { etapa: 'merge', via: 'dona', donoLocalId: `local_${DM}` });
-  item('F3', { etapa: 'planejamento', via: 'dona', donoLocalId: `local_${DP}` });
-  item('F4', { etapa: 'execucao', donoLocalId: `local_${PO}` });
-  const env = { POOL_APP_SESSOES_DIR: app, FILA_DIR: fila };
-  const f = transcript([...trabalho(), fala('Pronto, tudo verde.')]);
-  // Precondição: os cinco itens existem e a sessão que não é dona de nada não é cobrada (o negativo mede algo).
-  igual(['F1', 'F2', 'F3', 'F4', 'F5'].every((id) => existsSync(join(fila, `${id}.json`))), true, 'itens gravados');
-  if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { session_id: DE }), env))) throw new Error('dona em execução não cobrada');
-  if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { session_id: DV }), env))) throw new Error('dona em validação não cobrada');
-  if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { session_id: DM }), env))) throw new Error('dona em merge (conserto) não cobrada');
-  igual(rodar('executor-criterio.mjs', stop(f, { session_id: DP }), env), null, 'dona em planejamento');
-  igual(rodar('executor-criterio.mjs', stop(f, { session_id: PO }), env), null, 'dono de item do pool');
+  const ev = (sid) => ({ session_id: sid, transcript_path: f, cwd: '/r', hook_event_name: 'Stop', stop_hook_active: false, background_tasks: [] });
+  for (const etapa of ['execucao', 'validacao', 'merge']) {
+    if (!bloqueou(rc(ev(dona(sidDe(etapa), etapa))))) throw new Error(`dona em ${etapa} não cobrada`);
+  }
+  for (const etapa of ['planejamento', 'design', 'feito']) igual(rc(ev(dona(sidDe(etapa), etapa))), null, `dona em ${etapa}`);
+  igual(rc(ev('ffffffff-0000-0000-0000-000000000000')), null, 'sessão sem item');
   // Com a saída real colada, a dona passa.
   const ok = transcript([...trabalho(), usa('Bash', { command: 'npm test; echo "exit=$?"' }, 't9'), resultado('t9', '# pass 12\nexit=0'), fala('Testes afetados verdes: exit=0.')]);
-  igual(rodar('executor-criterio.mjs', stop(ok, { session_id: DE }), env), null, 'dona com exit=0');
-});
-caso('2.11 sessão --agent executor (agent_type sem agent_id) é cobrada', () => {
-  const f = transcript([...trabalho(), fala('Pronto.')]);
-  if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { agent_type: 'executor' })))) throw new Error('não cobrou');
+  igual(rc({ ...ev(dona(sidDe('ok'))), transcript_path: ok }), null, 'dona com exit=0');
 });
 caso('2.12 Stop vindo de dentro de subagente (agent_id) é ignorado', () => {
-  const f = transcript([...trabalho(), fala('Pronto.')], 'exec · x');
-  igual(rodar('executor-criterio.mjs', stop(f, { agent_id: 'a1', agent_type: 'executor' })), null, 'saída');
+  const f = transcript([...trabalho(), fala('Pronto.')]);
+  if (!bloqueou(rc(stop(f)))) throw new Error('precondição: a dona é cobrada');
+  igual(rc(stop(f, { agent_id: 'a1', agent_type: 'validador' })), null, 'saída');
 });
 caso('2.13 turno que para esperando background adia; o turno da notificação cobra', () => {
   const t1 = [...trabalho(), usa('Bash', { command: 'pnpm test', run_in_background: true }, 't9'), resultado('t9', 'Command running in background'), fala('Gate rodando; aviso quando terminar.')];
-  const f1 = transcript(t1, 'exec · x');
-  igual(rodar('executor-criterio.mjs', stop(f1, { background_tasks: [{ id: 'b1', status: 'running' }] })), null, 'turno 1');
+  const f1 = transcript(t1);
+  igual(rc(stop(f1, { background_tasks: [{ id: 'b1', status: 'running' }] })), null, 'turno 1');
   igual(log()[0][3], 'adiou-esperando-fundo', 'log 1');
   // Formato real (2.1.308): a notificação de Bash traz só o status, não a saída.
   const notif = abertura('<task-notification>\n<task-id>brdkei6q1</task-id>\n<tool-use-id>t9</tool-use-id>\n<output-file>/tmp/x/tasks/brdkei6q1.output</output-file>\n<status>completed</status>\n<summary>Background command "Run full gate" completed (exit code 0)</summary>\n</task-notification>', { origin: { kind: 'task-notification' } });
-  const f2 = transcript([...t1, notif, fala('O gate terminou e passou.')], 'exec · x');
-  if (!bloqueou(rodar('executor-criterio.mjs', stop(f2)))) throw new Error('turno da notificação não cobrou');
-  const f3 = transcript([...t1, notif, fala('Gate completed (exit code 0).')], 'exec · x');
-  igual(rodar('executor-criterio.mjs', stop(f3, { stop_hook_active: true })), null, 'com a saída da notificação');
+  const f2 = transcript([...t1, notif, fala('O gate terminou e passou.')]);
+  if (!bloqueou(rc(stop(f2)))) throw new Error('turno da notificação não cobrou');
+  const f3 = transcript([...t1, notif, fala('Gate completed (exit code 0).')]);
+  igual(rc(stop(f3, { stop_hook_active: true })), null, 'com a saída da notificação');
   igual(log().map((l) => l[3]).join(','), 'adiou-esperando-fundo,cobrou-1,corrigiu-apos-cobranca', 'log');
 });
 caso('2.14 feedback do próprio Stop (isMeta) não abre turno novo', () => {
-  const f = transcript([...trabalho(), fala('Pronto.'), { type: 'user', isMeta: true, uuid: id(), message: { role: 'user', content: 'Stop hook feedback:\nRelatório sem a saída' } }, fala('Pronto de novo.')], 'exec · x');
-  if (!bloqueou(rodar('executor-criterio.mjs', stop(f, { stop_hook_active: true })))) throw new Error('perdeu o turno (não viu o Edit)');
+  const f = transcript([...trabalho(), fala('Pronto.'), { type: 'user', isMeta: true, uuid: id(), message: { role: 'user', content: 'Stop hook feedback:\nRelatório sem a saída' } }, fala('Pronto de novo.')]);
+  if (!bloqueou(rc(stop(f, { stop_hook_active: true })))) throw new Error('perdeu o turno (não viu o Edit)');
 });
 caso('2.15 entrada quebrada: sai 0, sem saída, erro no log', () => {
-  igual(rodar('executor-criterio.mjs', '{'), null, 'saída');
+  igual(rc('{'), null, 'saída');
   igual(log()[0][3], 'erro', 'log');
 });
 // Casos da validação de 23/10 (eventos do 2.1.308, formatos de transcript reais).
-caso('2.16 subagente em background: background_tasks traz o próprio agente e mesmo assim cobra', () => {
-  const f = transcript(trabalho());
-  const ev = subStop(f, 'Pronto, testes passaram.', { background_tasks: [{ id: 'a77', type: 'local_agent', status: 'running' }, { id: 'b1', type: 'local_bash', status: 'running' }] });
-  if (!bloqueou(rodar('executor-criterio.mjs', ev))) throw new Error('adiou');
-});
 caso('2.17 edição por Bash conta como edição; Bash que só lê não conta', () => {
   for (const [i, cmd] of ["python3 - <<'EOF'\nopen('a.ts','w').write('x')\nEOF", "sed -i '' 's/a/b/' a.ts", 'cat >> b.md <<EOF\nx\nEOF', 'echo x | tee c.ts'].entries()) {
     const f = transcript([abertura('Plano'), usa('Bash', { command: cmd }, 't1'), resultado('t1', '')]);
-    if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, 'Feito.', { agent_id: `b${i}` })))) throw new Error(`não viu edição em: ${cmd}`);
+    if (!bloqueou(rc(subStop(f, 'Feito.', { chave: `b${i}` })))) throw new Error(`não viu edição em: ${cmd}`);
   }
   for (const [i, cmd] of ['git status 2>&1 | head', 'node -e "[1].map((x)=>x)" > /dev/null', 'grep -n "a->b" x.ts']. entries()) {
     const f = transcript([abertura('Plano'), usa('Bash', { command: cmd }, 't1'), resultado('t1', '')]);
-    igual(rodar('executor-criterio.mjs', subStop(f, 'Feito.', { agent_id: `c${i}` })), null, `leitura cobrada: ${cmd}`);
+    igual(rc(subStop(f, 'Feito.', { chave: `c${i}` })), null, `leitura cobrada: ${cmd}`);
   }
 });
 caso('2.18 resumo de compactação não abre turno novo (a edição de antes vale)', () => {
   const compacta = { type: 'user', uuid: id(), isCompactSummary: true, message: { role: 'user', content: 'This session is being continued from a previous conversation…' } };
   const f = transcript([...trabalho(), compacta, fala('Pronto.')]);
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, 'Pronto.')))) throw new Error('perdeu a edição de antes da compactação');
+  if (!bloqueou(rc(subStop(f, 'Pronto.')))) throw new Error('perdeu a edição de antes da compactação');
 });
 caso('2.19 status inventado (fora da saída real) é cobrado', () => {
   const f = transcript([abertura('Plano'), usa('Edit', { file_path: '/r/a.ts' }, 't1'), resultado('t1', 'ok'), usa('Bash', { command: 'git status' }, 't2'), resultado('t2', 'nothing to commit')]);
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, 'Gate: exit=0')))) throw new Error('exit=0 de cabeça passou');
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, 'test=0 typecheck=0', { agent_id: 'a81' })))) throw new Error('test=0 de cabeça passou');
+  if (!bloqueou(rc(subStop(f, 'Gate: exit=0')))) throw new Error('exit=0 de cabeça passou');
+  if (!bloqueou(rc(subStop(f, 'test=0 typecheck=0', { chave: 'a81' })))) throw new Error('test=0 de cabeça passou');
 });
 caso('2.20 saída com falha e relatório que só cita os que passaram é cobrado', () => {
   const f = transcript(trabalho('      Tests  2 failed | 96 passed (98)'));
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, 'Gate: 96 testes passaram.')))) throw new Error('escondeu a falha e passou');
-  igual(rodar('executor-criterio.mjs', subStop(f, 'Gate: 2 falharam, 96 passaram.', { agent_id: 'a82' })), null, 'admitiu a falha');
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, 'Gate: 96 testes passaram, nenhuma falha nova.', { agent_id: 'a85' })))) throw new Error('"nenhuma falha" escondeu as 2');
+  if (!bloqueou(rc(subStop(f, 'Gate: 96 testes passaram.')))) throw new Error('escondeu a falha e passou');
+  igual(rc(subStop(f, 'Gate: 2 falharam, 96 passaram.', { chave: 'a82' })), null, 'admitiu a falha');
+  if (!bloqueou(rc(subStop(f, 'Gate: 96 testes passaram, nenhuma falha nova.', { chave: 'a85' })))) throw new Error('"nenhuma falha" escondeu as 2');
 });
 caso('2.21 "Q62" solto e "$?" dentro de bloco de código não são dúvida', () => {
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Implementei a Q62 conforme o plano.')))) throw new Error('Q62 virou dúvida');
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Rodei:\n```\npnpm test; echo exit=$?\n```', { agent_id: 'a83' })))) throw new Error('$? virou dúvida');
+  if (!bloqueou(rc(subStop(transcript(trabalho()), 'Implementei a Q62 conforme o plano.')))) throw new Error('Q62 virou dúvida');
+  if (!bloqueou(rc(subStop(transcript(trabalho()), 'Rodei:\n```\npnpm test; echo exit=$?\n```', { chave: 'a83' })))) throw new Error('$? virou dúvida');
 });
 caso('2.22 saída lida do .output (Read) ou do Monitor conta como saída real', () => {
   const lido = transcript([abertura('Plano'), usa('Edit', { file_path: '/r/a.ts' }, 't1'), resultado('t1', 'ok'),
     usa('Read', { file_path: '/private/tmp/x/tasks/b1.output' }, 't2'), resultado('t2', SAIDA_VITEST)]);
-  igual(rodar('executor-criterio.mjs', subStop(lido, 'Gate: 98 testes verdes.')), null, 'Read do .output');
+  igual(rc(subStop(lido, 'Gate: 98 testes verdes.')), null, 'Read do .output');
   const mon = transcript([abertura('Plano'), usa('Edit', { file_path: '/r/a.ts' }, 't1'), resultado('t1', 'ok'),
     usa('Monitor', { command: 'tail -f g.log' }, 't3'), resultado('t3', 'EXIT=0')]);
-  igual(rodar('executor-criterio.mjs', subStop(mon, 'Gate: EXIT=0', { agent_id: 'a84' })), null, 'Monitor');
+  igual(rc(subStop(mon, 'Gate: EXIT=0', { chave: 'a84' })), null, 'Monitor');
 });
 caso('2.23 transcript que não existe: sai calado, sem erro no log', () => {
-  igual(rodar('executor-criterio.mjs', subStop('/nao/existe.jsonl', 'Pronto.')), null, 'saída');
-  igual(rodar('executor-criterio.mjs', stop('/nao/existe.jsonl')), null, 'Stop');
+  igual(rc(subStop('/nao/existe.jsonl', 'Pronto.')), null, 'saída');
+  igual(rc(stop('/nao/existe.jsonl')), null, 'Stop');
   igual(log().length, 0, 'log');
 });
 caso('2.24 só a ÚLTIMA saída com contagem conta: vermelho, conserto, verde passa', () => {
@@ -351,46 +319,46 @@ caso('2.24 só a ÚLTIMA saída com contagem conta: vermelho, conserto, verde pa
     usa('Bash', { command: 'pnpm test' }, 't2'), resultado('t2', '      Tests  2 failed | 96 passed (98)'),
     usa('Edit', { file_path: '/r/a.ts' }, 't3'), resultado('t3', 'ok'),
     usa('Bash', { command: 'pnpm test' }, 't4'), resultado('t4', SAIDA_VITEST)]);
-  igual(rodar('executor-criterio.mjs', subStop(f, 'Gate: 98 testes verdes.')), null, 'verde depois do conserto');
+  igual(rc(subStop(f, 'Gate: 98 testes verdes.')), null, 'verde depois do conserto');
 });
 caso('2.24b saída completa do vitest ("Test Files  1 failed" antes de "Tests  2 failed"): relato honesto passa', () => {
   const f = transcript(trabalho(' FAIL  src/a.test.ts > soma\n Test Files  1 failed | 3 passed (4)\n      Tests  2 failed | 96 passed (98)\n   Duration  12.31s'));
   let i = 0;
   for (const rel of ['Gate: 2 testes falharam, 96 passaram.', 'Gate: falharam 2, os outros 96 passaram.',
     'Gate vermelho:\n```\n      Tests  2 failed | 96 passed (98)\n```', '1 arquivo e 2 testes falharam; 96 passaram.']) {
-    igual(rodar('executor-criterio.mjs', subStop(f, rel, { agent_id: `h${i++}` })), null, `honesto cobrado: ${rel}`);
+    igual(rc(subStop(f, rel, { chave: `h${i++}` })), null, `honesto cobrado: ${rel}`);
   }
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, 'Gate: 96 testes passaram, nenhuma falha nova.', { agent_id: 'h9' })))) throw new Error('escondeu');
+  if (!bloqueou(rc(subStop(f, 'Gate: 96 testes passaram, nenhuma falha nova.', { chave: 'h9' })))) throw new Error('escondeu');
 });
 caso('2.24c o "exit=1" do relatório não conta como número de falhas', () => {
   const f = transcript(trabalho(' Test Files  1 failed | 3 passed (4)\n      Tests  2 failed | 96 passed (98)\nexit=1'));
   let i = 0;
   for (const rel of ['96 testes passaram, nenhuma falha nova (exit=1).', 'Gate: 96 passed, sem falhas, exit=1']) {
-    if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, rel, { agent_id: `x${i++}` })))) throw new Error(`escondeu com exit=1: ${rel}`);
+    if (!bloqueou(rc(subStop(f, rel, { chave: `x${i++}` })))) throw new Error(`escondeu com exit=1: ${rel}`);
   }
-  igual(rodar('executor-criterio.mjs', subStop(f, 'exit=1: 2 testes falharam, 96 passaram.', { agent_id: 'x9' })), null, 'honesto com exit=1');
+  igual(rc(subStop(f, 'exit=1: 2 testes falharam, 96 passaram.', { chave: 'x9' })), null, 'honesto com exit=1');
 });
 caso('2.24d relatório com milhares de linhas em branco termina rápido (sem backtracking)', () => {
   const ini = Date.now();
-  rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Pronto.' + '\n'.repeat(20000) + 'fim'));
+  rc(subStop(transcript(trabalho()), 'Pronto.' + '\n'.repeat(20000) + 'fim'));
   if (Date.now() - ini > 3000) throw new Error(`levou ${Date.now() - ini} ms`);
 });
 caso('2.25 "Bloqueado:" abrindo a linha é dúvida; título markdown com "?" não é', () => {
-  igual(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Bloqueado: falta o token da loja.')), null, 'Bloqueado:');
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Pronto.\n\n## O que ficou de fora?\n\nNada.', { agent_id: 'a86' })))) throw new Error('título com ? virou dúvida');
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Bloqueado: nada.', { agent_id: 'a88' })))) throw new Error('"Bloqueado: nada." isentou');
+  igual(rc(subStop(transcript(trabalho()), 'Bloqueado: falta o token da loja.')), null, 'Bloqueado:');
+  if (!bloqueou(rc(subStop(transcript(trabalho()), 'Pronto.\n\n## O que ficou de fora?\n\nNada.', { chave: 'a86' })))) throw new Error('título com ? virou dúvida');
+  if (!bloqueou(rc(subStop(transcript(trabalho()), 'Bloqueado: nada.', { chave: 'a88' })))) throw new Error('"Bloqueado: nada." isentou');
 });
 caso('2.26 "exit=1" no relatório não casa com "exit=10" na saída', () => {
   const f = transcript(trabalho('rodou\nexit=10'));
-  if (!bloqueou(rodar('executor-criterio.mjs', subStop(f, 'Critério: exit=1')))) throw new Error('exit=1 casou com exit=10');
-  igual(rodar('executor-criterio.mjs', subStop(f, 'Critério: exit=10', { agent_id: 'a87' })), null, 'exit=10 confere');
+  if (!bloqueou(rc(subStop(f, 'Critério: exit=1')))) throw new Error('exit=1 casou com exit=10');
+  igual(rc(subStop(f, 'Critério: exit=10', { chave: 'a87' })), null, 'exit=10 confere');
 });
 caso('2.27 fio principal com background que nunca termina: no 3º turno adiado, cobra', () => {
-  const f = transcript([...trabalho(), fala('Dev server no ar.')], 'exec · x');
+  const f = transcript([...trabalho(), fala('Dev server no ar.')]);
   const ev = stop(f, { background_tasks: [{ id: 'b1', type: 'local_bash', status: 'running' }] });
-  igual(rodar('executor-criterio.mjs', ev), null, '1º');
-  igual(rodar('executor-criterio.mjs', ev), null, '2º');
-  if (!bloqueou(rodar('executor-criterio.mjs', ev))) throw new Error('3º adiou de novo');
+  igual(rc(ev), null, '1º');
+  igual(rc(ev), null, '2º');
+  if (!bloqueou(rc(ev))) throw new Error('3º adiou de novo');
   igual(log().map((l) => l[3]).join(','), 'adiou-esperando-fundo,adiou-esperando-fundo,cobrou-1', 'log');
 });
 
@@ -468,7 +436,7 @@ caso('4.3 subagente Edit no produto: recusa (deny) e registra', () => {
   igual(r.hookSpecificOutput.permissionDecisionReason.includes(`${REPO}/apps/web/a.ts`), true, 'motivo cita o caminho');
   igual(log()[0][3], 'recusou', 'log');
   const m = r.hookSpecificOutput.permissionDecisionReason;
-  igual(m.includes('despacha a uma executora E livre do pool'), true, 'B4: manda despachar a uma executora do pool');
+  igual(m.includes('quem te lançou é quem grava'), true, 'manda devolver a quem o lançou');
   igual(/quem te lançou abre uma/.test(m), false, 'B4: não manda mais abrir sessão nova');
 });
 caso('4.4 subagente Write relativo, MultiEdit e NotebookEdit: recusa', () => {
@@ -507,13 +475,7 @@ caso('4.9 Bash não é coberto; sem caminho passa; entrada quebrada sai 0 com er
   igual(log()[0][3], 'erro', 'log');
 });
 
-// K2: o agent do plugin chega como `orquestracao:executor`; as travas que casam por nome aceitam as duas formas.
-caso('K2 executor-criterio: `orquestracao:executor` é cobrado como `executor`; `orquestracao:validador` não', () => {
-  const f = transcript(trabalho());
-  const r = rodar('executor-criterio.mjs', subStop(f, 'Pronto, editei a.ts e os testes passaram.', { agent_type: 'orquestracao:executor' }));
-  if (!bloqueou(r)) throw new Error('executor com prefixo não foi cobrado');
-  igual(rodar('executor-criterio.mjs', subStop(transcript(trabalho()), 'Achados: nenhum.', { agent_type: 'orquestracao:validador' })), null, 'validador com prefixo');
-});
+// K2: o agent do plugin chega como `orquestracao:<tipo>`; a lista casa as duas formas.
 caso('K2 subagente-nao-edita: a lista casa `orquestracao:designer` com `designer`; `orquestracao:executor` segue recusado', () => {
   writeFileSync(join(base, 'subagente-pode-escrever.txt'), 'designer\n');
   igual(rodar(SN, editar(`${REPO}/docs/design/revisoes/a.md`, sub('orquestracao:designer'))), null, 'designer com prefixo');
@@ -637,11 +599,11 @@ caso('F66.1 symlink que leva para fora da pasta de revisões recusa com o motivo
   igual(ultimo(), 'recusou', 'src/a.ts: log');
 }));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
-  const f = transcript([...trabalho(), fala('Pronto, editei.')], 'exec · x');
+  const f = transcript([...trabalho(), fala('Pronto, editei.')]);
   const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');
   const seq = [];
   for (let i = 1; i <= 4; i++) {
-    const r = rodar('executor-criterio.mjs', stop(f, { stop_hook_active: i > 1, last_assistant_message: 'Pronto, editei.' }));
+    const r = rc(stop(f, { stop_hook_active: i > 1, last_assistant_message: 'Pronto, editei.' }));
     seq.push(r?.reason?.match(/cobrança \d de 2/)?.[0] ?? 'passou');
     cresce(abertura('Stop hook feedback:\ncobrança', { isMeta: true }), fala('Pronto, editei.'));
   }
@@ -651,7 +613,7 @@ caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1
 caso('2.29 estado malformado ({"x":null}) não derruba o hook e é limpo na gravação', () => {
   const arq = join(base, 'hooks-crewai-estado.json');
   writeFileSync(arq, JSON.stringify({ x: null, y: 5 }));
-  if (!bloqueou(rodar('executor-criterio.mjs', stop(transcript([...trabalho(), fala('Pronto.')], 'exec · x'))))) throw new Error('não cobrou');
+  if (!bloqueou(rc(stop(transcript([...trabalho(), fala('Pronto.')]))))) throw new Error('não cobrou');
   igual(log().some((l) => l[3] === 'erro'), false, 'erro no log');
   igual(Object.keys(JSON.parse(readFileSync(arq, 'utf8'))).length, 1, 'só a chave desta sessão sobra');
 });
@@ -662,23 +624,23 @@ caso('2.30 turno que edita arquivo de teste registra `editou teste: <caminhos>`;
   const comTeste = transcript(mexeu('/r/x.test.mjs', 'ta'));
   // Precondição: a fixtura tem o `tool_use` que o hook lê; sem isto o "não registra" abaixo mediria um transcript vazio.
   igual(readFileSync(comTeste, 'utf8').includes('"name":"Edit"'), true, 'fixtura sem o tool_use de Edit');
-  igual(rodar('executor-criterio.mjs', subStop(comTeste, 'Gate: exit=0')), null, 'não cobra nem bloqueia por isso');
+  igual(rc(subStop(comTeste, 'Gate: exit=0')), null, 'não cobra nem bloqueia por isso');
   const linhas = log().filter((l) => l[3] === 'editou-teste');
   igual(linhas.length, 1, 'linhas de editou-teste');
   igual(linhas[0][4], 'editou teste: /r/x.test.mjs', 'detalhe');
   const soCodigo = transcript(mexeu('/r/src/a.mjs', 'tb'));
   igual(readFileSync(soCodigo, 'utf8').includes('"name":"Edit"'), true, 'fixtura sem o tool_use de Edit');
-  rodar('executor-criterio.mjs', subStop(soCodigo, 'Gate: exit=0', { agent_id: 'a79' }));
+  rc(subStop(soCodigo, 'Gate: exit=0', { chave: 'a79' }));
   igual(log().filter((l) => l[3] === 'editou-teste').length, 1, 'o turno só de código não registra');
   const pasta = transcript(mexeu('/r/hooks/tests/helper.mjs', 'tc'));
-  rodar('executor-criterio.mjs', subStop(pasta, 'Gate: exit=0', { agent_id: 'a80' }));
+  rc(subStop(pasta, 'Gate: exit=0', { chave: 'a80' }));
   igual(log().filter((l) => l[3] === 'editou-teste').length, 2, 'caminho em pasta tests/ conta');
   const porBash = transcript([abertura('Plano'), usa('Bash', { command: "sed -i '' 's/a/b/' src/y.spec.ts && npm test; echo exit=$?" }, 'td'), resultado('td', SAIDA_VITEST + '\nexit=0')]);
-  rodar('executor-criterio.mjs', subStop(porBash, 'Gate: exit=0', { agent_id: 'a81' }));
+  rc(subStop(porBash, 'Gate: exit=0', { chave: 'a81' }));
   igual(log().filter((l) => l[3] === 'editou-teste').length, 3, 'Bash que grava e cita o teste conta');
   const soRodou = transcript([abertura('Plano'), usa('Edit', { file_path: '/r/src/a.mjs', old_string: 'a', new_string: 'b' }, 'te'), resultado('te', 'ok'),
     usa('Bash', { command: 'npx vitest run src/z.test.ts; echo exit=$?' }, 'tf'), resultado('tf', SAIDA_VITEST + '\nexit=0')]);
-  rodar('executor-criterio.mjs', subStop(soRodou, 'Gate: exit=0', { agent_id: 'a82' }));
+  rc(subStop(soRodou, 'Gate: exit=0', { chave: 'a82' }));
   igual(log().filter((l) => l[3] === 'editou-teste').length, 3, 'rodar o teste não é editar o teste');
 });
 
@@ -688,7 +650,7 @@ caso('2.31 registro de teste editado por Bash: conta o alvo da escrita', () => {
     n += 1;
     const t = transcript([abertura('Plano'), usa('Bash', { command: cmd }, `bz${n}`), resultado(`bz${n}`, SAIDA_VITEST + '\nexit=0')]);
     const antes = log().filter((l) => l[3] === 'editou-teste').length;
-    rodar('executor-criterio.mjs', subStop(t, 'Gate: exit=0', { agent_id: `bz${n}` }));
+    rc(subStop(t, 'Gate: exit=0', { chave: `bz${n}` }));
     return log().filter((l) => l[3] === 'editou-teste').length - antes;
   };
   igual(conta('echo x > src/a.test.ts'), 1, 'redireção para teste');
@@ -706,7 +668,7 @@ caso('2.31 registro de teste editado por Bash: conta o alvo da escrita', () => {
   igual(conta('cp src/j.test.ts /tmp/backup'), 0, 'cp com teste só na origem');
   igual(conta('cat src/k.test.ts | grep x'), 0, 'cat de teste');
   // Conserto 2: R1 (não cobra o que não escreve teste) e R2 (aspas, branch com nome de teste).
-  const cobra = (cmd, id) => rodar('executor-criterio.mjs', subStop(transcript([abertura('Plano'), usa('Bash', { command: cmd }, id)]), 'feito', { agent_id: id }));
+  const cobra = (cmd, id) => rc(subStop(transcript([abertura('Plano'), usa('Bash', { command: cmd }, id)]), 'feito', { chave: id }));
   igual(cobra('git checkout develop', 'r1a')?.decision ?? null, null, 'R1: git checkout develop não cobra');
   igual(cobra('rm -rf /tmp/x', 'r1b')?.decision ?? null, null, 'R1: rm -rf /tmp/x não cobra');
   igual(cobra('cp a /tmp/b', 'r1c')?.decision ?? null, null, 'R1: cp a /tmp/b não cobra');

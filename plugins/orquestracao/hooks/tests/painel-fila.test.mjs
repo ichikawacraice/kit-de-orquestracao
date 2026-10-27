@@ -757,47 +757,14 @@ caso('F30-1: com add duas vezes com sessões diferentes dá duas entradas; repet
   com = json(painel('get', 'fila', 'F1')).data.com;
   igual(com.length, 2, 'continua com duas'); igual(com[0].oQue, 'só o conserto', 'oQue trocado');
 });
-// F155: com add confere o id contra o título no registro do app.
-const registro = (id, titulo) => {
-  const d = join(base, 'appsess'); mkdirSync(d, { recursive: true });
-  writeFileSync(join(d, `${id}.json`), JSON.stringify({ sessionId: id, title: titulo, cwd: base, isArchived: false }));
-};
-const comAddReg = (F, l, ap, o) => run('node', [join(SCRIPTS, 'painel.mjs'), 'com', 'add', F, l, ap, o], { POOL_APP_SESSOES_DIR: join(base, 'appsess') });
-caso('F155: com add com o id da orquestradora é recusado e não grava', () => {
+caso('F30-1: com del tira a sessão do com; quem não está sai com exit 1', () => {
   semear(); painel('set', 'fila', 'F1', COM());
-  registro(LA, '🎛 orquestradora — kit');
-  const antes = JSON.stringify(json(painel('get', 'fila', 'F1')));
-  const r = comAddReg('F1', LA, 'E18', 'x');
-  igual(r.exit, 1, `exit (${r.out}${r.err})`);
-  igual(JSON.stringify(json(painel('get', 'fila', 'F1'))), antes, 'o item mudou');
-});
-caso('F155: com add com o apelido que não é o do título é recusado; com o certo passa', () => {
-  semear(); painel('set', 'fila', 'F1', COM());
-  registro(LB, 'E21 · acabamento');
-  const r = comAddReg('F1', LB, 'E18', 'x');
-  igual(r.exit, 1, `exit (${r.out}${r.err})`); ok(r.err.includes('E21'), `stderr sem E21: ${r.err}`);
-  const c = comAddReg('F1', LB, 'E21', 'x');
-  igual(c.exit, 0, `E21 (${c.err})`);
-});
-caso('F155: com add com id fora do registro ou título sem apelido passa', () => {
-  semear(); painel('set', 'fila', 'F1', COM());
-  const L30 = 'local_00000000-0000-4000-8000-000000000030'; const L31 = 'local_00000000-0000-4000-8000-000000000031';
-  registro(L31, 'Nova sessão');
-  igual(comAddReg('F1', L30, 'E18', 'x').exit, 0, 'sem registro');
-  igual(comAddReg('F1', L31, 'E19', 'x').exit, 0, 'título sem apelido');
-});
-caso('F30-1: com del tira sem gravar fez; com del --fez grava fez com em; quem não está sai com exit 1', () => {
-  semear(); painel('set', 'fila', 'F1', COM());
-  comAdd('F1', LA, 'E1', 'título'); comAdd('F1', LB, 'V4', 'botão');
+  comAdd('F1', LA, 'dona', 'título'); comAdd('F1', LB, 'ajuda', 'botão');
   const a = painel('com', 'del', 'F1', LB); igual(a.exit, 0, `del (${a.err})`);
-  let d = json(painel('get', 'fila', 'F1')).data;
-  igual(d.com.length, 1, 'tirou a V4'); ok(d.fez === undefined, 'del sem --fez gravou fez');
-  const b = painel('com', 'del', 'F1', LA, '--fez'); igual(b.exit, 0, `del --fez (${b.err})`);
-  d = json(painel('get', 'fila', 'F1')).data;
-  igual(d.com.length, 0, 'com vazio'); igual(d.fez.length, 1, 'uma entrada em fez');
-  igual(JSON.stringify([d.fez[0].apelido, d.fez[0].oQue, d.fez[0].localId]), JSON.stringify(['E1', 'título', LA]), 'fez com quem e o quê');
-  ok(!Number.isNaN(Date.parse(d.fez[0].em)), 'fez.em é ISO');
-  recusa(painel('com', 'del', 'F1', LA), 'não está em com', 'del de quem não está');
+  const d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.com.length, 1, 'tirou a ajuda'); ok(d.fez === undefined, 'del não grava fez');
+  recusa(painel('com', 'del', 'F1', LB), 'não está em com', 'del de quem não está');
+  recusa(painel('com', 'del', 'F1', LA, '--fez'), 'uso: painel.mjs com del', '--fez saiu');
 });
 caso('F30-1: o update, o set e o batch com com são recusados (use com add|del); o com do disco fica intacto', () => {
   semear(); painel('set', 'fila', 'F1', COM()); comAdd('F1', LA, 'E1', 'título');
@@ -828,26 +795,34 @@ caso('F30-1: set --se-versao sem o campo com preserva o com gravado; fechar por 
   const f = json(painel('get', 'fila', 'F1')).data;
   igual(f.etapa, 'planejamento', 'etapa intacta'); igual(f.com.length, 2, 'com intacto');
 });
-caso('F30-1: o fez é campo de máquina: o set o preserva, e set/update/batch que o mudam são recusados', () => {
-  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'validacao' })); comAdd('F1', LA, 'E1', 'título'); comAdd('F1', LB, 'V4', 'valida');
-  painel('com', 'del', 'F1', LA, '--fez');
+// `fez` e `passaram` são históricos de itens antigos: o set guarda o gravado, e set/update/batch que os mudam são recusados.
+const comHistorico = (F) => {
+  const arq = join(base, 'painel', 'fila', `${F}.json`);
+  const doc = JSON.parse(readFileSync(arq, 'utf8'));
+  doc.data.fez = [{ localId: LA, apelido: 'E1', oQue: 'título', em: '2026-10-25T10:00:00.000Z' }];
+  doc.data.passaram = [{ localId: LA, apelido: 'E1', papel: 'E', em: '2026-10-25T10:00:00.000Z' }];
+  writeFileSync(arq, JSON.stringify(doc));
+};
+caso('F30-1: fez e passaram antigos são só leitura: o set os preserva, e set/update/batch que os mudam são recusados', () => {
+  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'validacao' })); comHistorico('F1');
   const v = () => json(painel('get', 'fila', 'F1')).version;
   igual(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', espera: { motivo: 'operador', texto: 'decidir' } }), '--se-versao', String(v())).exit, 0, 'set sem fez passa');
   const d = json(painel('get', 'fila', 'F1')).data;
-  igual(d.fez.length, 1, 'fez preservado no set'); igual(d.fez[0].apelido, 'E1', 'ainda a E1'); igual(d.com.length, 1, 'com preservado');
-  recusa(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', fez: [] }), '--se-versao', String(v())), 'só muda por `painel com del --fez`', 'set com fez []');
-  recusa(painel('update', 'fila', 'F1', '{"fez":[]}'), 'só muda por `painel com del --fez`', 'update com fez');
-  recusa(painel('batch', JSON.stringify([{ op: 'update', colecao: 'fila', id: 'F1', data: { fez: [] } }])), 'só muda por `painel com del --fez`', 'batch com fez');
-  recusa(painel('set', 'fila', 'F9', COM({ fez: [{ localId: LA, apelido: 'E1', oQue: 'a', em: '2026-10-25T10:00:00.000Z' }] })), 'só muda por `painel com del --fez`', 'set novo com fez');
+  igual(d.fez.length, 1, 'fez preservado no set'); igual(d.passaram.length, 1, 'passaram preservado no set');
+  recusa(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', fez: [] }), '--se-versao', String(v())), 'é histórico de item antigo', 'set com fez []');
+  recusa(painel('update', 'fila', 'F1', '{"fez":[]}'), 'é histórico de item antigo', 'update com fez');
+  recusa(painel('update', 'fila', 'F1', '{"passaram":[]}'), 'é histórico de item antigo', 'update com passaram');
+  recusa(painel('batch', JSON.stringify([{ op: 'update', colecao: 'fila', id: 'F1', data: { fez: [] } }])), 'é histórico de item antigo', 'batch com fez');
+  recusa(painel('set', 'fila', 'F9', COM({ fez: [{ localId: LA, apelido: 'E1', oQue: 'a', em: '2026-10-25T10:00:00.000Z' }] })), 'é histórico de item antigo', 'set novo com fez');
   igual(json(painel('get', 'fila', 'F1')).data.fez.length, 1, 'fez intacto');
 });
 caso('F30-1: o set compara com e fez em JSON canônico: igual ao gravado passa (chaves em outra ordem também), diferente é recusado, [] inclusive', () => {
-  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'validacao' })); comAdd('F1', LA, 'E1', 'título'); comAdd('F1', LB, 'V4', 'valida');
-  painel('com', 'del', 'F1', LA, '--fez');
+  semear(); painel('set', 'fila', 'F1', COM({ etapa: 'validacao' })); comHistorico('F1'); comAdd('F1', LB, 'dona', 'valida');
   const v = () => json(painel('get', 'fila', 'F1')).version;
   const g = () => json(painel('get', 'fila', 'F1')).data;
   const inverte = (l) => l.map((e) => Object.fromEntries(Object.entries(e).reverse()));
   const com0 = g().com; const fez0 = g().fez;
+  ok(com0.length === 1 && fez0.length === 1, 'precondição: com e fez gravados');
   igual(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', com: inverte(com0), fez: inverte(fez0) }), '--se-versao', String(v())).exit, 0, 'igual com chaves invertidas passa');
   igual(JSON.stringify(g().com), JSON.stringify(com0), 'com intacto'); igual(JSON.stringify(g().fez), JSON.stringify(fez0), 'fez intacto');
   recusa(painel('set', 'fila', 'F1', COM({ etapa: 'validacao', com: [] }), '--se-versao', String(v())), 'painel com add|del', 'set com com []');
@@ -937,44 +912,57 @@ caso('F32 B9: vencidos vale em qualquer posição; --min sem vencidos e flag des
   recusa(painel('list', 'fila', '--min', '1'), '--min só vale com', '--min sem vencidos');
   recusa(painel('list', 'fila', '--bobagem'), 'flag desconhecida', 'flag');
   for (const f of ['vencido', 'xyz']) recusa(painel('list', 'fila', f), 'filtro desconhecido', `filtro ${f}`);
-  recusa(painel('list', 'fila', 'xyz'), 'válidos: em-andamento · vencidos · esperando · planejamento', 'a lista dos válidos');
-  for (const f of ['em-andamento', 'vencidos', 'esperando', 'execucao', 'feito', 'aberto', 'concluido']) igual(painel('list', 'fila', f).exit, 0, `filtro ${f} vale`);
+  recusa(painel('list', 'fila', 'xyz'), 'válidos: em-andamento · vencidos · sem-dona · planejamento', 'a lista dos válidos');
+  for (const f of ['em-andamento', 'vencidos', 'sem-dona', 'execucao', 'feito', 'aberto', 'concluido']) igual(painel('list', 'fila', f).exit, 0, `filtro ${f} vale`);
   igual(painel('list', 'sessoes', 'xyz').exit, 0, 'o filtro livre das outras coleções não muda');
 });
 
-// F58: `esperando` na `list fila`, calculado fora de `data` e nunca gravado.
-caso('F58: list fila traz `esperando` fora de data (null quando não espera) e não grava nada; o filtro `esperando` separa os que esperam', () => {
+// `semDona` na `list fila`, calculado fora de `data` e nunca gravado.
+caso('list fila traz `semDona` fora de data (null quando tem gente) e não grava nada; o filtro `sem-dona` separa os sem dona', () => {
   semear();
-  porCom('F1', { ...dono, historico: [{ em: agoraMenos(30), etapa: 'execucao', dono: 'P1' }] });
-  porCom('F2', { ...dono, historico: [{ em: agoraMenos(30), etapa: 'execucao', dono: 'P1' }] });
-  comAdd('F2', LB, 'E1', 'executa');
+  porCom('F1', { etapa: 'execucao', donoLocalId: null, donoApelido: null, historico: [{ em: agoraMenos(30), etapa: 'execucao', dono: null }] });
+  porCom('F2', { etapa: 'execucao', donoLocalId: null, donoApelido: null, historico: [{ em: agoraMenos(30), etapa: 'execucao', dono: null }] });
+  comAdd('F2', LB, 'dona', 'executa');
   const antes = readFileSync(join(base, 'painel', 'fila', 'F1.json'), 'utf8');
   const todos = json(painel('list', 'fila'));
   const f1 = todos.find((d) => d.id === 'F1'); const f2 = todos.find((d) => d.id === 'F2');
   ok(f1 && f2, 'os dois itens saem na lista');
-  igual(f1.esperando?.papel, 'E', 'F1 espera E');
-  ok(f1.esperando.minutos >= 29, `minutos de F1 (${f1.esperando.minutos})`);
-  igual(f2.esperando, null, 'F2 tem E: esperando é null');
-  igual('esperando' in f1.data, false, 'esperando fora de data');
+  ok(f1.semDona && f1.semDona.minutos >= 29, `F1 sem dona (${JSON.stringify(f1.semDona)})`);
+  igual(f2.semDona, null, 'F2 tem gente no com: semDona é null');
+  igual('semDona' in f1.data, false, 'semDona fora de data');
   igual(readFileSync(join(base, 'painel', 'fila', 'F1.json'), 'utf8'), antes, 'o arquivo não muda');
-  igual(ids(painel('list', 'fila', 'esperando')), 'F1', 'filtro esperando');
-  igual(painel('get', 'fila', 'F1').out.includes('esperando"'), false, 'get não grava nem mostra o calculado');
+  igual(ids(painel('list', 'fila', 'sem-dona')), 'F1', 'filtro sem-dona');
+  igual(painel('get', 'fila', 'F1').out.includes('semDona"'), false, 'get não grava nem mostra o calculado');
 });
 
-caso('F150: com del aceita o apelido; ausente erra; repetido erra; --fez funciona pelo apelido', () => {
+caso('F150: com del aceita o apelido; ausente erra; repetido erra', () => {
   semear(); painel('set', 'fila', 'F1', COM());
-  comAdd('F1', LA, 'E1', 'título'); comAdd('F1', LB, 'V4', 'botão');
-  recusa(painel('com', 'del', 'F1', 'E9'), 'não está em com', 'apelido ausente');
-  const a = painel('com', 'del', 'F1', 'V4'); igual(a.exit, 0, `del pelo apelido (${a.err})`);
-  let d = json(painel('get', 'fila', 'F1')).data;
-  igual(d.com.length, 1, 'tirou a V4'); igual(d.com[0].apelido, 'E1', 'ficou a E1');
-  const b = painel('com', 'del', 'F1', 'E1', '--fez'); igual(b.exit, 0, `del --fez pelo apelido (${b.err})`);
-  d = json(painel('get', 'fila', 'F1')).data;
-  igual(d.com.length, 0, 'com vazio'); igual(d.fez.length, 1, 'fez gravado'); igual(d.fez[0].localId, LA, 'fez com o local_ de quem estava');
-  comAdd('F1', LA, 'E1', 'a'); comAdd('F1', LB, 'E1', 'b');
-  recusa(painel('com', 'del', 'F1', 'E1'), 'apelido ambíguo, use o local_', 'apelido repetido');
+  comAdd('F1', LA, 'dona', 'título'); comAdd('F1', LB, 'ajuda', 'botão');
+  recusa(painel('com', 'del', 'F1', 'outra'), 'não está em com', 'apelido ausente');
+  const a = painel('com', 'del', 'F1', 'ajuda'); igual(a.exit, 0, `del pelo apelido (${a.err})`);
+  const d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.com.length, 1, 'tirou a ajuda'); igual(d.com[0].apelido, 'dona', 'ficou a dona');
+  comAdd('F1', LB, 'dona', 'b');
+  recusa(painel('com', 'del', 'F1', 'dona'), 'apelido ambíguo, use o local_', 'apelido repetido');
   igual(json(painel('get', 'fila', 'F1')).data.com.length, 2, 'o ambíguo não tirou ninguém');
-  recusa(painel('com', 'del', 'F1', 'qualquer'), 'não é local_<uuid>', 'texto que não é apelido nem local_');
+});
+// F155: com add recusa o id da orquestradora (quem abre a dona pode passar o próprio id no lugar do dela).
+const registro = (id, titulo) => {
+  const d = join(base, 'appsess'); mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, `${id}.json`), JSON.stringify({ sessionId: id, title: titulo, cwd: base, isArchived: false }));
+};
+const comAddReg = (F, l, ap, o) => run('node', [join(SCRIPTS, 'painel.mjs'), 'com', 'add', F, l, ap, o], { POOL_APP_SESSOES_DIR: join(base, 'appsess') });
+caso('F155: com add com o id da orquestradora é recusado e não grava; o da dona passa', () => {
+  semear(); painel('set', 'fila', 'F1', COM());
+  registro(LA, '🎛 orquestradora — kit');
+  registro(LB, 'F1 · editor');
+  const antes = JSON.stringify(json(painel('get', 'fila', 'F1')));
+  const r = comAddReg('F1', LA, 'dona', 'x');
+  igual(r.exit, 1, `exit (${r.out}${r.err})`); ok(r.err.includes('orquestradora'), `stderr: ${r.err}`);
+  igual(JSON.stringify(json(painel('get', 'fila', 'F1'))), antes, 'o item mudou');
+  igual(comAddReg('F1', LB, 'dona', 'x').exit, 0, 'a dona passa');
+  const L30 = 'local_00000000-0000-4000-8000-000000000030';
+  igual(comAddReg('F1', L30, 'dona', 'x').exit, 0, 'sem registro passa');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

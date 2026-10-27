@@ -2,7 +2,7 @@
 // PreToolUse (F37): recusa o que leva SEGREDO para outra sessão. O texto que sai daqui fica no transcript do destino,
 // no painel e nas notas compartilhadas, e dali ninguém tira. Só olha os caminhos de saída (mensagem, start_session,
 // notas e painel); qualquer outra tool passa sem ser lida. A recusa nomeia os padrões e nunca o valor.
-// Erro do próprio hook vai para o log e DEIXA PASSAR: a trava não pode derrubar o pool.
+// Erro do próprio hook vai para o log e DEIXA PASSAR: a trava não pode derrubar as sessões.
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BASE, registrar, lerEntrada, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
@@ -25,7 +25,7 @@ function todosOsTextos(v, acc = [], fundo = 0) {
   return acc;
 }
 
-// Bash que grava (as regras BASH_GRAVA do executor-criterio, copiadas): redirecionamento, tee, sed -i, heredoc de interpretador.
+// Bash que grava (as regras BASH_GRAVA do criterio-da-dona, copiadas): redirecionamento, tee, sed -i, heredoc de interpretador.
 const BASH_GRAVA = [
   /\b(sed|perl)\s+(-[a-zA-Z]*\s+)*-[a-zA-Z]*i/,
   /(^|[^<>&0-9=-])>>?\s*(?!\/dev\/null\b|&)["']?[\w~./$-]/,

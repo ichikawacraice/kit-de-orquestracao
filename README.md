@@ -1,6 +1,6 @@
 # kit-de-orquestracao
 
-Kit de orquestração de sessões do Claude Code (pool de papéis, travas por hook, painel, gates), instalável em qualquer projeto.
+Kit de orquestração de sessões do Claude Code (uma sessão dona por item, travas por hook, painel, fila de merge, teto de testes), instalável em qualquer projeto.
 
 Em construção:
 - [Estudo: como distribuir e instalar](docs/estudos/2026-10-24-como-distribuir-o-kit.md)

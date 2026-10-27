@@ -39,13 +39,10 @@ export const PALAVRA_LIMPAR = ' · limpar'
 /**
  * As réguas de contexto por papel, as mesmas do hook `contexto-do-papel` (um teste da raiz compara): `aviso` marca `· alto`,
  * `teto` marca `· limpar`; nenhum dos dois é o denominador (esse é a janela de compactação). Sem faixa intermediária
- * (executora, orquestradora), aviso e teto coincidem.
+ * (orquestradora com o operador presente), aviso e teto coincidem.
  */
 export const REGUAS = {
-  E: { aviso: 300_000, teto: 300_000 },
-  P: { aviso: 350_000, teto: 500_000 },
-  D: { aviso: 350_000, teto: 500_000 },
-  V: { aviso: 350_000, teto: 500_000 },
+  dona: { aviso: 350_000, teto: 500_000 },
   orquestradora: { aviso: 150_000, teto: 150_000 },
   orquestradoraAusente: { aviso: 350_000, teto: 500_000 },
 } as const satisfies Record<string, Regua>
@@ -59,18 +56,18 @@ const mesmoProjeto = (a: unknown, b: string | null) => b !== null && texto(a)?.t
 
 // ---- funções puras ----
 
-export type Papel = 'E' | 'P' | 'D' | 'V' | 'orquestradora'
+export type Papel = 'dona' | 'orquestradora'
 
-/** O papel e o apelido do título da sessão (`E2 · …`, `🎛 orquestradora — …`); sem prefixo do pool, nenhum. */
+/** O papel e o apelido do título da sessão (`F12 · …` é a dona, `🎛 orquestradora — …`); outro título, nenhum. */
 export function papelEApelido(titulo: string | null | undefined): { papel: Papel | null; apelido: string | null } {
   const t = titulo ?? ''
   if (t.startsWith('🎛 orquestradora')) return { papel: 'orquestradora', apelido: '🎛' }
-  const m = /^(P|D|E|V)(\d+) · /.exec(t)
+  const m = /^(F\d+) · /.exec(t)
 
-  return m ? { papel: m[1] as Papel, apelido: `${m[1]}${m[2]}` } : { papel: null, apelido: null }
+  return m ? { papel: 'dona', apelido: m[1] as string } : { papel: null, apelido: null }
 }
 
-/** A régua do papel do título; a orquestradora com o modo ausente ligado segue a da planejadora. Sem papel, `null`. */
+/** A régua do papel do título; a orquestradora com o modo ausente ligado segue a da dona. Sem papel, `null`. */
 export function reguaDoPapel(titulo: string | null | undefined, ausente = false): Regua | null {
   const { papel } = papelEApelido(titulo)
   if (!papel) return null
@@ -139,21 +136,15 @@ export function meuItem(docs: Doc[], localId: string): { id: string; titulo: str
   return d ? { id: d.id, titulo: texto(d.data.titulo) ?? d.id, etapa: texto(d.data.etapa) ?? '?', projeto: texto(d.data.projeto)?.toLowerCase() } : null
 }
 
-/** Sessões distintas no `com` dos itens vivos do projeto, por apelido: `E<n>` e `V<n>` (sem teto: a F49 o tirou). */
-export function contarPool(docs: Doc[], projeto: string | null): { e: number; v: number } {
-  const e = new Set<string>()
-  const v = new Set<string>()
-  for (const d of docs.filter(x => vivo(x) && mesmoProjeto(x.data.projeto, projeto))) {
-    for (const c of (Array.isArray(d.data.com) ? d.data.com : []) as Array<Record<string, unknown> | null>) {
-      const localId = texto(c?.localId)
-      const apelido = texto(c?.apelido) ?? ''
-      if (!localId) continue
-      if (/^E\d/.test(apelido)) e.add(localId)
-      else if (/^V\d/.test(apelido)) v.add(localId)
-    }
-  }
+const ETAPAS_DE_TRABALHO = ['planejamento', 'design', 'execucao', 'validacao']
 
-  return { e: e.size, v: v.size }
+/** Donas trabalhando no projeto: itens numa etapa de trabalho com dona ou alguém no `com` (a mesma conta do teto de donas). */
+export function contarDonas(docs: Doc[], projeto: string | null): number {
+  return docs.filter(d => {
+    if (!mesmoProjeto(d.data.projeto, projeto) || !ETAPAS_DE_TRABALHO.includes(texto(d.data.etapa) ?? '')) return false
+
+    return texto(d.data.donoLocalId) !== undefined || (Array.isArray(d.data.com) && d.data.com.length > 0)
+  }).length
 }
 
 // ---- o aviso de reinício (F152) ----
@@ -271,8 +262,8 @@ export type EstadoBarra = {
   regua: Regua | null
   /** `F52 · design`, quando há item. */
   item: string | null
-  /** `E 2 · V 1`, quando há projeto. */
-  pool: string | null
+  /** `donas 2`, quando há projeto. */
+  donas: string | null
   abertas: number
   /** `null` = a bandeira não se leu: sem botão do modo. */
   modo: 'presente' | 'ausente' | null
@@ -290,7 +281,7 @@ export type EstadoBarra = {
 
 type Peca<K extends string> = { k: K; t: string }
 export type Pecas = {
-  esq: Array<Peca<'relogio' | 'contexto' | 'item' | 'pool'>>
+  esq: Array<Peca<'relogio' | 'contexto' | 'item' | 'donas'>>
   dir: Array<Peca<'reinicio' | 'perguntas' | 'limpar' | 'modo' | 'painel'>>
 }
 
@@ -324,7 +315,7 @@ export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
   const esq: Pecas['esq'] = [{ k: 'relogio', t: e.bloco ? ` ⧗ ${e.relogio} ` : `⧗ ${e.relogio}` }]
   if (e.tokens !== null) esq.push({ k: 'contexto', t: textoDoContexto(e.tokens, e.regua, e.janela, faixa) })
   if (faixa < 2 && e.item) esq.push({ k: 'item', t: e.item })
-  if (faixa === 0 && e.pool) esq.push({ k: 'pool', t: e.pool })
+  if (faixa === 0 && e.donas) esq.push({ k: 'donas', t: e.donas })
   // Ordem da direita: reinício → selo → limpar → modo → painel. O reinício (só com o aviso ligado), o limpar e o modo ausente nunca caem; o modo presente cai na faixa 2.
   const dir: Pecas['dir'] = []
   if (e.reinicio) dir.push({ k: 'reinicio', t: textoDoReinicioNaBarra({ estado: e.reinicio === 'esperando' ? 'espere' : e.reinicio, rodando: e.rodando ?? 0 }) })
@@ -395,7 +386,7 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
     janela: b.janela,
     regua,
     item: d.item,
-    pool: b.projeto ? `E ${b.pool.e} · V ${b.pool.v}` : null,
+    donas: b.projeto ? `donas ${b.donas}` : null,
     abertas: lido ? b.abertas : 0,
     modo: lido ? modo : null,
     trocando,

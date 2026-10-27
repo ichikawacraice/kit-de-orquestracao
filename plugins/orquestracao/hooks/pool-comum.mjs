@@ -1,20 +1,19 @@
-// Comum das travas do pool (F5, 24/10): quem é a sessão (registro do app), se é membro do pool ou
-// orquestradora, início do turno e "este repositório tem orquestradora ativa".
-// Fonte das regras: ~/.claude/orquestracao/pool/protocolo.md. Log e BASE: hooks-crewai-comum.mjs.
+// Comum das travas da sessão: quem é a sessão (registro do app), se é orquestradora ou dona de item, início do turno e
+// "este repositório tem orquestradora ativa".
+// Fonte das regras: pool/protocolo.md do plugin. Log e BASE: hooks-crewai-comum.mjs.
 import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, statSync, openSync, readSync, closeSync, unlinkSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { homedir, loadavg, availableParallelism } from 'node:os';
 import { join, basename, dirname } from 'node:path';
 import { fechadasRecentes, slugDoProjeto } from '../skills/orquestradora/scripts/perguntas-arquivo.mjs';
-import { BASE, tituloRapido, semPrefixoDoPlugin, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
+import { BASE } from './hooks-crewai-comum.mjs';
 
 export { BASE };
 const H = homedir();
 // A máquina está cheia para teste? (ADR 0005 e 0008, operador, 26/10) — o plugin não importa `gate/` (que não vai junto quando ele é instalado),
 // então lê as fichas por conta própria: a pasta, o teto, as faixas e o PID dono seguem o mesmo contrato do `gate/o-teto-da-maquina.mjs` (um teste
 // compara os dois). O teto tem a faixa do gate (fichas 1..G) e a faixa normal (G+1..T). Cheia = nenhuma ficha normal livre e, ou há gate rodando
-// (`<pasta>/gate` com PID vivo), ou a faixa do gate também está sem livre; ou a carga de 1 min ≥ núcleos. Um gate sozinho não segura a V.
+// (`<pasta>/gate` com PID vivo), ou a faixa do gate também está sem livre; ou a carga de 1 min ≥ núcleos. Um gate sozinho não enche a máquina.
 // Valor de teto inválido aqui não derruba o hook: cai para o próximo da ordem (o gate, esse, recusa alto). `KIT_CARGA_1MIN` fixa a carga (os testes).
 const FICHA_ILEGIVEL_MS = 30_000;
 const FRACAO_PADRAO_DE_TESTE = 2 / 3;
@@ -77,10 +76,10 @@ export function maquinaCheia({ env = process.env, pasta, teto, carga, nucleos = 
   return { cheia: semFicha || cargaAgora >= nucleos, tomadas: tomadasKs.size, teto: limite, faixas, livresNormais, livresDoGate, gateRodando: gateRodando ? true : null, carga: cargaAgora, nucleos, pasta: dir };
 }
 const SESSOES_DIR = () => process.env.POOL_APP_SESSOES_DIR || join(H, 'Library', 'Application Support', 'Claude', 'claude-code-sessions');
-// O registro tem uma pasta por conta do app; a de outra conta fica no disco com sessões que o app já não mostra (F142, medido
-// em 26/10: os 7 livres fantasmas, de dois projetos, eram todos da conta antiga). Pasta da conta atual = `lastKnownAccountUuid`
-// do config.json do app, irmão do registro. Sem config, sem a chave ou sem a pasta: o registro inteiro, como antes.
-function sessoesDaConta() {
+// O registro tem uma pasta por conta do app; a de outra conta fica no disco com sessões que o app já não mostra. Pasta da
+// conta atual = `lastKnownAccountUuid` do config.json do app, irmão do registro. Sem config, sem a chave ou sem a pasta: o
+// registro inteiro.
+export function sessoesDaConta() {
   const dir = SESSOES_DIR();
   try {
     const conta = JSON.parse(readFileSync(join(dirname(dir), 'config.json'), 'utf8'))?.lastKnownAccountUuid;
@@ -118,7 +117,7 @@ function guardarCache(id, reg) {
   } catch { /* sem cache, segue */ }
 }
 
-// fresco: ignora o cache (o título muda e a decisão depende dele — arquivar membro do pool, só por comando do operador).
+// fresco: ignora o cache (o título muda e a decisão depende dele — arquivar sessão, só por comando do operador).
 export function registroDaSessao(id, { fresco = false } = {}) {
   if (!id) return null;
   const hit = fresco ? null : lerCache()[id];
@@ -146,7 +145,6 @@ function varrerRegistro(id) {
 
 // Itens vivos da fila em que a sessão aparece (F30): `com` = trabalhando agora; `fez` = executou parte e o item ainda espera
 // validação, conserto ou merge. Pasta: FILA_DIR, ou <PAINEL_DIR>/fila. Erro de leitura = lista vazia (o hook deixa passar).
-const ETAPAS_DO_FEZ = ['execucao', 'validacao', 'merge'];
 export const filaDir = () => process.env.FILA_DIR || join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'fila');
 // Perguntas `limpar · orquestradora` da sessão (F48; só o título exato vale, outra `limpar · …` não é pedido nem ok): documentos de <PAINEL_DIR>/perguntas. Erro de leitura = lista vazia.
 const perguntasDir = () => join(process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), 'perguntas');
@@ -227,24 +225,7 @@ export function janelasDeLimpeza(transcriptPath) {
   return janelas;
 }
 
-export function itensDaSessao(localId) {
-  const saida = { com: [], fez: [] };
-  if (!localId) return saida;
-  let nomes; try { nomes = readdirSync(filaDir()); } catch { return saida; }
-  for (const nome of nomes) {
-    if (!nome.endsWith('.json')) continue;
-    try {
-      const doc = JSON.parse(readFileSync(join(filaDir(), nome), 'utf8'));
-      const d = doc?.data; const id = doc?.id ?? nome.replace(/\.json$/, '');
-      if (!d || d.etapa === 'feito' || d.etapa === 'descartado') continue;
-      if (Array.isArray(d.com) && d.com.some((c) => c?.localId === localId)) saida.com.push(id);
-      if (ETAPAS_DO_FEZ.includes(d.etapa) && Array.isArray(d.fez) && d.fez.some((c) => c?.localId === localId)) saida.fez.push(id);
-    } catch { /* arquivo parcial: ignora este item */ }
-  }
-  return saida;
-}
-
-// Itens vivos de que a sessão é DONA (`donoLocalId`): os que o `livre-se-limpa` solta quando ela se declara livre.
+// Itens vivos de que a sessão é DONA (`donoLocalId`).
 export function itensDonosDaSessao(localId) {
   const saida = [];
   if (!localId) return saida;
@@ -261,8 +242,8 @@ export function itensDonosDaSessao(localId) {
   return saida;
 }
 
-// F179: a sessão é dona de item `via: "dona"` (ADR 0011) na etapa em que escreve código — execução, validação e merge (o
-// conserto devolvido pela fila). Em planejamento e design a dona escreve plano e revisão, não roda critério. → [ids]
+// Os itens de que a sessão é dona na etapa em que escreve código — execução, validação e merge (o conserto devolvido pela
+// fila). Em planejamento e design a dona escreve plano e revisão, não roda critério. → [ids]
 const ETAPAS_DE_CRITERIO = ['execucao', 'validacao', 'merge'];
 export function itensDaDonaComCriterio(localId) {
   const saida = [];
@@ -273,36 +254,10 @@ export function itensDaDonaComCriterio(localId) {
     try {
       const doc = JSON.parse(readFileSync(join(filaDir(), nome), 'utf8'));
       const d = doc?.data;
-      if (d?.via === 'dona' && d.donoLocalId === localId && ETAPAS_DE_CRITERIO.includes(d.etapa)) saida.push(doc?.id ?? nome.replace(/\.json$/, ''));
+      if (d?.donoLocalId === localId && ETAPAS_DE_CRITERIO.includes(d.etapa)) saida.push(doc?.id ?? nome.replace(/\.json$/, ''));
     } catch { /* arquivo parcial: ignora este item */ }
   }
   return saida;
-}
-
-// F49/D8: tudo o que prende a sessão a item vivo (etapa ≠ feito/descartado): `com`, `fez` (de QUALQUER etapa viva) e dono. Quem decide arquivar
-// não pode tratar erro como "sem item": pasta da fila ilegível (≠ ausente: sem pasta não há item vivo), ou item que não se lê, → null (quem chama nega). Os outros helpers não mudam.
-export function ocupacaoDaSessao(localId) {
-  const saida = { com: [], fez: [], dono: [] };
-  if (!localId) return saida;
-  let nomes; try { nomes = readdirSync(filaDir()); } catch (err) { return err?.code === 'ENOENT' ? saida : null; }
-  for (const nome of nomes) {
-    if (!nome.endsWith('.json')) continue;
-    try {
-      const doc = JSON.parse(readFileSync(join(filaDir(), nome), 'utf8'));
-      const d = doc?.data; const id = doc?.id ?? nome.replace(/\.json$/, '');
-      if (!d || d.etapa === 'feito' || d.etapa === 'descartado') continue;
-      if (Array.isArray(d.com) && d.com.some((c) => c?.localId === localId)) saida.com.push(id);
-      if (Array.isArray(d.fez) && d.fez.some((c) => c?.localId === localId)) saida.fez.push(id);
-      if (d.donoLocalId === localId) saida.dono.push(id);
-    } catch { return null; }
-  }
-  return saida;
-}
-
-// Só o prefixo `<P|D|E|V><n> · ` do título vale: sem ele, não é membro (outro projeto, sessão avulsa).
-export function membroDoPool(titulo) {
-  const m = /^(P|D|E|V)(\d+) · /.exec(titulo || '');
-  return m ? { papel: m[1], id: `${m[1]}${m[2]}` } : null;
 }
 
 // Projeto da sessão (D1, 24/10): git common dir do `originCwd` (cai para `cwd`). `repo` é o common dir absoluto
@@ -313,22 +268,6 @@ export function projetoDaSessao(reg) {
   if (!repo) return null;
   const raiz = basename(repo) === '.git' ? dirname(repo) : repo;
   return { repo, nome: slugDoProjeto(basename(raiz).replace(/\.git$/, '')) };
-}
-
-// Membros do pool livres do projeto (F58): sessões NÃO arquivadas com título `<P|D|E|V><n> · livre` cujo projeto é o `repo`
-// (git common dir). Varre a pasta da conta atual do registro do app uma vez. → [{ apelido, papel, localId }]
-export function membrosLivres(repo) {
-  const livres = [];
-  if (!repo) return livres;
-  for (const f of arquivosLocal(sessoesDaConta())) {
-    let r;
-    try { r = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
-    if (!r || r.isArchived || !/^[PDEV]\d+ · livre\s*$/.test(r.title || '')) continue;
-    if (projetoDaSessao({ cwd: r.cwd, originCwd: r.originCwd })?.repo !== repo) continue;
-    const m = membroDoPool(r.title);
-    livres.push({ apelido: m.id, papel: m.papel, localId: r.sessionId || null });
-  }
-  return livres;
 }
 
 export function ehOrquestradora(sessionId, titulo) {
@@ -371,9 +310,6 @@ export function inicioDoTurno(transcriptPath) {
 // --- Repositório com orquestradora ativa: mesma regra de painel-das-sessoes.mjs; mude nos dois. ---
 const VALIDADE_MS = 7 * 24 * 3600 * 1000;
 
-// Chave da marca de vaga de E já pedida (`BASE/piso/<chave>.json`): 16 primeiros caracteres do sha1 do git common dir.
-export function chaveDoPiso(repo) { return createHash('sha1').update(String(repo)).digest('hex').slice(0, 16); }
-
 export function gitCommonDir(cwd) {
   if (!cwd || !existsSync(cwd)) return null;
   try {
@@ -388,20 +324,6 @@ export function transcriptDe(sessionId) {
   for (const d of readdirSync(proj)) {
     const f = join(proj, d, `${sessionId}.jsonl`);
     if (existsSync(f)) return f;
-  }
-  return null;
-}
-
-// Transcript da sessão pelo `local_…`, sem cache: o `cliSessionId` muda a cada limpeza de contexto (o `registroDaSessao` não o devolve).
-// → caminho do .jsonl ou null.
-export function transcriptDoLocal(localId) {
-  if (!localId) return null;
-  for (const f of arquivosLocal(SESSOES_DIR())) {
-    if (!f.endsWith(`${localId}.json`)) continue;
-    try {
-      const r = JSON.parse(readFileSync(f, 'utf8'));
-      if (r.sessionId === localId && typeof r.cliSessionId === 'string' && r.cliSessionId) return transcriptDe(r.cliSessionId);
-    } catch { /* registro ilegível */ }
   }
   return null;
 }
@@ -479,22 +401,12 @@ export function projetoTemOrquestradora(meuId, meuRepo) {
   return indeterminado ? null : false;
 }
 
-// Sessão executora (fio principal): subagente `executor` (agent_type), título `exec ·` no transcript
-// ou `E<n> · …` no registro do app. Mesmo teste do executor-criterio; o Stop de subagente não passa por aqui.
-export function ehExecutora(e, transcript) {
-  return semPrefixoDoPlugin(e.agent_type) === 'executor' || // `orquestracao:executor` vale `executor`
-    /^exec\s*·/.test(tituloRapido(transcript))
-    || membroDoPool(registroDaSessao(e.session_id)?.titulo)?.papel === 'E';
-}
-
-// --- Declarar-se livre no turno (F32): a detecção mora aqui para o `livre-se-limpa` (que solta) e o `fila-do-item` (que deixa de cobrar) ---
-// Só vale a INVOCAÇÃO de `node …/painel.mjs` na mesma linha: `set|update sessoes <id> '…livre…'` ou `batch '…sessoes…livre…'`.
-// Casar o comando inteiro cobrava heredoc que apenas citava essas palavras (falso positivo medido em 24/10 e de novo em 25/10),
-// então o comando é normalizado antes: o corpo dos heredocs sai, e os separadores (`; & | ( `` \n`) DENTRO de aspas viram `_`
-// (o tamanho não muda; `$(` e crase dentro de aspas duplas executam de verdade e ficam). A regex acha a invocação no normalizado.
-// Início de comando e invocação do painel (`node …/painel.mjs` ou o `painel` do bin/ do plugin): hooks-crewai-comum.mjs.
-// Limite declarado: caminho montado por variável (`node "$P" …`); JSON multilinha fora de aspas; atribuição com valor entre aspas e
-// espaço (`FOO="a b" node …`); outros prefixos (`sudo`, `xargs`, `bash -c "…"`); heredoc dentro de string.
+// --- Normalização do comando, para achar a INVOCAÇÃO do painel (as travas casam o comando normalizado, não o texto cru) ---
+// Casar o comando inteiro cobrava heredoc que apenas citava o subcomando, então o comando é normalizado antes: o corpo dos
+// heredocs sai, e os separadores (`; & | ( `` \n`) DENTRO de aspas viram `_` (o tamanho não muda; `$(` e crase dentro de aspas
+// duplas executam de verdade e ficam). Início de comando e invocação do painel (`node …/painel.mjs` ou o `painel` do bin/ do
+// plugin): hooks-crewai-comum.mjs. Limite declarado: caminho montado por variável (`node "$P" …`); JSON multilinha fora de
+// aspas; atribuição com valor entre aspas e espaço (`FOO="a b" node …`); outros prefixos (`sudo`, `xargs`, `bash -c "…"`).
 export function semHeredoc(c) {
   const linhas = String(c).split('\n'); const saida = []; const fila = []; // delimitadores pendentes, em ordem: `cat <<A; cat <<B`
   for (const l of linhas) {
@@ -520,61 +432,7 @@ export function separadoresDeAspasNeutros(c) {
   }
   return o;
 }
-const INVOCACAO = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:(?:set|update)\s+sessoes\s+\S+|batch)\s[^\n]*\blivre\b`);
-export const painelLivre = (c) => {
-  const n = separadoresDeAspasNeutros(semHeredoc(c));
-  return INVOCACAO.test(n) && (!/painel(?:\.mjs)?["']?\s+batch\b/.test(n) || /painel(?:\.mjs)?["']?\s+batch\s[^\n]*sessoes/.test(n));
-};
-// Declaração sobre a PRÓPRIA linha de `sessoes` (F32): o `local_` ou o id do CLI da sessão, com `etapa` começando em "livre".
-// Gravar a linha de outra sessão, ou a palavra "livre" noutro campo, não conta (soltar o item é ação, não cobrança).
-const escapa = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-export const painelLivrePropria = (c, ids) => {
-  const proprios = ids.filter(Boolean).map(escapa).join('|');
-  if (!proprios) return false;
-  const n = separadoresDeAspasNeutros(semHeredoc(c));
-  const unico = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:set|update)\s+sessoes\s+["']?(?:${proprios})["']?\s[^\n]*"etapa"\s*:\s*"livre\b`);
-  const lote = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+batch\s[^\n]*"colecao"\s*:\s*"sessoes"[^\n]*"id"\s*:\s*"(?:${proprios})"[^\n]*"etapa"\s*:\s*"livre\b`);
-  return unico.test(n) || lote.test(n);
-};
-
-
-
-const ehSelf = (id) => id === undefined || id === null || id === 'self';
-export const tituloLivre = (t) => /· livre\s*$/.test(String(t || ''));
-// F49: título de quem entregou e guarda a conversa para o conserto (a sessão não está livre: tem a conversa cheia).
-export const tituloAguardando = (t) => /· aguardando validação\s*$/.test(String(t || ''));
-// Quem se declarou livre no turno que começou em `inicio` (ms): `{ como, tituloNovo, propria, aguardando }` ou null. `como` é 'título livre'
-// (set_session_title "self" com título terminando em "· livre"; vence), 'título aguardando' (F49: terminando em "· aguardando validação",
-// `aguardando: true`) ou 'painel livre' (painel gravando em `sessoes` com "livre").
-// `propria`: alguma dessas declarações é sobre a própria sessão (`ids` = local_ e id do CLI): o título "self" ou a linha dela.
-export function declarouLivre(transcriptPath, inicio, ids = []) {
-  let como = null; let tituloNovo = null; let propria = false; let aguardando = false;
-  for (const l of readFileSync(transcriptPath, 'utf8').split('\n')) {
-    if (!l) continue;
-    let e; try { e = JSON.parse(l); } catch { continue; }
-    if (e.type !== 'assistant' || Date.parse(e.timestamp) < inicio) continue;
-    const c = e.message?.content;
-    if (!Array.isArray(c)) continue;
-    for (const b of c) {
-      if (b?.type !== 'tool_use') continue;
-      const n = String(b.name || ''); const i = b.input || {};
-      if (n.endsWith('set_session_title') && ehSelf(i.session_id) && tituloLivre(i.title)) { como = 'título livre'; tituloNovo = i.title; propria = true; aguardando = false; }
-      else if (n.endsWith('set_session_title') && ehSelf(i.session_id) && tituloAguardando(i.title)) { como = 'título aguardando'; tituloNovo = i.title; propria = true; aguardando = true; }
-      else if (n === 'Bash' && painelLivre(String(i.command || ''))) { como ||= 'painel livre'; if (painelLivrePropria(String(i.command || ''), ids)) propria = true; }
-    }
-  }
-  return como ? { como, tituloNovo, propria, aguardando } : null;
-}
-// O hook de Stop vai soltar a sessão (`livre-se-limpa`)? Membro do pool, `local_` resolvido e declaração sobre si. UMA função, para
-// o `livre-se-limpa` agir e o `fila-do-item` deixar de cobrar exatamente nos mesmos casos. → a declaração, ou null.
-export function vaiSoltar(transcriptPath, inicio, { sessionId, localId, titulo }) {
-  if (!localId) return null;
-  const d = declarouLivre(transcriptPath, inicio, [localId, sessionId]);
-  if (!d?.propria) return null;
-  return membroDoPool(d.tituloNovo) || membroDoPool(titulo) ? d : null;
-}
-
-// Contexto da sessão (F35): a ÚLTIMA entrada `assistant` com `usage` que não seja de subagente (`isSidechain`). Entrada de subagente
+// Contexto da sessão: a ÚLTIMA entrada `assistant` com `usage` que não seja de subagente (`isSidechain`). Entrada de subagente
 // carrega o contexto dele, e depois de compactar a última já vem menor, por isso vale só a última leitura (nada se soma).
 // → `{ tokens, em }` (`em` = timestamp da entrada), ou null se não há nenhum `usage`. Transcript ilegível LANÇA: quem chama registra `erro`.
 export function contextoDoTranscript(caminho) {
@@ -583,7 +441,7 @@ export function contextoDoTranscript(caminho) {
     if (!linhas[i]) continue;
     let e; try { e = JSON.parse(linhas[i]); } catch { continue; }
     const u = e?.message?.usage;
-    // Entrada sintética (`<synthetic>`, ex.: "No response requested.") traz `usage` zerado e não é leitura do contexto (O2 do F35).
+    // Entrada sintética (`<synthetic>`, ex.: "No response requested.") traz `usage` zerado e não é leitura do contexto .
     if (e?.type !== 'assistant' || e?.isSidechain === true || e?.message?.model === '<synthetic>' || !u) continue;
     const tokens = [u.input_tokens, u.cache_creation_input_tokens, u.cache_read_input_tokens].reduce((s, x) => s + (Number.isFinite(x) ? x : 0), 0);
     return { tokens, em: e.timestamp ?? null };

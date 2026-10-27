@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// PreToolUse (Q154, 23/10): quem escreve é sessão, como TRAVA. Subagente (evento com `agent_id`)
-// que chama Edit/Write/MultiEdit/NotebookEdit fora das pastas livres → `deny`, com o motivo. O
-// subagente não aparece na lista de sessões nem no painel e, quando morre, deixa mudança no disco
-// sem dono (11–13/10); trabalho que grava vai para sessão `exec · …`. Sessão aberta com
-// `--agent executor` chega com `agent_type` e SEM `agent_id`: é sessão, e passa.
-// `deny`, não `ask`: a decisão já foi tomada (Q154) e o subagente em background não teria a quem
+// PreToolUse: quem escreve é sessão, como TRAVA. Subagente (evento com `agent_id`) que chama
+// Edit/Write/MultiEdit/NotebookEdit fora das pastas livres → `deny`, com o motivo. O subagente não
+// aparece na lista de sessões nem no painel e, quando morre, deixa mudança no disco sem dono; quem
+// grava é a sessão dona do item. Sessão aberta com `--agent <tipo>` chega com `agent_type` e SEM
+// `agent_id`: é sessão, e passa.
+// `deny`, não `ask`: a decisão já foi tomada e o subagente em background não teria a quem
 // perguntar. Vale em bypass. Bash fica de fora pelo mesmo motivo do orquestradora-nao-edita
 // (parsear shell deu 50 alertas falsos); o briefing do subagente diz que ele não grava.
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
@@ -135,8 +135,7 @@ function main() {
       permissionDecision: 'deny',
       permissionDecisionReason:
         `Subagente não grava arquivo do projeto (${p}): quem escreve é sessão. ` +
-        'Pare e devolva no relatório o que gravaria (arquivo e conteúdo); quem te lançou despacha ' +
-        'a uma executora E livre do pool (ou, fora do pool, abre uma sessão executora).',
+        'Pare e devolva no relatório o que gravaria (arquivo e conteúdo): quem te lançou é quem grava.',
     },
   }));
 }

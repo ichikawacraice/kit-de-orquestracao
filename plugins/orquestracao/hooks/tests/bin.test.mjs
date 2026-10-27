@@ -43,7 +43,7 @@ caso('todo comando de bin/ é executável e os textos do plugin não citam o cam
   const arquivos = [];
   const varre = (d) => { for (const f of readdirSync(d, { withFileTypes: true })) { const p = join(d, f.name); if (f.isDirectory()) varre(p); else if (/\.md$/.test(f.name)) arquivos.push(p); } };
   for (const d of ['skills', 'agents', 'pool']) varre(join(PLUGIN, d));
-  ok(arquivos.length >= 15, `poucos textos: ${arquivos.length}`);
+  ok(arquivos.length >= 10, `poucos textos: ${arquivos.length}`);
   const velhos = arquivos.filter((p) => /~\/\.claude\/skills\/orquestradora\/scripts|\bpainel\.mjs\b|proxima-pergunta\.sh|proximo-item\.sh/.test(readFileSync(p, 'utf8')));
   ok(!velhos.length, `citam o caminho antigo: ${velhos.join(', ')}`);
 });

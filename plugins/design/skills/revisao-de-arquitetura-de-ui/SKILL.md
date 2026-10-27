@@ -1,6 +1,6 @@
 ---
 name: revisao-de-arquitetura-de-ui
-description: A revisão de arquitetura de UI — antes de escrever qualquer interface do front, decide a tarefa da tela, o inventário do que ela mostra (cada dado com a decisão que ele gera), a hierarquia, onde mora cada mensagem e quais componentes DO KIT montam cada região, e entrega no formato fixo para o crítico julgar. Use antes de criar ou mudar tela, painel, componente, mensagem ou fluxo do front ("desenha", "redesenha", "reorganiza", "a tela está confusa", "tem informação demais", "onde ponho este aviso"). Não escreve código de produto; quem implementa é o executor, a partir da revisão aprovada.
+description: A revisão de arquitetura de UI — antes de escrever qualquer interface do front, decide a tarefa da tela, o inventário do que ela mostra (cada dado com a decisão que ele gera), a hierarquia, onde mora cada mensagem e quais componentes DO KIT montam cada região, e entrega no formato fixo para o crítico julgar. Use antes de criar ou mudar tela, painel, componente, mensagem ou fluxo do front ("desenha", "redesenha", "reorganiza", "a tela está confusa", "tem informação demais", "onde ponho este aviso"). Não escreve código de produto; quem implementa é a dona do item, a partir da revisão aprovada.
 ---
 
 # Revisão de arquitetura de UI
@@ -58,7 +58,7 @@ Conflito entre fontes: a decisão registrada (ADR, spec aprovada, convenção co
 ## Decisões ao operador  (cada uma: o caso · se não decidir · recomendação)
 ```
 
-Grave em `<design.revisoes>/AAAA-MM-DD-<tela>.md` quando a revisão sustenta trabalho; rascunho fica no scratchpad. Depois dela vem o **crítico** (`critico-de-ui`), em contexto separado: quem desenhou já acredita no desenho. Achado do crítico volta para esta revisão antes de qualquer código, até o teto: com 24/30 ou mais e sem ressalva alta, a revisão está liberada para execução, e a ressalva média ou baixa vira item próprio na fila (a alta volta para conserto); no máximo 2 recríticas, e na terceira o que estiver abaixo de 24 sobe à planejadora (skill `critica-de-ui`, seção *O teto da crítica*).
+Grave em `<design.revisoes>/AAAA-MM-DD-<tela>.md` quando a revisão sustenta trabalho; rascunho fica no scratchpad. Depois dela vem o **crítico** (`critico-de-ui`), em contexto separado: quem desenhou já acredita no desenho. Achado do crítico volta para esta revisão antes de qualquer código, até o teto: com 24/30 ou mais e sem ressalva alta, a revisão está liberada para execução, e a ressalva média ou baixa vai para o `depois` do item (a alta volta para conserto); no máximo 2 recríticas, e na terceira o que estiver abaixo de 24 vai à dona do item (skill `critica-de-ui`, seção *O teto da crítica*).
 
 ## O que esta revisão não faz
 

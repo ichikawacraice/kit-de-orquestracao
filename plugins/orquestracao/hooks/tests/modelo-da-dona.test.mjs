@@ -1,32 +1,19 @@
-// ADR 0011: a chave do modelo (dona × papeis), o teto de donas e a escolha dos testes afetados.
+// ADR 0011: o teto de donas e a escolha dos testes afetados.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { modeloDoKit, tetoDeDonas, donaTrabalhando } from '../modelo-do-kit.mjs';
+import { tetoDeDonas, donaTrabalhando } from '../sem-dona.mjs';
 import { afetados, citacoesDe } from '../../skills/orquestradora/scripts/testes-afetados.mjs';
 
-test('o modelo é dona por padrão; KIT_MODELO e modelo.json voltam ao pool; valor estranho é dona', () => {
-  const base = mkdtempSync(join(tmpdir(), 'modelo-'));
-  try {
-    assert.equal(modeloDoKit({ HOOKS_CREWAI_BASE: base }), 'dona');
-    assert.equal(modeloDoKit({ HOOKS_CREWAI_BASE: base, KIT_MODELO: 'papeis' }), 'papeis');
-    assert.equal(modeloDoKit({ HOOKS_CREWAI_BASE: base, KIT_MODELO: 'xyz' }), 'dona');
-    writeFileSync(join(base, 'modelo.json'), '{"modelo":"papeis"}');
-    assert.equal(modeloDoKit({ HOOKS_CREWAI_BASE: base }), 'papeis');
-    assert.equal(modeloDoKit({ HOOKS_CREWAI_BASE: base, KIT_MODELO: 'dona' }), 'dona', 'o ambiente vence o arquivo');
-  } finally { rmSync(base, { recursive: true, force: true }); }
-});
-
-test('teto de donas: padrão 4, KIT_TETO_DE_DONAS troca; donaTrabalhando só conta item da dona em etapa de trabalho', () => {
+test('teto de donas: padrão 4, KIT_TETO_DE_DONAS troca; donaTrabalhando só conta item em etapa de trabalho com alguém', () => {
   assert.equal(tetoDeDonas({}), 4);
   assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: '3' }), 3);
   assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: '0' }), 4);
-  assert.equal(donaTrabalhando({ via: 'dona', etapa: 'execucao', donoLocalId: 'local_x' }), true);
-  assert.equal(donaTrabalhando({ via: 'dona', etapa: 'merge', donoLocalId: 'local_x' }), false, 'merge não conta');
-  assert.equal(donaTrabalhando({ etapa: 'execucao', donoLocalId: 'local_x' }), false, 'item do pool não conta');
-  assert.equal(donaTrabalhando({ via: 'dona', etapa: 'planejamento', com: [] }), false, 'sem ninguém não conta');
+  assert.equal(donaTrabalhando({ etapa: 'execucao', donoLocalId: 'local_x' }), true);
+  assert.equal(donaTrabalhando({ etapa: 'merge', donoLocalId: 'local_x' }), false, 'merge não conta');
+  assert.equal(donaTrabalhando({ etapa: 'planejamento', com: [] }), false, 'sem ninguém não conta');
 });
 
 test('testes afetados: o teste tocado, o que cita o arquivo, o que cita um dependente; o resto fica de fora', () => {
@@ -49,11 +36,11 @@ test('testes afetados: o teste tocado, o que cita o arquivo, o que cita um depen
 
 test('skills por etapa: as fixas da tabela do protocolo estão na lista do script', async () => {
   const { readFileSync } = await import('node:fs');
-  const { skillsDaEtapa, COLUNA_DA_ETAPA } = await import('../../pool/skills-da-etapa.mjs');
+  const { skillsDaEtapa, ETAPAS } = await import('../../pool/skills-da-etapa.mjs');
   const protocolo = readFileSync(new URL('../../pool/protocolo.md', import.meta.url), 'utf8');
   const secao = protocolo.slice(protocolo.indexOf('<a id="skills-da-etapa"></a>'), protocolo.indexOf('<a id="modelo-e-esforco"></a>'));
   assert.ok(secao.length > 200, 'seção ausente');
-  for (const etapa of Object.keys(COLUNA_DA_ETAPA)) {
+  for (const etapa of ETAPAS) {
     const lista = skillsDaEtapa(etapa);
     assert.ok(lista.length > 3, `${etapa}: lista vazia`);
     const linha = secao.split('\n').find((l) => l.startsWith(`| \`${etapa}\``));
@@ -66,7 +53,7 @@ test('skills por etapa: as fixas da tabela do protocolo estão na lista do scrip
 });
 
 // F179: os textos que a dona e as outras sessões leem concordam na regra do título e no modelo da dona.
-test('título da dona é `F<n> · <tema>` em todo texto que o diz; o resumo de início e o modelo de CLAUDE.md não falam do pool', async () => {
+test('título da dona é `F<n> · <tema>` em todo texto que o diz; o resumo de início e o modelo de CLAUDE.md dizem o modelo da dona', async () => {
   const { readFileSync } = await import('node:fs');
   const { dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
@@ -74,7 +61,7 @@ test('título da dona é `F<n> · <tema>` em todo texto que o diz; o resumo de i
   const ler = (...p) => readFileSync(join(...p), 'utf8');
   const textos = {
     dona: ler(plugin, 'pool', 'dona.md'),
-    protocolo: ler(plugin, 'pool', 'protocolo.md').split('# Legado')[0],
+    protocolo: ler(plugin, 'pool', 'protocolo.md'),
     orquestradora: ler(plugin, 'skills', 'orquestradora', 'SKILL.md'),
     papeis: ler(plugin, 'skills', 'papeis-e-modelos', 'SKILL.md'),
     resumo: ler(plugin, 'hooks', 'regras-globais.md'),

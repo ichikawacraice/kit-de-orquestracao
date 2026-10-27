@@ -7,12 +7,8 @@ import { join } from 'node:path';
 export const BASE = process.env.HOOKS_CREWAI_BASE || join(homedir(), '.claude', 'orquestracao');
 export const LOG = join(BASE, 'hooks-crewai.log');
 
-// O plugin `orquestracao` nomeia os seus agents e skills com prefixo (`orquestracao:executor`); as travas que casam por
-// nome aceitam as duas formas. Só este prefixo sai: `impeccable:x` e outros ficam como chegam.
-export const semPrefixoDoPlugin = (nome) => String(nome ?? '').replace(/^\/?orquestracao:/, '');
-
-// Os plugins do kit (`design:designer`, `processos:x`): a trava de escrita casa o papel sem o prefixo de qualquer um deles.
-// Só ela usa esta forma; as travas do pool seguem com `semPrefixoDoPlugin`, que só tira `orquestracao:`.
+// Os plugins do kit nomeiam os seus agents e skills com prefixo (`orquestracao:validador`, `design:designer`): a trava de
+// escrita casa o tipo com e sem o prefixo de qualquer um deles. Outro prefixo (`impeccable:x`) fica como chega.
 export const semPrefixoDoKit = (nome) => String(nome ?? '').replace(/^\/?(?:orquestracao|design|processos|painel-sessoes):/, '');
 
 // Uma linha por evento: data, sessão, hook, desfecho, detalhe (TSV).
@@ -63,7 +59,7 @@ export function lerTranscript(caminho) {
   return entradas;
 }
 
-// Helpers comuns às travas de Stop da executora (executor-criterio, executor-anuncia; F28, 25/10).
+// Helpers comuns às travas de Stop da dona (criterio-da-dona, contexto-do-papel).
 export function textoDe(msg) {
   const c = msg?.content;
   if (typeof c === 'string') return c;

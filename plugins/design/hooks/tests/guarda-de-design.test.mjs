@@ -173,7 +173,7 @@ describe('decidir — o designer não implementa (papel pelo agent_type do paylo
   it('nega Edit em código de tela, com o motivo', () => {
     const d = decidir(editar('/repo/web/src/components/ui/button.tsx'), null, ctx);
     assert.equal(d?.hookSpecificOutput?.permissionDecision, 'deny');
-    assert.match(d.hookSpecificOutput.permissionDecisionReason, /executor/);
+    assert.match(d.hookSpecificOutput.permissionDecisionReason, /dona do item/);
   });
   it('deixa a revisão ser gravada', () => {
     assert.equal(decidir(editar('/repo/docs/design/revisoes/2026-10-23-tela.md'), null, ctx), null);

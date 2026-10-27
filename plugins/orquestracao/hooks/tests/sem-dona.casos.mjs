@@ -1,0 +1,44 @@
+// Tabela de casos da regra "item sem dona", compartilhada pelo teste da função `.mjs` e pelo de concordância com a cópia
+// `.ts` do pane. `agora` fixo; `esperado` é o retorno inteiro.
+export const AGORA = Date.parse('2026-10-26T06:00:00.000Z');
+const min = (n) => new Date(AGORA - n * 60_000).toISOString();
+const hist = (...e) => e.map(([em, etapa, dono]) => ({ em, etapa, dono }));
+
+export const CASOS = [
+  { nome: 'planejamento sem dona e com vazio: sem dona desde a entrada na etapa',
+    data: { etapa: 'planejamento', donoLocalId: null, com: [], historico: hist([min(15), 'planejamento', null]) },
+    esperado: { desde: min(15), minutos: 15 } },
+  { nome: 'execucao sem dona: sem dona desde a entrada na etapa, não desde a última gravação',
+    data: { etapa: 'execucao', com: [], historico: hist([min(60), 'planejamento', 'dona'], [min(35), 'execucao', null]), atualizadoEm: min(1) },
+    esperado: { desde: min(35), minutos: 35 } },
+  { nome: 'com a dona: não está sem dona',
+    data: { etapa: 'execucao', donoLocalId: 'local_x', donoApelido: 'dona', com: [{ localId: 'local_x', apelido: 'dona' }], historico: hist([min(35), 'execucao', 'dona']) },
+    esperado: null },
+  { nome: 'sem dono mas com alguém no com: não está sem dona',
+    data: { etapa: 'validacao', com: [{ localId: 'local_y', apelido: 'dona' }], historico: hist([min(35), 'validacao', null]) },
+    esperado: null },
+  { nome: 'com espera: parado de propósito',
+    data: { etapa: 'execucao', espera: { motivo: 'operador' }, com: [], historico: hist([min(35), 'execucao', null]) },
+    esperado: null },
+  { nome: 'com trava: parado de propósito',
+    data: { etapa: 'design', trava: { motivo: 'conflito' }, com: [], historico: hist([min(35), 'design', null]) },
+    esperado: null },
+  { nome: 'merge: a dona só espera a fila',
+    data: { etapa: 'merge', com: [], historico: hist([min(35), 'merge', null]) },
+    esperado: null },
+  { nome: 'feito: final',
+    data: { etapa: 'feito', com: [], historico: hist([min(35), 'feito', null]) },
+    esperado: null },
+  { nome: 'sem etapa: fora da regra',
+    data: { com: [], atualizadoEm: min(35) },
+    esperado: null },
+  { nome: 'etapa repetida: vale a primeira da sequência final',
+    data: { etapa: 'execucao', com: [], historico: hist([min(90), 'execucao', 'dona'], [min(70), 'validacao', 'dona'], [min(50), 'execucao', 'dona'], [min(40), 'execucao', null]) },
+    esperado: { desde: min(50), minutos: 50 } },
+  { nome: 'sem historico: usa atualizadoEm',
+    data: { etapa: 'design', com: [], atualizadoEm: min(7) },
+    esperado: { desde: min(7), minutos: 7 } },
+  { nome: 'historico sem data legível: não dá para saber',
+    data: { etapa: 'execucao', com: [], historico: [{ em: 'ontem', etapa: 'execucao' }] },
+    esperado: null },
+];

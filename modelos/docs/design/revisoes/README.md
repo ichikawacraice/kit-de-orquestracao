@@ -1,6 +1,6 @@
 # Revisões de design
 
-Antes de qualquer tela nova ou mudada, a revisão de arquitetura de UI. Cada revisão é um arquivo `AAAA-MM-DD-<tela>.md` e é o que a executora segue: ela não redesenha a tela, ela cumpre a revisão aprovada.
+Antes de qualquer tela nova ou mudada, a revisão de arquitetura de UI. Cada revisão é um arquivo `AAAA-MM-DD-<tela>.md` e é o que a dona do item segue: ela não redesenha a tela, ela cumpre a revisão aprovada.
 
 ## O que a revisão traz
 

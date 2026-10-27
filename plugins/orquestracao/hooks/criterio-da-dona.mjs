@@ -1,26 +1,23 @@
 #!/usr/bin/env node
-// Stop + SubagentStop (Q62, ideia 2 do estudo CrewAI — Task.guardrail + guardrail_max_retries):
-// o executor só termina o turno com a SAÍDA REAL do comando de critério no relatório.
-// Quem é executor: subagente `executor` (agent_type), sessão aberta com --agent executor,
-// sessão cujo título começa com "exec ·", executora do pool (título `E<n> · …` no registro do app) ou
-// dona de item `via: "dona"` em execução, validação ou merge (F179; ADR 0011: a dona escreve o código).
-// Só cobra turno que editou arquivo — por Edit/Write ou por Bash que grava (57% dos executores
-// reais editam só por Bash). Status ("exit=0", "Found 0 errors") e contagem ("98 passed") só valem
-// se aparecem na saída real do turno (Bash, Read de .output/.log, Monitor, TaskOutput, notificação).
-// No subagente não há adiamento por background: o `background_tasks` do SubagentStop traz o próprio
-// agente e as tarefas da mãe (validação de 23/10), e o subagente que termina não tem turno seguinte.
-// No fio principal ("exec ·"), o turno que para esperando gate em background adia para o da notificação.
-// No fio principal ("exec ·"), no máximo 2 turnos seguidos adiados: dev server/Monitor eterno não desliga a trava.
+// Stop: a dona só termina o turno com a SAÍDA REAL do comando de critério no relatório (a ideia do `Task.guardrail` +
+// `guardrail_max_retries` da CrewAI: o critério de pronto não depende do relato).
+// Quem é cobrada: a dona de item vivo da fila em execução, validação ou merge (o conserto que a fila devolve); em
+// planejamento e design ela escreve plano e revisão, não roda critério.
+// Só cobra turno que editou arquivo — por Edit/Write ou por Bash que grava (mais da metade das edições reais é por Bash).
+// Status ("exit=0", "Found 0 errors") e contagem ("98 passed") só valem se aparecem na saída real do turno (Bash, Read de
+// .output/.log, Monitor, TaskOutput, notificação).
+// O turno que para esperando gate em background adia para o da notificação, no máximo 2 turnos seguidos: dev server ou
+// Monitor eterno não desliga a trava.
 // Não cobra quem devolve dúvida (pergunta fora de bloco de código que não é título markdown,
 // "Bloqueado: <motivo>" abrindo a linha, "devolvo", "parei", "estou bloqueado").
 // Saída com "N failed" exige o relatório citar o N junto da falha.
 // No máximo 2 cobranças por turno; depois deixa passar e registra. Erro vai para o log e o turno termina.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { BASE, registrar, lerEntrada, lerTranscript, semPrefixoDoPlugin, textoDe, conteudoDe, aberturaDoTurno, devolveuDuvida, lerEstadoDe, gravarEstadoDe } from './hooks-crewai-comum.mjs';
-import { ehExecutora, registroDaSessao, itensDaDonaComCriterio } from './pool-comum.mjs';
+import { BASE, registrar, lerEntrada, lerTranscript, textoDe, conteudoDe, aberturaDoTurno, devolveuDuvida, lerEstadoDe, gravarEstadoDe } from './hooks-crewai-comum.mjs';
+import { registroDaSessao, itensDaDonaComCriterio } from './pool-comum.mjs';
 
-const HOOK = 'executor-criterio';
+const HOOK = 'criterio-da-dona';
 const ESTADO = join(BASE, 'hooks-crewai-estado.json');
 const MAX_COBRANCAS = 2;
 const MAX_ADIAMENTOS = 2;
@@ -36,7 +33,7 @@ const BASH_GRAVA = [
   /\bpatch\b\s+-/,
 ];
 // Caminho de teste: pasta `test/`, `tests/` ou `__tests__/`, ou nome `*.test.*` / `*.spec.*`. O hook só REGISTRA
-// que o turno editou um (a validadora acha no log); não cobra nem bloqueia por isso (F36, Q233).
+// que o turno editou um (a revisão acha no log); não cobra nem bloqueia por isso.
 const CAMINHO_DE_TESTE = [/(^|\/)(tests?|__tests__)\//, /\.(test|spec)\.[cm]?[jt]sx?$/];
 const ehTeste = (caminho) => CAMINHO_DE_TESTE.some((r) => r.test(caminho));
 // Parte o comando em segmentos (`;`, `&&`, `||`, `|`, `&`) e em palavras, respeitando aspas simples e duplas
@@ -251,42 +248,36 @@ function colouSaidaReal(relatorio, saidas) {
 
 function main() {
   const e = lerEntrada();
-  const sub = e.hook_event_name === 'SubagentStop';
-  if (!sub && e.agent_id) return; // Stop de dentro de subagente: quem cobra é o SubagentStop
-  const tipo = semPrefixoDoPlugin(e.agent_type); // `orquestracao:executor` vale `executor`
-  if (sub && tipo !== 'executor') return;
-  const transcript = sub ? e.agent_transcript_path : e.transcript_path;
+  if (e.agent_id) return; // Stop de dentro de subagente: subagente não escreve, quem é cobrada é a dona
+  const transcript = e.transcript_path;
   if (!transcript || !existsSync(transcript)) return;
-  if (!sub && !ehExecutora(e, transcript) && !itensDaDonaComCriterio(registroDaSessao(e.session_id)?.localId).length) return;
+  if (!itensDaDonaComCriterio(registroDaSessao(e.session_id)?.localId).length) return;
 
   const turno = turnoAtual(lerTranscript(transcript));
   const sessao = e.session_id;
-  const quem = sub ? `subagente ${e.agent_id}` : 'principal';
+  const quem = 'principal';
   const estado = lerEstadoDe(ESTADO);
-  // Fio principal: turno que editou e parou esperando trabalho em background não é o fim;
-  // a cobrança fica pendente para o turno em que o resultado chega.
+  // Turno que editou e parou esperando trabalho em background não é o fim; a cobrança fica pendente para o turno em que o
+  // resultado chega.
   const pendente = `${sessao}:principal:pendente`;
-  if (!sub && estado[pendente] && estado[pendente].em < Date.now() - 24 * 3600 * 1000) delete estado[pendente];
-  if (!turno.editou && (sub || !estado[pendente])) return;
-  // Uma vez por turno, antes de qualquer adiamento: a validadora acha no log o teste que o executor mexeu.
-  const chaveDoTeste = `${sessao}:${sub ? e.agent_id : 'principal'}:${turno.chave}:teste`;
+  if (estado[pendente] && estado[pendente].em < Date.now() - 24 * 3600 * 1000) delete estado[pendente];
+  if (!turno.editou && !estado[pendente]) return;
+  // Uma vez por turno, antes de qualquer adiamento: a revisão acha no log o teste que a dona mexeu.
+  const chaveDoTeste = `${sessao}:principal:${turno.chave}:teste`;
   if (turno.testes.length && turno.editou && !estado[chaveDoTeste]) {
     gravarEstadoDe(ESTADO, (s) => { s[chaveDoTeste] = { n: 1, em: Date.now() }; });
     registrar(sessao, HOOK, 'editou-teste', `editou teste: ${turno.testes.join(', ')}`);
   }
-  if (!sub) {
-    const esperando = Array.isArray(e.background_tasks) ? e.background_tasks.length > 0 : turno.esperaFundo;
-    // Dev server ou Monitor que nunca termina deixaria o adiamento eterno: no 3º turno seguido
-    // adiado, cobra assim mesmo.
-    const adiados = estado[pendente]?.n || 0;
-    if (esperando && adiados < MAX_ADIAMENTOS) {
-      gravarEstadoDe(ESTADO, (s) => { s[pendente] = { n: adiados + 1, em: Date.now() }; });
-      registrar(sessao, HOOK, 'adiou-esperando-fundo', quem);
-      return;
-    }
+  const esperando = Array.isArray(e.background_tasks) ? e.background_tasks.length > 0 : turno.esperaFundo;
+  // Dev server ou Monitor que nunca termina deixaria o adiamento eterno: no 3º turno seguido adiado, cobra assim mesmo.
+  const adiados = estado[pendente]?.n || 0;
+  if (esperando && adiados < MAX_ADIAMENTOS) {
+    gravarEstadoDe(ESTADO, (s) => { s[pendente] = { n: adiados + 1, em: Date.now() }; });
+    registrar(sessao, HOOK, 'adiou-esperando-fundo', quem);
+    return;
   }
 
-  const chave = `${sessao}:${sub ? e.agent_id : 'principal'}:${turno.chave}`;
+  const chave = `${sessao}:principal:${turno.chave}`;
   const encerrar = () => gravarEstadoDe(ESTADO, (s) => { delete s[pendente]; delete s[chave]; });
   const relatorio = e.last_assistant_message ?? turno.ultimoTexto;
   const cobrancas = estado[chave]?.n || 0;
@@ -305,7 +296,7 @@ function main() {
   }
   if (cobrancas >= MAX_COBRANCAS) {
     // Esgotado vale pelo TURNO, não pela sequência: apagar a chave faria a parada seguinte (outro hook
-    // mantendo o turno vivo) recomeçar em 1 e a sessão não sairia nunca (laudo da V3, achado 1).
+    // mantendo o turno vivo) recomeçar em 1 e a sessão não sairia nunca.
     registrar(sessao, HOOK, cobrancas > MAX_COBRANCAS ? 'passou-esgotado' : 'deixou-passar-apos-2', quem);
     if (cobrancas === MAX_COBRANCAS) gravarEstadoDe(ESTADO, (s) => { delete s[pendente]; s[chave] = { n: MAX_COBRANCAS + 1, em: Date.now() }; });
     return;

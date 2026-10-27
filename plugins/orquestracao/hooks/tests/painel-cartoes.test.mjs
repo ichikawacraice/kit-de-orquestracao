@@ -1,4 +1,4 @@
-// Testes da coleção `cartoes` (cartão de sessão nova que espera o clique do operador): validação do painel.mjs, a função pura
+// Testes da coleção `cartoes` (cartão de sessão dona que espera o clique do operador): validação do painel.mjs, a função pura
 // `cartoesResolvidos` e a limpeza dentro de `painel batida`. Nunca tocam o painel real (pastas temporárias).
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,21 +35,23 @@ function painel(args) {
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr, json: () => JSON.parse(r.stdout) };
 }
-const cartao = (extra = {}) => ({ projeto: 'kit', apelido: 'E21', papel: 'E', itens: ['F144'], orquestradoraId: lid(1), propostoEm: iso(T - 10 * MIN), ...extra });
+// O cartão de sessão dona: apelido e papel `dona`, um item F<n>; a sessão aberta se chama `F<n> · <tema>`.
+const cartao = (extra = {}) => ({ projeto: 'kit', apelido: 'dona', papel: 'dona', itens: ['F144'], orquestradoraId: lid(1), propostoEm: iso(T - 10 * MIN), ...extra });
 const arq = (id) => join(base, 'painel', 'cartoes', `${id}.json`);
 
 // ---- validação ----
-test('cartoes: documento válido é gravado, com itens vazios (o piso de E) também', () => {
-  assert.equal(painel(['set', 'cartoes', 'task_a', JSON.stringify(cartao())]).exit, 0);
+test('cartoes: cartão de sessão dona (apelido dona, um item F<n>) é gravado', () => {
+  const r = painel(['set', 'cartoes', 'task_a', JSON.stringify(cartao())]);
+  assert.equal(r.exit, 0, r.err);
   assert.ok(existsSync(arq('task_a')));
-  assert.equal(painel(['set', 'cartoes', 'task_b', JSON.stringify(cartao({ itens: [] }))]).exit, 0);
-  assert.ok(existsSync(arq('task_b')));
 });
 for (const [nome, extra, trecho] of [
-  ['apelido fora de [PDEV]<n>', { apelido: 'X1' }, 'apelido'],
-  ['apelido sem número', { apelido: 'E' }, 'apelido'],
-  ['papel diferente da letra do apelido', { papel: 'D' }, 'papel'],
-  ['item que não é F<n>', { itens: ['F144', 'x'] }, 'itens'],
+  ['apelido que não é dona', { apelido: 'E21' }, 'apelido'],
+  ['apelido de dona com maiúscula', { apelido: 'Dona' }, 'apelido'],
+  ['papel que não é dona', { papel: 'E' }, 'papel'],
+  ['sem item', { itens: [] }, 'itens'],
+  ['mais de um item', { itens: ['F144', 'F145'] }, 'itens'],
+  ['item que não é F<n>', { itens: ['x'] }, 'itens'],
   ['itens que não é lista', { itens: 'F144' }, 'itens'],
   ['propostoEm que não é data', { propostoEm: 'ontem' }, 'propostoEm'],
   ['sem projeto', { projeto: '' }, 'projeto'],
@@ -62,30 +64,6 @@ for (const [nome, extra, trecho] of [
     assert.ok(!existsSync(arq('task_x')));
   });
 }
-// ---- cartão de sessão dona (ADR 0011): apelido `dona`, papel `dona`, um item F<n>; a sessão aberta se chama `F<n> · <tema>` ----
-const cartaoDona = (extra = {}) => cartao({ apelido: 'dona', papel: 'dona', itens: ['F140'], ...extra });
-test('cartoes: cartão de sessão dona (apelido dona, um item F<n>) é gravado', () => {
-  const r = painel(['set', 'cartoes', 'task_d', JSON.stringify(cartaoDona())]);
-  assert.equal(r.exit, 0, r.err);
-  assert.ok(existsSync(arq('task_d')));
-});
-for (const [nome, extra, trecho] of [
-  ['dona sem item', { itens: [] }, 'itens'],
-  ['dona com mais de um item', { itens: ['F140', 'F141'] }, 'itens'],
-  ['dona com papel de pool', { papel: 'E' }, 'papel'],
-  ['apelido de dona com maiúscula', { apelido: 'Dona' }, 'apelido'],
-]) {
-  test(`cartoes: recusa ${nome}`, () => {
-    const r = painel(['set', 'cartoes', 'task_x', JSON.stringify(cartaoDona(extra))]);
-    assert.equal(r.exit, 1, r.out);
-    assert.ok(r.err.includes(trecho), r.err);
-    assert.ok(!existsSync(arq('task_x')));
-  });
-}
-test('cartoes: apelido de pool com papel dona continua recusado', () => {
-  assert.equal(painel(['set', 'cartoes', 'task_x', JSON.stringify(cartao({ papel: 'dona' }))]).exit, 1);
-});
-
 test('cartoes: delete apaga o documento (a orquestradora retira o cartão)', () => {
   painel(['set', 'cartoes', 'task_a', JSON.stringify(cartao())]);
   assert.ok(existsSync(arq('task_a')));
@@ -98,26 +76,20 @@ const projetoDe = (r) => r.projeto ?? 'kit';
 const linha = (titulo, extra = {}) => ({ sessionId: lid(9), title: titulo, isArchived: false, createdAt: iso(T), lastActivityAt: iso(T), ...extra });
 const doc = (id, extra = {}) => ({ id, data: cartao(extra) });
 
-test('cartoesResolvidos: apelido vivo criado depois de propostoEm apaga', () => {
-  assert.deepEqual(cartoesResolvidos({ cartoes: [doc('a')], linhas: [linha('E21 · livre')], projetoDe, agoraMs: T }), ['a']);
-  assert.deepEqual(cartoesResolvidos({ cartoes: [doc('a')], linhas: [linha('E21 · plano das sessões')], projetoDe, agoraMs: T }), ['a']);
+test('cartoesResolvidos: a sessão `F<n> · <tema>` do item criada depois de propostoEm apaga; outro F não resolve', () => {
+  assert.deepEqual(cartoesResolvidos({ cartoes: [doc('d')], linhas: [linha('F144 · cartão da dona')], projetoDe, agoraMs: T }), ['d']);
+  assert.deepEqual(cartoesResolvidos({ cartoes: [doc('d')], linhas: [linha('F145 · outro item'), linha('F1440 · não é o F144')], projetoDe, agoraMs: T }), []);
 });
-test('cartoesResolvidos: cartão de dona resolve quando abre a sessão `F<n> · <tema>` do item; outro F não resolve', () => {
-  const d = { cartoes: [doc('d', { apelido: 'dona', papel: 'dona', itens: ['F140'] })], projetoDe, agoraMs: T };
-  assert.deepEqual(cartoesResolvidos({ ...d, linhas: [linha('F140 · cartão da dona')] }), ['d']);
-  assert.deepEqual(cartoesResolvidos({ ...d, linhas: [linha('F141 · outro item'), linha('F1400 · não é o F140')] }), []);
-  assert.deepEqual(cartoesResolvidos({ ...d, linhas: [linha('F140 · cartão da dona', { createdAt: iso(T - 3 * H), lastActivityAt: iso(T - 3 * H) })] }), []);
-});
-test('cartoesResolvidos: apelido vivo de ANTES de propostoEm fica (é a sessão antiga de mesmo apelido)', () => {
-  const antiga = linha('E21 · livre', { createdAt: iso(T - 3 * H), lastActivityAt: iso(T - 3 * H) });
+test('cartoesResolvidos: sessão de ANTES de propostoEm fica (é a sessão antiga com o mesmo título)', () => {
+  const antiga = linha('F144 · cartão da dona', { createdAt: iso(T - 3 * H), lastActivityAt: iso(T - 3 * H) });
   assert.deepEqual(cartoesResolvidos({ cartoes: [doc('a')], linhas: [antiga], projetoDe, agoraMs: T }), []);
 });
 test('cartoesResolvidos: sem createdAt usa lastActivityAt', () => {
-  const sem = { sessionId: lid(9), title: 'E21 · livre', isArchived: false, lastActivityAt: iso(T) };
+  const sem = { sessionId: lid(9), title: 'F144 · cartão da dona', isArchived: false, lastActivityAt: iso(T) };
   assert.deepEqual(cartoesResolvidos({ cartoes: [doc('a')], linhas: [sem], projetoDe, agoraMs: T }), ['a']);
 });
-test('cartoesResolvidos: arquivada, de outro projeto ou de outro apelido não resolve', () => {
-  const l = [linha('E21 · livre', { isArchived: true }), linha('E21 · livre', { projeto: 'outro' }), linha('E22 · livre'), linha('🎛 orquestradora — kit')];
+test('cartoesResolvidos: arquivada, de outro projeto ou de outro título não resolve', () => {
+  const l = [linha('F144 · x', { isArchived: true }), linha('F144 · x', { projeto: 'outro' }), linha('F143 · x'), linha('🎛 orquestradora — kit')];
   assert.deepEqual(cartoesResolvidos({ cartoes: [doc('a')], linhas: l, projetoDe, agoraMs: T }), []);
 });
 test('cartoesResolvidos: passou de 12 h apaga, mesmo sem sessão; dentro das 12 h fica', () => {
@@ -132,12 +104,12 @@ test('cartoesResolvidos: sem a lista de sessões (null) só o prazo vale; sem pr
 });
 
 // ---- dentro da batida ----
-test('batida apaga o cartão cujo apelido apareceu vivo e o que passou de 12 h; o resto fica', () => {
+test('batida apaga o cartão cuja sessão apareceu viva e o que passou de 12 h; o resto fica', () => {
   painel(['set', 'cartoes', 'task_vivo', JSON.stringify(cartao())]);
-  painel(['set', 'cartoes', 'task_velho', JSON.stringify(cartao({ apelido: 'E22', propostoEm: iso(T - 13 * H) }))]);
-  painel(['set', 'cartoes', 'task_espera', JSON.stringify(cartao({ apelido: 'E23' }))]);
+  painel(['set', 'cartoes', 'task_velho', JSON.stringify(cartao({ itens: ['F145'], propostoEm: iso(T - 13 * H) }))]);
+  painel(['set', 'cartoes', 'task_espera', JSON.stringify(cartao({ itens: ['F146'] }))]);
   const f = join(base, 'sessoes.json');
-  writeFileSync(f, JSON.stringify([{ sessionId: lid(9), title: 'E21 · livre', cwd: repo, isArchived: false, isRunning: false, createdAt: iso(T), lastActivityAt: iso(T) }]));
+  writeFileSync(f, JSON.stringify([{ sessionId: lid(9), title: 'F144 · cartão da dona', cwd: repo, isArchived: false, isRunning: false, createdAt: iso(T), lastActivityAt: iso(T) }]));
   const r = painel(['batida', '--sessoes', f, '--agora', iso(T)]);
   assert.equal(r.exit, 0, r.err);
   assert.deepEqual([...r.json().cartoesApagados].sort(), ['task_velho', 'task_vivo']);

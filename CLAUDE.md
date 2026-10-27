@@ -4,7 +4,7 @@ As seções marcadas `kit:` são do kit de orquestração: o `kit atualizar` tro
 
 <!-- kit:projeto v1 -->
 ## O projeto
-Kit de orquestração de sessões do Claude Code (pool de papéis, travas por hook, painel, gates), instalável em qualquer projeto. Dois plugins em `plugins/` (`orquestracao`, `painel-sessoes`) e um CLI em `cli/` (`npx -y github:ichikawacraice/kit-de-orquestracao`). Decisão: `docs/adr/0001-*`; planos em `docs/planos/`.
+Kit de orquestração de sessões do Claude Code (uma sessão dona por item, travas por hook, painel, fila de merge, teto de testes), instalável em qualquer projeto. Dois plugins em `plugins/` (`orquestracao`, `painel-sessoes`) e um CLI em `cli/` (`npx -y github:ichikawacraice/kit-de-orquestracao`). Decisão: `docs/adr/0001-*`; planos em `docs/planos/`.
 
 Regras do código (valem para toda fatia):
 - Node ≥ 20, ESM, só módulos nativos: o kit não traz dependência npm. Testes em `node:test` (`node --test`), nunca vitest.
@@ -29,7 +29,7 @@ Lidos de `.claude/kit.json`:
 
 <!-- kit:regras-de-operacao v1 -->
 ## Regras de operação
-- **Uma sessão dona por item, do plano ao PR** (ADR 0011): ela planeja, escreve, testa e abre o PR; manual em `plugins/orquestracao/pool/dona.md`. Sem P/D/E/V em sessões separadas (o pool só volta com `KIT_MODELO=papeis`, para item antigo).
+- **Uma sessão dona por item, do plano ao PR** (ADR 0011): ela planeja, escreve, testa e abre o PR; manual em `plugins/orquestracao/pool/dona.md`.
 - **Revisão por subagente** `orquestracao:validador` de contexto limpo antes do PR: só achados que afetam correção; o leve vai ao PR ou ao `depois` do item, nunca vira item.
 - **Durante o trabalho, só os testes afetados**; o gate completo (`npm test`) roda uma vez, na fila de merge da orquestradora (`painel fila-de-merge <N>:<sha>…`), sobre a combinação dos PRs. Um gate por vez; gate verde sobre a mesma árvore não se repete.
 - **Ninguém rebaseia por merge alheio:** a fila devolve à dona só o conflito real ou o gate vermelho. Rebase em vez de merge commit quando rebasear.
@@ -63,7 +63,7 @@ As pastas são as de `.claude/kit.json` (seção `documentos`); sem a seção va
 <!-- kit:design v1 -->
 ## Design de interface
 Vale para o projeto que tem front. As pastas e os globs de tela vêm de `.claude/kit.json` (seção `design`).
-- **O fluxo:** o designer escreve a revisão em `docs/design/revisoes/` antes de qualquer tela; a executora cumpre a revisão sem redesenhar; o crítico de UI julga depois. Nota abaixo de 24/30 volta para correção, com no máximo 2 recríticas. Item simples (reaproveita componente que já existe e não muda decisão registrada) pode ir pela via rápida: sem revisão, com uma crítica só depois do código.
+- **O fluxo:** o designer escreve a revisão em `docs/design/revisoes/` antes de qualquer tela; a dona do item cumpre a revisão sem redesenhar; o crítico de UI julga depois. Nota abaixo de 24/30 volta para correção, com no máximo 2 recríticas. Item simples (reaproveita componente que já existe e não muda decisão registrada) pode ir pela via rápida: sem revisão, com uma crítica só depois do código.
 - **`ANATOMIA.md` e `DESIGN.md` não se repetem:** o primeiro diz o que vai onde, o segundo como parece.
 - **Texto de UI não cita spec, ADR nem doc:** quem usa a tela não conhece o repositório.
 - **Ação assíncrona tem estado visível** (carregando, feito, falhou) no lugar onde a pessoa agiu.
@@ -85,5 +85,5 @@ Vale para o projeto que tem front. As pastas e os globs de tela vêm de `.claude
 ## Orquestradora
 - Com uma sessão `🎛 orquestradora — <projeto>` ativa, só ela mergeia, faz release e reserva números de documento; as demais sessões abrem PR e mandam o número a ela.
 - Sem orquestradora ativa, mergeie normalmente.
-- O estado do pool (painel, fila, contadores) mora em `~/.claude/orquestracao/`, não neste repositório.
+- O estado das sessões (painel, fila, contadores) mora em `~/.claude/orquestracao/`, não neste repositório.
 <!-- /kit:orquestradora -->

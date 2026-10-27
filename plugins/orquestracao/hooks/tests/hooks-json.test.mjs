@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// K2: hooks/hooks.json concorda com os eventos que os hooks de hoje têm no settings.json, e o SessionStart injeta as regras globais.
+// hooks/hooks.json lista cada hook do plugin com o evento e o matcher certos, e o SessionStart injeta as regras globais.
 // Rodar: node hooks/tests/hooks-json.test.mjs   (nada aqui toca ~/.claude: o settings.json de hoje está copiado abaixo)
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, mkdtempSync, mkdirSync, rmSync, cpSync, writeFileSync } from 'node:fs';
@@ -14,22 +14,18 @@ const ok = (c, m) => { if (!c) throw new Error(m); };
 function caso(nome, fn) { try { fn(); console.log(`ok   ${nome}`); } catch (e) { falhas++; console.log(`FAIL ${nome}\n     ${e.message}`); } }
 
 const PRE_EDICAO = 'Edit|Write|MultiEdit|NotebookEdit';
-// Evento | matcher | script — o que o settings.json tinha (fase 1), mais o SessionStart novo.
+// Evento | matcher | script.
 const ESPERADO = [
   ['Stop', null, 'orquestradora-ritual.mjs'],
   ['Stop', null, 'painel-das-sessoes.mjs'],
-  ['Stop', null, 'executor-criterio.mjs'],
-  ['Stop', null, 'executor-anuncia.mjs'],
+  ['Stop', null, 'criterio-da-dona.mjs'],
   ['Stop', null, 'fila-do-item.mjs'],
-  ['Stop', null, 'livre-se-limpa.mjs'],
   ['Stop', null, 'contexto-do-papel.mjs'],
   ['PreToolUse', PRE_EDICAO, 'orquestradora-nao-edita.mjs'],
   ['PreToolUse', PRE_EDICAO, 'subagente-nao-edita.mjs'],
-  ['PreToolUse', `Agent|Task|Bash|${PRE_EDICAO}|mcp__ccd_session_mgmt__archive_session|mcp__ccd_session_mgmt__delete_session|mcp__ccd_session__start_session|mcp__ccd_session_mgmt__clear_session|SendMessage|mcp__ccd_session_mgmt__send_message`, 'papel-do-pool.mjs'],
-  ['PreToolUse', 'Skill', 'skill-do-papel.mjs'],
+  ['PreToolUse', `Bash|${PRE_EDICAO}|mcp__ccd_session__start_session|mcp__ccd_session_mgmt__clear_session`, 'travas-da-sessao.mjs'],
   ['PreToolUse', 'SendMessage|mcp__ccd_session_mgmt__send_message|mcp__ccd_session__start_session|Write|Edit|MultiEdit|Bash', 'segredo-sai.mjs'],
   ['PreToolUse', 'mcp__ccd_session__start_session', 'titulo-da-dona.mjs'],
-  ['SubagentStop', null, 'executor-criterio.mjs'],
   ['PostToolUse', null, 'laco-de-comandos.mjs'],
   ['PostToolUseFailure', null, 'laco-de-comandos.mjs'],
   ['UserPromptSubmit', null, 'operador-ausente.mjs'],
@@ -57,7 +53,7 @@ caso('hooks.json lista cada evento, matcher e script de hoje (e só eles), com $
 caso('todo script do hooks.json existe, e todo hook de hooks/ (fora os comuns) está no hooks.json', () => {
   const doJson = new Set(Object.values(lerHooks()).flatMap((gs) => gs.flatMap((g) => g.hooks.map((c) => /\/hooks\/([\w-]+\.mjs)"/.exec(c.command)[1]))));
   for (const s of doJson) ok(existsSync(join(HOOKS, s)), `${s} não existe`);
-  const comuns = new Set(['hooks-crewai-comum.mjs', 'pool-comum.mjs', 'executor-anuncia-regra.mjs', 'varredura-entre-sessoes.mjs', 'perguntas-da-sessao.mjs', 'esperando-papel.mjs', 'modelo-do-kit.mjs']);
+  const comuns = new Set(['hooks-crewai-comum.mjs', 'pool-comum.mjs', 'varredura-entre-sessoes.mjs', 'perguntas-da-sessao.mjs', 'sem-dona.mjs']);
   const soltos = readdirSync(HOOKS).filter((f) => f.endsWith('.mjs') && !comuns.has(f) && !doJson.has(f));
   ok(soltos.length === 0, `hooks sem entrada no hooks.json: ${soltos.join(', ')}`);
 });

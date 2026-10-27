@@ -19,31 +19,27 @@
 //   painel.mjs temas list [--projeto <nome>]   os temas do projeto (o da pasta atual); cada tema vale só no projeto dele
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
-//   painel.mjs com del <F> <local_|apelido> [--fez]   tira a sessão do `com` (o apelido E1/V4… vale se for um só no item); --fez a registra em `fez` (quem executou)
-//   painel.mjs fez del <F> <local_|apelido> "<motivo>"   tira do `fez` do item a entrega daquela sessão (registro falso: quem saiu sem entregar); grava `agora` = "fez de <apelido> tirado: <motivo>"; recusa item inexistente, etapa final, motivo vazio, apelido ambíguo e sessão fora do `fez`
-//   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio (sem `fez`: quem sai assim não entregou), `agora` = motivo; --so-dono deixa o `com` como está
-//   painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]   os membros livres do papel no projeto, o mais antigo parado primeiro → [{localId, apelido}]; --sessoes é o JSON do list_sessions (sem ele, o registro do app, sem contar a mesma sessão duas vezes)
-//   painel.mjs pegar <F> [<local_>] <apelido>   (o id sai de $CLAUDE_CODE_HOST_SESSION_ID; id de outra sessão, de orquestradora ou de outro apelido é recusado) o membro livre pega o item que espera o papel dele (atômico: o segundo recebe {recusado, motivo} e exit 1); planejamento/design gravam o dono, todos põem a sessão no `com`
-//   painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]   (ADR 0009) ao terminar, pega o item vivo mais antigo do mesmo projeto e tema do último item por onde a sessão passou (`passaram`) que espera o papel dela (pula o item só se a sessão já passou por ele nesta etapa), como o `pegar` → {pegou:true, item, …} ou {pegou:false, motivo}; recusa com o contexto acima do aviso do papel (E 300 mil, P/D/V 350 mil) ou sem medida do transcript; --tokens só sobrescreve a medida (teste)
-//   painel.mjs mergear <PR> <sha> [--seco]   o merge do PR validado (F150): confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
+//   painel.mjs com del <F> <local_|apelido>   tira a sessão do `com` (o apelido vale se for um só no item)
+//   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio, `agora` = motivo; --so-dono deixa o `com` como está
+//   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); exit 0 nos dois casos, 1 só em erro de leitura
-//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   (ADR 0011) a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar
-//   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod (ADR 0007): cutuca e solta o item parado, avisa o livre do papel que o item espera, pede ao membro com título de item fechado que volte a livre, relata merge/vagas/excedentes/títulos velhos à orquestradora → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
+//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar
+//   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga) → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
 //   (item que vira feito/descartado arquiva os próprios handoffs e roda a limpeza; reaberto, eles voltam. Pasta: PAINEL_HANDOFFS_DIR, senão PAINEL_DIR/../pool/handoffs, senão ~/.claude/orquestracao/pool/handoffs)
 //   painel.mjs list fila vencidos [--min N]   itens vivos com dono ou `com`, sem `espera` nem `trava`, parados há mais de N min (padrão 30 ou PAINEL_PRAZO_MIN)
-//   painel.mjs list fila esperando   itens vivos esperando o papel da etapa (D, E ou V) sem ninguém dele no item; todo documento de `list fila` sai com `esperando` ({papel, desde, minutos} ou null) FORA de `data`, calculado na hora e nunca gravado
-//   (`passaram`, a lista de quem passou pelo item, só muda por `com add` e `pegar`; set/update/batch a recusam)
-//   (`com` e `fez` só mudam por `com add|del [--fez]`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
+//   painel.mjs list fila sem-dona   itens vivos numa etapa de trabalho sem dona e sem ninguém no `com`; todo documento de `list fila` sai com `semDona` ({desde, minutos} ou null) FORA de `data`, calculado na hora e nunca gravado
+//   (`com` só muda por `com add|del`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
+//   (`fez` e `passaram` são históricos de itens antigos: só leitura; o set guarda o gravado e recusa o diferente, o update e o batch recusam)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
 //   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
 //   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
 //   (set em fila/<id> que JÁ existe exige --se-versao N — ou "seVersao" na op do batch —: sem ele, o set apagaria o item em silêncio)
 //
-// Coleções: sessoes, perguntas, fila (itens F<n> do pool; protocolo em pool/protocolo.md#fila-do-pool) e cartoes (cartão de sessão nova
-//   que espera o clique do operador; id = task_id do start_session; { projeto, apelido, papel, itens[F<n>], orquestradoraId, propostoEm }; cartão de dona: apelido e papel `dona`, um item só;
-//   a orquestradora grava e apaga, e a batida apaga o apelido vivo e o que passou de 12 h).
+// Coleções: sessoes, perguntas, fila (itens F<n>; protocolo em pool/protocolo.md#a-fila) e cartoes (cartão de sessão dona
+//   que espera o clique do operador; id = task_id do start_session; { projeto, apelido: "dona", papel: "dona", itens: [F<n>], orquestradoraId, propostoEm };
+//   a orquestradora grava e apaga, e a batida apaga o cartão cuja sessão já abriu e o que passou de 12 h).
 //
 // `projeto` (sessoes, fila e perguntas): ao CRIAR um documento sem o campo, o script o preenche com o nome do repositório git de
 // onde roda (basename da pasta que contém o git common dir, em slug `[a-z0-9-]`; fora de git não preenche). Toda op que grava
@@ -59,7 +55,7 @@ import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
-import { AFINIDADE_MIN, BATIDA_SOLTA_MIN, cartoesResolvidos, julgar, livresDe, ocupadosDaFila } from './batida.mjs';
+import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
 import { SHA_VALIDADO, conferir, dadosDoPr, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerPs, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote } from './fila-de-merge.mjs';
@@ -104,30 +100,24 @@ const pool = MEU_CLI
     return null;
   })
   : null;
-// `esperando` da `list fila` (F58): a regra mora em hooks/esperando-papel.mjs; só `list fila` a carrega (as outras
+// `semDona` da `list fila`: a regra mora em hooks/sem-dona.mjs; só `list fila` e a batida a carregam (as outras
 // invocações não dependem do módulo, nem a cópia do script solta numa pasta sem `hooks/`).
-const DA_BATIDA = ['batida', 'pegar', 'livres', 'seguinte'].includes(process.argv[2]);
+const DA_BATIDA = process.argv[2] === 'batida';
 const DO_REINICIO = process.argv[2] === 'pode-reiniciar';
 const DA_MIGRACAO = process.argv[2] === 'perguntas' && process.argv[3] === 'migrar';
 const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || DA_MIGRACAO || process.argv[2] === 'com';
-const moduloEsperando = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
-  ? await import(pathToFileURL(join(HOOKS_DIR, 'esperando-papel.mjs')).href)
+const moduloSemDona = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
+  ? await import(pathToFileURL(join(HOOKS_DIR, 'sem-dona.mjs')).href)
   : null;
-const esperandoPapel = moduloEsperando?.esperandoPapel ?? null;
-const entradaNaEtapa = moduloEsperando?.entradaNaEtapa ?? null;
-// `batida`, `pegar` e `livres` (e `com`, só para conferir o membro) também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
+const semDona = moduloSemDona?.semDona ?? null;
+// A batida, o `pode-reiniciar`, a migração das perguntas e o `com add` também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
 const regras = CONFERE_MEMBRO
   ? await import(pathToFileURL(POOL_COMUM).href).catch((e) => {
     if (DA_BATIDA || DO_REINICIO) throw e;
-    process.stderr.write(`painel.mjs: aviso: não consegui importar ${POOL_COMUM} (${e.message}); o id do membro não foi conferido\n`);
+    process.stderr.write(`painel.mjs: aviso: não consegui importar ${POOL_COMUM} (${e.message}); o projeto da sessão não foi conferido\n`);
     return null;
   })
   : null;
-// As réguas de contexto por papel moram no hook contexto-do-papel (que só roda quando é o script principal); o `seguinte` as lê dali.
-const reguas = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'contexto-do-papel.mjs')).href) : null;
-const crewai = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'hooks-crewai-comum.mjs')).href) : null;
-// ADR 0011: o modelo de trabalho (dona ou papeis) decide se a batida avisa livres, conta piso e excedentes.
-const modelo = DA_BATIDA ? await import(pathToFileURL(join(HOOKS_DIR, 'modelo-do-kit.mjs')).href) : null;
 let meusIds; // Set de ids que contam como "a própria sessão"; null = não resolvido
 function ehMinha(id) {
   if (!MEU_CLI) return true;
@@ -364,14 +354,14 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: fez.em "${e.em}" não é data ISO`);
   });
   if (!viaCom && 'fez' in novo && (op === 'update' || canonico(novo.fez) !== canonico(antes?.fez ?? []))) {
-    throw new Error(`${chave}: o campo "fez" só muda por \`painel com del --fez\` (acrescenta) ou \`painel fez del\` (tira entrega falsa); o ${op} apagaria ou forjaria quem executou`);
+    throw new Error(`${chave}: o campo "fez" é histórico de item antigo: só leitura (o ${op} o apagaria ou o forjaria)`);
   }
   lista('passaram', ['localId', 'apelido', 'papel', 'em'], (e) => {
     if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: passaram.em "${e.em}" não é data ISO`);
     if (!['P', 'D', 'E', 'V'].includes(e.papel)) throw new Error(`${chave}: passaram.papel "${e.papel}" não é P, D, E ou V`);
   });
   if (!viaCom && 'passaram' in novo && (op === 'update' || canonico(novo.passaram) !== canonico(antes?.passaram ?? []))) {
-    throw new Error(`${chave}: o campo "passaram" só muda por \`painel com add\` e \`painel pegar\` (o ${op} apagaria ou forjaria quem passou pelo item)`);
+    throw new Error(`${chave}: o campo "passaram" é histórico de item antigo: só leitura (o ${op} o apagaria ou o forjaria)`);
   }
   if (tem('espera')) {
     const e = novo.espera;
@@ -416,15 +406,13 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   }
 }
 
-// Cartão de sessão nova que espera o clique do operador (a coleção `cartoes`; id = o task_id do start_session).
+// Cartão de sessão dona que espera o clique do operador (a coleção `cartoes`; id = o task_id do start_session): apelido e papel
+// `dona`, exatamente um item; a sessão aberta se chama `F<n> · <tema>`.
 function validarCartao(chave, c) {
   for (const k of ['projeto', 'orquestradoraId']) if (!textoNaoVazio(c[k])) throw new Error(`${chave}: ${k} é obrigatório`);
-  // Cartão de sessão dona (ADR 0011): apelido e papel `dona`, exatamente um item; a sessão aberta se chama `F<n> · <tema>`.
-  const dona = c.apelido === 'dona';
-  if (!dona && !/^[PDEV]\d+$/.test(String(c.apelido))) throw new Error(`${chave}: apelido "${c.apelido}" não é dona, P<n>, D<n>, E<n> ou V<n>`);
-  if (c.papel !== (dona ? 'dona' : String(c.apelido)[0])) throw new Error(`${chave}: papel "${c.papel}" não é ${dona ? 'dona (o do apelido dona)' : `a letra do apelido ${c.apelido}`}`);
-  if (!Array.isArray(c.itens) || c.itens.some((F) => !ID.test(String(F)) || !/^F\d+$/.test(String(F)))) throw new Error(`${chave}: itens deve ser a lista de F<n> (vazia no piso de E)`);
-  if (dona && c.itens.length !== 1) throw new Error(`${chave}: o cartão de dona leva exatamente um item F<n> em itens`);
+  if (c.apelido !== 'dona') throw new Error(`${chave}: apelido "${c.apelido}" não é dona`);
+  if (c.papel !== 'dona') throw new Error(`${chave}: papel "${c.papel}" não é dona`);
+  if (!Array.isArray(c.itens) || c.itens.length !== 1 || !ID.test(String(c.itens[0])) || !/^F\d+$/.test(String(c.itens[0]))) throw new Error(`${chave}: o cartão de dona leva exatamente um item F<n> em itens`);
   if (Number.isNaN(Date.parse(c.propostoEm))) throw new Error(`${chave}: propostoEm não é data ISO`);
 }
 
@@ -737,40 +725,25 @@ function comTrava(fn) {
   }
 }
 
-// F155: o id do próprio membro. O Bash da sessão aberta por outra não mostra o `local_…` dela (só o de quem a abriu), então
-// quem digita o id erra. Fonte: CLAUDE_CODE_HOST_SESSION_ID; senão o registro do app pelo id do CLI; senão null.
-function idDestaSessao() {
-  const h = process.env.CLAUDE_CODE_HOST_SESSION_ID;
-  if (h && LOCAL_ID.test(h)) return h;
-  try { return regras?.registroDaSessao(MEU_CLI)?.localId ?? null; } catch { return null; }
-}
-// O id tem de ser de um membro do pool com o apelido dado: orquestradora e membro de outro apelido são recusados. Id fora do
-// registro ou título sem apelido (sessão recém-aberta) passa: errar para o lado de não travar a escrita.
-function conferirMembro(localId, apelido, onde) {
+// A orquestradora abre a dona e pode passar o próprio id no lugar do dela: `com add` recusa o id de sessão `🎛 orquestradora`.
+function conferirQuemTrabalha(localId, onde) {
   let reg = null;
   try { reg = regras?.registroDaSessao(localId, { fresco: true }) ?? null; } catch { /* sem registro */ }
   const titulo = reg?.titulo ?? reg?.title;
-  if (!titulo) return;
-  if (titulo.startsWith('🎛 orquestradora')) throw new Error(`${onde}: ${localId} é a sessão "${titulo}", não um membro do pool; o id do membro sai do start_session (para si: $CLAUDE_CODE_HOST_SESSION_ID)`);
-  const m = regras.membroDoPool(titulo);
-  if (m && m.id !== apelido) throw new Error(`${onde}: ${localId} é a ${m.id} ("${titulo}"), não a ${apelido}`);
-}
-// `passaram` (ADR 0009): quem passou pelo item, com o papel (letra do apelido) e quando; a mesma sessão só aparece uma vez (o `em` se renova).
-function comPassagem(d, localId, apelido) {
-  const lista = Array.isArray(d.passaram) ? d.passaram : [];
-  return [...lista.filter((p) => p.localId !== localId), { localId, apelido, papel: String(apelido)[0], em: new Date().toISOString() }];
+  if (titulo?.startsWith('🎛 orquestradora')) throw new Error(`${onde}: ${localId} é a sessão "${titulo}", não a dona do item; o id da dona sai do start_session (para si: $CLAUDE_CODE_HOST_SESSION_ID)`);
 }
 
-// `com add|del`: lê, muda e grava a lista dentro da trava do painel; é a única via que grava `com` (e a que acrescenta a `fez`).
+// `com add|del`: lê, muda e grava a lista dentro da trava do painel; é a única via que grava `com`.
 function comandoCom(args) {
   const [sub, F, quem0, ...resto] = args;
   let localId = quem0;
-  if (sub !== 'add' && sub !== 'del') throw new Error('uso: painel.mjs com add <F> <local_> <apelido> "<oQue>" | com del <F> <local_|apelido> [--fez]');
+  if (sub !== 'add' && sub !== 'del') throw new Error('uso: painel.mjs com add <F> <local_> <apelido> "<oQue>" | com del <F> <local_|apelido>');
   if (!ID.test(String(F))) throw new Error(`com: id de item inválido "${F}"`);
-  // `com del` também aceita o apelido (E1, V4…): resolvido no `com` do item, dentro da trava
-  const porApelido = sub === 'del' && !LOCAL_ID.test(String(quem0)) && /^[PDEV]\d+$/.test(String(quem0));
+  // `com del` também aceita o apelido: resolvido no `com` do item, dentro da trava
+  const porApelido = sub === 'del' && !LOCAL_ID.test(String(quem0)) && textoNaoVazio(quem0) && !String(quem0).startsWith('local_');
   if (!porApelido && !LOCAL_ID.test(String(localId))) throw new Error(`com: "${localId}" não é local_<uuid>`);
-  if (sub === 'add') conferirMembro(localId, resto[0], 'com add');
+  if (sub === 'del' && resto.length) throw new Error('uso: painel.mjs com del <F> <local_|apelido>');
+  if (sub === 'add') conferirQuemTrabalha(localId, 'com add');
   return comTrava(() => {
     const atual = ler('fila', F);
     if (!atual) throw new Error(`fila/${F} não existe`);
@@ -786,15 +759,9 @@ function comandoCom(args) {
       const [apelido, oQue] = resto;
       if (!textoNaoVazio(apelido) || !textoNaoVazio(oQue)) throw new Error('com add: faltam <apelido> e "<oQue>"');
       nova = com.some((c) => c.localId === localId) ? com.map((c) => (c.localId === localId ? { ...c, apelido, oQue } : c)) : [...com, { localId, apelido, oQue }];
-      if (/^[PDEV]\d+$/.test(apelido)) data.passaram = comPassagem(atual.data, localId, apelido);
     } else {
-      const quem = com.find((c) => c.localId === localId);
-      if (!quem) throw new Error(`com del: ${localId} não está em com de ${F}`);
+      if (!com.some((c) => c.localId === localId)) throw new Error(`com del: ${localId} não está em com de ${F}`);
       nova = com.filter((c) => c.localId !== localId);
-      if (resto.includes('--fez')) {
-        const fez = Array.isArray(atual.data.fez) ? atual.data.fez : [];
-        data.fez = [...fez.filter((f) => f.localId !== localId || f.oQue !== quem.oQue), { localId, apelido: quem.apelido, oQue: quem.oQue, em: new Date().toISOString() }];
-      }
     }
     data.com = nova;
     const p = planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map());
@@ -802,32 +769,8 @@ function comandoCom(args) {
   });
 }
 
-// `fez del <F> <local_|apelido> "<motivo>"`: tira a entrega falsa (F169). É a única via que tira de `fez`; o motivo vira o `agora`.
-function comandoFez(args) {
-  const [sub, F, quem, motivo, ...sobra] = args;
-  if (sub !== 'del' || sobra.length) throw new Error('uso: painel.mjs fez del <F> <local_|apelido> "<motivo>" (o motivo vai entre aspas)');
-  if (!ID.test(String(F))) throw new Error(`fez del: id de item inválido "${F}"`);
-  const porApelido = !LOCAL_ID.test(String(quem)) && /^[PDEV]\d+$/.test(String(quem));
-  if (!porApelido && !LOCAL_ID.test(String(quem))) throw new Error(`fez del: "${quem}" não é local_<uuid> nem apelido`);
-  if (!textoNaoVazio(motivo)) throw new Error('fez del: falta o "<motivo>" (vira o `agora` do item)');
-  return comTrava(() => {
-    const atual = ler('fila', F);
-    if (!atual) throw new Error(`fila/${F} não existe`);
-    const d0 = atual.data ?? {};
-    const final = ETAPAS.includes(d0.etapa) ? ETAPAS_FINAIS.has(d0.etapa) : ['feito', 'descartado'].includes(d0.estado);
-    if (final) throw new Error(`fez del: ${F} está em etapa final (${d0.etapa ?? d0.estado}); não há o que tirar`);
-    const fez = Array.isArray(d0.fez) ? d0.fez : [];
-    const achados = fez.filter((f) => (porApelido ? f.apelido === quem : f.localId === quem));
-    if (achados.length === 0) throw new Error(`fez del: ${quem} não está em fez de ${F}`);
-    const locais = new Set(achados.map((f) => f.localId));
-    if (porApelido && locais.size > 1) throw new Error(`fez del: apelido ambíguo, use o local_ (${[...locais].join(', ')})`);
-    const data = { fez: fez.filter((f) => !locais.has(f.localId)), agora: `fez de ${achados[0].apelido} tirado: ${motivo}` };
-    return efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
-  });
-}
-
-// `soltar <F> "<motivo>"`: o único caminho para devolver um item à fila sem dono (hook de Stop e ritual da orquestradora).
-// Grava pela via do `com` (zera o `com`) dentro da trava; não registra `fez`.
+// `soltar <F> "<motivo>"`: o único caminho para devolver um item à fila sem dono (a batida o usa com o item cuja dona sumiu).
+// Grava pela via do `com` (zera o `com`) dentro da trava.
 function comandoSoltar(args) {
   const iso = args.indexOf('--so-dono');
   const soDono = iso >= 0 ? (args.splice(iso, 1), true) : false;
@@ -850,7 +793,7 @@ function soltarSemTrava(F, motivo, soDono) {
   return efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
 }
 
-// ---- batida, pegar, livres (ADR 0007) ----
+// ---- batida ----
 const flag = (args, nome, comValor = true) => {
   const i = args.indexOf(nome);
   if (i < 0) return comValor ? null : false;
@@ -879,113 +822,7 @@ function projetoDeUmaLinha() {
 }
 const itensVivos = () => new Map([...itensDaFila()].filter(([, d]) => !ETAPAS_FINAIS.has(d?.etapa)));
 
-function comandoLivres(args) {
-  const arquivo = flag(args, '--sessoes');
-  const projeto = (flag(args, '--projeto') ?? projetoDoCwd().projeto ?? '').toLowerCase();
-  const [papel, ...sobra] = args;
-  if (!['P', 'D', 'E', 'V'].includes(papel) || sobra.length) throw new Error('uso: painel.mjs livres <P|D|E|V> [--sessoes <arquivo>] [--projeto <nome>]');
-  if (!projeto) throw new Error('livres: sem projeto (fora de git); passe --projeto');
-  const ocupados = ocupadosDaFila(itensDaFila());
-  if (arquivo) return livresDe(lerSessoes(arquivo), papel, projeto, projetoDeUmaLinha(), ocupados);
-  const repo = regras.gitCommonDir(process.cwd());
-  const vistos = new Set();
-  return regras.membrosLivres(repo)
-    .filter((m) => m.papel === papel && m.localId && !ocupados.has(m.localId) && !vistos.has(m.localId) && vistos.add(m.localId))
-    .map((m) => ({ localId: m.localId, apelido: m.apelido }));
-}
-
-// `pegar`: o membro livre que recebeu o aviso. Tudo dentro da trava: dois livres no mesmo item, um só pega.
-function comandoPegar(args) {
-  const [F, ...resto] = args;
-  const apelido = resto.pop();
-  const [dado, ...sobra] = resto;
-  if (!ID.test(String(F)) || sobra.length) throw new Error('uso: painel.mjs pegar <F> [<local_…>] <apelido>');
-  if (!/^[PDEV]\d+$/.test(String(apelido))) throw new Error(`pegar: apelido "${apelido}" não é P<n>, D<n>, E<n> ou V<n>`);
-  const propria = idDestaSessao();
-  const localId = dado ?? propria;
-  if (!localId) throw new Error('pegar: não sei o id desta sessão (sem $CLAUDE_CODE_HOST_SESSION_ID); passe o <local_…>: painel.mjs pegar <F> <local_…> <apelido>');
-  if (!LOCAL_ID.test(String(localId))) throw new Error(`pegar: "${localId}" não é local_<uuid>`);
-  if (propria && localId !== propria) throw new Error(`pegar: ${localId} não é esta sessão (${propria}); pegar é sempre para a própria sessão: painel.mjs pegar ${F} ${apelido}`);
-  conferirMembro(localId, apelido, 'pegar');
-  return comTrava(() => pegarDentro(F, localId, apelido));
-}
-// O corpo do `pegar`, já dentro da trava (o `seguinte` o reusa).
-function pegarDentro(F, localId, apelido) {
-  const recusa = (motivo) => ({ recusado: true, item: F, motivo });
-  {
-    const atual = ler('fila', F);
-    if (!atual) return recusa(`fila/${F} não existe`);
-    const d = atual.data ?? {};
-    if (ETAPAS_FINAIS.has(d.etapa)) return recusa(`o item está em etapa final (${d.etapa})`);
-    if (d.etapa === 'merge') return recusa('o item está em merge: é da orquestradora');
-    const r = esperandoPapel(d, Date.now());
-    if (!r) return recusa('o item não está esperando ninguém (já tem quem trabalhe nele, está em espera ou travado)');
-    if (r.papel !== apelido[0]) return recusa(`o item espera o papel ${r.papel}, não o ${apelido[0]}`);
-    if (r.entregue) return recusa(`a parte do papel ${r.papel} já foi entregue; o item espera a dona avançar a etapa`);
-    const com = Array.isArray(d.com) ? d.com : [];
-    const data = { com: [...com.filter((c) => c.localId !== localId), { localId, apelido, oQue: d.titulo }], agora: `${apelido} começou`, passaram: comPassagem(d, localId, apelido) };
-    if ((d.etapa === 'planejamento' || d.etapa === 'design') && !textoNaoVazio(d.donoLocalId)) { data.donoLocalId = localId; data.donoApelido = apelido; }
-    efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
-    // F169: quem pega um item novo deixou os outros; sai do `com` deles sem `fez` (quem entregou já rodou `com del --fez`).
-    for (const [outro, o] of itensVivos()) {
-      if (outro === F || !Array.isArray(o?.com) || !o.com.some((c) => c.localId === localId)) continue;
-      efetivar(planejar({ op: 'update', colecao: 'fila', id: outro, data: { com: o.com.filter((c) => c.localId !== localId) }, [VIA_COM]: true }, undefined, new Map()));
-    }
-    const handoff = join(HANDOFFS, `${F}.md`);
-    return { pegou: true, item: F, titulo: d.titulo, etapa: d.etapa, handoff: existsSync(handoff) ? handoff : null };
-  }
-}
-
-// `seguinte` (ADR 0009): ao terminar, o membro olha o mesmo assunto antes de se declarar livre. Acha o item vivo mais antigo do mesmo
-// projeto e tema do último item por onde esta sessão passou que espera o papel dela, e faz o `pegar`. O teto de contexto manda mais:
-// acima do aviso da régua do papel (ou sem medida) recusa, e a sessão se limpa.
-function comandoSeguinte(args) {
-  const tokens = flag(args, '--tokens');
-  const dado = LOCAL_ID.test(String(args[0])) ? args.shift() : null;
-  const [apelido, ...sobra] = args;
-  if (!/^[PDEV]\d+$/.test(String(apelido)) || sobra.length) throw new Error('uso: painel.mjs seguinte [<local_…>] <apelido> [--tokens <n>]');
-  const localId = dado ?? idDestaSessao();
-  if (!localId) throw new Error('seguinte: não sei o id desta sessão (sem $CLAUDE_CODE_HOST_SESSION_ID); passe o <local_…>');
-  const nao = (motivo) => ({ pegou: false, motivo });
-  const aviso = apelido[0] === 'E' ? reguas.EXEC : reguas.ALTO;
-  let medido = tokens === null ? null : Number(tokens);
-  if (tokens === null) {
-    try { const f = regras.transcriptDoLocal(localId); medido = f ? regras.contextoDoTranscript(f)?.tokens ?? null : null; } catch { medido = null; }
-  }
-  if (!Number.isFinite(medido)) return nao('contexto sem medida (transcript não achado ou sem usage): livre e limpe-se; o item vai a outro');
-  if (medido >= aviso) return nao(`contexto alto (${Math.round(medido / 1000)} mil, aviso do papel ${apelido[0]}: ${Math.round(aviso / 1000)} mil): livre e limpe-se; o item vai a outro`);
-  return comTrava(() => {
-    const todos = itensDaFila();
-    let ultimo = null;
-    for (const d of todos.values()) {
-      for (const p of Array.isArray(d?.passaram) ? d.passaram : []) {
-        if (p?.localId === localId && (!ultimo || Date.parse(p.em) > Date.parse(ultimo.p.em))) ultimo = { d, p };
-      }
-    }
-    if (!ultimo) return nao('esta sessão não passou por nenhum item registrado: não há assunto para seguir');
-    const { projeto, tema } = ultimo.d;
-    const agora = Date.now();
-    const candidatos = [];
-    for (const [F, d] of todos) {
-      if (ETAPAS_FINAIS.has(d?.etapa) || d?.projeto !== projeto || d?.tema !== tema) continue;
-      // já passou por ele NESTA etapa: a V sai sem `--fez` e o item segue esperando V. Passagem de rodada anterior (conserto, revalidação) não pula.
-      const entrada = entradaNaEtapa(d);
-      if (entrada === null || (Array.isArray(d.passaram) ? d.passaram : []).some((p) => p?.localId === localId && Date.parse(p.em) >= entrada)) continue;
-      const r = esperandoPapel(d, agora);
-      if (!r || r.entregue || r.papel !== apelido[0]) continue;
-      candidatos.push({ F, desde: Date.parse(r.desde) });
-    }
-    candidatos.sort((a, b) => a.desde - b.desde);
-    if (!candidatos.length) return nao(`nenhum item do tema "${tema}" espera o papel ${apelido[0]}`);
-    for (const { F } of candidatos) {
-      const r = pegarDentro(F, localId, apelido);
-      if (r.pegou) return r;
-    }
-    return nao(`nenhum item do tema "${tema}" pôde ser pego`);
-  });
-}
-
-// `mergear <PR> <sha> [--seco]` (F150). O GitHub fica FORA da trava (é lento); a escrita no painel, dentro dela.
+// `mergear <PR> <sha> [--seco]`. O GitHub fica FORA da trava (é lento); a escrita no painel, dentro dela.
 function comandoMergear(args) {
   const seco = flag(args, '--seco', false);
   const [prTexto, sha, ...sobra] = args;
@@ -1264,13 +1101,11 @@ function comandoBatida(args) {
     const itens = itensVivos();
     const julgado = julgar({
       agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(),
-      estado: arquivoJson(join(pasta, 'estado.json'), {}), ausente: Boolean(crewai.modoAusente()),
-      cheia: () => regras.maquinaCheia().cheia, esperandoPapel, todos: itensDaFila(),
-      afinidadeMin: Number.isFinite(Number(process.env.BATIDA_AFINIDADE_MIN)) && Number(process.env.BATIDA_AFINIDADE_MIN) > 0 ? Number(process.env.BATIDA_AFINIDADE_MIN) : AFINIDADE_MIN,
+      estado: arquivoJson(join(pasta, 'estado.json'), {}),
+      semDona,
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
       caminhoDoRelatorio: (nome) => join(pasta, `${nome}.json`),
       prazoMin: prazoEmMin([]), soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
-      dona: modelo.modeloDaDona(),
     });
     const marcadoresApagados = marcadoresMortos(new Map(linhas.map((r) => [r.sessionId, r])), agoraMs);
     const cartoesApagados = cartoesResolvidos({ cartoes: cartoesDoPainel(), linhas, projetoDe: projetoDeUmaLinha(), agoraMs });
@@ -1281,15 +1116,12 @@ function comandoBatida(args) {
       try { soltarSemTrava(F, motivo, false); soltos.push(F); } catch (e) { process.stderr.write(`batida: não soltei ${F}: ${e?.message || e}\n`); }
     }
     saida.soltos = soltos;
-    for (const { F, texto } of julgado.espera) {
-      try { efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { espera: { motivo: 'gate', texto } } }, undefined, new Map())); } catch (e) { process.stderr.write(`batida: não gravei a espera de ${F}: ${e?.message || e}\n`); }
-    }
     gravarJson(join(pasta, 'estado.json'), julgado.estado);
     const em = new Date(agoraMs).toISOString();
     for (const [nome, p] of Object.entries(julgado.projetos)) {
       const { mudou, ...conteudo } = p;
       // o relatório só passa a ser "o último" quando a orquestradora existe para recebê-lo: sem ela, a próxima batida o oferece de novo
-      if (mudou && !conteudo.orquestradora) { const antes = arquivoJson(join(pasta, `${nome}.json`), null); gravarJson(join(pasta, `${nome}.json`), { ...conteudo, merge: antes?.merge ?? [], vagas: antes?.vagas ?? [], excedentes: antes?.excedentes ?? [], titulosVelhos: antes?.titulosVelhos ?? [], em }); continue; }
+      if (mudou && !conteudo.orquestradora) { const antes = arquivoJson(join(pasta, `${nome}.json`), null); gravarJson(join(pasta, `${nome}.json`), { ...conteudo, merge: antes?.merge ?? [], vagas: antes?.vagas ?? [], em }); continue; }
       gravarJson(join(pasta, `${nome}.json`), { ...conteudo, em });
     }
     // F183: a resposta gravada pelo pane fica na pasta quente (o mod não apaga arquivo); a batida a leva para o arquivo
@@ -1485,7 +1317,7 @@ function main(argv) {
         if (flag) throw new Error(`list fila: flag desconhecida "${flag}"`);
         const filtro = resto[1];
         // os `estado` do contrato antigo ainda filtram (documento sem `etapa`); fora desta lista, o filtro é erro de digitação
-        const validos = ['em-andamento', 'vencidos', 'esperando', ...ETAPAS, 'aberto', 'bloqueado', 'concluido', 'concluida', 'em-planejamento', 'em-execucao', 'em-validacao'];
+        const validos = ['em-andamento', 'vencidos', 'sem-dona', ...ETAPAS, 'aberto', 'bloqueado', 'concluido', 'concluida', 'em-planejamento', 'em-execucao', 'em-validacao'];
         if (filtro !== undefined && !validos.includes(filtro)) {
           throw new Error(`list fila: filtro desconhecido "${filtro}" (válidos: ${[...new Set(validos)].join(' · ')})`);
         }
@@ -1504,11 +1336,11 @@ function main(argv) {
       saida = existsSync(dir)
         ? [...readdirSync(dir).filter((n) => n.endsWith('.json')).map((n) => join(dir, n)), ...doArquivo]
             .map((f) => JSON.parse(readFileSync(f, 'utf8')))
-            .filter((d) => (prazoMin !== null ? ehVencido(d.data, prazoMin * 60_000, Date.now()) : !b || (a === 'fila' && b === 'esperando') || filtraPorEstado(a, d.data, b)))
+            .filter((d) => (prazoMin !== null ? ehVencido(d.data, prazoMin * 60_000, Date.now()) : !b || (a === 'fila' && b === 'sem-dona') || filtraPorEstado(a, d.data, b)))
             .filter((d) => !projetoDaLista || (String(d.data?.projeto ?? '').toLowerCase() || arq.SEM_PROJETO) === projetoDaLista)
             .filter((d) => !sessao || d.data?.sessaoId === sessao)
-            .map((d) => (a === 'fila' ? { ...d, esperando: esperandoPapel(d.data, Date.now()) } : d))
-            .filter((d) => !(a === 'fila' && b === 'esperando') || d.esperando)
+            .map((d) => (a === 'fila' ? { ...d, semDona: semDona(d.data, Date.now()) } : d))
+            .filter((d) => !(a === 'fila' && b === 'sem-dona') || d.semDona)
         : [];
       break;
     }
@@ -1523,23 +1355,11 @@ function main(argv) {
     case 'perguntas':
       saida = comandoPerguntas(resto);
       break;
-    case 'seguinte':
-      saida = comandoSeguinte(resto);
-      break;
     case 'com':
       saida = comandoCom(resto);
       break;
-    case 'fez':
-      saida = comandoFez(resto);
-      break;
     case 'soltar':
       saida = comandoSoltar(resto);
-      break;
-    case 'livres':
-      saida = comandoLivres(resto);
-      break;
-    case 'pegar':
-      saida = comandoPegar(resto);
       break;
     case 'batida':
       saida = comandoBatida(resto);
@@ -1566,10 +1386,10 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|com|soltar|livres|pegar|seguinte|batida|mergear|pode-reiniciar|fila-de-merge|handoffs … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|perguntas|com|soltar|batida|mergear|pode-reiniciar|fila-de-merge|handoffs … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
-  return (cmd === 'pegar' || cmd === 'mergear') && saida.recusado ? 1 : 0;
+  return cmd === 'mergear' && saida.recusado ? 1 : 0;
 }
 
 try {

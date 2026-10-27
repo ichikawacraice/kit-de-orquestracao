@@ -7,12 +7,12 @@
     {
       "name": "orquestracao",
       "source": "./plugins/orquestracao",
-      "description": "Pool de sessões: hooks e travas, skills, agents e scripts do painel."
+      "description": "Uma sessão dona por item e a orquestradora: hooks e travas, skills, agents e scripts do painel."
     },
     {
       "name": "painel-sessoes",
       "source": "./plugins/painel-sessoes",
-      "description": "Mod /painel: as sessões do pool, as perguntas com Q-ID e a fila."
+      "description": "Mod /painel: a fila de itens, as perguntas com Q-ID e as sessões."
     },
     {
       "name": "processos",

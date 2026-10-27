@@ -14,22 +14,23 @@ const limite = (nome) => { const m = hook.match(new RegExp(`limite\\('${nome}', 
 const mil = (n) => `${n / 1000} mil`;
 
 test('F54.d1 as constantes do hook são lidas e não vazias', () => {
-  const v = { ESPERA: limite('ESPERA'), ALTO: limite('ALTO'), TETO: limite('TETO'), EXEC: limite('EXEC') };
-  assert.deepEqual(v, { ESPERA: 250_000, ALTO: 350_000, TETO: 500_000, EXEC: 300_000 });
+  const v = { ESPERA: limite('ESPERA'), ALTO: limite('ALTO'), TETO: limite('TETO'), PEDIR: limite('PEDIR') };
+  assert.deepEqual(v, { ESPERA: 250_000, ALTO: 350_000, TETO: 500_000, PEDIR: 150_000 });
 });
-test('F54.d2 papeis-e-modelos cita os quatro limites do hook', () => {
+test('F54.d2 papeis-e-modelos cita os limites do hook', () => {
   const skill = ler('skills', 'papeis-e-modelos', 'SKILL.md');
   assert.ok(skill.length > 0, 'skill vazia');
-  for (const nome of ['ESPERA', 'ALTO', 'TETO', 'EXEC']) assert.ok(skill.includes(`**≥ ${mil(limite(nome))}`), `skill sem "≥ ${mil(limite(nome))}" (${nome})`);
+  for (const nome of ['ESPERA', 'ALTO', 'TETO']) assert.ok(skill.includes(`**≥ ${mil(limite(nome))}`), `skill sem "≥ ${mil(limite(nome))}" (${nome})`);
+  assert.ok(skill.includes(`a partir de ${mil(limite('PEDIR'))}`), 'skill sem o destaque do botão de limpar');
   assert.ok(skill.includes('**600 mil**'), 'skill sem o global de 600 mil');
 });
-test('F54.d3 o frontmatter dos agentes tem 400000 / 400000 / 200000 e a skill diz o mesmo', () => {
-  const esperado = { executor: 400000, validador: 400000, explorador: 200000 };
+test('F54.d3 o frontmatter dos agentes tem 400000 / 200000 e a skill diz o mesmo', () => {
+  const esperado = { validador: 400000, explorador: 200000 };
   for (const [ag, n] of Object.entries(esperado)) {
     const t = ler('agents', `${ag}.md`);
     assert.ok(t.length > 0, `${ag}.md vazio`);
     assert.match(t, new RegExp(`^autoCompactWindow: ${n}$`, 'm'), `${ag}.md sem autoCompactWindow: ${n}`);
   }
   const skill = ler('skills', 'papeis-e-modelos', 'SKILL.md');
-  assert.ok(skill.includes('executor e validador **400 mil**, explorador **200 mil**'));
+  assert.ok(skill.includes('validador **400 mil**, explorador **200 mil**'));
 });

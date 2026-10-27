@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ADR 0005 (26/10): doc × código — o protocolo, as papéis e o código do teto de núcleos têm de concordar (pasta padrão, nomes de
+// ADR 0005 (26/10): doc × código — o protocolo, o manual da dona e o código do teto de núcleos têm de concordar (pasta padrão, nomes de
 // variável, âncora).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -45,19 +45,14 @@ test('as frações e o nome da vez do gate: o protocolo, o README, o gate e o pl
   assert.ok(comum.includes(`'${NOME_DA_VEZ_DO_GATE}'`), 'o plugin não lê o arquivo da vez do gate');
   assert.ok(teto.includes('2 / 3') && teto.includes('0.7'), 'o código do gate não tem 2/3 e 0,7');
 });
-test('executora e validadora citam a âncora, e ela existe no protocolo', () => {
-  for (const papel of ['executora', 'validadora']) {
-    const t = ler('plugins', 'orquestracao', 'pool', 'papeis', `${papel}.md`);
-    assert.ok(t.length > 0, `${papel}.md vazio`);
-    assert.ok(t.includes('../protocolo.md#teto-de-nucleos'), `${papel}.md não cita protocolo.md#teto-de-nucleos`);
-    assert.ok(t.includes('com-fichas'), `${papel}.md não cita o com-fichas`);
-  }
+test('o manual da dona cita a âncora e o com-fichas, e ela existe no protocolo', () => {
+  const t = ler('plugins', 'orquestracao', 'pool', 'dona.md');
+  assert.ok(t.length > 0, 'dona.md vazio');
+  assert.ok(t.includes('protocolo.md#teto-de-nucleos'), 'dona.md não cita protocolo.md#teto-de-nucleos');
+  assert.ok(t.includes('com-fichas'), 'dona.md não cita o com-fichas');
   assert.ok(protocolo.includes('(#teto-de-nucleos)'), 'a linha das regras do repositório não aponta a âncora');
 });
-test('a skill da orquestradora cita a âncora e a trava T8 existe no hook', () => {
+test('a skill da orquestradora cita a âncora', () => {
   const skill = ler('plugins', 'orquestracao', 'skills', 'orquestradora', 'SKILL.md');
   assert.ok(skill.includes('teto-de-nucleos'), 'a skill não cita a âncora');
-  const hook = ler('plugins', 'orquestracao', 'hooks', 'papel-do-pool.mjs');
-  assert.ok(hook.includes("nega('T8'") && hook.includes('//   T8'), 'o hook não tem a T8 e o comentário dela');
-  assert.ok(protocolo.includes('(T8)'), 'o protocolo não cita a T8');
 });

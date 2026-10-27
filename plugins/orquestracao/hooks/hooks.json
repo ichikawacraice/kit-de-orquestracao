@@ -23,16 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/executor-criterio.mjs\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/executor-anuncia.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/criterio-da-dona.mjs\"",
             "timeout": 10
           }
         ]
@@ -42,15 +33,6 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/fila-do-item.mjs\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/livre-se-limpa.mjs\"",
             "timeout": 10
           }
         ]
@@ -90,21 +72,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/papel-do-pool.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/travas-da-sessao.mjs\"",
             "timeout": 10
           }
         ],
-        "matcher": "Agent|Task|Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__ccd_session_mgmt__archive_session|mcp__ccd_session_mgmt__delete_session|mcp__ccd_session__start_session|mcp__ccd_session_mgmt__clear_session|SendMessage|mcp__ccd_session_mgmt__send_message"
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/skill-do-papel.mjs\"",
-            "timeout": 10
-          }
-        ],
-        "matcher": "Skill"
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__ccd_session__start_session|mcp__ccd_session_mgmt__clear_session"
       },
       {
         "hooks": [
@@ -125,17 +97,6 @@
           }
         ],
         "matcher": "mcp__ccd_session__start_session"
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/executor-criterio.mjs\"",
-            "timeout": 10
-          }
-        ]
       }
     ],
     "PostToolUse": [

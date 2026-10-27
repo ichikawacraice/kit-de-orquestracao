@@ -4,7 +4,7 @@
 // dar um comando e sair novamente"). Frase solta ("vou dormir") e prompt comum NÃO mexem; não há prazo de validade.
 // `/ausente` sem argumento só mostra o estado (a skill responde). Mensagem de outra sessão não liga nem desliga.
 // O botão do painel é a segunda via humana: liga gravando `por:"painel"` e desliga gravando `{ligado:false}` (o pane não apaga arquivo).
-// Bandeira: <BASE>/operador-ausente.json = { desde, frase, sessionId, por }. Quem lê: `modoAusente()` (T3a, T7, contexto-do-papel).
+// Bandeira: <BASE>/operador-ausente.json = { desde, frase, sessionId, por }. Quem lê: `modoAusente()` (T3 e T7 de travas-da-sessao, contexto-do-papel).
 // F59: o off GUARDA o período: `{ligado:false, desde, desligadoEm, por, sessionId}` (o `desde` do on), para a orquestradora
 // trazer o resumo (skills/orquestradora/scripts/ausencia.mjs). Sem bandeira, ilegível ou já desligada: não inventa período.
 import { existsSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';

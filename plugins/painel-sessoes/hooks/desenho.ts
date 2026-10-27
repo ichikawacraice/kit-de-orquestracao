@@ -374,9 +374,9 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   const ultimoPr = item.prs.length > 0 ? `#${item.prs[item.prs.length - 1]}${item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''}` : ''
   const montar = (quem: Trecho[]): Trecho[] => [
     item.situacao === 'fila'
-      ? { t: item.esperando?.entregue ? textoEsperando(item.esperando, agora) : `espera ${rotulo}${item.esperando ? textoEsperando(item.esperando, agora).replace(/^esperando \S+/, '') : ''}`, classe: 's', peso: true }
+      ? { t: `espera ${rotulo}${item.esperando ? ` · ${minutosDesde(item.esperando.desde, agora)} min` : ''}`, classe: 's', peso: true }
       : { t: rotulo, classe: cor, peso: true },
-    ...(item.esperando && item.situacao !== 'fila' ? [{ t: textoEsperando(item.esperando, agora, item.dona === true), classe: 's', peso: true }] : []),
+    ...(item.esperando && item.situacao !== 'fila' ? [{ t: textoEsperando(item.esperando, agora), classe: 's', peso: true }] : []),
     ...(opcoes.noTravados ? [{ t: tituloDoTema(item), classe: 's' }] : []),
     ...(item.perguntas.length > 0 ? [{ t: `aguarda você · ${item.perguntas[0]}`, classe: AVISO, peso: true }] : []),
     ...(seloDaEspera(item) ? [{ t: seloDaEspera(item) as string, classe: item.espera?.motivo === 'operador' ? AVISO : 's', peso: true }] : []),
@@ -458,12 +458,13 @@ export function fileteSvg(W: number): { source: string; height: number } {
   return { height: 1, source: svg(W, 1, '<line class="ln" x1="0" y1="0.5" x2="' + W + '" y2="0.5"/>') }
 }
 
-/** O papel pela 1ª letra do apelido (P1, E3, V4, D1, O…): qualquer outra letra não diz papel. */
-export function papelDe(apelido: string): 'planejadora' | 'executora' | 'validadora' | 'designer' | 'orquestradora' | 'dona' | undefined {
-  if (apelido.trim().toLowerCase() === 'dona') return 'dona'
-  const letra = apelido.trim().charAt(0).toUpperCase()
+/** O papel pelo apelido: `dona` ou o `F<n>` da sessão dona, e `🎛`/`orquestradora`; qualquer outro não diz papel. */
+export function papelDe(apelido: string): 'orquestradora' | 'dona' | undefined {
+  const a = apelido.trim().toLowerCase()
+  if (a === 'dona' || /^f\d+$/.test(a)) return 'dona'
+  if (a === '🎛' || a === 'orquestradora') return 'orquestradora'
 
-  return ({ P: 'planejadora', E: 'executora', V: 'validadora', D: 'designer', O: 'orquestradora' } as const)[letra as 'P']
+  return undefined
 }
 
 // ---- F34: o desenho em cartões (a moldura é o `Box` da composição; aqui só o conteúdo) ----
@@ -536,14 +537,10 @@ const chipDoPr = (item: LinhaItem): Chip[] => {
 /** O `Chip` tem a classe do texto em `texto`; a pílula da etapa leva o fundo `tile`, onde as quatro cores de etapa passam de 4,5:1. */
 const chipDaEtapa = (item: LinhaItem): Chip => ({ t: ROTULO_ETAPA[item.etapa] ?? item.etapa, texto: COR_ETAPA[item.etapa] ?? 's', fundo: 'tile' })
 
-/** `esperando E · 35 min`; quando o papel já entregou, `entregue · avance a etapa · 15 min` (F58). Os minutos saem de `desde` e da hora do desenho. */
-export const textoEsperando = (e: NonNullable<LinhaItem['esperando']>, agora: number, dona = false): string => {
-  const min = Math.max(0, Math.floor((agora - Date.parse(e.desde)) / 60000))
-  // ADR 0011: no item da dona o que falta é a sessão dona, não o papel da etapa.
-  if (dona) return `sem dona · ${min} min`
+const minutosDesde = (desde: string, agora: number): number => Math.max(0, Math.floor((agora - Date.parse(desde)) / 60000))
 
-  return e.entregue ? `entregue · avance a etapa · ${min} min` : `esperando ${e.papel} · ${min} min`
-}
+/** `sem dona · 35 min`: os minutos saem de `desde` e da hora do desenho. */
+export const textoEsperando = (e: NonNullable<LinhaItem['esperando']>, agora: number): string => `sem dona · ${minutosDesde(e.desde, agora)} min`
 
 const upper = (s: string): string => s.toLocaleUpperCase('pt-BR')
 
@@ -610,7 +607,7 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   }
 
   const chips: Chip[] = [chipDaEtapa(item)]
-  if (item.esperando) chips.push({ t: textoEsperando(item.esperando, agora, item.dona === true), texto: 's', traco: 'ms' })
+  if (item.esperando) chips.push({ t: textoEsperando(item.esperando, agora), texto: 's', traco: 'ms' })
   if (item.perguntas.length > 0) chips.push({ t: `aguarda você · ${item.perguntas[0]}`, texto: 'pt', fundo: AVISO })
   const selo = seloDaEspera(item)
   if (selo && item.espera?.motivo === 'gate') chips.push({ t: selo, texto: 's', traco: 'ms' })
@@ -727,8 +724,8 @@ export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { cit
     }
     alt.push(item.resumo)
   }
-  const minutosNaFila = item.esperando ? ` · ${Math.max(0, Math.floor((agora - Date.parse(item.esperando.desde)) / 60000))} min` : ''
-  const chips: Chip[] = [{ t: item.esperando?.entregue ? textoEsperando(item.esperando, agora) : `espera ${ROTULO_ETAPA[item.etapa] ?? item.etapa}${minutosNaFila}`, texto: 's', traco: 'ms', tracejado: true }, ...chipDoPr(item)]
+  const minutosNaFila = item.esperando ? ` · ${minutosDesde(item.esperando.desde, agora)} min` : ''
+  const chips: Chip[] = [{ t: `espera ${ROTULO_ETAPA[item.etapa] ?? item.etapa}${minutosNaFila}`, texto: 's', traco: 'ms', tracejado: true }, ...chipDoPr(item)]
   const linhaDeChips = chipsSvg(X_FILA, y + 8, tw, chips)
   partes.push(...linhaDeChips.partes)
   y += 8 + linhaDeChips.altura
@@ -749,16 +746,15 @@ export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { cit
 /** Um cartão de sessão nova como o pane o desenha: o apelido, o que a sessão vai fazer (os itens, com o título quando se sabe) e quando foi proposto. */
 export type LinhaDeCartao = { apelido: string; itens: Array<{ id: string; titulo?: string }>; propostoEm: string }
 
-/** `Manter uma executora livre` quando o cartão não tem item (o piso de E); senão o título do primeiro item, ou o número dele. */
+/** O título do primeiro item do cartão, ou o número dele. */
 export function paraQueDoCartao(c: LinhaDeCartao): string {
   const primeiro = c.itens[0]
-  if (primeiro) return primeiro.titulo ?? primeiro.id
 
-  return `Manter uma ${papelDe(c.apelido) ?? 'sessão'} livre`
+  return primeiro ? (primeiro.titulo ?? primeiro.id) : 'sessão dona'
 }
 
 /**
- * A linha de "Sessões para abrir": anel tracejado âmbar (sessão que ainda não existe e espera você), `E21 · EXECUTORA` e há quanto
+ * A linha de "Sessões para abrir": anel tracejado âmbar (sessão que ainda não existe e espera você), `F140 · DONA` e há quanto
  * tempo, para quê em até duas linhas e `+ N itens` quando o cartão tem mais de um. Um lembrete de clique, mais leve que o cartão de item.
  */
 export function sessaoParaAbrirSvg(W: number, c: LinhaDeCartao, agora: number, opcoes: { filete?: boolean } = {}): { source: string; height: number; alt: string } {
