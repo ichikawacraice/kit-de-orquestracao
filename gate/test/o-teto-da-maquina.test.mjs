@@ -60,7 +60,7 @@ function pidMorto() {
 }
 
 const EU = { pid: process.pid, token: "eu", worktree: "/wt/eu", projeto: "kit", desde: "2026-10-26T10:00:00.000Z" };
-const OUTRO = { pid: process.pid, token: "outro", worktree: "/wt/outro", projeto: "izanagi", desde: "2026-10-26T10:00:00.000Z" };
+const OUTRO = { pid: process.pid, token: "outro", worktree: "/wt/outro", projeto: "alfa", desde: "2026-10-26T10:00:00.000Z" };
 
 const fichas = () => readdirSync(pasta).sort();
 const ficha = (k, conteudo) => writeFileSync(join(pasta, String(k)), typeof conteudo === "string" ? conteudo : JSON.stringify(conteudo));
@@ -79,10 +79,8 @@ describe("onde moram as fichas", () => {
 });
 
 describe("o valor do teto", () => {
-  it("`KIT_NUCLEOS_DE_TESTE` vence; depois o legado do Izanagi; depois o teto.json; depois 2/3 dos núcleos", () => {
+  it("`KIT_NUCLEOS_DE_TESTE` vence; depois o teto.json; depois 2/3 dos núcleos", () => {
     assert.equal(tetoDaMaquina({ KIT_NUCLEOS_DE_TESTE: "5" }, 15, pasta), 5);
-    assert.equal(tetoDaMaquina({ IZANAGI_NUCLEOS_DE_TESTE: "4" }, 15, pasta), 4);
-    assert.equal(tetoDaMaquina({ KIT_NUCLEOS_DE_TESTE: "5", IZANAGI_NUCLEOS_DE_TESTE: "4" }, 15, pasta), 5);
     writeFileSync(join(pasta, "teto.json"), JSON.stringify({ nucleos: 3 }));
     assert.equal(tetoDaMaquina({}, 15, pasta), 3);
     assert.equal(tetoDaMaquina({ KIT_NUCLEOS_DE_TESTE: "6" }, 15, pasta), 6, "a env vence o arquivo");
@@ -165,10 +163,10 @@ describe("tomar e soltar fichas", () => {
     assert.deepEqual(velha.levou, [1]);
   });
 
-  it("ficha no formato do Izanagi (sem token) com PID vivo é respeitada; a mesma com PID morto é retomada", () => {
+  it("ficha no formato do Alfa (sem token) com PID vivo é respeitada; a mesma com PID morto é retomada", () => {
     const formatos = [
-      { pid: process.pid, worktree: "/wt/izanagi", projeto: "izanagi", desde: "2026-10-26T10:00:00.000Z" },
-      { pid: process.pid, cwd: "/wt/izanagi", desde: "2026-10-26T10:00:00.000Z" },
+      { pid: process.pid, worktree: "/wt/alfa", projeto: "alfa", desde: "2026-10-26T10:00:00.000Z" },
+      { pid: process.pid, cwd: "/wt/alfa", desde: "2026-10-26T10:00:00.000Z" },
     ];
     for (const f of formatos) {
       const morto = { ...f, pid: pidMorto() };

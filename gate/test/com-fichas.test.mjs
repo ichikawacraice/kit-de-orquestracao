@@ -28,7 +28,7 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-/** O env do filho: sem o que muda o teto ou o caminho (`KIT_FICHAS_TOMADAS`, `KIT_NUCLEOS_DE_TESTE`, `IZANAGI_NUCLEOS_DE_TESTE`, `CI`). */
+/** O env do filho: sem o que muda o teto ou o caminho (`KIT_FICHAS_TOMADAS`, `KIT_NUCLEOS_DE_TESTE`, `CI`). */
 const envDe = (extra = {}) => ({ PATH: process.env.PATH, HOME: dir, KIT_NUCLEOS_DIR: pasta, ...extra });
 
 const rodar = (args, extra = {}) =>

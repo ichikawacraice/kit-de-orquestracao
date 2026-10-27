@@ -19,7 +19,7 @@ import { pastaDoTeto, quemSouEuNasFichas, soltarFichas, tetoDaMaquina, tomarFich
  *
  * **No CI nada muda** (`process.env.CI`): devolve `{}` e o vitest fica no default.
  *
- * `KIT_TESTE_WORKERS` (ou o legado `IZANAGI_TESTE_WORKERS`) sobrescreve o teto
+ * `KIT_TESTE_WORKERS` sobrescreve o teto
  * (inteiro ≥ 1). Valor que não é inteiro positivo é recusado alto: um `NaN`
  * chegaria ao tinypool como `Invalid array length`, o mesmo "no tests".
  *

@@ -425,7 +425,7 @@ caso('D3 gancho de pausa com valor não numérico é ignorado (termina dentro de
   ok(Date.now() - t1 < 5000, `sh demorou ${Date.now() - t1} ms`);
 });
 
-// --- Fase 1 do kit (24/10): projeto por documento e PAINEL_DIR com fallback IZANAGI_PAINEL_DIR ---
+// --- Fase 1 do kit (24/10): projeto por documento e PAINEL_DIR ---
 function repoGit(nome) {
   const d = join(base, nome); mkdirSync(d);
   for (const a of [['init', '-q'], ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'x']]) {
@@ -449,8 +449,8 @@ caso('projeto automático: set fila sem `projeto`, rodado de dentro do repo alfa
 });
 caso('projeto explícito não é sobrescrito; fora de git não inventa projeto', () => {
   const A = repoGit('alfa'); const sem = join(base, 'semgit'); mkdirSync(sem);
-  painelEm(A, 'set', 'fila', 'F1', '{"titulo":"x","etapa":"planejamento","tema":"editor","estado":"aberto","projeto":"izanagi"}');
-  igual(json(painelEm(A, 'get', 'fila', 'F1')).data.projeto, 'izanagi', 'explícito');
+  painelEm(A, 'set', 'fila', 'F1', '{"titulo":"x","etapa":"planejamento","tema":"editor","estado":"aberto","projeto":"alfa"}');
+  igual(json(painelEm(A, 'get', 'fila', 'F1')).data.projeto, 'alfa', 'explícito');
   igual(painelEm(sem, 'set', 'fila', 'F2', ITEM).exit, 0, 'set fora de git');
   ok(!('projeto' in json(painelEm(sem, 'get', 'fila', 'F2')).data), 'projeto inventado fora de git');
 });
@@ -461,7 +461,7 @@ caso('criar documento sem projeto, fora de git: exit 0, grava, e avisa no stderr
   ok(r.err.includes('aviso: fila/F2 sem projeto (cwd fora de git)'), `stderr sem o aviso: ${JSON.stringify(r.err)}`);
   ok(json(painelEm(sem, 'get', 'fila', 'F2')).data.titulo, 'não gravou');
   ok(!painelEm(A, 'set', 'fila', 'F3', ITEM).err.includes('aviso'), 'avisou dentro de git');
-  ok(!painelEm(sem, 'set', 'fila', 'F4', '{"titulo":"x","etapa":"planejamento","tema":"editor","estado":"aberto","projeto":"izanagi"}').err.includes('aviso'), 'avisou com projeto explícito');
+  ok(!painelEm(sem, 'set', 'fila', 'F4', '{"titulo":"x","etapa":"planejamento","tema":"editor","estado":"aberto","projeto":"alfa"}').err.includes('aviso'), 'avisou com projeto explícito');
 });
 caso('list --projeto filtra; sem flag e com --todos trazem tudo', () => {
   const A = repoGit('alfa'); const B = repoGit('beta');
@@ -472,13 +472,11 @@ caso('list --projeto filtra; sem flag e com --todos trazem tudo', () => {
   igual(ids(painelEm(A, 'list', 'fila', '--todos')), 'F1,F2', '--todos');
   igual(ids(painelEm(A, 'list', 'fila', 'aberto', '--projeto', 'beta')), 'F2', 'estado + --projeto');
 });
-caso('PAINEL_DIR e IZANAGI_PAINEL_DIR funcionam; o novo vence se os dois existirem', () => {
-  const velho = join(base, 'velho'); const novo = join(base, 'novo'); mkdirSync(velho); mkdirSync(novo); writeFileSync(join(velho, 'temas.json'), TEMAS); writeFileSync(join(novo, 'temas.json'), TEMAS);
-  const r = (env) => spawnSync('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, PAINEL_DIR: '', IZANAGI_PAINEL_DIR: '', HOME: join(base, 'home'), ...env } });
-  igual(r({ IZANAGI_PAINEL_DIR: velho }).status, 0, 'nome antigo');
-  ok(existsSync(join(velho, 'fila', 'F1.json')), 'nome antigo não gravou em velho');
-  igual(r({ PAINEL_DIR: novo, IZANAGI_PAINEL_DIR: velho }).status, 0, 'os dois');
-  ok(existsSync(join(novo, 'fila', 'F1.json')), 'PAINEL_DIR não venceu');
+caso('PAINEL_DIR manda onde o painel grava', () => {
+  const novo = join(base, 'novo'); mkdirSync(novo); writeFileSync(join(novo, 'temas.json'), TEMAS);
+  const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, PAINEL_DIR: novo, HOME: join(base, 'home') } });
+  igual(r.status, 0, r.stderr);
+  ok(existsSync(join(novo, 'fila', 'F1.json')), 'PAINEL_DIR não mandou');
 });
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -614,7 +612,7 @@ caso('contrato 6: campos de dono antigos são recusados; donoLocalId pede format
 });
 caso('contrato 7: update de agora em documento antigo (estado: concluido) passa', () => {
   semear(); mkdirSync(join(base, 'painel', 'fila'), { recursive: true });
-  writeFileSync(join(base, 'painel', 'fila', 'F1.json'), JSON.stringify({ id: 'F1', version: 1, data: { titulo: 'velho', estado: 'concluido', projeto: 'izanagi', historico: [] } }));
+  writeFileSync(join(base, 'painel', 'fila', 'F1.json'), JSON.stringify({ id: 'F1', version: 1, data: { titulo: 'velho', estado: 'concluido', projeto: 'alfa', historico: [] } }));
   const r = painel('update', 'fila', 'F1', '{"agora":"anotação"}');
   igual(r.exit, 0, `exit (${r.err})`);
   igual(json(painel('get', 'fila', 'F1')).data.agora, 'anotação', 'agora');

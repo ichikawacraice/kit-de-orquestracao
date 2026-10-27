@@ -1,7 +1,7 @@
 /**
  * **A configuração do gate: `.claude/kit.json` do projeto, com padrões.**
  *
- * Tudo o que no Izanagi era fixo (lista de pacotes, comandos, nomes de trava,
+ * Tudo o que no projeto de origem era fixo (lista de pacotes, comandos, nomes de trava,
  * prazos, variáveis de ambiente da chave) vem daqui. Sem `kit.json` o gate
  * roda o `gate.comandoCompleto` que o projeto declarar — e recusa alto se não
  * houver nenhum, em vez de adivinhar o comando.
@@ -80,7 +80,7 @@ const PERFIL_PNPM = {
     pacotes: "auto",
     filtroDePacote: "{escopo}/{pacote}",
     typecheck: "pnpm -r typecheck",
-    // true: exige o formato do Izanagi (registro da instalação em `node_modules/.pnpm/lock.yaml` e ao menos um pacote com `main` em `dist`).
+    // true: exige o formato de origem do gate (registro da instalação em `node_modules/.pnpm/lock.yaml` e ao menos um pacote com `main` em `dist`).
     exigeDist: false,
   },
 };
@@ -223,13 +223,10 @@ function validarExtras(extras) {
   }
 }
 
-/** `KIT_<sufixo>`, e o legado `IZANAGI_<sufixo>` como reserva. */
+/** `KIT_<sufixo>`; vazio vale como ausente. */
 export function envKit(env, sufixo) {
-  for (const prefixo of ["KIT_", "IZANAGI_"]) {
-    const v = env[prefixo + sufixo];
-    if (v !== undefined && v !== "") return v;
-  }
-  return undefined;
+  const v = env["KIT_" + sufixo];
+  return v === undefined || v === "" ? undefined : v;
 }
 
 /** Inteiro ≥ 1 vindo do env (ou o padrão); inválido é erro alto com o nome da variável. */

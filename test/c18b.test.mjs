@@ -71,9 +71,9 @@ describe('c18b.1 lista da trava: ausente já cobre todos os repositórios', () =
   });
   it('com lista: o repositório entra (e só uma vez)', (t) => {
     const a = ambiente(t); const d = a.projeto('p3');
-    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n');
+    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Alfa/.git\n');
     assert.equal(a.kit(d, 'iniciar').status, 0);
-    assert.equal(a.lista('trava-edicao-repos.txt'), `/Users/x/Izanagi/.git\n${join(d, '.git')}\n`);
+    assert.equal(a.lista('trava-edicao-repos.txt'), `/Users/x/Alfa/.git\n${join(d, '.git')}\n`);
   });
   it('remover tira só a linha do kit e nunca apaga o arquivo, nem quando fica vazio', (t) => {
     const a = ambiente(t); const d = a.projeto('p4');
@@ -103,9 +103,9 @@ describe('c18c.1 remover e a lista que o kit (c18) criou', () => {
     assert.equal(a.kit(d, 'iniciar').status, 0);
     const lock = join(d, '.claude', 'kit.lock.json'); const l = JSON.parse(readFileSync(lock, 'utf8'));
     l.operador = { trava: { linha: join(d, '.git'), adicionou: true, criouArquivo: true } }; writeFileSync(lock, `${JSON.stringify(l, null, 2)}\n`);
-    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), `/Users/x/Izanagi/.git\n${join(d, '.git')}\n`);
+    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), `/Users/x/Alfa/.git\n${join(d, '.git')}\n`);
     assert.equal(a.kit(d, 'remover').status, 0);
-    assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n', 'sobrou outra linha: o arquivo fica');
+    assert.equal(a.lista('trava-edicao-repos.txt'), '/Users/x/Alfa/.git\n', 'sobrou outra linha: o arquivo fica');
   });
   it('sem criouArquivo no lock e a lista fica vazia: o arquivo fica (vazio), o kit não o criou', (t) => {
     const a = ambiente(t); const d = a.projeto('m1c');
@@ -126,19 +126,19 @@ describe('c18b.4 doutor: lista existe e não tem o repositório', () => {
     assert.doesNotMatch(a.kit(d, 'doutor').stdout, /trava-edicao-repos/, 'sem lista: nada a avisar');
     // quem adotou antes do c18: o lock não tem `operador`
     const lock = join(d, '.claude', 'kit.lock.json'); const l = JSON.parse(readFileSync(lock, 'utf8')); delete l.operador; writeFileSync(lock, `${JSON.stringify(l, null, 2)}\n`);
-    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Izanagi/.git\n');
+    mkdirSync(a.base, { recursive: true }); writeFileSync(join(a.base, 'trava-edicao-repos.txt'), '/Users/x/Alfa/.git\n');
     const r = a.kit(d, 'doutor');
     assert.match(r.stdout, /aviso: .* não está em trava-edicao-repos\.txt/);
     assert.ok(r.stdout.includes(`echo '${join(d, '.git')}' >> `), `o comando para acrescentar: ${r.stdout}`);
-    writeFileSync(join(a.base, 'trava-edicao-repos.txt'), `/Users/x/Izanagi/.git\n${join(d, '.git')}\n`);
+    writeFileSync(join(a.base, 'trava-edicao-repos.txt'), `/Users/x/Alfa/.git\n${join(d, '.git')}\n`);
     assert.doesNotMatch(a.kit(d, 'doutor').stdout, /trava-edicao-repos/, 'com o repo na lista, sem aviso');
   });
 });
 
 // ---- 2 e 3: projeto com regras próprias
 const projetoComRegras = (a, nome, extra = {}) => a.projeto(nome, {
-  'CLAUDE.md': '# Izanagi\n\n## Regras\n1. Spec-driven é obrigatório.\n\n## O que é este projeto\nLoja.\n',
-  'package.json': { name: 'izanagi', private: true, scripts: { test: 'node scripts/a-vez-do-gate.mjs' } },
+  'CLAUDE.md': '# Alfa\n\n## Regras\n1. Spec-driven é obrigatório.\n\n## O que é este projeto\nLoja.\n',
+  'package.json': { name: 'alfa', private: true, scripts: { test: 'node scripts/a-vez-do-gate.mjs' } },
   'scripts/a-vez-do-gate.mjs': '// gate do projeto\n',
   'scripts/guarda-de-operacao.mjs': '// guarda do projeto\n',
   '.claude/settings.json': { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'node scripts/guarda-de-operacao.mjs' }] }] } },
@@ -203,7 +203,7 @@ describe('c18b.3 blocos que contradizem o projeto', () => {
     assert.doesNotMatch(ler(d, 'CLAUDE.md'), /kit:comandos|kit:regras-de-operacao/, 'o atualizar não os traz de volta');
     assert.doesNotMatch(a.kit(d, 'doutor').stdout, /^falha:/m);
     assert.equal(a.kit(d, 'remover').status, 0);
-    assert.equal(ler(d, 'CLAUDE.md'), '# Izanagi\n\n## Regras\n1. Spec-driven é obrigatório.\n\n## O que é este projeto\nLoja.\n', 'remover devolve o CLAUDE.md');
+    assert.equal(ler(d, 'CLAUDE.md'), '# Alfa\n\n## Regras\n1. Spec-driven é obrigatório.\n\n## O que é este projeto\nLoja.\n', 'remover devolve o CLAUDE.md');
   });
   it('mesmo num projeto sem regras próprias, adotar em CLAUDE.md existente omite os dois blocos (a regra é do CLAUDE.md existente)', (t) => {
     const a = ambiente(t); const d = a.projeto('p9', { 'CLAUDE.md': '# Meu\n' });

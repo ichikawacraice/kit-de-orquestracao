@@ -14,7 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { SEM_PROJETO, slugDoProjeto } from './perguntas-arquivo.mjs';
 
 const BASE = () => process.env.HOOKS_CREWAI_BASE || join(homedir(), '.claude', 'orquestracao');
-const PAINEL = () => process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(BASE(), 'painel');
+const PAINEL = () => process.env.PAINEL_DIR || join(BASE(), 'painel');
 const VALIDADE_MS = 7 * 24 * 3600 * 1000;
 const FECHADAS = new Set(['feito', 'descartado']);
 const git = (cwd, args, timeout = 20000) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', timeout, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'] });

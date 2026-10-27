@@ -38,7 +38,7 @@ const PERGUNTAS = banco(
   doc(
     'Q7',
     {
-      projeto: 'izanagi',
+      projeto: 'alfa',
       sessao: 'frente A',
       titulo: 'qual caminho',
       estado: 'aberta',
@@ -53,7 +53,7 @@ const PERGUNTAS = banco(
   doc(
     'Q8',
     {
-      projeto: 'izanagi',
+      projeto: 'alfa',
       // o id cru no lugar do nome: o pane mostra o título da sessão
       sessao: 'local_b',
       sessaoId: 'local_b',
@@ -67,7 +67,7 @@ const PERGUNTAS = banco(
   doc(
     'Q9',
     {
-      projeto: 'izanagi',
+      projeto: 'alfa',
       sessao: 'eu mesma',
       // a pergunta é da sessão onde o painel está aberto
       sessaoId: 'local_eu',
@@ -76,7 +76,7 @@ const PERGUNTAS = banco(
     },
     1,
   ),
-  doc('Q5', { projeto: 'izanagi', sessao: 'frente B', titulo: 'já foi', estado: 'respondida', resposta: 'sim' }),
+  doc('Q5', { projeto: 'alfa', sessao: 'frente B', titulo: 'já foi', estado: 'respondida', resposta: 'sim' }),
 )
 
 const VIVAS = JSON.stringify([
@@ -84,7 +84,7 @@ const VIVAS = JSON.stringify([
   { sessionId: 'local_b', title: 'frente B', isRunning: false, isArchived: false },
   { sessionId: 'local_e', title: 'frente E', isRunning: false, isArchived: false },
   { sessionId: 'local_o', title: 'orq', isRunning: true, isArchived: false },
-  { sessionId: 'local_d', title: 'nova sem linha', cwd: '/Users/x/Developer/Projects/Izanagi', isRunning: true },
+  { sessionId: 'local_d', title: 'nova sem linha', cwd: '/Users/x/Developer/Projects/Alfa', isRunning: true },
 ])
 
 const EU = JSON.stringify({ sessionId: 'local_eu', title: 'eu mesma', isRunning: true, isArchived: false })
@@ -191,8 +191,8 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   // A pasta do painel em memória: um arquivo por documento.
   const arquivos = new Map<string, string>()
   for (const d of opc.perguntas ?? PERGUNTAS) arquivos.set(`${PASTA}/perguntas/${d.id}.json`, JSON.stringify(d))
-  // a foto da fila não traz o `projeto`, mas os 29 itens reais têm `izanagi`: sem ele o item legado cai em "Sem tema" (c19)
-  for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, { projeto: 'izanagi', ...data })))
+  // a foto da fila não traz o `projeto`, mas os 29 itens reais têm `alfa`: sem ele o item legado cai em "Sem tema" (c19)
+  for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, { projeto: 'alfa', ...data })))
   if (opc.bandeira !== undefined) arquivos.set(BANDEIRA, opc.bandeira)
   for (const d of opc.sessoesDocs ?? []) arquivos.set(`${PASTA}/sessoes/${d.id}.json`, JSON.stringify(d))
   for (const d of opc.cartoes ?? []) arquivos.set(`${PASTA}/cartoes/${d.id}.json`, JSON.stringify(d))
@@ -300,10 +300,10 @@ async function lerPane($: Parameters<TestBody>[0], on: On, opc: Opcoes = {}, fal
 }
 
 const AGORA = Date.UTC(2026, 9, 25, 15)
-const P7 = 'local_112bbb1c-9e59-4f31-9f65-7c3a31f6160f'
-const P2 = 'local_d985d448-ecd4-40a1-b7ea-eb327779056b'
-const P1 = 'local_c19b5998-5821-4435-91f3-320eac727d3b'
-const E8 = 'local_7723bebb-d428-4bb6-ab63-37354ead5c78'
+const P7 = 'local_00000000-0000-4000-8000-0000000000f7'
+const P2 = 'local_00000000-0000-4000-8000-0000000000f2'
+const P1 = 'local_00000000-0000-4000-8000-0000000000f1'
+const E8 = 'local_00000000-0000-4000-8000-0000000000e8'
 const vivasDe = (...ids: string[]) => JSON.stringify(ids.map(sessionId => ({ sessionId, title: sessionId, isRunning: true, isArchived: false })))
 const fila = (...ids: string[]) => Object.fromEntries(ids.map(id => [id, FILA_REAL[id] as Record<string, unknown>]))
 // A superfície lida repete o texto: o pai concatena os filhos e cada filho aparece de novo, com o alt dos desenhos.
@@ -389,9 +389,9 @@ test('travado: vai para Travados, com o tema na linha 2 e a trava inteira', asyn
 })
 
 test('item com pergunta: o selo vem do item e da pergunta, e só de pergunta aberta', async ($, on) => {
-  const q8 = doc('Q8', { projeto: 'izanagi', sessao: 'P1', sessaoId: P1, titulo: 'posso rebasear', estado: 'aberta', item: 'F1' }, 2)
-  const q7 = doc('Q7', { projeto: 'izanagi', sessao: 'P2', sessaoId: P2, titulo: 'qual caminho', estado: 'aberta' }, 4)
-  const q5 = doc('Q5', { projeto: 'izanagi', sessao: 'P7', titulo: 'já foi', estado: 'respondida', resposta: 'sim' })
+  const q8 = doc('Q8', { projeto: 'alfa', sessao: 'P1', sessaoId: P1, titulo: 'posso rebasear', estado: 'aberta', item: 'F1' }, 2)
+  const q7 = doc('Q7', { projeto: 'alfa', sessao: 'P2', sessaoId: P2, titulo: 'qual caminho', estado: 'aberta' }, 4)
+  const q5 = doc('Q5', { projeto: 'alfa', sessao: 'P7', titulo: 'já foi', estado: 'respondida', resposta: 'sim' })
   const itens = {
     F13: { ...FILA_REAL.F13, perguntas: ['Q7'] },
     F1: FILA_REAL.F1 as Record<string, unknown>,
@@ -646,7 +646,7 @@ test('F183: o rodapé lê do arquivo só as respondidas hoje (São Paulo), além
   const { relogio } = engine(on, false, {}, {
     agora: AGORA_SP,
     arquivadas: [
-      { caminho: 'izanagi/2026-10/Q30.json', mtimeMs: hoje, doc: doc('Q30', { projeto: 'izanagi', titulo: 'fechada hoje', estado: 'respondida', resposta: 'sim', respondidaEm: new Date(hoje).toISOString() }) },
+      { caminho: 'alfa/2026-10/Q30.json', mtimeMs: hoje, doc: doc('Q30', { projeto: 'alfa', titulo: 'fechada hoje', estado: 'respondida', resposta: 'sim', respondidaEm: new Date(hoje).toISOString() }) },
       { caminho: 'kit/2026-10/Q31.json', mtimeMs: hoje, doc: doc('Q31', { projeto: 'kit', titulo: 'movida hoje, respondida ontem', estado: 'respondida', resposta: 'não', respondidaEm: new Date(ontem).toISOString() }) },
       { caminho: 'kit/2026-10/Q32.json', mtimeMs: ontem, doc: doc('Q32', { projeto: 'kit', titulo: 'de ontem', estado: 'respondida', resposta: 'x', respondidaEm: new Date(ontem).toISOString() }) },
     ],
@@ -668,10 +668,10 @@ test('F183: o rodapé lê do arquivo só as respondidas hoje (São Paulo), além
 })
 
 test('F183: slugDoProjeto do pane dá o mesmo de perguntas-arquivo.mjs (os mesmos casos do teste do painel)', () => {
-  expect(R.slugDoProjeto('Izanagi')).toBe('izanagi')
+  expect(R.slugDoProjeto('Alfa')).toBe('alfa')
   expect(R.slugDoProjeto('Meu_Repo.git')).toBe('meu-repo-git')
   expect(R.slugDoProjeto('  kit-de-orquestracao ')).toBe('kit-de-orquestracao')
-  expect(R.slugDoProjeto('Wicomm IA')).toBe('wicomm-ia')
+  expect(R.slugDoProjeto('Loja Azul IA')).toBe('loja-azul-ia')
   expect(R.slugDoProjeto('__')).toBeNull()
   expect(R.slugDoProjeto(undefined)).toBeNull()
 })
@@ -938,13 +938,13 @@ test('palavra comprida na 1ª linha do título quebra depois do hífen, não no 
 test('dois projetos com o tema "geral" são dois grupos, cada item uma vez, e o rótulo repetido ganha o projeto (V3)', () => {
   const temas = [
     { id: 'geral', rotulo: 'Geral', projeto: 'novo' },
-    { id: 'geral', rotulo: 'Geral', projeto: 'izanagi' },
-    { id: 'kit', rotulo: 'Kit', projeto: 'izanagi' },
+    { id: 'geral', rotulo: 'Geral', projeto: 'alfa' },
+    { id: 'kit', rotulo: 'Kit', projeto: 'alfa' },
   ]
   const docs = [
     { id: 'F1', data: { titulo: 'F1', tema: 'geral', projeto: 'novo', etapa: 'planejamento' } },
-    { id: 'F2', data: { titulo: 'F2', tema: 'geral', projeto: 'izanagi', etapa: 'planejamento' } },
-    { id: 'F3', data: { titulo: 'F3', tema: 'kit', projeto: 'izanagi', etapa: 'planejamento' } },
+    { id: 'F2', data: { titulo: 'F2', tema: 'geral', projeto: 'alfa', etapa: 'planejamento' } },
+    { id: 'F3', data: { titulo: 'F3', tema: 'kit', projeto: 'alfa', etapa: 'planejamento' } },
   ]
   const itens = montarItens(docs, temas, [], undefined, [], AGORA)
   expect(itens.length, 'a montagem não pode vir vazia').toBe(3)
@@ -952,19 +952,19 @@ test('dois projetos com o tema "geral" são dois grupos, cada item uma vez, e o 
   const grupos = porTema(itens, temas, (a, b) => a.id.localeCompare(b.id))
   expect(grupos.length, 'um grupo por (projeto, id)').toBe(3)
   expect(grupos.map(g => g.itens.map(i => i.id).join())).toEqual(['F1', 'F2', 'F3'])
-  expect(grupos.map(g => g.rotulo)).toEqual(['Geral · novo', 'Geral · izanagi', 'Kit'])
+  expect(grupos.map(g => g.rotulo)).toEqual(['Geral · novo', 'Geral · alfa', 'Kit'])
 })
 
 test('com um só projeto, o rótulo do tema não ganha sufixo', () => {
-  const temas = [{ id: 'geral', rotulo: 'Geral', projeto: 'izanagi' }]
-  const itens = montarItens([{ id: 'F1', data: { titulo: 'F1', tema: 'geral', projeto: 'izanagi', etapa: 'planejamento' } }], temas, [], undefined, [], AGORA)
+  const temas = [{ id: 'geral', rotulo: 'Geral', projeto: 'alfa' }]
+  const itens = montarItens([{ id: 'F1', data: { titulo: 'F1', tema: 'geral', projeto: 'alfa', etapa: 'planejamento' } }], temas, [], undefined, [], AGORA)
   expect(itens.length).toBe(1)
   expect(itens[0]!.tema).toBe('geral')
   expect(porTema(itens, temas, () => 0).map(g => g.rotulo)).toEqual(['Geral'])
 })
 
 test('c19: item legado sem projeto não vai para o geral do primeiro projeto: cai em "Sem tema" com o motivo; tema global ainda casa', () => {
-  const temas = [{ id: 'geral', rotulo: 'Geral', projeto: 'izanagi' }, { id: 'glob', rotulo: 'Global' }]
+  const temas = [{ id: 'geral', rotulo: 'Geral', projeto: 'alfa' }, { id: 'glob', rotulo: 'Global' }]
   const itens = montarItens([
     { id: 'F1', data: { titulo: 'F1', tema: 'geral', etapa: 'planejamento' } },
     { id: 'F2', data: { titulo: 'F2', tema: 'glob', etapa: 'planejamento' } },
@@ -977,7 +977,7 @@ test('c19: item legado sem projeto não vai para o geral do primeiro projeto: ca
 })
 
 test('c19: tema que existe, mas é de outro projeto, diz "tema de outro projeto" e não "fora da lista"', () => {
-  const temas = [{ id: 'kit', rotulo: 'Kit', projeto: 'izanagi' }]
+  const temas = [{ id: 'kit', rotulo: 'Kit', projeto: 'alfa' }]
   const itens = montarItens([
     { id: 'F1', data: { titulo: 'F1', tema: 'kit', projeto: 'novo', etapa: 'planejamento' } },
     { id: 'F2', data: { titulo: 'F2', tema: 'nada', projeto: 'novo', etapa: 'planejamento' } },
@@ -1224,7 +1224,7 @@ test('com botões, o filete do item vem depois deles', () => {
 // F34 fatia 1: as quatro seções, o papel, a situação da sessão e a leitura parada.
 type Linha = Parameters<typeof contarSecoes>[0][number]
 const linha = (id: string, extra: Partial<Linha> = {}): Linha => ({ id, titulo: id, tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'execucao', situacao: 'andando', prs: [], depois: [], com: [], perguntas: [], ...extra })
-const perguntaAberta = (id: string, item?: string) => ({ id, projeto: 'izanagi', sessao: 's', titulo: id, item, opcoes: [] })
+const perguntaAberta = (id: string, item?: string) => ({ id, projeto: 'alfa', sessao: 's', titulo: id, item, opcoes: [] })
 const TEMAS_S = [{ id: 'editor', rotulo: 'Editor da loja' }]
 const ESPERA_OP = { motivo: 'operador' as const, texto: 'decidir' }
 const CENARIOS = {
@@ -1733,7 +1733,7 @@ test('F43-1: a fixtura de 44 itens não está vazia e todo cartão, linha de fil
   const filaTodos = filaCompleta()
   expect(Object.keys(filaTodos).length).toBe(44)
   const { lido } = await lerPane($, on, { fila: filaTodos, vivas: vivasDe(P1, P2, P7, E8), perguntas: [] })
-  const docs = Object.entries(filaTodos).map(([id, data]) => doc(id, { projeto: 'izanagi', ...data }))
+  const docs = Object.entries(filaTodos).map(([id, data]) => doc(id, { projeto: 'alfa', ...data }))
   const itens = montarItens(docs, TEMAS_REAIS, null, undefined, [], AGORA)
   expect(itens.filter(x => x.situacao !== 'feito').length, 'os itens vivos existem').toBeGreaterThan(3)
   for (const i of itens.filter(x => x.situacao !== 'feito')) {
@@ -1744,7 +1744,7 @@ test('F43-1: a fixtura de 44 itens não está vazia e todo cartão, linha de fil
   }
 })
 
-const indiceDe = (...itens: Array<[string, string]>) => new Map(itens.map(([id, titulo]) => [id, { id, titulo, tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'feito', projeto: 'izanagi' }]))
+const indiceDe = (...itens: Array<[string, string]>) => new Map(itens.map(([id, titulo]) => [id, { id, titulo, tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'feito', projeto: 'alfa' }]))
 
 test('F43-2: citadosDe — um número, repetido e o próprio item', () => {
   const idx = indiceDe(['F13', 'SPEC-155 fatia 2'], ['F7', 'sobras'])
@@ -1802,7 +1802,7 @@ test('F43-3: citadosDe e a recusa do painel classificam do mesmo jeito (marca no
 
 test('F43-4: a leitura guarda o índice com feito antigo e descartado; os itens visíveis seguem só com os feitos de 24 h', async ($, on) => {
   const filaTodos = filaCompleta()
-  const docs = Object.entries(filaTodos).map(([id, data]) => doc(id, { projeto: 'izanagi', ...data }))
+  const docs = Object.entries(filaTodos).map(([id, data]) => doc(id, { projeto: 'alfa', ...data }))
   const indice = R.montarIndice(docs, TEMAS_REAIS)
   expect(indice).toHaveLength(44)
   expect(indice.find(i => i.id === 'F7')?.etapa, 'descartado antigo está no índice').toBe('descartado')
@@ -1814,7 +1814,7 @@ test('F43-4: a leitura guarda o índice com feito antigo e descartado; os itens 
 })
 
 const LISTA = () => {
-  const docs = Object.entries(filaCompleta()).map(([id, data]) => doc(id, { projeto: 'izanagi', ...data }))
+  const docs = Object.entries(filaCompleta()).map(([id, data]) => doc(id, { projeto: 'alfa', ...data }))
   return R.montarIndice(docs, TEMAS_DOIS_PROJETOS)
 }
 
@@ -1838,14 +1838,14 @@ test('F43-5: Todos os itens · N com N do índice; grupos na ordem de temas.json
 test('F43-5: o projeto aparece no cabeçalho com dois projetos e some com um', () => {
   const grupos = R.gruposDoIndice(LISTA(), TEMAS_DOIS_PROJETOS)
   const dois = D.todosSvg(300, grupos[0]!, { comProjeto: true })
-  expect(dois.source).toMatch(/izanagi|kit-de-orquestracao/)
+  expect(dois.source).toMatch(/alfa|kit-de-orquestracao/)
   const um = D.todosSvg(300, grupos[0]!, { comProjeto: false })
-  expect(um.source).not.toMatch(/izanagi|kit-de-orquestracao/)
+  expect(um.source).not.toMatch(/alfa|kit-de-orquestracao/)
   expect(dois.alt).toMatch(/F\d+ · /)
 })
 
 test('F43-6: filtro — 13, F13 e f13 acham só o F13; palavra sem acento acha título com acento; 99 não acha nada', () => {
-  const lista = [...LISTA(), { id: 'F90', titulo: 'validação do painel', tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'feito', projeto: 'izanagi' }]
+  const lista = [...LISTA(), { id: 'F90', titulo: 'validação do painel', tema: 'editor', temaRotulo: 'Editor da loja', etapa: 'feito', projeto: 'alfa' }]
   for (const f of ['13', 'F13', 'f13']) expect(R.filtrarIndice(lista, f).map(i => i.id), f).toEqual(['F13'])
   expect(R.filtrarIndice(lista, 'validacao').map(i => i.id)).toContain('F90')
   expect(R.filtrarIndice(lista, '99')).toEqual([])
@@ -1853,7 +1853,7 @@ test('F43-6: filtro — 13, F13 e f13 acham só o F13; palavra sem acento acha t
 })
 
 test('F43-7: pergunta com item: o rótulo é "F<n> · <título do item>", sem o tema', async ($, on) => {
-  const perguntas = banco(doc('Q238', { projeto: 'izanagi', sessao: 's', sessaoId: 'local_b', titulo: 'qual', estado: 'aberta', item: 'F34' }))
+  const perguntas = banco(doc('Q238', { projeto: 'alfa', sessao: 's', sessaoId: 'local_b', titulo: 'qual', estado: 'aberta', item: 'F34' }))
   const filaTodos = filaCompleta()
   const { lido } = await lerPane($, on, { fila: filaTodos, perguntas, vivas: vivasDe(P1, P2, P7, E8) })
   expect(lido.desktop).toMatch(/Q238 · F34 · item sintético 34/)
@@ -1874,20 +1874,20 @@ test('F43-10: com Todos os itens e Feitos hoje abertos, a lista inteira vem depo
 })
 
 test('projeto no título: o cartão e a linha da fila abrem com "PROJETO · TEMA"; sem projeto, só o tema', () => {
-  const com = cartaoSvg(360, itemCheio({ projeto: 'izanagi' }), AGORA, { situacao: situacaoDoTeste })
+  const com = cartaoSvg(360, itemCheio({ projeto: 'alfa' }), AGORA, { situacao: situacaoDoTeste })
   expect(com.source, 'o desenho não pode vir vazio').toBeTruthy()
-  expect(com.source).toContain('IZANAGI · EDITOR DA LOJA')
+  expect(com.source).toContain('ALFA · EDITOR DA LOJA')
   const fila = filaSvg(360, itemCheio({ situacao: 'fila', com: [], projeto: 'kit-de-orquestracao' }), AGORA)
   expect(fila.source, 'a 360 px o tema pode encurtar; o projeto vem antes').toContain('KIT-DE-ORQUESTRACAO · EDITOR DA')
   const sem = cartaoSvg(360, itemCheio({ projeto: undefined }), AGORA, { situacao: situacaoDoTeste })
   expect(sem.source).toContain('EDITOR DA LOJA')
-  expect(sem.source, 'sem projeto, nada de projeto no rótulo').not.toMatch(/IZANAGI|KIT-DE-ORQUESTRACAO/)
+  expect(sem.source, 'sem projeto, nada de projeto no rótulo').not.toMatch(/ALFA|KIT-DE-ORQUESTRACAO/)
 })
 
 test('projeto no título: montarItens leva o projeto do documento ao item', () => {
-  const [item] = montarItens([doc('F1', { titulo: 'x', tema: 'editor', etapa: 'execucao', projeto: 'Izanagi' })], TEMAS_REAIS, [], undefined, [], AGORA)
+  const [item] = montarItens([doc('F1', { titulo: 'x', tema: 'editor', etapa: 'execucao', projeto: 'Alfa' })], TEMAS_REAIS, [], undefined, [], AGORA)
   expect(item, 'o item existe').toBeDefined()
-  expect(item!.projeto).toBe('izanagi')
+  expect(item!.projeto).toBe('alfa')
 })
 
 test('largura: no desktop o desenho ocupa a largura do pane, sem folga à direita', async ($, on) => {
@@ -2068,9 +2068,9 @@ test('F48 B8: desligar grava {ligado:false, desligadoEm, por:"painel"}, volta ao
 })
 
 // F59: o botão "Estou de volta" guarda o período e avisa cada orquestradora ativa; falha no envio avisa e não desfaz o modo.
-const ORQ_ATIVA = doc('local_orq_ativa', { projeto: 'izanagi', titulo: '🎛 orquestradora — izanagi', papel: 'orquestradora', estado: 'trabalhando' })
-const ORQ_ARQUIVADA = doc('local_orq_velha', { projeto: 'izanagi', titulo: '🎛 orquestradora — izanagi', papel: 'orquestradora', estado: 'concluida' })
-const MEMBRO = doc('local_e1', { projeto: 'izanagi', titulo: 'E1 · livre', papel: 'executor', estado: 'parada' })
+const ORQ_ATIVA = doc('local_orq_ativa', { projeto: 'alfa', titulo: '🎛 orquestradora — alfa', papel: 'orquestradora', estado: 'trabalhando' })
+const ORQ_ARQUIVADA = doc('local_orq_velha', { projeto: 'alfa', titulo: '🎛 orquestradora — alfa', papel: 'orquestradora', estado: 'concluida' })
+const MEMBRO = doc('local_e1', { projeto: 'alfa', titulo: 'E1 · livre', papel: 'executor', estado: 'parada' })
 
 test('F59 B12: desligar manda o pedido do resumo só à orquestradora ativa', async ($, on) => {
   const { ui, enviadas, relogio, toasts, bandeiras } = await abrirDe({ bandeira: LIGADA(HA_3H), vivas: vivasDe(P7, P1, 'local_orq_ativa'), sessoesDocs: [ORQ_ATIVA, ORQ_ARQUIVADA, MEMBRO] }, $, on)
@@ -2120,7 +2120,7 @@ test('F59 B15: a orquestradora é a própria sessão do pane: o pedido entra com
 })
 
 test('F59 B16: orquestradora de sessoes que não está nas vivas do app não recebe pedido nem gera aviso', async ($, on) => {
-  const { ui, enviadas, prompts, relogio, toasts } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ATIVA, doc('local_orq_fantasma', { projeto: 'izanagi', papel: 'orquestradora', estado: 'trabalhando' })] }, $, on)
+  const { ui, enviadas, prompts, relogio, toasts } = await abrirDe({ bandeira: LIGADA(HA_3H), sessoesDocs: [ORQ_ATIVA, doc('local_orq_fantasma', { projeto: 'alfa', papel: 'orquestradora', estado: 'trabalhando' })] }, $, on)
   await ui.press({ key: 'modo' })
   await relogio.settle()
   expect([enviadas, prompts], 'nenhuma das duas está nas vivas').toEqual([[], []])
@@ -2283,7 +2283,7 @@ test('F58: o item sem dona na fila leva os minutos no chip "espera execução"',
 })
 
 // F69 A0: item sem dono com sessão viva no `com` está andando: vai a Executando, não à Na fila.
-const SEM_DONO = (extra: Record<string, unknown> = {}) => docF('F70', { projeto: 'izanagi', etapa: 'execucao', historico: [{ em: new Date(AGORA - 60 * 60_000).toISOString(), etapa: 'execucao', dono: null }], ...extra })
+const SEM_DONO = (extra: Record<string, unknown> = {}) => docF('F70', { projeto: 'alfa', etapa: 'execucao', historico: [{ em: new Date(AGORA - 60 * 60_000).toISOString(), etapa: 'execucao', dono: null }], ...extra })
 
 test('F69 A0: sem dono e com alguém vivo no com vai a Executando, e a Na fila cai', () => {
   const sozinho = monta([SEM_DONO()], [{ sessionId: P1 }])
@@ -2333,25 +2333,25 @@ test('F69 A: papelQueFalta — a fila numa etapa de trabalho pede a dona; espera
 })
 
 test('F69 A: papelQueFalta — item com dona trabalhando não pede', () => {
-  const andando = monta([docF('F2', { projeto: 'izanagi', etapa: 'validacao', donoApelido: 'dona', donoLocalId: P1, com: COM(['dona', P1]) })], [{ sessionId: P1 }])[0]!
+  const andando = monta([docF('F2', { projeto: 'alfa', etapa: 'validacao', donoApelido: 'dona', donoLocalId: P1, com: COM(['dona', P1]) })], [{ sessionId: P1 }])[0]!
   expect(andando.situacao, 'precondição: anda').toBe('andando')
   expect(R.papelQueFalta(andando)).toBeUndefined()
 })
 
 test('F69 A: orquestradoraDoProjeto — uma, nenhuma, várias, caixa do projeto, arquivada e sem lista', () => {
-  const orqs = [{ id: 'local_a', projeto: 'izanagi' }, { id: 'local_b', projeto: 'izanagi' }, { id: 'local_k', projeto: 'kit' }]
-  expect(R.orquestradoraDoProjeto('izanagi', orqs, ['local_a', 'local_k'])).toEqual({ id: 'local_a' })
-  expect(R.orquestradoraDoProjeto('Izanagi', orqs, ['local_a', 'local_k']), 'a fila tem minúsculas, o título pode ter maiúscula').toEqual({ id: 'local_a' })
-  expect(R.orquestradoraDoProjeto('izanagi', orqs, ['local_a', 'local_b'])).toEqual({ varias: 2 })
-  expect(R.orquestradoraDoProjeto('izanagi', orqs, ['local_k']), 'as duas de izanagi estão arquivadas').toEqual({ nenhuma: true })
+  const orqs = [{ id: 'local_a', projeto: 'alfa' }, { id: 'local_b', projeto: 'alfa' }, { id: 'local_k', projeto: 'kit' }]
+  expect(R.orquestradoraDoProjeto('alfa', orqs, ['local_a', 'local_k'])).toEqual({ id: 'local_a' })
+  expect(R.orquestradoraDoProjeto('Alfa', orqs, ['local_a', 'local_k']), 'a fila tem minúsculas, o título pode ter maiúscula').toEqual({ id: 'local_a' })
+  expect(R.orquestradoraDoProjeto('alfa', orqs, ['local_a', 'local_b'])).toEqual({ varias: 2 })
+  expect(R.orquestradoraDoProjeto('alfa', orqs, ['local_k']), 'as duas de alfa estão arquivadas').toEqual({ nenhuma: true })
   expect(R.orquestradoraDoProjeto('outro', orqs, ['local_a'])).toEqual({ nenhuma: true })
-  expect(R.orquestradoraDoProjeto('izanagi', orqs, null), 'sem a lista do app não se sabe').toEqual({ semLista: true })
+  expect(R.orquestradoraDoProjeto('alfa', orqs, null), 'sem a lista do app não se sabe').toEqual({ semLista: true })
 })
 
 test('F69 A: textoDoPedidoDeVaga — hora, projeto, cada item com "F<n> · " e a âncora da skill', () => {
-  const t = R.textoDoPedidoDeVaga('izanagi', [{ id: 'F68', titulo: 'editor da loja' }, { id: 'F63', titulo: 'painel do componente' }], AGORA)
+  const t = R.textoDoPedidoDeVaga('alfa', [{ id: 'F68', titulo: 'editor da loja' }, { id: 'F63', titulo: 'painel do componente' }], AGORA)
   expect(t).toContain(`Pedido do operador pelo painel (${R.hora(AGORA).slice(0, 5)})`)
-  expect(t).toContain('em izanagi')
+  expect(t).toContain('em alfa')
   expect(t).toContain('abra a sessão dona de cada item sem dona')
   expect(t).toContain('F68 · editor da loja; F63 · painel do componente')
   expect(t.match(D_ITEM_SOLTO) ?? [], 'nenhum F<n> sem o título').toEqual([])
@@ -2372,9 +2372,9 @@ test('F69 A: podarPedidos — item que ganhou o papel, prompt de mais de 5 min e
   expect(R.podarPedidos({ F70: { estado: 'enviando' } }, [sem], AGORA), 'enviando não vence por tempo').toEqual({ F70: { estado: 'enviando' } })
 })
 
-// Os gestos, no pane. O pane está na orquestradora do izanagi quando `host` é o id dela.
-const ORQ_IZ = doc('local_orq_iz', { projeto: 'izanagi', titulo: '🎛 orquestradora — izanagi', papel: 'orquestradora', estado: 'trabalhando' })
-const ORQ_IZ2 = doc('local_orq_iz2', { projeto: 'izanagi', titulo: '🎛 orquestradora — izanagi', papel: 'orquestradora', estado: 'parada' })
+// Os gestos, no pane. O pane está na orquestradora do alfa quando `host` é o id dela.
+const ORQ_IZ = doc('local_orq_iz', { projeto: 'alfa', titulo: '🎛 orquestradora — alfa', papel: 'orquestradora', estado: 'trabalhando' })
+const ORQ_IZ2 = doc('local_orq_iz2', { projeto: 'alfa', titulo: '🎛 orquestradora — alfa', papel: 'orquestradora', estado: 'parada' })
 const ORQ_KIT = doc('local_orq_kit', { projeto: 'kit', titulo: '🎛 orquestradora — kit', papel: 'orquestradora', estado: 'trabalhando' })
 const vivasPedir = (...extra: string[]) => vivasDe('local_orq_iz', 'local_orq_kit', ...extra)
 const parado = (etapa: string, extra: Record<string, unknown> = {}) => SEM_DONO({ etapa, ...extra }).data
@@ -2382,7 +2382,7 @@ const FILA_DOIS = () => ({ F68: parado('execucao', { titulo: 'editor da loja' })
 const FILA_TRES = () => ({ ...FILA_DOIS(), F71: parado('validacao', { projeto: 'kit', titulo: 'barra de status' }) })
 const pedir = (opc: Opcoes) => ({ vivas: vivasPedir(), sessoesDocs: [ORQ_IZ, ORQ_KIT], ...opc })
 // proposto 5 min antes do AGORA dos testes
-const cartaoDe = (id: string, extra: Record<string, unknown> = {}) => doc(id, { projeto: 'izanagi', apelido: 'dona', papel: 'dona', itens: ['F68'], orquestradoraId: 'local_orq_iz', propostoEm: new Date(AGORA - 5 * 60_000).toISOString(), ...extra })
+const cartaoDe = (id: string, extra: Record<string, unknown> = {}) => doc(id, { projeto: 'alfa', apelido: 'dona', papel: 'dona', itens: ['F68'], orquestradoraId: 'local_orq_iz', propostoEm: new Date(AGORA - 5 * 60_000).toISOString(), ...extra })
 const CARTAO_F68 = cartaoDe('task_e21')
 
 test('F69 A (i): pane na orquestradora do projeto: o pedido vai ao campo, sem Enter e sem mensagem', async ($, on) => {
@@ -2421,11 +2421,11 @@ test('F69 A (iii): pane em outra sessão: send_message à orquestradora, foco ne
   expect(enviadas[0]?.session_id).toBe('local_orq_iz')
   expect(String(enviadas[0]?.message)).toContain('F68 · editor da loja')
   expect([abertas[0]?.session_id, abertas[0]?.target], 'foco na orquestradora, como o "Abrir P2"').toEqual(['local_orq_iz', 'focus'])
-  expect(toasts.at(-1)).toBe('Pedido enviado à orquestradora de izanagi: o cartão aparece na conversa dela.')
+  expect(toasts.at(-1)).toBe('Pedido enviado à orquestradora de alfa: o cartão aparece na conversa dela.')
   const lido = await lerSuperficie(ui)
   expect(lido).toMatch(/Pedido às \d\d:\d\d · inicie o cartão/)
   expect(await ui.find({ key: 'pedir:F68' }), 'o botão do item some: não vira reenvio').toBeUndefined()
-  expect(await ui.find({ key: 'orq:izanagi' }), 'o grupo do topo da Na fila saiu: o clique mora em "Sessões para abrir"').toBeUndefined()
+  expect(await ui.find({ key: 'orq:alfa' }), 'o grupo do topo da Na fila saiu: o clique mora em "Sessões para abrir"').toBeUndefined()
   await ui.unmount()
 })
 
@@ -2438,15 +2438,15 @@ test('F69 A (iv): "Pedir n sessões" faz um pedido por orquestradora e não põe
   const por = Object.fromEntries(enviadas.map(e => [String(e.session_id), String(e.message)]))
   expect(por.local_orq_iz).toContain('F68 ·')
   expect(por.local_orq_iz).toContain('F63 ·')
-  expect(por.local_orq_iz, 'o item do kit não vai ao izanagi').not.toContain('F71')
+  expect(por.local_orq_iz, 'o item do kit não vai ao alfa').not.toContain('F71')
   expect(por.local_orq_kit).toContain('F71 ·')
   expect(por.local_orq_kit).not.toContain('F68')
   expect(abertas, 'dois destinos: nenhum foco automático').toEqual([])
-  expect(toasts.at(-1)).toBe('2 pedidos enviados à orquestradora de izanagi, os cartões aparecem na conversa dela; 1 pedido enviado à orquestradora de kit, o cartão aparece na conversa dela.')
+  expect(toasts.at(-1)).toBe('2 pedidos enviados à orquestradora de alfa, os cartões aparecem na conversa dela; 1 pedido enviado à orquestradora de kit, o cartão aparece na conversa dela.')
   const lido = await lerSuperficie(ui)
   expect(lido.match(/Pedido às \d\d:\d\d · inicie o cartão/g)?.length, 'um estado por item').toBeGreaterThanOrEqual(3)
   expect(await ui.find({ key: 'pedir:lote' }), 'com todos pedidos o lote some').toBeUndefined()
-  expect([await ui.find({ key: 'orq:izanagi' }), await ui.find({ key: 'orq:kit' })], 'nenhum grupo no topo da Na fila').toEqual([undefined, undefined])
+  expect([await ui.find({ key: 'orq:alfa' }), await ui.find({ key: 'orq:kit' })], 'nenhum grupo no topo da Na fila').toEqual([undefined, undefined])
   await ui.unmount()
 })
 
@@ -2464,7 +2464,7 @@ test('F69 A (iv-b): no lote a orquestradora desta sessão recebe pelo campo e a 
 
 test('F69 A (v): projeto sem orquestradora ativa: sem botão, e o aviso no topo diz quantos itens', async ($, on) => {
   const { ui } = await abrirDe(pedir({ fila: FILA_TRES(), sessoesDocs: [ORQ_IZ] }), $, on)
-  expect(await ui.find({ key: 'pedir:F68' }), 'precondição: o izanagi tem botão').toBeDefined()
+  expect(await ui.find({ key: 'pedir:F68' }), 'precondição: o alfa tem botão').toBeDefined()
   expect(await ui.find({ key: 'pedir:F71' }), 'o kit não tem orquestradora').toBeUndefined()
   expect(await lerSuperficie(ui)).toMatch(/Sem orquestradora ativa em kit\u00a0·\u00a01\u00a0item · abra uma orquestradora para pedir/)
   expect((await ui.find({ key: 'pedir:lote' }))?.text, 'o item sem destino não conta no lote').toBe('Pedir 2 sessões')
@@ -2475,7 +2475,7 @@ test('F69 A (vi): duas orquestradoras ativas: nada é enviado e o aviso manda pe
   const { ui, enviadas, fills } = await abrirDe(pedir({ fila: FILA_DOIS(), sessoesDocs: [ORQ_IZ, ORQ_IZ2], vivas: vivasPedir('local_orq_iz2') }), $, on)
   expect(await ui.find({ key: 'pedir:F68' })).toBeUndefined()
   expect(await ui.find({ key: 'pedir:lote' })).toBeUndefined()
-  expect(await lerSuperficie(ui)).toMatch(/2 orquestradoras ativas em izanagi · peça na conversa da certa/)
+  expect(await lerSuperficie(ui)).toMatch(/2 orquestradoras ativas em alfa · peça na conversa da certa/)
   expect([enviadas, fills]).toEqual([[], []])
   await ui.unmount()
 })
@@ -2502,7 +2502,7 @@ test('F69 A (vii): send_message com erro: o botão volta e o motivo vai para a f
   expect((await ui.find({ key: 'pedir:F68' }))?.text, 'o botão voltou').toBe('Pedir dona')
   const lido = await lerSuperficie(ui)
   expect(lido).toMatch(/Ação não concluída/)
-  expect(lido).toMatch(/Não pedi a sessão do F68 · editor da loja à orquestradora de izanagi \(sessão não achada\): peça na conversa dela\./)
+  expect(lido).toMatch(/Não pedi a sessão do F68 · editor da loja à orquestradora de alfa \(sessão não achada\): peça na conversa dela\./)
   expect(lido).not.toMatch(/Pedido às/)
   expect(abertas, 'sem envio, sem foco').toEqual([])
   await ui.unmount()
@@ -2513,7 +2513,7 @@ test('F69 A (vii-b): lote com falha numa orquestradora: um aviso por orquestrado
   await ui.press({ key: 'pedir:lote' })
   await relogio.settle()
   const lido = await lerSuperficie(ui)
-  expect(lido).toMatch(/Não pedi 2 sessões à orquestradora de izanagi \(sessão não achada\): F\d+ · [^;]*, F\d+ · [^;]*; peça na conversa dela/)
+  expect(lido).toMatch(/Não pedi 2 sessões à orquestradora de alfa \(sessão não achada\): F\d+ · [^;]*, F\d+ · [^;]*; peça na conversa dela/)
   expect(lido).toMatch(/Não pedi a sessão do F71 · barra de status à orquestradora de kit/)
   expect(toasts.some(t => /enviado/.test(t)), 'nada saiu: nenhum toast de sucesso').toBe(false)
   expect((await ui.find({ key: 'pedir:lote' }))?.text, 'o lote volta recontado').toBe('Pedir 3 sessões')
@@ -2557,7 +2557,7 @@ test('F69 A (ix): o item que ganha o papel na releitura perde o "Pedido às"', a
   const lido = await lerSuperficie(ui)
   expect(lido).not.toMatch(/Pedido às/)
   expect(lido).toMatch(/1 Executando/)
-  expect(await ui.find({ key: 'orq:izanagi' }), 'sem item em Pedido, o botão da orquestradora some').toBeUndefined()
+  expect(await ui.find({ key: 'orq:alfa' }), 'sem item em Pedido, o botão da orquestradora some').toBeUndefined()
   await ui.unmount()
 })
 
@@ -2632,7 +2632,7 @@ test('F76 C/E: o topo da Na fila só tem o lote e os avisos, com o recuo da linh
   expect([topo.props.paddingLeft, topo.props.paddingBottom], 'o recuo da linha').toEqual([3, 1])
   await pedirDoisProjetos(ui, relogio)
   const r = await raiz(ui)
-  expect(achar(r, n => n.props?.key === 'orq:izanagi' || n.props?.key === 'orq:kit'), 'sem botão de grupo').toEqual([])
+  expect(achar(r, n => n.props?.key === 'orq:alfa' || n.props?.key === 'orq:kit'), 'sem botão de grupo').toEqual([])
   expect(achar(r, n => n.type === 'Text' && /cartão da fila espera você/.test(txt(n))), 'sem frase de grupo').toEqual([])
   expect(achar(r, n => n.type === 'Text' && /^Pedido às \d\d:\d\d · inicie o cartão$/.test(txt(n))).length, 'cada item diz que o pedido saiu').toBe(2)
   await ui.unmount()
@@ -2731,8 +2731,8 @@ test('F85 B: o mesmo dono em dois cartões ganha dois botões de chave única, e
 
 // F85 D: a decisão que a sessão assumiu fica no painel, a confirmar.
 const ASSUMIDA = (id: string, extra: Record<string, unknown> = {}, version = 3) =>
-  doc(id, { projeto: 'izanagi', sessao: 'frente B', sessaoId: 'local_b', titulo: `decisão ${id}`, recomendacao: `seguir com ${id}`, estado: 'assumida', ...extra }, version)
-const RESPONDIDA_ANTIGA = doc('Q5', { projeto: 'izanagi', sessao: 'frente B', titulo: 'já fechada', estado: 'respondida', resposta: 'sim' }, 2)
+  doc(id, { projeto: 'alfa', sessao: 'frente B', sessaoId: 'local_b', titulo: `decisão ${id}`, recomendacao: `seguir com ${id}`, estado: 'assumida', ...extra }, version)
+const RESPONDIDA_ANTIGA = doc('Q5', { projeto: 'alfa', sessao: 'frente B', titulo: 'já fechada', estado: 'respondida', resposta: 'sim' }, 2)
 const comAssumidas = (extra: Partial<Opcoes> = {}): Opcoes => ({ perguntas: [ASSUMIDA('Q30'), ASSUMIDA('Q31'), RESPONDIDA_ANTIGA], fila: {}, ...extra })
 const abrirAssumidas = async ($: Parameters<TestBody>[0], on: On, surface: 'desktop' | 'terminal' = 'desktop', extra: Partial<Opcoes> = {}) => {
   const motor = engine(on, false, {}, { agora: AGORA, vivas: vivasDe(P7), ...comAssumidas(extra) })
@@ -2847,16 +2847,16 @@ const PLANOS = { F68: parado('execucao', { titulo: 'editor da loja' }), F63: par
 const comCartoes = (cartoes: Doc[], extra: Partial<Opcoes> = {}) => pedir({ fila: PLANOS, cartoes, ...extra })
 
 test('F144 pura: lerCartao aceita o contrato e recusa apelido, papel, itens e data fora dele', () => {
-  const ok = { projeto: 'Izanagi', apelido: 'dona', papel: 'dona', itens: ['F68'], orquestradoraId: 'local_o', propostoEm: iso5(5) }
-  expect(R.lerCartao({ id: 't', data: ok, version: 1 })).toEqual({ id: 't', projeto: 'izanagi', apelido: 'dona', papel: 'dona', itens: ['F68'], orquestradoraId: 'local_o', propostoEm: iso5(5) })
+  const ok = { projeto: 'Alfa', apelido: 'dona', papel: 'dona', itens: ['F68'], orquestradoraId: 'local_o', propostoEm: iso5(5) }
+  expect(R.lerCartao({ id: 't', data: ok, version: 1 })).toEqual({ id: 't', projeto: 'alfa', apelido: 'dona', papel: 'dona', itens: ['F68'], orquestradoraId: 'local_o', propostoEm: iso5(5) })
   for (const ruim of [{ apelido: 'E21' }, { papel: 'E' }, { itens: [] }, { itens: ['x'] }, { itens: 'F68' }, { propostoEm: 'ontem' }, { orquestradoraId: '' }, { projeto: '' }])
     expect(R.lerCartao({ id: 't', data: { ...ok, ...ruim }, version: 1 }), JSON.stringify(ruim)).toBeUndefined()
 })
 
 test('F180 pura: lerCartao aceita o cartão de dona (apelido dona, um F<n>) e cartoesVisiveis o some quando abre `F<n> · …`', () => {
-  const ok = { projeto: 'Izanagi', apelido: 'dona', papel: 'dona', itens: ['F140'], orquestradoraId: 'local_o', propostoEm: iso5(10) }
+  const ok = { projeto: 'Alfa', apelido: 'dona', papel: 'dona', itens: ['F140'], orquestradoraId: 'local_o', propostoEm: iso5(10) }
   const c = R.lerCartao({ id: 'd', data: ok, version: 1 })
-  expect(c).toEqual({ id: 'd', projeto: 'izanagi', apelido: 'dona', papel: 'dona', itens: ['F140'], orquestradoraId: 'local_o', propostoEm: iso5(10) })
+  expect(c).toEqual({ id: 'd', projeto: 'alfa', apelido: 'dona', papel: 'dona', itens: ['F140'], orquestradoraId: 'local_o', propostoEm: iso5(10) })
   for (const ruim of [{ itens: [] }, { itens: ['F140', 'F141'] }, { papel: 'E' }]) expect(R.lerCartao({ id: 'd', data: { ...ok, ...ruim }, version: 1 }), JSON.stringify(ruim)).toBeUndefined()
   const viva = (title: string, createdAt: string) => ({ sessionId: 'local_x', title, createdAt })
   expect(R.cartoesVisiveis([c!], [], false, AGORA).map(x => x.id)).toEqual(['d'])
@@ -2872,7 +2872,7 @@ test('F180 desenho: a linha de dona diz "dona", o item e o tema', () => {
 })
 
 test('F144 pura: cartoesVisiveis — a sessão F<n> aberta depois do pedido some, a de antes fica, 12 h some, sem lista só o prazo vale', () => {
-  const c = (id: string, item: string, min: number) => ({ id, projeto: 'izanagi', apelido: 'dona', papel: 'dona' as const, itens: [item], orquestradoraId: 'local_o', propostoEm: iso5(min) })
+  const c = (id: string, item: string, min: number) => ({ id, projeto: 'alfa', apelido: 'dona', papel: 'dona' as const, itens: [item], orquestradoraId: 'local_o', propostoEm: iso5(min) })
   const cartoes = [c('b', 'F22', 6), c('a', 'F21', 10), c('v', 'F23', 13 * 60)]
   const viva = (title: string, createdAt: string) => ({ sessionId: 'local_x', title, createdAt })
   expect(R.cartoesVisiveis(cartoes, [], false, AGORA).map(x => x.id), 'mais antigo primeiro; o de 13 h já saiu').toEqual(['a', 'b'])
@@ -2906,7 +2906,7 @@ test('F144: com cartão a seção vem depois de "Esperam você" e antes da fila,
   expect(lido.terminal).toMatch(/Sessões para abrir · 1/)
   expect(lido.terminal).toMatch(/F68 dona · há 5 min/)
   expect(lido.terminal).toContain('editor da loja')
-  expect(lido.terminal).toContain('O cartão está na conversa da orquestradora de izanagi')
+  expect(lido.terminal).toContain('O cartão está na conversa da orquestradora de alfa')
   antes(lido.terminal, /Esperam você/, /Sessões para abrir/)
 })
 
@@ -2915,7 +2915,7 @@ test('F144: duas linhas e uma orquestradora ganham um só botão, e o resumo do 
   const { ui, relogio } = await abrirDe(comCartoes([CARTAO_F68, outro]), $, on)
   expect((await ui.findAll({ key: 'cartoes:local_orq_iz' })).length, 'um botão por grupo').toBe(1)
   const lido = await lerSuperficie(ui)
-  expect(lido).toContain('Os cartões estão na conversa da orquestradora de izanagi')
+  expect(lido).toContain('Os cartões estão na conversa da orquestradora de alfa')
   expect(lido).toMatch(/Sessões para abrir · 2/)
   antes(lido, /F63, dona/, /F68, dona/)
   expect(lido, 'o resumo segue contando itens').not.toMatch(/2 sessões para abrir/)
@@ -2925,7 +2925,7 @@ test('F144: duas linhas e uma orquestradora ganham um só botão, e o resumo do 
 
 test('F144: o apelido que já aparece vivo depois do pedido esconde a linha na hora; o de antes não', async ($, on) => {
   const vivas = JSON.stringify([
-    { sessionId: 'local_orq_iz', title: '🎛 orquestradora — izanagi', isRunning: true, isArchived: false },
+    { sessionId: 'local_orq_iz', title: '🎛 orquestradora — alfa', isRunning: true, isArchived: false },
     { sessionId: 'local_nova', title: 'F68 · editor da loja', isRunning: false, isArchived: false, createdAt: iso5(1) },
     { sessionId: 'local_velha', title: 'F63 · painel', isRunning: false, isArchived: false, createdAt: iso5(120) },
   ])

@@ -59,10 +59,10 @@ describe("o parser acha o comando (o vazio não atravessa)", () => {
 
 describe("pnpm build que toca o front", () => {
   it("pergunta na raiz com o next dev no ar, e o motivo diz o que fazer", () => {
-    const buildFiltrado = "pnpm --filter @izanagi/shared --filter @izanagi/adapters build";
+    const buildFiltrado = "pnpm --filter @alfa/shared --filter @alfa/adapters build";
     const motivos = avaliar("pnpm build", ctx(true, RAIZ, { fora: [] }, { buildFiltrado }));
     expect(motivos).toHaveLength(1);
-    expect(motivos[0]).toMatch(/--filter @izanagi\/shared/);
+    expect(motivos[0]).toMatch(/--filter @alfa\/shared/);
     // Sem `guarda.buildFiltrado` o motivo ainda diz o que fazer, sem inventar comando.
     expect(avaliar("pnpm build", ctx(true))[0]).toMatch(/build filtrado dos pacotes/);
   });
@@ -81,8 +81,8 @@ describe("pnpm build que toca o front", () => {
     "pnpm -r build",
     "pnpm run build",
     "cd /repo && pnpm build",
-    "pnpm --filter @izanagi/web build",
-    "pnpm --filter=@izanagi/web build",
+    "pnpm --filter @alfa/web build",
+    "pnpm --filter=@alfa/web build",
   ], "pergunta em `%s`", (comando) => {
     expect(pergunta(comando, ctx(true))).toBe(true);
   });
@@ -95,9 +95,9 @@ describe("pnpm build que toca o front", () => {
   // Achados da revisão do diff de 2026-09-22: seletores do pnpm que incluem o
   // front sem escrever `web`, e o cwd efetivo mudado por `-C`/`--dir`/`-w`.
   cada([
-    'pnpm --filter "@izanagi/*" build',
-    'pnpm --filter "...@izanagi/shared" build',
-    'pnpm --filter "@izanagi/shared..." build',
+    'pnpm --filter "@alfa/*" build',
+    'pnpm --filter "...@alfa/shared" build',
+    'pnpm --filter "@alfa/shared..." build',
     "pnpm --filter ./apps/* build",
   ], "pergunta no seletor que alcança o front: `%s`", (comando) => {
     expect(pergunta(comando)).toBe(true);
@@ -123,7 +123,7 @@ describe("pnpm build que toca o front", () => {
   });
 
   cada([
-    "pnpm --filter @izanagi/shared --filter @izanagi/adapters --filter @izanagi/runner build",
+    "pnpm --filter @alfa/shared --filter @alfa/adapters --filter @alfa/runner build",
     "pnpm test",
     "pnpm typecheck",
   ], "não pergunta em `%s`", (comando) => {
@@ -637,7 +637,7 @@ describe("o kit.json de um repositório real chega até a decisão do hook", () 
 
   it("(A2) migration fora do tronco pergunta também num repo npm, sem workspace nem front", () => {
     const raiz = repoNpm({});
-    expect(existsSync(join(raiz, "pnpm-workspace.yaml"))).toBe(false); // precondição: o repo não tem a forma do Izanagi
+    expect(existsSync(join(raiz, "pnpm-workspace.yaml"))).toBe(false); // precondição: o repo não tem a forma do Alfa
     const r = rodar(raiz, "supabase migration up --local");
     expect(decisao(r)?.permissionDecision).toBe("ask");
     expect(decisao(r).permissionDecisionReason).toMatch(/b\.sql/);

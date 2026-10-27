@@ -117,7 +117,7 @@ function rodar(ferramentas, { extra = {}, env = {} } = {}) {
     env: { ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'),
       PAINEL_DIR: join(base, 'painel'), FILA_DIR: '', ESPERA_MIN: '', KIT_TETO_DE_DONAS: '',
       // a máquina do teste nunca está cheia por acaso: sem fichas e com carga zero, a menos que o caso diga o contrário
-      KIT_NUCLEOS_DIR: join(base, 'nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', IZANAGI_NUCLEOS_DE_TESTE: '', CI: '', KIT_CARGA_1MIN: '0', ...env },
+      KIT_NUCLEOS_DIR: join(base, 'nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', CI: '', KIT_CARGA_1MIN: '0', ...env },
   });
   assert.equal(r.status, 0, r.stderr);
   return r.stdout ? JSON.parse(r.stdout) : null;

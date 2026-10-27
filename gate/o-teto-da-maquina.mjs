@@ -6,10 +6,8 @@
  * repositório e nada soma; aqui mora o que soma: um conjunto de **fichas**, uma por núcleo de teste, numa
  * pasta da máquina (`~/.claude/orquestracao/nucleos-de-teste`, ou `KIT_NUCLEOS_DIR`). A ficha k (de 1 ao
  * teto) é o arquivo `<pasta>/<k>`, criado com `openSync(…, 'wx')`, com `{pid, token, worktree, projeto, desde}`.
- * O contrato é o mesmo do ADR 0400 do Izanagi (arquivo `<k>`, PID dono): os dois projetos dividem as fichas.
  *
- * **O valor** (ADR 0008, operador, 26/10: o teto é fração dos núcleos). Em ordem: `KIT_NUCLEOS_DE_TESTE` (ou o legado
- * `IZANAGI_NUCLEOS_DE_TESTE`), absoluto; `KIT_FRACAO_DE_TESTE`; o arquivo `<pasta>/teto.json` com `{"nucleos": N}` (absoluto,
+ * **O valor** (ADR 0008, operador, 26/10: o teto é fração dos núcleos). Em ordem: `KIT_NUCLEOS_DE_TESTE`, absoluto; `KIT_FRACAO_DE_TESTE`; o arquivo `<pasta>/teto.json` com `{"nucleos": N}` (absoluto,
  * vence) ou `{"fracao": f}`; 2/3 dos núcleos (`floor`, mínimo 1). No CI não há teto (`null`).
  *
  * **Duas faixas** (ADR 0008). Faixa do gate: fichas `1..G`, G = floor(T × 0,7) (`KIT_FRACAO_DO_GATE`); faixa normal:

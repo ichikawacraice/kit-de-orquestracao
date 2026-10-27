@@ -26,8 +26,7 @@
  * workers (`KIT_TESTE_WORKERS`, ou `KIT_CONSERTO_WORKERS`), e não espera o gate
  * completo — nem o contrário. Nunca grava o verde: só a suíte inteira prova a árvore.
  *
- * **Configuração**: `.claude/kit.json` (ver `config.mjs`). Os nomes `IZANAGI_*`
- * das variáveis continuam valendo como reserva dos `KIT_*`.
+ * **Configuração**: `.claude/kit.json` (ver `config.mjs`); as variáveis de ambiente são `KIT_*`.
  *
  * **O que a retomada NÃO garante.** Entre ler a trava morta e apagá-la há uma
  * janela de microssegundos em que um segundo retomador pode apagar a trava que
@@ -138,8 +137,7 @@ export const MENSAGEM_DO_LACO = (detalhe, irmao = false) => `[gate] a suíte cha
 
 /**
  * O ambiente do filho que roda a suíte. O conserto leva `KIT_TESTE_WORKERS`
- * (e o legado `IZANAGI_TESTE_WORKERS`, que o `vitest.teto.mjs` de quem migra
- * ainda lê) = `gate.workersConserto` quando quem chamou não definiu
+ * = `gate.workersConserto` quando quem chamou não definiu
  * (`KIT_CONSERTO_WORKERS` escolhe outro valor); o gate completo segue com o teto
  * do projeto.
  */
@@ -152,7 +150,6 @@ export function ambienteDoFilho(env = process.env, argv = [], raiz = RAIZ, cfg =
   if (pedido !== undefined) n = inteiroDoEnv(env, "CONSERTO_WORKERS", n);
   else if (envKit(env, "TESTE_WORKERS") !== undefined) return filho;
   filho["KIT_TESTE_WORKERS"] = String(n);
-  filho["IZANAGI_TESTE_WORKERS"] = String(n);
   return filho;
 }
 
@@ -204,7 +201,7 @@ export function fichasDaSuite(env = process.env, argv = [], raiz = RAIZ, cfg = c
 
 /**
  * O mínimo de fichas com que o gate começa depois do prazo da devolução: metade do pedido, `ceil(quero / 2)` — e, no perfil `pnpm-workspace`, nunca
- * menos que 2 workers por pacote (`2 × pacotesJuntos`). Medido em 26/10 (Izanagi `web`, 725 arquivos): 1 worker levou 861 s sob carga 25, contra
+ * menos que 2 workers por pacote (`2 × pacotesJuntos`). Medido em 26/10 (um pacote `web` de 725 arquivos): 1 worker levou 861 s sob carga 25, contra
  * 160 s com 3; o vitest fixa os workers ao subir, então começar com 1 por pacote é pior que esperar mais um pouco.
  */
 export function minimoParaComecar(quero, env, cfg) {
@@ -267,7 +264,7 @@ function git(args, cwd) {
 }
 
 /**
- * O caminho da trava: `KIT_GATE_TRAVA` (ou o legado `IZANAGI_`), senão o diretório comum do git,
+ * O caminho da trava: `KIT_GATE_TRAVA`, senão o diretório comum do git,
  * senão `os.tmpdir()`. Devolve também o aviso a imprimir quando caiu no último.
  */
 export function caminhoDaTrava(env = process.env, raiz = RAIZ, fila = "gate", cfg = carregarConfig(raiz)) {
@@ -660,7 +657,6 @@ export async function main(env = process.env, argv = process.argv.slice(2), raiz
     if (cfg.gate.perfil === "pnpm-workspace") {
       const porPacote = pacote === null ? Math.max(1, Math.floor(fichas.quantas / (pacotesJuntos(env, cfg) ?? 1))) : fichas.quantas;
       filho["KIT_TESTE_WORKERS"] = String(porPacote);
-      filho["IZANAGI_TESTE_WORKERS"] = String(porPacote);
     }
     const inicio = Date.now();
     const codigo = constroi(raiz, env, cfg);

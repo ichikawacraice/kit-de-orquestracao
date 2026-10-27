@@ -4,6 +4,7 @@ import { readFileSync, existsSync, mkdtempSync, mkdirSync, copyFileSync, appendF
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nomesDoAutorEm } from './nomes-do-autor.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MODELOS = [
@@ -11,9 +12,9 @@ const MODELOS = [
   'docs/design/revisoes/README.md', 'docs/research/README.md', 'docs/planos/README.md',
   'front/PRODUCT.md', 'front/DESIGN.md', 'front/ANATOMIA.md', 'CLAUDE.md',
 ];
-const PROIBIDAS = ['Izanagi', 'Wake', 'VTEX', 'apps/web'];
+const PROIBIDAS = ['Wake', 'VTEX', 'apps/web'];
 const ler = (f, base = join(RAIZ, 'modelos')) => readFileSync(join(base, f), 'utf8');
-const citadas = (texto) => PROIBIDAS.filter((p) => texto.includes(p));
+const citadas = (texto) => [...PROIBIDAS.filter((p) => texto.includes(p)), ...nomesDoAutorEm(texto)];
 const bloco = (texto, nome) => new RegExp(`<!-- kit:${nome} v(\\d+) -->([\\s\\S]*?)<!-- /kit:${nome} -->`).exec(texto);
 
 describe('modelos de documento (K10)', () => {

@@ -69,7 +69,7 @@ caso('SessionStart injeta as regras globais (Q-ID, papéis e modelos, achar a or
   ok(typeof t === 'string' && t.length > 200, `texto curto demais: ${t?.length}`);
   for (const termo of ['Q-ID', 'proxima-pergunta', 'papeis-e-modelos', 'orquestradora', 'list_sessions']) ok(t.includes(termo), `falta "${termo}"`);
   ok(t.length < 6000, `o resumo deve ser curto: ${t.length}`);
-  ok(!/Izanagi|ichikawa/i.test(t), 'o texto do plugin não cita projeto nem pessoa');
+  ok(!/\/Users\/(?!x\/)[a-z]|\/home\/[a-z]/i.test(t), 'o texto do plugin não traz caminho da pasta pessoal de ninguém');
 });
 caso('SessionStart sem o .md das regras: não escreve nada e não falha (nunca trava o início da sessão)', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'sessao-inicio-'));

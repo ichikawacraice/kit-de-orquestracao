@@ -4,12 +4,13 @@ import { readFileSync, existsSync, mkdtempSync, mkdirSync, appendFileSync, copyF
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { nomesDoAutorEm } from './nomes-do-autor.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PLUGIN = join(RAIZ, 'plugins', 'processos');
 const SKILLS = ['spec-driven', 'revisar-diff', 'auditoria-de-clique'];
 const ARQUIVOS = [...SKILLS.map((s) => `skills/${s}/SKILL.md`), 'workflows/revisao-do-diff.js'];
-const PROIBIDAS = /Izanagi|Wake|VTEX|apps\/web|packages\/shared|useAposta|decidirGesto|pnpm/;
+const PROIBIDAS = /Wake|VTEX|apps\/web|packages\/shared|useAposta|decidirGesto|pnpm/;
 const ler = (f, base = PLUGIN) => readFileSync(join(base, f), 'utf8');
 const frontmatter = (t) => {
   const m = /^---\n([\s\S]*?)\n---\n/.exec(t);
@@ -50,6 +51,7 @@ describe('plugin processos (K11)', () => {
       const t = ler(f);
       assert.ok(t.trim().length > 200);
       assert.equal(PROIBIDAS.exec(t), null, `cita ${PROIBIDAS.exec(t)?.[0]}`);
+      assert.deepEqual(nomesDoAutorEm(t), []);
     });
   }
 

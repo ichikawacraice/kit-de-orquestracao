@@ -61,7 +61,7 @@ function igual(a, b, msg) { if (a !== b) throw new Error(`${msg}: esperado ${JSO
 
 // ---------- ideia 1: orquestradora não edita ----------
 const SID = '6a6d90b1-2fe5-4255-a082-ecb2a2ebf520';
-const REPO = join(homedir(), 'Developer/Projects/Izanagi');
+const REPO = join(homedir(), 'Developer/Projects/Alfa');
 const pre = (tool, input, extra = {}) => ({
   session_id: SID, transcript_path: '/x.jsonl', cwd: REPO, permission_mode: 'bypassPermissions',
   hook_event_name: 'PreToolUse', tool_name: tool, tool_input: input, tool_use_id: 'toolu_1', ...extra,
@@ -95,10 +95,10 @@ caso('1.5 orquestradora: NotebookEdit pergunta', () => {
   igual(decisao(rodar('orquestradora-nao-edita.mjs', pre('NotebookEdit', { notebook_path: `${REPO}/n.ipynb`, new_source: 'x' }))), 'ask', 'decisão');
 });
 for (const [nome, p] of [
-  ['estado da orquestração', () => join(base, 'izanagi.md')],
+  ['estado da orquestração', () => join(base, 'alfa.md')],
   ['notas de release', () => `${REPO}/docs/releases/2026-10-23-1.md`],
-  ['notas de release em worktree', () => join(homedir(), 'Developer/Projects/Izanagi-wt-rel/docs/releases/2026-10-23-2.md')],
-  ['memória', () => join(homedir(), '.claude/projects/-Users-x-Izanagi/memory/a.md')],
+  ['notas de release em worktree', () => join(homedir(), 'Developer/Projects/Alfa-wt-rel/docs/releases/2026-10-23-2.md')],
+  ['memória', () => join(homedir(), '.claude/projects/-Users-x-Alfa/memory/a.md')],
   ['scratchpad', () => '/private/tmp/claude-501/proj/sessao/scratchpad/a.md'],
   ['notas entre sessões', () => join(homedir(), 'Library/Application Support/Claude/side-session-notes/local_x/n.md')],
 ]) {
@@ -116,7 +116,7 @@ caso('1.7 orquestradora: Bash não é coberto (nem pergunta, nem registra)', () 
 caso('1.8 só nos repositórios listados: repo fora da lista passa calado, repo da lista pergunta', () => {
   marcar();
   const ev = pre('Edit', { file_path: `${REPO}/apps/web/a.ts`, old_string: 'a', new_string: 'b' });
-  writeFileSync(join(base, 'trava-edicao-repos.txt'), '/Users/x/Developer/Projects/battlewand/.git\n');
+  writeFileSync(join(base, 'trava-edicao-repos.txt'), '/Users/x/Developer/Projects/beta/.git\n');
   igual(rodar('orquestradora-nao-edita.mjs', ev), null, 'fora da lista');
   writeFileSync(join(base, 'trava-edicao-repos.txt'), `/Users/x/outro/.git\n${REPO}/.git\n`);
   igual(decisao(rodar('orquestradora-nao-edita.mjs', ev)), 'ask', 'na lista');
@@ -372,7 +372,7 @@ const VITEST = ' FAIL  src/a.test.ts > soma\nAssertionError: expected 3 to be 4\
 const avisos = (eventos) => eventos.map((ev) => rodar('laco-de-comandos.mjs', ev)?.hookSpecificOutput?.additionalContext ?? null);
 
 caso('3.1 o mesmo comando 4× com a mesma saída avisa no 4º, só uma vez', () => {
-  const r = avisos(Array.from({ length: 5 }, () => bash('pnpm --filter @izanagi/runner test', VITEST)));
+  const r = avisos(Array.from({ length: 5 }, () => bash('pnpm --filter @alfa/runner test', VITEST)));
   igual(r.map(Boolean).join(','), 'false,false,false,true,false', 'avisos');
   igual(log().map((l) => l[3]).join(','), 'avisou', 'log');
 });
@@ -402,7 +402,7 @@ caso('3.6 a sequência é por agente: o principal e um subagente não se somam',
 });
 caso('3.8 o teste vermelho repetido chega como PostToolUseFailure (error, sem tool_response) e avisa', () => {
   const falha = { session_id: SID, transcript_path: '/x.jsonl', cwd: REPO, hook_event_name: 'PostToolUseFailure', tool_name: 'Bash',
-    tool_input: { command: 'pnpm --filter @izanagi/runner test' }, tool_use_id: 'toolu_1', error: `Exit code 1\n${VITEST}`, is_interrupt: false };
+    tool_input: { command: 'pnpm --filter @alfa/runner test' }, tool_use_id: 'toolu_1', error: `Exit code 1\n${VITEST}`, is_interrupt: false };
   const r = Array.from({ length: 4 }, () => rodar('laco-de-comandos.mjs', falha));
   igual(r.slice(0, 3).every((x) => x === null), true, '1º–3º');
   igual(r[3]?.hookSpecificOutput?.hookEventName, 'PostToolUseFailure', 'evento do aviso');

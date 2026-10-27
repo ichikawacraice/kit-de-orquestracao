@@ -43,9 +43,9 @@ import { expect } from "./expect.mjs";
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(AQUI, "..", "..");
 
-/** O perfil do Izanagi, com os quatro pacotes escritos — o que `gate.pacotes: "auto"` leria do workspace. */
+/** O perfil do Alfa, com os quatro pacotes escritos — o que `gate.pacotes: "auto"` leria do workspace. */
 const PNPM = carregarConfig(RAIZ, {
-  gate: { perfil: "pnpm-workspace", pacotes: ["shared", "adapters", "runner", "web"], filtroDePacote: "@izanagi/{pacote}" },
+  gate: { perfil: "pnpm-workspace", pacotes: ["shared", "adapters", "runner", "web"], filtroDePacote: "@alfa/{pacote}" },
 });
 
 let dir;
@@ -213,9 +213,9 @@ describe("quantos pacotes rodam juntos", () => {
 
 describe("um pacote só — o conserto pela mesma fila", () => {
   it("o pacote pedido vira um --filter, e o resto vai para o vitest", () => {
-    expect(argumentosDaSuite({}, ["runner"], RAIZ, PNPM)).toEqual(["--filter", "@izanagi/runner", "test"]);
-    expect(argumentosDaSuite({}, ["--", "web", "src/x.test.ts"], RAIZ, PNPM)).toEqual(["--filter", "@izanagi/web", "test", "src/x.test.ts"]);
-    expect(argumentosDaSuite({ CI: "true" }, ["shared", "-t", "trava"], RAIZ, PNPM)).toEqual(["--filter", "@izanagi/shared", "test", "-t", "trava"]);
+    expect(argumentosDaSuite({}, ["runner"], RAIZ, PNPM)).toEqual(["--filter", "@alfa/runner", "test"]);
+    expect(argumentosDaSuite({}, ["--", "web", "src/x.test.ts"], RAIZ, PNPM)).toEqual(["--filter", "@alfa/web", "test", "src/x.test.ts"]);
+    expect(argumentosDaSuite({ CI: "true" }, ["shared", "-t", "trava"], RAIZ, PNPM)).toEqual(["--filter", "@alfa/shared", "test", "-t", "trava"]);
   });
 
   it("pacote desconhecido é recusado alto, com a lista", () => {
@@ -411,7 +411,7 @@ describe("a fila do conserto", () => {
  * que muda o teto saem do env dos casos, que assim medem o gate e não o `com-fichas` que roda o `npm test`.
  */
 describe("o gate toma as fichas do teto", () => {
-  const SEM_TETO = { KIT_FICHAS_TOMADAS: undefined, KIT_NUCLEOS_DE_TESTE: undefined, IZANAGI_NUCLEOS_DE_TESTE: undefined, CI: "" };
+  const SEM_TETO = { KIT_FICHAS_TOMADAS: undefined, KIT_NUCLEOS_DE_TESTE: undefined, CI: "" };
   const limpo = (extra = {}) => {
     const env = { ...process.env, ...SEM_TETO, ...extra };
     for (const [k, v] of Object.entries(env)) if (v === undefined) delete env[k];
@@ -425,7 +425,7 @@ describe("o gate toma as fichas do teto", () => {
     expect(cfg.gate.prazos.devolucaoSeg).toBe(300);
     for (const n of ["NUCLEOS_DIR", "NUCLEOS_DE_TESTE", "FICHAS_TOMADAS", "FRACAO_DE_TESTE", "FRACAO_DO_GATE", "PRAZO_DA_DEVOLUCAO_SEG"]) expect(cfg.arvore.foraDaChave).toContain(n);
     const { nomesDoEnv } = await import("../o-verde-da-arvore.mjs");
-    const nomes = nomesDoEnv({ KIT_NUCLEOS_DIR: "x", KIT_NUCLEOS_DE_TESTE: "3", KIT_FICHAS_TOMADAS: "2", IZANAGI_NUCLEOS_DE_TESTE: "3", KIT_FRACAO_DE_TESTE: "0.5", KIT_FRACAO_DO_GATE: "0.5", KIT_PRAZO_DA_DEVOLUCAO_SEG: "1", KIT_OUTRA: "1" }, cfg.arvore);
+    const nomes = nomesDoEnv({ KIT_NUCLEOS_DIR: "x", KIT_NUCLEOS_DE_TESTE: "3", KIT_FICHAS_TOMADAS: "2", KIT_FRACAO_DE_TESTE: "0.5", KIT_FRACAO_DO_GATE: "0.5", KIT_PRAZO_DA_DEVOLUCAO_SEG: "1", KIT_OUTRA: "1" }, cfg.arvore);
     expect(nomes).toEqual(["KIT_OUTRA"]);
   });
 
@@ -588,7 +588,7 @@ describe("o gate toma as fichas do teto", () => {
  * o que viu. A "outra sessão" é este processo (PID vivo) escrevendo os arquivos da pasta à mão.
  */
 describe("o gate e a vez da máquina (ADR 0008)", () => {
-  const LIMPO = { KIT_FICHAS_TOMADAS: undefined, KIT_NUCLEOS_DE_TESTE: undefined, IZANAGI_NUCLEOS_DE_TESTE: undefined, KIT_FRACAO_DE_TESTE: undefined, KIT_FRACAO_DO_GATE: undefined, KIT_TESTE_WORKERS: undefined, IZANAGI_TESTE_WORKERS: undefined, KIT_GATE_PACOTES: undefined, IZANAGI_GATE_PACOTES: undefined, KIT_GATE_VAGAS: undefined, IZANAGI_GATE_VAGAS: undefined, CI: "" };
+  const LIMPO = { KIT_FICHAS_TOMADAS: undefined, KIT_NUCLEOS_DE_TESTE: undefined, KIT_FRACAO_DE_TESTE: undefined, KIT_FRACAO_DO_GATE: undefined, KIT_TESTE_WORKERS: undefined, KIT_GATE_PACOTES: undefined, APP_GATE_PACOTES: undefined, KIT_GATE_VAGAS: undefined, APP_GATE_VAGAS: undefined, CI: "" };
   const limpo = (extra = {}) => {
     const env = { ...process.env, ...LIMPO, ...extra };
     for (const [k, v] of Object.entries(env)) if (v === undefined) delete env[k];

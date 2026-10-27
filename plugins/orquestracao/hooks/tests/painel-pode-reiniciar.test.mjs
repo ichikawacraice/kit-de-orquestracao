@@ -54,7 +54,7 @@ function sessoes(...linhas) {
   writeFileSync(f, JSON.stringify(linhas));
   return f;
 }
-const ficha = (k, dono) => writeFileSync(join(base, 'nuc', String(k)), JSON.stringify({ worktree: '/x/wt/izanagi-a', projeto: 'izanagi', desde: iso(T), ...dono }));
+const ficha = (k, dono) => writeFileSync(join(base, 'nuc', String(k)), JSON.stringify({ worktree: '/x/wt/alfa-a', projeto: 'alfa', desde: iso(T), ...dono }));
 const lerArquivo = () => JSON.parse(readFileSync(arquivoDoReinicio(), 'utf8'));
 const pidMorto = () => { const r = spawnSync('node', ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' }); return Number(r.stdout); };
 
@@ -96,7 +96,7 @@ test('ficha com pid vivo é teste; ficha com pid morto não conta; fichas do mes
   ficha(3, { pid: pidMorto() });
   const j = painel(['pode-reiniciar', '--sessoes', sessoes(), '--json']).json();
   assert.equal(j.pode, false);
-  assert.deepEqual(j.motivos.map((m) => [m.tipo, m.texto]), [['teste', 'teste de izanagi em izanagi-a (2 fichas)']]);
+  assert.deepEqual(j.motivos.map((m) => [m.tipo, m.texto]), [['teste', 'teste de alfa em alfa-a (2 fichas)']]);
 });
 
 test('só ficha de pid morto: pode', () => {

@@ -64,7 +64,7 @@ describe("tetoDeWorkers com o teto da máquina", () => {
     tetoDeWorkers({}, 15, 0.25, { pasta, teto: 4, avisar: () => {} });
     const antes = readdirSync(pasta).sort();
     assert.equal(antes.length, 3);
-    // só a variável que a primeira chamada gravou: o ambiente de quem roda o teste (IZANAGI_TESTE_WORKERS etc.) não entra
+    // só a variável que a primeira chamada gravou: o ambiente de quem roda o teste (KIT_TESTE_WORKERS etc.) não entra
     const r = tetoDeWorkers({ KIT_FICHAS_TOMADAS: process.env.KIT_FICHAS_TOMADAS }, 15, 0.25, { pasta, teto: 4, avisar: () => {} });
     assert.deepEqual(r, { maxWorkers: 3, minWorkers: 1 });
     assert.deepEqual(readdirSync(pasta).sort(), antes);

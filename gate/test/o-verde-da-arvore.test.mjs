@@ -28,18 +28,18 @@ import {
 } from "../o-verde-da-arvore.mjs";
 import { expect } from "./expect.mjs";
 
-/** Os três extras do Izanagi, como o `kit.json` dele os declara. */
+/** Os três extras do Alfa, como o `kit.json` dele os declara. */
 const BANCO = {
   nome: "banco",
   tipo: "banco-postgres",
-  urlEnv: "IZANAGI_BANCO_LOCAL_URL",
+  urlEnv: "APP_BANCO_LOCAL_URL",
   urlPadrao: "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
 };
-const TAILWIND = { nome: "tailwind", tipo: "diretorio-executavel", dirEnv: "IZANAGI_TAILWIND_DIR", dirPadrao: "izanagi-tailwind", binario: "node_modules/.bin/tailwindcss" };
+const TAILWIND = { nome: "tailwind", tipo: "diretorio-executavel", dirEnv: "APP_TAILWIND_DIR", dirPadrao: "alfa-tailwind", binario: "node_modules/.bin/tailwindcss" };
 const TIPOS_DO_NEXT = { nome: "tiposDoNext", tipo: "arquivos-gerados", base: "apps/web", padraoDir: "^\\.next[^/]*$", sub: "types" };
 const CFG = carregarConfig("/x", {
-  gate: { verdeDir: "izanagi-gate-verde" },
-  arvore: { prefixosEnv: ["IZANAGI_", "NEXT_PUBLIC_", "SUPABASE_"], extras: [BANCO, TAILWIND, TIPOS_DO_NEXT] },
+  gate: { verdeDir: "alfa-gate-verde" },
+  arvore: { prefixosEnv: ["APP_", "NEXT_PUBLIC_", "SUPABASE_"], extras: [BANCO, TAILWIND, TIPOS_DO_NEXT] },
 });
 
 /**
@@ -74,7 +74,7 @@ beforeEach(() => {
   verde = join(base, "verde");
   mkdirSync(repo);
   git(["init", "-q"], repo);
-  git(["config", "user.email", "teste@izanagi.local"], repo);
+  git(["config", "user.email", "teste@alfa.local"], repo);
   git(["config", "user.name", "teste"], repo);
   writeFileSync(join(repo, ".gitignore"), "ignorado.txt\n");
   writeFileSync(join(repo, "a.txt"), "a\n");
@@ -90,8 +90,8 @@ afterEach(() => {
 
 /** Um env que só tem o que o caso põe — nada exportado no shell de quem roda entra na chave. */
 const envLimpo = (extra = {}) => ({
-  IZANAGI_BANCO_LOCAL_URL: "postgresql://x@10.0.0.1:5432/db",
-  IZANAGI_TAILWIND_DIR: join(base, "sem-tailwind"),
+  APP_BANCO_LOCAL_URL: "postgresql://x@10.0.0.1:5432/db",
+  APP_TAILWIND_DIR: join(base, "sem-tailwind"),
   ...extra,
 });
 
@@ -150,7 +150,7 @@ describe("árvore ilegível não guarda nem acha verde", () => {
     try {
       // A precondição: sem permissão, ilegível MESMO — como root ele seria lido, e o caso não mediria nada.
       expect(() => readFileSync(travado), "precondição: o arquivo travado é ilegível (rodando como root?)").toThrow();
-      const env = envLimpo({ IZANAGI_GATE_VERDE_DIR: verde });
+      const env = envLimpo({ KIT_GATE_VERDE_DIR: verde });
       const insumos = insumosDaChave(repo, env, CFG);
       // A precondição: a árvore não foi lida — e a mensagem é estável, então a chave
       // seria a mesma para qualquer conteúdo.
@@ -192,7 +192,7 @@ describe("a chave", () => {
     expect(chave).toMatch(/^[0-9a-f]{64}$/);
 
     expect(chaveDe({ ...base_, arvore: "outra" }), "arvore").not.toBe(chave);
-    expect(chaveDe(insumosDaChave(repo, envLimpo({ IZANAGI_SUITE: "leve" }), CFG)), "env").not.toBe(chave);
+    expect(chaveDe(insumosDaChave(repo, envLimpo({ APP_SUITE: "leve" }), CFG)), "env").not.toBe(chave);
     expect(chaveDe({ ...base_, banco: "outro" }), "banco").not.toBe(chave);
     expect(chaveDe({ ...base_, dotenv: "outro" }), "dotenv").not.toBe(chave);
     expect(chaveDe({ ...base_, tailwind: "outro" }), "tailwind").not.toBe(chave);
@@ -211,7 +211,7 @@ describe("a chave", () => {
 
   it("o Tailwind entra pelo binário de cada instalação EXECUTAR, no layout real", () => {
     const raiz = join(base, "sem-tailwind");
-    const env = { IZANAGI_TAILWIND_DIR: raiz };
+    const env = { APP_TAILWIND_DIR: raiz };
     expect(impressaoDoDiretorioExecutavel(env, TAILWIND)).toBe("ausente");
     // O layout de `binDaInstalacao`: <raiz>/<major>-<versão>/node_modules/.bin/tailwindcss.
     const bin = join(raiz, "v3-3.4.19", "node_modules", ".bin", "tailwindcss");
@@ -265,7 +265,7 @@ describe("a chave", () => {
 
   it("as variáveis do próprio gate não mudam a chave", () => {
     const chave = chaveDe(insumosDaChave(repo, envLimpo(), CFG));
-    expect(chaveDe(insumosDaChave(repo, envLimpo({ KIT_GATE_SEM_CACHE: "1", IZANAGI_GATE_SEM_CACHE: "1", KIT_GATE_VERDE_DIR: verde, KIT_GATE_TRAVA: "x", IZANAGI_GATE_VERDE_DIR: verde }), CFG))).toBe(chave);
+    expect(chaveDe(insumosDaChave(repo, envLimpo({ KIT_GATE_SEM_CACHE: "1", APP_GATE_SEM_CACHE: "1", KIT_GATE_VERDE_DIR: verde, KIT_GATE_TRAVA: "x", APP_GATE_VERDE_DIR: verde }), CFG))).toBe(chave);
   });
 
   it("o valor de uma variável nunca sai do hash — só o nome", () => {
@@ -277,12 +277,12 @@ describe("a chave", () => {
 
 describe("o banco local na chave", () => {
   it("endereço que não é local é ausente", () => {
-    expect(impressaoDoBanco({ IZANAGI_BANCO_LOCAL_URL: "postgresql://x@10.0.0.1:5432/db" }, BANCO)).toBe("ausente");
+    expect(impressaoDoBanco({ APP_BANCO_LOCAL_URL: "postgresql://x@10.0.0.1:5432/db" }, BANCO)).toBe("ausente");
   });
 
   it("porta fechada é ausente, sem pendurar", () => {
     const inicio = Date.now();
-    expect(impressaoDoBanco({ IZANAGI_BANCO_LOCAL_URL: "postgresql://postgres:postgres@127.0.0.1:1/postgres" }, BANCO)).toBe("ausente");
+    expect(impressaoDoBanco({ APP_BANCO_LOCAL_URL: "postgresql://postgres:postgres@127.0.0.1:1/postgres" }, BANCO)).toBe("ausente");
     expect(Date.now() - inicio).toBeLessThan(10_000);
   });
 });
@@ -346,20 +346,20 @@ describe("o registro", () => {
   });
 
   it("o diretório do verde é o do ponto de injeção, ou o comum do git", () => {
-    expect(dirDoVerde({ IZANAGI_GATE_VERDE_DIR: verde }, repo, CFG)).toEqual({ dir: verde, aviso: null });
+    expect(dirDoVerde({ KIT_GATE_VERDE_DIR: verde }, repo, CFG)).toEqual({ dir: verde, aviso: null });
     const comum = git(["rev-parse", "--path-format=absolute", "--git-common-dir"], repo);
     expect(comum.length).toBeGreaterThan(0);
-    expect(dirDoVerde({}, repo, CFG)).toEqual({ dir: join(comum, "izanagi-gate-verde"), aviso: null });
+    expect(dirDoVerde({}, repo, CFG)).toEqual({ dir: join(comum, "alfa-gate-verde"), aviso: null });
   });
 });
 
 describe("o que difere, quando a mesma árvore passou com outra chave", () => {
   it("nomeia o insumo — e da variável, só o nome", () => {
-    const antes = insumosDaChave(repo, envLimpo({ IZANAGI_PROVA: "valor-secreto" }), CFG);
+    const antes = insumosDaChave(repo, envLimpo({ APP_PROVA: "valor-secreto" }), CFG);
     const agora = insumosDaChave(repo, envLimpo(), CFG);
     expect(antes.arvore).toBe(agora.arvore);
     const difere = insumosQueDiferem(antes, agora);
-    expect(difere).toEqual(["env (só no verde: IZANAGI_PROVA)"]);
+    expect(difere).toEqual(["env (só no verde: APP_PROVA)"]);
     expect(difere.join()).not.toContain("valor-secreto");
     expect(insumosQueDiferem(agora, { ...agora, banco: "outro" })).toEqual(["banco"]);
   });
@@ -446,9 +446,9 @@ describe("os extras da chave vêm do kit.json", () => {
 });
 
 describe("as variáveis do próprio kit entram sempre na chave", () => {
-  it("`arvore.prefixosEnv` sem `KIT_` não tira `KIT_*` nem `IZANAGI_*` da chave", () => {
+  it("`arvore.prefixosEnv` sem `KIT_` não tira `KIT_*` da chave", () => {
     const arvore = { prefixosEnv: ["NEXT_PUBLIC_"], avulsas: [], foraDaChave: ["GATE_SEM_CACHE"] };
-    const env = { KIT_TESTE_WORKERS: "3", IZANAGI_TESTE_WORKERS: "3", NEXT_PUBLIC_X: "1", KIT_GATE_SEM_CACHE: "1", OUTRA: "x" };
-    expect(nomesDoEnv(env, arvore)).toEqual(["IZANAGI_TESTE_WORKERS", "KIT_TESTE_WORKERS", "NEXT_PUBLIC_X"]);
+    const env = { KIT_TESTE_WORKERS: "3", NEXT_PUBLIC_X: "1", KIT_GATE_SEM_CACHE: "1", OUTRA: "x" };
+    expect(nomesDoEnv(env, arvore)).toEqual(["KIT_TESTE_WORKERS", "NEXT_PUBLIC_X"]);
   });
 });

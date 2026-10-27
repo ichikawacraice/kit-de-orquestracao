@@ -11,7 +11,7 @@ const CASO_NO_HOOK = 200;
 const TITULO_NO_HOOK = 120;
 const RESPOSTA_NO_HOOK = 200;
 
-const painelDir = () => process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
+const painelDir = () => process.env.PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 const texto = (v) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 const ms = (iso) => { const t = Date.parse(iso ?? ''); return Number.isNaN(t) ? 0 : t; };
 

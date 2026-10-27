@@ -14,7 +14,7 @@ const COMUM = pathToFileURL(join(PLUGIN, 'hooks', 'pool-comum.mjs')).href;
 
 function lerOk(home, localId) {
   const r = spawnSync('node', ['--input-type=module', '-e', `import { okDoBotaoDeLimpar } from '${COMUM}'; process.stdout.write(JSON.stringify(okDoBotaoDeLimpar(${JSON.stringify(localId)})));`], {
-    encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: { ...process.env, HOME: home, PAINEL_DIR: '', IZANAGI_PAINEL_DIR: '' },
+    encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: { ...process.env, HOME: home, PAINEL_DIR: '' },
   });
   assert.equal(r.status, 0, r.stderr);
   return JSON.parse(r.stdout);

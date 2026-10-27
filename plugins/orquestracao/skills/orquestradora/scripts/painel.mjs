@@ -45,7 +45,7 @@
 // onde roda (basename da pasta que contém o git common dir, em slug `[a-z0-9-]`; fora de git não preenche). Toda op que grava
 // `projeto` fora do slug é recusada (F183). Pergunta respondida/cancelada mora em `perguntas/arquivo/<projeto>/<AAAA-MM>/<Q>.json`
 // (mês da resposta, São Paulo); `get`, `update` e `delete` a acham onde estiver, e a que reabre volta à pasta quente. Ambiente: PAINEL_DIR
-// (o nome antigo IZANAGI_PAINEL_DIR segue valendo, e o novo vence); idem PAINEL_PAUSA_* (só teste).
+// e PAINEL_PAUSA_* (só teste).
 //
 // Toda escrita grava `atualizadoEm` (agora, ISO) quando o JSON não traz um, e sobe `version`.
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -63,9 +63,9 @@ import { registrarAcerto } from './testes-afetados.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
 import * as arq from './perguntas-arquivo.mjs';
 
-const BASE = process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
+const BASE = process.env.PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel');
 // Handoffs dos itens: PAINEL_HANDOFFS_DIR; senão, ao lado do painel (PAINEL_DIR/../pool/handoffs, que no uso real é ~/.claude/orquestracao/pool/handoffs); senão, o padrão do HOME.
-const HANDOFFS = process.env.PAINEL_HANDOFFS_DIR || ((process.env.PAINEL_DIR || process.env.IZANAGI_PAINEL_DIR) ? join(BASE, '..', 'pool', 'handoffs') : join(homedir(), '.claude', 'orquestracao', 'pool', 'handoffs'));
+const HANDOFFS = process.env.PAINEL_HANDOFFS_DIR || (process.env.PAINEL_DIR ? join(BASE, '..', 'pool', 'handoffs') : join(homedir(), '.claude', 'orquestracao', 'pool', 'handoffs'));
 const COLECOES = new Set(['sessoes', 'perguntas', 'fila', 'cartoes']);
 const ID = /^[A-Za-z0-9_.-]{1,120}$/;
 
@@ -625,8 +625,8 @@ const TRAVA_ORFA_MS = 30_000;
 function dormir(ms) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }
 
 // Gancho só de teste: segura por N ms; valor que não é número finito positivo é ignorado.
-function pausa(nome) { // nome = sufixo (PAUSA_MS…): vale PAINEL_<nome> e o antigo IZANAGI_PAINEL_<nome>
-  const n = Number(process.env[`PAINEL_${nome}`] ?? process.env[`IZANAGI_PAINEL_${nome}`]);
+function pausa(nome) { // nome = sufixo (PAUSA_MS…): vale PAINEL_<nome>
+  const n = Number(process.env[`PAINEL_${nome}`]);
   if (Number.isFinite(n) && n > 0) dormir(n);
 }
 

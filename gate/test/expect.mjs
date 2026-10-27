@@ -1,6 +1,6 @@
 /**
  * Um `expect` mínimo sobre `node:assert/strict`, só para os testes do gate
- * portados do Izanagi (vitest) manterem a forma do original sem dependência.
+ * portados do Alfa (vitest) manterem a forma do original sem dependência.
  */
 import assert from "node:assert/strict";
 import { it } from "node:test";

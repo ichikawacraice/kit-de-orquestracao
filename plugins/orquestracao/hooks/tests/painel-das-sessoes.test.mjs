@@ -74,11 +74,6 @@ caso('ADR 0007: sem orquestradora ativa no projeto, a sessão que abriu PR e nã
   const pr = rodar(transcript('segue', ['gh pr create --title x']));
   ok(pr?.decision === 'block' && pr.reason.includes('abriu PR'), `PR aberto e nada gravado: ${JSON.stringify(pr)}`);
 });
-caso('(b2) o nome antigo IZANAGI_PAINEL_DIR segue valendo (PAINEL_DIR vazio): bloqueia como (b)', () => {
-  pergunta('Q12', LOCAL);
-  const r = rodar(transcript('Q12 — resposta do operador pelo painel: sim'), { PAINEL_DIR: '', IZANAGI_PAINEL_DIR: dir('painel') });
-  ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
-});
 caso('(c) igual a (b), com painel.mjs update no turno: passa', () => {
   pergunta('Q12', LOCAL);
   const r = rodar(transcript('Q12 — resposta do operador pelo painel: sim', [`node ~/.claude/skills/orquestradora/scripts/painel.mjs update sessoes ${LOCAL} '{"etapa":"x"}'`]));

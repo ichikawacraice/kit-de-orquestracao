@@ -177,7 +177,7 @@ describe("indice-de-adr", () => {
     }
   });
 
-  it("rótulo `ADR 0390` com o número do arquivo passa (foi o falso positivo do Izanagi); com outro número reprova", () => {
+  it("rótulo `ADR 0390` com o número do arquivo passa (foi o falso positivo do Alfa); com outro número reprova", () => {
     const a = bom();
     a["docs/adr/README.md"] = ADR_INDICE("Decide X", "[ADR 0001](0001-um.md)");
     const raiz = pasta(a);
@@ -313,7 +313,7 @@ describe("linha-do-roadmap", () => {
     }
   });
 
-  it("link do roadmap para outro doc aceita o slug do título, mas a âncora tem de existir (o falso positivo do Izanagi)", () => {
+  it("link do roadmap para outro doc aceita o slug do título, mas a âncora tem de existir (o falso positivo do Alfa)", () => {
     const a = bom();
     a["docs/roadmap.md"] = ROADMAP("x · [doc](outro.md#um-título) · [doc2](outro.md#nao-existe)");
     a["docs/outro.md"] = "# Um título\n";
