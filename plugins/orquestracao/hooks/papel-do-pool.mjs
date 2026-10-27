@@ -9,8 +9,8 @@
 //   T2  archive_session / delete_session de membro do pool. Só a orquestradora arquiva: com o modo ausente desligado, sozinha, o membro sem item vivo
 //       (sem com, fez nem dono) e que não seja a última E livre do projeto (piso, ADR 0004); com ele ligado, só por pedido do operador no turno dele (Q277). Sempre membro do MESMO projeto ou de projeto sem orquestradora.
 //   T3  start_session: negado em turno que não é do operador com o modo ausente ligado (/ausente on) e a membro do pool.
-//   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava).
-//   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o botão de limpar da barra, o sim do painel ou o da janela, F48/F53/F147).
+//   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava) e em <BASE>/limpeza/ (o ok de limpar só nasce do clique na barra).
+//   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o botão de limpar da barra (o ok vale uma limpeza), o sim do painel ou o da janela, F48/F53/F147).
 //   T6  Bash `gh pr merge` ou `painel mergear` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
 //   T9  SendMessage / send_message de uma V cujo texto diz `validado` ou `aprovado` sem a linha `PR <n> validado, HEAD <sha de 7 a 40 hex>` → deny
 //       (assumida, a confirmar, F150): o recado sem sha não deixa a orquestradora conferir a ponta com `painel mergear`. Outros papéis passam.
@@ -26,7 +26,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { registrar, lerEntrada, semPrefixoDoPlugin, modoAusente, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, membrosLivres, perguntasDeLimpeza, okDoBotaoDeLimpar, janelasDeLimpeza, SIM_DA_JANELA_MS, filaDir, maquinaCheia, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
+import { BASE, registroDaSessao, membroDoPool, ehOrquestradora, inicioDoTurno, origemDoTurno, gitCommonDir, projetoTemOrquestradora, projetoDaSessao, ocupacaoDaSessao, membrosLivres, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, janelasDeLimpeza, SIM_DA_JANELA_MS, filaDir, maquinaCheia, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'papel-do-pool';
 const H = homedir();
@@ -76,6 +76,9 @@ function main() {
     if (!p) return;
     if (p.startsWith(join(BASE, 'painel') + '/')) {
       return nega('T5', '-', p, 'O painel só se grava por `painel` (o comando do plugin orquestracao: ele valida e trava a escrita).');
+    }
+    if (p.startsWith(join(BASE, 'limpeza') + '/')) {
+      return nega('T5', '-', p, 'O ok de limpar só se grava pelo botão `↺ Limpar` da barra: é o clique do operador.');
     }
     if (LIVRES.some((f) => f(p))) return;
     const reg = registroDaSessao(e.session_id);
@@ -198,7 +201,7 @@ function main() {
     let origem = null;
     try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
     if (origem === 'human') return libera('turno do operador');
-    if (okDoBotaoDeLimpar(reg?.localId)) return libera('botão da barra');
+    if (okDoBotaoDeLimpar(reg?.localId)) { gastarOkDoBotaoDeLimpar(reg.localId); return libera('botão da barra'); }
     const ok = perguntasDeLimpeza(reg?.localId).find((d) => d.estado === 'respondida' && d.respondidaPor === 'painel'
       && /^\s*sim/i.test(String(d.resposta ?? '')) && noPrazo(d.respondidaEm));
     if (ok) return libera('sim do painel');

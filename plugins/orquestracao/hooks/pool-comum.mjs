@@ -1,7 +1,7 @@
 // Comum das travas do pool (F5, 24/10): quem é a sessão (registro do app), se é membro do pool ou
 // orquestradora, início do turno e "este repositório tem orquestradora ativa".
 // Fonte das regras: ~/.claude/orquestracao/pool/protocolo.md. Log e BASE: hooks-crewai-comum.mjs.
-import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, renameSync, readdirSync, statSync, openSync, readSync, closeSync, unlinkSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { homedir, loadavg, availableParallelism } from 'node:os';
@@ -175,6 +175,12 @@ export function okDoBotaoDeLimpar(localId) {
     const dif = Date.now() - em;
     return d?.por === 'barra' && Number.isFinite(em) && dif >= 0 && dif <= 30 * 60_000 ? { em } : null;
   } catch { return null; }
+}
+
+// O ok do botão vale uma limpeza: a T7 o apaga ao liberar. Se o `clear_session` falhar depois da liberação, o ok já foi gasto e o operador clica de novo.
+export function gastarOkDoBotaoDeLimpar(localId) {
+  if (!localId || !/^local_[\w-]+$/.test(localId)) return;
+  try { unlinkSync(join(limpezaDir(), `${localId}.json`)); } catch { /* arquivo já ausente não é falha */ }
 }
 
 // Janela de limpeza (F53): o operador responde à pergunta `limpar · orquestradora` pela janela (AskUserQuestion). Só o termo inteiro vale

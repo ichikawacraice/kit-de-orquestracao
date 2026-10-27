@@ -327,6 +327,11 @@ caso('T1c: validadora edita arquivo do projeto → deny; ~/.claude e side-sessio
   passa(pre('V1', 'Write', { file_path: join(dir('home'), 'Library', 'Application Support', 'Claude', 'side-session-notes', 'a', 'n.md') }), 'V em side-session-notes');
   passa(pre('E3', 'Edit', { file_path: '/repo/apps/web/x.ts' }), 'E no repo');
 });
+caso('F166 T5: Edit/Write em <BASE>/limpeza/ → deny para qualquer sessão (o ok de limpar é o clique do operador)', () => {
+  nega(pre('ORQ', 'Write', { file_path: join(BASE_ORQ(), 'limpeza', 'local_ORQ.json') }), 'orquestradora');
+  nega(pre('P1', 'Edit', { file_path: join(BASE_ORQ(), 'limpeza', 'local_P1.json') }), 'P1');
+  passa(pre('ORQ', 'Write', { file_path: join(BASE_ORQ(), 'limpeza-notas.md') }), 'contraste: nome parecido fora da pasta passa');
+});
 caso('T5: Edit/Write em <BASE>/painel/ → deny para qualquer sessão; outro arquivo da BASE passa', () => {
   nega(pre('P1', 'Edit', { file_path: join(BASE_ORQ(), 'painel', 'sessoes', 'x.json') }), 'P1');
   nega(pre('ORQ', 'Write', { file_path: join(BASE_ORQ(), 'painel', 'fila', 'F1.json') }), 'orquestradora');
@@ -542,6 +547,13 @@ caso('F147 T7: o ok do botão da barra libera em turno peer (≤ 30 min, por bar
   okDoBotao({ por: 'barra' }); nega7(limpa('ORQ', depeer()), 'sem em');
   okDoBotao('{nao json'); nega7(limpa('ORQ', depeer()), 'arquivo ilegível');
   okDoBotao({ em: haMin(5), por: 'barra' }, 'local_P1'); okDoBotao({ em: haMin(500), por: 'barra' }); nega7(limpa('ORQ', depeer()), 'arquivo de outra sessão não vale para esta');
+});
+caso('F166 T7: o ok do botão vale uma limpeza — o arquivo some na liberação e o segundo clear_session nega', () => {
+  okDoBotao({ em: haMin(5), por: 'barra' });
+  ok(existsSync(dir('limpeza', 'local_ORQ.json')), 'precondição: o ok do botão existe antes da limpeza');
+  passa(limpa('ORQ', depeer()), 'primeira limpeza com o ok');
+  ok(!existsSync(dir('limpeza', 'local_ORQ.json')), 'o ok do botão deveria ter sido gasto na liberação');
+  nega7(limpa('ORQ', depeer()), 'segunda limpeza sem novo clique');
 });
 caso('T7: orquestradora limpando um membro passa; P1 limpando "self" passa', () => {
   passa(limpa('ORQ', depeer(), 'local_E1'), 'orquestradora limpa membro');
