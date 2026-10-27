@@ -148,3 +148,14 @@ test('pendente/entregue: ≤ 7 dias sem entrega devolve o período; entregue gra
   const sem = ambiente();
   const s = sem.rodar('entregue'); assert.equal(s.status, 1); assert.match(s.stderr, /período/);
 });
+
+test('F183: a pergunta que a migração marcou `sem-projeto` segue em semProjeto e pede ação', () => {
+  const a = ambiente();
+  a.bandeira({ ligado: false, desde: periodo.desde, desligadoEm: periodo.ate, por: 'painel' });
+  a.grava('perguntas', 'Q9', { projeto: 'sem-projeto', titulo: 'assumida que a migração não resolveu', estado: 'assumida', criadaEm: haH(5) });
+  a.grava('perguntas', 'Q10', { projeto: 'proj', titulo: 'do projeto', estado: 'aberta', criadaEm: haH(5) });
+  const j = JSON.parse(a.rodar('resumo', '--repo', a.repo).stdout);
+  assert.deepEqual(j.perguntas.abertas.map((q) => q.id), ['Q10'], 'a presença de uma pergunta do projeto é medida');
+  assert.deepEqual(j.perguntas.semProjeto.map((q) => q.id), ['Q9']);
+  assert.ok(j.pedeAcao.some((p) => p.id === 'Q9'));
+});

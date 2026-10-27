@@ -1,6 +1,7 @@
 // A batida (ADR 0007): o julgamento puro de "o que está parado, quem avisar, o que soltar". Sem I/O: o painel.mjs lê a fila,
 // a lista de sessões (`list_sessions`, passada por arquivo) e o estado da batida, chama `julgar` e aplica o resultado
 // (grava o estado, solta, grava a espera). Quem chama a cada 10 min é o mod painel-sessoes.
+import { slugDoProjeto } from './perguntas-arquivo.mjs';
 
 export const PRAZO_MIN = 30; // item parado: sem gravar há tanto (PAINEL_PRAZO_MIN troca)
 export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta (BATIDA_SOLTA_MIN troca)
@@ -19,7 +20,7 @@ const apelidoDoTitulo = (t) => /^([PDEV]\d+) · /.exec(t || '')?.[1] ?? null;
 export const ehLivre = (titulo) => /^[PDEV]\d+ · livre\s*$/.test(titulo || '');
 export const ehDaOrquestradora = (titulo, projeto) => {
   const m = /^🎛 orquestradora — (.+?)\s*$/.exec(titulo || '');
-  return Boolean(m) && m[1].toLowerCase() === projeto;
+  return Boolean(m) && slugDoProjeto(m[1]) === projeto; // F183: o mesmo slug do painel ("Wicomm IA" → wicomm-ia)
 };
 const vivoNaLista = (row) => row && row.isArchived !== true;
 

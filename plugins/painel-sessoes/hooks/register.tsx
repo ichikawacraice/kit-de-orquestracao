@@ -453,6 +453,10 @@ export function hora(ms: number): string {
   return `${dois(d.getHours())}:${dois(d.getMinutes())}:${dois(d.getSeconds())}`
 }
 
+/** F183: o nome do projeto como o painel o grava (o mesmo de perguntas-arquivo.mjs): minúsculo, [a-z0-9-], sem traço nas pontas; vazio = null. */
+export const slugDoProjeto = (nome: string | undefined | null): string | null =>
+  String(nome ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || null
+
 // São Paulo sem horário de verão desde 2019: UTC−3 fixo (o painel.mjs usa o fuso pelo Intl; dão o mesmo dia).
 const SP_MS = 3 * 3_600_000
 /** O dia (AAAA-MM-DD) de um instante em São Paulo. */
@@ -1278,18 +1282,18 @@ async function projetoDoCwd($: EngineInterface): Promise<string | null> {
     return null
   }
   const w = cwd.indexOf('/.claude/worktrees/')
-  if (w > 0) return nomeDaPasta(cwd.slice(0, w)).toLowerCase()
+  if (w > 0) return slugDoProjeto(nomeDaPasta(cwd.slice(0, w)))
   let dir = cwd
   for (let i = 0; i < 12 && dir.length > 1; i++) {
     try {
-      if ((await $.fs.list(dir)).some(x => x.name === '.git')) return nomeDaPasta(dir).toLowerCase()
+      if ((await $.fs.list(dir)).some(x => x.name === '.git')) return slugDoProjeto(nomeDaPasta(dir))
     } catch {
       break
     }
     dir = dir.slice(0, dir.lastIndexOf('/')) || '/'
   }
 
-  return nomeDaPasta(cwd).toLowerCase() || null
+  return slugDoProjeto(nomeDaPasta(cwd))
 }
 
 /** O título desta sessão no registro do app; fora do app (ou sem o arquivo), `null`. */

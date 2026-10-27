@@ -7,10 +7,11 @@
 //   painel.mjs list   <colecao> [estado] [--projeto <nome> | --todos] [--sessao <local_…>]   (sem flag lista tudo; --sessao filtra pelo `sessaoId` do documento)
 //     (F183) `list perguntas` sem `--projeto`, `--todos` nem `--sessao` lista o projeto da pasta atual, e só a pasta quente (abertas e
 //     assumidas); `respondida`/`cancelada` ou `--arquivo` incluem o arquivo (`perguntas/arquivo/<projeto>/<AAAA-MM>/`)
-//   painel.mjs perguntas arquivar [--seco]   leva ao arquivo as fechadas que ficaram na pasta quente (a resposta do pane); a batida roda junto → {arquivadas:[…]}
+//   painel.mjs perguntas arquivar [--seco]   leva ao arquivo as fechadas que ficaram na pasta quente (a resposta do pane); a batida roda junto, só depois da migração (marca <PAINEL_DIR>/.migracao-F183) → {arquivadas:[…]}
 //   painel.mjs perguntas migrar [--seco]   (F183, uma vez) `projeto` em slug nas quatro coleções; pergunta sem projeto pega o da sessão
 //     (sessoes/<sessaoId>, senão o registro do app), senão `sem-projeto`; sessão sem projeto, pelo registro; depois arquiva as fechadas.
-//     Sem --seco faz backup do painel em <PAINEL_DIR>/../backups/F183-<data>/ → {seco, backup, projeto:{id: novo}, arquivadas}
+//     Lê também o arquivo (conserta a pasta da pergunta já arquivada). Sem --seco faz backup do painel em <PAINEL_DIR>/../backups/F183-<data>/
+//     e grava a marca que libera a batida → {seco, backup, projeto:{id: novo}, arquivadas}
 //   painel.mjs set    <colecao> <id> '<json>'            substitui o documento
 //   painel.mjs update <colecao> <id> '<json>' [--se-versao N]   mescla os campos (null apaga)
 //   painel.mjs batch  '[{"op":"set|update|delete","colecao":"…","id":"…","data":{…},"seVersao":N}]'   (seVersao opcional por op)
@@ -542,8 +543,12 @@ function planejar(o, seVersao, vista) {
 
 function efetivar(p) {
   if (p.apagar) {
-    const f = p.colecao === 'perguntas' ? arq.acharPergunta(caminho('perguntas'), p.id) : caminho(p.colecao, p.id);
-    if (f) rmSync(f, { force: true });
+    if (p.colecao !== 'perguntas') rmSync(caminho(p.colecao, p.id), { force: true });
+    else {
+      // uma corrida com o pane pode deixar duas cópias (pasta quente e arquivo): o delete leva todas
+      let f;
+      while ((f = arq.acharPergunta(caminho('perguntas'), p.id))) rmSync(f, { force: true });
+    }
     return { id: p.id, deleted: true };
   }
   semearTema(p.semente);
@@ -1288,7 +1293,7 @@ function comandoBatida(args) {
       gravarJson(join(pasta, `${nome}.json`), { ...conteudo, em });
     }
     // F183: a resposta gravada pelo pane fica na pasta quente (o mod não apaga arquivo); a batida a leva para o arquivo
-    try { saida.perguntasArquivadas = arquivarFechadas(false); } catch (e) { process.stderr.write(`batida: não arquivei as perguntas fechadas: ${e?.message || e}\n`); }
+    try { saida.perguntasArquivadas = existsSync(MARCA_DA_MIGRACAO()) ? arquivarFechadas(false) : []; } catch (e) { process.stderr.write(`batida: não arquivei as perguntas fechadas: ${e?.message || e}\n`); }
     for (const id of marcadoresApagados) rmSync(join(ORQ(), 'ativas', id), { force: true });
     for (const id of cartoesApagados) rmSync(caminho('cartoes', id), { force: true });
     // o mesmo julgamento de `pode-reiniciar`, com a lista que a batida já tem (F152); falhar aqui não derruba a batida
@@ -1320,6 +1325,9 @@ function arquivarFechadas(seco) {
   return movidas;
 }
 
+// A batida só arquiva depois da migração: antes dela, mover 400 arquivos do estado real sem backup nem ok do operador não vale.
+const MARCA_DA_MIGRACAO = () => join(BASE, '.migracao-F183');
+
 // F183, migração única: `projeto` em slug nas quatro coleções; a pergunta sem projeto ganha o da sessão dela (sessoes/<sessaoId>,
 // senão o registro do app), e o resto `sem-projeto`; a sessão sem projeto, pelo registro do app, senão `sem-projeto`. Depois
 // arquiva as fechadas. Sem `seco`, copia o painel inteiro para <BASE>/../backups/F183-<data>/ antes de gravar.
@@ -1328,11 +1336,13 @@ function migrarProjetos(seco) {
     if (!regras || !localId) return null;
     try { const reg = regras.registroDaSessao(localId, { fresco: true }); return reg ? arq.slugDoProjeto(regras.projetoDaSessao(reg)?.nome) : null; } catch { return null; }
   };
+  // As perguntas incluem o arquivo: uma passada de `perguntas arquivar` antes da migração não as esconde dela.
   const docs = (colecao) => {
     const dir = caminho(colecao);
     if (!existsSync(dir)) return [];
-    return readdirSync(dir).filter((n) => n.endsWith('.json')).flatMap((n) => {
-      try { return [{ f: join(dir, n), doc: JSON.parse(readFileSync(join(dir, n), 'utf8')) }]; } catch { process.stderr.write(`aviso: ${colecao}/${n} ilegível, ficou como está\n`); return []; }
+    const arquivos = [...readdirSync(dir).filter((n) => n.endsWith('.json')).map((n) => join(dir, n)), ...(colecao === 'perguntas' ? arq.arquivadas(dir) : [])];
+    return arquivos.flatMap((f) => {
+      try { return [{ f, doc: JSON.parse(readFileSync(f, 'utf8')) }]; } catch { process.stderr.write(`aviso: ${f} ilegível, ficou como está\n`); return []; }
     });
   };
   const sessoes = docs('sessoes');
@@ -1347,19 +1357,28 @@ function migrarProjetos(seco) {
         novo = (sid && (projetoDaSessao.get(sid) || doRegistro(sid))) || arq.SEM_PROJETO;
       }
       if (!novo && colecao === 'sessoes') novo = doRegistro(d.sessionId ?? doc.id) || arq.SEM_PROJETO;
-      if (!novo || novo === d.projeto) continue;
-      novos.push({ colecao, f, doc, projeto: novo });
+      const muda = Boolean(novo) && novo !== d.projeto;
+      const data = muda ? { ...d, projeto: novo } : d;
+      // a pergunta vai para o lugar do estado e do projeto (pasta quente, ou o arquivo do projeto certo)
+      const destino = colecao === 'perguntas' ? arq.lugarDe(caminho('perguntas'), doc.id, data) : f;
+      if (muda || destino !== f) novos.push({ colecao, f, doc, data, destino, muda, projeto: novo });
     }
   }
   const chave = (n) => (n.colecao === 'perguntas' ? n.doc.id : `${n.colecao}/${n.doc.id}`);
-  const projetos = Object.fromEntries(novos.map((n) => [chave(n), n.projeto]));
-  const fechadasNaQuente = docs('perguntas').filter(({ doc }) => arq.FECHADAS.has(doc?.data?.estado)).map(({ doc }) => doc.id);
-  if (seco) return { seco: true, projeto: projetos, arquivadas: fechadasNaQuente };
+  const projetos = Object.fromEntries(novos.filter((n) => n.muda).map((n) => [chave(n), n.projeto]));
+  const quente = caminho('perguntas');
+  const arquivadas = novos.filter((n) => n.colecao === 'perguntas' && dirname(n.f) === quente && n.destino !== n.f).map((n) => n.doc.id);
+  if (seco) return { seco: true, projeto: projetos, arquivadas };
   const backup = join(BASE, '..', 'backups', `F183-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   mkdirSync(dirname(backup), { recursive: true });
   cpSync(BASE, backup, { recursive: true, filter: (src) => !src.startsWith(TRAVA) });
-  for (const n of novos) gravarEm(n.f, n.doc.id, { ...n.doc.data, projeto: n.projeto }, (n.doc.version ?? 0) + 1);
-  return { seco: false, backup, projeto: projetos, arquivadas: arquivarFechadas(false) };
+  for (const n of novos) {
+    if (n.muda) gravarEm(n.destino, n.doc.id, n.data, (n.doc.version ?? 0) + 1);
+    else { mkdirSync(dirname(n.destino), { recursive: true }); renameSync(n.f, n.destino); }
+    if (n.muda && n.destino !== n.f) rmSync(n.f, { force: true });
+  }
+  writeFileSync(MARCA_DA_MIGRACAO(), `${JSON.stringify({ em: new Date().toISOString(), backup })}\n`);
+  return { seco: false, backup, projeto: projetos, arquivadas };
 }
 
 function comandoPerguntas(args) {
@@ -1448,7 +1467,7 @@ function main(argv) {
         ? [...readdirSync(dir).filter((n) => n.endsWith('.json')).map((n) => join(dir, n)), ...doArquivo]
             .map((f) => JSON.parse(readFileSync(f, 'utf8')))
             .filter((d) => (prazoMin !== null ? ehVencido(d.data, prazoMin * 60_000, Date.now()) : !b || (a === 'fila' && b === 'esperando') || filtraPorEstado(a, d.data, b)))
-            .filter((d) => !projetoDaLista || String(d.data?.projeto ?? '').toLowerCase() === projetoDaLista)
+            .filter((d) => !projetoDaLista || (String(d.data?.projeto ?? '').toLowerCase() || arq.SEM_PROJETO) === projetoDaLista)
             .filter((d) => !sessao || d.data?.sessaoId === sessao)
             .map((d) => (a === 'fila' ? { ...d, esperando: esperandoPapel(d.data, Date.now()) } : d))
             .filter((d) => !(a === 'fila' && b === 'esperando') || d.esperando)

@@ -667,6 +667,15 @@ test('F183: o rodapé lê do arquivo só as respondidas hoje (São Paulo), além
   await ui.unmount()
 })
 
+test('F183: slugDoProjeto do pane dá o mesmo de perguntas-arquivo.mjs (os mesmos casos do teste do painel)', () => {
+  expect(R.slugDoProjeto('Izanagi')).toBe('izanagi')
+  expect(R.slugDoProjeto('Meu_Repo.git')).toBe('meu-repo-git')
+  expect(R.slugDoProjeto('  kit-de-orquestracao ')).toBe('kit-de-orquestracao')
+  expect(R.slugDoProjeto('Wicomm IA')).toBe('wicomm-ia')
+  expect(R.slugDoProjeto('__')).toBeNull()
+  expect(R.slugDoProjeto(undefined)).toBeNull()
+})
+
 test('F183: diaEmSP e inicioDoDiaEmSP contam o dia em São Paulo', () => {
   expect(R.diaEmSP(Date.UTC(2026, 10, 1, 1))).toBe('2026-10-31')
   expect(R.diaEmSP(Date.UTC(2026, 10, 1, 3))).toBe('2026-11-01')

@@ -55,6 +55,7 @@ test('slugDoProjeto: minúsculo, [a-z0-9-], sem traço nas pontas; vazio vira nu
   assert.equal(slugDoProjeto('Izanagi'), 'izanagi');
   assert.equal(slugDoProjeto('Meu_Repo.git'), 'meu-repo-git');
   assert.equal(slugDoProjeto('  kit-de-orquestracao '), 'kit-de-orquestracao');
+  assert.equal(slugDoProjeto('Wicomm IA'), 'wicomm-ia');
   assert.equal(slugDoProjeto('__'), null);
   assert.equal(slugDoProjeto(undefined), null);
 });
@@ -220,15 +221,53 @@ test('fechadasRecentes: só o arquivo mudado no período, de todos os projetos',
   assert.deepEqual(fechadasRecentes(pasta(), { desdeMs: agora - 86_400_000 }).map((f) => f.split('/').pop()).sort(), ['Q1.json', 'Q2.json']);
 });
 
-test('a batida leva para o arquivo a resposta que o pane deixou na pasta quente; --seco não', () => {
+test('a batida só arquiva depois da migração; depois, leva a resposta que o pane deixou na pasta quente (--seco não)', () => {
   pergunta('Q1', { estado: 'respondida', projeto: 'izanagi', respondidaPor: 'painel', respondidaEm: '2026-10-20T15:00:00Z' });
   const lista = join(base, 'sessoes.json');
   writeFileSync(lista, '[]');
+  const antes = painel(['batida', '--sessoes', lista]);
+  assert.equal(antes.exit, 0, antes.err);
+  assert.deepEqual(antes.json().perguntasArquivadas, [], 'sem a migração (o ok do operador), a batida não move o estado real');
+  assert.ok(existsSync(quente('Q1')));
+  assert.equal(painel(['perguntas', 'migrar']).exit, 0);
+  pergunta('Q2', { estado: 'respondida', projeto: 'izanagi', respondidaPor: 'painel', respondidaEm: '2026-10-21T15:00:00Z' });
   const seco = painel(['batida', '--sessoes', lista, '--seco']);
   assert.equal(seco.exit, 0, seco.err);
-  assert.ok(existsSync(quente('Q1')), 'a presença seria detectada: --seco deixa onde está');
+  assert.ok(existsSync(quente('Q2')), 'a presença seria detectada: --seco deixa onde está');
   const r = painel(['batida', '--sessoes', lista]);
   assert.equal(r.exit, 0, r.err);
-  assert.deepEqual(r.json().perguntasArquivadas, ['Q1']);
-  assert.ok(!existsSync(quente('Q1')) && existsSync(noArquivo('izanagi', '2026-10', 'Q1')));
+  assert.deepEqual(r.json().perguntasArquivadas, ['Q2']);
+  assert.ok(!existsSync(quente('Q2')) && existsSync(noArquivo('izanagi', '2026-10', 'Q2')));
+});
+
+test('a migração também conserta a pergunta que já estava no arquivo (arquivar antes de migrar)', () => {
+  pergunta('Q2', { estado: 'respondida', sessaoId: LOCAL(2), respondidaEm: '2026-10-20T15:00:00Z' });
+  pergunta('Q7', { estado: 'respondida', projeto: 'Izanagi', respondidaEm: '2026-10-20T15:00:00Z' });
+  writeFileSync(join(base, 'painel', 'sessoes', `${LOCAL(2)}.json`), JSON.stringify({ id: LOCAL(2), version: 1, data: { sessionId: LOCAL(2), projeto: 'battlewand' } }));
+  assert.equal(painel(['perguntas', 'arquivar']).exit, 0);
+  assert.ok(existsSync(noArquivo('sem-projeto', '2026-10', 'Q2')), 'precondição: arquivada sem o projeto da sessão');
+  assert.equal(lerJson(noArquivo('izanagi', '2026-10', 'Q7')).data.projeto, 'Izanagi', 'precondição: arquivada com a caixa de antes');
+  const seco = painel(['perguntas', 'migrar', '--seco']).json();
+  assert.deepEqual(seco.projeto, { Q2: 'battlewand', Q7: 'izanagi' });
+  assert.equal(painel(['perguntas', 'migrar']).exit, 0);
+  assert.ok(existsSync(noArquivo('battlewand', '2026-10', 'Q2')) && !existsSync(noArquivo('sem-projeto', '2026-10', 'Q2')), 'mudou de pasta com o projeto');
+  assert.equal(lerJson(noArquivo('izanagi', '2026-10', 'Q7')).data.projeto, 'izanagi');
+  assert.deepEqual(ids(painel(['list', 'perguntas', 'respondida', '--projeto', 'battlewand']).json()), ['Q2']);
+});
+
+test('--projeto sem-projeto lista quem não tem o campo; delete leva as duas cópias da corrida com o pane', () => {
+  pergunta('Q3', { estado: 'aberta', sessaoId: LOCAL(1) });
+  pergunta('Q4', { estado: 'aberta', sessaoId: LOCAL(1), projeto: 'outro' });
+  assert.deepEqual(ids(painel(['list', 'perguntas', '--projeto', 'sem-projeto']).json()), ['Q3']);
+  pergunta('Q5', { estado: 'respondida', projeto: 'izanagi' });
+  pergunta('Q5', { estado: 'respondida', projeto: 'izanagi' }, join(pasta(), 'arquivo', 'izanagi', '2026-10'));
+  assert.equal(painel(['delete', 'perguntas', 'Q5']).exit, 0);
+  assert.equal(acharPergunta(pasta(), 'Q5'), null);
+});
+
+test('ehDaOrquestradora compara pelo mesmo slug do painel', async () => {
+  const { ehDaOrquestradora } = await import('../../skills/orquestradora/scripts/batida.mjs');
+  assert.equal(ehDaOrquestradora('🎛 orquestradora — Wicomm IA', 'wicomm-ia'), true);
+  assert.equal(ehDaOrquestradora('🎛 orquestradora — Izanagi', 'izanagi'), true);
+  assert.equal(ehDaOrquestradora('🎛 orquestradora — Izanagi', 'outro'), false);
 });
