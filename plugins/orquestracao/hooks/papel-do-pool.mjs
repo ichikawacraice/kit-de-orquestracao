@@ -11,7 +11,9 @@
 //   T3  start_session: negado em turno que não é do operador com o modo ausente ligado (/ausente on) e a membro do pool.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava).
 //   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o botão de limpar da barra, o sim do painel ou o da janela, F48/F53/F147).
-//   T6  Bash `gh pr merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
+//   T6  Bash `gh pr merge` ou `painel mergear` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
+//   T9  SendMessage / send_message de uma V cujo texto diz `validado` ou `aprovado` sem a linha `PR <n> validado, HEAD <sha de 7 a 40 hex>` → deny
+//       (assumida, a confirmar, F150): o recado sem sha não deixa a orquestradora conferir a ponta com `painel mergear`. Outros papéis passam.
 //   T8  Bash `painel … com add F<n> …` da orquestradora, item `F<n>` em `etapa: "validacao"` e máquina cheia (todas as fichas do teto
 //       tomadas ou carga ≥ núcleos, ADR 0005) → deny: a V testa logo ao começar. Item em `execucao` passa (a E escreve código antes de testar).
 // Limites conhecidos: o cache do registro (pool-comum.mjs, 2 min) atrasa em até 2 min a troca de título, nos dois
@@ -95,7 +97,8 @@ function main() {
         return nega('T8', 'orquestradora', itensDeV.join(','), `Máquina cheia (${m.tomadas} de ${m.teto} fichas, carga ${m.carga.toFixed(1)}): não despache a V agora; grave no item espera {"motivo":"gate","texto":"máquina cheia"} (ADR 0005).`);
       }
     }
-    if (!/\bgh\b[^\n|;&]*\bpr\s+merge\b/.test(ti.command || '')) return;
+    const mergearDoPainel = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+mergear\b`).test(normal);
+    if (!mergearDoPainel && !/\bgh\b[^\n|;&]*\bpr\s+merge\b/.test(ti.command || '')) return;
     const reg = registroDaSessao(e.session_id);
     if (ehOrquestradora(e.session_id, reg?.titulo)) return;
     const repo = gitCommonDir(e.cwd);
@@ -103,11 +106,20 @@ function main() {
     const temOrq = projetoTemOrquestradora(e.session_id, repo);
     if (temOrq === false) return;
     if (temOrq === null) {
-      registrar(sid, HOOK, 'perguntou', `T6 ${membroDoPool(reg?.titulo)?.id ?? 'sessao'} Bash gh pr merge (projeto não conferido)`);
+      registrar(sid, HOOK, 'perguntou', `T6 ${membroDoPool(reg?.titulo)?.id ?? 'sessao'} Bash ${mergearDoPainel ? 'painel mergear' : 'gh pr merge'} (projeto não conferido)`);
       return decisao('ask', 'Não consegui conferir se este projeto tem orquestradora ativa; se tiver, quem mergeia é ela. Aprove só se o operador mandou mergear daqui.');
     }
-    registrar(sid, HOOK, 'perguntou', `T6 ${membroDoPool(reg?.titulo)?.id ?? 'sessao'} Bash gh pr merge`);
+    registrar(sid, HOOK, 'perguntou', `T6 ${membroDoPool(reg?.titulo)?.id ?? 'sessao'} Bash ${mergearDoPainel ? 'painel mergear' : 'gh pr merge'}`);
     return decisao('ask', 'Com orquestradora ativa, quem mergeia é ela: mande `PR N validado, HEAD Y`. Aprove só se o operador mandou mergear daqui.');
+  }
+
+  if (tool === 'SendMessage' || tool === 'mcp__ccd_session_mgmt__send_message') {
+    const texto = Object.values(ti).filter((v) => typeof v === 'string').join('\n').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (!/\b(validad[oa]|aprovad[oa])\b/i.test(texto)) return;
+    const reg = registroDaSessao(e.session_id);
+    if (membroDoPool(reg?.titulo)?.papel !== 'V') return;
+    if (/\bPR\s+\d+\s+validado,\s*HEAD\s+[0-9a-f]{7,40}\b/i.test(texto)) return;
+    return nega('T9', membroDoPool(reg.titulo).id, tool, 'Recado de validação leva o PR e o sha que você validou, numa linha: `PR <n> validado, HEAD <sha>` (7 a 40 hex). Sem isso a orquestradora não confere que a ponta é a mesma. Reprovou? Escreva "reprovado" e os achados.');
   }
 
   if (tool === 'Agent' || tool === 'Task') {

@@ -45,7 +45,7 @@ Título: `<ID> · <o que está fazendo, em palavras do produto>` (ex.: `P1 · ed
 - **Pedido de vaga pelo painel (F69):** na Na fila e no cartão que espera papel o pane tem o botão "Pedir <papel>" (planejadora, designer, executora, validadora) e, na seção, "Pedir n sessões" (só com 2 ou mais). O pedido vai à orquestradora do projeto do item: a que o app lista como viva e é a única do projeto (sem ela, ou com várias, o pane avisa e não envia). Pane aberto na própria orquestradora → o texto vai ao campo do prompt e o operador aperta Enter (turno dele, em que ela abre as sessões); em outra sessão → `send_message`, e ela responde com um cartão por vaga que o operador inicia (o pane mostra "No prompt às HH:MM · aperte Enter" ou "Pedido às HH:MM · inicie o cartão" e o botão "Abrir a orquestradora"). A orquestradora atende pela [âncora `vaga-pelo-painel`](../skills/orquestradora/SKILL.md#vaga-pelo-painel). Complementa a cobrança do `esperando-papel`, não a substitui.
 - **Cada etapa tem dono sessão:** execução é de uma E, validação de uma V (ver "Cada papel na sua sessão"); `via: "subagente"` sobra só para itens antigos, de antes dessa decisão.
 - **Achar o próprio `local_…`:** `get_session` com `"self"` (campo `sessionId`).
-- PR validado vai à orquestradora como `PR N validado, HEAD Y` (ela mergeia), **direto da V, com cópia à dona do item**; a V leva o item a `merge` e o solta no mesmo gesto (`papeis/validadora.md`).
+- PR validado vai à orquestradora como `PR N validado, HEAD Y` (ela mergeia com `painel mergear <n> <Y>`), **direto da V, com cópia à dona do item**; a V leva o item a `merge` e o solta no mesmo gesto (`papeis/validadora.md`).
 
 <a id="batida"></a>
 ## A batida (ADR 0007, operador, 26/10)

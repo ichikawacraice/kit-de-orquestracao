@@ -961,5 +961,21 @@ caso('F58: list fila traz `esperando` fora de data (null quando não espera) e n
   igual(painel('get', 'fila', 'F1').out.includes('esperando"'), false, 'get não grava nem mostra o calculado');
 });
 
+caso('F150: com del aceita o apelido; ausente erra; repetido erra; --fez funciona pelo apelido', () => {
+  semear(); painel('set', 'fila', 'F1', COM());
+  comAdd('F1', LA, 'E1', 'título'); comAdd('F1', LB, 'V4', 'botão');
+  recusa(painel('com', 'del', 'F1', 'E9'), 'não está em com', 'apelido ausente');
+  const a = painel('com', 'del', 'F1', 'V4'); igual(a.exit, 0, `del pelo apelido (${a.err})`);
+  let d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.com.length, 1, 'tirou a V4'); igual(d.com[0].apelido, 'E1', 'ficou a E1');
+  const b = painel('com', 'del', 'F1', 'E1', '--fez'); igual(b.exit, 0, `del --fez pelo apelido (${b.err})`);
+  d = json(painel('get', 'fila', 'F1')).data;
+  igual(d.com.length, 0, 'com vazio'); igual(d.fez.length, 1, 'fez gravado'); igual(d.fez[0].localId, LA, 'fez com o local_ de quem estava');
+  comAdd('F1', LA, 'E1', 'a'); comAdd('F1', LB, 'E1', 'b');
+  recusa(painel('com', 'del', 'F1', 'E1'), 'apelido ambíguo, use o local_', 'apelido repetido');
+  igual(json(painel('get', 'fila', 'F1')).data.com.length, 2, 'o ambíguo não tirou ninguém');
+  recusa(painel('com', 'del', 'F1', 'qualquer'), 'não é local_<uuid>', 'texto que não é apelido nem local_');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;
