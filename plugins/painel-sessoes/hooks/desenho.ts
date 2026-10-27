@@ -726,6 +726,60 @@ export function filaSvg(W: number, item: LinhaItem, agora: number, opcoes: { cit
   return { height: altura, alt: alt.join(' — '), source: svg(W, altura, partes.join('')) }
 }
 
+/** Um cartão de sessão nova como o pane o desenha: o apelido, o que a sessão vai fazer (os itens, com o título quando se sabe) e quando foi proposto. */
+export type LinhaDeCartao = { apelido: string; itens: Array<{ id: string; titulo?: string }>; propostoEm: string }
+
+/** `Manter uma executora livre` quando o cartão não tem item (o piso de E); senão o título do primeiro item, ou o número dele. */
+export function paraQueDoCartao(c: LinhaDeCartao): string {
+  const primeiro = c.itens[0]
+  if (primeiro) return primeiro.titulo ?? primeiro.id
+
+  return `Manter uma ${papelDe(c.apelido) ?? 'sessão'} livre`
+}
+
+/**
+ * A linha de "Sessões para abrir": anel tracejado âmbar (sessão que ainda não existe e espera você), `E21 · EXECUTORA` e há quanto
+ * tempo, para quê em até duas linhas e `+ N itens` quando o cartão tem mais de um. Um lembrete de clique, mais leve que o cartão de item.
+ */
+export function sessaoParaAbrirSvg(W: number, c: LinhaDeCartao, agora: number, opcoes: { filete?: boolean } = {}): { source: string; height: number; alt: string } {
+  const tw = W - X_FILA
+  const tempo = desde(c.propostoEm, agora)
+  const tempoW = tempo ? largura(tempo, 12) + 10 : 0
+  const papel = papelDe(c.apelido)
+  const prefixo = papel ? ` · ${upper(papel)}` : ''
+  const reserva = largura(c.apelido, 11) * 1.1
+  const resto = caber(prefixo, 11, Math.max(0, tw - tempoW - reserva))
+  const partes: string[] = [
+    `<circle cx="9" cy="9" r="5" fill="none" class="avs" stroke-width="1.3" stroke-dasharray="2 2"/>`,
+    `<text x="${X_FILA}" y="11" font-family="${FONTE}" font-size="11" font-variant-numeric="tabular-nums"><tspan class="t" font-weight="700">${xml(c.apelido)}</tspan><tspan class="m" font-weight="600">${xml(resto)}</tspan></text>`,
+  ]
+  if (tempo) partes.push(texto(W, 11.5, 12, 'm', xml(tempo), ' text-anchor="end" font-variant-numeric="tabular-nums"'))
+  let y = 11
+  const paraQue = paraQueDoCartao(c)
+  for (const l of quebrarEmDuas(paraQue, 14, tw, tw)) {
+    y += 19
+    partes.push(texto(X_FILA, y, 14, 't', xml(l), ' font-weight="600"'))
+  }
+  const alt = [`${c.apelido}, ${papel ?? 'sessão'}, proposta ${tempo ?? 'agora há pouco'}`, c.itens.length > 0 ? `para: ${c.itens.map(i => (i.titulo ? `${i.id} · ${i.titulo}` : i.id)).join('; ')}` : paraQue]
+  if (c.itens.length > 1) {
+    y += 17
+    partes.push(texto(X_FILA, y, 12.5, 's', `+ ${c.itens.length - 1} ${c.itens.length === 2 ? 'item' : 'itens'}`))
+  }
+  const altura = y + 10
+  if (opcoes.filete !== false) partes.push(`<line class="ln" x1="0" y1="${altura - 0.5}" x2="${W}" y2="${altura - 0.5}"/>`)
+
+  return { height: altura, alt: alt.join(' — '), source: svg(W, altura, partes.join('')) }
+}
+
+/** A frase do grupo de cartões (uma por orquestradora), em até duas linhas; `erro` pinta de `er` (a orquestradora não está aberta). */
+export function fraseDoGrupoSvg(W: number, frase: string, erro = false): { source: string; height: number; alt: string } {
+  const linhas = quebrar(frase, 12.5, W - X_FILA, 2)
+  const partes = linhas.map((l, i) => texto(X_FILA, 14 + i * 17, 12.5, erro ? 'er' : 's', xml(l)))
+  const altura = 14 + (linhas.length - 1) * 17 + 6
+
+  return { height: altura, alt: frase, source: svg(W, altura, partes.join('')) }
+}
+
 /** `F13 · TEMA`: o número em `t` 11/700, nunca cortado (o corte vale só para o tema); o tempo à direita já está fora de `max`. */
 function sobreSvg(x: number, y: number, max: number, item: { id: string; temaRotulo: string; projeto?: string }): string {
   const prefixo = ' · '

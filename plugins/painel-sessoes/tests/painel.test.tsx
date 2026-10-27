@@ -126,6 +126,8 @@ type Opcoes = {
   bandeira?: string
   /** Documentos da coleção `sessoes` do painel (a orquestradora ativa é a de `papel: "orquestradora"` e estado fora de `concluida`). */
   sessoesDocs?: Doc[]
+  /** Documentos da coleção `cartoes` (o cartão de sessão nova que espera o clique). */
+  cartoes?: Doc[]
   /** O que o operador já digitou na caixa do prompt (`$.prompt.read`); vazio por padrão. */
   rascunho?: string
   /** `$.prompt.fill` não pôs o texto na caixa. */
@@ -191,6 +193,7 @@ function engine(on: On, falhaPasta = false, falhas: Falhas = {}, opc: Opcoes = {
   for (const [id, data] of Object.entries(opc.fila ?? FILA_REAL)) arquivos.set(`${PASTA}/fila/${id}.json`, JSON.stringify(doc(id, { projeto: 'izanagi', ...data })))
   if (opc.bandeira !== undefined) arquivos.set(BANDEIRA, opc.bandeira)
   for (const d of opc.sessoesDocs ?? []) arquivos.set(`${PASTA}/sessoes/${d.id}.json`, JSON.stringify(d))
+  for (const d of opc.cartoes ?? []) arquivos.set(`${PASTA}/cartoes/${d.id}.json`, JSON.stringify(d))
   const bandeiras: Escrita[] = []
   if (!opc.semTemas) arquivos.set(`${PASTA}/temas.json`, JSON.stringify(opc.temas ?? TEMAS_REAIS))
   const escritas: Escrita[] = []
@@ -2341,6 +2344,9 @@ const parado = (etapa: string, extra: Record<string, unknown> = {}) => SEM_DONO(
 const FILA_DOIS = () => ({ F68: parado('execucao', { titulo: 'editor da loja' }), F63: parado('planejamento', { titulo: 'painel do componente' }) })
 const FILA_TRES = () => ({ ...FILA_DOIS(), F71: parado('validacao', { projeto: 'kit', titulo: 'barra de status' }) })
 const pedir = (opc: Opcoes) => ({ vivas: vivasPedir(), sessoesDocs: [ORQ_IZ, ORQ_KIT], ...opc })
+// proposto 5 min antes do AGORA dos testes
+const cartaoDe = (id: string, extra: Record<string, unknown> = {}) => doc(id, { projeto: 'izanagi', apelido: 'E21', papel: 'E', itens: ['F68'], orquestradoraId: 'local_orq_iz', propostoEm: new Date(AGORA - 5 * 60_000).toISOString(), ...extra })
+const CARTAO_E21 = cartaoDe('task_e21')
 
 test('F69 A (i): pane na orquestradora do projeto: o pedido vai ao campo, sem Enter e sem mensagem', async ($, on) => {
   const { ui, fills, enviadas, prompts, abertas, toasts, relogio } = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, host: 'local_orq_iz' }), $, on)
@@ -2382,7 +2388,7 @@ test('F69 A (iii): pane em outra sessão: send_message à orquestradora, foco ne
   const lido = await lerSuperficie(ui)
   expect(lido).toMatch(/Pedido às \d\d:\d\d · inicie o cartão/)
   expect(await ui.find({ key: 'pedir:F68' }), 'o botão do item some: não vira reenvio').toBeUndefined()
-  expect((await ui.find({ key: 'orq:izanagi' }))?.text, 'um projeto só: sem o nome').toBe('Abrir a orquestradora')
+  expect(await ui.find({ key: 'orq:izanagi' }), 'o grupo do topo da Na fila saiu: o clique mora em "Sessões para abrir"').toBeUndefined()
   await ui.unmount()
 })
 
@@ -2403,8 +2409,7 @@ test('F69 A (iv): "Pedir n sessões" faz um pedido por orquestradora e não põe
   const lido = await lerSuperficie(ui)
   expect(lido.match(/Pedido às \d\d:\d\d · inicie o cartão/g)?.length, 'um estado por item').toBeGreaterThanOrEqual(3)
   expect(await ui.find({ key: 'pedir:lote' }), 'com todos pedidos o lote some').toBeUndefined()
-  expect(await ui.find({ key: 'orq:izanagi' })).toBeDefined()
-  expect((await ui.find({ key: 'orq:kit' }))?.text, 'dois projetos em Pedido: a frase colada diz qual').toBe('Abrir a orquestradora')
+  expect([await ui.find({ key: 'orq:izanagi' }), await ui.find({ key: 'orq:kit' })], 'nenhum grupo no topo da Na fila').toEqual([undefined, undefined])
   await ui.unmount()
 })
 
@@ -2551,13 +2556,13 @@ test('F69 A (xi-b): cartão entregue pela V não ganha botão (a ausência é me
   await ui.unmount()
 })
 
-test('F69 A (xii): R2 — depois do lote a linha diz só "inicie o cartão" e a frase inteira vem uma vez por projeto', async ($, on) => {
+test('F69 A (xii): R2 — depois do lote a linha diz só "inicie o cartão" e o topo da Na fila não repete a frase do grupo', async ($, on) => {
   const { ui, relogio } = await abrirDe(pedir({ fila: FILA_DOIS() }), $, on)
   await ui.press({ key: 'pedir:lote' })
   await relogio.settle()
   const textos = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   expect(textos.filter(t => /^Pedido às \d\d:\d\d · inicie o cartão$/.test(t)).length, 'uma por linha, curta').toBe(2)
-  expect(textos.filter(t => /2 cartões da fila esperam você na conversa da orquestradora de izanagi/.test(t)).length, 'a frase inteira, uma vez').toBe(1)
+  expect(textos.filter(t => /cartões? da fila esperam? você/.test(t)), 'a frase do grupo saiu do topo').toEqual([])
   await ui.unmount()
 })
 
@@ -2597,45 +2602,31 @@ const FILA_F76 = () => ({
   F73: parado('execucao', { projeto: 'kit', titulo: 'rotas do kit' }),
 })
 
-test('F76 A: o topo da Na fila conta só a Na fila; o cartão em Executando em "Pedido" não gera frase nem botão no topo', async ($, on) => {
+test('F76 A: o cartão em Executando em "Pedido" tem o próprio botão; o topo da Na fila não tem grupo nem botão da orquestradora', async ($, on) => {
   const { ui, relogio } = await abrirDe(pedir({ fila: { ...ESPERANDO_V(), F68: FILA_DOIS().F68 }, vivas: vivasPedir(P1) }), $, on)
   await ui.press({ key: 'pedir:F2' })
   await relogio.settle()
   expect(await ui.find({ key: 'orq:F2' }), 'precondição: o cartão tem o próprio botão').toBeDefined()
-  expect(await ui.find({ key: 'orq:izanagi' }), 'sem item da fila em Pedido, o topo não tem o botão').toBeUndefined()
-  const textos = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(textos.filter(t => /cartões? (da fila )?esperam? você/.test(t))).toEqual([])
   await ui.press({ key: 'pedir:F68' })
   await relogio.settle()
-  expect((await ui.findAll({ key: 'orq:izanagi' })).length, 'o botão do topo aparece uma vez').toBe(1)
-  const ts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(ts.filter(t => /^1 cartão da fila espera você na conversa da orquestradora de izanagi$/.test(t)).length, 'conta só o da fila').toBe(1)
+  expect(await ui.find({ key: 'orq:izanagi' }), 'o item da fila em Pedido não gera botão no topo').toBeUndefined()
+  const textos = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect(textos.filter(t => /cartões? (da fila )?esperam? você/.test(t))).toEqual([])
+  expect(textos.filter(t => /^Pedido às \d\d:\d\d · inicie o cartão$/.test(t)).length, 'o pedido segue dito na linha do item').toBe(1)
   await ui.unmount()
 })
 
-test('F76 B: todo botão da orquestradora diz só "Abrir a orquestradora", com dois projetos em Pedido', async ($, on) => {
+test('F76 B: o botão do cartão em Executando diz só "Abrir a orquestradora", com dois projetos em Pedido', async ($, on) => {
   const { ui, relogio } = await abrirDe(pedir({ fila: { ...ESPERANDO_V(), F68: FILA_DOIS().F68, F71: FILA_TRES().F71 }, vivas: vivasPedir(P1) }), $, on)
   for (const k of ['pedir:F2', 'pedir:F68', 'pedir:F71']) {
     await ui.press({ key: k })
     await relogio.settle()
   }
-  for (const k of ['orq:F2', 'orq:izanagi', 'orq:kit']) expect((await ui.find({ key: k }))?.text, k).toBe('Abrir a orquestradora')
+  expect((await ui.find({ key: 'orq:F2' }))?.text).toBe('Abrir a orquestradora')
+  for (const k of ['orq:izanagi', 'orq:kit']) expect(await ui.find({ key: k }), k).toBeUndefined()
   await ui.unmount()
 })
 
-const topoF76 = (r: No) => {
-  const todos = subarvore(r).filter(n => n.type === 'Button' || n.type === 'Text')
-  const i = (f: (n: No) => boolean) => todos.findIndex(f)
-
-  return {
-    todos,
-    lote: i(n => n.props?.key === 'pedir:lote'),
-    fIz: i(n => n.type === 'Text' && txt(n) === '1 cartão da fila espera você na conversa da orquestradora de izanagi'),
-    bIz: i(n => n.props?.key === 'orq:izanagi'),
-    fKit: i(n => n.type === 'Text' && txt(n) === '1 cartão da fila espera você na conversa da orquestradora de kit'),
-    bKit: i(n => n.props?.key === 'orq:kit'),
-  }
-}
 const pedirDoisProjetos = async (ui: { press: (q: object) => Promise<unknown> }, relogio: { settle: () => Promise<unknown> }) => {
   for (const k of ['pedir:F68', 'pedir:F71']) {
     await ui.press({ key: k })
@@ -2643,69 +2634,18 @@ const pedirDoisProjetos = async (ui: { press: (q: object) => Promise<unknown> },
   }
 }
 
-test('F76 C/E: o topo agrupa frase e botão por projeto, com o recuo da linha (desktop)', async ($, on) => {
+test('F76 C/E: o topo da Na fila só tem o lote e os avisos, com o recuo da linha, e nenhum grupo de projeto', async ($, on) => {
   const { ui, relogio } = await abrirDe(pedir({ fila: FILA_F76() }), $, on)
+  const antesDoPedido = await raiz(ui)
+  const lote = achar(antesDoPedido, n => n.props?.key === 'pedir:lote')[0]!
+  expect(lote, 'precondição: o lote existe').toBeDefined()
+  const topo = pais(antesDoPedido).get(pais(antesDoPedido).get(lote)!)!
+  expect([topo.props.paddingLeft, topo.props.paddingBottom], 'o recuo da linha').toEqual([3, 1])
   await pedirDoisProjetos(ui, relogio)
   const r = await raiz(ui)
-  const t = topoF76(r)
-  // presença antes da ordem
-  expect([t.lote, t.fIz, t.bIz, t.fKit, t.bKit].every(x => x >= 0), 'os cinco nós existem').toBe(true)
-  expect(achar(r, n => n.props?.key === 'orq:izanagi').length).toBe(1)
-  expect(achar(r, n => n.props?.key === 'orq:kit').length).toBe(1)
-  expect(t.lote).toBeLessThan(t.fIz)
-  expect(t.bIz, 'o botão vem logo depois da frase').toBe(t.fIz + 1)
-  expect(t.bKit, 'o botão de kit vem logo depois da frase de kit').toBe(t.fKit + 1)
-  expect(t.fKit).toBeGreaterThan(t.bIz)
-  const m = pais(r)
-  const todos = achar(r, () => true)
-  const no = (f: (n: No) => boolean) => todos.find(f)!
-  const frIz = no(n => n.type === 'Text' && txt(n) === '1 cartão da fila espera você na conversa da orquestradora de izanagi')
-  const btIz = no(n => n.props?.key === 'orq:izanagi')
-  const frKit = no(n => n.type === 'Text' && txt(n) === '1 cartão da fila espera você na conversa da orquestradora de kit')
-  const btKit = no(n => n.props?.key === 'orq:kit')
-  const grupo = ancestralComum(m, [frIz, btIz])!
-  expect(grupo.type).toBe('Box')
-  expect(grupo.props.flexDirection).toBe('column')
-  expect(subarvore(grupo).includes(frKit) || subarvore(grupo).includes(btKit), 'o grupo não tem nada do outro projeto').toBe(false)
-  expect(m.get(btIz)?.props?.flexDirection, 'o pai do botão é a fileira').toBe('row')
-  const lote = no(n => n.props?.key === 'pedir:lote')
-  const topo = ancestralComum(m, [lote, btIz, btKit, frIz, frKit])!
-  expect([topo.props.paddingLeft, topo.props.paddingBottom], 'o recuo da linha').toEqual([3, 1])
-  expect(subarvore(topo).some(n => n.props?.key === 'pedir:F63'), 'as linhas da fila ficam fora do topo').toBe(false)
-  expect(subarvore(topo).some(n => n.props?.key === 'pedir:lote')).toBe(true)
-  await ui.unmount()
-})
-
-test('F76 C/E: com um projeto só, a mesma ordem sem o segundo grupo', async ($, on) => {
-  const { ui, relogio } = await abrirDe(pedir({ fila: { F68: FILA_F76().F68, F63: FILA_F76().F63, F64: FILA_F76().F64 } }), $, on)
-  await ui.press({ key: 'pedir:F68' })
-  await relogio.settle()
-  const r = await raiz(ui)
-  const t = topoF76(r)
-  expect([t.lote, t.fIz, t.bIz].every(x => x >= 0), 'lote, frase e botão existem').toBe(true)
-  expect(t.fKit, 'não há grupo de kit').toBe(-1)
-  expect(t.lote).toBeLessThan(t.fIz)
-  expect(t.bIz).toBe(t.fIz + 1)
-  expect((await ui.find({ key: 'orq:izanagi' }))?.text).toBe('Abrir a orquestradora')
-  await ui.unmount()
-})
-
-test('F76 C/E: o terminal agrupa do mesmo jeito, com recuo de 2 colunas', async ($, on) => {
-  const motor = engine(on, false, {}, { agora: AGORA, fila: FILA_F76(), ...pedir({}) })
-  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  await $.command.run(ABRIR)
-  await motor.relogio.settle()
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await pedirDoisProjetos(ui, motor.relogio)
-  const r = await raiz(ui)
-  const t = topoF76(r)
-  expect([t.lote, t.fIz, t.bIz, t.fKit, t.bKit].every(x => x >= 0), 'os cinco nós existem').toBe(true)
-  expect(t.bIz).toBe(t.fIz + 1)
-  expect(t.bKit).toBe(t.fKit + 1)
-  const m = pais(r)
-  const todos = achar(r, () => true)
-  const topo = ancestralComum(m, ['pedir:lote', 'orq:izanagi', 'orq:kit'].map(k => todos.find(n => n.props?.key === k)!))!
-  expect(topo.props.paddingLeft).toBe(2)
+  expect(achar(r, n => n.props?.key === 'orq:izanagi' || n.props?.key === 'orq:kit'), 'sem botão de grupo').toEqual([])
+  expect(achar(r, n => n.type === 'Text' && /cartão da fila espera você/.test(txt(n))), 'sem frase de grupo').toEqual([])
+  expect(achar(r, n => n.type === 'Text' && /^Pedido às \d\d:\d\d · inicie o cartão$/.test(txt(n))).length, 'cada item diz que o pedido saiu').toBe(2)
   await ui.unmount()
 })
 
@@ -2763,49 +2703,27 @@ test('F76 F: lote com papéis diferentes guarda o papel de cada item e sobrevive
   await ui.unmount()
 })
 
-// F82: a frase e o "Abrindo…" do topo da Na fila não confundem.
-test('F82 A: a frase do topo diz de onde conta ("da fila"), no singular e no plural', async ($, on) => {
-  const um = await abrirDe(pedir({ fila: { ...ESPERANDO_V(), F68: FILA_DOIS().F68 }, vivas: vivasPedir(P1) }), $, on)
-  await um.ui.press({ key: 'pedir:F2' })
-  await um.ui.press({ key: 'pedir:F68' })
-  await um.relogio.settle()
-  expect(await um.ui.find({ key: 'orq:F2' }), 'precondição: o cartão em Executando também está em Pedido').toBeDefined()
-  const t1 = (await um.ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(t1.filter(t => t === '1 cartão da fila espera você na conversa da orquestradora de izanagi').length).toBe(1)
-  expect(t1.filter(t => /1 cartão espera você/.test(t))).toEqual([])
-  await um.ui.unmount()
-})
-
-test('F82 A: com dois itens da fila em Pedido a frase vai ao plural', async ($, on) => {
-  const { ui, relogio } = await abrirDe(pedir({ fila: FILA_DOIS() }), $, on)
-  await ui.press({ key: 'pedir:lote' })
-  await relogio.settle()
-  const ts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(ts.filter(t => t === '2 cartões da fila esperam você na conversa da orquestradora de izanagi').length).toBe(1)
-  await ui.unmount()
-})
-
+// F82: o "Abrindo…" não confunde botões da mesma sessão.
 test('F82 B: o "Abrindo…" acende só no botão pressionado; o clique em outro botão da mesma sessão é ignorado', async ($, on) => {
   let soltar: () => void = () => undefined
   const segurarAbrir: { p?: Promise<void> } = {}
-  const { ui, abertas, relogio } = await abrirDe(pedir({ fila: { ...ESPERANDO_V(), F68: FILA_DOIS().F68 }, vivas: vivasPedir(P1), segurarAbrir }), $, on)
+  const { ui, abertas, relogio } = await abrirDe(pedir({ fila: { ...ESPERANDO_V(), F68: FILA_DOIS().F68 }, vivas: vivasPedir(P1), segurarAbrir, cartoes: [CARTAO_E21] }), $, on)
   await ui.press({ key: 'pedir:F2' })
-  await ui.press({ key: 'pedir:F68' })
   await relogio.settle()
   segurarAbrir.p = new Promise<void>(res => (soltar = res))
   const jaAbertas = abertas.length
-  expect((await ui.find({ key: 'orq:izanagi' }))?.text, 'precondição: botão do topo').toBe('Abrir a orquestradora')
+  expect((await ui.find({ key: 'cartoes:local_orq_iz' }))?.text, 'precondição: botão da seção').toBe('Abrir a orquestradora')
   expect((await ui.find({ key: 'orq:F2' }))?.text, 'precondição: botão do cartão').toBe('Abrir a orquestradora')
-  await ui.press({ key: 'orq:izanagi' })
+  await ui.press({ key: 'cartoes:local_orq_iz' })
   await relogio.settle()
-  expect((await ui.find({ key: 'orq:izanagi' }))?.text).toBe('Abrindo…')
+  expect((await ui.find({ key: 'cartoes:local_orq_iz' }))?.text).toBe('Abrindo…')
   expect((await ui.find({ key: 'orq:F2' }))?.text, 'o do cartão não acende').toBe('Abrir a orquestradora')
   await ui.press({ key: 'orq:F2' })
   await relogio.settle()
   soltar()
   await relogio.settle()
   expect(abertas.length - jaAbertas, 'o segundo clique, em outro botão da mesma sessão, foi ignorado').toBe(1)
-  expect((await ui.find({ key: 'orq:izanagi' }))?.text).toBe('Abrir a orquestradora')
+  expect((await ui.find({ key: 'cartoes:local_orq_iz' }))?.text).toBe('Abrir a orquestradora')
   expect((await ui.find({ key: 'orq:F2' }))?.text).toBe('Abrir a orquestradora')
   await ui.unmount()
 })
@@ -2876,18 +2794,18 @@ test('F82 D: com dois itens o sufixo é "2 itens", também inquebrável', async 
 test('F85 A: a orquestradora aberta sozinha depois do pedido acende "Abrindo…" no botão dela e o clique não abre outra vez', async ($, on) => {
   let soltar: () => void = () => undefined
   const segurarAbrir: { p?: Promise<void> } = {}
-  const { ui, abertas, relogio } = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, segurarAbrir }), $, on)
+  const { ui, abertas, relogio } = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, segurarAbrir, cartoes: [CARTAO_E21] }), $, on)
   segurarAbrir.p = new Promise<void>(res => (soltar = res))
   await ui.press({ key: 'pedir:F68' })
   await relogio.settle()
-  expect(await ui.find({ key: 'orq:izanagi' }), 'precondição: o botão da orquestradora existe').toBeDefined()
-  expect((await ui.find({ key: 'orq:izanagi' }))?.text, 'enquanto abre, o botão dela diz "Abrindo…"').toBe('Abrindo…')
-  await ui.press({ key: 'orq:izanagi' })
+  expect(await ui.find({ key: 'cartoes:local_orq_iz' }), 'precondição: o botão da orquestradora existe').toBeDefined()
+  expect((await ui.find({ key: 'cartoes:local_orq_iz' }))?.text, 'enquanto abre, o botão dela diz "Abrindo…"').toBe('Abrindo…')
+  await ui.press({ key: 'cartoes:local_orq_iz' })
   await relogio.settle()
   soltar()
   await relogio.settle()
   expect(abertas.length, 'o foco automático pediu uma vez e o clique no botão que abria foi ignorado').toBe(1)
-  expect((await ui.find({ key: 'orq:izanagi' }))?.text).toBe('Abrir a orquestradora')
+  expect((await ui.find({ key: 'cartoes:local_orq_iz' }))?.text).toBe('Abrir a orquestradora')
   await ui.unmount()
 })
 
@@ -3034,4 +2952,132 @@ test('F85 D (5): assumida que mudou desde a leitura não é sobrescrita e vira a
   expect(enviadas).toEqual([])
   expect(await lerTudo(ui)).toMatch(/Q30 não gravada: Q30 mudou desde a leitura \(agora: respondida\)/)
   await ui.unmount()
+})
+
+// F144: "Sessões para abrir" — o cartão de sessão nova sai das perguntas e ganha seção própria.
+const MIN5 = 5 * 60_000
+const iso5 = (min: number) => new Date(AGORA - min * 60_000).toISOString()
+const PLANOS = { F68: parado('execucao', { titulo: 'editor da loja' }), F63: parado('planejamento', { titulo: 'painel do componente' }) }
+const comCartoes = (cartoes: Doc[], extra: Partial<Opcoes> = {}) => pedir({ fila: PLANOS, cartoes, ...extra })
+
+test('F144 pura: lerCartao aceita o contrato e recusa apelido, papel, itens e data fora dele', () => {
+  const ok = { projeto: 'Izanagi', apelido: 'E21', papel: 'E', itens: ['F68'], orquestradoraId: 'local_o', propostoEm: iso5(5) }
+  expect(R.lerCartao({ id: 't', data: ok, version: 1 })).toEqual({ id: 't', projeto: 'izanagi', apelido: 'E21', papel: 'E', itens: ['F68'], orquestradoraId: 'local_o', propostoEm: iso5(5) })
+  expect(R.lerCartao({ id: 't', data: { ...ok, itens: [] }, version: 1 })?.itens, 'o piso de E não tem item').toEqual([])
+  for (const ruim of [{ apelido: 'X1' }, { papel: 'D' }, { itens: ['x'] }, { itens: 'F68' }, { propostoEm: 'ontem' }, { orquestradoraId: '' }, { projeto: '' }])
+    expect(R.lerCartao({ id: 't', data: { ...ok, ...ruim }, version: 1 }), JSON.stringify(ruim)).toBeUndefined()
+})
+
+test('F144 pura: cartoesVisiveis — apelido vivo depois do pedido some, o de antes fica, 12 h some, sem lista só o prazo vale', () => {
+  const c = (id: string, apelido: string, min: number) => ({ id, projeto: 'izanagi', apelido, papel: apelido[0] as 'E', itens: [], orquestradoraId: 'local_o', propostoEm: iso5(min) })
+  const cartoes = [c('b', 'E22', 6), c('a', 'E21', 10), c('v', 'E23', 13 * 60)]
+  const viva = (title: string, createdAt: string) => ({ sessionId: 'local_x', title, createdAt })
+  expect(R.cartoesVisiveis(cartoes, [], false, AGORA).map(x => x.id), 'mais antigo primeiro; o de 13 h já saiu').toEqual(['a', 'b'])
+  expect(R.cartoesVisiveis(cartoes, [viva('E21 · livre', iso5(1))], false, AGORA).map(x => x.id), 'E21 abriu depois do pedido').toEqual(['b'])
+  expect(R.cartoesVisiveis(cartoes, [viva('E21 · livre', iso5(60))], false, AGORA).map(x => x.id), 'E21 antigo é outra sessão').toEqual(['a', 'b'])
+  expect(R.cartoesVisiveis(cartoes, [viva('E21 · livre', iso5(1))], true, AGORA).map(x => x.id), 'sem a lista não se sabe quem abriu').toEqual(['a', 'b'])
+})
+
+test('F144 desenho: a linha diz apelido, papel por extenso, há quanto tempo, para quê e + N itens; sem item, "Manter uma … livre"', () => {
+  const com = D.sessaoParaAbrirSvg(360, { apelido: 'E21', propostoEm: iso5(4), itens: [{ id: 'F68', titulo: 'editor da loja' }, { id: 'F63', titulo: 'painel do componente' }] }, AGORA)
+  expect(com.source.length, 'o desenho existe').toBeGreaterThan(0)
+  for (const t of ['E21', ' · EXECUTORA', 'há 4 min', 'editor da loja', '+ 1 item']) expect(com.source, t).toContain(t)
+  expect(com.alt, 'o alt traz todos os itens').toMatch(/F68 · editor da loja; F63 · painel do componente/)
+  const piso = D.sessaoParaAbrirSvg(360, { apelido: 'D3', propostoEm: iso5(4), itens: [] }, AGORA)
+  expect(piso.source).toContain('Manter uma designer livre')
+  expect(piso.source, 'sem mais itens não há a linha "+ N"').not.toContain('+ ')
+  expect(D.sessaoParaAbrirSvg(288, { apelido: 'E21', propostoEm: iso5(4), itens: [{ id: 'F9' }] }, AGORA).source, 'sem título, o número').toContain('F9')
+  expect(D.fraseDoGrupoSvg(360, 'A orquestradora destes cartões não está aberta', true).source).toContain('class="er"')
+})
+
+test('F144: sem cartão a seção não existe, nem o título', async ($, on) => {
+  const sem = await lerPane($, on, comCartoes([]))
+  for (const sup of ['terminal', 'desktop'] as const) expect(sem.lido[sup], sup).not.toContain('Sessões para abrir')
+})
+
+test('F144: com cartão a seção vem depois de "Esperam você" e antes da fila, nas duas superfícies', async ($, on) => {
+  const { lido } = await lerPane($, on, comCartoes([CARTAO_E21], { perguntas: PERGUNTAS }))
+  for (const sup of ['terminal', 'desktop'] as const) {
+    expect(lido[sup], `${sup}: a seção existe`).toContain('Sessões para abrir')
+    antes(lido[sup], /Sessões para abrir/, /Na fila/)
+  }
+  expect(lido.terminal).toMatch(/Sessões para abrir · 1/)
+  expect(lido.terminal).toMatch(/E21 executora · há 5 min/)
+  expect(lido.terminal).toContain('editor da loja')
+  expect(lido.terminal).toContain('O cartão está na conversa da orquestradora de izanagi')
+  antes(lido.terminal, /Esperam você/, /Sessões para abrir/)
+})
+
+test('F144: duas linhas e uma orquestradora ganham um só botão, e o resumo do topo não conta cartão', async ($, on) => {
+  const outro = cartaoDe('task_d3', { apelido: 'D3', papel: 'D', itens: [], propostoEm: iso5(8) })
+  const { ui, relogio } = await abrirDe(comCartoes([CARTAO_E21, outro]), $, on)
+  expect((await ui.findAll({ key: 'cartoes:local_orq_iz' })).length, 'um botão por grupo').toBe(1)
+  const lido = await lerSuperficie(ui)
+  expect(lido).toContain('Os cartões estão na conversa da orquestradora de izanagi')
+  expect(lido).toMatch(/Sessões para abrir · 2/)
+  antes(lido, /D3, designer/, /E21, executora/)
+  expect(lido, 'o resumo segue contando itens').not.toMatch(/2 sessões para abrir/)
+  await relogio.settle()
+  await ui.unmount()
+})
+
+test('F144: o apelido que já aparece vivo depois do pedido esconde a linha na hora; o de antes não', async ($, on) => {
+  const vivas = JSON.stringify([
+    { sessionId: 'local_orq_iz', title: '🎛 orquestradora — izanagi', isRunning: true, isArchived: false },
+    { sessionId: 'local_nova', title: 'E21 · livre', isRunning: false, isArchived: false, createdAt: iso5(1) },
+    { sessionId: 'local_velha', title: 'D3 · livre', isRunning: false, isArchived: false, createdAt: iso5(120) },
+  ])
+  const d3 = cartaoDe('task_d3', { apelido: 'D3', papel: 'D', itens: [] })
+  const { lido } = await lerPane($, on, comCartoes([CARTAO_E21, d3], { vivas }))
+  expect(lido.terminal, 'E21 abriu: a linha some').not.toContain('E21 executora')
+  expect(lido.terminal, 'D3 de antes do pedido não conta').toContain('D3 designer')
+  expect(lido.terminal).toMatch(/Sessões para abrir · 1/)
+})
+
+test('F144: cartão de mais de 12 h não aparece', async ($, on) => {
+  const velho = cartaoDe('task_velho', { propostoEm: iso5(13 * 60) })
+  const { lido } = await lerPane($, on, comCartoes([velho, CARTAO_E21]))
+  expect(lido.terminal).toMatch(/Sessões para abrir · 1/)
+  expect(lido.terminal).not.toMatch(/task_velho/)
+})
+
+test('F144: só o cartão de mais de 12 h: a seção não existe', async ($, on) => {
+  const velho = cartaoDe('task_velho', { propostoEm: iso5(13 * 60) })
+  expect((await lerPane($, on, comCartoes([velho]))).lido.terminal).not.toContain('Sessões para abrir')
+})
+
+test('F144: sem a lista de sessões as linhas aparecem todas', async ($, on) => {
+  const nova = { sessionId: 'local_nova', title: 'E21 · livre', isRunning: false, isArchived: false, createdAt: iso5(1) }
+  const semLista = await lerPane($, on, comCartoes([CARTAO_E21], { vivas: JSON.stringify([nova]), listaFalha: true }))
+  expect(semLista.lido.terminal, 'sem lista não dá para saber quais abriram').toContain('E21 executora')
+})
+
+test('F144: a orquestradora do grupo não está aberta — a frase avisa e o grupo fica sem botão', async ($, on) => {
+  const { ui } = await abrirDe(comCartoes([CARTAO_E21], { vivas: vivasDe('local_orq_kit') }), $, on)
+  expect(await lerSuperficie(ui)).toContain('A orquestradora destes cartões não está aberta')
+  expect(await ui.find({ key: 'cartoes:local_orq_iz' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('F144: "Abrir a orquestradora" da seção foca a conversa dela e mostra "Abrindo…" enquanto abre', async ($, on) => {
+  let soltar: () => void = () => undefined
+  const segurarAbrir: { p?: Promise<void> } = {}
+  const { ui, abertas, relogio } = await abrirDe(comCartoes([CARTAO_E21], { segurarAbrir }), $, on)
+  segurarAbrir.p = new Promise<void>(res => (soltar = res))
+  expect((await ui.find({ key: 'cartoes:local_orq_iz' }))?.text).toBe('Abrir a orquestradora')
+  await ui.press({ key: 'cartoes:local_orq_iz' })
+  await relogio.settle()
+  expect((await ui.find({ key: 'cartoes:local_orq_iz' }))?.text).toBe('Abrindo…')
+  soltar()
+  await relogio.settle()
+  expect([abertas.at(-1)?.session_id, abertas.at(-1)?.target]).toEqual(['local_orq_iz', 'focus'])
+  expect((await ui.find({ key: 'cartoes:local_orq_iz' }))?.text).toBe('Abrir a orquestradora')
+  await ui.unmount()
+})
+
+test('F144: cartoes ilegível vai para a faixa de erro e a seção não aparece', async ($, on) => {
+  const ruim = doc('task_ruim', { apelido: 'lixo' })
+  const { lido } = await lerPane($, on, comCartoes([ruim]))
+  expect(lido.terminal).toMatch(/cartoes\/task_ruim: fora do contrato/)
+  expect(lido.terminal).not.toContain('Sessões para abrir')
 })

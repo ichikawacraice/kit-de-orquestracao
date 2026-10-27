@@ -91,7 +91,10 @@ export type PerguntaAnterior = {
 }
 
 /** O que o `list_sessions` diz de uma sessão: o bastante para "trabalhando agora" e "parada há X". */
-export type SessaoViva = { sessionId: string; isRunning?: boolean; lastActivityAt?: string }
+export type SessaoViva = { sessionId: string; isRunning?: boolean; lastActivityAt?: string; title?: string; createdAt?: string }
+
+/** Um cartão de sessão nova que espera o clique do operador (coleção `cartoes` do painel; `id` = o task_id do start_session). */
+export type CartaoDeSessao = { id: string; projeto: string; apelido: string; papel: PapelDoPedido; itens: string[]; orquestradoraId: string; propostoEm: string }
 
 export type Leitura = {
   lidoEm: number | null
@@ -116,6 +119,8 @@ export type Leitura = {
   semLista?: boolean
   /** As orquestradoras do painel (`papel: "orquestradora"`, estado fora de `concluida`), com o projeto em minúsculas: para onde vai o pedido de sessão. Ausente no estado de antes desta versão. */
   orquestradoras?: Array<{ id: string; projeto: string }>
+  /** Os cartões de sessão nova lidos de `cartoes` (os já abertos ou vencidos se escondem na hora de desenhar). Ausente no estado de antes desta versão. */
+  cartoes?: CartaoDeSessao[]
   /** O modo ausente da última leitura; `null` = o arquivo não se leu (JSON inválido); ausente (undefined) antes da 1ª leitura e no estado de antes desta versão. */
   ausente?: { ligado: boolean; desde?: string; por?: string } | null
 }
