@@ -17,7 +17,7 @@ Base: `main` em `d424817`. Origem: pedido do operador depois do F207 — "a part
 Os estados 1 e 2 podem coexistir (um plugin instalado, outro publicado depois): aparecem as duas linhas, a do kit primeiro.
 
 ## Partes
-- **A · script** (`pode-reiniciar.mjs`, `painel.mjs`): sai `lerAtualizacao` e o campo `atualizacao` (app e motor, do F207); entra `paraAplicar` (plugin do kit instalado depois do início do app) e `paraBaixar` (publicada > instalada, lida com cache de 30 min em `batida/kit-publicado.json`, para não ir à rede a cada leitura do pane). Rede fora do ar → sem `paraBaixar` e a próxima tentativa na janela seguinte.
+- **A · script** (`pode-reiniciar.mjs`, `painel.mjs`): sai `lerAtualizacao` e o campo `atualizacao` (app e motor, do F207); entra `paraAplicar` (plugin do kit instalado depois do início do app) e `paraBaixar` (publicada > instalada, lida com cache de 30 min em `batida/kit-publicado.json`, para não ir à rede a cada leitura do pane). Fetch que falha (sem rede, ou outro fetch segurando o ref) → vale o `origin/main` que o clone já tem; a próxima tentativa na janela seguinte.
 - **B · mod**: gate dos três estados no desktop e no terminal; botão `Atualizar` com estado visível; trava entre sessões em `batida/atualizando-kit.json` (10 min).
 - Teste antes do código nas duas partes.
 

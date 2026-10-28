@@ -134,7 +134,6 @@ export type PapelDoPedido = 'dona'
 export type EstadoPedido = { estado: 'enviando' } | { estado: 'prompt'; em: number; papel: PapelDoPedido } | { estado: 'pedido'; em: number; papel: PapelDoPedido }
 
 /** O aviso de reinício e a conferência que a tela lê: os dois arquivos de `batida/` (F152), cada um com o próprio erro. */
-/** O que só entra com o app reiniciado: a versão nova do app já baixada, e a do motor mais nova que a mais velha em uso. */
 /** Um plugin do kit instalado depois que o app abriu: só vale com o app reiniciado. */
 export type ParaAplicar = { nome: string; versao: string }
 /** Um plugin do kit com versão publicada mais nova que a instalada. */

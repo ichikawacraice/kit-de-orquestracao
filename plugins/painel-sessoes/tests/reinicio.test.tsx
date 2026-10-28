@@ -1014,3 +1014,19 @@ test('F209 (validador 1): o kit e o reinício moram entre o botão do modo e os 
     await ui.unmount()
   }
 })
+
+test('F209 (2º validador M1): atualizou e a reconferência falhou — a tela otimista fica, a linha do kit não volta do arquivo velho', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, paraBaixar: KIT, segurarReconferencia: true })
+  const ui = await abrirPane($, m, 'terminal')
+  await ui.press({ key: 'kit' })
+  await m.relogio.settle()
+  m.segurado.conferenciaFalha = true
+  m.segurado.soltarConferencia()
+  await m.relogio.settle()
+  const t = await lido(ui)
+  expect(m.toasts).toContain('Kit atualizado: orquestracao 0.1.41. Reinicie o app para aplicar.')
+  expect(t, 'a linha do kit não volta').not.toMatch(/Atualização do kit/)
+  expect(t, 'o kit segue na linha azul').toContain('Pronta para aplicar · orquestracao 0.1.41')
+  expect(m.arquivos.has(TRAVA), 'a trava sai: a atualização deu certo').toBe(false)
+  await ui.unmount()
+})

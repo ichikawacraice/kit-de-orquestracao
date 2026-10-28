@@ -1714,6 +1714,7 @@ export async function atualizarKit($: EngineInterface): Promise<void> {
     })
   }
   const lista = feitos.map(f => `${f.nome} ${f.versao}`).join(', ')
+  let confirmou = false
   try {
     if (detalhe === null) {
       $.ui.toast(feitos.length ? `Kit atualizado: ${lista}. Reinicie o app para aplicar.` : 'O kit já estava em dia.')
@@ -1727,12 +1728,14 @@ export async function atualizarKit($: EngineInterface): Promise<void> {
     }
     // a conferência nova confirma o que a tela já mostra; até ela gravar, a guarda (o átomo e a trava) segura a tela e os outros panes
     await conferirReinicio($, await listaFresca($))
+    confirmou = true
   } catch (err) {
     $.ui.log(`kit: ${mensagem(err)}`)
   } finally {
     if (detalhe === null && home) await $.process.run(['rm', '-f', trava], { timeoutMs: SCRIPT_TIMEOUT_MS }).catch(() => undefined)
     await update($, atualizandoKit, () => false)
-    await lerReinicio($).catch(() => undefined)
+    // sem a conferência nova o disco ainda é o de antes do clique: a tela otimista fica até a próxima leitura que confira
+    if (confirmou) await lerReinicio($).catch(() => undefined)
   }
 }
 

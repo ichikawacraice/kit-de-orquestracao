@@ -113,7 +113,7 @@ const compararVersao = (a, b) => { const x = RELEASE.exec(a).slice(1).map(Number
 
 // F209: os plugins do kit (o marketplace `kit-de-orquestracao`, escopo user). O app carrega os plugins quando abre: plugin com
 // `lastUpdated` depois do início do processo do app ainda não vale. "Para baixar" é a versão do `main` publicado mais nova que a
-// instalada, lida por `git fetch` no clone do marketplace (só o FETCH_HEAD; a árvore do clone não anda), com cache de 30 min.
+// instalada, lida por `git fetch` no clone do marketplace (o FETCH_HEAD, ou o `origin/main` do clone se o fetch falhar; a árvore do clone não anda), com cache de 30 min.
 const MARKETPLACE = 'kit-de-orquestracao';
 export const KIT_PUBLICADO_VALE_MS = 30 * 60_000;
 const GIT_TIMEOUT_MS = 20_000;
