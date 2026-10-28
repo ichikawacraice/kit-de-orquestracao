@@ -202,17 +202,22 @@ test('(dona-5) F218: com cartão de sessão dona esperando o clique ou sessão v
     mkdirSync(join(base, 'painel', 'cartoes'), { recursive: true });
     writeFileSync(join(base, 'painel', 'cartoes', 'task_x.json'), JSON.stringify({ id: 'task_x', version: 1, data: { projeto: 'proj-a', apelido: 'dona', papel: 'dona', itens: [F], orquestradoraId: 'local_ORQ', propostoEm: minAtras(min) } }));
   };
+  cartao('F7', 5);
+  assert.equal(rodar([LIST, GRAVA]), null, 'cartão do F7 de 5 min (o item está sem dona há 10): o pedido já saiu');
   cartao('F7', 32);
-  assert.equal(rodar([LIST, GRAVA]), null, 'cartão de 32 min do F7: o pedido já saiu');
-  cartao('F8', 32);
+  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'cartão de antes de o item ficar sem dona é de outra rodada');
+  cartao('F8', 5);
   assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'cartão de outro item não vale');
   cartao('F7', 13 * 60);
   assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'cartão de 13 h venceu');
   rmSync(join(base, 'painel', 'cartoes'), { recursive: true });
   const vivas = (...l) => writeFileSync(join(base, 'orq', 'batida', 'sessoes.json'), JSON.stringify(l));
-  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: false });
+  // o sessoes.json da batida não traz createdAt: vale lastActivityAt
+  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: false, lastActivityAt: minAtras(1) });
   assert.equal(rodar([LIST, GRAVA]), null, 'a sessão do F7 abriu e ainda não se gravou dona');
-  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: true });
+  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: false, lastActivityAt: minAtras(40) });
+  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'a sessão parada desde antes de o item ficar sem dona (a dona que soltou) não vale');
+  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: true, lastActivityAt: minAtras(1) });
   assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'sessão arquivada não vale');
 });
 }

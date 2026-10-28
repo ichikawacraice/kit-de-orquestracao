@@ -31,14 +31,17 @@ export function semDona(data: Record<string, unknown> | null | undefined, agoraM
 export const CARTAO_VALIDADE_MS = 12 * 3_600_000
 
 // A dona do item já está a caminho (F218): cartão de sessão dona do item esperando o clique (menos de 12 h) ou sessão viva
-// `F<n> · …` ainda sem se gravar. Cópia de `donaACaminho` de plugins/orquestracao/hooks/sem-dona.mjs (mesmo teste de concordância).
-export function donaACaminho(
-  F: string,
-  { cartoes = [], sessoes = [], agoraMs }: { cartoes?: Array<{ itens?: unknown; propostoEm?: unknown } | null>; sessoes?: Array<{ title?: unknown; isArchived?: unknown } | null>; agoraMs: number },
-): boolean {
+// `F<n> · …` ainda sem se gravar, nascidos depois de `desde`. Cópia de `donaACaminho` de plugins/orquestracao/hooks/sem-dona.mjs
+// (mesmo teste de concordância).
+type CartaoACaminho = { itens?: unknown; propostoEm?: unknown } | null
+type SessaoACaminho = { title?: unknown; isArchived?: unknown; createdAt?: unknown; lastActivityAt?: unknown } | null
+export function donaACaminho(F: string, { cartoes = [], sessoes = [], agoraMs, desde }: { cartoes?: CartaoACaminho[]; sessoes?: SessaoACaminho[]; agoraMs: number; desde?: string }): boolean {
+  const piso = Date.parse(String(desde))
+  const depois = (t: number) => !Number.isNaN(t) && (Number.isNaN(piso) || t >= piso)
   const cartao = cartoes.some(c => {
     const t = Date.parse(String(c?.propostoEm))
-    return Array.isArray(c?.itens) && c.itens.includes(F) && !Number.isNaN(t) && agoraMs - t < CARTAO_VALIDADE_MS
+    return Array.isArray(c?.itens) && c.itens.includes(F) && depois(t) && agoraMs - t < CARTAO_VALIDADE_MS
   })
-  return cartao || sessoes.some(s => s?.isArchived !== true && typeof s?.title === 'string' && s.title.startsWith(`${F} · `))
+  return cartao || sessoes.some(s => s?.isArchived !== true && typeof s?.title === 'string' && s.title.startsWith(`${F} · `)
+    && depois(Date.parse(String(s.createdAt ?? s.lastActivityAt))))
 }

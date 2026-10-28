@@ -45,7 +45,7 @@ export const CASOS = [
 
 // Tabela da regra "dona a caminho" (F218): cartão de sessão dona esperando o clique ou sessão viva `F<n> · …` do item.
 const cartao = (itens, minAtras) => ({ itens, propostoEm: min(minAtras) });
-const viva = (title, isArchived = false) => ({ title, isArchived });
+const viva = (title, isArchived = false, criada = 1) => ({ title, isArchived, createdAt: min(criada) });
 export const CASOS_A_CAMINHO = [
   { nome: 'nada: não está a caminho', F: 'F7', cartoes: [], sessoes: [], esperado: false },
   { nome: 'cartão do item proposto há 10 min', F: 'F7', cartoes: [cartao(['F7'], 10)], sessoes: [], esperado: true },
@@ -55,5 +55,11 @@ export const CASOS_A_CAMINHO = [
   { nome: 'sessão viva do item, ainda sem se gravar', F: 'F7', cartoes: [], sessoes: [viva('F7 · editor da loja')], esperado: true },
   { nome: 'sessão arquivada do item não conta', F: 'F7', cartoes: [], sessoes: [viva('F7 · editor da loja', true)], esperado: false },
   { nome: 'F70 não é F7', F: 'F7', cartoes: [cartao(['F70'], 10)], sessoes: [viva('F70 · outro')], esperado: false },
+  { nome: 'sessão da dona que soltou o item (criada antes de ele ficar sem dona) não conta', F: 'F7', desde: min(30), cartoes: [], sessoes: [viva('F7 · editor da loja', false, 90)], esperado: false },
+  { nome: 'sessão aberta depois de o item ficar sem dona conta', F: 'F7', desde: min(30), cartoes: [], sessoes: [viva('F7 · editor da loja', false, 5)], esperado: true },
+  { nome: 'sem createdAt, vale lastActivityAt: parada desde antes de o item ficar sem dona não conta', F: 'F7', desde: min(30), cartoes: [], sessoes: [{ title: 'F7 · x', isArchived: false, lastActivityAt: min(45) }], esperado: false },
+  { nome: 'sessão sem data nenhuma não conta', F: 'F7', cartoes: [], sessoes: [{ title: 'F7 · x', isArchived: false }], esperado: false },
+  { nome: 'cartão proposto antes de o item ficar sem dona não conta', F: 'F7', desde: min(30), cartoes: [cartao(['F7'], 60)], sessoes: [], esperado: false },
+  { nome: 'cartão proposto depois de o item ficar sem dona conta', F: 'F7', desde: min(30), cartoes: [cartao(['F7'], 10)], sessoes: [], esperado: true },
   { nome: 'entradas ruins não derrubam', F: 'F7', cartoes: [null, { itens: 'F7' }], sessoes: [null, { title: 7 }], esperado: false },
 ];

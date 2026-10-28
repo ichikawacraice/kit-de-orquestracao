@@ -24,7 +24,7 @@ test('as duas cópias de donaACaminho dão o mesmo resultado (F218)', { skip: se
   const copia = await import(pathToFileURL(TS).href);
   assert.ok(CASOS_A_CAMINHO.length > 0, 'a tabela de casos não pode estar vazia');
   for (const c of CASOS_A_CAMINHO) {
-    const args = { cartoes: c.cartoes, sessoes: c.sessoes, agoraMs: AGORA };
+    const args = { cartoes: c.cartoes, sessoes: c.sessoes, agoraMs: AGORA, desde: c.desde };
     assert.equal(copia.donaACaminho(c.F, args), donaACaminho(c.F, args), c.nome);
   }
 });

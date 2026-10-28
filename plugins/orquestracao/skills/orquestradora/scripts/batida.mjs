@@ -6,7 +6,7 @@ import { slugDoProjeto } from './perguntas-arquivo.mjs';
 export const PRAZO_MIN = 30; // item parado: sem gravar há tanto (PAINEL_PRAZO_MIN troca)
 export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta (BATIDA_SOLTA_MIN troca)
 export const ESPERA_MIN = 5; // sem dona há tanto: vira vaga no relatório da orquestradora
-export const CARTAO_VALIDADE_H = 12; // cartão de sessão dona sem clique há tanto: a orquestradora já o terá reproposto
+export const CARTAO_VALIDADE_H = 12; // cartão de sessão dona sem clique há tanto sai; enquanto vale, o item não é cobrado de novo (F218)
 
 const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
 const ms = (v) => { const t = Date.parse(v); return Number.isNaN(t) ? null : t; };
@@ -99,7 +99,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, don
     // O item sem dona há ESPERA_MIN vira vaga de dona no relatório da orquestradora, menos o que já tem a dona a caminho
     // (cartão esperando o clique ou sessão `F<n> · …` viva): a vaga repetida faz a orquestradora propor a segunda dona (F218).
     const r = semDona(d, agoraMs);
-    if (r && r.minutos >= ESPERA_MIN && !donaACaminho(F, { cartoes, sessoes: linhas, agoraMs })) proj.vagas.push({ papel: 'dona', item: F });
+    if (r && r.minutos >= ESPERA_MIN && !donaACaminho(F, { cartoes, sessoes: linhas, agoraMs, desde: r.desde })) proj.vagas.push({ papel: 'dona', item: F });
   }
   for (const F of Object.keys(cutucadas)) if (!vistos.has(F)) delete cutucadas[F];
 

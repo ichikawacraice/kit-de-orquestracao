@@ -719,12 +719,12 @@ async function pedirSessoes($: EngineInterface, ids: string[], chave: string, su
   const agora = await $.clock.now()
   const lote = chave === 'lote'
   const vivas = l.semLista ? null : (l.sessoes ?? []).map(v => v.sessionId)
-  const aCaminho = (F: string) => donaACaminho(F, { cartoes: l.cartoes ?? [], sessoes: l.sessoes ?? [], agoraMs: agora })
+  const aCaminho = (i: LinhaItem) => donaACaminho(i.id, { cartoes: l.cartoes ?? [], sessoes: l.sessoes ?? [], agoraMs: agora, desde: i.esperando?.desde })
   const grupos = new Map<string, { orq: string; alvos: Array<{ item: LinhaItem; papel: PapelPedido }> }>()
   for (const item of l.itens.filter(i => ids.includes(i.id))) {
     const papel = papelQueFalta(item)
     const e = atual[item.id]
-    if (!papel || !item.projeto || aCaminho(item.id) || (e && (e.estado === 'enviando' || (lote ? vivoDoEstado(e, agora) : e.estado === 'pedido')))) continue
+    if (!papel || !item.projeto || aCaminho(item) || (e && (e.estado === 'enviando' || (lote ? vivoDoEstado(e, agora) : e.estado === 'pedido')))) continue
     const destino = orquestradoraDoProjeto(item.projeto, l.orquestradoras ?? [], vivas)
     if (!('id' in destino)) continue
     const g = grupos.get(item.projeto) ?? { orq: destino.id, alvos: [] }
@@ -2174,7 +2174,7 @@ export const register: Register = on => {
     // F218: o item com cartão de sessão dona esperando o clique, ou com a sessão `F<n> · …` viva, já pediu: sem segundo pedido.
     const pedidoDe = (i: LinhaItem) => {
       const papel = papelQueFalta(i)
-      if (!papel || !i.projeto || donaACaminho(i.id, { cartoes: lidaAgora.cartoes ?? [], sessoes: lidaAgora.sessoes ?? [], agoraMs: agoraDoPedido })) return undefined
+      if (!papel || !i.projeto || donaACaminho(i.id, { cartoes: lidaAgora.cartoes ?? [], sessoes: lidaAgora.sessoes ?? [], agoraMs: agoraDoPedido, desde: i.esperando?.desde })) return undefined
 
       return { papel, projeto: i.projeto, destino: destinoDo(i.projeto), estado: estadoVivo(i.id) }
     }

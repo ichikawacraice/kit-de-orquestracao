@@ -47,11 +47,16 @@ export const CARTAO_VALIDADE_MS = 12 * 3_600_000;
 
 // A dona do item já está a caminho (F218): há cartão de sessão dona do item esperando o clique (`cartoes`, proposto há menos
 // de 12 h) ou sessão viva `F<n> · …` (aberta e ainda sem se gravar dona). Pedir de novo abriria a segunda dona do item.
+// `desde` (ISO, o `desde` de `semDona`): só conta o que nasceu depois de o item ficar sem dona; a sessão da dona que soltou o
+// item, ou a de antes de ele reabrir, segue viva com o mesmo título e não está a caminho. Sem `createdAt`, vale `lastActivityAt`.
 // `cartoes`: o `data` dos documentos da coleção; `sessoes`: as linhas do `list_sessions`.
-export function donaACaminho(F, { cartoes = [], sessoes = [], agoraMs }) {
+export function donaACaminho(F, { cartoes = [], sessoes = [], agoraMs, desde }) {
+  const piso = Date.parse(desde);
+  const depois = (t) => !Number.isNaN(t) && (Number.isNaN(piso) || t >= piso);
   const cartao = cartoes.some((c) => {
     const t = Date.parse(c?.propostoEm);
-    return Array.isArray(c?.itens) && c.itens.includes(F) && !Number.isNaN(t) && agoraMs - t < CARTAO_VALIDADE_MS;
+    return Array.isArray(c?.itens) && c.itens.includes(F) && depois(t) && agoraMs - t < CARTAO_VALIDADE_MS;
   });
-  return cartao || sessoes.some((s) => s?.isArchived !== true && typeof s?.title === 'string' && s.title.startsWith(`${F} · `));
+  return cartao || sessoes.some((s) => s?.isArchived !== true && typeof s?.title === 'string' && s.title.startsWith(`${F} · `)
+    && depois(Date.parse(s.createdAt ?? s.lastActivityAt)));
 }

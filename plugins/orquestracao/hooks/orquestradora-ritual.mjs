@@ -58,7 +58,7 @@ function itensSemDona(nomeProjeto) {
       if (!e || e.minutos < ESPERA_MIN) continue;
       const F = doc.id ?? nome.replace(/\.json$/, '');
       aCaminho ??= { cartoes: cartoes(), sessoes: sessoesDaBatida(), agoraMs: Date.now() };
-      if (!donaACaminho(F, aCaminho)) itens.push({ id: F, data: doc.data, ...e });
+      if (!donaACaminho(F, { ...aCaminho, desde: e.desde })) itens.push({ id: F, data: doc.data, ...e });
     } catch { /* item ilegível: ignora */ }
   }
   return itens;
