@@ -700,14 +700,36 @@ test('F209: o comando falha e nada se sabe pendente: o reinício não aparece, o
   await ui.unmount()
 })
 
-test('o comando falha no pane: não sei, "não consegui conferir agora", o motivo vai para Não consegui ler tudo', async ($, on) => {
-  // F209: com o arquivo de antes dizendo que um plugin do kit espera reinício, a linha fica e diz que não conferiu
-  const m = await iniciar($, on, { comandoFalha: true, arquivo: arquivo([], 30, { paraAplicar: [{ nome: 'painel-sessoes', versao: '0.9.5' }] }) })
+test('o comando falha no pane com o aviso ligado: não sei, "não consegui conferir agora", o motivo vai para Não consegui ler tudo', async ($, on) => {
+  // F209: o arquivo velho do disco (kit para baixar e plugin esperando) não aparece: sem conferência não se sabe; só o aviso ligado segue
+  const velho = arquivo([], 30, { paraAplicar: [{ nome: 'painel-sessoes', versao: '0.9.5' }], paraBaixar: KIT })
+  const m = await iniciar($, on, { comandoFalha: true, arquivo: velho, aviso: aviso({ ligadoEm: iso(AGORA - 10 * MIN) }) })
   const ui = await abrirPane($, m, 'desktop')
   const texto = await lido(ui)
-  expect(texto).toContain('Reiniciar o app: não sei — não consegui conferir agora.')
+  expect(texto).toContain('Aviso de reinício ligado: não sei — não consegui conferir agora.')
   expect(texto).toContain('Não consegui ler tudo')
   expect(texto).toMatch(/reinício: painel pode-reiniciar saiu com 1/)
+  expect(texto, 'a linha do kit do arquivo velho não aparece').not.toMatch(/Atualização do kit/)
+  expect(texto, 'nem a linha azul').not.toMatch(/Pronta para aplicar/)
+  await ui.unmount()
+})
+
+test('F209 (validador 2): o comando falha sem aviso e o arquivo velho do disco diz que há o que fazer: o pane não mostra nada (prova: sem a falha, mostra)', async ($, on) => {
+  const velho = arquivo([], 0, { paraAplicar: [{ nome: 'painel-sessoes', versao: '0.9.5' }], paraBaixar: KIT })
+  const m = await iniciar($, on, { comandoFalha: true, arquivo: velho })
+  const ui = await abrirPane($, m, 'terminal')
+  const texto = await lido(ui)
+  expect(texto).toMatch(/reinício: painel pode-reiniciar saiu com 1/)
+  expect(texto).not.toMatch(/Atualização do kit|Reiniciar|Pode reiniciar|Pronta para aplicar|Me avise/)
+  await ui.unmount()
+})
+
+test('F209 (validador 2, prova): o mesmo arquivo com a conferência funcionando mostra o kit e a linha azul', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: [{ nome: 'painel-sessoes', versao: '0.9.5' }], paraBaixar: KIT })
+  const ui = await abrirPane($, m, 'terminal')
+  const texto = await lido(ui)
+  expect(texto).toMatch(/Atualização do kit/)
+  expect(texto).toMatch(/Pronta para aplicar/)
   await ui.unmount()
 })
 
@@ -936,15 +958,16 @@ test('F209 (crítica P2): até a reconferência gravar, a trava fica e uma leitu
   await m.relogio.settle()
   expect(m.toasts).toContain('Kit atualizado: orquestracao 0.1.41. Reinicie o app para aplicar.')
   expect(m.arquivos.has(TRAVA), 'a trava segura os outros panes até a reconferência').toBe(true)
-  // a leitura periódica no meio: a conferência dela falha e o disco ainda tem o arquivo velho, com o kit para baixar
-  m.arquivos.set(ARQ, JSON.stringify(arquivo([], 0, { paraBaixar: KIT }, m.tempo.agora)))
-  m.segurado.conferenciaFalha = true
+  // a leitura periódica no meio grava o arquivo como estava antes do clique (o kit para baixar, nada a aplicar)
+  const depois = { paraBaixar: m.estado.paraBaixar, paraAplicar: m.estado.paraAplicar }
+  m.estado.paraBaixar = KIT
+  m.estado.paraAplicar = null
   await ui.press({ key: 'atualizar' })
   await m.relogio.settle()
   const meio = await lido(ui)
   expect(meio, 'a linha do kit não volta').not.toMatch(/Atualização do kit/)
   expect(meio, 'e o kit segue na linha azul').toContain('Pronta para aplicar · orquestracao 0.1.41')
-  m.segurado.conferenciaFalha = false
+  Object.assign(m.estado, depois)
   m.segurado.soltarConferencia()
   await m.relogio.settle()
   expect(m.arquivos.has(TRAVA), 'a trava sai depois da reconferência').toBe(false)
@@ -978,4 +1001,16 @@ test('F209 (crítica P1): desktop com Me avise ao lado, a linha azul desce para 
   expect(linhaDoReinicio, 'a fileira do ⏻ existe').toBeDefined()
   expect(larg(fontes[0]!), 'a linha azul tem a largura inteira, 96 a mais que a fileira do botão').toBe(larg(linhaDoReinicio!) + 96)
   await ui.unmount()
+})
+
+test('F209 (validador 1): o kit e o reinício moram entre o botão do modo e os contadores, nas duas superfícies', async ($, on) => {
+  const m = await iniciar($, on, { motivos: [sessao(7)], paraBaixar: KIT })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await abrirPane($, m, surface)
+    const t = await lido(ui)
+    const pos = ['Ficar ausente', 'Atualização do kit', surface === 'terminal' ? 'Reiniciar: espere' : 'Reiniciar o app: espere', surface === 'terminal' ? 'nada em andamento' : 'Esperam você'].map(x => t.indexOf(x))
+    expect(pos.every(p => p > -1), `${surface}: achou as quatro peças ${pos.join(',')}`).toBe(true)
+    expect([...pos].sort((a, b) => a - b), `${surface}: na ordem modo, kit, reinício, contadores`).toEqual(pos)
+    await ui.unmount()
+  }
 })

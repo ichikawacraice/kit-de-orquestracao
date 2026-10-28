@@ -158,12 +158,14 @@ const gitNoClone = (env, clone, args) => execFileSync(env.GIT_BIN || 'git', ['-C
 /** As versões publicadas no `main` do marketplace ({ nome: versao }), ou `null` sem clone ou sem rede. Grava o cache. */
 function conferirPublicado({ clone, cache, agoraMs, env }) {
   let publicado = null;
+  // dois fetch no mesmo clone ao mesmo tempo: o que perde a trava do ref falha, mas o `origin/main` que o outro gravou vale igual
+  let ref = 'FETCH_HEAD';
+  try { gitNoClone(env, clone, ['fetch', '--quiet', 'origin', 'main']); } catch { ref = 'origin/main'; }
   try {
-    gitNoClone(env, clone, ['fetch', '--quiet', 'origin', 'main']);
-    const nomes = JSON.parse(gitNoClone(env, clone, ['show', 'FETCH_HEAD:.claude-plugin/marketplace.json'])).plugins.map((p) => p.name);
+    const nomes = JSON.parse(gitNoClone(env, clone, ['show', `${ref}:.claude-plugin/marketplace.json`])).plugins.map((p) => p.name);
     publicado = {};
     for (const nome of nomes) {
-      try { publicado[nome] = JSON.parse(gitNoClone(env, clone, ['show', `FETCH_HEAD:plugins/${nome}/.claude-plugin/plugin.json`])).version; } catch { /* sem manifesto */ }
+      try { publicado[nome] = JSON.parse(gitNoClone(env, clone, ['show', `${ref}:plugins/${nome}/.claude-plugin/plugin.json`])).version; } catch { /* sem manifesto */ }
     }
   } catch { publicado = null; }
   // sem rede o cache guarda a tentativa: a próxima ida à rede espera a janela, e não a cada leitura do pane

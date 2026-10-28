@@ -371,3 +371,14 @@ test('F209: o painel só trata do kit — app baixado pelo ShipIt e motor novo n
   assert.equal(r.json().paraAplicar, undefined);
   assert.deepEqual(Object.keys(lerArquivo()).sort(), ['em', 'listaEm', 'motivos', 'pode', 'sessoesDe']);
 });
+
+test('F209 (validador 4): o fetch falha (outro fetch segura o ref, ou sem rede) e vale o origin/main que o clone já tem', () => {
+  const m = marketplace({ orquestracao: '0.1.40' });
+  instalados([{ id: kit('orquestracao'), version: '0.1.40' }]);
+  m.publicar('orquestracao', '0.1.41');
+  git(m.clone, 'fetch', '-q', 'origin');
+  rmSync(m.origem, { recursive: true, force: true });
+  const r = conferir();
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().paraBaixar, [{ nome: 'orquestracao', instalada: '0.1.40', publicada: '0.1.41' }]);
+});

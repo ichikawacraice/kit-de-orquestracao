@@ -250,7 +250,9 @@ export function vigiaSumiu({ aviso, agora }: { aviso: AvisoDeReinicio; agora: nu
 export const esperaReinicio = (paraAplicar: unknown[] | null | undefined): boolean => (paraAplicar?.length ?? 0) > 0
 
 /** O que o topo do pane mostra (as duas superfícies leem daqui): o kit para baixar (`null` = nada) e se o bloco do reinício aparece. */
-export function oQueMostrarDoReinicio({ arquivo, aviso }: { arquivo: Pick<ArquivoDeReinicio, 'paraAplicar' | 'paraBaixar'> | null; aviso: unknown }): { kit: ParaBaixar[] | null; reinicio: boolean } {
+export function oQueMostrarDoReinicio({ arquivo, aviso, falhou = false }: { arquivo: Pick<ArquivoDeReinicio, 'paraAplicar' | 'paraBaixar'> | null; aviso: unknown; falhou?: boolean }): { kit: ParaBaixar[] | null; reinicio: boolean } {
+  // a conferência falhou: sem dado não se sabe se há pendência, e o arquivo do disco é velho; só o aviso ligado segue (com "não sei")
+  if (falhou) return { kit: null, reinicio: aviso !== null }
   const kit = arquivo?.paraBaixar?.length ? arquivo.paraBaixar : null
 
   return { kit, reinicio: aviso !== null || esperaReinicio(arquivo?.paraAplicar) }
