@@ -1423,6 +1423,20 @@ test('F34-2: o cartão diz "sessão encerrada" para a sessão fora da lista e p�
   expect(sem.source, 'sessão parada vai sem ponto').not.toContain('class="vivo ')
 })
 
+test('F221: a dona ociosa do item que espera o gate não aparece como parada', () => {
+  const noGate = itemCheio({ com: [COM_VIVO2], trava: undefined, etapa: 'merge', espera: { motivo: 'gate', texto: 'PR 1308 na fila de merge' } })
+  const r = cartaoSvg(360, noGate, AGORA, { situacao: situacaoDoTeste })
+  expect(r.source, 'o desenho não pode vir vazio').toBeTruthy()
+  expect(r.source).toContain('esperando o gate')
+  expect(r.source).not.toContain('parada há 40 min')
+  const soEtapa = cartaoSvg(360, itemCheio({ com: [COM_VIVO2], trava: undefined, etapa: 'merge', espera: undefined }), AGORA, { situacao: situacaoDoTeste })
+  expect(soEtapa.source, 'em merge sem a espera gravada também').toContain('esperando o gate')
+  const trabalhando = cartaoSvg(360, itemCheio({ com: [COM_VIVO], trava: undefined, etapa: 'merge', espera: undefined }), AGORA, { situacao: situacaoDoTeste })
+  expect(trabalhando.source, 'quem trabalha segue trabalhando').toMatch(/<tspan class="s">trabalhando agora</)
+  const execucao = cartaoSvg(360, itemCheio({ com: [COM_VIVO2], trava: undefined, espera: undefined }), AGORA, { situacao: situacaoDoTeste })
+  expect(execucao.source, 'em execução a parada segue dita').toContain('parada há 40 min')
+})
+
 test('F34-2: o cartão tem as linhas do desenho, na ordem, e o resto vai ao alt', () => {
   const r = cartaoSvg(360, itemCheio({ trava: { motivo: 'sem-ninguem', texto: 'E8 não está mais ativa' }, situacao: 'travado', espera: undefined }), AGORA, { situacao: situacaoDoTeste })
   expect(r.source).toContain('EDITOR DA LOJA')
