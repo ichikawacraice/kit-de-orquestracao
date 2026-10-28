@@ -37,3 +37,11 @@ test('o mod grava onde a T7 lê: sem PAINEL_DIR, <HOME>/.claude/orquestracao/lim
     assert.equal(lerOk(home, '../local_ORQ'), null, 'id com ../ é recusado');
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
+
+test('F219 o mod lê a marca de volta onde a T7 a grava: <BASE>/volta-da-limpeza/<local_…>.json', () => {
+  const mod = readFileSync(join(PLUGIN, '..', 'painel-sessoes', 'hooks', 'register.tsx'), 'utf8');
+  const comum = readFileSync(join(PLUGIN, 'hooks', 'pool-comum.mjs'), 'utf8');
+  assert.ok(mod.length > 0 && comum.length > 0, 'arquivo vazio');
+  assert.match(mod, /\$\{BASE_ORQUESTRACAO\}\/volta-da-limpeza/, 'o mod não lê em BASE_ORQUESTRACAO/volta-da-limpeza');
+  assert.match(comum, /'\.\.', 'volta-da-limpeza'/, 'a T7 não grava em <PAINEL_DIR>/../volta-da-limpeza');
+});

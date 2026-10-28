@@ -15,7 +15,14 @@ const ALERTA_MIN = 10 * 60
 export const BANDEIRA_DO_APP = 'Library/Application Support/Claude/claude-code-sessions'
 
 /** O que o clique de limpar manda à própria sessão (o prompt chega com origem `plugin`; o ok que a T7 lê é o arquivo gravado antes). */
-export const PROMPT_DE_LIMPAR = 'O operador mandou limpar pelo botão da barra: grave o estado (handoff do que estiver aberto) e limpe-se com clear_session "self".'
+export const PROMPT_DE_LIMPAR = 'O operador mandou limpar pelo botão da barra: grave o estado (handoff do que estiver aberto) e limpe-se com clear_session "self". Na volta, o painel reabre e a skill orquestradora é carregada sem você pedir.'
+/**
+ * F219: o que o processo novo da orquestradora manda à própria sessão ao voltar de uma limpeza (a marca de volta, que a T7 grava
+ * ao liberar o `clear_session`), para ela já estar no papel quando o operador olhar, e não só no primeiro turno dele.
+ */
+export const PROMPT_DA_VOLTA = 'Voltei de uma limpeza de contexto: carregue a skill `orquestracao:orquestradora` e cumpra o "Ao assumir" (o painel já foi reaberto). Não há pedido novo do operador neste turno.'
+/** A marca de volta vale isto depois de gravada: a limpeza vem logo depois da liberação; marca mais velha é limpeza que não aconteceu. */
+export const VOLTA_VALE_MS = 10 * 60_000
 /** Com o cache frio o clique limpa direto (`clear_session` pelo mod) e espera isto a sessão recomeçar (o processo morre na limpeza); passado o prazo, pede à sessão. */
 export const ESPERA_DA_LIMPEZA_DIRETA_MS = 20_000
 /** O `Limpando…` segue até a leitura ver o contexto abaixo disto e, se o clique já foi abaixo disto, abaixo da metade do que era no clique (senão a leitura apagaria o aviso antes da limpeza), ou até `LIMPANDO_MAX_MS`. */
@@ -42,11 +49,11 @@ export const PALAVRA_LIMPAR = ' · limpar'
 /**
  * As réguas de contexto por papel, as mesmas do hook `contexto-do-papel` (um teste da raiz compara): `aviso` marca `· alto`,
  * `teto` marca `· limpar`; nenhum dos dois é o denominador (esse é a janela de compactação). Sem faixa intermediária
- * (orquestradora com o operador presente), aviso e teto coincidem.
+ * (orquestradora com o operador presente), aviso e teto coincidem, em 250 mil: a sessão já recomeça com ~90 mil (F219).
  */
 export const REGUAS = {
   dona: { aviso: 350_000, teto: 500_000 },
-  orquestradora: { aviso: 150_000, teto: 150_000 },
+  orquestradora: { aviso: 250_000, teto: 250_000 },
   orquestradoraAusente: { aviso: 350_000, teto: 500_000 },
 } as const satisfies Record<string, Regua>
 
@@ -103,6 +110,19 @@ export function janelaDeCompactacao({ env, settings, modelo }: { env: string | u
   if (escolhida === null) return doModelo
 
   return doModelo === null ? escolhida : Math.min(escolhida, doModelo)
+}
+
+/** A marca de volta (`{ em, … }`) ainda vale: `em` legível, não no futuro (1 min de folga) e dentro de `VOLTA_VALE_MS`. Devolve o `em`, senão `null`. */
+export function voltaValida(textoDaMarca: string | null | undefined, agora: number): string | null {
+  try {
+    const em = texto((JSON.parse(textoDaMarca ?? '') as Record<string, unknown> | null)?.em)
+    const t = em === undefined ? NaN : Date.parse(em)
+    if (em === undefined || Number.isNaN(t) || t - agora > 60_000 || agora - t > VOLTA_VALE_MS) return null
+
+    return em
+  } catch {
+    return null
+  }
 }
 
 /** A moldura do cache: nunca com o turno rodando (o cache está sendo renovado); `null` sem resposta ainda. */

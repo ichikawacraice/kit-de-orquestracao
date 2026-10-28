@@ -160,8 +160,11 @@ test('O3c. precondição: sem URL, o `?` sozinho dispara (o teste mede a URL, n�
 // modo ausente ligado vale a régua da dona, que cobra.
 const agora = () => new Date().toISOString();
 const LIMPAR = (extra = {}) => ({ titulo: 'limpar · orquestradora', sessaoId: 'local_ORQ', estado: 'aberta', atualizadoEm: agora(), ...extra });
-test('F147-1. ORQ presente a 160, 260 e 360 mil, sem pergunta nem janela: o Stop sai sem block e registra o contexto alto', () => com((b) => {
-  for (const tokens of [160_000, 260_000, 360_000]) {
+test('F147-1. ORQ presente a 260, 360 e 460 mil, sem pergunta nem janela: o Stop sai sem block e registra o contexto alto', () => com((b) => {
+  // F219: a régua subiu para 250 mil (a sessão recomeça com ~90 mil); 160 mil não registra mais.
+  assert.equal(rodar(b, 'ORQ', transcript(b, { tokens: 160_000 })), null, '160 mil');
+  assert.doesNotMatch(log(b), /contexto-alto/, '160 mil registrou contexto alto');
+  for (const tokens of [260_000, 360_000, 460_000]) {
     assert.equal(rodar(b, 'ORQ', transcript(b, { tokens })), null, `${tokens}`);
     assert.match(log(b), new RegExp(`\\tcontexto-alto\\torquestradora ${tokens / 1000} mil`));
   }
