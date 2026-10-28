@@ -130,15 +130,34 @@ export function idadeDaVolta(textoDaMarca: string | null | undefined, agora: num
   }
 }
 
-/** As sessões a acordar: marca `local_….json` (não a já acordada) de outra sessão, com idade entre `ACORDAR_DEPOIS_DE_MS` e `VOLTA_VALE_MS`. */
-export function paraAcordar(marcas: Array<{ nome: string; texto: string | null }>, eu: string | undefined, agora: number): string[] {
+/** As sessões a acordar: marca `local_….json` (não a já acordada) de outra sessão, com idade entre `ACORDAR_DEPOIS_DE_MS` e `VOLTA_VALE_MS`; `cli` é a id do CLI que pediu a limpeza. */
+export function paraAcordar(marcas: Array<{ nome: string; texto: string | null }>, eu: string | undefined, agora: number): Array<{ id: string; cli: string | null }> {
   return marcas.flatMap(({ nome, texto: t }) => {
     const id = /^(local_[\w-]+)\.json$/.exec(nome)?.[1]
     if (!id || id === eu) return []
     const idade = idadeDaVolta(t, agora)
+    if (idade === null || idade < ACORDAR_DEPOIS_DE_MS || idade > VOLTA_VALE_MS) return []
+    let cli: string | null = null
+    try {
+      cli = texto((JSON.parse(t ?? '') as Record<string, unknown>).cli) ?? null
+    } catch {
+      cli = null
+    }
 
-    return idade !== null && idade >= ACORDAR_DEPOIS_DE_MS && idade <= VOLTA_VALE_MS ? [id] : []
+    return [{ id, cli }]
   })
+}
+
+/**
+ * A limpeza pedida aconteceu: o registro do app não traz mais como atual a id do CLI que a pediu (sem `cliSessionId` é sessão
+ * limpa ainda sem processo novo). Marca sem `cli` só vale com o registro sem `cliSessionId`. Sem registro, não se sabe: não.
+ */
+export function limpezaAconteceu(cliDaMarca: string | null, registro: { cliSessionId?: unknown } | null): boolean {
+  if (registro === null) return false
+  const atual = texto(registro.cliSessionId)
+  if (atual === undefined) return true
+
+  return cliDaMarca !== null && atual !== cliDaMarca
 }
 
 /** A moldura do cache: nunca com o turno rodando (o cache está sendo renovado); `null` sem resposta ainda. */

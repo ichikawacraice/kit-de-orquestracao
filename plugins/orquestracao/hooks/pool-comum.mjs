@@ -197,15 +197,16 @@ export function gastarOkDoBotaoDeLimpar(localId) {
   try { unlinkSync(join(limpezaDir(), `${localId}.json`)); } catch { /* arquivo já ausente não é falha */ }
 }
 
-// A marca de volta da limpeza (F219): a T7 a grava em <PAINEL_DIR>/../volta-da-limpeza/<local_…>.json `{ "em": "<ISO>", "motivo": … }` ao
+// A marca de volta da limpeza (F219): a T7 a grava em <PAINEL_DIR>/../volta-da-limpeza/<local_…>.json `{ "em": "<ISO>", "motivo", "cli" }` ao
 // liberar o clear_session da orquestradora. A limpeza do app mata o processo do CLI; no processo novo, o mod painel-sessoes lê a marca,
-// reabre o painel e manda carregar a skill orquestradora, sem esperar o operador falar. Falha de escrita não trava a limpeza.
+// a sessão é acordada por outra sessão viva. `cli` é a id do CLI que pediu a limpeza: quem acorda só manda se o registro do app já
+// não a traz como atual (a limpeza aconteceu de fato; ela pode ser descartada depois de liberada). Falha de escrita não trava a limpeza.
 const voltaDir = () => join(process.env.PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), '..', 'volta-da-limpeza');
-export function marcarVoltaDaLimpeza(localId, motivo) {
+export function marcarVoltaDaLimpeza(localId, motivo, cli) {
   if (!localId || !/^local_[\w-]+$/.test(localId)) return;
   try {
     mkdirSync(voltaDir(), { recursive: true });
-    writeFileSync(join(voltaDir(), `${localId}.json`), `${JSON.stringify({ em: new Date().toISOString(), motivo })}\n`);
+    writeFileSync(join(voltaDir(), `${localId}.json`), `${JSON.stringify({ em: new Date().toISOString(), motivo, ...(cli ? { cli } : {}) })}\n`);
   } catch { /* sem a marca, a volta espera o operador, como antes */ }
 }
 

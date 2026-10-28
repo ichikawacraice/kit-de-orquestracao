@@ -291,6 +291,7 @@ caso('F219 T7: a limpeza liberada grava a marca de volta (botão, operador, ause
   const d = JSON.parse(readFileSync(volta(), 'utf8'));
   ok(Math.abs(Date.now() - Date.parse(d.em)) < 60_000, `em fora de agora: ${JSON.stringify(d)}`);
   ok(d.motivo === 'botão da barra', `motivo: ${JSON.stringify(d)}`);
+  ok(d.cli === S.ORQ[0], `a marca não traz a id do CLI que pediu a limpeza: ${JSON.stringify(d)}`);
   rmSync(volta()); passa(limpa('ORQ', humano()), 'operador'); ok(existsSync(volta()), 'turno do operador sem marca');
   rmSync(volta()); bandeira(Date.now() - 3600_000); passa(limpa('ORQ', depeer()), 'ausente'); ok(existsSync(volta()), 'modo ausente sem marca');
   rmSync(volta()); passa(limpa('DONA', depeer()), 'dona'); passa(limpa('ORQ', depeer(), 'local_DONA'), 'outra sessão');

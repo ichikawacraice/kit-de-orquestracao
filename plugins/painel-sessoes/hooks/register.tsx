@@ -3,7 +3,7 @@ import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { semDona } from './sem-dona'
 import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, PROMPT_DA_VOLTA, PAINEL_NA_VOLTA_MS, idadeDaVolta, paraAcordar, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, PROMPT_DA_VOLTA, PAINEL_NA_VOLTA_MS, idadeDaVolta, paraAcordar, limpezaAconteceu, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
@@ -1308,18 +1308,22 @@ async function projetoDoCwd($: EngineInterface): Promise<string | null> {
   return slugDoProjeto(nomeDaPasta(cwd))
 }
 
-/** O título desta sessão no registro do app; fora do app (ou sem o arquivo), `null`. */
-async function tituloDoApp($: EngineInterface, home: string | undefined, id: string): Promise<string | null> {
+/** O registro de uma sessão no app (`claude-code-sessions/<conta>/<org>/<local_…>.json`); fora do app (ou sem o arquivo), `null`. */
+async function registroDoApp($: EngineInterface, home: string | undefined, id: string): Promise<Record<string, unknown> | null> {
   try {
     const conta = await $.env.get('CLAUDE_CODE_ACCOUNT_UUID')
     const org = await $.env.get('CLAUDE_CODE_ORGANIZATION_UUID')
     if (!home || !conta || !org) return null
-    const reg = JSON.parse((await $.fs.read(`${home}/${BANDEIRA_DO_APP}/${conta}/${org}/${id}.json`)) as string) as Record<string, unknown>
 
-    return texto(reg.title) ?? null
+    return JSON.parse((await $.fs.read(`${home}/${BANDEIRA_DO_APP}/${conta}/${org}/${id}.json`)) as string) as Record<string, unknown>
   } catch {
     return null
   }
+}
+
+/** O título desta sessão no registro do app; fora do app (ou sem o arquivo), `null`. */
+async function tituloDoApp($: EngineInterface, home: string | undefined, id: string): Promise<string | null> {
+  return texto((await registroDoApp($, home, id))?.title) ?? null
 }
 
 /** Uma leitura por vez; falha vira linha em `erros`, nunca exceção solta. Só arquivos: o `list_sessions` fica para o pane aberto. */
@@ -1517,7 +1521,8 @@ const ACORDADA = '.acordada.json'
 async function gravarVolta($: EngineInterface, host: string, motivo: string): Promise<void> {
   try {
     const pasta = `${await $.env.get('HOME')}/${PASTA_DA_VOLTA}`
-    const conteudo = `${JSON.stringify({ em: new Date(await $.clock.now()).toISOString(), motivo })}\n`
+    const cli = await $.session.id().catch(() => null)
+    const conteudo = `${JSON.stringify({ em: new Date(await $.clock.now()).toISOString(), motivo, ...(cli ? { cli } : {}) })}\n`
     try {
       await $.fs.write(`${pasta}/${host}.json`, conteudo)
     } catch {
@@ -1576,16 +1581,24 @@ async function acordarQuemVoltou($: EngineInterface, home: string, host: string 
   const marcas = await Promise.all(
     entradas.filter(e => e.kind === 'file').map(async e => ({ nome: e.name, texto: (await $.fs.read(`${pasta}/${e.name}`).catch(() => null)) as string | null })),
   )
-  for (const id of paraAcordar(marcas, host, await $.clock.now())) {
+  for (const { id, cli } of paraAcordar(marcas, host, await $.clock.now())) {
     try {
+      // A limpeza liberada pela T7 pode ser descartada pelo app (mensagem na fila, turno novo antes de ficar parada): só acorda se ela aconteceu.
+      if (!limpezaAconteceu(cli, await registroDoApp($, home, id))) continue
       const s = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__get_session', session_id: id })
       if (s.deny !== undefined || s.isError) continue
-      const sessao = JSON.parse(s.text.slice(Math.max(0, s.text.indexOf('{')))) as { isRunning?: boolean; isArchived?: boolean }
-      if (sessao.isRunning !== false || sessao.isArchived === true) continue
+      const t = s.text ?? ''
+      const sessao = JSON.parse(t.slice(Math.max(0, t.indexOf('{')))) as { isRunning?: boolean; starting?: boolean; isArchived?: boolean }
+      // `starting`: alguém (o operador) já a acordou e o processo novo está subindo.
+      if (sessao.isRunning !== false || sessao.starting === true || sessao.isArchived === true) continue
       const tomou = await $.process.run(['mv', `${pasta}/${id}.json`, `${pasta}/${id}${ACORDADA}`], { timeoutMs: SCRIPT_TIMEOUT_MS })
       if (tomou.exitCode !== 0) continue
       const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: id, message: PROMPT_DA_VOLTA })
-      if (r.deny !== undefined || r.isError) await $.ui.log(`volta da limpeza: não acordei ${id}: ${r.deny || r.text}`)
+      if (r.deny !== undefined || r.isError) {
+        // Devolve a marca: a próxima leitura (desta ou de outra sessão) tenta de novo, dentro do prazo.
+        await $.process.run(['mv', `${pasta}/${id}${ACORDADA}`, `${pasta}/${id}.json`], { timeoutMs: SCRIPT_TIMEOUT_MS }).catch(() => undefined)
+        await $.ui.log(`volta da limpeza: não acordei ${id}: ${r.deny || r.text}`)
+      }
     } catch (err) {
       await $.ui.log(`volta da limpeza: ${id}: ${mensagem(err)}`).catch(() => {})
     }

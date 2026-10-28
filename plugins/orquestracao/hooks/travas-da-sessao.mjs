@@ -89,7 +89,7 @@ function main() {
     // F213: o ok do botão vale uma limpeza por qualquer caminho que a libere (a limpeza direta do cache frio não abre turno, e a
     // origem lida é a do último turno, muitas vezes `human`): se sobrasse, um clear_session de turno peer passaria nos 30 min seguintes.
     // F219: e deixa a marca de volta, para o processo novo reabrir o painel e carregar a skill sem esperar o operador.
-    const libera = (motivo) => { gastarOkDoBotaoDeLimpar(reg?.localId); marcarVoltaDaLimpeza(reg?.localId, motivo); registrar(sid, HOOK, 'liberou-limpeza', `${alvoReal} ${motivo}`); };
+    const libera = (motivo) => { gastarOkDoBotaoDeLimpar(reg?.localId); marcarVoltaDaLimpeza(reg?.localId, motivo, e.session_id); registrar(sid, HOOK, 'liberou-limpeza', `${alvoReal} ${motivo}`); };
     if (modoAusente()) return libera('modo ausente ligado');
     let origem = null;
     try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }

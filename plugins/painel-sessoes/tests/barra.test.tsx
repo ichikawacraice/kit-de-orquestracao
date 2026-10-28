@@ -13,6 +13,7 @@ import {
   ACORDAR_DEPOIS_DE_MS,
   PAINEL_NA_VOLTA_MS,
   paraAcordar,
+  limpezaAconteceu,
   PALAVRA_ALTO,
   PALAVRA_LIMPAR,
   REGUAS,
@@ -336,9 +337,11 @@ type Opcoes = {
   /** Marcas de volta a mais, por nome de arquivo (ex.: a de outra sessão, ou a `.acordada.json`). */
   voltas?: Record<string, string>
   /** O que o `get_session` de outra sessão devolve (padrão: parada, não arquivada). */
-  alvo?: { isRunning?: boolean; isArchived?: boolean }
+  alvo?: { isRunning?: boolean; isArchived?: boolean; starting?: boolean }
   /** O `mv` que toma a marca falha (outro mod a tomou antes). */
   mvFalha?: boolean
+  /** O registro do app da outra sessão (`local_orq`); `null` = sem arquivo. Padrão: limpa e sem processo novo (sem `cliSessionId`). */
+  registroAlvo?: Record<string, unknown> | null
 }
 
 function engine(on: On, opc: Opcoes = {}) {
@@ -384,6 +387,7 @@ function engine(on: On, opc: Opcoes = {}) {
   if (opc.settings !== null) arquivos.set(SETTINGS, opc.settings ?? '{"autoCompactWindow": 600000}')
   if (opc.volta !== undefined) arquivos.set(VOLTA, opc.volta)
   for (const [nome, t] of Object.entries(opc.voltas ?? {})) arquivos.set(`${PASTA_DA_VOLTA}/${nome}`, t)
+  if (opc.registroAlvo !== null) arquivos.set(REGISTRO_DO_APP.replace(EU, 'local_orq'), JSON.stringify(opc.registroAlvo ?? { title: '🎛 orquestradora — kit', priorCliSessionIds: ['cli-velho'] }))
   // Só o `mv` e o `rm` da marca de volta; o resto do process.run segue sem implementação, como antes.
   const comandos: string[][] = []
   on('process.run', (_, e) => {
@@ -937,6 +941,15 @@ test('limpar com o cache frio sem leitura de contexto no clique: o app recusa �
 const marcaDeVolta = (antesMs: number) => JSON.stringify({ em: new Date(AGORA - antesMs).toISOString(), motivo: 'botão da barra' })
 const OUTRA = 'local_orq'
 
+test('limpezaAconteceu: o registro sem cliSessionId, ou com outro que não o da marca; sem registro ou com o mesmo, não', () => {
+  expect(limpezaAconteceu('cli-velho', { priorCliSessionIds: ['cli-velho'] }), 'limpa, sem processo novo').toBe(true)
+  expect(limpezaAconteceu('cli-velho', { cliSessionId: 'cli-novo' }), 'limpa, processo novo já subiu').toBe(true)
+  expect(limpezaAconteceu('cli-velho', { cliSessionId: 'cli-velho' }), 'a limpeza foi descartada').toBe(false)
+  expect(limpezaAconteceu(null, { cliSessionId: 'cli-x' }), 'marca sem cli: só sem cliSessionId').toBe(false)
+  expect(limpezaAconteceu(null, {})).toBe(true)
+  expect(limpezaAconteceu('cli-velho', null), 'sem registro não se sabe').toBe(false)
+})
+
 test('paraAcordar: marca de outra sessão entre 30 s e 10 min; a própria, a acordada, a vencida e a ilegível ficam', () => {
   const m = (nome: string, antes: number | null) => ({ nome, texto: antes === null ? '{nao json' : marcaDeVolta(antes) })
   expect(
@@ -945,7 +958,8 @@ test('paraAcordar: marca de outra sessão entre 30 s e 10 min; a própria, a aco
       EU,
       AGORA,
     ),
-  ).toEqual([OUTRA])
+  ).toEqual([{ id: OUTRA, cli: null }])
+  expect(paraAcordar([{ nome: `${OUTRA}.json`, texto: JSON.stringify({ em: new Date(AGORA - 60_000).toISOString(), cli: 'cli-velho' }) }], EU, AGORA)).toEqual([{ id: OUTRA, cli: 'cli-velho' }])
 })
 
 test('acordar: a leitura da barra acha a marca de outra sessão parada, toma a marca e manda a mensagem da volta, uma vez', async ($, on) => {
@@ -967,6 +981,9 @@ for (const [caso, opc] of [
   ['a sessão foi arquivada', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, alvo: { isArchived: true } }],
   ['outro mod tomou a marca antes', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, mvFalha: true }],
   ['a marca já foi acordada', { voltas: { [`${OUTRA}.acordada.json`]: marcaDeVolta(60_000) } }],
+  ['a limpeza foi descartada (o registro ainda traz o CLI da marca)', { voltas: { [`${OUTRA}.json`]: JSON.stringify({ em: new Date(AGORA - 60_000).toISOString(), cli: 'cli-velho' }) }, registroAlvo: { cliSessionId: 'cli-velho' } }],
+  ['sem o registro do app', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, registroAlvo: null }],
+  ['o processo novo está subindo (o operador a acordou)', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, alvo: { starting: true } }],
 ] as const) {
   test(`acordar: ${caso} → nenhuma mensagem (o contraste: o teste acima manda)`, async ($, on) => {
     // Só a leitura do início: com o relógio parado, a marca nova demais segue nova demais.
@@ -974,6 +991,20 @@ for (const [caso, opc] of [
     expect(m.enviadas.filter(e => e.message === PROMPT_DA_VOLTA)).toEqual([])
   })
 }
+
+test('acordar: a limpeza com o processo novo já de pé (outro cliSessionId) e a sessão parada → manda', async ($, on) => {
+  const m = await iniciar($, on, { titulo: 'F1 · outra dona', voltas: { [`${OUTRA}.json`]: JSON.stringify({ em: new Date(AGORA - 60_000).toISOString(), cli: 'cli-velho' }) }, registroAlvo: { cliSessionId: 'cli-novo' } })
+  expect(m.enviadas.filter(e => e.message === PROMPT_DA_VOLTA).map(e => e.session_id)).toEqual([OUTRA])
+})
+
+test('acordar: o envio falha → a marca volta ao nome de antes, e a leitura seguinte tenta de novo', async ($, on) => {
+  const m = await iniciar($, on, { titulo: 'F1 · outra dona', voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, envioFalha: 'Target session is recovering its own pending input' })
+  expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${OUTRA}.json`), 'a marca foi devolvida').toBe(true)
+  expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${OUTRA}.acordada.json`)).toBe(false)
+  expect(m.comandos.filter(c => c[0] === 'mv').length, 'tomou e devolveu').toBe(2)
+  await m.relogio.advance(LEITURA_MS + 1000)
+  expect(m.comandos.filter(c => c[0] === 'mv').length, 'tentou de novo na leitura seguinte').toBe(4)
+})
 
 test('acordar: a própria marca não se acorda (o processo dela é o que vai morrer)', async ($, on) => {
   const m = await iniciar($, on, { tokens: 260_000, volta: marcaDeVolta(60_000), painelAbertoNoInicio: true })
