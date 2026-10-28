@@ -4,9 +4,12 @@
 // primeiro turno, e o turno inteiro editou código como dona). Reconhece a sessão pelo registro do app (título
 // `🎛 orquestradora`) ou pela batida (`batida/<projeto>.json` com `orquestradora: <local_…>`), recria o marcador da id nova,
 // apaga os das ids que ela deixou para trás e devolve a ordem para o additionalContext. Quem chama engole qualquer erro.
+// F220: a limpeza também mata a fila de merge que rodava em segundo plano; a fila do projeto órfã entra no aviso, com a
+// chamada que a retoma.
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { BASE, registroDaSessao, gitCommonDir } from './pool-comum.mjs';
+import { BASE, registroDaSessao, gitCommonDir, projetoDaSessao } from './pool-comum.mjs';
+import { comandoDeRelance, lerFilaOrfa } from '../skills/orquestradora/scripts/fila-orfa.mjs';
 
 const ID_SEGURO = /^[\w-]+$/; // o session_id vira nome de arquivo em ativas/
 
@@ -17,6 +20,21 @@ function nomeadaNaBatida(localId) {
     if (!n.endsWith('.json')) return false;
     try { return JSON.parse(readFileSync(join(dir, n), 'utf8'))?.orquestradora === localId; } catch { return false; }
   });
+}
+
+// O estado da fila mora ao lado do painel (painel.mjs: <PAINEL_DIR>/../fila-de-merge), que no uso real é <BASE>/fila-de-merge.
+const pastaDasFilas = () => (process.env.PAINEL_DIR ? join(process.env.PAINEL_DIR, '..', 'fila-de-merge') : join(BASE, 'fila-de-merge'));
+
+function avisoDaFila(reg) {
+  try {
+    const nome = projetoDaSessao(reg)?.nome;
+    const orfa = nome ? lerFilaOrfa(join(pastaDasFilas(), `${nome}.json`)) : null;
+    if (!orfa) return '';
+    return [
+      `**A fila de merge deste projeto está sem processo** (ocupada desde ${orfa.desde ?? '?'}; a limpeza de contexto mata a fila que roda em segundo plano): ${orfa.prs.map((p) => `#${p.pr}`).join(', ')} ficaram anotados e ninguém os leva.`,
+      `Depois de carregar a skill, relance em segundo plano (run_in_background): \`${comandoDeRelance(orfa)}\`.`,
+    ].join(' ');
+  } catch { return ''; }
 }
 
 // → { texto, marcador, apagados } quando a sessão é a orquestradora; null quando não é ou não dá para saber.
@@ -45,6 +63,7 @@ export function orquestradoraDeVolta({ sessionId, localId, cwd }) {
     '',
     'O contexto desta sessão começou agora (abertura, limpeza ou compactação), mas o papel continua. **Antes de qualquer outra coisa** — inclusive antes de responder ao pedido que abriu este turno —, carregue a skill `orquestracao:orquestradora` e cumpra o "Ao assumir". Pedido de código ou de mudança que chegar vira item com sessão dona, não edição aqui.',
     `O marcador \`ativas/${sessionId}\` já foi recriado por este hook${apagados.length ? ` (saíram os das ids anteriores: ${apagados.join(', ')})` : ''}: as travas da orquestradora valem desde já.`,
-  ].join('\n');
+    avisoDaFila(reg),
+  ].filter((l, i) => i < 3 || l).join('\n');
   return { texto, marcador, apagados };
 }

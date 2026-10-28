@@ -157,6 +157,42 @@ test('batida: item em merge parado vai ao relatório, nada à dona; com a orques
   assert.deepEqual(msgs(sem, 'relatorio'), [], 'sem orquestradora viva, ninguém a quem avisar');
 });
 
+// F220: a limpeza de contexto mata a fila em background; o item gravado há menos do prazo não contava como merge parado.
+const estadoDaFila = () => join(base, 'fila-de-merge', 'kit.json');
+function fila(estado) { mkdirSync(dirname(estadoDaFila()), { recursive: true }); writeFileSync(estadoDaFila(), JSON.stringify(estado)); }
+const pidMorto = () => spawnSync('true', { timeout: 5000, killSignal: 'SIGKILL' }).pid;
+const SHA = 'a9f034d309a1546d29c807ea54ce3dc87cf919b2';
+
+test('batida: fila de merge sem processo vivo → os itens dela vão ao merge na hora e a orquestradora recebe o comando de relance', () => {
+  item('F1', { etapa: 'merge', prs: [7], atualizadoEm: iso(T - 5 * MIN) });
+  item('F2', { etapa: 'merge', prs: [8], atualizadoEm: iso(T - 5 * MIN) });
+  const arq = sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit'));
+  fila({ ocupada: { pid: pidMorto(), desde: iso(T - 30 * MIN), gate: 'pnpm test' }, emVoo: [{ pr: 7, sha: SHA }], pendentes: [{ pr: 8 }] });
+  const a = batida(arq);
+  assert.equal(a.exit, 0, a.err);
+  const kit = a.json().projetos.kit;
+  assert.deepEqual(kit.merge, ['F1', 'F2'], 'gravados há 5 min, mas a fila deles está órfã');
+  assert.deepEqual(kit.filaParada?.prs, [7, 8]);
+  const rel = msgs(a, 'relatorio');
+  assert.equal(rel.length, 1, a.out);
+  assert.equal(rel[0].para, lid(30));
+  assert.match(rel[0].texto, /fila de merge sem processo/);
+  assert.ok(rel[0].texto.includes(`painel fila-de-merge 7:${SHA} 8 --gate 'pnpm test'`), rel[0].texto);
+  assert.deepEqual(JSON.parse(readFileSync(join(pastaOrq(), 'batida', 'kit.json'), 'utf8')).filaParada?.prs, [7, 8], 'o relatório gravado diz a fila parada');
+  assert.deepEqual(msgs(batida(arq, T + 6 * MIN), 'relatorio'), [], 'o mesmo relatório não repete');
+});
+
+test('batida: fila com o dono vivo não é parada (e o item gravado há 5 min segue fora do merge parado)', () => {
+  item('F1', { etapa: 'merge', prs: [7], atualizadoEm: iso(T - 5 * MIN) });
+  const arq = sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit'));
+  fila({ ocupada: { pid: process.pid, desde: new Date().toISOString() }, emVoo: [{ pr: 7, sha: SHA }], pendentes: [] });
+  const a = batida(arq);
+  assert.equal(a.exit, 0, a.err);
+  assert.deepEqual(a.json().projetos.kit.merge, []);
+  assert.equal(a.json().projetos.kit.filaParada ?? null, null);
+  assert.deepEqual(msgs(a, 'relatorio'), []);
+});
+
 test('batida: apaga o marcador da orquestradora arquivada e mantém o da viva', () => {
   const reg = (n, cli, extra) => writeFileSync(join(base, 'appsess', `${lid(n)}.json`), JSON.stringify({ sessionId: lid(n), cliSessionId: cli, title: '🎛 orquestradora — kit', cwd: repo, isArchived: false, ...extra }));
   reg(40, 'cli-arquivada', { isArchived: true });

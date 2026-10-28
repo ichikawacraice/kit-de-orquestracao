@@ -2,6 +2,7 @@
 // de sessões (`list_sessions`, passada por arquivo) e o estado da batida, chama `julgar` e aplica o resultado (grava o estado,
 // solta). Quem chama a cada 10 min é o mod painel-sessoes.
 import { slugDoProjeto } from './perguntas-arquivo.mjs';
+import { comandoDeRelance } from './fila-orfa.mjs';
 
 export const PRAZO_MIN = 30; // item parado: sem gravar há tanto (PAINEL_PRAZO_MIN troca)
 export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta (BATIDA_SOLTA_MIN troca)
@@ -49,7 +50,9 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs, itens =
   return apagar;
 }
 
-export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
+// `filasOrfas`: { <projeto>: fila-orfa.mjs#filaOrfa } — a fila de merge com PR anotado e sem processo vivo (F220). O item em
+// merge com PR nela vai ao relatório na hora, sem esperar o prazo, e o relatório leva `filaParada` com o comando de relance.
+export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
   const mensagens = []; const soltar = [];
@@ -79,7 +82,8 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, don
     const minParado = t === null ? null : Math.floor((agoraMs - t) / 60_000);
 
     if (d.etapa === 'merge') {
-      if (parado) proj.merge.push(F);
+      const naFilaOrfa = Array.isArray(d.prs) && (filasOrfas[nome]?.prs ?? []).some((p) => d.prs.includes(p.pr));
+      if (parado || naFilaOrfa) proj.merge.push(F);
       continue;
     }
     if (parado && gente.length) {
@@ -109,16 +113,21 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, don
     if (r && r.minutos >= ESPERA_MIN && !donaACaminho(F, d, { cartoes, agoraMs })) proj.vagas.push({ papel: 'dona', item: F });
   }
   for (const F of Object.keys(cutucadas)) if (!vistos.has(F)) delete cutucadas[F];
+  for (const [nome, o] of Object.entries(filasOrfas)) {
+    if (!o?.prs?.length) continue;
+    projeto(nome).filaParada = { prs: o.prs.map((p) => p.pr), desde: o.desde ?? null, relance: comandoDeRelance(o) };
+  }
 
   // relatório à orquestradora de cada projeto, só quando algo mudou desde o último
   const relatorios = {};
   for (const [nome, proj] of [...projetos].sort(([a], [b]) => a.localeCompare(b))) {
-    const chaves = (x) => [x.merge ?? [], x.vagas ?? []];
-    const mudou = JSON.stringify(chaves(proj)) !== JSON.stringify((() => { const u = ultimo(nome); return u ? chaves(u) : [[], []]; })());
+    const chaves = (x) => [x.merge ?? [], x.vagas ?? [], x.filaParada?.prs ?? []];
+    const mudou = JSON.stringify(chaves(proj)) !== JSON.stringify(chaves(ultimo(nome) ?? {}));
     relatorios[nome] = { ...proj, mudou };
-    const algo = proj.merge.length || proj.vagas.length;
+    const algo = proj.merge.length || proj.vagas.length || proj.filaParada;
     if (proj.orquestradora && algo && mudou) {
       const partes = [];
+      if (proj.filaParada) partes.push(`fila de merge sem processo vivo para ${proj.filaParada.prs.map((n) => `#${n}`).join(', ')} (a limpeza de contexto mata a fila em segundo plano); relance em segundo plano: \`${proj.filaParada.relance}\``);
       if (proj.merge.length) partes.push(`merge parado: ${proj.merge.join(', ')}`);
       if (proj.vagas.length) partes.push(`sem dona: ${proj.vagas.map((v) => v.item).join(', ')}`);
       const hora = new Date(agoraMs).toTimeString().slice(0, 5);
