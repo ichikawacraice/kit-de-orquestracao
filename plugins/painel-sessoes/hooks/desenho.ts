@@ -1027,10 +1027,16 @@ export function reinicioSvg(W: number, r: ReinicioDesenhado): { source: string; 
   // A atualização baixada é uma linha a mais, em azul: logo abaixo da linha discreta, ou a última dentro da moldura.
   const versoes = versoesDaAtualizacao(r.atualizacao)
   const frase = versoes === null ? null : `↑ Atualização baixada · ${versoes} · reinicie o app para instalar`
+  // Sem espaço, encolhem as palavras antes da versão: o alt diz tudo inteiro.
+  const fraseQueCabe = (max: number) => {
+    const opcoes = [frase as string, `↑ Atualização baixada · ${versoes}`, `↑ Atualização · ${versoes}`]
+
+    return caber(opcoes.find(o => largura(o, 12) <= max) ?? opcoes[opcoes.length - 1], 12, max)
+  }
   const altDaAtualizacao = versoes === null ? '' : ` Atualização baixada: ${versoes}. Reinicie o app para instalar.`
   const discreta = (alt: string, corpo: string) => {
     const altura = frase === null ? 20 : 38
-    const linha = frase === null ? '' : texto(0, 32, 12, 'an', xml(caber(frase, 12, W)))
+    const linha = frase === null ? '' : texto(0, 32, 12, 'an', xml(fraseQueCabe(W)))
 
     return { height: altura, alt: `${alt}${altDaAtualizacao}`, source: svg(W, altura, `${corpo}${linha}`) }
   }
@@ -1088,7 +1094,7 @@ export function reinicioSvg(W: number, r: ReinicioDesenhado): { source: string; 
   const glifoDoTitulo = r.estado === 'pode' ? OK : 'm'
   const partes = [`<text x="12" y="24" font-family="${FONTE}" font-size="13" font-weight="700"><tspan class="${glifoDoTitulo}">⏻</tspan><tspan class="${classe}"> ${xml(caber(titulo, 13, util - 20))}</tspan></text>`]
   linhas.forEach((l, k) => partes.push(texto(12, 40 + 16 * k, 12, k === linhas.length - 1 && (r.estado === 'espere' || (r.estado === 'pode' && k > 0)) ? 'm' : 's', xml(caber(l, 12, util)))))
-  if (frase !== null) partes.push(texto(12, 40 + 16 * linhas.length, 12, 'an', xml(caber(frase, 12, util))))
+  if (frase !== null) partes.push(texto(12, 40 + 16 * linhas.length, 12, 'an', xml(fraseQueCabe(util))))
 
   return {
     height: altura,

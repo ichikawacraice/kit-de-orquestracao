@@ -220,7 +220,10 @@ test('reinicioSvg: atualização baixada vira uma linha a mais, sem e com aviso;
   const comAviso = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {}, atualizacao: att })
   const semAviso = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {} })
   expect(comAviso.height).toBe(semAviso.height + 16)
-  expect(comAviso.source).toContain('Atualização baixada · app 3.2.0, motor 2.1.308')
+  expect(comAviso.source, 'na moldura estreita o corte solta a instrução, nunca a versão').toContain('Atualização · app 3.2.0, motor 2.1.308<')
+  expect(comAviso.alt, 'o alt diz a instrução inteira mesmo quando o desenho a solta').toContain('Reinicie o app para instalar.')
+  const largo = reinicioSvg(600, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {}, atualizacao: att })
+  expect(largo.source, 'com espaço a instrução volta').toContain('motor 2.1.308 · reinicie o app para instalar')
 })
 
 test('reinicioSvg com aviso: até 4 motivos, o resto vira "+ N mais" na linha da hora, e o alt lê todos inteiros', () => {
