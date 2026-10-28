@@ -998,6 +998,14 @@ export function fraseDaAplicacao(p: ReinicioDesenhado['paraAplicar'], max = Infi
 const altDaAplicacao = (p: ReinicioDesenhado['paraAplicar']): string =>
   p?.length ? ` Pronta para aplicar ao reiniciar o app: ${p.map(x => `${x.nome} ${x.versao}`).join(', ')}.` : ''
 
+/** A linha azul sozinha, 18 px na largura inteira: embaixo da fileira `⏻` + `Me avise`, que não lhe deixa espaço. `null` sem nada. */
+export function aplicacaoSvg(W: number, p: ReinicioDesenhado['paraAplicar']): { source: string; height: number; alt: string } | null {
+  const frase = fraseDaAplicacao(p, W)
+  if (frase === null) return null
+
+  return { height: 18, alt: altDaAplicacao(p).trim(), source: svg(W, 18, texto(0, 13, 12, 'an', xml(frase))) }
+}
+
 /** Quantos motivos o bloco lista antes do `+ N mais`. */
 export const MOTIVOS_NO_BLOCO = 4
 

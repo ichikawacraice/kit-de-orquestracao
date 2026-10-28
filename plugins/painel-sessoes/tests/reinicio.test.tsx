@@ -320,6 +320,8 @@ type Opc = {
   atualizar?: { exitCode: number; stdout?: string; stderr?: string }
   /** F209: o `atualizar-plugins` só responde quando o teste chama `soltar()`. */
   segurarAtualizar?: boolean
+  /** F209: a conferência logo depois do `atualizar-plugins` só responde quando o teste chama `soltarConferencia()`. */
+  segurarReconferencia?: boolean
 }
 
 const ABRIR = { command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as const
@@ -397,14 +399,18 @@ function engine(on: On, opc: Opc = {}) {
   })
   const execucoes: string[][] = []
   const envs: (Record<string, string> | undefined)[] = []
-  const segurado: { soltar: () => void } = { soltar: () => {} }
+  const segurado: { soltar: () => void; soltarConferencia: () => void; segurarProxima: boolean; conferenciaFalha: boolean } = { soltar: () => {}, soltarConferencia: () => {}, segurarProxima: false, conferenciaFalha: false }
   on('process.run', async (_, e) => {
     const argv = [...e.argv]
     execucoes.push(argv)
     if (argv[0] === 'ps') envs.push((e.init as { env?: Record<string, string> } | undefined)?.env)
     const ok = { exitCode: 0, stdout: '{}', stderr: '', isStdoutTruncated: false, isStderrTruncated: false }
     if (argv.includes('pode-reiniciar')) {
-      if (opc.comandoFalha) return { value: { ...ok, exitCode: 1, stderr: 'quebrou' } }
+      if (segurado.segurarProxima) {
+        segurado.segurarProxima = false
+        await new Promise<void>(res => { segurado.soltarConferencia = res })
+      }
+      if (opc.comandoFalha || segurado.conferenciaFalha) return { value: { ...ok, exitCode: 1, stderr: 'quebrou' } }
       // o comando de verdade grava o arquivo; aqui o teste o imita com o que ele julgaria
       const extra = { ...(estado.paraAplicar?.length ? { paraAplicar: estado.paraAplicar } : {}), ...(estado.paraBaixar?.length ? { paraBaixar: estado.paraBaixar } : {}) }
       arquivos.set(ARQ, JSON.stringify(arquivo(estado.motivos, 0, extra, tempo.agora)))
@@ -416,6 +422,7 @@ function engine(on: On, opc: Opc = {}) {
         // o kit ficou em dia: a próxima conferência não traz mais o que baixar, e o plugin novo espera o reinício
         estado.paraBaixar = undefined
         estado.paraAplicar = [{ nome: 'orquestracao', versao: '0.1.41' }]
+        if (opc.segurarReconferencia) segurado.segurarProxima = true
       }
 
       return { value: { ...ok, stdout: r.stdout ?? '', stderr: r.stderr ?? '', exitCode: r.exitCode } }
@@ -919,5 +926,56 @@ test('F209 estados 1 e 2 juntos: a linha do kit vem antes do bloco do reinício'
   expect(kit).toBeGreaterThan(-1)
   expect(rein).toBeGreaterThan(-1)
   expect(kit).toBeLessThan(rein)
+  await ui.unmount()
+})
+
+test('F209 (crítica P2): até a reconferência gravar, a trava fica e uma leitura com o arquivo velho não traz a linha do kit de volta', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, paraBaixar: KIT, segurarReconferencia: true })
+  const ui = await abrirPane($, m, 'terminal')
+  await ui.press({ key: 'kit' })
+  await m.relogio.settle()
+  expect(m.toasts).toContain('Kit atualizado: orquestracao 0.1.41. Reinicie o app para aplicar.')
+  expect(m.arquivos.has(TRAVA), 'a trava segura os outros panes até a reconferência').toBe(true)
+  // a leitura periódica no meio: a conferência dela falha e o disco ainda tem o arquivo velho, com o kit para baixar
+  m.arquivos.set(ARQ, JSON.stringify(arquivo([], 0, { paraBaixar: KIT }, m.tempo.agora)))
+  m.segurado.conferenciaFalha = true
+  await ui.press({ key: 'atualizar' })
+  await m.relogio.settle()
+  const meio = await lido(ui)
+  expect(meio, 'a linha do kit não volta').not.toMatch(/Atualização do kit/)
+  expect(meio, 'e o kit segue na linha azul').toContain('Pronta para aplicar · orquestracao 0.1.41')
+  m.segurado.conferenciaFalha = false
+  m.segurado.soltarConferencia()
+  await m.relogio.settle()
+  expect(m.arquivos.has(TRAVA), 'a trava sai depois da reconferência').toBe(false)
+  expect(await lido(ui)).not.toMatch(/Atualização do kit/)
+  await ui.unmount()
+})
+
+test('F209 (crítica P3): outra sessão gravou a trava e este pane ainda não leu: toast neutro, sem faixa, e o botão vira Atualizando…', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, paraBaixar: KIT })
+  const ui = await abrirPane($, m, 'terminal')
+  expect((await ui.find({ key: 'kit' }))?.text).toBe('Atualizar')
+  m.arquivos.set(TRAVA, JSON.stringify({ em: iso(m.tempo.agora - MIN), sessao: OUTRA }))
+  await ui.press({ key: 'kit' })
+  await m.relogio.settle()
+  expect(m.execucoes.some(a => a[1]?.endsWith('atualizar-plugins.mjs')), 'nada roda').toBe(false)
+  expect(m.toasts).toContain('Outra sessão já está atualizando o kit.')
+  expect(await lido(ui), 'sem a faixa de falha').not.toMatch(/Não consegui atualizar/)
+  expect((await ui.find({ key: 'kit' }))?.text).toBe('Atualizando…')
+  await ui.unmount()
+})
+
+test('F209 (crítica P1): desktop com Me avise ao lado, a linha azul desce para a largura inteira e leva a versão', async ($, on) => {
+  const m = await iniciar($, on, { motivos: [sessao(7)], paraAplicar: [{ nome: 'orquestracao', versao: '0.1.41' }] })
+  const ui = await abrirPane($, m, 'desktop')
+  expect((await ui.find({ key: 'reinicio' }))?.text).toBe('Me avise')
+  const fontes = (await ui.findAll({})).map(el => String(el.props.source ?? '')).filter(x => x.includes('aplicar'))
+  expect(fontes.length, 'achou a linha azul').toBe(1)
+  expect(fontes[0]).toContain('orquestracao 0.1.41')
+  const larg = (x: string) => Number(/width="(\d+)"/.exec(x)?.[1])
+  const linhaDoReinicio = (await ui.findAll({})).map(el => String(el.props.source ?? '')).find(x => x.includes('Reiniciar: espere'))
+  expect(linhaDoReinicio, 'a fileira do ⏻ existe').toBeDefined()
+  expect(larg(fontes[0]!), 'a linha azul tem a largura inteira, 96 a mais que a fileira do botão').toBe(larg(linhaDoReinicio!) + 96)
   await ui.unmount()
 })

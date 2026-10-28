@@ -6,7 +6,7 @@ import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Lei
 import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
-import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
+import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -1504,9 +1504,14 @@ async function lerReinicio($: EngineInterface, erros: string[] = []): Promise<Pi
   const aviso = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_AVISO, validoAviso, erros)
   const travaDoKit = await lerArquivoDaBatida($, pasta, ARQUIVO_DA_TRAVA_DO_KIT, validoTravaDoKit, erros)
   const gravando = (await read($, reiniciando)) !== null
-  // durante o clique do kit a tela (otimista) vale mais que o disco
+  // durante o clique do kit, só os campos do kit da tela (otimista) valem mais que o disco; o resto (pode, espere, motivos) segue o disco
   const kitRodando = await read($, atualizandoKit)
-  await update($, reinicio, r => ({ ...r, arquivo: kitRodando ? r.arquivo : arquivo, aviso: gravando ? r.aviso : aviso, travaDoKit: kitRodando ? r.travaDoKit : travaDoKit }))
+  await update($, reinicio, r => ({
+    ...r,
+    arquivo: kitRodando && arquivo && r.arquivo ? { ...arquivo, paraBaixar: r.arquivo.paraBaixar, paraAplicar: r.arquivo.paraAplicar } : arquivo,
+    aviso: gravando ? r.aviso : aviso,
+    travaDoKit: kitRodando ? r.travaDoKit : travaDoKit,
+  }))
 
   return { arquivo, aviso }
 }
@@ -1664,25 +1669,37 @@ export async function atualizarKit($: EngineInterface): Promise<void> {
   const sessao = (await sessaoDoApp($)) ?? null
   let resultado: ResultadoDoKit = {}
   let detalhe: string | null = null
+  let outraSessao: TravaDoKit | null = null
   try {
     if (!home) throw new Error('sem HOME')
     const script = await caminhoDoPainel($, home)
     if (!script) throw new Error('o plugin orquestracao não está instalado')
-    const outra = await lerJson<TravaDoKit>($, trava)
-    if (estadoDoKit({ trava: outra, aqui: false, agora }).outra) throw new Error('outra sessão já está atualizando')
-    await gravarTrava({ em: new Date(agora).toISOString(), sessao })
-    const r = await $.process.run(['node', script.replace(/painel\.mjs$/, 'atualizar-plugins.mjs'), '--json'], { timeoutMs: ATUALIZAR_KIT_TIMEOUT_MS })
-    try {
-      resultado = JSON.parse(r.stdout) as ResultadoDoKit
-    } catch {
-      resultado = {}
-    }
-    if (r.exitCode !== 0) {
-      const falho = resultado.plugins?.find(p => p.acao === 'falhou' || p.acao === 'não pegou')
-      detalhe = falho ? `${falho.id.split('@')[0]}: ${falho.acao} (${falho.mensagem ?? ''})` : r.stderr.trim().split('\n')[0] || `saiu com ${r.exitCode}`
+    const doDisco = await lerJson<TravaDoKit>($, trava)
+    if (doDisco && estadoDoKit({ trava: doDisco, aqui: false, agora }).outra) {
+      outraSessao = doDisco
+    } else {
+      await gravarTrava({ em: new Date(agora).toISOString(), sessao })
+      const r = await $.process.run(['node', script.replace(/painel\.mjs$/, 'atualizar-plugins.mjs'), '--json'], { timeoutMs: ATUALIZAR_KIT_TIMEOUT_MS })
+      try {
+        resultado = JSON.parse(r.stdout) as ResultadoDoKit
+      } catch {
+        resultado = {}
+      }
+      if (r.exitCode !== 0) {
+        const falho = resultado.plugins?.find(p => p.acao === 'falhou' || p.acao === 'não pegou')
+        detalhe = falho ? `${falho.id.split('@')[0]}: ${falho.acao} (${falho.mensagem ?? ''})` : r.stderr.trim().split('\n')[0] || `saiu com ${r.exitCode}`
+      }
     }
   } catch (err) {
     detalhe = mensagem(err)
+  }
+  // outra sessão já atualiza (o átomo daqui estava atrasado): não é falha; o botão vira `Atualizando…` inerte no mesmo render
+  if (outraSessao) {
+    await update($, reinicio, r => ({ ...r, travaDoKit: outraSessao }))
+    await update($, atualizandoKit, () => false)
+    $.ui.toast('Outra sessão já está atualizando o kit.')
+
+    return
   }
   const feitos = (resultado.plugins ?? []).filter(p => p.acao === 'atualizado').map(p => ({ nome: p.id.split('@')[0]!, versao: p.depois ?? '' }))
   // o efeito entra na hora: o que pegou sai do "para baixar" e entra no que espera o reinício
@@ -1699,28 +1716,23 @@ export async function atualizarKit($: EngineInterface): Promise<void> {
   const lista = feitos.map(f => `${f.nome} ${f.versao}`).join(', ')
   try {
     if (detalhe === null) {
-      await $.process.run(['rm', '-f', trava], { timeoutMs: SCRIPT_TIMEOUT_MS })
-      await update($, reinicio, r => ({ ...r, travaDoKit: null }))
       $.ui.toast(feitos.length ? `Kit atualizado: ${lista}. Reinicie o app para aplicar.` : 'O kit já estava em dia.')
     } else {
       const motivo = motivoCurtoDoKit(detalhe)
-      if (detalhe !== 'outra sessão já está atualizando') await gravarTrava({ em: new Date(agora).toISOString(), sessao, falhou: { motivo, detalhe, em: new Date(await $.clock.now()).toISOString() } })
+      await gravarTrava({ em: new Date(agora).toISOString(), sessao, falhou: { motivo, detalhe, em: new Date(await $.clock.now()).toISOString() } })
       const falta = (resultado.plugins ?? []).filter(p => p.acao === 'falhou' || p.acao === 'não pegou').map(p => p.id.split('@')[0]).join(', ')
       const texto_ = feitos.length ? `Atualizei ${lista}; ${falta || 'o resto'} não atualizou (${motivo}).` : `Não consegui atualizar o kit (${motivo}).`
       $.ui.toast(texto_)
       await avisar($, texto_).catch(() => {})
     }
+    // a conferência nova confirma o que a tela já mostra; até ela gravar, a guarda (o átomo e a trava) segura a tela e os outros panes
+    await conferirReinicio($, await listaFresca($))
   } catch (err) {
     $.ui.log(`kit: ${mensagem(err)}`)
   } finally {
+    if (detalhe === null && home) await $.process.run(['rm', '-f', trava], { timeoutMs: SCRIPT_TIMEOUT_MS }).catch(() => undefined)
     await update($, atualizandoKit, () => false)
-  }
-  // a conferência nova confirma o que a tela já mostra (e vence se divergir)
-  try {
-    await conferirReinicio($, await listaFresca($))
-    await lerReinicio($)
-  } catch (err) {
-    $.ui.log(`reinício depois do kit: ${mensagem(err)}`)
+    await lerReinicio($).catch(() => undefined)
   }
 }
 
@@ -2562,7 +2574,10 @@ export const register: Register = on => {
           })()}
           {lido && mostraReinicio && (() => {
             // Sem aviso: a linha de 20 px com o botão ao lado (a largura do SVG desconta o botão); com aviso: o bloco e o botão embaixo.
-            const r = reinicioSvg(rn.aviso || !botaoDoAviso ? W : W - 96, dadosDoReinicio)
+            // Com o `Me avise` ao lado, a linha azul desce para um SVG próprio na largura inteira (ao lado do botão a versão não cabe).
+            const aoLado = !rn.aviso && botaoDoAviso !== null
+            const r = reinicioSvg(aoLado ? W - 96 : W, aoLado ? { ...dadosDoReinicio, paraAplicar: null } : dadosDoReinicio)
+            const aplicar = aoLado ? aplicacaoSvg(W, dadosDoReinicio.paraAplicar) : null
 
             return rn.aviso ? (
               <Box key="bloco-do-reinicio" flexDirection="column" gap={1} alignItems="flex-start">
@@ -2570,9 +2585,12 @@ export const register: Register = on => {
                 {botaoDoAviso}
               </Box>
             ) : (
-              <Box key="bloco-do-reinicio" flexDirection="row" alignItems="center" columnGap={1} flexWrap="wrap">
-                <Svg source={r.source} alt={r.alt} width={botaoDoAviso ? W - 96 : W} height={r.height} />
-                {botaoDoAviso}
+              <Box key="bloco-do-reinicio" flexDirection="column">
+                <Box flexDirection="row" alignItems="center" columnGap={1} flexWrap="wrap">
+                  <Svg source={r.source} alt={r.alt} width={aoLado ? W - 96 : W} height={r.height} />
+                  {botaoDoAviso}
+                </Box>
+                {aplicar && <Svg source={aplicar.source} alt={aplicar.alt} width={W} height={aplicar.height} />}
               </Box>
             )
           })()}
