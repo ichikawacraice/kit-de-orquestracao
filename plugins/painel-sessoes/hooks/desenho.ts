@@ -980,6 +980,15 @@ export type ReinicioDesenhado = {
   razao?: string
   /** O aviso ligado (`avisadoEm` = quando a notificação saiu); `null` = a linha discreta, sem moldura. */
   aviso: { avisadoEm?: string } | null
+  /** A atualização que espera o reinício (`painel pode-reiniciar`); ausente ou `null` = nada baixado. */
+  atualizacao?: { app?: { baixada: string }; motor?: { baixada: string } } | null
+}
+
+/** `app 3.2.0, motor 2.1.308`, ou `null` sem atualização. */
+const versoesDaAtualizacao = (a: ReinicioDesenhado['atualizacao']): string | null => {
+  const partes = [a?.app && `app ${a.app.baixada}`, a?.motor && `motor ${a.motor.baixada}`].filter(Boolean)
+
+  return partes.length ? partes.join(', ') : null
 }
 
 /** Quantos motivos o bloco lista antes do `+ N mais`. */
@@ -1015,26 +1024,31 @@ const conferido = (ms: number | null): string => (ms === null ? 'sem conferênci
 export function reinicioSvg(W: number, r: ReinicioDesenhado): { source: string; height: number; alt: string } {
   const util = W - 24
   const porTipo = contagemDoReinicio(r.motivos)
+  // A atualização baixada é uma linha a mais, em azul: logo abaixo da linha discreta, ou a última dentro da moldura.
+  const versoes = versoesDaAtualizacao(r.atualizacao)
+  const frase = versoes === null ? null : `↑ Atualização baixada · ${versoes} · reinicie o app para instalar`
+  const altDaAtualizacao = versoes === null ? '' : ` Atualização baixada: ${versoes}. Reinicie o app para instalar.`
+  const discreta = (alt: string, corpo: string) => {
+    const altura = frase === null ? 20 : 38
+    const linha = frase === null ? '' : texto(0, 32, 12, 'an', xml(caber(frase, 12, W)))
+
+    return { height: altura, alt: `${alt}${altDaAtualizacao}`, source: svg(W, altura, `${corpo}${linha}`) }
+  }
   if (r.aviso === null) {
     const glifo = (c: string) => `<tspan class="${c}">⏻</tspan>`
     if (r.estado === 'pode') {
       const resto = r.conferidoEm === null ? '' : ` · conferido às ${hhmm_(r.conferidoEm)}`
       const frase = caber('Pode reiniciar o app', 12.5, Math.max(40, W - largura(resto, 12.5) - 18))
 
-      return {
-        height: 20,
-        alt: `Pode reiniciar o app, ${conferido(r.conferidoEm)}.`,
-        source: svg(W, 20, `<text x="0" y="14" font-family="${FONTE}" font-size="12.5">${glifo(OK)}<tspan class="${OK}" font-weight="600"> ${xml(frase)}</tspan><tspan class="m">${xml(resto)}</tspan></text>`),
-      }
+      return discreta(`Pode reiniciar o app, ${conferido(r.conferidoEm)}.`, `<text x="0" y="14" font-family="${FONTE}" font-size="12.5">${glifo(OK)}<tspan class="${OK}" font-weight="600"> ${xml(frase)}</tspan><tspan class="m">${xml(resto)}</tspan></text>`)
     }
     const espere = r.estado === 'espere'
     const dito = espere ? `Reiniciar: espere · ${r.rodando} rodando` : 'Reiniciar: não sei'
 
-    return {
-      height: 20,
-      alt: espere ? `Reiniciar o app: espere, ${r.rodando} rodando — ${porTipo}.` : `Reiniciar o app: não sei — ${r.razao ?? 'ainda não conferi'}.`,
-      source: svg(W, 20, `<text x="0" y="14" font-family="${FONTE}" font-size="12.5">${glifo('m')}<tspan class="s" font-weight="600"> ${xml(caber(dito, 12.5, W - 18))}</tspan></text>`),
-    }
+    return discreta(
+      espere ? `Reiniciar o app: espere, ${r.rodando} rodando — ${porTipo}.` : `Reiniciar o app: não sei — ${r.razao ?? 'ainda não conferi'}.`,
+      `<text x="0" y="14" font-family="${FONTE}" font-size="12.5">${glifo('m')}<tspan class="s" font-weight="600"> ${xml(caber(dito, 12.5, W - 18))}</tspan></text>`,
+    )
   }
 
   const ligado = 'aviso ligado'
@@ -1070,14 +1084,15 @@ export function reinicioSvg(W: number, r: ReinicioDesenhado): { source: string; 
     linhas = [r.razao ?? 'ainda não conferi']
     alt = `Aviso de reinício ligado: não sei — ${r.razao ?? 'ainda não conferi'}.`
   }
-  const altura = 24 + 16 * linhas.length + 10
+  const altura = 24 + 16 * (linhas.length + (frase === null ? 0 : 1)) + 10
   const glifoDoTitulo = r.estado === 'pode' ? OK : 'm'
   const partes = [`<text x="12" y="24" font-family="${FONTE}" font-size="13" font-weight="700"><tspan class="${glifoDoTitulo}">⏻</tspan><tspan class="${classe}"> ${xml(caber(titulo, 13, util - 20))}</tspan></text>`]
   linhas.forEach((l, k) => partes.push(texto(12, 40 + 16 * k, 12, k === linhas.length - 1 && (r.estado === 'espere' || (r.estado === 'pode' && k > 0)) ? 'm' : 's', xml(caber(l, 12, util)))))
+  if (frase !== null) partes.push(texto(12, 40 + 16 * linhas.length, 12, 'an', xml(caber(frase, 12, util))))
 
   return {
     height: altura,
-    alt,
+    alt: `${alt}${altDaAtualizacao}`,
     source: svg(W, altura, `<rect class="${moldura}" fill="none" stroke-width="1.5" x=".75" y=".75" width="${W - 1.5}" height="${altura - 1.5}" rx="8"/>${partes.join('')}`),
   }
 }

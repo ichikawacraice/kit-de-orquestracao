@@ -57,7 +57,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
 import { MOTIVO_DO_FORK, SHA_VALIDADO, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
-import { julgarReinicio, lerFichas, lerPs, textoDoReinicio } from './pode-reiniciar.mjs';
+import { julgarReinicio, lerAtualizacao, lerFichas, lerPs, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote } from './fila-de-merge.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
@@ -1074,13 +1074,18 @@ function eusDestaSessao() {
 }
 function conferirReinicio({ linhas, listaEm, sessoesDe, agoraMs = Date.now() }) {
   const euPid = new Set([process.pid, process.ppid]);
-  const motivos = julgarReinicio({ sessoes: linhas, fichas: lerFichas(regras.pastaDoTeto(process.env)), ps: lerPs(process.env), euPid });
+  const ps = lerPs(process.env);
+  const motivos = julgarReinicio({ sessoes: linhas, fichas: lerFichas(regras.pastaDoTeto(process.env)), ps, euPid });
   const em = new Date(agoraMs).toISOString();
-  const completo = { pode: motivos.length === 0, motivos, sessoesDe, em, listaEm: new Date(listaEm).toISOString() };
+  // a atualização é um extra: ler mal não derruba o julgamento
+  let atualizacao = null;
+  try { atualizacao = lerAtualizacao({ home: homedir(), ps }); } catch { /* sem atualização */ }
+  const att = atualizacao ? { atualizacao } : {};
+  const completo = { pode: motivos.length === 0, motivos, sessoesDe, em, listaEm: new Date(listaEm).toISOString(), ...att };
   const idadeMin = Math.max(0, Math.round((agoraMs - listaEm) / 60_000));
   const eu = eusDestaSessao();
   const visiveis = motivos.filter((m) => !(m.tipo === 'sessao' && eu.has(m.localId)));
-  const saida = { pode: visiveis.length === 0, motivos: visiveis, sessoesDe, ...(sessoesDe === 'batida' ? { idadeMin } : {}), em };
+  const saida = { pode: visiveis.length === 0, motivos: visiveis, sessoesDe, ...(sessoesDe === 'batida' ? { idadeMin } : {}), em, ...att };
   return { completo, saida };
 }
 const gravarReinicio = (completo) => gravarJson(join(ORQ(), 'batida', 'pode-reiniciar.json'), completo);

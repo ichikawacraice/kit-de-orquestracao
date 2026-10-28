@@ -134,9 +134,12 @@ export type PapelDoPedido = 'dona'
 export type EstadoPedido = { estado: 'enviando' } | { estado: 'prompt'; em: number; papel: PapelDoPedido } | { estado: 'pedido'; em: number; papel: PapelDoPedido }
 
 /** O aviso de reinício e a conferência que a tela lê: os dois arquivos de `batida/` (F152), cada um com o próprio erro. */
+/** O que só entra com o app reiniciado: a versão nova do app já baixada, e a do motor mais nova que a mais velha em uso. */
+export type Atualizacao = { app?: { instalada: string; baixada: string }; motor?: { rodando: string; baixada: string } }
+
 export type Reinicio = {
   /** `batida/pode-reiniciar.json`; `null` = ausente ou ilegível. */
-  arquivo: { pode: boolean; motivos: Array<{ tipo: 'sessao' | 'teste' | 'merge'; texto: string; localId?: string }>; sessoesDe?: string; em: string; listaEm?: string } | null
+  arquivo: { pode: boolean; motivos: Array<{ tipo: 'sessao' | 'teste' | 'merge'; texto: string; localId?: string }>; sessoesDe?: string; em: string; listaEm?: string; atualizacao?: Atualizacao } | null
   /** `batida/aviso-de-reinicio.json`; `null` = desligado (ou ilegível). */
   aviso: { ligadoEm: string; vigia: string; avisadoEm?: string; naoPodeSeguidos: number } | null
   /** A última conferência pelo comando falhou (o pane diz "não consegui conferir agora"). */
