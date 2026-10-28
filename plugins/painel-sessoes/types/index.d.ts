@@ -134,17 +134,22 @@ export type PapelDoPedido = 'dona'
 export type EstadoPedido = { estado: 'enviando' } | { estado: 'prompt'; em: number; papel: PapelDoPedido } | { estado: 'pedido'; em: number; papel: PapelDoPedido }
 
 /** O aviso de reinício e a conferência que a tela lê: os dois arquivos de `batida/` (F152), cada um com o próprio erro. */
-/** O que só entra com o app reiniciado: a versão nova do app já baixada, e a do motor mais nova que a mais velha em uso. */
-export type Atualizacao = { app?: { instalada: string; baixada: string }; motor?: { rodando: string; baixada: string } }
+/** Um plugin do kit instalado depois que o app abriu: só vale com o app reiniciado. */
+export type ParaAplicar = { nome: string; versao: string }
+/** Um plugin do kit com versão publicada mais nova que a instalada. */
+export type ParaBaixar = { nome: string; instalada: string; publicada: string }
 
 export type Reinicio = {
   /** `batida/pode-reiniciar.json`; `null` = ausente ou ilegível. */
-  arquivo: { pode: boolean; motivos: Array<{ tipo: 'sessao' | 'teste' | 'merge'; texto: string; localId?: string }>; sessoesDe?: string; em: string; listaEm?: string; atualizacao?: Atualizacao } | null
+  arquivo: { pode: boolean; motivos: Array<{ tipo: 'sessao' | 'teste' | 'merge'; texto: string; localId?: string }>; sessoesDe?: string; em: string; listaEm?: string; paraAplicar?: ParaAplicar[]; paraBaixar?: ParaBaixar[] } | null
   /** `batida/aviso-de-reinicio.json`; `null` = desligado (ou ilegível). */
   aviso: { ligadoEm: string; vigia: string; avisadoEm?: string; naoPodeSeguidos: number } | null
   /** A última conferência pelo comando falhou (o pane diz "não consegui conferir agora"). */
   falhou: boolean
+  /** `batida/atualizando-kit.json`: quem clicou `Atualizar` e quando, e a falha (em todo pane até 30 min); `null` = ausente. */
+  travaDoKit?: TravaDoKit | null
 }
+export type TravaDoKit = { em: string; sessao?: string | null; falhou?: { motivo: string; detalhe?: string; em: string } }
 
 /** O que a barra de status lê, de leve, a cada 30 s e a cada turno: só arquivos, nunca `list_sessions`. */
 export type Barra = {
@@ -198,6 +203,8 @@ declare module 'claude-code' {
       reinicio: Reinicio
       /** O botão do aviso de reinício está gravando (`Ligando…` / `Desligando…`). */
       reiniciando: 'ligando' | 'desligando' | null
+      /** O botão `Atualizar` do kit está rodando nesta sessão (a falha mora na trava, que todo pane lê). */
+      atualizandoKit: boolean
       /** O `/barra` escondeu a barra nesta sessão. */
       barraEscondida: boolean
       /** O `↺ Limpando…` da barra: a hora do clique e o contexto lido nele; `null` fora da limpeza. */

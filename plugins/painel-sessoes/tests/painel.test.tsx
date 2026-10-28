@@ -2226,10 +2226,9 @@ for (const bandeira of [undefined, LIGADA(HA_3H)]) {
     } else {
       expect(invertidos(topo), 'presente não tem o bloco invertido').toEqual([])
     }
-    // o bloco do reinício (F152) mora entre a faixa do modo e os contadores
-    const reinicio = filhos(topo)[bandeira ? 2 : 1]!
-    expect(subarvore(reinicio).filter(n => n.type === 'Button').map(b => b.props.key), 'o reinício vem logo depois do modo, com o botão Me avise').toEqual(['reinicio'])
-    const contadores = filhos(topo).slice(bandeira ? 3 : 2)
+    // o bloco do reinício (F152) mora entre a faixa do modo e os contadores, e só com algo esperando reinício (F209): aqui não há
+    expect(subarvore(topo).filter(n => n.type === 'Button').map(b => b.props.key), 'sem nada pendente, sem o botão Me avise').not.toContain('reinicio')
+    const contadores = filhos(topo).slice(bandeira ? 2 : 1)
     expect(contadores.length, 'os contadores vêm depois').toBeGreaterThan(0)
     expect(contadores.flatMap(subarvore).filter(n => n.type === 'Button'), 'o ↻ não está na linha dos contadores').toEqual([])
     await ui.unmount()

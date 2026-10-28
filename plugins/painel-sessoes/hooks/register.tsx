@@ -2,11 +2,11 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { semDona } from './sem-dona'
-import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
+import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
-import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
+import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -1502,8 +1502,16 @@ async function lerReinicio($: EngineInterface, erros: string[] = []): Promise<Pi
   const pasta = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/batida`
   const arquivo = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_REINICIO, validoArquivo, erros)
   const aviso = await lerArquivoDaBatida($, pasta, ARQUIVO_DO_AVISO, validoAviso, erros)
+  const travaDoKit = await lerArquivoDaBatida($, pasta, ARQUIVO_DA_TRAVA_DO_KIT, validoTravaDoKit, erros)
   const gravando = (await read($, reiniciando)) !== null
-  await update($, reinicio, r => ({ ...r, arquivo, aviso: gravando ? r.aviso : aviso }))
+  // durante o clique do kit, só os campos do kit da tela (otimista) valem mais que o disco; o resto (pode, espere, motivos) segue o disco
+  const kitRodando = await read($, atualizandoKit)
+  await update($, reinicio, r => ({
+    ...r,
+    arquivo: kitRodando && arquivo && r.arquivo ? { ...arquivo, paraBaixar: r.arquivo.paraBaixar, paraAplicar: r.arquivo.paraAplicar } : arquivo,
+    aviso: gravando ? r.aviso : aviso,
+    travaDoKit: kitRodando ? r.travaDoKit : travaDoKit,
+  }))
 
   return { arquivo, aviso }
 }
@@ -1607,6 +1615,127 @@ export async function desligarAviso($: EngineInterface): Promise<void> {
     await falhouOAviso($, `Não consegui desligar o aviso (${mensagem(err)}).`)
   } finally {
     await update($, reiniciando, () => null)
+  }
+}
+
+// ---- a atualização do kit (F209): o botão `Atualizar` roda `atualizar-plugins`, que põe os plugins do kit na versão publicada ----
+// O clique mostra `Atualizando…` na hora; feito → a linha sai e o kit entra na linha azul do reinício no mesmo render, toast, e a
+// conferência nova confirma; falhou → `↓ Não atualizou o kit` com o motivo curto e `Tentar de novo`, toast e a faixa "Ação não
+// concluída". A trava `batida/atualizando-kit.json` impede duas sessões juntas e guarda a falha, que todo pane mostra por 30 min.
+
+export const atualizandoKit = atom({ plugin: 'painel-sessoes', key: 'atualizandoKit' } as const, false as boolean)
+const ARQUIVO_DA_TRAVA_DO_KIT = 'atualizando-kit.json'
+/** A trava de outra sessão vale até isto: depois, a sessão que a gravou caiu no meio. */
+export const TRAVA_DO_KIT_MS = 10 * 60_000
+/** A falha aparece em todo pane até isto; depois volta o `Atualizar`. */
+export const FALHA_DO_KIT_MS = 30 * 60_000
+/** Abaixo da trava: o mod desiste antes que outra sessão a ache velha. */
+const ATUALIZAR_KIT_TIMEOUT_MS = 9 * 60_000
+
+type ResultadoDoKit = { plugins?: Array<{ id: string; antes: string | null; depois: string | null; acao: string; mensagem?: string }> }
+const validoTravaDoKit = (v: unknown): v is TravaDoKit => typeof v === 'object' && v !== null && typeof (v as TravaDoKit).em === 'string'
+
+/** O motivo que a tela mostra: uma frase curta da tabela; o texto cru (que pode citar comando) fica só na trava. */
+export function motivoCurtoDoKit(detalhe: string): string {
+  if (/não pegou|instalada ficou|ficou em \S+, publicada/.test(detalhe)) return 'ficou na versão antiga'
+  if (/não encontrado no PATH|ENOENT/.test(detalhe)) return 'não achei o Claude Code'
+  if (/não respondeu em|timed? ?out|tempo esgotado/i.test(detalhe)) return 'demorou demais'
+  if (/ls-remote|marketplace update|origin|clone|GitHub|resolve host|unable to access/i.test(detalhe)) return 'sem acesso ao repositório'
+
+  return 'erro inesperado'
+}
+
+/** Estado da linha do kit para a tela: rodando aqui ou noutra sessão, e a falha de até 30 min. */
+export function estadoDoKit({ trava, aqui, agora }: { trava: TravaDoKit | null | undefined; aqui: boolean; agora: number }): { atualizando: boolean; outra: boolean; falhou: string | null } {
+  const em = Date.parse(trava?.em ?? '')
+  const falhaEm = Date.parse(trava?.falhou?.em ?? '')
+  const outra = !aqui && trava != null && !trava.falhou && !Number.isNaN(em) && agora - em < TRAVA_DO_KIT_MS
+  const falhou = !aqui && trava?.falhou && !Number.isNaN(falhaEm) && agora - falhaEm < FALHA_DO_KIT_MS ? trava.falhou.motivo : null
+
+  return { atualizando: aqui || outra, outra, falhou }
+}
+
+export async function atualizarKit($: EngineInterface): Promise<void> {
+  if (await read($, atualizandoKit)) return
+  const agora = await $.clock.now()
+  if (estadoDoKit({ trava: (await read($, reinicio)).travaDoKit, aqui: false, agora }).outra) return
+  await update($, atualizandoKit, () => true)
+  const home = await $.env.get('HOME')
+  const trava = `${home}/${BASE_ORQUESTRACAO}/batida/${ARQUIVO_DA_TRAVA_DO_KIT}`
+  const gravarTrava = async (t: TravaDoKit) => {
+    await $.fs.write(trava, JSON.stringify(t))
+    await update($, reinicio, r => ({ ...r, travaDoKit: t }))
+  }
+  const sessao = (await sessaoDoApp($)) ?? null
+  let resultado: ResultadoDoKit = {}
+  let detalhe: string | null = null
+  let outraSessao: TravaDoKit | null = null
+  try {
+    if (!home) throw new Error('sem HOME')
+    const script = await caminhoDoPainel($, home)
+    if (!script) throw new Error('o plugin orquestracao não está instalado')
+    const doDisco = await lerJson<TravaDoKit>($, trava)
+    if (doDisco && estadoDoKit({ trava: doDisco, aqui: false, agora }).outra) {
+      outraSessao = doDisco
+    } else {
+      await gravarTrava({ em: new Date(agora).toISOString(), sessao })
+      const r = await $.process.run(['node', script.replace(/painel\.mjs$/, 'atualizar-plugins.mjs'), '--json'], { timeoutMs: ATUALIZAR_KIT_TIMEOUT_MS })
+      try {
+        resultado = JSON.parse(r.stdout) as ResultadoDoKit
+      } catch {
+        resultado = {}
+      }
+      if (r.exitCode !== 0) {
+        const falho = resultado.plugins?.find(p => p.acao === 'falhou' || p.acao === 'não pegou')
+        detalhe = falho ? `${falho.id.split('@')[0]}: ${falho.acao} (${falho.mensagem ?? ''})` : r.stderr.trim().split('\n')[0] || `saiu com ${r.exitCode}`
+      }
+    }
+  } catch (err) {
+    detalhe = mensagem(err)
+  }
+  // outra sessão já atualiza (o átomo daqui estava atrasado): não é falha; o botão vira `Atualizando…` inerte no mesmo render
+  if (outraSessao) {
+    await update($, reinicio, r => ({ ...r, travaDoKit: outraSessao }))
+    await update($, atualizandoKit, () => false)
+    $.ui.toast('Outra sessão já está atualizando o kit.')
+
+    return
+  }
+  const feitos = (resultado.plugins ?? []).filter(p => p.acao === 'atualizado').map(p => ({ nome: p.id.split('@')[0]!, versao: p.depois ?? '' }))
+  // o efeito entra na hora: o que pegou sai do "para baixar" e entra no que espera o reinício
+  if (feitos.length) {
+    await update($, reinicio, r => r.arquivo === null ? r : {
+      ...r,
+      arquivo: {
+        ...r.arquivo,
+        paraBaixar: (r.arquivo.paraBaixar ?? []).filter(p => !feitos.some(f => f.nome === p.nome)),
+        paraAplicar: [...(r.arquivo.paraAplicar ?? []).filter(p => !feitos.some(f => f.nome === p.nome)), ...feitos],
+      },
+    })
+  }
+  const lista = feitos.map(f => `${f.nome} ${f.versao}`).join(', ')
+  let confirmou = false
+  try {
+    if (detalhe === null) {
+      $.ui.toast(feitos.length ? `Kit atualizado: ${lista}. Reinicie o app para aplicar.` : 'O kit já estava em dia.')
+    } else {
+      const motivo = motivoCurtoDoKit(detalhe)
+      await gravarTrava({ em: new Date(agora).toISOString(), sessao, falhou: { motivo, detalhe, em: new Date(await $.clock.now()).toISOString() } })
+      const falta = (resultado.plugins ?? []).filter(p => p.acao === 'falhou' || p.acao === 'não pegou').map(p => p.id.split('@')[0]).join(', ')
+      const texto_ = feitos.length ? `Atualizei ${lista}; ${falta || 'o resto'} não atualizou (${motivo}).` : `Não consegui atualizar o kit (${motivo}).`
+      $.ui.toast(texto_)
+      await avisar($, texto_).catch(() => {})
+    }
+    // a conferência nova confirma o que a tela já mostra; até ela gravar, a guarda (o átomo e a trava) segura a tela e os outros panes
+    await conferirReinicio($, await listaFresca($))
+    confirmou = true
+  } catch (err) {
+    $.ui.log(`kit: ${mensagem(err)}`)
+  } finally {
+    if (detalhe === null && home) await $.process.run(['rm', '-f', trava], { timeoutMs: SCRIPT_TIMEOUT_MS }).catch(() => undefined)
+    await update($, atualizandoKit, () => false)
+    // sem a conferência nova o disco ainda é o de antes do clique: a tela otimista fica até a próxima leitura que confira
+    if (confirmou) await lerReinicio($).catch(() => undefined)
   }
 }
 
@@ -2257,7 +2386,25 @@ export const register: Register = on => {
         {gravandoAviso === 'desligando' ? 'Desligando…' : 'Me avise'}
       </Button>
     ) : null
-    const dadosDoReinicio = { ...doReinicio, aviso: rn.aviso ? { avisadoEm: rn.aviso.avisadoEm } : null, atualizacao: rn.arquivo?.atualizacao ?? null }
+    const dadosDoReinicio = { ...doReinicio, aviso: rn.aviso ? { avisadoEm: rn.aviso.avisadoEm } : null, paraAplicar: rn.falhou ? null : rn.arquivo?.paraAplicar ?? null }
+    // F209: o reinício só aparece com algo instalado esperando por ele (ou com o aviso que o operador ligou); o kit, com versão para baixar.
+    const mostrar = oQueMostrarDoReinicio({ arquivo: rn.arquivo, aviso: rn.aviso, falhou: rn.falhou })
+    const mostraReinicio = mostrar.reinicio
+    const kitAqui = await read($, atualizandoKit)
+    const kit = estadoDoKit({ trava: rn.travaDoKit, aqui: kitAqui, agora })
+    const paraBaixar = mostrar.kit ?? []
+    const mostraKit = mostrar.kit !== null
+    const botaoDoKit = (
+      <Button
+        key="kit"
+        variant="secondary"
+        onPress={() => {
+          if (!kit.atualizando) void atualizarKit($)
+        }}
+      >
+        {kit.atualizando ? 'Atualizando…' : kit.falhou !== null ? 'Tentar de novo' : 'Atualizar'}
+      </Button>
+    )
     // O modo da leitura: `undefined` é antes da 1ª leitura; `null`, o arquivo que não se leu; senão a bandeira.
     const modo: 'lendo' | 'presente' | 'ausente' | 'desconhecido' = l.ausente === undefined ? 'lendo' : l.ausente === null ? 'desconhecido' : l.ausente.ligado ? 'ausente' : 'presente'
     // O botão do modo fica no canto esquerdo da fileira e o rótulo é o gesto; sem ler o modo não há botão (gravar por cima esconderia o problema).
@@ -2418,9 +2565,22 @@ export const register: Register = on => {
             {linhaParou && <Svg source={linhaParou.source} alt={linhaParou.alt} width={W} height={linhaParou.height} />}
             {faixaModo && <Svg source={faixaModo.source} alt={faixaModo.alt} width={W} height={faixaModo.height} />}
           </Box>
-          {lido && (() => {
+          {lido && mostraKit && (() => {
+            const k = kitSvg(W - BOTAO_DO_KIT, { paraBaixar, falhou: kit.falhou, atualizando: kit.atualizando })
+
+            return (
+              <Box key="linha-do-kit" flexDirection="row" alignItems="center" columnGap={1} flexWrap="wrap">
+                <Svg source={k.source} alt={k.alt} width={W - BOTAO_DO_KIT} height={k.height} />
+                {botaoDoKit}
+              </Box>
+            )
+          })()}
+          {lido && mostraReinicio && (() => {
             // Sem aviso: a linha de 20 px com o botão ao lado (a largura do SVG desconta o botão); com aviso: o bloco e o botão embaixo.
-            const r = reinicioSvg(rn.aviso || !botaoDoAviso ? W : W - 96, dadosDoReinicio)
+            // Com o `Me avise` ao lado, a linha azul desce para um SVG próprio na largura inteira (ao lado do botão a versão não cabe).
+            const aoLado = !rn.aviso && botaoDoAviso !== null
+            const r = reinicioSvg(aoLado ? W - 96 : W, aoLado ? { ...dadosDoReinicio, paraAplicar: null } : dadosDoReinicio)
+            const aplicar = aoLado ? aplicacaoSvg(W, dadosDoReinicio.paraAplicar) : null
 
             return rn.aviso ? (
               <Box key="bloco-do-reinicio" flexDirection="column" gap={1} alignItems="flex-start">
@@ -2428,9 +2588,12 @@ export const register: Register = on => {
                 {botaoDoAviso}
               </Box>
             ) : (
-              <Box key="bloco-do-reinicio" flexDirection="row" alignItems="center" columnGap={1} flexWrap="wrap">
-                <Svg source={r.source} alt={r.alt} width={botaoDoAviso ? W - 96 : W} height={r.height} />
-                {botaoDoAviso}
+              <Box key="bloco-do-reinicio" flexDirection="column">
+                <Box flexDirection="row" alignItems="center" columnGap={1} flexWrap="wrap">
+                  <Svg source={r.source} alt={r.alt} width={aoLado ? W - 96 : W} height={r.height} />
+                  {botaoDoAviso}
+                </Box>
+                {aplicar && <Svg source={aplicar.source} alt={aplicar.alt} width={W} height={aplicar.height} />}
               </Box>
             )
           })()}
@@ -2638,7 +2801,24 @@ export const register: Register = on => {
               <Text dimColor>· sessões novas só abrem com você</Text>
             </Box>
           )}
-          {lido && (() => {
+          {lido && mostraKit && (
+            <Box key="linha-do-kit" flexDirection="column">
+              <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+                {kit.falhou !== null && !kit.atualizando ? (
+                  <Text color="error" bold wrap="truncate-end">↓ Não atualizou o kit</Text>
+                ) : (
+                  <Text wrap="truncate-end">
+                    <Text color="suggestion">↓</Text>
+                    <Text bold>{` ${fraseDoKit(paraBaixar).slice(2).split(' · ')[0]}`}</Text>
+                    {fraseDoKit(paraBaixar).includes(' · ') && <Text dimColor>{` · ${fraseDoKit(paraBaixar).split(' · ').slice(1).join(' · ')}`}</Text>}
+                  </Text>
+                )}
+                {botaoDoKit}
+              </Box>
+              {kit.falhou !== null && !kit.atualizando && <Text dimColor wrap="truncate-end">{kit.falhou}</Text>}
+            </Box>
+          )}
+          {lido && mostraReinicio && (() => {
             const cor = doReinicio.estado === 'pode' ? GLIFO_REINICIO.pode : GLIFO_REINICIO.esperando
             const hora_ = doReinicio.conferidoEm === null ? 'sem conferência' : `conferido às ${hhmm(doReinicio.conferidoEm)}`
             const titulo_ = rn.aviso
@@ -2651,11 +2831,17 @@ export const register: Register = on => {
                 {!rn.aviso && doReinicio.estado === 'pode' && <Text dimColor>{` · ${hora_}`}</Text>}
               </Text>
             )
+            // F209: o que espera o reinício, em azul, logo abaixo do título (ou a última linha com o aviso ligado)
+            const aplicar = fraseDaAplicacao(rn.falhou ? null : rn.arquivo?.paraAplicar ?? null)
+            const linhaAplicar = aplicar && <Text key="aplicar" color="suggestion" wrap="truncate-end">{aplicar}</Text>
             if (!rn.aviso) {
               return (
-                <Box key="bloco-do-reinicio" flexDirection="row" flexWrap="wrap" columnGap={1}>
-                  {titulo}
-                  {botaoDoAviso}
+                <Box key="bloco-do-reinicio" flexDirection="column">
+                  <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+                    {titulo}
+                    {botaoDoAviso}
+                  </Box>
+                  {linhaAplicar}
                 </Box>
               )
             }
@@ -2677,6 +2863,7 @@ export const register: Register = on => {
                   {linhas.map((t, i) => (
                     <Text key={`${i}:${t}`} dimColor wrap="truncate-end">{t}</Text>
                   ))}
+                  {linhaAplicar}
                 </Box>
                 {botaoDoAviso}
               </Box>

@@ -4,9 +4,8 @@
 // `gate/` (que não vai junto quando ele é instalado): a leitura das fichas repete o contrato de `gate/o-teto-da-maquina.mjs` e um
 // teste compara as duas.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
-import { basename, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 
 const vivo = (pid) => {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -109,49 +108,98 @@ export function julgarReinicio({ sessoes, fichas, ps, euPid = new Set() }) {
   return motivos;
 }
 
-// Atualização que só entra com o app reiniciado: o app com a versão nova já baixada pelo ShipIt (instala ao fechar) e o motor
-// (claude-code) com versão mais nova na pasta do app do que a que alguma sessão roda. Tudo lido do HOME; fora do macOS nada existe.
-const versaoDoPlist = (app) => {
-  try { return /<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/.exec(readFileSync(join(app, 'Contents', 'Info.plist'), 'utf8'))?.[1] ?? null; } catch { return null; }
-};
-const deUrl = (u) => { try { return typeof u === 'string' && u.startsWith('file:') ? fileURLToPath(u) : null; } catch { return null; } };
 const RELEASE = /^(\d+)\.(\d+)\.(\d+)$/;
 const compararVersao = (a, b) => { const x = RELEASE.exec(a).slice(1).map(Number); const y = RELEASE.exec(b).slice(1).map(Number); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; };
 
-/** → `{ app?: { instalada, baixada }, motor?: { rodando, baixada } }`, ou `null` sem nada esperando. `rodando` é a mais velha em uso. */
-export function lerAtualizacao({ home, ps }) {
-  const r = {};
+// F209: os plugins do kit (o marketplace `kit-de-orquestracao`, escopo user). O app carrega os plugins quando abre: plugin com
+// `lastUpdated` depois do início do processo do app ainda não vale. "Para baixar" é a versão do `main` publicado mais nova que a
+// instalada, lida por `git fetch` no clone do marketplace (o FETCH_HEAD, ou o `origin/main` do clone se o fetch falhar; a árvore do clone não anda), com cache de 30 min.
+const MARKETPLACE = 'kit-de-orquestracao';
+export const KIT_PUBLICADO_VALE_MS = 30 * 60_000;
+const GIT_TIMEOUT_MS = 20_000;
+
+/** Os plugins do kit com escopo user: [{ nome, versao, lastUpdated }]. Sem o arquivo, nenhum. */
+export function lerInstaladosDoKit(home) {
+  let reg = null;
+  try { reg = JSON.parse(readFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), 'utf8')); } catch { return []; }
+  return Object.entries(reg?.plugins ?? {}).flatMap(([id, lista]) => {
+    if (!id.endsWith(`@${MARKETPLACE}`) || !Array.isArray(lista)) return [];
+    const user = lista.find((e) => e?.scope === 'user' && typeof e.version === 'string');
+    return user ? [{ nome: id.slice(0, -MARKETPLACE.length - 1), versao: user.version, lastUpdated: user.lastUpdated ?? null }] : [];
+  });
+}
+
+/** O início do processo do app (ms) pelo `ps -axo lstart=,command=` (`LC_ALL=C`); `PODE_REINICIAR_PS_INICIO` aponta um arquivo (teste). `null` = não medi. */
+export function lerInicioDoApp(env = process.env) {
+  let bruto;
   try {
-    const estado = JSON.parse(readFileSync(join(home, 'Library', 'Caches', 'com.anthropic.claudefordesktop.ShipIt', 'ShipItState.plist'), 'utf8'));
-    const alvo = deUrl(estado?.targetBundleURL);
-    const novo = deUrl(estado?.updateBundleURL);
-    const instalada = alvo && versaoDoPlist(alvo);
-    const baixada = novo && versaoDoPlist(novo);
-    // só a mais nova: uma sobra do ShipIt com versão mais velha que a instalada não instala nada
-    const maisNova = RELEASE.test(instalada ?? '') && RELEASE.test(baixada ?? '') ? compararVersao(instalada, baixada) < 0 : instalada !== baixada;
-    if (instalada && baixada && maisNova) r.app = { instalada, baixada };
-  } catch { /* sem ShipIt: nada baixado */ }
-  let pastas = [];
-  try { pastas = readdirSync(join(home, 'Library', 'Application Support', 'Claude', 'claude-code')).filter((n) => RELEASE.test(n)); } catch { /* sem pasta */ }
-  const rodando = ps.flatMap((p) => { const m = /\/claude-code\/(\d+\.\d+\.\d+)\//.exec(p.command); return m ? [m[1]] : []; });
-  if (pastas.length && rodando.length) {
-    const baixada = pastas.sort(compararVersao).at(-1);
-    const velha = rodando.sort(compararVersao)[0];
-    if (compararVersao(velha, baixada) < 0) r.motor = { rodando: velha, baixada };
+    bruto = env.PODE_REINICIAR_PS_INICIO
+      ? readFileSync(env.PODE_REINICIAR_PS_INICIO, 'utf8')
+      : env.PODE_REINICIAR_PS ? '' : execFileSync('ps', ['-axo', 'lstart=,command='], { encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024, env: { ...env, LC_ALL: 'C' } });
+  } catch { return null; }
+  for (const l of bruto.split('\n')) {
+    const m = /^\s*(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.+?)\s*$/.exec(l);
+    if (m?.[2]?.endsWith('Claude.app/Contents/MacOS/Claude')) { const t = Date.parse(m[1]); return Number.isNaN(t) ? null : t; }
   }
-  return r.app || r.motor ? r : null;
+  return null;
 }
 
-/** A linha da atualização: `null` sem nada esperando. */
-export function fraseDaAtualizacao(a) {
-  if (!a) return null;
-  const partes = [a.app && `app ${a.app.baixada}`, a.motor && `motor ${a.motor.baixada}`].filter(Boolean);
-  return `Atualização baixada (${partes.join(', ')}): reinicie o app para instalar.`;
+/** Plugins do kit instalados depois que o app abriu: [{ nome, versao }]. Sem medir o início do app, nenhum. */
+export function pluginsEsperandoReinicio({ home, inicioDoApp }) {
+  if (inicioDoApp === null) return [];
+  return lerInstaladosDoKit(home).flatMap((p) => {
+    const t = Date.parse(p.lastUpdated ?? '');
+    return !Number.isNaN(t) && t > inicioDoApp ? [{ nome: p.nome, versao: p.versao }] : [];
+  });
 }
 
-/** O texto da resposta. `idadeMin` só quando a lista é a da batida. */
-export function textoDoReinicio({ pode, motivos, sessoesDe, idadeMin, atualizacao }) {
+const gitNoClone = (env, clone, args) => execFileSync(env.GIT_BIN || 'git', ['-C', clone, ...args], { encoding: 'utf8', timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'] });
+
+/** As versões publicadas no `main` do marketplace ({ nome: versao }), ou `null` sem clone ou sem rede. Grava o cache. */
+function conferirPublicado({ clone, cache, agoraMs, env }) {
+  let publicado = null;
+  // dois fetch no mesmo clone ao mesmo tempo: o que perde a trava do ref falha, mas o `origin/main` que o outro gravou vale igual
+  let ref = 'FETCH_HEAD';
+  try { gitNoClone(env, clone, ['fetch', '--quiet', 'origin', 'main']); } catch { ref = 'origin/main'; }
+  try {
+    const nomes = JSON.parse(gitNoClone(env, clone, ['show', `${ref}:.claude-plugin/marketplace.json`])).plugins.map((p) => p.name);
+    publicado = {};
+    for (const nome of nomes) {
+      try { publicado[nome] = JSON.parse(gitNoClone(env, clone, ['show', `${ref}:plugins/${nome}/.claude-plugin/plugin.json`])).version; } catch { /* sem manifesto */ }
+    }
+  } catch { publicado = null; }
+  // sem rede o cache guarda a tentativa: a próxima ida à rede espera a janela, e não a cada leitura do pane
+  try { mkdirSync(dirname(cache), { recursive: true }); writeFileSync(cache, `${JSON.stringify({ em: new Date(agoraMs).toISOString(), publicado })}\n`); } catch { /* sem cache */ }
+  return publicado;
+}
+
+/** Os plugins do kit com versão publicada mais nova que a instalada: [{ nome, instalada, publicada }]. */
+export function lerParaBaixar({ home, cache, agoraMs = Date.now(), env = process.env }) {
+  const instalados = lerInstaladosDoKit(home);
+  if (!instalados.length) return [];
+  const clone = env.KIT_MARKETPLACE_DIR || join(home, '.claude', 'plugins', 'marketplaces', MARKETPLACE);
+  let publicado;
+  try {
+    const c = JSON.parse(readFileSync(cache, 'utf8'));
+    const em = Date.parse(c?.em ?? '');
+    if (!Number.isNaN(em) && agoraMs - em < KIT_PUBLICADO_VALE_MS && agoraMs >= em) publicado = c.publicado ?? null;
+  } catch { /* sem cache */ }
+  if (publicado === undefined) {
+    try { readdirSync(clone); } catch { return []; }
+    publicado = conferirPublicado({ clone, cache, agoraMs, env });
+  }
+  if (!publicado) return [];
+  return instalados.flatMap((p) => {
+    const v = publicado[p.nome];
+    return RELEASE.test(v ?? '') && RELEASE.test(p.versao) && compararVersao(p.versao, v) < 0 ? [{ nome: p.nome, instalada: p.versao, publicada: v }] : [];
+  });
+}
+
+/** O texto da resposta. `idadeMin` só quando a lista é a da batida. As linhas do kit vêm por último e não são motivo. */
+export function textoDoReinicio({ pode, motivos, sessoesDe, idadeMin, paraAplicar, paraBaixar }) {
   const idade = sessoesDe === 'batida' && idadeMin !== undefined ? `(lista de há ${idadeMin} min)\n` : '';
-  const att = atualizacao ? `${fraseDaAtualizacao(atualizacao)}\n` : '';
-  return pode ? `Pode reiniciar.\n${att}${idade}` : `Não reinicie agora:\n${motivos.map((m) => m.texto).join('\n')}\n${att}${idade}`;
+  const aplicar = paraAplicar?.length ? `Plugins do kit instalados (${paraAplicar.map((p) => `${p.nome} ${p.versao}`).join(', ')}): reinicie o app para aplicar.\n` : '';
+  const baixar = paraBaixar?.length ? `Atualização do kit para baixar (${paraBaixar.map((p) => `${p.nome} ${p.publicada}`).join(', ')}): rode atualizar-plugins.\n` : '';
+  const kit = `${aplicar}${baixar}`;
+  return pode ? `Pode reiniciar.\n${kit}${idade}` : `Não reinicie agora:\n${motivos.map((m) => m.texto).join('\n')}\n${kit}${idade}`;
 }

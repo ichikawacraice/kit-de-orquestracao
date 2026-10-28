@@ -980,15 +980,30 @@ export type ReinicioDesenhado = {
   razao?: string
   /** O aviso ligado (`avisadoEm` = quando a notificação saiu); `null` = a linha discreta, sem moldura. */
   aviso: { avisadoEm?: string } | null
-  /** A atualização que espera o reinício (`painel pode-reiniciar`); ausente ou `null` = nada baixado. */
-  atualizacao?: { app?: { baixada: string }; motor?: { baixada: string } } | null
+  /** Os plugins do kit que esperam o reinício (`painel pode-reiniciar`); ausente, `null` ou vazio = nada. */
+  paraAplicar?: Array<{ nome: string; versao: string }> | null
 }
 
-/** `app 3.2.0, motor 2.1.308`, ou `null` sem atualização. */
-const versoesDaAtualizacao = (a: ReinicioDesenhado['atualizacao']): string | null => {
-  const partes = [a?.app && `app ${a.app.baixada}`, a?.motor && `motor ${a.motor.baixada}`].filter(Boolean)
+/** A linha azul do estado 2, a maior forma que cabe em `max` a 12 px (o terminal usa a 1ª e corta no fim); `null` sem nada.
+ * Um plugin vai pelo nome e versão; vários, `kit (N plugins)`: o kit não tem versão própria. */
+export function fraseDaAplicacao(p: ReinicioDesenhado['paraAplicar'], max = Infinity): string | null {
+  if (!p?.length) return null
+  const v = p.length === 1 ? `${p[0]!.nome} ${p[0]!.versao}` : `kit (${p.length} plugins)`
+  const opcoes = [`↑ Pronta para aplicar · ${v} · reinicie o app`, `↑ Pronta para aplicar · ${v}`, `↑ Para aplicar · ${v}`, '↑ Para aplicar · kit']
 
-  return partes.length ? partes.join(', ') : null
+  return max === Infinity ? opcoes[0]! : caber(opcoes.find(o => largura(o, 12) <= max) ?? opcoes[opcoes.length - 1]!, 12, max)
+}
+
+/** O `alt` da linha azul, com todas as versões inteiras. */
+const altDaAplicacao = (p: ReinicioDesenhado['paraAplicar']): string =>
+  p?.length ? ` Pronta para aplicar ao reiniciar o app: ${p.map(x => `${x.nome} ${x.versao}`).join(', ')}.` : ''
+
+/** A linha azul sozinha, 18 px na largura inteira: embaixo da fileira `⏻` + `Me avise`, que não lhe deixa espaço. `null` sem nada. */
+export function aplicacaoSvg(W: number, p: ReinicioDesenhado['paraAplicar']): { source: string; height: number; alt: string } | null {
+  const frase = fraseDaAplicacao(p, W)
+  if (frase === null) return null
+
+  return { height: 18, alt: altDaAplicacao(p).trim(), source: svg(W, 18, texto(0, 13, 12, 'an', xml(frase))) }
 }
 
 /** Quantos motivos o bloco lista antes do `+ N mais`. */
@@ -1024,21 +1039,16 @@ const conferido = (ms: number | null): string => (ms === null ? 'sem conferênci
 export function reinicioSvg(W: number, r: ReinicioDesenhado): { source: string; height: number; alt: string } {
   const util = W - 24
   const porTipo = contagemDoReinicio(r.motivos)
-  // A atualização baixada é uma linha a mais, em azul: logo abaixo da linha discreta, ou a última dentro da moldura.
-  const versoes = versoesDaAtualizacao(r.atualizacao)
-  const frase = versoes === null ? null : `↑ Atualização baixada · ${versoes} · reinicie o app para instalar`
-  // Sem espaço, encolhem as palavras antes da versão: o alt diz tudo inteiro.
-  const fraseQueCabe = (max: number) => {
-    const opcoes = [frase as string, `↑ Atualização baixada · ${versoes}`, `↑ Atualização · ${versoes}`]
-
-    return caber(opcoes.find(o => largura(o, 12) <= max) ?? opcoes[opcoes.length - 1], 12, max)
-  }
-  const altDaAtualizacao = versoes === null ? '' : ` Atualização baixada: ${versoes}. Reinicie o app para instalar.`
+  // O que espera o reinício é uma linha a mais, em azul: logo abaixo da linha discreta, ou a última dentro da moldura.
+  const frase = fraseDaAplicacao(r.paraAplicar)
+  // Sem espaço, encolhem as palavras antes da versão e o kit vira `kit`: o alt diz tudo inteiro.
+  const fraseQueCabe = (max: number) => fraseDaAplicacao(r.paraAplicar, max) as string
+  const altDoKit = altDaAplicacao(r.paraAplicar)
   const discreta = (alt: string, corpo: string) => {
     const altura = frase === null ? 20 : 38
     const linha = frase === null ? '' : texto(0, 32, 12, 'an', xml(fraseQueCabe(W)))
 
-    return { height: altura, alt: `${alt}${altDaAtualizacao}`, source: svg(W, altura, `${corpo}${linha}`) }
+    return { height: altura, alt: `${alt}${altDoKit}`, source: svg(W, altura, `${corpo}${linha}`) }
   }
   if (r.aviso === null) {
     const glifo = (c: string) => `<tspan class="${c}">⏻</tspan>`
@@ -1098,7 +1108,48 @@ export function reinicioSvg(W: number, r: ReinicioDesenhado): { source: string; 
 
   return {
     height: altura,
-    alt: `${alt}${altDaAtualizacao}`,
+    alt: `${alt}${altDoKit}`,
     source: svg(W, altura, `<rect class="${moldura}" fill="none" stroke-width="1.5" x=".75" y=".75" width="${W - 1.5}" height="${altura - 1.5}" rx="8"/>${partes.join('')}`),
   }
+}
+
+// ---- a atualização do kit para baixar (F209): uma linha com o botão `Atualizar` ao lado (fora do SVG, reserva fixa) ----
+
+/** A reserva do botão ao lado da linha do kit: o rótulo mais longo (`Tentar de novo`), para a linha não se rearrumar ao trocar. */
+export const BOTAO_DO_KIT = 120
+
+export type KitDesenhado = {
+  /** Os plugins do kit com versão publicada mais nova que a instalada. */
+  paraBaixar: Array<{ nome: string; instalada: string; publicada: string }>
+  /** O motivo curto da última falha (em todo pane, até 30 min); `null` = sem falha. */
+  falhou: string | null
+  /** O clique está rodando (nesta sessão ou noutra). */
+  atualizando: boolean
+}
+
+const deParaDoKit = (p: KitDesenhado['paraBaixar']) => p.map(x => `${x.nome} ${x.instalada} para ${x.publicada}`).join(', ')
+
+/** A frase da linha, a maior que cabe em `max` a 12,5 px (o terminal usa a 1ª): `↓ Atualização do kit · orquestracao 0.1.71` ou `· 2 plugins`. */
+export function fraseDoKit(p: KitDesenhado['paraBaixar'], max = Infinity): string {
+  const resto = p.length === 1 ? ` · ${p[0]!.nome} ${p[0]!.publicada}` : p.length > 1 ? ` · ${p.length} plugins` : ''
+  const opcoes = [`↓ Atualização do kit${resto}`, '↓ Atualização do kit']
+
+  return max === Infinity ? opcoes[0]! : caber(opcoes.find(o => largura(o, 12.5) <= max) ?? opcoes[1]!, 12.5, max)
+}
+
+/** A linha do kit (W já sem a reserva do botão): 20 px; com a falha, `↓ Não atualizou o kit` e o motivo embaixo, 38 px. */
+export function kitSvg(W: number, k: KitDesenhado): { source: string; height: number; alt: string } {
+  const dePara = deParaDoKit(k.paraBaixar)
+  if (k.falhou !== null && !k.atualizando) {
+    const titulo = caber('↓ Não atualizou o kit', 12.5, W)
+    const corpo = `<text x="0" y="14" font-family="${FONTE}" font-size="12.5" font-weight="600" class="er">${xml(titulo)}</text>${texto(0, 32, 12, 's', xml(caber(k.falhou, 12, W)))}`
+
+    return { height: 38, alt: `O kit não atualizou: ${k.falhou}.${dePara ? ` Falta: ${dePara}.` : ''}`, source: svg(W, 38, corpo) }
+  }
+  const frase = fraseDoKit(k.paraBaixar, W)
+  const corte = frase.indexOf(' · ')
+  const [cabeca, resto] = corte < 0 ? [frase, ''] : [frase.slice(0, corte), frase.slice(corte)]
+  const corpo = `<text x="0" y="14" font-family="${FONTE}" font-size="12.5"><tspan class="an" font-weight="600">${xml(cabeca)}</tspan><tspan class="m">${xml(resto)}</tspan></text>`
+
+  return { height: 20, alt: `${k.atualizando ? 'Atualizando o kit' : 'Atualização do kit disponível'}: ${dePara}.`, source: svg(W, 20, corpo) }
 }

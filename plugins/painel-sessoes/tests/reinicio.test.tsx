@@ -16,7 +16,8 @@ import {
   vigiaSumiu,
 } from '../hooks/barra.js'
 import type { ArquivoDeReinicio, AvisoDeReinicio, EstadoBarra } from '../hooks/barra.js'
-import { MOTIVOS_NO_BLOCO, contagemDoReinicio, reinicioSvg } from '../hooks/desenho.js'
+import { BOTAO_DO_KIT, MOTIVOS_NO_BLOCO, contagemDoReinicio, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg } from '../hooks/desenho.js'
+import { motivoCurtoDoKit } from '../hooks/register.js'
 
 const EU = 'local_eu'
 const OUTRA = 'local_outra'
@@ -206,24 +207,59 @@ test('reinicioSvg sem aviso: UMA linha de 20 px, e o alt traz a contagem por tip
   expect(espere.source, 'sem aviso os motivos não aparecem').not.toContain('merge/rebase')
 })
 
-test('reinicioSvg: atualização baixada vira uma linha a mais, sem e com aviso; sem ela a altura não muda', () => {
-  const att = { app: { instalada: '3.1.0', baixada: '3.2.0' }, motor: { rodando: '2.1.299', baixada: '2.1.308' } }
+test('reinicioSvg: o plugin do kit esperando o reinício vira uma linha azul a mais, sem e com aviso; sem ela a altura não muda (F209)', () => {
+  const um = [{ nome: 'orquestracao', versao: '0.1.41' }]
   const sem = reinicioSvg(288, { estado: 'espere', rodando: 1, motivos: [teste], conferidoEm: AGORA, aviso: null })
-  expect(sem.source).not.toContain('Atualização')
-  const com = reinicioSvg(288, { estado: 'espere', rodando: 1, motivos: [teste], conferidoEm: AGORA, aviso: null, atualizacao: att })
+  expect(sem.source).not.toContain('aplicar')
+  const com = reinicioSvg(288, { estado: 'espere', rodando: 1, motivos: [teste], conferidoEm: AGORA, aviso: null, paraAplicar: um })
   expect(com.height).toBe(sem.height + 18)
-  expect(com.source).toContain('Atualização baixada · app 3.2.0, motor 2.1.308')
-  expect(com.alt).toContain('Atualização baixada: app 3.2.0, motor 2.1.308. Reinicie o app para instalar.')
-  const soApp = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: null, atualizacao: { app: att.app } })
-  expect(soApp.source).toContain('Atualização baixada · app 3.2.0')
-  expect(soApp.source).not.toContain('motor')
-  const comAviso = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {}, atualizacao: att })
+  expect(com.source).toContain('↑ Pronta para aplicar · orquestracao 0.1.41<')
+  expect(com.alt).toContain('Pronta para aplicar ao reiniciar o app: orquestracao 0.1.41.')
+  const comAviso = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {}, paraAplicar: um })
   const semAviso = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {} })
   expect(comAviso.height).toBe(semAviso.height + 16)
-  expect(comAviso.source, 'na moldura estreita o corte solta a instrução, nunca a versão').toContain('Atualização · app 3.2.0, motor 2.1.308<')
-  expect(comAviso.alt, 'o alt diz a instrução inteira mesmo quando o desenho a solta').toContain('Reinicie o app para instalar.')
-  const largo = reinicioSvg(600, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {}, atualizacao: att })
-  expect(largo.source, 'com espaço a instrução volta').toContain('motor 2.1.308 · reinicie o app para instalar')
+  expect(comAviso.source, 'na moldura estreita sai a instrução, nunca a versão').toContain('↑ Pronta para aplicar · orquestracao 0.1.41<')
+  expect(fraseDaAplicacao(um, 235), 'mais estreito ainda, encolhem as palavras').toBe('↑ Para aplicar · orquestracao 0.1.41')
+  const largo = reinicioSvg(600, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {}, paraAplicar: um })
+  expect(largo.source, 'com espaço a instrução volta').toContain('orquestracao 0.1.41 · reinicie o app<')
+  for (const r of [com, comAviso, largo]) expect(r.source, 'o texto velho saiu').not.toMatch(/baixada|instalar|app 3|motor/)
+})
+
+test('reinicioSvg: vários plugins do kit viram "kit (N plugins)"; o alt traz todos (F209)', () => {
+  const dois = [{ nome: 'orquestracao', versao: '0.1.41' }, { nome: 'painel-sessoes', versao: '0.9.5' }]
+  const r = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {}, paraAplicar: dois })
+  expect(r.source).toContain('kit (2 plugins)')
+  expect(r.alt).toContain('Pronta para aplicar ao reiniciar o app: orquestracao 0.1.41, painel-sessoes 0.9.5.')
+  expect(fraseDaAplicacao(dois)).toBe('↑ Pronta para aplicar · kit (2 plugins) · reinicie o app')
+  expect(fraseDaAplicacao(null)).toBeNull()
+  expect(fraseDaAplicacao([])).toBeNull()
+})
+
+test('kitSvg: a frase que cabe, 20 px; a falha em 38 px com o motivo curto; o alt traz de/para (F209)', () => {
+  const um = [{ nome: 'orquestracao', instalada: '0.1.40', publicada: '0.1.41' }]
+  const dois = [...um, { nome: 'painel-sessoes', instalada: '0.9.4', publicada: '0.9.5' }]
+  const estreito = kitSvg(288 - BOTAO_DO_KIT, { paraBaixar: um, falhou: null, atualizando: false })
+  expect(estreito.height).toBe(20)
+  expect(estreito.source, 'a 168 px só a frase').toContain('↓ Atualização do kit<')
+  expect(estreito.source).not.toContain('orquestracao')
+  expect(estreito.alt).toBe('Atualização do kit disponível: orquestracao 0.1.40 para 0.1.41.')
+  expect(kitSvg(360 - BOTAO_DO_KIT, { paraBaixar: dois, falhou: null, atualizando: false }).source, 'a 240 px cabe "· 2 plugins"').toContain('· 2 plugins<')
+  expect(fraseDoKit(um)).toBe('↓ Atualização do kit · orquestracao 0.1.41')
+  expect(kitSvg(168, { paraBaixar: um, falhou: null, atualizando: true }).alt).toMatch(/^Atualizando o kit: /)
+  const falhou = kitSvg(168, { paraBaixar: um, falhou: 'ficou na versão antiga', atualizando: false })
+  expect(falhou.height).toBe(38)
+  expect(falhou.source).toContain('class="er">↓ Não atualizou o kit<')
+  expect(falhou.source).toContain('ficou na versão antiga')
+  expect(falhou.alt).toBe('O kit não atualizou: ficou na versão antiga. Falta: orquestracao 0.1.40 para 0.1.41.')
+  for (const r of [estreito, falhou]) expect(r.source, 'sem citar comando ou item').not.toMatch(/atualizar-plugins|F\d{3}|painel /)
+})
+
+test('motivoCurtoDoKit: o texto cru vira uma frase da tabela', () => {
+  expect(motivoCurtoDoKit('orquestracao: não pegou (instalada ficou em 0.1.40, publicada 0.1.41)')).toBe('ficou na versão antiga')
+  expect(motivoCurtoDoKit('git ls-remote falhou: fatal: unable to access')).toBe('sem acesso ao repositório')
+  expect(motivoCurtoDoKit('claude plugin marketplace update não respondeu em 180 s')).toBe('demorou demais')
+  expect(motivoCurtoDoKit('claude não encontrado no PATH')).toBe('não achei o Claude Code')
+  expect(motivoCurtoDoKit('algo estranho')).toBe('erro inesperado')
 })
 
 test('reinicioSvg com aviso: até 4 motivos, o resto vira "+ N mais" na linha da hora, e o alt lê todos inteiros', () => {
@@ -276,6 +312,16 @@ type Opc = {
   notificacaoFalha?: boolean
   /** O instante de início do processo do app que o `ps` mostra; `null` = o `ps` não traz a linha do app; omitido = a mesma manhã. */
   appInicio?: string | null
+  /** F209: os plugins do kit que o comando grava como esperando reinício; omitido = um (o reinício aparece); `null` = nada. */
+  paraAplicar?: ArquivoDeReinicio['paraAplicar'] | null
+  /** F209: o kit com versão para baixar que o comando grava. */
+  paraBaixar?: ArquivoDeReinicio['paraBaixar']
+  /** F209: o que `atualizar-plugins --json` devolve (exit e saída); omitido = atualiza o orquestracao para 0.1.41. */
+  atualizar?: { exitCode: number; stdout?: string; stderr?: string }
+  /** F209: o `atualizar-plugins` só responde quando o teste chama `soltar()`. */
+  segurarAtualizar?: boolean
+  /** F209: a conferência logo depois do `atualizar-plugins` só responde quando o teste chama `soltarConferencia()`. */
+  segurarReconferencia?: boolean
 }
 
 const ABRIR = { command: 'painel', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } } as const
@@ -322,7 +368,12 @@ function engine(on: On, opc: Opc = {}) {
   if (!opc.semPlugin) arquivos.set(INSTALADOS, JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user', installPath: '/cache/orquestracao/1' }] } }))
   if (opc.arquivo) arquivos.set(ARQ, JSON.stringify(opc.arquivo))
   if (opc.aviso) arquivos.set(AVISO, JSON.stringify(opc.aviso))
-  const estado = { motivos: opc.motivos ?? [] as Motivo[], appInicio: opc.appInicio === undefined ? 'Mon Oct 27 08:00:00 2026' : opc.appInicio }
+  const estado = {
+    motivos: opc.motivos ?? [] as Motivo[],
+    appInicio: opc.appInicio === undefined ? 'Mon Oct 27 08:00:00 2026' : opc.appInicio,
+    paraAplicar: opc.paraAplicar === undefined ? [{ nome: 'painel-sessoes', versao: '0.9.5' }] : opc.paraAplicar,
+    paraBaixar: opc.paraBaixar,
+  }
   /** O relógio do teste: o que o mock do motor diz, para o comando falso gravar `em` na mesma hora. */
   const tempo = { agora: AGORA }
   on('fs.list', (_, e) => {
@@ -348,15 +399,33 @@ function engine(on: On, opc: Opc = {}) {
   })
   const execucoes: string[][] = []
   const envs: (Record<string, string> | undefined)[] = []
-  on('process.run', (_, e) => {
+  const segurado: { soltar: () => void; soltarConferencia: () => void; segurarProxima: boolean; conferenciaFalha: boolean } = { soltar: () => {}, soltarConferencia: () => {}, segurarProxima: false, conferenciaFalha: false }
+  on('process.run', async (_, e) => {
     const argv = [...e.argv]
     execucoes.push(argv)
     if (argv[0] === 'ps') envs.push((e.init as { env?: Record<string, string> } | undefined)?.env)
     const ok = { exitCode: 0, stdout: '{}', stderr: '', isStdoutTruncated: false, isStderrTruncated: false }
     if (argv.includes('pode-reiniciar')) {
-      if (opc.comandoFalha) return { value: { ...ok, exitCode: 1, stderr: 'quebrou' } }
+      if (segurado.segurarProxima) {
+        segurado.segurarProxima = false
+        await new Promise<void>(res => { segurado.soltarConferencia = res })
+      }
+      if (opc.comandoFalha || segurado.conferenciaFalha) return { value: { ...ok, exitCode: 1, stderr: 'quebrou' } }
       // o comando de verdade grava o arquivo; aqui o teste o imita com o que ele julgaria
-      arquivos.set(ARQ, JSON.stringify(arquivo(estado.motivos, 0, {}, tempo.agora)))
+      const extra = { ...(estado.paraAplicar?.length ? { paraAplicar: estado.paraAplicar } : {}), ...(estado.paraBaixar?.length ? { paraBaixar: estado.paraBaixar } : {}) }
+      arquivos.set(ARQ, JSON.stringify(arquivo(estado.motivos, 0, extra, tempo.agora)))
+    }
+    if (argv[1]?.endsWith('atualizar-plugins.mjs')) {
+      if (opc.segurarAtualizar) await new Promise<void>(res => { segurado.soltar = res })
+      const r = opc.atualizar ?? { exitCode: 0, stdout: JSON.stringify({ plugins: [{ id: 'orquestracao@kit-de-orquestracao', antes: '0.1.40', publicado: '0.1.41', depois: '0.1.41', acao: 'atualizado' }], reiniciar: true }) }
+      if (r.exitCode === 0) {
+        // o kit ficou em dia: a próxima conferência não traz mais o que baixar, e o plugin novo espera o reinício
+        estado.paraBaixar = undefined
+        estado.paraAplicar = [{ nome: 'orquestracao', versao: '0.1.41' }]
+        if (opc.segurarReconferencia) segurado.segurarProxima = true
+      }
+
+      return { value: { ...ok, stdout: r.stdout ?? '', stderr: r.stderr ?? '', exitCode: r.exitCode } }
     }
     if (argv[0] === 'ps') {
       const app = estado.appInicio === null ? '' : `  4242 ${estado.appInicio} /Applications/Claude.app/Contents/MacOS/Claude\n`
@@ -387,7 +456,7 @@ function engine(on: On, opc: Opc = {}) {
     return { result: {}, text: '[]' }
   })
 
-  return { relogio, tempo, arquivos, estado, escritasDoAviso, execucoes, envs, toasts, logs, chamadas, notificacoes, avisoNoDisco: () => (arquivos.has(AVISO) ? (JSON.parse(arquivos.get(AVISO) ?? '{}') as AvisoDeReinicio) : null) }
+  return { segurado, relogio, tempo, arquivos, estado, escritasDoAviso, execucoes, envs, toasts, logs, chamadas, notificacoes, avisoNoDisco: () => (arquivos.has(AVISO) ? (JSON.parse(arquivos.get(AVISO) ?? '{}') as AvisoDeReinicio) : null) }
 }
 
 async function iniciar($: Parameters<TestBody>[0], on: On, opc: Opc = {}) {
@@ -622,13 +691,45 @@ test('pane desktop sem aviso: o Svg de 20 px, com a contagem por tipo no alt e o
   await ui.unmount()
 })
 
-test('o comando falha no pane: não sei, "não consegui conferir agora", o motivo vai para Não consegui ler tudo', async ($, on) => {
+test('F209: o comando falha e nada se sabe pendente: o reinício não aparece, o motivo vai para Não consegui ler tudo', async ($, on) => {
   const m = await iniciar($, on, { comandoFalha: true })
   const ui = await abrirPane($, m, 'desktop')
   const texto = await lido(ui)
-  expect(texto).toContain('Reiniciar o app: não sei — não consegui conferir agora.')
+  expect(texto).toMatch(/reinício: painel pode-reiniciar saiu com 1/)
+  expect(texto).not.toMatch(/[Rr]einiciar o app/)
+  await ui.unmount()
+})
+
+test('o comando falha no pane com o aviso ligado: não sei, "não consegui conferir agora", o motivo vai para Não consegui ler tudo', async ($, on) => {
+  // F209: o arquivo velho do disco (kit para baixar e plugin esperando) não aparece: sem conferência não se sabe; só o aviso ligado segue
+  const velho = arquivo([], 30, { paraAplicar: [{ nome: 'painel-sessoes', versao: '0.9.5' }], paraBaixar: KIT })
+  const m = await iniciar($, on, { comandoFalha: true, arquivo: velho, aviso: aviso({ ligadoEm: iso(AGORA - 10 * MIN) }) })
+  const ui = await abrirPane($, m, 'desktop')
+  const texto = await lido(ui)
+  expect(texto).toContain('Aviso de reinício ligado: não sei — não consegui conferir agora.')
   expect(texto).toContain('Não consegui ler tudo')
   expect(texto).toMatch(/reinício: painel pode-reiniciar saiu com 1/)
+  expect(texto, 'a linha do kit do arquivo velho não aparece').not.toMatch(/Atualização do kit/)
+  expect(texto, 'nem a linha azul').not.toMatch(/Pronta para aplicar/)
+  await ui.unmount()
+})
+
+test('F209 (validador 2): o comando falha sem aviso e o arquivo velho do disco diz que há o que fazer: o pane não mostra nada (prova: sem a falha, mostra)', async ($, on) => {
+  const velho = arquivo([], 0, { paraAplicar: [{ nome: 'painel-sessoes', versao: '0.9.5' }], paraBaixar: KIT })
+  const m = await iniciar($, on, { comandoFalha: true, arquivo: velho })
+  const ui = await abrirPane($, m, 'terminal')
+  const texto = await lido(ui)
+  expect(texto).toMatch(/reinício: painel pode-reiniciar saiu com 1/)
+  expect(texto).not.toMatch(/Atualização do kit|Reiniciar|Pode reiniciar|Pronta para aplicar|Me avise/)
+  await ui.unmount()
+})
+
+test('F209 (validador 2, prova): o mesmo arquivo com a conferência funcionando mostra o kit e a linha azul', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: [{ nome: 'painel-sessoes', versao: '0.9.5' }], paraBaixar: KIT })
+  const ui = await abrirPane($, m, 'terminal')
+  const texto = await lido(ui)
+  expect(texto).toMatch(/Atualização do kit/)
+  expect(texto).toMatch(/Pronta para aplicar/)
   await ui.unmount()
 })
 
@@ -729,4 +830,203 @@ test('pane com aviso: até 4 motivos, + N mais, e o desktop lê todos no alt', a
   const td = await lido(d)
   for (const x of motivos5) expect(td).toContain(x.texto)
   await d.unmount()
+})
+
+// ---- F209: o reinício e o kit só aparecem quando há o que fazer ----
+
+test('F209: nada esperando reinício e nada para baixar: o pane não mostra nada do reinício (as duas superfícies)', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, motivos: [sessao(7)] })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await abrirPane($, m, surface)
+    const texto = await lido(ui)
+    expect(texto, 'o pane foi lido').toMatch(/nada em andamento|Esperam você/)
+    expect(texto).not.toMatch(/[Rr]einicia/)
+    expect(await ui.find({ key: 'reinicio' }), 'sem Me avise').toBeUndefined()
+    await ui.unmount()
+  }
+})
+
+test('F209: com plugin do kit esperando o reinício ele aparece (prova de presença do teste acima), nas duas superfícies', async ($, on) => {
+  const m = await iniciar($, on, { motivos: [sessao(7)] })
+  let ui = await abrirPane($, m, 'terminal')
+  expect(await lido(ui)).toContain('Reiniciar: espere · 1 rodando')
+  await ui.unmount()
+  m.estado.paraAplicar = [{ nome: 'orquestracao', versao: '0.1.41' }]
+  ui = await abrirPane($, m, 'desktop')
+  await ui.press({ key: 'atualizar' })
+  await m.relogio.settle()
+  expect(await lido(ui)).toContain('orquestracao 0.1.41')
+  expect((await ui.find({ key: 'reinicio' }))?.text).toBe('Me avise')
+  await ui.unmount()
+})
+
+test('F209: com o aviso ligado e nada pendente, o bloco do aviso fica', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, aviso: aviso({ ligadoEm: iso(AGORA - 5 * MIN) }), motivos: [sessao(7)] })
+  const ui = await abrirPane($, m, 'terminal')
+  expect(await lido(ui)).toContain('Espere · 1 rodando')
+  expect((await ui.find({ key: 'reinicio' }))?.text).toBe('Não avisar mais')
+  await ui.unmount()
+})
+
+const KIT = [{ nome: 'orquestracao', instalada: '0.1.40', publicada: '0.1.41' }]
+const TRAVA = `${BATIDA}/atualizando-kit.json`
+
+test('F209 estado 1 → 2: Atualizar mostra Atualizando… na hora; feito, a linha do kit sai, o reinício entra com o plugin, e o toast', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, paraBaixar: KIT, segurarAtualizar: true })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await abrirPane($, m, surface)
+    const texto = await lido(ui)
+    expect(texto).toMatch(/Atualização do kit/)
+    expect(texto, 'estado 1 sem nada instalado esperando: sem reinício').not.toMatch(/[Rr]einiciar/)
+    expect((await ui.find({ key: 'kit' }))?.text).toBe('Atualizar')
+    await ui.unmount()
+  }
+  const ui = await abrirPane($, m, 'terminal')
+  await ui.press({ key: 'kit' })
+  await ui.press({ key: 'kit' })
+  expect((await ui.find({ key: 'kit' }))?.text, 'no mesmo render').toBe('Atualizando…')
+  expect(m.execucoes.filter(a => a[1]?.endsWith('atualizar-plugins.mjs')).length, 'o clique repetido é ignorado').toBe(1)
+  m.segurado.soltar()
+  await m.relogio.settle()
+  expect(m.execucoes.some(a => a[1]?.endsWith('/skills/orquestradora/scripts/atualizar-plugins.mjs') && a[2] === '--json')).toBe(true)
+  const depois = await lido(ui)
+  expect(depois).not.toMatch(/Atualização do kit/)
+  expect(await ui.find({ key: 'kit' })).toBeUndefined()
+  expect(depois).toContain('↑ Pronta para aplicar · orquestracao 0.1.41 · reinicie o app')
+  expect(depois, 'nada rodando: pode').toContain('Pode reiniciar o app')
+  expect(m.toasts).toContain('Kit atualizado: orquestracao 0.1.41. Reinicie o app para aplicar.')
+  expect(m.arquivos.has(TRAVA), 'a trava sai no fim').toBe(false)
+  await ui.unmount()
+})
+
+test('F209 falhou: ↓ Não atualizou o kit com o motivo curto, Tentar de novo, toast e a faixa; a trava guarda a falha para os outros panes', async ($, on) => {
+  const stdout = JSON.stringify({ plugins: [{ id: 'orquestracao@kit-de-orquestracao', antes: '0.1.40', depois: '0.1.40', acao: 'não pegou', mensagem: 'instalada ficou em 0.1.40, publicada 0.1.41' }] })
+  const m = await iniciar($, on, { paraAplicar: null, paraBaixar: KIT, atualizar: { exitCode: 1, stdout } })
+  const ui = await abrirPane($, m, 'terminal')
+  await ui.press({ key: 'kit' })
+  await m.relogio.settle()
+  const texto = await lido(ui)
+  expect(texto).toContain('↓ Não atualizou o kit')
+  expect(texto).toContain('ficou na versão antiga')
+  expect(texto, 'o texto cru não vai para a tela').not.toContain('publicada 0.1.41')
+  expect((await ui.find({ key: 'kit' }))?.text).toBe('Tentar de novo')
+  expect(m.toasts).toContain('Não consegui atualizar o kit (ficou na versão antiga).')
+  expect(texto).toContain('Não consegui atualizar o kit (ficou na versão antiga).')
+  const trava = JSON.parse(m.arquivos.get(TRAVA) ?? '{}') as { falhou?: { motivo: string; detalhe: string } }
+  expect(trava.falhou?.motivo).toBe('ficou na versão antiga')
+  expect(trava.falhou?.detalhe).toContain('não pegou')
+  await ui.unmount()
+  // outro pane (outra sessão, sem o clique) lê a falha da trava
+  const desk = await abrirPane($, m, 'desktop')
+  expect(await lido(desk)).toContain('O kit não atualizou: ficou na versão antiga.')
+  await desk.unmount()
+})
+
+test('F209 outra sessão atualizando (trava fresca): Atualizando… inerte, o clique não roda nada; trava velha (11 min) volta Atualizar', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, paraBaixar: KIT })
+  m.arquivos.set(TRAVA, JSON.stringify({ em: iso(AGORA - 2 * MIN), sessao: OUTRA }))
+  let ui = await abrirPane($, m, 'terminal')
+  expect((await ui.find({ key: 'kit' }))?.text).toBe('Atualizando…')
+  await ui.press({ key: 'kit' })
+  await m.relogio.settle()
+  expect(m.execucoes.some(a => a[1]?.endsWith('atualizar-plugins.mjs')), 'nada roda').toBe(false)
+  await ui.unmount()
+  m.arquivos.set(TRAVA, JSON.stringify({ em: iso(AGORA - 11 * MIN), sessao: OUTRA }))
+  ui = await abrirPane($, m, 'terminal')
+  await ui.press({ key: 'atualizar' })
+  await m.relogio.settle()
+  expect((await ui.find({ key: 'kit' }))?.text).toBe('Atualizar')
+  await ui.unmount()
+})
+
+test('F209 estados 1 e 2 juntos: a linha do kit vem antes do bloco do reinício', async ($, on) => {
+  const m = await iniciar($, on, { paraBaixar: KIT })
+  const ui = await abrirPane($, m, 'terminal')
+  const texto = await lido(ui)
+  const kit = texto.indexOf('Atualização do kit')
+  const rein = texto.indexOf('Pronta para aplicar')
+  expect(kit).toBeGreaterThan(-1)
+  expect(rein).toBeGreaterThan(-1)
+  expect(kit).toBeLessThan(rein)
+  await ui.unmount()
+})
+
+test('F209 (crítica P2): até a reconferência gravar, a trava fica e uma leitura com o arquivo velho não traz a linha do kit de volta', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, paraBaixar: KIT, segurarReconferencia: true })
+  const ui = await abrirPane($, m, 'terminal')
+  await ui.press({ key: 'kit' })
+  await m.relogio.settle()
+  expect(m.toasts).toContain('Kit atualizado: orquestracao 0.1.41. Reinicie o app para aplicar.')
+  expect(m.arquivos.has(TRAVA), 'a trava segura os outros panes até a reconferência').toBe(true)
+  // a leitura periódica no meio grava o arquivo como estava antes do clique (o kit para baixar, nada a aplicar)
+  const depois = { paraBaixar: m.estado.paraBaixar, paraAplicar: m.estado.paraAplicar }
+  m.estado.paraBaixar = KIT
+  m.estado.paraAplicar = null
+  await ui.press({ key: 'atualizar' })
+  await m.relogio.settle()
+  const meio = await lido(ui)
+  expect(meio, 'a linha do kit não volta').not.toMatch(/Atualização do kit/)
+  expect(meio, 'e o kit segue na linha azul').toContain('Pronta para aplicar · orquestracao 0.1.41')
+  Object.assign(m.estado, depois)
+  m.segurado.soltarConferencia()
+  await m.relogio.settle()
+  expect(m.arquivos.has(TRAVA), 'a trava sai depois da reconferência').toBe(false)
+  expect(await lido(ui)).not.toMatch(/Atualização do kit/)
+  await ui.unmount()
+})
+
+test('F209 (crítica P3): outra sessão gravou a trava e este pane ainda não leu: toast neutro, sem faixa, e o botão vira Atualizando…', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, paraBaixar: KIT })
+  const ui = await abrirPane($, m, 'terminal')
+  expect((await ui.find({ key: 'kit' }))?.text).toBe('Atualizar')
+  m.arquivos.set(TRAVA, JSON.stringify({ em: iso(m.tempo.agora - MIN), sessao: OUTRA }))
+  await ui.press({ key: 'kit' })
+  await m.relogio.settle()
+  expect(m.execucoes.some(a => a[1]?.endsWith('atualizar-plugins.mjs')), 'nada roda').toBe(false)
+  expect(m.toasts).toContain('Outra sessão já está atualizando o kit.')
+  expect(await lido(ui), 'sem a faixa de falha').not.toMatch(/Não consegui atualizar/)
+  expect((await ui.find({ key: 'kit' }))?.text).toBe('Atualizando…')
+  await ui.unmount()
+})
+
+test('F209 (crítica P1): desktop com Me avise ao lado, a linha azul desce para a largura inteira e leva a versão', async ($, on) => {
+  const m = await iniciar($, on, { motivos: [sessao(7)], paraAplicar: [{ nome: 'orquestracao', versao: '0.1.41' }] })
+  const ui = await abrirPane($, m, 'desktop')
+  expect((await ui.find({ key: 'reinicio' }))?.text).toBe('Me avise')
+  const fontes = (await ui.findAll({})).map(el => String(el.props.source ?? '')).filter(x => x.includes('aplicar'))
+  expect(fontes.length, 'achou a linha azul').toBe(1)
+  expect(fontes[0]).toContain('orquestracao 0.1.41')
+  const larg = (x: string) => Number(/width="(\d+)"/.exec(x)?.[1])
+  const linhaDoReinicio = (await ui.findAll({})).map(el => String(el.props.source ?? '')).find(x => x.includes('Reiniciar: espere'))
+  expect(linhaDoReinicio, 'a fileira do ⏻ existe').toBeDefined()
+  expect(larg(fontes[0]!), 'a linha azul tem a largura inteira, 96 a mais que a fileira do botão').toBe(larg(linhaDoReinicio!) + 96)
+  await ui.unmount()
+})
+
+test('F209 (validador 1): o kit e o reinício moram entre o botão do modo e os contadores, nas duas superfícies', async ($, on) => {
+  const m = await iniciar($, on, { motivos: [sessao(7)], paraBaixar: KIT })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await abrirPane($, m, surface)
+    const t = await lido(ui)
+    const pos = ['Ficar ausente', 'Atualização do kit', surface === 'terminal' ? 'Reiniciar: espere' : 'Reiniciar o app: espere', surface === 'terminal' ? 'nada em andamento' : 'Esperam você'].map(x => t.indexOf(x))
+    expect(pos.every(p => p > -1), `${surface}: achou as quatro peças ${pos.join(',')}`).toBe(true)
+    expect([...pos].sort((a, b) => a - b), `${surface}: na ordem modo, kit, reinício, contadores`).toEqual(pos)
+    await ui.unmount()
+  }
+})
+
+test('F209 (2º validador M1): atualizou e a reconferência falhou — a tela otimista fica, a linha do kit não volta do arquivo velho', async ($, on) => {
+  const m = await iniciar($, on, { paraAplicar: null, paraBaixar: KIT, segurarReconferencia: true })
+  const ui = await abrirPane($, m, 'terminal')
+  await ui.press({ key: 'kit' })
+  await m.relogio.settle()
+  m.segurado.conferenciaFalha = true
+  m.segurado.soltarConferencia()
+  await m.relogio.settle()
+  const t = await lido(ui)
+  expect(m.toasts).toContain('Kit atualizado: orquestracao 0.1.41. Reinicie o app para aplicar.')
+  expect(t, 'a linha do kit não volta').not.toMatch(/Atualização do kit/)
+  expect(t, 'o kit segue na linha azul').toContain('Pronta para aplicar · orquestracao 0.1.41')
+  expect(m.arquivos.has(TRAVA), 'a trava sai: a atualização deu certo').toBe(false)
+  await ui.unmount()
 })
