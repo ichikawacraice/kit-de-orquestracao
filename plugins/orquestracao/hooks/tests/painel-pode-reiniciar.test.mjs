@@ -299,3 +299,11 @@ test('lerAtualizacao compara versão por número, não por texto (2.1.99 < 2.1.1
   assert.ok(a, 'devia detectar o motor novo');
   assert.deepEqual(a.motor, { rodando: '2.1.99', baixada: '2.1.100' });
 });
+
+test('app: sobra do ShipIt com versão mais velha que a instalada não é atualização (o mesmo arranjo com versão nova é)', async () => {
+  const { lerAtualizacao } = await import(join(SCRIPTS, 'pode-reiniciar.mjs'));
+  appComAtualizacao({ instalada: '3.10.0', baixada: '3.9.0' });
+  assert.equal(lerAtualizacao({ home: join(base, 'home'), ps: [] }), null);
+  appComAtualizacao({ instalada: '3.10.0', baixada: '3.11.0' });
+  assert.deepEqual(lerAtualizacao({ home: join(base, 'home'), ps: [] }), { app: { instalada: '3.10.0', baixada: '3.11.0' } });
+});

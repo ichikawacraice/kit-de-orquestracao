@@ -127,7 +127,9 @@ export function lerAtualizacao({ home, ps }) {
     const novo = deUrl(estado?.updateBundleURL);
     const instalada = alvo && versaoDoPlist(alvo);
     const baixada = novo && versaoDoPlist(novo);
-    if (instalada && baixada && instalada !== baixada) r.app = { instalada, baixada };
+    // só a mais nova: uma sobra do ShipIt com versão mais velha que a instalada não instala nada
+    const maisNova = RELEASE.test(instalada ?? '') && RELEASE.test(baixada ?? '') ? compararVersao(instalada, baixada) < 0 : instalada !== baixada;
+    if (instalada && baixada && maisNova) r.app = { instalada, baixada };
   } catch { /* sem ShipIt: nada baixado */ }
   let pastas = [];
   try { pastas = readdirSync(join(home, 'Library', 'Application Support', 'Claude', 'claude-code')).filter((n) => RELEASE.test(n)); } catch { /* sem pasta */ }
