@@ -211,4 +211,14 @@ test('(dona-5) F218: com cartão de sessão dona esperando o clique, não cobra 
   cartao('F7', 13 * 60);
   assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'cartão de 13 h venceu');
 });
+test('(dona-6) F218: o item com cartão esperando o clique ocupa a vaga dele no teto de donas', () => {
+  for (const F of ['F1', 'F2', 'F3']) comDona(F);
+  semDona('F7'); semDona('F8');
+  mkdirSync(join(base, 'painel', 'cartoes'), { recursive: true });
+  writeFileSync(join(base, 'painel', 'cartoes', 'task_x.json'), JSON.stringify({ id: 'task_x', version: 1, data: { projeto: 'proj-a', apelido: 'dona', papel: 'dona', itens: ['F7'], orquestradoraId: 'local_ORQ', propostoEm: minAtras(5) } }));
+  assert.equal(rodar([LIST, GRAVA]), null, '3 trabalhando + 1 a caminho = teto 4: o F8 espera');
+  const r = rodar([LIST, GRAVA], { env: { KIT_TETO_DE_DONAS: '5' } });
+  assert.match(r?.reason ?? '', /F8 sem dona há 10 min \(3 de 5 donas trabalhando, 1 a caminho\)/, 'prova: com vaga, cobra o F8 e conta o F7 a caminho');
+  assert.doesNotMatch(r.reason, /F7 sem dona/);
+});
 }

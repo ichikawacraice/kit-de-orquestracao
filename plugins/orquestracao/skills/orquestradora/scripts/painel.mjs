@@ -39,7 +39,7 @@
 //
 // Coleções: sessoes, perguntas, fila (itens F<n>; protocolo em pool/protocolo.md#a-fila) e cartoes (cartão de sessão dona
 //   que espera o clique do operador; id = task_id do start_session; { projeto, apelido: "dona", papel: "dona", itens: [F<n>], orquestradoraId, propostoEm? }; propostoEm é opcional: o painel grava agora (e troca hora no futuro por agora);
-//   a orquestradora grava e apaga, e a batida apaga o cartão cuja sessão já abriu e o que passou de 12 h).
+//   a orquestradora grava e apaga, e a batida apaga o cartão cuja sessão já abriu e se gravou dona, ou está aberta há 30 min sem se gravar, e o que passou de 12 h).
 //
 // `projeto` (sessoes, fila e perguntas): ao CRIAR um documento sem o campo, o script o preenche com o nome do repositório git de
 // onde roda (basename da pasta que contém o git common dir, em slug `[a-z0-9-]`; fora de git não preenche). Toda op que grava

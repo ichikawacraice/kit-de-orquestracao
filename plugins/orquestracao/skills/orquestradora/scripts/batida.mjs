@@ -27,21 +27,24 @@ const tituloDoCartao = (titulo, c) => (/^(F\d+) · /.exec(titulo || '')?.[1] ?? 
 // `propostoEm` no futuro (hora escrita errada) não vale: conta de `atualizadoEm` (a gravação do cartão), ou de agora se faltar.
 // `cartoes`: [{ id, data }] → ids a apagar.
 // `itens` (Map F → data, opcional): com ele, a sessão aberta só resolve o cartão quando o item já tem quem trabalhe (ou saiu da
-// fila viva); até ela se gravar dona, o cartão segura a cobrança de outra dona (F218).
+// fila viva), ou quando ela está aberta há PRAZO_MIN sem se gravar dona (morreu ou foi largada: o item volta a ser vaga). Até lá
+// o cartão segura a cobrança de outra dona (F218).
 export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs, itens = null }) {
   const apagar = [];
   for (const { id, data: c } of cartoes) {
     let proposto = ms(c?.propostoEm);
     if (proposto !== null && proposto > agoraMs) proposto = Math.min(ms(c?.atualizadoEm) ?? agoraMs, agoraMs);
     if (proposto === null || agoraMs - proposto >= CARTAO_VALIDADE_H * 3_600_000) { apagar.push(id); continue; }
-    const aberto = (linhas ?? []).some((r) => {
-      if (!vivoNaLista(r) || !tituloDoCartao(r.title, c) || projetoDe(r) !== slugDoProjeto(c.projeto)) return false;
+    let abertaEm = null; // a sessão do cartão mais antiga aberta depois dele
+    for (const r of linhas ?? []) {
+      if (!vivoNaLista(r) || !tituloDoCartao(r.title, c) || projetoDe(r) !== slugDoProjeto(c.projeto)) continue;
       const criada = ms(r.createdAt) ?? ms(r.lastActivityAt);
-      return criada !== null && criada >= proposto;
-    });
+      if (criada !== null && criada >= proposto && (abertaEm === null || criada < abertaEm)) abertaEm = criada;
+    }
+    if (abertaEm === null) continue;
     const d = itens?.get(c?.itens?.[0]);
     const gravou = !itens || !d || ETAPAS_FINAIS.has(d.etapa) || texto(d.donoLocalId) || (Array.isArray(d.com) && d.com.length > 0);
-    if (aberto && gravou) apagar.push(id);
+    if (gravou || agoraMs - abertaEm >= PRAZO_MIN * 60_000) apagar.push(id);
   }
   return apagar;
 }

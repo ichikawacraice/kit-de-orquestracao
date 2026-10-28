@@ -33,12 +33,13 @@ function cartoes() {
 }
 
 // Itens do projeto da orquestradora sem dona há ESPERA_MIN ou mais, menos os que já têm a dona a caminho (cartão esperando o
-// clique): cobrar de novo abre a segunda dona do item (F218).
+// clique), que só contam para o teto: cobrar de novo abre a segunda dona do item (F218). → { itens, aCaminho }
 function itensSemDona(nomeProjeto) {
   const dir = filaDir();
-  if (!nomeProjeto || !existsSync(dir)) return [];
+  if (!nomeProjeto || !existsSync(dir)) return { itens: [], aCaminho: 0 };
   let doPainel = null; // os cartões, lidos só quando há item sem dona
   const itens = [];
+  let aCaminho = 0;
   for (const nome of readdirSync(dir)) {
     if (!nome.endsWith('.json')) continue;
     try {
@@ -48,10 +49,11 @@ function itensSemDona(nomeProjeto) {
       if (!e || e.minutos < ESPERA_MIN) continue;
       const F = doc.id ?? nome.replace(/\.json$/, '');
       doPainel ??= cartoes();
-      if (!donaACaminho(F, doc.data, { cartoes: doPainel, agoraMs: Date.now() })) itens.push({ id: F, data: doc.data, ...e });
+      if (donaACaminho(F, doc.data, { cartoes: doPainel, agoraMs: Date.now() })) aCaminho++;
+      else itens.push({ id: F, data: doc.data, ...e });
     } catch { /* item ilegível: ignora */ }
   }
-  return itens;
+  return { itens, aCaminho };
 }
 
 // Donas trabalhando agora no projeto (item com dona ou `com` numa etapa de trabalho; `merge` não conta).
@@ -72,15 +74,17 @@ function donasTrabalhando(nomeProjeto) {
 // O item sem dona pede a sessão dona, até o teto de donas trabalhando; acima do teto, espera sem cobrança. Satisfaz: um
 // `start_session` no turno, o modo ausente ligado (ninguém para abrir), gravar o dono do item ou mandar mensagem que o cite.
 function cobrancaDeDona(nomeProjeto, comandos, usadas, mensagens) {
-  const itens = itensSemDona(nomeProjeto);
+  const { itens, aCaminho } = itensSemDona(nomeProjeto);
   if (itens.length === 0) return [];
   if ([...usadas].some((n) => n.endsWith('start_session')) || modoAusente()) return [];
   const teto = maquinaCheia().cheia ? Math.min(3, tetoDeDonas()) : tetoDeDonas();
-  const ocupadas = donasTrabalhando(nomeProjeto);
+  // a dona a caminho (cartão esperando o clique) já ocupa a vaga dela no teto
+  const ocupadas = donasTrabalhando(nomeProjeto) + aCaminho;
   if (ocupadas >= teto) return [];
+  const conta = aCaminho > 0 ? `${ocupadas - aCaminho} de ${teto} donas trabalhando, ${aCaminho} a caminho` : `${ocupadas} de ${teto} donas trabalhando`;
   const cita = (id, x) => new RegExp(`\\b${id}\\b`).test(x);
   const faltam = itens.filter((it) => !comandos.some((c) => cita(it.id, c) && /donoLocalId/.test(c)) && !mensagens.some((m) => cita(it.id, m)));
-  return faltam.slice(0, teto - ocupadas).map((it) => `${it.id} sem dona há ${it.minutos} min (${ocupadas} de ${teto} donas trabalhando): abra a sessão dona do item (start_session; fora do turno do operador, cartão)`);
+  return faltam.slice(0, teto - ocupadas).map((it) => `${it.id} sem dona há ${it.minutos} min (${conta}): abra a sessão dona do item (start_session; fora do turno do operador, cartão)`);
 }
 
 // A batida escreve `batida/<projeto>.json` a cada rodada; sem ele, ou velho, o mod não a está rodando.

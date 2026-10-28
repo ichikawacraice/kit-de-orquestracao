@@ -282,3 +282,18 @@ test('batida F218: a sessão aberta pelo cartão só o apaga quando o item ganho
   assert.deepEqual(r.json().cartoesApagados, ['task_b'], 'prova: o F2 tem dona e o cartão dele sai; o do F1, aberto e ainda sem dona, fica');
   assert.deepEqual(r.json().projetos.kit.vagas, [], 'o F1 segue a caminho');
 });
+
+test('batida F218: a sessão aberta pelo cartão que passa de 30 min sem se gravar dona solta o cartão e o item volta a ser vaga', () => {
+  const sem = { ...semGente, etapa: 'planejamento', atualizadoEm: iso(T - 60 * MIN), historico: [{ em: iso(T - 60 * MIN), etapa: 'planejamento', dono: null }] };
+  item('F1', sem); item('F2', sem);
+  mkdirSync(join(pastaPainel(), 'cartoes'), { recursive: true });
+  for (const [id, F] of [['task_a', 'F1'], ['task_b', 'F2']])
+    writeFileSync(join(pastaPainel(), 'cartoes', `${id}.json`), JSON.stringify({ id, version: 1, data: { projeto: 'kit', apelido: 'dona', papel: 'dona', itens: [F], orquestradoraId: lid(30), propostoEm: iso(T - 50 * MIN) } }));
+  // o sessoes.json real só traz lastActivityAt: a do F1 parou há 31 min; a do F2 trabalhou há 5
+  const arq = sessoes(sessao(30, '🎛 orquestradora — kit'), sessao(31, 'F1 · item f1', { lastActivityAt: iso(T - 31 * MIN) }), sessao(32, 'F2 · item f2', { lastActivityAt: iso(T - 5 * MIN) }));
+  const r = batida(arq);
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().cartoesApagados, ['task_a'], 'prova: a do F2, ativa, segura o cartão; a do F1, parada há 31 min, não');
+  const depois = batida(arq, T + MIN);
+  assert.deepEqual(depois.json().projetos.kit.vagas, [{ papel: 'dona', item: 'F1' }], 'sem o cartão, o F1 volta a ser vaga');
+});
