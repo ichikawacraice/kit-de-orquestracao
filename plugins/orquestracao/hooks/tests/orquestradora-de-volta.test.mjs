@@ -114,3 +114,20 @@ test('session_id com barra não vira caminho fora de ativas/', () => {
   inicio('../fora');
   assert.ok(!existsSync(join(base, 'orq', 'fora')));
 });
+
+// F220: a limpeza de contexto mata a fila de merge que rodava em background; quem volta precisa saber o que ficou anotado.
+test('orquestradora que volta com a fila do projeto órfã recebe o aviso e o comando de relance; com a fila vazia, nada', () => {
+  registro(LOCAL, { title: '🎛 orquestradora — kit', cliSessionId: 'cli-novo' });
+  const fila = join(base, 'fila-de-merge', 'kit.json');
+  mkdirSync(dirname(fila), { recursive: true });
+  writeFileSync(fila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [] }));
+  const vazia = inicio('cli-novo');
+  assert.ok(vazia.includes(ORDEM), 'precondição: é a orquestradora');
+  assert.doesNotMatch(vazia, /fila de merge deste projeto está sem processo/, 'fila vazia: sem aviso');
+  const morto = spawnSync('true', { timeout: 5000, killSignal: 'SIGKILL' }).pid;
+  writeFileSync(fila, JSON.stringify({ ocupada: { pid: morto, desde: '2026-10-28T13:03:03.261Z', gate: 'pnpm test' }, emVoo: [{ pr: 1307, sha: 'a9f034d309a1546d29c807ea54ce3dc87cf919b2' }], pendentes: [{ pr: 1308 }] }));
+  const t = inicio('cli-novo');
+  assert.ok(t.includes(ORDEM));
+  assert.match(t, /fila de merge deste projeto está sem processo/);
+  assert.ok(t.includes("painel fila-de-merge 1307:a9f034d309a1546d29c807ea54ce3dc87cf919b2 1308 --gate 'pnpm test'"), t.slice(0, 1500));
+});

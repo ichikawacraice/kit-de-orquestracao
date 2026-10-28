@@ -59,6 +59,7 @@ import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
 import { MOTIVO_DO_FORK, SHA_VALIDADO, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote } from './fila-de-merge.mjs';
+import { donoDaFilaVivo, lerFilaOrfa } from './fila-orfa.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
 import * as arq from './perguntas-arquivo.mjs';
@@ -867,16 +868,12 @@ function comandoMergear(args) {
 // Lote pela fila ocupada (F182): `<BASE>/../fila-de-merge/<projeto>.json` guarda {ocupada:{pid,desde}|null,
 // pendentes:[{pr,sha?}], emVoo:[{pr,sha?}]}. Com a fila ocupada por um processo vivo, a chamada só anota os PRs em `pendentes`
 // e sai; quem roda, ao terminar a rodada, leva a lista inteira como o lote seguinte, até esvaziar. `emVoo` é o lote da rodada
-// que roda: ocupada por processo morto, a chamada nova assume e leva o `emVoo` e os pendentes antes dos seus. Falha de um PR
+// que roda: ocupada por processo morto (ou por pid reciclado, F220: fila-orfa.mjs), a chamada nova assume e leva o `emVoo` e os pendentes antes dos seus. Falha de um PR
 // (fechado, ponta mudou) só o tira do lote; PR que o gh não leu volta aos pendentes para a próxima chamada (`releitura`), até
 // LEITURAS_DA_FILA tentativas; PR de outra base fica para a rodada seguinte; erro da rodada inteira (preparo, git) não volta à
 // lista: sai no erro com os PRs que não rodaram e os que ficaram na fila. `--seco` não usa nem mexe na lista.
 const LEITURAS_DA_FILA = 3;
 const ESTADO_DA_FILA = (projeto) => join(BASE, '..', 'fila-de-merge', `${projeto || 'sem-projeto'}.json`);
-function processoVivo(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try { process.kill(pid, 0); return true; } catch (e) { return e?.code === 'EPERM'; }
-}
 // junta `novos` ao fim de `lista` sem repetir o PR (o sha mais novo vale)
 function juntarPedidos(lista, novos) {
   const r = lista.map((p) => ({ ...p }));
@@ -898,25 +895,29 @@ function comandoFilaDeMerge(args) {
   if (!args.length || casados.some((m) => !m)) throw new Error(uso);
   const pedidos = juntarPedidos([], casados.map(([, n, sha]) => (sha ? { pr: Number(n), sha: sha.toLowerCase() } : { pr: Number(n) })));
   const cwd = process.cwd();
-  // o PR pedido agora tem de existir e estar aberto (erro de quem pediu, como antes); o resto se confere na rodada
+  const arquivo = seco ? null : ESTADO_DA_FILA(projetoDoCwd(cwd).projeto);
+  const lista = (v) => (Array.isArray(v) ? v : []);
+  const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };
+  // o PR pedido agora tem de existir e estar aberto (erro de quem pediu, como antes); o resto se confere na rodada.
+  // F220: o PR que já está anotado na fila (o relance da fila órfã repete a lista inteira) e fechou no meio tempo não
+  // derruba a chamada: a rodada o tira da fila, como faz com o pendente que fechou.
+  const naFila = new Set(seco ? [] : (() => { const e = lerEstado(); return [...e.emVoo, ...e.pendentes].map((p) => p?.pr); })());
   for (const { pr } of pedidos) {
     const v = dadosDoPr(pr, cwd);
-    if (v.state !== 'OPEN') throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
+    if (v.state !== 'OPEN' && !naFila.has(pr)) throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
     if (deFork(v)) throw new Error(`fila-de-merge: ${MOTIVO_DO_FORK(pr)}`);
   }
   if (seco) return rodadaDaFila(pedidos, { seco, gate, preparar, cwd });
-  const arquivo = ESTADO_DA_FILA(projetoDoCwd(cwd).projeto);
-  const lista = (v) => (Array.isArray(v) ? v : []);
-  const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };
   const entrada = comTrava(() => {
     const e = lerEstado();
-    if (e.ocupada && e.ocupada.pid !== process.pid && processoVivo(e.ocupada.pid)) {
+    if (e.ocupada && e.ocupada.pid !== process.pid && donoDaFilaVivo(e.ocupada)) {
       const pendentes = juntarPedidos(e.pendentes, pedidos);
       gravarJson(arquivo, { ...e, pendentes });
       return { pendente: true, ocupadaDesde: e.ocupada.desde ?? null, pendentes };
     }
     const lote = juntarPedidos(juntarPedidos(e.emVoo, e.pendentes), pedidos);
-    gravarJson(arquivo, { ocupada: { pid: process.pid, desde: new Date().toISOString() }, pendentes: [], emVoo: lote });
+    // o gate e o preparo ficam no estado: o relance da fila órfã (F220) os repete
+    gravarJson(arquivo, { ocupada: { pid: process.pid, desde: new Date().toISOString(), gate, ...(preparar ? { preparar } : {}) }, pendentes: [], emVoo: lote });
     return { lote };
   });
   if (entrada.pendente) return entrada;
@@ -1119,6 +1120,16 @@ function comandoPodeReiniciar(args) {
   return { saida, comoJson };
 }
 
+// F220: as filas de merge com PR anotado e sem processo vivo, por projeto (o nome do arquivo é o slug do projeto).
+function filasOrfas() {
+  const dir = dirname(ESTADO_DA_FILA('x'));
+  let nomes = [];
+  try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return {}; }
+  const r = {};
+  for (const n of nomes.sort()) { const o = lerFilaOrfa(join(dir, n)); if (o) r[n.slice(0, -'.json'.length)] = o; }
+  return r;
+}
+
 function comandoBatida(args) {
   const arquivo = flag(args, '--sessoes');
   const seco = flag(args, '--seco', false);
@@ -1132,7 +1143,7 @@ function comandoBatida(args) {
   const rodar = () => {
     const itens = itensVivos();
     const julgado = julgar({
-      agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(),
+      agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(), filasOrfas: filasOrfas(),
       estado: arquivoJson(join(pasta, 'estado.json'), {}),
       semDona, donaACaminho, cartoes: cartoesDoPainel().map((c) => c.data),
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
@@ -1153,7 +1164,7 @@ function comandoBatida(args) {
     for (const [nome, p] of Object.entries(julgado.projetos)) {
       const { mudou, ...conteudo } = p;
       // o relatório só passa a ser "o último" quando a orquestradora existe para recebê-lo: sem ela, a próxima batida o oferece de novo
-      if (mudou && !conteudo.orquestradora) { const antes = arquivoJson(join(pasta, `${nome}.json`), null); gravarJson(join(pasta, `${nome}.json`), { ...conteudo, merge: antes?.merge ?? [], vagas: antes?.vagas ?? [], em }); continue; }
+      if (mudou && !conteudo.orquestradora) { const antes = arquivoJson(join(pasta, `${nome}.json`), null); const { filaParada, ...resto } = conteudo; gravarJson(join(pasta, `${nome}.json`), { ...resto, merge: antes?.merge ?? [], vagas: antes?.vagas ?? [], ...(antes?.filaParada ? { filaParada: antes.filaParada } : {}), em }); continue; }
       gravarJson(join(pasta, `${nome}.json`), { ...conteudo, em });
     }
     // F183: a resposta gravada pelo pane fica na pasta quente (o mod não apaga arquivo); a batida a leva para o arquivo
