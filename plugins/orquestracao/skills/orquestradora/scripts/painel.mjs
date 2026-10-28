@@ -1040,7 +1040,8 @@ function gravarJson(f, v) {
   renameSync(tmp, f);
 }
 const SETE_DIAS_MS = 7 * 24 * 3600_000;
-// Marcadores `ativas/<id>` de orquestradora que já não existem: sessão arquivada ou fora do registro, ou parada há 7 dias.
+// Marcadores `ativas/<id>` de orquestradora que já não existem: sessão arquivada ou fora do registro, id que a sessão deixou para
+// trás ao limpar o contexto (F208), ou parada há 7 dias.
 function marcadoresMortos(porId, agoraMs) {
   const dir = join(ORQ(), 'ativas');
   let nomes = [];
@@ -1049,7 +1050,7 @@ function marcadoresMortos(porId, agoraMs) {
   for (const id of nomes.sort()) {
     let reg = null;
     try { reg = regras.registroDaSessao(id, { fresco: true }); } catch { continue; }
-    if (reg === null || reg.arquivada) { mortos.push(id); continue; }
+    if (reg === null || reg.arquivada || reg.anterior) { mortos.push(id); continue; }
     const linha = porId.get(reg.localId);
     if (linha?.isRunning === true) continue;
     const t = Date.parse(linha?.lastActivityAt);

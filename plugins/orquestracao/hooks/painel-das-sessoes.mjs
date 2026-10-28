@@ -9,7 +9,8 @@
 // git common dir; marcador vazio (formato antigo) é resolvido pelo cwd do transcript.
 // Marcador cujo transcript não muda há 7 dias é ignorado.
 // A própria orquestradora fica com orquestradora-ritual.mjs; a que perdeu o marcador
-// (limpeza de contexto troca o session_id) ganha um de volta pelo título.
+// (limpeza de contexto troca o session_id) ganha um de volta no início da sessão (sessao-inicio.mjs, F208)
+// e, se aquele falhar, aqui pelo título, no fim do primeiro turno.
 import { readFileSync, existsSync, appendFileSync, writeFileSync, mkdirSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';

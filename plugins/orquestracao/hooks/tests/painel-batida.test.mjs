@@ -169,6 +169,16 @@ test('batida: apaga o marcador da orquestradora arquivada e mantém o da viva', 
   assert.ok(!existsSync(join(pastaOrq(), 'ativas', 'cli-arquivada')));
   assert.ok(existsSync(join(pastaOrq(), 'ativas', 'cli-viva')));
 });
+test('batida: apaga o marcador de id anterior da orquestradora viva (a limpeza trocou o session_id) e mantém o da atual', () => {
+  writeFileSync(join(base, 'appsess', `${lid(41)}.json`), JSON.stringify({ sessionId: lid(41), cliSessionId: 'cli-atual', priorCliSessionIds: ['cli-anterior'], title: '🎛 orquestradora — kit', cwd: repo, isArchived: false }));
+  mkdirSync(join(pastaOrq(), 'ativas'), { recursive: true });
+  writeFileSync(join(pastaOrq(), 'ativas', 'cli-anterior'), '');
+  writeFileSync(join(pastaOrq(), 'ativas', 'cli-atual'), '');
+  const r = batida(sessoes(sessao(41, '🎛 orquestradora — kit', { isRunning: true })));
+  assert.deepEqual(r.json().marcadoresApagados, ['cli-anterior'], r.out);
+  assert.ok(!existsSync(join(pastaOrq(), 'ativas', 'cli-anterior')));
+  assert.ok(existsSync(join(pastaOrq(), 'ativas', 'cli-atual')));
+});
 test('batida --seco: devolve o que faria e não muda arquivo nenhum', () => {
   item('F1');
   const antes = statSync(arquivoDoItem('F1')).mtimeMs;
