@@ -580,7 +580,9 @@ test('F221: PR novo da dona fora de `prs` entra no item, que fica em merge duran
     assert.match(noGate.agora, /PR 24 na fila de merge: o gate roda/);
     assert.equal(noGate.espera, undefined, 'sem espera: a batida segue vendo o merge parado');
     assert.deepEqual(s.ligados, [{ pr: 24, item: 'F5' }]);
-    assert.equal(c.dado('F5').etapa, 'feito');
+    const d = c.dado('F5');
+    assert.equal(d.etapa, 'feito');
+    assert.equal(d.espera, undefined);
   } finally { limpar(c); }
 });
 
@@ -595,6 +597,7 @@ test('F221: PR novo devolvido pelo gate volta o item a execucao', () => {
     const d = c.dado('F5');
     assert.equal(d.etapa, 'execucao');
     assert.deepEqual(d.prs, [21, 23]);
+    assert.equal(d.espera ?? null, null, 'a fila não grava espera');
   } finally { limpar(c); }
 });
 
@@ -655,5 +658,23 @@ test('F221: a rodada que falha deixa o item em merge sem espera (a batida o vê 
     assert.equal(d.etapa, 'merge');
     assert.deepEqual(d.prs, [21, 24]);
     assert.equal(d.espera, undefined);
+  } finally { limpar(c); }
+});
+
+test('F221: o item devolvido numa rodada não volta a merge pela religação do outro PR dele na rodada seguinte', () => {
+  const c = montar();
+  try {
+    const r0 = c.painel('set', 'fila', 'F5', JSON.stringify({ titulo: 'item de dois PRs', etapa: 'merge', tema: 'editor', via: 'dona', prs: [23, 24], donoLocalId: LA, donoApelido: 'dona' }));
+    assert.equal(r0.exit, 0, r0.err);
+    // o gate da rodada 1 (só o 23) anota o 24 uma vez: ele vira o lote da rodada 2
+    const marca = join(c.raiz, 'anotou');
+    const anota = `test -f ${marca} || { touch ${marca}; node ${join(SCRIPTS, 'painel.mjs')} fila-de-merge 24 >/dev/null; }`;
+    const r = c.painel('fila-de-merge', '23', '--gate', `${anota}; test ! -f c.txt`);
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.ok(Array.isArray(s.rodadas) && s.rodadas.length === 2, `duas rodadas: ${r.out}`);
+    assert.deepEqual(s.devolvidos.map((x) => x.pr), [23]);
+    assert.deepEqual(s.mergeados.map((x) => x.pr), [24]);
+    assert.equal(c.dado('F5').etapa, 'execucao', 'o 23 voltou à dona: o item fica em execucao');
   } finally { limpar(c); }
 });

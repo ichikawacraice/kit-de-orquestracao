@@ -903,7 +903,8 @@ function branchDaDona(localId) {
 }
 // branches: Map pr → headRefName (null: só pelo `prs`). Fora da trava lê as branches das donas (git); dentro, relê e grava.
 // → { ligados: [{pr, item}], ambiguos: [pr] }
-function ligarPrsAosItens(branches, { projeto, oQue }) {
+// pular: itens que esta chamada já devolveu (a rodada seguinte não os põe de volta em `merge` por outro PR deles).
+function ligarPrsAosItens(branches, { projeto, oQue, pular = new Set() }) {
   if (!projeto || !branches.size) return { ligados: [], ambiguos: [] };
   const doProjeto = (d) => String(d?.projeto ?? '').toLowerCase() === projeto;
   const daDona = new Map();
@@ -911,14 +912,16 @@ function ligarPrsAosItens(branches, { projeto, oQue }) {
     for (const [, d] of itensVivos()) if (doProjeto(d) && d.donoLocalId && !daDona.has(d.donoLocalId)) daDona.set(d.donoLocalId, branchDaDona(d.donoLocalId));
   }
   return comTrava(() => {
-    const vivos = [...itensVivos()].filter(([, d]) => doProjeto(d));
+    const vivos = [...itensVivos()].filter(([F, d]) => doProjeto(d) && !pular.has(F));
     const prsDe = (d) => (Array.isArray(d.prs) ? d.prs : []);
     const pelaBranch = (d, b) => Boolean(b) && (d.branch === b || (Boolean(d.donoLocalId) && daDona.get(d.donoLocalId) === b));
     const porItem = new Map();
     const ambiguos = [];
     for (const [pr, b] of branches) {
       const pelosPrs = vivos.filter(([, d]) => prsDe(d).includes(pr));
-      const casados = pelosPrs.length ? pelosPrs : vivos.filter(([, d]) => pelaBranch(d, b));
+      // o campo `branch` do item é o sinal explícito: desempata o worktree da dona
+      const explicitos = b ? vivos.filter(([, d]) => d.branch === b) : [];
+      const casados = pelosPrs.length ? pelosPrs : explicitos.length === 1 ? explicitos : vivos.filter(([, d]) => pelaBranch(d, b));
       if (!pelosPrs.length && casados.length > 1) { ambiguos.push(pr); continue; }
       for (const [F] of casados) porItem.set(F, [...(porItem.get(F) ?? []), pr]);
     }
@@ -986,14 +989,16 @@ function comandoFilaDeMerge(args) {
   const projetoDaFila = projetoDoCwd(cwd).projeto;
   if (entrada.pendente) return { ...entrada, ...ligarComAviso(branches, { projeto: projetoDaFila, oQue: 'espera a vez' }) };
   const ligacoes = { ligados: [], ambiguos: [] };
+  const devolvidosAqui = new Set();
   const rodadas = [];
   let aReler = []; // o que o gh não leu nesta chamada: fica nos pendentes, fora dos lotes seguintes dela
   try {
     let lote = entrada.lote;
     while (lote.length) {
       // a cada rodada: o PR anotado como pendente (já ligado) passa de "espera a vez" a "o gate roda"
-      const lig = ligarComAviso(new Map(lote.map((p) => [p.pr, branches.get(p.pr) ?? null])), { projeto: projetoDaFila, oQue: 'o gate roda' });
-      ligacoes.ligados.push(...lig.ligados); ligacoes.ambiguos.push(...lig.ambiguos);
+      const lig = ligarComAviso(new Map(lote.map((p) => [p.pr, branches.get(p.pr) ?? null])), { projeto: projetoDaFila, oQue: 'o gate roda', pular: devolvidosAqui });
+      for (const l of lig.ligados) if (!ligacoes.ligados.some((x) => x.pr === l.pr && x.item === l.item)) ligacoes.ligados.push(l);
+      for (const n of lig.ambiguos) if (!ligacoes.ambiguos.includes(n)) ligacoes.ambiguos.push(n);
       let r;
       try {
         r = rodadaDaFila(lote, { seco, gate, preparar, cwd });
@@ -1013,6 +1018,7 @@ function comandoFilaDeMerge(args) {
         break;
       }
       const { adiados = [], releitura = [], ...resto } = r;
+      for (const dv of resto.devolvidos ?? []) for (const it of dv.itens ?? []) devolvidosAqui.add(it.item);
       rodadas.push({ prs: lote.filter((p) => !adiados.some((a) => a.pr === p.pr)).map((p) => p.pr), ...resto, ...(releitura.length ? { releitura: releitura.map((p) => p.pr) } : {}) });
       // ler a lista vazia e soltar a fila no mesmo trecho travado: o PR que chega depois disso acha a fila livre.
       // O PR que o gh não leu fica nos pendentes, fora do lote seguinte desta chamada: a próxima chamada o tenta de novo.
