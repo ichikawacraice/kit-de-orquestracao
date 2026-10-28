@@ -23,7 +23,7 @@
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio, `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); (F209) traz também `paraAplicar` (plugins do kit instalados depois que o app abriu) e `paraBaixar` (plugins do kit com versão publicada mais nova, por `git fetch` no clone do marketplace com cache de 30 min em batida/kit-publicado.json); exit 0 nos dois casos, 1 só em erro de leitura
-//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar
+//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), liga cada PR ao item vivo pelo `prs`, pelo `branch` do item ou pela branch do worktree da dona e o põe em `merge` (F221), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga) → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
@@ -106,13 +106,13 @@ const pool = MEU_CLI
 const DA_BATIDA = process.argv[2] === 'batida';
 const DO_REINICIO = process.argv[2] === 'pode-reiniciar';
 const DA_MIGRACAO = process.argv[2] === 'perguntas' && process.argv[3] === 'migrar';
-const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || DA_MIGRACAO || process.argv[2] === 'com';
+const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || DA_MIGRACAO || process.argv[2] === 'com' || process.argv[2] === 'fila-de-merge';
 const moduloSemDona = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
   ? await import(pathToFileURL(join(HOOKS_DIR, 'sem-dona.mjs')).href)
   : null;
 const semDona = moduloSemDona?.semDona ?? null;
 const donaACaminho = moduloSemDona?.donaACaminho;
-// A batida, o `pode-reiniciar`, a migração das perguntas e o `com add` também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
+// A batida, o `pode-reiniciar`, a migração das perguntas, o `com add` e a fila de merge (a branch da dona, F221) também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
 const regras = CONFERE_MEMBRO
   ? await import(pathToFileURL(POOL_COMUM).href).catch((e) => {
     if (DA_BATIDA || DO_REINICIO) throw e;
@@ -885,6 +885,70 @@ function juntarPedidos(lista, novos) {
   return r;
 }
 
+// F221: a dona que abre um PR novo sem pô-lo em `prs` deixava o item fora da fila (em `execucao`, com a sessão ociosa, que o
+// pane lê como parada). O PR se liga ao item vivo do projeto pelo `prs`, pelo campo `branch` do item ou pela branch do worktree
+// da sessão dona; o item ligado ganha o PR em `prs` e fica em `merge` até a fila mergear ou devolver. Sem `espera`: o item
+// em `merge` que a fila largou (erro da rodada, PR mergeado por fora) segue aparecendo na batida como merge parado.
+// A branch só liga quando aponta um item só (duas donas no mesmo cwd, ou a dona com outro item vivo, não ligam nenhum).
+function branchDaDona(localId) {
+  let cwd = null;
+  try { cwd = regras?.registroDaSessao(localId)?.cwd ?? null; } catch { return null; }
+  if (!cwd || !existsSync(cwd)) return null;
+  try {
+    const b = execFileSync('git', ['-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      encoding: 'utf8', timeout: Number(process.env.KIT_GIT_TIMEOUT_MS) || 10000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return b && b !== 'HEAD' ? b : null;
+  } catch { return null; }
+}
+// branches: Map pr → headRefName (null: só pelo `prs`). Fora da trava lê as branches das donas (git); dentro, relê e grava.
+// → { ligados: [{pr, item}], ambiguos: [pr] }
+// pular: itens que esta chamada já devolveu (a rodada seguinte não os põe de volta em `merge` por outro PR deles).
+function ligarPrsAosItens(branches, { projeto, oQue, pular = new Set() }) {
+  if (!projeto || !branches.size) return { ligados: [], ambiguos: [] };
+  const doProjeto = (d) => String(d?.projeto ?? '').toLowerCase() === projeto;
+  const daDona = new Map();
+  if ([...branches.values()].some(Boolean)) {
+    for (const [, d] of itensVivos()) if (doProjeto(d) && d.donoLocalId && !daDona.has(d.donoLocalId)) daDona.set(d.donoLocalId, branchDaDona(d.donoLocalId));
+  }
+  return comTrava(() => {
+    const vivos = [...itensVivos()].filter(([F, d]) => doProjeto(d) && !pular.has(F));
+    const prsDe = (d) => (Array.isArray(d.prs) ? d.prs : []);
+    const pelaBranch = (d, b) => Boolean(b) && (d.branch === b || (Boolean(d.donoLocalId) && daDona.get(d.donoLocalId) === b));
+    const porItem = new Map();
+    const ambiguos = [];
+    for (const [pr, b] of branches) {
+      const pelosPrs = vivos.filter(([, d]) => prsDe(d).includes(pr));
+      // o campo `branch` do item é o sinal explícito: desempata o worktree da dona
+      const explicitos = b ? vivos.filter(([, d]) => d.branch === b) : [];
+      const casados = pelosPrs.length ? pelosPrs : explicitos.length === 1 ? explicitos : vivos.filter(([, d]) => pelaBranch(d, b));
+      if (!pelosPrs.length && casados.length > 1) { ambiguos.push(pr); continue; }
+      for (const [F] of casados) porItem.set(F, [...(porItem.get(F) ?? []), pr]);
+    }
+    const ligados = [];
+    for (const [F, meus] of porItem) {
+      const d = vivos.find(([id]) => id === F)[1];
+      const prs = prsDe(d);
+      const lista = meus.map((n) => `PR ${n}`).join(', ');
+      try {
+        efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { prs: [...prs, ...meus.filter((n) => !prs.includes(n))], etapa: 'merge', agora: `${lista} na fila de merge: ${oQue}` } }, undefined, new Map()));
+        ligados.push(...meus.map((pr) => ({ pr, item: F })));
+      } catch (e) { process.stderr.write(`painel.mjs: aviso: fila-de-merge não ligou ${lista} ao ${F} (${String(e?.message || e).split('\n')[0]})\n`); }
+    }
+    return { ligados, ambiguos };
+  });
+}
+const ligarComAviso = (branches, opcoes) => {
+  try {
+    const r = ligarPrsAosItens(branches, opcoes);
+    if (r.ambiguos.length) process.stderr.write(`painel.mjs: aviso: fila-de-merge: a branch de ${r.ambiguos.map((n) => `#${n}`).join(', ')} aponta mais de um item; nenhum foi ligado (grave o PR em prs do item)\n`);
+    return r;
+  } catch (e) {
+    process.stderr.write(`painel.mjs: aviso: fila-de-merge não ligou os PRs aos itens (${String(e?.message || e).split('\n')[0]})\n`);
+    return { ligados: [], ambiguos: [] };
+  }
+};
+
 function comandoFilaDeMerge(args) {
   const seco = flag(args, '--seco', false);
   const gate = flag(args, '--gate') ?? GATE_PADRAO;
@@ -902,8 +966,10 @@ function comandoFilaDeMerge(args) {
   // F220: o PR que já está anotado na fila (o relance da fila órfã repete a lista inteira) e fechou no meio tempo não
   // derruba a chamada: a rodada o tira da fila, como faz com o pendente que fechou.
   const naFila = new Set(seco ? [] : (() => { const e = lerEstado(); return [...e.emVoo, ...e.pendentes].map((p) => p?.pr); })());
+  const branches = new Map();
   for (const { pr } of pedidos) {
     const v = dadosDoPr(pr, cwd);
+    branches.set(pr, typeof v.headRefName === 'string' ? v.headRefName : null);
     if (v.state !== 'OPEN' && !naFila.has(pr)) throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
     if (deFork(v)) throw new Error(`fila-de-merge: ${MOTIVO_DO_FORK(pr)}`);
   }
@@ -920,12 +986,19 @@ function comandoFilaDeMerge(args) {
     gravarJson(arquivo, { ocupada: { pid: process.pid, desde: new Date().toISOString(), gate, ...(preparar ? { preparar } : {}) }, pendentes: [], emVoo: lote });
     return { lote };
   });
-  if (entrada.pendente) return entrada;
+  const projetoDaFila = projetoDoCwd(cwd).projeto;
+  if (entrada.pendente) return { ...entrada, ...ligarComAviso(branches, { projeto: projetoDaFila, oQue: 'espera a vez' }) };
+  const ligacoes = { ligados: [], ambiguos: [] };
+  const devolvidosAqui = new Set();
   const rodadas = [];
   let aReler = []; // o que o gh não leu nesta chamada: fica nos pendentes, fora dos lotes seguintes dela
   try {
     let lote = entrada.lote;
     while (lote.length) {
+      // a cada rodada: o PR anotado como pendente (já ligado) passa de "espera a vez" a "o gate roda"
+      const lig = ligarComAviso(new Map(lote.map((p) => [p.pr, branches.get(p.pr) ?? null])), { projeto: projetoDaFila, oQue: 'o gate roda', pular: devolvidosAqui });
+      for (const l of lig.ligados) if (!ligacoes.ligados.some((x) => x.pr === l.pr && x.item === l.item)) ligacoes.ligados.push(l);
+      for (const n of lig.ambiguos) if (!ligacoes.ambiguos.includes(n)) ligacoes.ambiguos.push(n);
       let r;
       try {
         r = rodadaDaFila(lote, { seco, gate, preparar, cwd });
@@ -945,6 +1018,7 @@ function comandoFilaDeMerge(args) {
         break;
       }
       const { adiados = [], releitura = [], ...resto } = r;
+      for (const dv of resto.devolvidos ?? []) for (const it of dv.itens ?? []) devolvidosAqui.add(it.item);
       rodadas.push({ prs: lote.filter((p) => !adiados.some((a) => a.pr === p.pr)).map((p) => p.pr), ...resto, ...(releitura.length ? { releitura: releitura.map((p) => p.pr) } : {}) });
       // ler a lista vazia e soltar a fila no mesmo trecho travado: o PR que chega depois disso acha a fila livre.
       // O PR que o gh não leu fica nos pendentes, fora do lote seguinte desta chamada: a próxima chamada o tenta de novo.
@@ -960,7 +1034,8 @@ function comandoFilaDeMerge(args) {
   } finally {
     comTrava(() => { const e = lerEstado(); if (e.ocupada?.pid === process.pid) gravarJson(arquivo, { ...e, ocupada: null, emVoo: [] }); });
   }
-  if (rodadas.length === 1) { const { prs, ...r } = rodadas[0]; return r; }
+  const lig = ligacoes.ligados.length || ligacoes.ambiguos.length ? ligacoes : {};
+  if (rodadas.length === 1) { const { prs, ...r } = rodadas[0]; return { ...r, ...lig }; }
   const suspeitas = rodadas.map((r) => r.suspeitaDeInstavel).filter(Boolean);
   const erros = rodadas.map((r) => r.erro).filter(Boolean);
   const releitura = rodadas.flatMap((r) => r.releitura ?? []);
@@ -974,6 +1049,7 @@ function comandoFilaDeMerge(args) {
     ...(erros.length ? { erros } : {}),
     ...(releitura.length ? { releitura } : {}),
     rodadas,
+    ...lig,
   };
 }
 

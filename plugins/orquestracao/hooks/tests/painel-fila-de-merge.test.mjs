@@ -544,3 +544,137 @@ test('PR de fork é recusado: nem gate nem merge, e o pedido explica', () => {
     assert.deepEqual(c.merges(), [21]);
   } finally { limpar(c); }
 });
+
+// F221: a dona abriu PR novo e não o pôs em `prs`. A fila liga o PR ao item pela branch do worktree da sessão dona, põe o item
+// em `merge` enquanto o gate roda, e o fecha ou devolve como os outros.
+function donaNaBranch(c, branch) {
+  const wt = join(c.raiz, 'wt-dona');
+  git(c.clone, 'worktree', 'add', '-q', wt, branch);
+  const app = join(c.raiz, 'app');
+  mkdirSync(app, { recursive: true });
+  writeFileSync(join(app, `${LA}.json`), JSON.stringify({ sessionId: LA, title: 'F5 · item', cwd: wt, originCwd: c.clone, isArchived: false }));
+  c.envExtra.POOL_APP_SESSOES_DIR = app;
+}
+function itemComPrVelho(c) {
+  const est = JSON.parse(readFileSync(join(c.raiz, 'estado.json'), 'utf8'));
+  est.prs['21'].state = 'MERGED';
+  writeFileSync(join(c.raiz, 'estado.json'), JSON.stringify(est));
+  const r = c.painel('set', 'fila', 'F5', JSON.stringify({ titulo: 'item da dona', etapa: 'execucao', tema: 'editor', via: 'dona', prs: [21], donoLocalId: LA, donoApelido: 'dona' }));
+  assert.equal(r.exit, 0, r.err);
+}
+const GATE_COPIA = (c) => `cp ${join(c.raiz, 'painel', 'fila', 'F5.json')} ${join(c.raiz, 'F5-no-gate.json')}`;
+
+test('F221: PR novo da dona fora de `prs` entra no item, que fica em merge durante o gate e fecha no merge', () => {
+  const c = montar();
+  try {
+    itemComPrVelho(c); donaNaBranch(c, 'pr24');
+    const r = c.painel('fila-de-merge', '24', '--gate', GATE_COPIA(c));
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24]);
+    assert.deepEqual(s.mergeados[0].itens.map((i) => [i.item, i.fechado]), [['F5', true]], 'o PR novo se liga ao item');
+    const noGate = JSON.parse(readFileSync(join(c.raiz, 'F5-no-gate.json'), 'utf8')).data;
+    assert.ok(noGate, 'o gate copiou o item');
+    assert.equal(noGate.etapa, 'merge', 'durante o gate o item está em merge');
+    assert.deepEqual(noGate.prs, [21, 24]);
+    assert.match(noGate.agora, /PR 24 na fila de merge: o gate roda/);
+    assert.equal(noGate.espera, undefined, 'sem espera: a batida segue vendo o merge parado');
+    assert.deepEqual(s.ligados, [{ pr: 24, item: 'F5' }]);
+    const d = c.dado('F5');
+    assert.equal(d.etapa, 'feito');
+    assert.equal(d.espera, undefined);
+  } finally { limpar(c); }
+});
+
+test('F221: PR novo devolvido pelo gate volta o item a execucao', () => {
+  const c = montar();
+  try {
+    itemComPrVelho(c); donaNaBranch(c, 'pr23');
+    const r = c.painel('fila-de-merge', '23', '--gate', 'test ! -f c.txt');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.devolvidos.map((x) => [x.pr, x.itens.map((i) => i.item)]), [[23, ['F5']]]);
+    const d = c.dado('F5');
+    assert.equal(d.etapa, 'execucao');
+    assert.deepEqual(d.prs, [21, 23]);
+    assert.equal(d.espera ?? null, null, 'a fila não grava espera');
+  } finally { limpar(c); }
+});
+
+test('F221: PR de outra branch não se liga ao item da dona; o campo `branch` do item também liga', () => {
+  const c = montar();
+  try {
+    itemComPrVelho(c); donaNaBranch(c, 'pr25');
+    const r = c.painel('fila-de-merge', '24', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.deepEqual(JSON.parse(r.out).mergeados[0].itens, [], 'a branch da dona é outra');
+    assert.deepEqual(c.dado('F5').prs, [21]);
+    assert.equal(c.painel('update', 'fila', 'F5', JSON.stringify({ branch: 'pr26' })).exit, 0);
+    const r2 = c.painel('fila-de-merge', '26', '--gate', 'true');
+    assert.equal(r2.exit, 0, r2.err + r2.out);
+    assert.deepEqual(JSON.parse(r2.out).mergeados[0].itens.map((i) => i.item), ['F5']);
+  } finally { limpar(c); }
+});
+
+test('F221: com a fila ocupada, o PR anotado já liga o item e o põe em merge', () => {
+  const c = montar();
+  try {
+    itemComPrVelho(c); donaNaBranch(c, 'pr24');
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: process.pid, desde: new Date().toISOString() }, pendentes: [] }));
+    const r = c.painel('fila-de-merge', '24');
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.equal(JSON.parse(r.out).pendente, true);
+    const d = c.dado('F5');
+    assert.equal(d.etapa, 'merge');
+    assert.deepEqual(d.prs, [21, 24]);
+    assert.match(d.agora, /espera a vez/);
+  } finally { limpar(c); }
+});
+
+test('F221: a branch que aponta dois itens (a dona com outro item vivo) não liga nenhum', () => {
+  const c = montar();
+  try {
+    itemComPrVelho(c); donaNaBranch(c, 'pr24');
+    assert.equal(c.painel('set', 'fila', 'F6', JSON.stringify({ titulo: 'outro item da dona', etapa: 'planejamento', tema: 'editor', via: 'dona', donoLocalId: LA, donoApelido: 'dona' })).exit, 0);
+    const r = c.painel('fila-de-merge', '24', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados[0].itens, []);
+    assert.deepEqual(s.ambiguos, [24]);
+    assert.match(r.err, /aponta mais de um item/);
+    assert.equal(c.dado('F6').etapa, 'planejamento');
+    assert.equal(c.dado('F5').etapa, 'execucao');
+  } finally { limpar(c); }
+});
+
+test('F221: a rodada que falha deixa o item em merge sem espera (a batida o vê parado)', () => {
+  const c = montar();
+  try {
+    itemComPrVelho(c); donaNaBranch(c, 'pr24');
+    const r = c.painel('fila-de-merge', '24', '--gate', 'true', '--preparar', 'false');
+    assert.notEqual(r.exit, 0, 'o preparo falha');
+    const d = c.dado('F5');
+    assert.equal(d.etapa, 'merge');
+    assert.deepEqual(d.prs, [21, 24]);
+    assert.equal(d.espera, undefined);
+  } finally { limpar(c); }
+});
+
+test('F221: o item devolvido numa rodada não volta a merge pela religação do outro PR dele na rodada seguinte', () => {
+  const c = montar();
+  try {
+    const r0 = c.painel('set', 'fila', 'F5', JSON.stringify({ titulo: 'item de dois PRs', etapa: 'merge', tema: 'editor', via: 'dona', prs: [23, 24], donoLocalId: LA, donoApelido: 'dona' }));
+    assert.equal(r0.exit, 0, r0.err);
+    // o gate da rodada 1 (só o 23) anota o 24 uma vez: ele vira o lote da rodada 2
+    const marca = join(c.raiz, 'anotou');
+    const anota = `test -f ${marca} || { touch ${marca}; node ${join(SCRIPTS, 'painel.mjs')} fila-de-merge 24 >/dev/null; }`;
+    const r = c.painel('fila-de-merge', '23', '--gate', `${anota}; test ! -f c.txt`);
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.ok(Array.isArray(s.rodadas) && s.rodadas.length === 2, `duas rodadas: ${r.out}`);
+    assert.deepEqual(s.devolvidos.map((x) => x.pr), [23]);
+    assert.deepEqual(s.mergeados.map((x) => x.pr), [24]);
+    assert.equal(c.dado('F5').etapa, 'execucao', 'o 23 voltou à dona: o item fica em execucao');
+  } finally { limpar(c); }
+});

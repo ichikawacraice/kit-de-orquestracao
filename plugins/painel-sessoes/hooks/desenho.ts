@@ -649,9 +649,15 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
 
   const pessoas = pessoasDoItem(item)
   const mostradas = pessoas.slice(0, MAX_LINHAS_QUEM)
+  // F221: em merge, ou esperando o gate, a sessão ociosa espera a fila de propósito; "parada há X" a leria como parada
+  const esperaOGate = item.etapa === 'merge' || item.espera?.motivo === 'gate'
+  const situacaoDe = (localId: string): string | undefined => {
+    const s = opcoes.situacao(localId)
+    return esperaOGate && s?.startsWith('parada') ? 'esperando o gate' : s
+  }
   for (const p of mostradas) {
     y += 8
-    const linha = linhaQuem(y, p, opcoes.situacao(p.localId), W)
+    const linha = linhaQuem(y, p, situacaoDe(p.localId), W)
     partes.push(linha.svg)
     alt.push(linha.alt)
     y += 22
