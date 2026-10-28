@@ -3,7 +3,7 @@ import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { semDona } from './sem-dona'
 import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
@@ -1420,14 +1420,19 @@ async function tiqueDoCache($: EngineInterface): Promise<void> {
 
 /**
  * O botão `↺ Limpar` (só na orquestradora): grava o ok que a T7 lê (`limpeza/<local_…>.json`, o prompt do mod chega com origem
- * `plugin`, nunca `human`) e manda à própria sessão o prompt de limpar. Sem o arquivo, nada é enviado. O `Limpando…` aparece no
- * mesmo render e segue até a leitura ver o contexto pequeno (ou 10 min); falha volta o botão na hora, com toast e aviso.
+ * `plugin`, nunca `human`) e, com o cache quente, manda à própria sessão o prompt de limpar (ela grava o handoff barato). Com o
+ * cache frio e o turno parado (F213), limpa direto pelo `clear_session`, sem turno do modelo: um turno ali reescreveria a
+ * conversa inteira sem cache só para gravar o handoff. Se a limpeza direta é recusada ou a sessão não recomeça em
+ * `ESPERA_DA_LIMPEZA_DIRETA_MS`, avisa, regrava o ok (a T7 o gasta ao liberar) e cai no pedido à sessão. Sem o arquivo, nada é
+ * enviado. O `Limpando…` aparece no mesmo render e segue até a leitura ver o contexto pequeno (ou 10 min); falha volta o botão
+ * na hora, com toast e aviso.
  */
-async function limparPelaBarra($: EngineInterface): Promise<void> {
+async function limparPelaBarra($: EngineInterface, trabalhando: boolean): Promise<void> {
   if ((await read($, limpando)) !== null) return
   const desde = await $.clock.now()
-  const tokensNoClique = (await read($, barra)).tokens
-  await update($, limpando, () => ({ desde, tokens: tokensNoClique }))
+  const b = await read($, barra)
+  const direto = cacheFrio(b.cache.segundos, trabalhando || trabalhandoNaBarra)
+  await update($, limpando, () => ({ desde, tokens: b.tokens }))
   const falhou = async (motivo: string) => {
     await update($, limpando, () => null)
     $.ui.toast(motivo)
@@ -1438,23 +1443,50 @@ async function limparPelaBarra($: EngineInterface): Promise<void> {
     if (!host) return await falhou('Não consegui mandar a limpeza (sessão não identificada).')
     const pasta = `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/limpeza`
     const arquivo = `${pasta}/${host}.json`
-    const conteudo = `${JSON.stringify({ em: new Date(desde).toISOString(), por: 'barra' })}\n`
-    try {
-      await $.fs.write(arquivo, conteudo)
-    } catch (erroDaEscrita) {
-      // A pasta pode não existir ainda: cria e tenta uma vez mais; se continuar falhando, o motivo é o da escrita.
+    const gravarOk = async () => {
+      const conteudo = `${JSON.stringify({ em: new Date(await $.clock.now()).toISOString(), por: 'barra' })}\n`
       try {
-        await $.process.run(['mkdir', '-p', pasta], { timeoutMs: SCRIPT_TIMEOUT_MS })
         await $.fs.write(arquivo, conteudo)
-      } catch {
-        throw erroDaEscrita
+      } catch (erroDaEscrita) {
+        // A pasta pode não existir ainda: cria e tenta uma vez mais; se continuar falhando, o motivo é o da escrita.
+        try {
+          await $.process.run(['mkdir', '-p', pasta], { timeoutMs: SCRIPT_TIMEOUT_MS })
+          await $.fs.write(arquivo, conteudo)
+        } catch {
+          throw erroDaEscrita
+        }
       }
+    }
+    await gravarOk()
+    if (direto) {
+      const motivo = await limparDireto($)
+      // `null`: o app aceitou e o processo morreu na limpeza antes do prazo (nada mais roda aqui).
+      if (motivo === null) return
+      const aviso = `A limpeza direta não pegou (${motivo}); pedi à sessão que se limpe.`
+      $.ui.toast(aviso)
+      await avisar($, aviso).catch(() => {})
+      await gravarOk()
     }
     const r = await $.prompt.submit({ text: PROMPT_DE_LIMPAR })
     if (r.drop !== undefined) await falhou(`Não consegui mandar a limpeza (${r.drop || 'o prompt foi recusado'}).`)
   } catch (err) {
     await falhou(`Não consegui mandar a limpeza (${mensagem(err)}).`)
   }
+}
+
+/** Pede ao app a limpeza da própria sessão e espera ela recomeçar; devolve o motivo quando não pegou (recusa, erro ou prazo). */
+async function limparDireto($: EngineInterface): Promise<string | null> {
+  try {
+    const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__clear_session', session_id: 'self' })
+    if (r.deny !== undefined) return r.deny || 'recusada'
+    if (r.isError) return r.text || 'o app recusou'
+  } catch (err) {
+    return mensagem(err)
+  }
+  // A limpeza mata o processo do CLI (F45): se este mod ainda roda depois do prazo, a sessão não recomeçou.
+  await $.clock.sleep(ESPERA_DA_LIMPEZA_DIRETA_MS)
+
+  return 'a sessão não recomeçou'
 }
 
 
@@ -1995,7 +2027,7 @@ function registrarBarra(on: On): void {
         abrirPainel: () => void abrirPainel($),
         alternarPainel: () => void alternarPainel($),
         alternarModo: () => void alternarModo($),
-        limpar: () => void limparPelaBarra($),
+        limpar: () => void limparPelaBarra($, e.props.isWorking),
       },
     )
   })

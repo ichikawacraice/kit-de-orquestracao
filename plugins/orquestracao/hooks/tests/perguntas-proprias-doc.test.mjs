@@ -37,3 +37,18 @@ test('a seção "Orçamento de contexto" da skill descreve o botão de limpar e 
   assert.doesNotMatch(secao, /abre a janela \(`AskUserQuestion`\)/, 'a skill ainda manda abrir a janela');
   assert.doesNotMatch(secao, /grava o estado, abre a pergunta/, 'a skill ainda manda abrir a pergunta');
 });
+
+// F213: o rótulo do cache frio e o aviso da queda que a skill cita são os do mod (doc × código).
+test('a skill descreve a limpeza direta do cache frio com o rótulo e o aviso que o mod mostra', () => {
+  const skill = readFileSync(join(PLUGIN, 'skills', 'orquestradora', 'SKILL.md'), 'utf8');
+  const secao = skill.slice(skill.indexOf('## Orçamento de contexto'));
+  assert.ok(secao.length > 100, 'seção ausente');
+  const barra = readFileSync(join(PLUGIN, '..', 'painel-sessoes', 'hooks', 'barra.tsx'), 'utf8');
+  const rotulo = barra.match(/direto \? '([^']+)'/)?.[1];
+  assert.ok(rotulo, 'o mod não traz o rótulo do cache frio');
+  assert.ok(secao.includes(`↺ ${rotulo}`), `a skill não cita ↺ ${rotulo}`);
+  const register = readFileSync(join(PLUGIN, '..', 'painel-sessoes', 'hooks', 'register.tsx'), 'utf8');
+  const aviso = register.match(/`(A limpeza direta não pegou) \(\$\{motivo\}\)(; pedi à sessão que se limpe\.)`/);
+  assert.ok(aviso, 'o mod não traz o aviso da queda');
+  assert.ok(secao.includes(`${aviso[1]} (…)${aviso[2]}`), 'a skill não traz o aviso da queda');
+});
