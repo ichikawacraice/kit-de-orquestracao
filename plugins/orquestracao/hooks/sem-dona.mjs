@@ -41,3 +41,17 @@ export function tetoDeDonas(env = process.env) {
 
 // Item com alguém trabalhando nele (a dona ou quem está no `com`), numa etapa que conta para o teto.
 export const donaTrabalhando = (d) => ETAPAS_DE_TRABALHO.includes(d?.etapa) && temGente(d);
+
+// Prazo do cartão de sessão dona que espera o clique (o mesmo da batida e do pane): depois dele, a orquestradora repropõe.
+export const CARTAO_VALIDADE_MS = 12 * 3_600_000;
+
+// A dona do item já está a caminho (F218): há cartão de sessão dona do item esperando o clique (`cartoes`, proposto há menos
+// de 12 h) ou sessão viva `F<n> · …` (aberta e ainda sem se gravar dona). Pedir de novo abriria a segunda dona do item.
+// `cartoes`: o `data` dos documentos da coleção; `sessoes`: as linhas do `list_sessions`.
+export function donaACaminho(F, { cartoes = [], sessoes = [], agoraMs }) {
+  const cartao = cartoes.some((c) => {
+    const t = Date.parse(c?.propostoEm);
+    return Array.isArray(c?.itens) && c.itens.includes(F) && !Number.isNaN(t) && agoraMs - t < CARTAO_VALIDADE_MS;
+  });
+  return cartao || sessoes.some((s) => s?.isArchived !== true && typeof s?.title === 'string' && s.title.startsWith(`${F} · `));
+}

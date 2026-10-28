@@ -195,4 +195,24 @@ test('(xv) resumo do ausente pendente + item sem dona + batida parada na mesma r
   const r = rodar([GRAVA]);
   assert.match(r.reason, /A batida não roda/); assert.match(r.reason, /resumo/); assert.match(r.reason, /F7 sem dona/);
 });
+test('(dona-5) F218: com cartão de sessão dona esperando o clique ou sessão viva `F<n> · …` do item, não cobra outra dona', () => {
+  semDona('F7');
+  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'prova: sem cartão nem sessão, cobra');
+  const cartao = (F, min) => {
+    mkdirSync(join(base, 'painel', 'cartoes'), { recursive: true });
+    writeFileSync(join(base, 'painel', 'cartoes', 'task_x.json'), JSON.stringify({ id: 'task_x', version: 1, data: { projeto: 'proj-a', apelido: 'dona', papel: 'dona', itens: [F], orquestradoraId: 'local_ORQ', propostoEm: minAtras(min) } }));
+  };
+  cartao('F7', 32);
+  assert.equal(rodar([LIST, GRAVA]), null, 'cartão de 32 min do F7: o pedido já saiu');
+  cartao('F8', 32);
+  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'cartão de outro item não vale');
+  cartao('F7', 13 * 60);
+  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'cartão de 13 h venceu');
+  rmSync(join(base, 'painel', 'cartoes'), { recursive: true });
+  const vivas = (...l) => writeFileSync(join(base, 'orq', 'batida', 'sessoes.json'), JSON.stringify(l));
+  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: false });
+  assert.equal(rodar([LIST, GRAVA]), null, 'a sessão do F7 abriu e ainda não se gravou dona');
+  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: true });
+  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'sessão arquivada não vale');
+});
 }

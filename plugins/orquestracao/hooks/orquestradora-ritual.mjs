@@ -6,12 +6,12 @@
 // (skills/orquestradora/scripts/ausencia.mjs, seção `resumo-da-ausencia`).
 // O teto: `KIT_TETO_DE_DONAS` (padrão 4), 3 com a máquina cheia; acima dele o item espera sem cobrança.
 // A sessão é orquestradora quando existe ~/.claude/orquestracao/ativas/<session_id>.
-import { readFileSync, existsSync, appendFileSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, appendFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BASE, modoAusente } from './hooks-crewai-comum.mjs';
-import { semDona, tetoDeDonas, donaTrabalhando } from './sem-dona.mjs';
+import { semDona, donaACaminho, tetoDeDonas, donaTrabalhando } from './sem-dona.mjs';
 import { filaDir, maquinaCheia } from './pool-comum.mjs';
 import { pendente, projetoDoRepo } from '../skills/orquestradora/scripts/ausencia.mjs';
 
@@ -25,10 +25,29 @@ const BATIDA_VELHA_MIN = (() => { const n = Number(process.env.BATIDA_VELHA_MIN)
 
 const LOG = join(homedir(), '.claude', 'orquestracao', 'ritual-hook.log');
 
-// Itens do projeto da orquestradora sem dona há ESPERA_MIN ou mais.
+// Os cartões de sessão dona esperando o clique (coleção `cartoes`, ao lado da fila): o `data` de cada um.
+function cartoes() {
+  const dir = join(dirname(filaDir()), 'cartoes');
+  let nomes; try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return []; }
+  return nomes.flatMap((n) => { try { return [JSON.parse(readFileSync(join(dir, n), 'utf8'))?.data]; } catch { return []; } });
+}
+
+// As sessões vivas que a batida leu na última rodada (`batida/sessoes.json`); velha como a batida parada, não vale.
+function sessoesDaBatida() {
+  const arq = join(BASE, 'batida', 'sessoes.json');
+  try {
+    if (Date.now() - statSync(arq).mtimeMs >= BATIDA_VELHA_MIN * 60_000) return [];
+    const l = JSON.parse(readFileSync(arq, 'utf8'));
+    return Array.isArray(l) ? l : [];
+  } catch { return []; }
+}
+
+// Itens do projeto da orquestradora sem dona há ESPERA_MIN ou mais, menos os que já têm a dona a caminho (cartão esperando o
+// clique ou sessão `F<n> · …` viva): cobrar de novo abre a segunda dona do item (F218).
 function itensSemDona(nomeProjeto) {
   const dir = filaDir();
   if (!nomeProjeto || !existsSync(dir)) return [];
+  let aCaminho = null; // lidos só quando há item sem dona
   const itens = [];
   for (const nome of readdirSync(dir)) {
     if (!nome.endsWith('.json')) continue;
@@ -36,7 +55,10 @@ function itensSemDona(nomeProjeto) {
       const doc = JSON.parse(readFileSync(join(dir, nome), 'utf8'));
       if (String(doc?.data?.projeto ?? '').toLowerCase() !== nomeProjeto) continue;
       const e = semDona(doc.data, Date.now());
-      if (e && e.minutos >= ESPERA_MIN) itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), data: doc.data, ...e });
+      if (!e || e.minutos < ESPERA_MIN) continue;
+      const F = doc.id ?? nome.replace(/\.json$/, '');
+      aCaminho ??= { cartoes: cartoes(), sessoes: sessoesDaBatida(), agoraMs: Date.now() };
+      if (!donaACaminho(F, aCaminho)) itens.push({ id: F, data: doc.data, ...e });
     } catch { /* item ilegível: ignora */ }
   }
   return itens;

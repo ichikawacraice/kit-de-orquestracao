@@ -254,3 +254,14 @@ test('batida: item sem dona com espera, trava ou em merge não vira vaga', () =>
   const r = batida(sessoes(sessao(30, '🎛 orquestradora — kit')));
   assert.deepEqual(r.json().projetos.kit.vagas, [{ papel: 'dona', item: 'F4' }], 'prova: o sem dona comum vira vaga');
 });
+
+test('batida F218: item sem dona com cartão de sessão dona esperando o clique ou sessão viva `F<n> · …` não vira vaga', () => {
+  const sem = { ...semGente, etapa: 'planejamento', atualizadoEm: iso(T - 40 * MIN), historico: [{ em: iso(T - 40 * MIN), etapa: 'planejamento', dono: null }] };
+  item('F1', sem); item('F2', sem); item('F3', sem);
+  mkdirSync(join(pastaPainel(), 'cartoes'), { recursive: true });
+  writeFileSync(join(pastaPainel(), 'cartoes', 'task_a.json'), JSON.stringify({ id: 'task_a', version: 1, data: { projeto: 'kit', apelido: 'dona', papel: 'dona', itens: ['F1'], orquestradoraId: lid(30), propostoEm: iso(T - 30 * MIN) } }));
+  const r = batida(sessoes(sessao(30, '🎛 orquestradora — kit'), sessao(31, 'F2 · item f2', { createdAt: iso(T - 2 * MIN) })), T, ['--seco']);
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().projetos.kit.vagas, [{ papel: 'dona', item: 'F3' }], 'prova: o F3, sem cartão nem sessão, vira vaga; F1 e F2 não');
+  assert.match(msgs(r, 'relatorio')[0]?.texto ?? '', /sem dona: F3\./);
+});

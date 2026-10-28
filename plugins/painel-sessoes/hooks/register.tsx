@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
-import { semDona } from './sem-dona'
+import { donaACaminho, semDona } from './sem-dona'
 import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
 import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
@@ -719,11 +719,12 @@ async function pedirSessoes($: EngineInterface, ids: string[], chave: string, su
   const agora = await $.clock.now()
   const lote = chave === 'lote'
   const vivas = l.semLista ? null : (l.sessoes ?? []).map(v => v.sessionId)
+  const aCaminho = (F: string) => donaACaminho(F, { cartoes: l.cartoes ?? [], sessoes: l.sessoes ?? [], agoraMs: agora })
   const grupos = new Map<string, { orq: string; alvos: Array<{ item: LinhaItem; papel: PapelPedido }> }>()
   for (const item of l.itens.filter(i => ids.includes(i.id))) {
     const papel = papelQueFalta(item)
     const e = atual[item.id]
-    if (!papel || !item.projeto || (e && (e.estado === 'enviando' || (lote ? vivoDoEstado(e, agora) : e.estado === 'pedido')))) continue
+    if (!papel || !item.projeto || aCaminho(item.id) || (e && (e.estado === 'enviando' || (lote ? vivoDoEstado(e, agora) : e.estado === 'pedido')))) continue
     const destino = orquestradoraDoProjeto(item.projeto, l.orquestradoras ?? [], vivas)
     if (!('id' in destino)) continue
     const g = grupos.get(item.projeto) ?? { orq: destino.id, alvos: [] }
@@ -2170,9 +2171,10 @@ export const register: Register = on => {
 
       return e && vivoDoEstado(e, agoraDoPedido) ? e : undefined
     }
+    // F218: o item com cartão de sessão dona esperando o clique, ou com a sessão `F<n> · …` viva, já pediu: sem segundo pedido.
     const pedidoDe = (i: LinhaItem) => {
       const papel = papelQueFalta(i)
-      if (!papel || !i.projeto) return undefined
+      if (!papel || !i.projeto || donaACaminho(i.id, { cartoes: lidaAgora.cartoes ?? [], sessoes: lidaAgora.sessoes ?? [], agoraMs: agoraDoPedido })) return undefined
 
       return { papel, projeto: i.projeto, destino: destinoDo(i.projeto), estado: estadoVivo(i.id) }
     }

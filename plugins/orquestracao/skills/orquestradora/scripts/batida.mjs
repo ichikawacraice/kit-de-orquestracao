@@ -42,7 +42,7 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs }) {
   return apagar;
 }
 
-export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
+export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
   const mensagens = []; const soltar = [];
@@ -96,9 +96,10 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, ult
     }
     delete cutucadas[F];
 
-    // O item sem dona há ESPERA_MIN vira vaga de dona no relatório da orquestradora.
+    // O item sem dona há ESPERA_MIN vira vaga de dona no relatório da orquestradora, menos o que já tem a dona a caminho
+    // (cartão esperando o clique ou sessão `F<n> · …` viva): a vaga repetida faz a orquestradora propor a segunda dona (F218).
     const r = semDona(d, agoraMs);
-    if (r && r.minutos >= ESPERA_MIN) proj.vagas.push({ papel: 'dona', item: F });
+    if (r && r.minutos >= ESPERA_MIN && !donaACaminho(F, { cartoes, sessoes: linhas, agoraMs })) proj.vagas.push({ papel: 'dona', item: F });
   }
   for (const F of Object.keys(cutucadas)) if (!vistos.has(F)) delete cutucadas[F];
 

@@ -42,3 +42,18 @@ export const CASOS = [
     data: { etapa: 'execucao', com: [], historico: [{ em: 'ontem', etapa: 'execucao' }] },
     esperado: null },
 ];
+
+// Tabela da regra "dona a caminho" (F218): cartão de sessão dona esperando o clique ou sessão viva `F<n> · …` do item.
+const cartao = (itens, minAtras) => ({ itens, propostoEm: min(minAtras) });
+const viva = (title, isArchived = false) => ({ title, isArchived });
+export const CASOS_A_CAMINHO = [
+  { nome: 'nada: não está a caminho', F: 'F7', cartoes: [], sessoes: [], esperado: false },
+  { nome: 'cartão do item proposto há 10 min', F: 'F7', cartoes: [cartao(['F7'], 10)], sessoes: [], esperado: true },
+  { nome: 'cartão de outro item não conta', F: 'F7', cartoes: [cartao(['F8'], 10)], sessoes: [], esperado: false },
+  { nome: 'cartão de mais de 12 h venceu', F: 'F7', cartoes: [cartao(['F7'], 13 * 60)], sessoes: [], esperado: false },
+  { nome: 'cartão sem data legível não conta', F: 'F7', cartoes: [{ itens: ['F7'], propostoEm: 'ontem' }], sessoes: [], esperado: false },
+  { nome: 'sessão viva do item, ainda sem se gravar', F: 'F7', cartoes: [], sessoes: [viva('F7 · editor da loja')], esperado: true },
+  { nome: 'sessão arquivada do item não conta', F: 'F7', cartoes: [], sessoes: [viva('F7 · editor da loja', true)], esperado: false },
+  { nome: 'F70 não é F7', F: 'F7', cartoes: [cartao(['F70'], 10)], sessoes: [viva('F70 · outro')], esperado: false },
+  { nome: 'entradas ruins não derrubam', F: 'F7', cartoes: [null, { itens: 'F7' }], sessoes: [null, { title: 7 }], esperado: false },
+];

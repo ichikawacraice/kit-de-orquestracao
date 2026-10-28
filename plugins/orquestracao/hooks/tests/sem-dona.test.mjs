@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { semDona, donaTrabalhando, tetoDeDonas, ETAPAS_DE_TRABALHO } from '../sem-dona.mjs';
-import { CASOS, AGORA } from './sem-dona.casos.mjs';
+import { semDona, donaACaminho, donaTrabalhando, tetoDeDonas, ETAPAS_DE_TRABALHO } from '../sem-dona.mjs';
+import { CASOS, CASOS_A_CAMINHO, AGORA } from './sem-dona.casos.mjs';
 
 test('semDona responde à tabela inteira', () => {
   assert.ok(CASOS.length > 0, 'a tabela de casos não pode estar vazia');
@@ -32,4 +32,9 @@ test('tetoDeDonas: KIT_TETO_DE_DONAS inteiro positivo, senão 4', () => {
   assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: '2' }), 2);
   assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: '0' }), 4);
   assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: 'x' }), 4);
+});
+
+test('donaACaminho responde à tabela inteira (F218)', () => {
+  assert.ok(CASOS_A_CAMINHO.some((c) => c.esperado) && CASOS_A_CAMINHO.some((c) => !c.esperado), 'a tabela precisa dos dois desfechos');
+  for (const c of CASOS_A_CAMINHO) assert.equal(donaACaminho(c.F, { cartoes: c.cartoes, sessoes: c.sessoes, agoraMs: AGORA }), c.esperado, c.nome);
 });

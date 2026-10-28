@@ -110,6 +110,7 @@ const moduloSemDona = (process.argv[2] === 'list' && process.argv.slice(3).inclu
   ? await import(pathToFileURL(join(HOOKS_DIR, 'sem-dona.mjs')).href)
   : null;
 const semDona = moduloSemDona?.semDona ?? null;
+const donaACaminho = moduloSemDona?.donaACaminho;
 // A batida, o `pode-reiniciar`, a migração das perguntas e o `com add` também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
 const regras = CONFERE_MEMBRO
   ? await import(pathToFileURL(POOL_COMUM).href).catch((e) => {
@@ -1133,7 +1134,7 @@ function comandoBatida(args) {
     const julgado = julgar({
       agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(),
       estado: arquivoJson(join(pasta, 'estado.json'), {}),
-      semDona,
+      semDona, donaACaminho, cartoes: cartoesDoPainel().map((c) => c.data),
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
       caminhoDoRelatorio: (nome) => join(pasta, `${nome}.json`),
       prazoMin: prazoEmMin([]), soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,

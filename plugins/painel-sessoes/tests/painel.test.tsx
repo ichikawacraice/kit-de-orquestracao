@@ -2689,7 +2689,7 @@ test('F82 D: com dois itens o sufixo é "2 itens", também inquebrável', async 
 test('F85 A: a orquestradora aberta sozinha depois do pedido acende "Abrindo…" no botão dela e o clique não abre outra vez', async ($, on) => {
   let soltar: () => void = () => undefined
   const segurarAbrir: { p?: Promise<void> } = {}
-  const { ui, abertas, relogio } = await abrirDe(pedir({ fila: { F68: FILA_DOIS().F68 }, segurarAbrir, cartoes: [CARTAO_F68] }), $, on)
+  const { ui, abertas, relogio } = await abrirDe(pedir({ fila: FILA_DOIS(), segurarAbrir, cartoes: [cartaoDe('task_e21', { itens: ['F63'] })] }), $, on)
   segurarAbrir.p = new Promise<void>(res => (soltar = res))
   await ui.press({ key: 'pedir:F68' })
   await relogio.settle()
@@ -3093,4 +3093,28 @@ test('lerDoc: id com barra ou ".." fica com o nome do arquivo', () => {
   expect(R.lerDoc('{"id":"a/b","data":{}}', 'Q9.json').id).toBe('Q9')
   expect(R.lerDoc('{"id":"..","data":{}}', 'Q10.json').id).toBe('Q10')
   expect(R.lerDoc('{"data":{}}', 'Q11.json').id).toBe('Q11')
+})
+
+// F218: o item que já tem cartão de sessão dona esperando o clique, ou sessão viva `F<n> · …`, não oferece "Pedir dona":
+// o clique pediria a segunda dona do mesmo item (no F217, o cartão na conversa da orquestradora e o texto no prompt).
+test('F218: item com cartão esperando o clique não tem "Pedir dona" nem entra no lote; o clique no outro não toca o dele', async ($, on) => {
+  const { ui, fills, enviadas, relogio } = await abrirDe(pedir({ fila: FILA_DOIS(), host: 'local_orq_iz', cartoes: [CARTAO_F68] }), $, on)
+  expect(await ui.find({ key: 'pedir:F63' }), 'prova: o item sem cartão segue com o botão').toBeDefined()
+  expect(await ui.find({ key: 'pedir:F68' }), 'o F68 já tem cartão: sem botão').toBeUndefined()
+  expect(await ui.find({ key: 'pedir:lote' }), 'um item só pode ser pedido: sem lote').toBeUndefined()
+  await ui.press({ key: 'pedir:F63' })
+  await relogio.settle()
+  expect(fills.length).toBe(1)
+  expect(fills[0]?.text).toContain('F63 · painel do componente')
+  expect(fills[0]?.text, 'o pedido não leva o item que já tem cartão').not.toContain('F68')
+  expect(enviadas).toEqual([])
+  await ui.unmount()
+})
+
+test('F218: item com sessão viva `F<n> · …` que ainda não se gravou dona não tem "Pedir dona"', async ($, on) => {
+  const vivas = JSON.stringify([...JSON.parse(vivasPedir()), { sessionId: 'local_f68', title: 'F68 · editor da loja', isRunning: true, isArchived: false, createdAt: new Date(AGORA - 60_000).toISOString() }])
+  const { ui } = await abrirDe(pedir({ fila: FILA_DOIS(), vivas }), $, on)
+  expect(await ui.find({ key: 'pedir:F63' }), 'prova: o item sem sessão segue com o botão').toBeDefined()
+  expect(await ui.find({ key: 'pedir:F68' })).toBeUndefined()
+  await ui.unmount()
 })
