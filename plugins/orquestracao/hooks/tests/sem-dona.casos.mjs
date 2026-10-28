@@ -43,23 +43,21 @@ export const CASOS = [
     esperado: null },
 ];
 
-// Tabela da regra "dona a caminho" (F218): cartão de sessão dona esperando o clique ou sessão viva `F<n> · …` do item.
+// Tabela da regra "dona a caminho" (F218): cartão de sessão dona esperando o clique, proposto depois de o item ficar sem dono.
 const cartao = (itens, minAtras) => ({ itens, propostoEm: min(minAtras) });
-const viva = (title, isArchived = false, criada = 1) => ({ title, isArchived, createdAt: min(criada) });
+const semDono = (minAtras) => ({ etapa: 'planejamento', com: [], historico: hist([min(minAtras), 'planejamento', null]) });
+// a dona pegou o item há 120 min e o soltou há 30, sem mudar a etapa (o `painel soltar`)
+const soltou = { etapa: 'planejamento', com: [], historico: hist([min(200), 'planejamento', null], [min(120), 'planejamento', 'dona'], [min(30), 'planejamento', null]) };
 export const CASOS_A_CAMINHO = [
-  { nome: 'nada: não está a caminho', F: 'F7', cartoes: [], sessoes: [], esperado: false },
-  { nome: 'cartão do item proposto há 10 min', F: 'F7', cartoes: [cartao(['F7'], 10)], sessoes: [], esperado: true },
-  { nome: 'cartão de outro item não conta', F: 'F7', cartoes: [cartao(['F8'], 10)], sessoes: [], esperado: false },
-  { nome: 'cartão de mais de 12 h venceu', F: 'F7', cartoes: [cartao(['F7'], 13 * 60)], sessoes: [], esperado: false },
-  { nome: 'cartão sem data legível não conta', F: 'F7', cartoes: [{ itens: ['F7'], propostoEm: 'ontem' }], sessoes: [], esperado: false },
-  { nome: 'sessão viva do item, ainda sem se gravar', F: 'F7', cartoes: [], sessoes: [viva('F7 · editor da loja')], esperado: true },
-  { nome: 'sessão arquivada do item não conta', F: 'F7', cartoes: [], sessoes: [viva('F7 · editor da loja', true)], esperado: false },
-  { nome: 'F70 não é F7', F: 'F7', cartoes: [cartao(['F70'], 10)], sessoes: [viva('F70 · outro')], esperado: false },
-  { nome: 'sessão da dona que soltou o item (criada antes de ele ficar sem dona) não conta', F: 'F7', desde: min(30), cartoes: [], sessoes: [viva('F7 · editor da loja', false, 90)], esperado: false },
-  { nome: 'sessão aberta depois de o item ficar sem dona conta', F: 'F7', desde: min(30), cartoes: [], sessoes: [viva('F7 · editor da loja', false, 5)], esperado: true },
-  { nome: 'sem createdAt, vale lastActivityAt: parada desde antes de o item ficar sem dona não conta', F: 'F7', desde: min(30), cartoes: [], sessoes: [{ title: 'F7 · x', isArchived: false, lastActivityAt: min(45) }], esperado: false },
-  { nome: 'sessão sem data nenhuma não conta', F: 'F7', cartoes: [], sessoes: [{ title: 'F7 · x', isArchived: false }], esperado: false },
-  { nome: 'cartão proposto antes de o item ficar sem dona não conta', F: 'F7', desde: min(30), cartoes: [cartao(['F7'], 60)], sessoes: [], esperado: false },
-  { nome: 'cartão proposto depois de o item ficar sem dona conta', F: 'F7', desde: min(30), cartoes: [cartao(['F7'], 10)], sessoes: [], esperado: true },
-  { nome: 'entradas ruins não derrubam', F: 'F7', cartoes: [null, { itens: 'F7' }], sessoes: [null, { title: 7 }], esperado: false },
+  { nome: 'sem cartão: não está a caminho', F: 'F7', data: semDono(30), cartoes: [], esperado: false },
+  { nome: 'cartão do item proposto há 10 min', F: 'F7', data: semDono(30), cartoes: [cartao(['F7'], 10)], esperado: true },
+  { nome: 'cartão de outro item não conta', F: 'F7', data: semDono(30), cartoes: [cartao(['F8'], 10)], esperado: false },
+  { nome: 'F70 não é F7', F: 'F7', data: semDono(30), cartoes: [cartao(['F70'], 10)], esperado: false },
+  { nome: 'cartão de mais de 12 h venceu', F: 'F7', data: semDono(14 * 60), cartoes: [cartao(['F7'], 13 * 60)], esperado: false },
+  { nome: 'cartão sem data legível não conta', F: 'F7', data: semDono(30), cartoes: [{ itens: ['F7'], propostoEm: 'ontem' }], esperado: false },
+  { nome: 'cartão de antes de a dona soltar o item é de outra rodada', F: 'F7', data: soltou, cartoes: [cartao(['F7'], 150)], esperado: false },
+  { nome: 'cartão de depois de a dona soltar o item conta', F: 'F7', data: soltou, cartoes: [cartao(['F7'], 20)], esperado: true },
+  { nome: 'mudar de etapa sem dono não muda o piso', F: 'F7', data: { etapa: 'execucao', com: [], historico: hist([min(60), 'planejamento', null], [min(5), 'execucao', null]) }, cartoes: [cartao(['F7'], 30)], esperado: true },
+  { nome: 'sem historico: sem piso, vale o prazo', F: 'F7', data: { etapa: 'design', com: [] }, cartoes: [cartao(['F7'], 10)], esperado: true },
+  { nome: 'entradas ruins não derrubam', F: 'F7', data: null, cartoes: [null, { itens: 'F7' }], esperado: false },
 ];

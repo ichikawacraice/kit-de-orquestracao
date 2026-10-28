@@ -36,5 +36,5 @@ test('tetoDeDonas: KIT_TETO_DE_DONAS inteiro positivo, senão 4', () => {
 
 test('donaACaminho responde à tabela inteira (F218)', () => {
   assert.ok(CASOS_A_CAMINHO.some((c) => c.esperado) && CASOS_A_CAMINHO.some((c) => !c.esperado), 'a tabela precisa dos dois desfechos');
-  for (const c of CASOS_A_CAMINHO) assert.equal(donaACaminho(c.F, { cartoes: c.cartoes, sessoes: c.sessoes, agoraMs: AGORA, desde: c.desde }), c.esperado, c.nome);
+  for (const c of CASOS_A_CAMINHO) assert.equal(donaACaminho(c.F, c.data, { cartoes: c.cartoes, agoraMs: AGORA }), c.esperado, c.nome);
 });

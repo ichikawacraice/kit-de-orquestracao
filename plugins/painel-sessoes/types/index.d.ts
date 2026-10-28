@@ -28,6 +28,8 @@ export type LinhaItem = {
   espera?: { motivo: 'operador' | 'gate'; texto: string }
   /** Sem dona numa etapa de trabalho desde `desde`; ausente quando há quem trabalhe, ou o item espera de propósito. */
   esperando?: { desde: string }
+  /** Desde quando (ms) o histórico tem o item sem dono: o cartão de dona de antes disso é de outra rodada (F218). */
+  semDonoDesde?: number
   prs: number[]
   /** O que fica para depois; `item` é o F<n> quando o documento o liga a outro item. */
   depois: Array<{ texto: string; item?: string }>

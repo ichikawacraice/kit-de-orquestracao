@@ -30,18 +30,25 @@ export function semDona(data: Record<string, unknown> | null | undefined, agoraM
 
 export const CARTAO_VALIDADE_MS = 12 * 3_600_000
 
-// A dona do item já está a caminho (F218): cartão de sessão dona do item esperando o clique (menos de 12 h) ou sessão viva
-// `F<n> · …` ainda sem se gravar, nascidos depois de `desde`. Cópia de `donaACaminho` de plugins/orquestracao/hooks/sem-dona.mjs
-// (mesmo teste de concordância).
+// Cópias de `semDonoDesde` e `donaACaminho` de plugins/orquestracao/hooks/sem-dona.mjs (F218; mesmo teste de concordância).
+export function semDonoDesde(data: Record<string, unknown> | null | undefined): number | null {
+  const hist = Array.isArray(data?.historico) ? (data.historico as Array<Record<string, unknown> | null>) : []
+  let desde: number | null = null
+  for (let i = hist.length - 1; i >= 0 && !hist[i]?.dono; i--) {
+    const t = ms(hist[i]?.em)
+    if (t !== null) desde = t
+  }
+  return desde
+}
+
 type CartaoACaminho = { itens?: unknown; propostoEm?: unknown } | null
-type SessaoACaminho = { title?: unknown; isArchived?: unknown; createdAt?: unknown; lastActivityAt?: unknown } | null
-export function donaACaminho(F: string, { cartoes = [], sessoes = [], agoraMs, desde }: { cartoes?: CartaoACaminho[]; sessoes?: SessaoACaminho[]; agoraMs: number; desde?: string }): boolean {
-  const piso = Date.parse(String(desde))
-  const depois = (t: number) => !Number.isNaN(t) && (Number.isNaN(piso) || t >= piso)
-  const cartao = cartoes.some(c => {
+export function donaACaminho(F: string, data: Record<string, unknown> | null | undefined, { cartoes = [], agoraMs }: { cartoes?: CartaoACaminho[]; agoraMs: number }): boolean {
+  return cartaoACaminho(F, semDonoDesde(data), { cartoes, agoraMs })
+}
+
+export function cartaoACaminho(F: string, piso: number | null, { cartoes = [], agoraMs }: { cartoes?: CartaoACaminho[]; agoraMs: number }): boolean {
+  return cartoes.some(c => {
     const t = Date.parse(String(c?.propostoEm))
-    return Array.isArray(c?.itens) && c.itens.includes(F) && depois(t) && agoraMs - t < CARTAO_VALIDADE_MS
+    return Array.isArray(c?.itens) && c.itens.includes(F) && !Number.isNaN(t) && (piso === null || t >= piso) && agoraMs - t < CARTAO_VALIDADE_MS
   })
-  return cartao || sessoes.some(s => s?.isArchived !== true && typeof s?.title === 'string' && s.title.startsWith(`${F} · `)
-    && depois(Date.parse(String(s.createdAt ?? s.lastActivityAt))))
 }

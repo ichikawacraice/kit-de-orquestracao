@@ -195,9 +195,9 @@ test('(xv) resumo do ausente pendente + item sem dona + batida parada na mesma r
   const r = rodar([GRAVA]);
   assert.match(r.reason, /A batida não roda/); assert.match(r.reason, /resumo/); assert.match(r.reason, /F7 sem dona/);
 });
-test('(dona-5) F218: com cartão de sessão dona esperando o clique ou sessão viva `F<n> · …` do item, não cobra outra dona', () => {
+test('(dona-5) F218: com cartão de sessão dona esperando o clique, não cobra outra dona', () => {
   semDona('F7');
-  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'prova: sem cartão nem sessão, cobra');
+  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'prova: sem cartão, cobra');
   const cartao = (F, min) => {
     mkdirSync(join(base, 'painel', 'cartoes'), { recursive: true });
     writeFileSync(join(base, 'painel', 'cartoes', 'task_x.json'), JSON.stringify({ id: 'task_x', version: 1, data: { projeto: 'proj-a', apelido: 'dona', papel: 'dona', itens: [F], orquestradoraId: 'local_ORQ', propostoEm: minAtras(min) } }));
@@ -210,14 +210,5 @@ test('(dona-5) F218: com cartão de sessão dona esperando o clique ou sessão v
   assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'cartão de outro item não vale');
   cartao('F7', 13 * 60);
   assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'cartão de 13 h venceu');
-  rmSync(join(base, 'painel', 'cartoes'), { recursive: true });
-  const vivas = (...l) => writeFileSync(join(base, 'orq', 'batida', 'sessoes.json'), JSON.stringify(l));
-  // o sessoes.json da batida não traz createdAt: vale lastActivityAt
-  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: false, lastActivityAt: minAtras(1) });
-  assert.equal(rodar([LIST, GRAVA]), null, 'a sessão do F7 abriu e ainda não se gravou dona');
-  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: false, lastActivityAt: minAtras(40) });
-  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'a sessão parada desde antes de o item ficar sem dona (a dona que soltou) não vale');
-  vivas({ sessionId: 'local_d', title: 'F7 · item F7', isArchived: true, lastActivityAt: minAtras(1) });
-  assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'sessão arquivada não vale');
 });
 }

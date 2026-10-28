@@ -255,13 +255,30 @@ test('batida: item sem dona com espera, trava ou em merge não vira vaga', () =>
   assert.deepEqual(r.json().projetos.kit.vagas, [{ papel: 'dona', item: 'F4' }], 'prova: o sem dona comum vira vaga');
 });
 
-test('batida F218: item sem dona com cartão de sessão dona esperando o clique ou sessão viva `F<n> · …` não vira vaga', () => {
+test('batida F218: item sem dona com cartão de sessão dona esperando o clique não vira vaga; cartão de antes de a dona soltar, sim', () => {
   const sem = { ...semGente, etapa: 'planejamento', atualizadoEm: iso(T - 40 * MIN), historico: [{ em: iso(T - 40 * MIN), etapa: 'planejamento', dono: null }] };
-  item('F1', sem); item('F2', sem); item('F3', sem); item('F4', sem);
+  // F2: a dona pegou em T−90 e soltou em T−40 (o `painel soltar`), e o cartão é de T−60, da rodada dela
+  const soltou = { ...semGente, etapa: 'planejamento', atualizadoEm: iso(T - 40 * MIN), historico: [{ em: iso(T - 120 * MIN), etapa: 'planejamento', dono: null }, { em: iso(T - 90 * MIN), etapa: 'planejamento', dono: 'dona' }, { em: iso(T - 40 * MIN), etapa: 'planejamento', dono: null }] };
+  item('F1', sem); item('F2', soltou); item('F3', sem);
+  const cartao = (id, F, min) => writeFileSync(join(pastaPainel(), 'cartoes', `${id}.json`), JSON.stringify({ id, version: 1, data: { projeto: 'kit', apelido: 'dona', papel: 'dona', itens: [F], orquestradoraId: lid(30), propostoEm: iso(T - min * MIN) } }));
   mkdirSync(join(pastaPainel(), 'cartoes'), { recursive: true });
-  writeFileSync(join(pastaPainel(), 'cartoes', 'task_a.json'), JSON.stringify({ id: 'task_a', version: 1, data: { projeto: 'kit', apelido: 'dona', papel: 'dona', itens: ['F1'], orquestradoraId: lid(30), propostoEm: iso(T - 30 * MIN) } }));
-  const r = batida(sessoes(sessao(30, '🎛 orquestradora — kit'), sessao(31, 'F2 · item f2', { createdAt: iso(T - 2 * MIN) }), sessao(32, 'F4 · item f4', { createdAt: iso(T - 90 * MIN) })), T, ['--seco']);
+  cartao('task_a', 'F1', 30); cartao('task_b', 'F2', 60);
+  // a sessão do F2 da dona que soltou segue viva: não conta
+  const r = batida(sessoes(sessao(30, '🎛 orquestradora — kit'), sessao(31, 'F2 · item f2', { lastActivityAt: iso(T - 30 * MIN) })), T, ['--seco']);
   assert.equal(r.exit, 0, r.err);
-  assert.deepEqual(r.json().projetos.kit.vagas, [{ papel: 'dona', item: 'F3' }, { papel: 'dona', item: 'F4' }], 'prova: o F3, sem cartão nem sessão, vira vaga; F1 e F2 não; F4 tem só a sessão de antes de ficar sem dona (a dona que soltou)');
-  assert.match(msgs(r, 'relatorio')[0]?.texto ?? '', /sem dona: F3, F4\./);
+  assert.deepEqual(r.json().projetos.kit.vagas, [{ papel: 'dona', item: 'F2' }, { papel: 'dona', item: 'F3' }], 'prova: F3 sem cartão vira vaga; F1 com cartão não; F2 com cartão velho e sessão velha, sim');
+  assert.match(msgs(r, 'relatorio')[0]?.texto ?? '', /sem dona: F2, F3\./);
+});
+
+test('batida F218: a sessão aberta pelo cartão só o apaga quando o item ganhou quem trabalhe', () => {
+  const sem = { ...semGente, etapa: 'planejamento', atualizadoEm: iso(T - 40 * MIN), historico: [{ em: iso(T - 40 * MIN), etapa: 'planejamento', dono: null }] };
+  item('F1', sem); item('F2', { etapa: 'planejamento' });
+  mkdirSync(join(pastaPainel(), 'cartoes'), { recursive: true });
+  for (const [id, F] of [['task_a', 'F1'], ['task_b', 'F2']])
+    writeFileSync(join(pastaPainel(), 'cartoes', `${id}.json`), JSON.stringify({ id, version: 1, data: { projeto: 'kit', apelido: 'dona', papel: 'dona', itens: [F], orquestradoraId: lid(30), propostoEm: iso(T - 10 * MIN) } }));
+  const abertas = sessoes(sessao(30, '🎛 orquestradora — kit'), sessao(31, 'F1 · item f1', { createdAt: iso(T - 2 * MIN) }), sessao(32, 'F2 · item f2', { createdAt: iso(T - 2 * MIN) }));
+  const r = batida(abertas, T, ['--seco']);
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().cartoesApagados, ['task_b'], 'prova: o F2 tem dona e o cartão dele sai; o do F1, aberto e ainda sem dona, fica');
+  assert.deepEqual(r.json().projetos.kit.vagas, [], 'o F1 segue a caminho');
 });

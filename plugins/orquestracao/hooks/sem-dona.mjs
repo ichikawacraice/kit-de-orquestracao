@@ -45,18 +45,30 @@ export const donaTrabalhando = (d) => ETAPAS_DE_TRABALHO.includes(d?.etapa) && t
 // Prazo do cartão de sessão dona que espera o clique (o mesmo da batida e do pane): depois dele, a orquestradora repropõe.
 export const CARTAO_VALIDADE_MS = 12 * 3_600_000;
 
-// A dona do item já está a caminho (F218): há cartão de sessão dona do item esperando o clique (`cartoes`, proposto há menos
-// de 12 h) ou sessão viva `F<n> · …` (aberta e ainda sem se gravar dona). Pedir de novo abriria a segunda dona do item.
-// `desde` (ISO, o `desde` de `semDona`): só conta o que nasceu depois de o item ficar sem dona; a sessão da dona que soltou o
-// item, ou a de antes de ele reabrir, segue viva com o mesmo título e não está a caminho. Sem `createdAt`, vale `lastActivityAt`.
-// `cartoes`: o `data` dos documentos da coleção; `sessoes`: as linhas do `list_sessions`.
-export function donaACaminho(F, { cartoes = [], sessoes = [], agoraMs, desde }) {
-  const piso = Date.parse(desde);
-  const depois = (t) => !Number.isNaN(t) && (Number.isNaN(piso) || t >= piso);
-  const cartao = cartoes.some((c) => {
+// Desde quando o item está sem dono (ms): a primeira entrada da sequência final do `historico` com `dono` vazio, atravessando
+// mudança de etapa (o `desde` de `semDona` é a entrada na etapa, que a dona que soltou o item não muda). `null` se não der.
+export function semDonoDesde(data) {
+  const hist = Array.isArray(data?.historico) ? data.historico : [];
+  let desde = null;
+  for (let i = hist.length - 1; i >= 0 && !hist[i]?.dono; i--) {
+    const t = ms(hist[i]?.em);
+    if (t !== null) desde = t;
+  }
+  return desde;
+}
+
+// A dona do item já está a caminho (F218): há cartão de sessão dona do item esperando o clique (`cartoes`, o `data` dos
+// documentos), proposto há menos de 12 h e depois de o item ficar sem dono (`data`: o item). Pedir de novo abriria a segunda
+// dona. Só o cartão vale: a sessão `F<n> · …` viva não separa a dona nova da que soltou o item, e o cartão fica no painel até o
+// item ganhar quem trabalhe (`cartoesResolvidos` da batida).
+export function donaACaminho(F, data, { cartoes = [], agoraMs }) {
+  return cartaoACaminho(F, semDonoDesde(data), { cartoes, agoraMs });
+}
+
+// O mesmo, com o piso já calculado (ms ou null): o pane guarda o `semDonoDesde` na linha do item.
+export function cartaoACaminho(F, piso, { cartoes = [], agoraMs }) {
+  return cartoes.some((c) => {
     const t = Date.parse(c?.propostoEm);
-    return Array.isArray(c?.itens) && c.itens.includes(F) && depois(t) && agoraMs - t < CARTAO_VALIDADE_MS;
+    return Array.isArray(c?.itens) && c.itens.includes(F) && !Number.isNaN(t) && (piso === null || t >= piso) && agoraMs - t < CARTAO_VALIDADE_MS;
   });
-  return cartao || sessoes.some((s) => s?.isArchived !== true && typeof s?.title === 'string' && s.title.startsWith(`${F} · `)
-    && depois(Date.parse(s.createdAt ?? s.lastActivityAt)));
 }

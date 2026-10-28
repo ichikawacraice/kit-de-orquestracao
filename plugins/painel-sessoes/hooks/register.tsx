@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
-import { donaACaminho, semDona } from './sem-dona'
+import { cartaoACaminho, semDona, semDonoDesde } from './sem-dona'
 import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
 import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
@@ -293,6 +293,7 @@ function montarTodos(
       espera: final || situacao === 'travado' ? undefined : esperaGravada,
       // Sem dona no item há tempo: some quando o item está final ou travado (a trava já diz o que o prende).
       esperando: final || situacao === 'travado' ? undefined : (s => (s ? { desde: s.desde } : undefined))(semDona(d.data, agora)),
+      semDonoDesde: (t => (t === null ? undefined : t))(semDonoDesde(d.data)),
       prs: inteiros(d.data.prs),
       depois: Array.isArray(d.data.depois)
         ? d.data.depois.flatMap(x => {
@@ -719,7 +720,7 @@ async function pedirSessoes($: EngineInterface, ids: string[], chave: string, su
   const agora = await $.clock.now()
   const lote = chave === 'lote'
   const vivas = l.semLista ? null : (l.sessoes ?? []).map(v => v.sessionId)
-  const aCaminho = (i: LinhaItem) => donaACaminho(i.id, { cartoes: l.cartoes ?? [], sessoes: l.sessoes ?? [], agoraMs: agora, desde: i.esperando?.desde })
+  const aCaminho = (i: LinhaItem) => cartaoACaminho(i.id, i.semDonoDesde ?? null, { cartoes: l.cartoes ?? [], agoraMs: agora })
   const grupos = new Map<string, { orq: string; alvos: Array<{ item: LinhaItem; papel: PapelPedido }> }>()
   for (const item of l.itens.filter(i => ids.includes(i.id))) {
     const papel = papelQueFalta(item)
@@ -2171,10 +2172,10 @@ export const register: Register = on => {
 
       return e && vivoDoEstado(e, agoraDoPedido) ? e : undefined
     }
-    // F218: o item com cartão de sessão dona esperando o clique, ou com a sessão `F<n> · …` viva, já pediu: sem segundo pedido.
+    // F218: o item com cartão de sessão dona esperando o clique já pediu: sem segundo pedido.
     const pedidoDe = (i: LinhaItem) => {
       const papel = papelQueFalta(i)
-      if (!papel || !i.projeto || donaACaminho(i.id, { cartoes: lidaAgora.cartoes ?? [], sessoes: lidaAgora.sessoes ?? [], agoraMs: agoraDoPedido, desde: i.esperando?.desde })) return undefined
+      if (!papel || !i.projeto || cartaoACaminho(i.id, i.semDonoDesde ?? null, { cartoes: lidaAgora.cartoes ?? [], agoraMs: agoraDoPedido })) return undefined
 
       return { papel, projeto: i.projeto, destino: destinoDo(i.projeto), estado: estadoVivo(i.id) }
     }
