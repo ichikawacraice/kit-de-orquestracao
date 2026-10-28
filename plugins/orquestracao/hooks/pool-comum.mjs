@@ -128,7 +128,7 @@ export function registroDaSessao(id, { fresco = false } = {}) {
   return reg;
 }
 
-// `cliIds`: a id atual do CLI e as anteriores (cada limpeza de contexto troca a id); `anterior`: a id buscada é uma das que
+// `cliIds`: a id atual do CLI (`cliAtual`) e as anteriores (cada limpeza de contexto troca a id); `anterior`: a id buscada é uma das que
 // a sessão já deixou para trás (F208: o marcador `ativas/` dela é órfão). Id `local_…` tenta antes o arquivo de mesmo nome (o app
 // grava assim), sem ler os outros; sem acerto, a varredura inteira.
 function varrerRegistro(id) {
@@ -150,7 +150,7 @@ function varrerArquivos(id, pelo) {
       if (r.sessionId === id || r.cliSessionId === id || (Array.isArray(r.priorCliSessionIds) && r.priorCliSessionIds.includes(id))) {
         const prior = Array.isArray(r.priorCliSessionIds) ? r.priorCliSessionIds.filter((x) => typeof x === 'string' && x) : [];
         const cliIds = [...new Set([r.cliSessionId, ...prior].filter((x) => typeof x === 'string' && x))];
-        return { localId: r.sessionId || null, titulo: r.title || '', arquivada: Boolean(r.isArchived), cwd: r.cwd || null, originCwd: r.originCwd || null, cliIds, anterior: prior.includes(id) && r.cliSessionId !== id };
+        return { localId: r.sessionId || null, titulo: r.title || '', arquivada: Boolean(r.isArchived), cwd: r.cwd || null, originCwd: r.originCwd || null, cliIds, cliAtual: typeof r.cliSessionId === 'string' && r.cliSessionId ? r.cliSessionId : null, anterior: prior.includes(id) && r.cliSessionId !== id };
       }
     } catch { /* registro ilegível */ }
   }

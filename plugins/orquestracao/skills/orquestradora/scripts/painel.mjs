@@ -1041,7 +1041,9 @@ function gravarJson(f, v) {
 }
 const SETE_DIAS_MS = 7 * 24 * 3600_000;
 // Marcadores `ativas/<id>` de orquestradora que já não existem: sessão arquivada ou fora do registro, id que a sessão deixou para
-// trás ao limpar o contexto (F208), ou parada há 7 dias.
+// trás ao limpar o contexto (F208), ou parada há 7 dias. Fora do registro só depois de MARCADOR_NOVO_MS: o hook de início cria
+// o marcador da id nova antes de o app gravá-la no registro.
+const MARCADOR_NOVO_MS = 10 * 60_000;
 function marcadoresMortos(porId, agoraMs) {
   const dir = join(ORQ(), 'ativas');
   let nomes = [];
@@ -1050,7 +1052,13 @@ function marcadoresMortos(porId, agoraMs) {
   for (const id of nomes.sort()) {
     let reg = null;
     try { reg = regras.registroDaSessao(id, { fresco: true }); } catch { continue; }
-    if (reg === null || reg.arquivada || reg.anterior) { mortos.push(id); continue; }
+    if (reg === null) {
+      let mtime = 0;
+      try { mtime = statSync(join(dir, id)).mtimeMs; } catch { /* sumiu: some de novo */ }
+      if (agoraMs - mtime >= MARCADOR_NOVO_MS) mortos.push(id);
+      continue;
+    }
+    if (reg.arquivada || reg.anterior) { mortos.push(id); continue; }
     const linha = porId.get(reg.localId);
     if (linha?.isRunning === true) continue;
     const t = Date.parse(linha?.lastActivityAt);

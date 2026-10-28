@@ -64,12 +64,15 @@ test('orquestradora pelo nome na batida do projeto, mesmo sem o título', () => 
   assert.ok(t.includes(ORDEM));
 });
 
-test('registro ainda na id antiga (o app não gravou a nova): a antiga sai e a nova entra', () => {
-  registro(LOCAL, { title: '🎛 orquestradora — kit', cliSessionId: 'cli-velho' });
+test('registro ainda na id antiga, ou um `claude` lançado pela própria orquestradora: o marcador da id atual fica', () => {
+  // as duas situações chegam iguais ao hook (id nova fora do registro); apagar a atual derrubaria as travas da orquestradora viva
+  registro(LOCAL, { title: '🎛 orquestradora — kit', cliSessionId: 'cli-atual', priorCliSessionIds: ['cli-velho'] });
+  writeFileSync(marcador('cli-atual'), '');
   writeFileSync(marcador('cli-velho'), '');
-  inicio('cli-novo');
-  assert.ok(existsSync(marcador('cli-novo')));
-  assert.ok(!existsSync(marcador('cli-velho')));
+  inicio('cli-filho');
+  assert.ok(existsSync(marcador('cli-filho')));
+  assert.ok(!existsSync(marcador('cli-velho')), 'precondição: a limpeza das anteriores rodou');
+  assert.ok(existsSync(marcador('cli-atual')), 'o marcador da id atual do registro não sai');
 });
 
 test('marcador de outra orquestradora fica', () => {

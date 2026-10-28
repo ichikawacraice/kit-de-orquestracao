@@ -31,8 +31,11 @@ export function orquestradoraDeVolta({ sessionId, localId, cwd }) {
   const marcador = join(ativas, sessionId);
   writeFileSync(marcador, `${gitCommonDir(reg.originCwd || reg.cwd || cwd) ?? 'null'}\n`);
   const apagados = [];
+  // Só as ids que o registro já marca como deixadas para trás. A id atual do registro fica: "o app ainda não gravou a id
+  // nova da limpeza" e "um `claude` lançado do Bash da orquestradora" (herda o CLAUDE_CODE_HOST_SESSION_ID) chegam iguais
+  // aqui, e no segundo apagar a atual derrubaria as travas da orquestradora viva. O que sobrar, a batida apaga.
   for (const id of reg.cliIds ?? []) {
-    if (id === sessionId || !ID_SEGURO.test(id) || !existsSync(join(ativas, id))) continue;
+    if (id === sessionId || id === reg.cliAtual || !ID_SEGURO.test(id) || !existsSync(join(ativas, id))) continue;
     rmSync(join(ativas, id), { force: true });
     apagados.push(id);
   }
