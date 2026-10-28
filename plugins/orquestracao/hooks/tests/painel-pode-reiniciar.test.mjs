@@ -239,3 +239,71 @@ test('o plugin lê as fichas como o gate: mesmo conjunto de pids vivos', async (
   const { lerFichas } = await import(join(SCRIPTS, 'pode-reiniciar.mjs'));
   assert.deepEqual(lerFichas(join(base, 'nuc')).map((f) => f.k).sort((a, b) => a - b), doGate);
 });
+
+// Atualização esperando reinício: o app com a atualização já baixada pelo ShipIt, ou o motor (claude-code) com versão mais nova na
+// pasta do app do que a que as sessões rodam. Tudo dentro do HOME temporário.
+const plist = (versao) => `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>\n\t<key>CFBundleShortVersionString</key>\n\t<string>${versao}</string>\n</dict></plist>\n`;
+function appComAtualizacao({ instalada, baixada }) {
+  const home = join(base, 'home');
+  const alvo = join(base, 'Applications', 'Claude.app');
+  mkdirSync(join(alvo, 'Contents'), { recursive: true });
+  writeFileSync(join(alvo, 'Contents', 'Info.plist'), plist(instalada));
+  const shipit = join(home, 'Library', 'Caches', 'com.anthropic.claudefordesktop.ShipIt');
+  const novo = join(shipit, 'update.abc', 'Claude.app');
+  if (baixada) {
+    mkdirSync(join(novo, 'Contents'), { recursive: true });
+    writeFileSync(join(novo, 'Contents', 'Info.plist'), plist(baixada));
+  }
+  mkdirSync(shipit, { recursive: true });
+  writeFileSync(join(shipit, 'ShipItState.plist'), JSON.stringify({ targetBundleURL: `file://${alvo}/`, updateBundleURL: `file://${novo}/` }));
+}
+function motores(...versoes) {
+  const pasta = join(base, 'home', 'Library', 'Application Support', 'Claude', 'claude-code');
+  for (const v of versoes) mkdirSync(join(pasta, v), { recursive: true });
+  return pasta;
+}
+const motorNoPs = (pid, versao) => `${pid} 1 /Users/x/Library/Application Support/Claude/claude-code/${versao}/abc/claude.app/Contents/MacOS/claude --output-format stream-json`;
+
+test('sem nada baixado: o arquivo não traz atualizacao (prova de ausência: o próximo teste mostra que se detecta)', () => {
+  appComAtualizacao({ instalada: '3.1.0' });
+  motores('2.1.308');
+  const r = painel(['pode-reiniciar', '--sessoes', sessoes(sessao(1, 'E1 · livre')), '--json'], { PODE_REINICIAR_PS: psCom([motorNoPs(500, '2.1.308')]) });
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(r.json().atualizacao, undefined);
+  assert.equal(lerArquivo().atualizacao, undefined);
+});
+
+test('app com atualização baixada e motor novo na pasta: o arquivo e a saída trazem as duas, e o texto pede reinício', () => {
+  appComAtualizacao({ instalada: '3.1.0', baixada: '3.2.0' });
+  motores('2.1.299', '2.1.308', 'lixo');
+  const env = { PODE_REINICIAR_PS: psCom([motorNoPs(500, '2.1.299'), motorNoPs(501, '2.1.299')]) };
+  const r = painel(['pode-reiniciar', '--sessoes', sessoes(sessao(1, 'E1 · livre')), '--json'], env);
+  assert.equal(r.exit, 0, r.err);
+  const esperado = { app: { instalada: '3.1.0', baixada: '3.2.0' }, motor: { rodando: '2.1.299', baixada: '2.1.308' } };
+  assert.deepEqual(r.json().atualizacao, esperado);
+  assert.deepEqual(lerArquivo().atualizacao, esperado);
+  assert.equal(painel(['pode-reiniciar', '--sessoes', sessoes(sessao(1, 'E1 · livre'))], env).out, 'Pode reiniciar.\nAtualização baixada (app 3.2.0, motor 2.1.308): reinicie o app para instalar.\n');
+});
+
+test('motor: todas as sessões já na versão mais nova não é atualização; ShipIt sem a pasta baixada também não', () => {
+  appComAtualizacao({ instalada: '3.1.0', baixada: null });
+  motores('2.1.299', '2.1.308');
+  const r = painel(['pode-reiniciar', '--sessoes', sessoes(sessao(1, 'E1 · livre')), '--json'], { PODE_REINICIAR_PS: psCom([motorNoPs(500, '2.1.308')]) });
+  assert.equal(r.json().atualizacao, undefined);
+});
+
+test('lerAtualizacao compara versão por número, não por texto (2.1.99 < 2.1.100)', async () => {
+  const { lerAtualizacao } = await import(join(SCRIPTS, 'pode-reiniciar.mjs'));
+  motores('2.1.99', '2.1.100');
+  const a = lerAtualizacao({ home: join(base, 'home'), ps: [{ pid: 1, ppid: 0, command: motorNoPs(1, '2.1.99').slice(4) }] });
+  assert.ok(a, 'devia detectar o motor novo');
+  assert.deepEqual(a.motor, { rodando: '2.1.99', baixada: '2.1.100' });
+});
+
+test('app: sobra do ShipIt com versão mais velha que a instalada não é atualização (o mesmo arranjo com versão nova é)', async () => {
+  const { lerAtualizacao } = await import(join(SCRIPTS, 'pode-reiniciar.mjs'));
+  appComAtualizacao({ instalada: '3.10.0', baixada: '3.9.0' });
+  assert.equal(lerAtualizacao({ home: join(base, 'home'), ps: [] }), null);
+  appComAtualizacao({ instalada: '3.10.0', baixada: '3.11.0' });
+  assert.deepEqual(lerAtualizacao({ home: join(base, 'home'), ps: [] }), { app: { instalada: '3.10.0', baixada: '3.11.0' } });
+});

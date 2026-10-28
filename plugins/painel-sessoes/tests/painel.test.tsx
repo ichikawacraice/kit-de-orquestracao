@@ -723,6 +723,7 @@ test('Responder abre o campo, e o texto vai ao arquivo e à sessão', async ($, 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await ui.find({ key: 'Q8:outra' })).toBeUndefined()
   await ui.press({ key: 'Q8:responder' })
+  expect((await ui.find({ key: 'Q8:outra' }))?.props.rows, 'o campo tem 3 linhas: o fim do texto longo fica à vista').toBe(3)
   await ui.input({ key: 'Q8:outra', text: 'espera o #12' })
   expect((escritas[0]?.data as Escrita | undefined)?.resposta).toBe('espera o #12')
   expect(String(enviadas[0]?.message)).toMatch(/espera o #12/)
@@ -2813,6 +2814,7 @@ test('F85 D (4): Mudar… grava o texto e entrega à sessão dona com o texto da
   await ui.press({ key: 'assumidas' })
   expect(await ui.find({ key: 'Q30:outra' }), 'precondição: o campo começa fechado').toBeUndefined()
   await ui.press({ key: 'Q30:mudar' })
+  expect((await ui.find({ key: 'Q30:outra' }))?.props.rows, 'o campo do Mudar… também tem 3 linhas').toBe(3)
   await ui.input({ key: 'Q30:outra', text: 'rebasear só depois do gate' })
   await relogio.settle()
   const gravado = JSON.parse(arquivos.get(`${PASTA}/perguntas/Q30.json`) as string) as Doc

@@ -2184,6 +2184,7 @@ export const register: Register = on => {
             <Input
               key={`${q.id}:outra`}
               placeholder={q.propria ? 'sua resposta, vai para esta sessão…' : 'sua resposta, vai direto para a sessão…'}
+              rows={3}
               submitLabel={emCurso && enviandoAgora?.opcao === 'outra' ? 'Enviando…' : 'Enviar'}
               onSubmit={(valor: string) => {
                 if (!emCurso) void responder($, q, valor, 'outra')
@@ -2220,6 +2221,7 @@ export const register: Register = on => {
             <Input
               key={`${q.id}:outra`}
               placeholder="o que fazer no lugar, vai direto para a sessão…"
+              rows={3}
               submitLabel={emCurso && enviandoAgora?.opcao === 'outra' ? 'Enviando…' : 'Enviar'}
               onSubmit={(valor: string) => {
                 if (!emCurso) void responder($, q, valor, 'outra', { esperado: 'assumida', texto: textoDaMudanca(q, valor.trim()) })
@@ -2255,7 +2257,7 @@ export const register: Register = on => {
         {gravandoAviso === 'desligando' ? 'Desligando…' : 'Me avise'}
       </Button>
     ) : null
-    const dadosDoReinicio = { ...doReinicio, aviso: rn.aviso ? { avisadoEm: rn.aviso.avisadoEm } : null }
+    const dadosDoReinicio = { ...doReinicio, aviso: rn.aviso ? { avisadoEm: rn.aviso.avisadoEm } : null, atualizacao: rn.arquivo?.atualizacao ?? null }
     // O modo da leitura: `undefined` é antes da 1ª leitura; `null`, o arquivo que não se leu; senão a bandeira.
     const modo: 'lendo' | 'presente' | 'ausente' | 'desconhecido' = l.ausente === undefined ? 'lendo' : l.ausente === null ? 'desconhecido' : l.ausente.ligado ? 'ausente' : 'presente'
     // O botão do modo fica no canto esquerdo da fileira e o rótulo é o gesto; sem ler o modo não há botão (gravar por cima esconderia o problema).

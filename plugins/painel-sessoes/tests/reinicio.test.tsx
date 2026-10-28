@@ -206,6 +206,26 @@ test('reinicioSvg sem aviso: UMA linha de 20 px, e o alt traz a contagem por tip
   expect(espere.source, 'sem aviso os motivos não aparecem').not.toContain('merge/rebase')
 })
 
+test('reinicioSvg: atualização baixada vira uma linha a mais, sem e com aviso; sem ela a altura não muda', () => {
+  const att = { app: { instalada: '3.1.0', baixada: '3.2.0' }, motor: { rodando: '2.1.299', baixada: '2.1.308' } }
+  const sem = reinicioSvg(288, { estado: 'espere', rodando: 1, motivos: [teste], conferidoEm: AGORA, aviso: null })
+  expect(sem.source).not.toContain('Atualização')
+  const com = reinicioSvg(288, { estado: 'espere', rodando: 1, motivos: [teste], conferidoEm: AGORA, aviso: null, atualizacao: att })
+  expect(com.height).toBe(sem.height + 18)
+  expect(com.source).toContain('Atualização baixada · app 3.2.0, motor 2.1.308')
+  expect(com.alt).toContain('Atualização baixada: app 3.2.0, motor 2.1.308. Reinicie o app para instalar.')
+  const soApp = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: null, atualizacao: { app: att.app } })
+  expect(soApp.source).toContain('Atualização baixada · app 3.2.0')
+  expect(soApp.source).not.toContain('motor')
+  const comAviso = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {}, atualizacao: att })
+  const semAviso = reinicioSvg(288, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {} })
+  expect(comAviso.height).toBe(semAviso.height + 16)
+  expect(comAviso.source, 'na moldura estreita o corte solta a instrução, nunca a versão').toContain('Atualização · app 3.2.0, motor 2.1.308<')
+  expect(comAviso.alt, 'o alt diz a instrução inteira mesmo quando o desenho a solta').toContain('Reinicie o app para instalar.')
+  const largo = reinicioSvg(600, { estado: 'pode', rodando: 0, motivos: [], conferidoEm: AGORA, aviso: {}, atualizacao: att })
+  expect(largo.source, 'com espaço a instrução volta').toContain('motor 2.1.308 · reinicie o app para instalar')
+})
+
 test('reinicioSvg com aviso: até 4 motivos, o resto vira "+ N mais" na linha da hora, e o alt lê todos inteiros', () => {
   expect(MOTIVOS_NO_BLOCO).toBe(4)
   const e = desenho('espere', motivos5, { })
