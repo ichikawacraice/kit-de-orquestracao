@@ -895,16 +895,19 @@ function comandoFilaDeMerge(args) {
   if (!args.length || casados.some((m) => !m)) throw new Error(uso);
   const pedidos = juntarPedidos([], casados.map(([, n, sha]) => (sha ? { pr: Number(n), sha: sha.toLowerCase() } : { pr: Number(n) })));
   const cwd = process.cwd();
-  // o PR pedido agora tem de existir e estar aberto (erro de quem pediu, como antes); o resto se confere na rodada
+  const arquivo = seco ? null : ESTADO_DA_FILA(projetoDoCwd(cwd).projeto);
+  const lista = (v) => (Array.isArray(v) ? v : []);
+  const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };
+  // o PR pedido agora tem de existir e estar aberto (erro de quem pediu, como antes); o resto se confere na rodada.
+  // F220: o PR que já está anotado na fila (o relance da fila órfã repete a lista inteira) e fechou no meio tempo não
+  // derruba a chamada: a rodada o tira da fila, como faz com o pendente que fechou.
+  const naFila = new Set(seco ? [] : (() => { const e = lerEstado(); return [...e.emVoo, ...e.pendentes].map((p) => p?.pr); })());
   for (const { pr } of pedidos) {
     const v = dadosDoPr(pr, cwd);
-    if (v.state !== 'OPEN') throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
+    if (v.state !== 'OPEN' && !naFila.has(pr)) throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
     if (deFork(v)) throw new Error(`fila-de-merge: ${MOTIVO_DO_FORK(pr)}`);
   }
   if (seco) return rodadaDaFila(pedidos, { seco, gate, preparar, cwd });
-  const arquivo = ESTADO_DA_FILA(projetoDoCwd(cwd).projeto);
-  const lista = (v) => (Array.isArray(v) ? v : []);
-  const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };
   const entrada = comTrava(() => {
     const e = lerEstado();
     if (e.ocupada && e.ocupada.pid !== process.pid && donoDaFilaVivo(e.ocupada)) {

@@ -347,6 +347,32 @@ test('F220: quem ocupa a fila grava o gate e o preparo (o relance da fila órfã
   } finally { limpar(c); }
 });
 
+test('F220: o relance da fila órfã com um PR que fechou no meio tempo roda o resto (e PR fechado fora da fila segue recusado)', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F4', 24);
+    const est = JSON.parse(readFileSync(join(c.raiz, 'estado.json'), 'utf8'));
+    est.prs[21].state = 'MERGED';
+    writeFileSync(join(c.raiz, 'estado.json'), JSON.stringify(est));
+    const morto = spawnSync('true', { timeout: 5000, killSignal: 'SIGKILL' }).pid;
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    // sem estar na fila, o PR fechado é erro de quem pediu, como antes (a prova de que a recusa existe)
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [] }));
+    const fora = c.painel('fila-de-merge', '21', '24', '--gate', 'true');
+    assert.notEqual(fora.exit, 0);
+    assert.match(fora.err, /não está aberto/);
+    assert.deepEqual(c.merges(), []);
+    // na fila órfã, o comando de relance repete o 21: ele sai da fila e o 24 entra
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: morto, desde: '2026-10-28T13:03:03.261Z', gate: 'true' }, emVoo: [{ pr: 21 }], pendentes: [{ pr: 24 }] }));
+    const r = c.painel('fila-de-merge', '21', '24', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24]);
+    assert.match(s.devolvidos.find((d) => d.pr === 21)?.motivo ?? '', /saiu da fila/);
+    assert.deepEqual(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')), { ocupada: null, pendentes: [], emVoo: [] });
+  } finally { limpar(c); }
+});
+
 test('--seco não usa nem mexe na lista de pendentes', () => {
   const c = montar();
   try {
