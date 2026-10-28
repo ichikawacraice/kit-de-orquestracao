@@ -546,7 +546,7 @@ test('PR de fork é recusado: nem gate nem merge, e o pedido explica', () => {
 });
 
 // F221: a dona abriu PR novo e não o pôs em `prs`. A fila liga o PR ao item pela branch do worktree da sessão dona, põe o item
-// em `merge` (espera o gate) enquanto o gate roda, e o fecha ou devolve como os outros.
+// em `merge` enquanto o gate roda, e o fecha ou devolve como os outros.
 function donaNaBranch(c, branch) {
   const wt = join(c.raiz, 'wt-dona');
   git(c.clone, 'worktree', 'add', '-q', wt, branch);
@@ -577,14 +577,14 @@ test('F221: PR novo da dona fora de `prs` entra no item, que fica em merge duran
     assert.ok(noGate, 'o gate copiou o item');
     assert.equal(noGate.etapa, 'merge', 'durante o gate o item está em merge');
     assert.deepEqual(noGate.prs, [21, 24]);
-    assert.equal(noGate.espera?.motivo, 'gate');
-    const d = c.dado('F5');
-    assert.equal(d.etapa, 'feito');
-    assert.equal(d.espera, undefined);
+    assert.match(noGate.agora, /PR 24 na fila de merge: o gate roda/);
+    assert.equal(noGate.espera, undefined, 'sem espera: a batida segue vendo o merge parado');
+    assert.deepEqual(s.ligados, [{ pr: 24, item: 'F5' }]);
+    assert.equal(c.dado('F5').etapa, 'feito');
   } finally { limpar(c); }
 });
 
-test('F221: PR novo devolvido pelo gate volta o item a execucao, sem a espera do gate', () => {
+test('F221: PR novo devolvido pelo gate volta o item a execucao', () => {
   const c = montar();
   try {
     itemComPrVelho(c); donaNaBranch(c, 'pr23');
@@ -595,7 +595,6 @@ test('F221: PR novo devolvido pelo gate volta o item a execucao, sem a espera do
     const d = c.dado('F5');
     assert.equal(d.etapa, 'execucao');
     assert.deepEqual(d.prs, [21, 23]);
-    assert.equal(d.espera ?? null, null, 'a espera do gate sai na devolução');
   } finally { limpar(c); }
 });
 
@@ -626,6 +625,35 @@ test('F221: com a fila ocupada, o PR anotado já liga o item e o põe em merge',
     const d = c.dado('F5');
     assert.equal(d.etapa, 'merge');
     assert.deepEqual(d.prs, [21, 24]);
-    assert.equal(d.espera?.motivo, 'gate');
+    assert.match(d.agora, /espera a vez/);
+  } finally { limpar(c); }
+});
+
+test('F221: a branch que aponta dois itens (a dona com outro item vivo) não liga nenhum', () => {
+  const c = montar();
+  try {
+    itemComPrVelho(c); donaNaBranch(c, 'pr24');
+    assert.equal(c.painel('set', 'fila', 'F6', JSON.stringify({ titulo: 'outro item da dona', etapa: 'planejamento', tema: 'editor', via: 'dona', donoLocalId: LA, donoApelido: 'dona' })).exit, 0);
+    const r = c.painel('fila-de-merge', '24', '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados[0].itens, []);
+    assert.deepEqual(s.ambiguos, [24]);
+    assert.match(r.err, /aponta mais de um item/);
+    assert.equal(c.dado('F6').etapa, 'planejamento');
+    assert.equal(c.dado('F5').etapa, 'execucao');
+  } finally { limpar(c); }
+});
+
+test('F221: a rodada que falha deixa o item em merge sem espera (a batida o vê parado)', () => {
+  const c = montar();
+  try {
+    itemComPrVelho(c); donaNaBranch(c, 'pr24');
+    const r = c.painel('fila-de-merge', '24', '--gate', 'true', '--preparar', 'false');
+    assert.notEqual(r.exit, 0, 'o preparo falha');
+    const d = c.dado('F5');
+    assert.equal(d.etapa, 'merge');
+    assert.deepEqual(d.prs, [21, 24]);
+    assert.equal(d.espera, undefined);
   } finally { limpar(c); }
 });
