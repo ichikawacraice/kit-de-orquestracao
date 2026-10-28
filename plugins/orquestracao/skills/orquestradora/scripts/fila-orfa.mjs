@@ -1,6 +1,6 @@
 // F220: a fila de merge órfã. O estado da fila (`fila-de-merge/<projeto>.json`, painel.mjs) guarda {ocupada:{pid,desde,gate,
 // preparar}|null, pendentes, emVoo}. A limpeza de contexto da orquestradora mata a tarefa de background que roda a fila
-// (medido no Izanagi em 28/10: `[killed]`), e o que estava em voo ou anotado fica no arquivo sem ninguém para drenar: só a
+// (medido num projeto em 28/10: `[killed]`), e o que estava em voo ou anotado fica no arquivo sem ninguém para drenar: só a
 // chamada seguinte o leva. Aqui se diz quando isso aconteceu (a batida e o início de sessão da orquestradora avisam) e qual
 // chamada retoma. Dono vivo = o pid responde e o processo começou antes de `desde`: o pid reciclado por outro processo não
 // prende a fila. Sem dependência do painel: o hook de início de sessão também lê.

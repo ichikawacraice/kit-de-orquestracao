@@ -1,4 +1,4 @@
-// F220: a fila de merge órfã — PR anotado (`emVoo` ou `pendentes`) sem processo vivo para drenar. Medido no Izanagi em 28/10:
+// F220: a fila de merge órfã — PR anotado (`emVoo` ou `pendentes`) sem processo vivo para drenar. Medido num projeto em 28/10:
 // a limpeza de contexto matou a tarefa de background da fila (`[killed]`) e o #1308 ficou só anotado, sem ninguém notar.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
