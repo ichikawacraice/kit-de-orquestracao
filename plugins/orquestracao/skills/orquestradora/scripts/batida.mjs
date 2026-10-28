@@ -6,7 +6,7 @@ import { slugDoProjeto } from './perguntas-arquivo.mjs';
 export const PRAZO_MIN = 30; // item parado: sem gravar há tanto (PAINEL_PRAZO_MIN troca)
 export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta (BATIDA_SOLTA_MIN troca)
 export const ESPERA_MIN = 5; // sem dona há tanto: vira vaga no relatório da orquestradora
-export const CARTAO_VALIDADE_H = 12; // cartão de sessão dona sem clique há tanto: a orquestradora já o terá reproposto
+export const CARTAO_VALIDADE_H = 12; // cartão de sessão dona sem clique há tanto sai; enquanto vale, o item não é cobrado de novo (F218)
 
 const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
 const ms = (v) => { const t = Date.parse(v); return Number.isNaN(t) ? null : t; };
@@ -26,23 +26,30 @@ const tituloDoCartao = (titulo, c) => (/^(F\d+) · /.exec(titulo || '')?.[1] ?? 
 // de sessões: só o prazo vale. Sessão de antes de `propostoEm` com o mesmo título é outra e não resolve.
 // `propostoEm` no futuro (hora escrita errada) não vale: conta de `atualizadoEm` (a gravação do cartão), ou de agora se faltar.
 // `cartoes`: [{ id, data }] → ids a apagar.
-export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs }) {
+// `itens` (Map F → data, opcional): com ele, a sessão aberta só resolve o cartão quando o item já tem quem trabalhe (ou saiu da
+// fila viva), ou quando ela está aberta há PRAZO_MIN sem se gravar dona (morreu ou foi largada: o item volta a ser vaga). Até lá
+// o cartão segura a cobrança de outra dona (F218).
+export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs, itens = null }) {
   const apagar = [];
   for (const { id, data: c } of cartoes) {
     let proposto = ms(c?.propostoEm);
     if (proposto !== null && proposto > agoraMs) proposto = Math.min(ms(c?.atualizadoEm) ?? agoraMs, agoraMs);
     if (proposto === null || agoraMs - proposto >= CARTAO_VALIDADE_H * 3_600_000) { apagar.push(id); continue; }
-    const aberto = (linhas ?? []).some((r) => {
-      if (!vivoNaLista(r) || !tituloDoCartao(r.title, c) || projetoDe(r) !== slugDoProjeto(c.projeto)) return false;
+    let abertaEm = null; // a sessão do cartão mais antiga aberta depois dele
+    for (const r of linhas ?? []) {
+      if (!vivoNaLista(r) || !tituloDoCartao(r.title, c) || projetoDe(r) !== slugDoProjeto(c.projeto)) continue;
       const criada = ms(r.createdAt) ?? ms(r.lastActivityAt);
-      return criada !== null && criada >= proposto;
-    });
-    if (aberto) apagar.push(id);
+      if (criada !== null && criada >= proposto && (abertaEm === null || criada < abertaEm)) abertaEm = criada;
+    }
+    if (abertaEm === null) continue;
+    const d = itens?.get(c?.itens?.[0]);
+    const gravou = !itens || !d || ETAPAS_FINAIS.has(d.etapa) || texto(d.donoLocalId) || (Array.isArray(d.com) && d.com.length > 0);
+    if (gravou || agoraMs - abertaEm >= PRAZO_MIN * 60_000) apagar.push(id);
   }
   return apagar;
 }
 
-export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
+export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
   const mensagens = []; const soltar = [];
@@ -96,9 +103,10 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, ult
     }
     delete cutucadas[F];
 
-    // O item sem dona há ESPERA_MIN vira vaga de dona no relatório da orquestradora.
+    // O item sem dona há ESPERA_MIN vira vaga de dona no relatório da orquestradora, menos o que já tem a dona a caminho
+    // (cartão esperando o clique): a vaga repetida faz a orquestradora propor a segunda dona (F218).
     const r = semDona(d, agoraMs);
-    if (r && r.minutos >= ESPERA_MIN) proj.vagas.push({ papel: 'dona', item: F });
+    if (r && r.minutos >= ESPERA_MIN && !donaACaminho(F, d, { cartoes, agoraMs })) proj.vagas.push({ papel: 'dona', item: F });
   }
   for (const F of Object.keys(cutucadas)) if (!vistos.has(F)) delete cutucadas[F];
 

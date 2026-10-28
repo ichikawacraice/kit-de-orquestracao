@@ -39,7 +39,7 @@
 //
 // Coleções: sessoes, perguntas, fila (itens F<n>; protocolo em pool/protocolo.md#a-fila) e cartoes (cartão de sessão dona
 //   que espera o clique do operador; id = task_id do start_session; { projeto, apelido: "dona", papel: "dona", itens: [F<n>], orquestradoraId, propostoEm? }; propostoEm é opcional: o painel grava agora (e troca hora no futuro por agora);
-//   a orquestradora grava e apaga, e a batida apaga o cartão cuja sessão já abriu e o que passou de 12 h).
+//   a orquestradora grava e apaga, e a batida apaga o cartão cuja sessão já abriu e se gravou dona, ou está aberta há 30 min sem se gravar, e o que passou de 12 h).
 //
 // `projeto` (sessoes, fila e perguntas): ao CRIAR um documento sem o campo, o script o preenche com o nome do repositório git de
 // onde roda (basename da pasta que contém o git common dir, em slug `[a-z0-9-]`; fora de git não preenche). Toda op que grava
@@ -110,6 +110,7 @@ const moduloSemDona = (process.argv[2] === 'list' && process.argv.slice(3).inclu
   ? await import(pathToFileURL(join(HOOKS_DIR, 'sem-dona.mjs')).href)
   : null;
 const semDona = moduloSemDona?.semDona ?? null;
+const donaACaminho = moduloSemDona?.donaACaminho;
 // A batida, o `pode-reiniciar`, a migração das perguntas e o `com add` também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
 const regras = CONFERE_MEMBRO
   ? await import(pathToFileURL(POOL_COMUM).href).catch((e) => {
@@ -1133,13 +1134,13 @@ function comandoBatida(args) {
     const julgado = julgar({
       agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(),
       estado: arquivoJson(join(pasta, 'estado.json'), {}),
-      semDona,
+      semDona, donaACaminho, cartoes: cartoesDoPainel().map((c) => c.data),
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
       caminhoDoRelatorio: (nome) => join(pasta, `${nome}.json`),
       prazoMin: prazoEmMin([]), soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
     });
     const marcadoresApagados = marcadoresMortos(new Map(linhas.map((r) => [r.sessionId, r])), agoraMs);
-    const cartoesApagados = cartoesResolvidos({ cartoes: cartoesDoPainel(), linhas, projetoDe: projetoDeUmaLinha(), agoraMs });
+    const cartoesApagados = cartoesResolvidos({ cartoes: cartoesDoPainel(), linhas, projetoDe: projetoDeUmaLinha(), agoraMs, itens: new Map(itens) });
     const saida = { cartoesApagados, mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
     if (seco) return saida;
     const soltos = [];

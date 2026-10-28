@@ -11,7 +11,7 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BASE, modoAusente } from './hooks-crewai-comum.mjs';
-import { semDona, tetoDeDonas, donaTrabalhando } from './sem-dona.mjs';
+import { semDona, donaACaminho, tetoDeDonas, donaTrabalhando } from './sem-dona.mjs';
 import { filaDir, maquinaCheia } from './pool-comum.mjs';
 import { pendente, projetoDoRepo } from '../skills/orquestradora/scripts/ausencia.mjs';
 
@@ -25,21 +25,35 @@ const BATIDA_VELHA_MIN = (() => { const n = Number(process.env.BATIDA_VELHA_MIN)
 
 const LOG = join(homedir(), '.claude', 'orquestracao', 'ritual-hook.log');
 
-// Itens do projeto da orquestradora sem dona há ESPERA_MIN ou mais.
+// Os cartões de sessão dona esperando o clique (coleção `cartoes`, ao lado da fila): o `data` de cada um.
+function cartoes() {
+  const dir = join(dirname(filaDir()), 'cartoes');
+  let nomes; try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return []; }
+  return nomes.flatMap((n) => { try { return [JSON.parse(readFileSync(join(dir, n), 'utf8'))?.data]; } catch { return []; } });
+}
+
+// Itens do projeto da orquestradora sem dona há ESPERA_MIN ou mais, menos os que já têm a dona a caminho (cartão esperando o
+// clique), que só contam para o teto: cobrar de novo abre a segunda dona do item (F218). → { itens, aCaminho }
 function itensSemDona(nomeProjeto) {
   const dir = filaDir();
-  if (!nomeProjeto || !existsSync(dir)) return [];
+  if (!nomeProjeto || !existsSync(dir)) return { itens: [], aCaminho: 0 };
+  let doPainel = null; // os cartões, lidos só quando há item sem dona
   const itens = [];
+  let aCaminho = 0;
   for (const nome of readdirSync(dir)) {
     if (!nome.endsWith('.json')) continue;
     try {
       const doc = JSON.parse(readFileSync(join(dir, nome), 'utf8'));
       if (String(doc?.data?.projeto ?? '').toLowerCase() !== nomeProjeto) continue;
       const e = semDona(doc.data, Date.now());
-      if (e && e.minutos >= ESPERA_MIN) itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), data: doc.data, ...e });
+      if (!e || e.minutos < ESPERA_MIN) continue;
+      const F = doc.id ?? nome.replace(/\.json$/, '');
+      doPainel ??= cartoes();
+      if (donaACaminho(F, doc.data, { cartoes: doPainel, agoraMs: Date.now() })) aCaminho++;
+      else itens.push({ id: F, data: doc.data, ...e });
     } catch { /* item ilegível: ignora */ }
   }
-  return itens;
+  return { itens, aCaminho };
 }
 
 // Donas trabalhando agora no projeto (item com dona ou `com` numa etapa de trabalho; `merge` não conta).
@@ -60,15 +74,17 @@ function donasTrabalhando(nomeProjeto) {
 // O item sem dona pede a sessão dona, até o teto de donas trabalhando; acima do teto, espera sem cobrança. Satisfaz: um
 // `start_session` no turno, o modo ausente ligado (ninguém para abrir), gravar o dono do item ou mandar mensagem que o cite.
 function cobrancaDeDona(nomeProjeto, comandos, usadas, mensagens) {
-  const itens = itensSemDona(nomeProjeto);
+  const { itens, aCaminho } = itensSemDona(nomeProjeto);
   if (itens.length === 0) return [];
   if ([...usadas].some((n) => n.endsWith('start_session')) || modoAusente()) return [];
   const teto = maquinaCheia().cheia ? Math.min(3, tetoDeDonas()) : tetoDeDonas();
-  const ocupadas = donasTrabalhando(nomeProjeto);
+  // a dona a caminho (cartão esperando o clique) já ocupa a vaga dela no teto
+  const ocupadas = donasTrabalhando(nomeProjeto) + aCaminho;
   if (ocupadas >= teto) return [];
+  const conta = aCaminho > 0 ? `${ocupadas - aCaminho} de ${teto} donas trabalhando, ${aCaminho} a caminho` : `${ocupadas} de ${teto} donas trabalhando`;
   const cita = (id, x) => new RegExp(`\\b${id}\\b`).test(x);
   const faltam = itens.filter((it) => !comandos.some((c) => cita(it.id, c) && /donoLocalId/.test(c)) && !mensagens.some((m) => cita(it.id, m)));
-  return faltam.slice(0, teto - ocupadas).map((it) => `${it.id} sem dona há ${it.minutos} min (${ocupadas} de ${teto} donas trabalhando): abra a sessão dona do item (start_session; fora do turno do operador, cartão)`);
+  return faltam.slice(0, teto - ocupadas).map((it) => `${it.id} sem dona há ${it.minutos} min (${conta}): abra a sessão dona do item (start_session; fora do turno do operador, cartão)`);
 }
 
 // A batida escreve `batida/<projeto>.json` a cada rodada; sem ele, ou velho, o mod não a está rodando.

@@ -42,3 +42,22 @@ export const CASOS = [
     data: { etapa: 'execucao', com: [], historico: [{ em: 'ontem', etapa: 'execucao' }] },
     esperado: null },
 ];
+
+// Tabela da regra "dona a caminho" (F218): cartão de sessão dona esperando o clique, proposto depois de o item ficar sem dono.
+const cartao = (itens, minAtras) => ({ itens, propostoEm: min(minAtras) });
+const semDono = (minAtras) => ({ etapa: 'planejamento', com: [], historico: hist([min(minAtras), 'planejamento', null]) });
+// a dona pegou o item há 120 min e o soltou há 30, sem mudar a etapa (o `painel soltar`)
+const soltou = { etapa: 'planejamento', com: [], historico: hist([min(200), 'planejamento', null], [min(120), 'planejamento', 'dona'], [min(30), 'planejamento', null]) };
+export const CASOS_A_CAMINHO = [
+  { nome: 'sem cartão: não está a caminho', F: 'F7', data: semDono(30), cartoes: [], esperado: false },
+  { nome: 'cartão do item proposto há 10 min', F: 'F7', data: semDono(30), cartoes: [cartao(['F7'], 10)], esperado: true },
+  { nome: 'cartão de outro item não conta', F: 'F7', data: semDono(30), cartoes: [cartao(['F8'], 10)], esperado: false },
+  { nome: 'F70 não é F7', F: 'F7', data: semDono(30), cartoes: [cartao(['F70'], 10)], esperado: false },
+  { nome: 'cartão de mais de 12 h venceu', F: 'F7', data: semDono(14 * 60), cartoes: [cartao(['F7'], 13 * 60)], esperado: false },
+  { nome: 'cartão sem data legível não conta', F: 'F7', data: semDono(30), cartoes: [{ itens: ['F7'], propostoEm: 'ontem' }], esperado: false },
+  { nome: 'cartão de antes de a dona soltar o item é de outra rodada', F: 'F7', data: soltou, cartoes: [cartao(['F7'], 150)], esperado: false },
+  { nome: 'cartão de depois de a dona soltar o item conta', F: 'F7', data: soltou, cartoes: [cartao(['F7'], 20)], esperado: true },
+  { nome: 'mudar de etapa sem dono não muda o piso', F: 'F7', data: { etapa: 'execucao', com: [], historico: hist([min(60), 'planejamento', null], [min(5), 'execucao', null]) }, cartoes: [cartao(['F7'], 30)], esperado: true },
+  { nome: 'sem historico: sem piso, vale o prazo', F: 'F7', data: { etapa: 'design', com: [] }, cartoes: [cartao(['F7'], 10)], esperado: true },
+  { nome: 'entradas ruins não derrubam', F: 'F7', data: null, cartoes: [null, { itens: 'F7' }], esperado: false },
+];
