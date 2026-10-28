@@ -3,7 +3,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -168,6 +168,26 @@ test('batida: apaga o marcador da orquestradora arquivada e mantém o da viva', 
   assert.deepEqual(r.json().marcadoresApagados, ['cli-arquivada'], r.out);
   assert.ok(!existsSync(join(pastaOrq(), 'ativas', 'cli-arquivada')));
   assert.ok(existsSync(join(pastaOrq(), 'ativas', 'cli-viva')));
+});
+test('batida: apaga o marcador de id anterior da orquestradora viva (a limpeza trocou o session_id) e mantém o da atual', () => {
+  writeFileSync(join(base, 'appsess', `${lid(41)}.json`), JSON.stringify({ sessionId: lid(41), cliSessionId: 'cli-atual', priorCliSessionIds: ['cli-anterior'], title: '🎛 orquestradora — kit', cwd: repo, isArchived: false }));
+  mkdirSync(join(pastaOrq(), 'ativas'), { recursive: true });
+  writeFileSync(join(pastaOrq(), 'ativas', 'cli-anterior'), '');
+  writeFileSync(join(pastaOrq(), 'ativas', 'cli-atual'), '');
+  const r = batida(sessoes(sessao(41, '🎛 orquestradora — kit', { isRunning: true })));
+  assert.deepEqual(r.json().marcadoresApagados, ['cli-anterior'], r.out);
+  assert.ok(!existsSync(join(pastaOrq(), 'ativas', 'cli-anterior')));
+  assert.ok(existsSync(join(pastaOrq(), 'ativas', 'cli-atual')));
+});
+test('batida: marcador fora do registro só sai depois de 10 min (o app pode ainda não ter gravado a id nova da limpeza)', () => {
+  mkdirSync(join(pastaOrq(), 'ativas'), { recursive: true });
+  writeFileSync(join(pastaOrq(), 'ativas', 'cli-recente'), '');
+  writeFileSync(join(pastaOrq(), 'ativas', 'cli-velho'), '');
+  const onzeMin = new Date(T - 11 * MIN);
+  utimesSync(join(pastaOrq(), 'ativas', 'cli-velho'), onzeMin, onzeMin);
+  const r = batida(sessoes(sessao(1, 'F1 · a')));
+  assert.deepEqual(r.json().marcadoresApagados, ['cli-velho'], r.out);
+  assert.ok(existsSync(join(pastaOrq(), 'ativas', 'cli-recente')));
 });
 test('batida --seco: devolve o que faria e não muda arquivo nenhum', () => {
   item('F1');
