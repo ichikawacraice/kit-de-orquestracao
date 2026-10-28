@@ -980,38 +980,23 @@ export type ReinicioDesenhado = {
   razao?: string
   /** O aviso ligado (`avisadoEm` = quando a notificação saiu); `null` = a linha discreta, sem moldura. */
   aviso: { avisadoEm?: string } | null
-  /** A atualização que espera o reinício (`painel pode-reiniciar`); ausente ou `null` = nada baixado. */
-  atualizacao?: { app?: { baixada: string }; motor?: { baixada: string }; plugins?: Array<{ nome: string; versao: string }> } | null
+  /** Os plugins do kit que esperam o reinício (`painel pode-reiniciar`); ausente, `null` ou vazio = nada. */
+  paraAplicar?: Array<{ nome: string; versao: string }> | null
 }
 
-/**
- * O que espera o reinício, na ordem app, motor, kit: `app 3.2.0, motor 2.1.308, orquestracao 0.1.71` (um plugin do kit) ou
- * `…, kit (2 plugins)` (vários); `curto` troca o kit por `kit`. `null` sem nada. O kit não tem versão própria: cada plugin tem a sua.
- */
-const versoesDaAtualizacao = (a: ReinicioDesenhado['atualizacao'], curto = false): string | null => {
-  const plugins = a?.plugins ?? []
-  const kit = plugins.length === 0 ? null : curto ? 'kit' : plugins.length === 1 ? `${plugins[0]!.nome} ${plugins[0]!.versao}` : `kit (${plugins.length} plugins)`
-  const partes = [a?.app && `app ${a.app.baixada}`, a?.motor && `motor ${a.motor.baixada}`, kit].filter(Boolean)
-
-  return partes.length ? partes.join(', ') : null
-}
-
-/** A linha azul do estado 2, a maior forma que cabe em `max` a 12 px (o terminal usa a 1ª e corta no fim); `null` sem nada. */
-export function fraseDaAplicacao(a: ReinicioDesenhado['atualizacao'], max = Infinity): string | null {
-  const v = versoesDaAtualizacao(a)
-  if (v === null) return null
-  const curto = versoesDaAtualizacao(a, true) as string
-  const opcoes = [`↑ Pronta para aplicar · ${v} · reinicie o app`, `↑ Pronta para aplicar · ${v}`, `↑ Para aplicar · ${v}`, `↑ Para aplicar · ${curto}`]
+/** A linha azul do estado 2, a maior forma que cabe em `max` a 12 px (o terminal usa a 1ª e corta no fim); `null` sem nada.
+ * Um plugin vai pelo nome e versão; vários, `kit (N plugins)`: o kit não tem versão própria. */
+export function fraseDaAplicacao(p: ReinicioDesenhado['paraAplicar'], max = Infinity): string | null {
+  if (!p?.length) return null
+  const v = p.length === 1 ? `${p[0]!.nome} ${p[0]!.versao}` : `kit (${p.length} plugins)`
+  const opcoes = [`↑ Pronta para aplicar · ${v} · reinicie o app`, `↑ Pronta para aplicar · ${v}`, `↑ Para aplicar · ${v}`, '↑ Para aplicar · kit']
 
   return max === Infinity ? opcoes[0]! : caber(opcoes.find(o => largura(o, 12) <= max) ?? opcoes[opcoes.length - 1]!, 12, max)
 }
 
 /** O `alt` da linha azul, com todas as versões inteiras. */
-const altDaAplicacao = (a: ReinicioDesenhado['atualizacao']): string => {
-  const partes = [a?.app && `app ${a.app.baixada}`, a?.motor && `motor ${a.motor.baixada}`, ...(a?.plugins ?? []).map(p => `${p.nome} ${p.versao}`)].filter(Boolean)
-
-  return partes.length ? ` Pronta para aplicar ao reiniciar o app: ${partes.join(', ')}.` : ''
-}
+const altDaAplicacao = (p: ReinicioDesenhado['paraAplicar']): string =>
+  p?.length ? ` Pronta para aplicar ao reiniciar o app: ${p.map(x => `${x.nome} ${x.versao}`).join(', ')}.` : ''
 
 /** Quantos motivos o bloco lista antes do `+ N mais`. */
 export const MOTIVOS_NO_BLOCO = 4
@@ -1047,15 +1032,15 @@ export function reinicioSvg(W: number, r: ReinicioDesenhado): { source: string; 
   const util = W - 24
   const porTipo = contagemDoReinicio(r.motivos)
   // O que espera o reinício é uma linha a mais, em azul: logo abaixo da linha discreta, ou a última dentro da moldura.
-  const frase = fraseDaAplicacao(r.atualizacao)
+  const frase = fraseDaAplicacao(r.paraAplicar)
   // Sem espaço, encolhem as palavras antes da versão e o kit vira `kit`: o alt diz tudo inteiro.
-  const fraseQueCabe = (max: number) => fraseDaAplicacao(r.atualizacao, max) as string
-  const altDaAtualizacao = altDaAplicacao(r.atualizacao)
+  const fraseQueCabe = (max: number) => fraseDaAplicacao(r.paraAplicar, max) as string
+  const altDoKit = altDaAplicacao(r.paraAplicar)
   const discreta = (alt: string, corpo: string) => {
     const altura = frase === null ? 20 : 38
     const linha = frase === null ? '' : texto(0, 32, 12, 'an', xml(fraseQueCabe(W)))
 
-    return { height: altura, alt: `${alt}${altDaAtualizacao}`, source: svg(W, altura, `${corpo}${linha}`) }
+    return { height: altura, alt: `${alt}${altDoKit}`, source: svg(W, altura, `${corpo}${linha}`) }
   }
   if (r.aviso === null) {
     const glifo = (c: string) => `<tspan class="${c}">⏻</tspan>`
@@ -1115,7 +1100,7 @@ export function reinicioSvg(W: number, r: ReinicioDesenhado): { source: string; 
 
   return {
     height: altura,
-    alt: `${alt}${altDaAtualizacao}`,
+    alt: `${alt}${altDoKit}`,
     source: svg(W, altura, `<rect class="${moldura}" fill="none" stroke-width="1.5" x=".75" y=".75" width="${W - 1.5}" height="${altura - 1.5}" rx="8"/>${partes.join('')}`),
   }
 }

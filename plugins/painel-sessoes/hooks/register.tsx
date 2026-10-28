@@ -1692,7 +1692,7 @@ export async function atualizarKit($: EngineInterface): Promise<void> {
       arquivo: {
         ...r.arquivo,
         paraBaixar: (r.arquivo.paraBaixar ?? []).filter(p => !feitos.some(f => f.nome === p.nome)),
-        atualizacao: { ...(r.arquivo.atualizacao ?? {}), plugins: [...(r.arquivo.atualizacao?.plugins ?? []).filter(p => !feitos.some(f => f.nome === p.nome)), ...feitos] },
+        paraAplicar: [...(r.arquivo.paraAplicar ?? []).filter(p => !feitos.some(f => f.nome === p.nome)), ...feitos],
       },
     })
   }
@@ -2371,7 +2371,7 @@ export const register: Register = on => {
         {gravandoAviso === 'desligando' ? 'Desligando…' : 'Me avise'}
       </Button>
     ) : null
-    const dadosDoReinicio = { ...doReinicio, aviso: rn.aviso ? { avisadoEm: rn.aviso.avisadoEm } : null, atualizacao: rn.arquivo?.atualizacao ?? null }
+    const dadosDoReinicio = { ...doReinicio, aviso: rn.aviso ? { avisadoEm: rn.aviso.avisadoEm } : null, paraAplicar: rn.arquivo?.paraAplicar ?? null }
     // F209: o reinício só aparece com algo instalado esperando por ele (ou com o aviso que o operador ligou); o kit, com versão para baixar.
     const mostrar = oQueMostrarDoReinicio({ arquivo: rn.arquivo, aviso: rn.aviso })
     const mostraReinicio = mostrar.reinicio
@@ -2811,7 +2811,7 @@ export const register: Register = on => {
               </Text>
             )
             // F209: o que espera o reinício, em azul, logo abaixo do título (ou a última linha com o aviso ligado)
-            const aplicar = fraseDaAplicacao(rn.arquivo?.atualizacao ?? null)
+            const aplicar = fraseDaAplicacao(rn.arquivo?.paraAplicar ?? null)
             const linhaAplicar = aplicar && <Text key="aplicar" color="suggestion" wrap="truncate-end">{aplicar}</Text>
             if (!rn.aviso) {
               return (

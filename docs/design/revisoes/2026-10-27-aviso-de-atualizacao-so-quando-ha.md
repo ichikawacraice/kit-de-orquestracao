@@ -11,6 +11,10 @@
   - As larguras abaixo saíram da própria `largura()` de `desenho.ts`, com W = 288.
   - O botão sem aviso reserva 96 px (`W - 96`). Pela mesma régua, `Tentar de novo` mede 93 px de texto a 13 px, então não cabe em 96.
 
+## Decisão do operador depois da revisão (28/10)
+
+O painel trata **só dos plugins do kit**: "quando falamos de atualização no painel, é somente para questões do painel e do nosso kit". O app e o motor saem do painel. Na linha azul do estado 2, o `V` passa a ser só o kit (`<nome> <versão>` com um plugin, `kit (N plugins)` com vários; a forma mais curta é `↑ Para aplicar · kit`); as menções a app e motor abaixo ficam como registro do que se decidiu antes.
+
 ## Tarefa
 
 *O operador vê no topo do pane só o que pede um gesto dele: baixar a atualização do kit (um clique) e, depois, reiniciar o app para aplicá-la. Quando não há nada pendente, o topo não mostra nada sobre isso.*

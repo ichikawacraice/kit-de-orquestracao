@@ -135,13 +135,14 @@ export type EstadoPedido = { estado: 'enviando' } | { estado: 'prompt'; em: numb
 
 /** O aviso de reinício e a conferência que a tela lê: os dois arquivos de `batida/` (F152), cada um com o próprio erro. */
 /** O que só entra com o app reiniciado: a versão nova do app já baixada, e a do motor mais nova que a mais velha em uso. */
-export type Atualizacao = { app?: { instalada: string; baixada: string }; motor?: { rodando: string; baixada: string }; plugins?: Array<{ nome: string; versao: string }> }
+/** Um plugin do kit instalado depois que o app abriu: só vale com o app reiniciado. */
+export type ParaAplicar = { nome: string; versao: string }
 /** Um plugin do kit com versão publicada mais nova que a instalada. */
 export type ParaBaixar = { nome: string; instalada: string; publicada: string }
 
 export type Reinicio = {
   /** `batida/pode-reiniciar.json`; `null` = ausente ou ilegível. */
-  arquivo: { pode: boolean; motivos: Array<{ tipo: 'sessao' | 'teste' | 'merge'; texto: string; localId?: string }>; sessoesDe?: string; em: string; listaEm?: string; atualizacao?: Atualizacao; paraBaixar?: ParaBaixar[] } | null
+  arquivo: { pode: boolean; motivos: Array<{ tipo: 'sessao' | 'teste' | 'merge'; texto: string; localId?: string }>; sessoesDe?: string; em: string; listaEm?: string; paraAplicar?: ParaAplicar[]; paraBaixar?: ParaBaixar[] } | null
   /** `batida/aviso-de-reinicio.json`; `null` = desligado (ou ilegível). */
   aviso: { ligadoEm: string; vigia: string; avisadoEm?: string; naoPodeSeguidos: number } | null
   /** A última conferência pelo comando falhou (o pane diz "não consegui conferir agora"). */

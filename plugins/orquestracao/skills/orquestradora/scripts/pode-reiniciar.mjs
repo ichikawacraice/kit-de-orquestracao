@@ -6,7 +6,6 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const vivo = (pid) => {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -109,38 +108,8 @@ export function julgarReinicio({ sessoes, fichas, ps, euPid = new Set() }) {
   return motivos;
 }
 
-// Atualização que só entra com o app reiniciado: o app com a versão nova já baixada pelo ShipIt (instala ao fechar) e o motor
-// (claude-code) com versão mais nova na pasta do app do que a que alguma sessão roda. Tudo lido do HOME; fora do macOS nada existe.
-const versaoDoPlist = (app) => {
-  try { return /<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/.exec(readFileSync(join(app, 'Contents', 'Info.plist'), 'utf8'))?.[1] ?? null; } catch { return null; }
-};
-const deUrl = (u) => { try { return typeof u === 'string' && u.startsWith('file:') ? fileURLToPath(u) : null; } catch { return null; } };
 const RELEASE = /^(\d+)\.(\d+)\.(\d+)$/;
 const compararVersao = (a, b) => { const x = RELEASE.exec(a).slice(1).map(Number); const y = RELEASE.exec(b).slice(1).map(Number); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; };
-
-/** → `{ app?: { instalada, baixada }, motor?: { rodando, baixada } }`, ou `null` sem nada esperando. `rodando` é a mais velha em uso. */
-export function lerAtualizacao({ home, ps }) {
-  const r = {};
-  try {
-    const estado = JSON.parse(readFileSync(join(home, 'Library', 'Caches', 'com.anthropic.claudefordesktop.ShipIt', 'ShipItState.plist'), 'utf8'));
-    const alvo = deUrl(estado?.targetBundleURL);
-    const novo = deUrl(estado?.updateBundleURL);
-    const instalada = alvo && versaoDoPlist(alvo);
-    const baixada = novo && versaoDoPlist(novo);
-    // só a mais nova: uma sobra do ShipIt com versão mais velha que a instalada não instala nada
-    const maisNova = RELEASE.test(instalada ?? '') && RELEASE.test(baixada ?? '') ? compararVersao(instalada, baixada) < 0 : instalada !== baixada;
-    if (instalada && baixada && maisNova) r.app = { instalada, baixada };
-  } catch { /* sem ShipIt: nada baixado */ }
-  let pastas = [];
-  try { pastas = readdirSync(join(home, 'Library', 'Application Support', 'Claude', 'claude-code')).filter((n) => RELEASE.test(n)); } catch { /* sem pasta */ }
-  const rodando = ps.flatMap((p) => { const m = /\/claude-code\/(\d+\.\d+\.\d+)\//.exec(p.command); return m ? [m[1]] : []; });
-  if (pastas.length && rodando.length) {
-    const baixada = pastas.sort(compararVersao).at(-1);
-    const velha = rodando.sort(compararVersao)[0];
-    if (compararVersao(velha, baixada) < 0) r.motor = { rodando: velha, baixada };
-  }
-  return r.app || r.motor ? r : null;
-}
 
 // F209: os plugins do kit (o marketplace `kit-de-orquestracao`, escopo user). O app carrega os plugins quando abre: plugin com
 // `lastUpdated` depois do início do processo do app ainda não vale. "Para baixar" é a versão do `main` publicado mais nova que a
@@ -224,17 +193,11 @@ export function lerParaBaixar({ home, cache, agoraMs = Date.now(), env = process
   });
 }
 
-/** A linha da atualização: `null` sem nada esperando. */
-export function fraseDaAtualizacao(a) {
-  if (!a) return null;
-  const partes = [a.app && `app ${a.app.baixada}`, a.motor && `motor ${a.motor.baixada}`, ...(a.plugins ?? []).map((p) => `${p.nome} ${p.versao}`)].filter(Boolean);
-  return `Atualização baixada (${partes.join(', ')}): reinicie o app para instalar.`;
-}
-
-/** O texto da resposta. `idadeMin` só quando a lista é a da batida. */
-export function textoDoReinicio({ pode, motivos, sessoesDe, idadeMin, atualizacao, paraBaixar }) {
+/** O texto da resposta. `idadeMin` só quando a lista é a da batida. As linhas do kit vêm por último e não são motivo. */
+export function textoDoReinicio({ pode, motivos, sessoesDe, idadeMin, paraAplicar, paraBaixar }) {
   const idade = sessoesDe === 'batida' && idadeMin !== undefined ? `(lista de há ${idadeMin} min)\n` : '';
+  const aplicar = paraAplicar?.length ? `Plugins do kit instalados (${paraAplicar.map((p) => `${p.nome} ${p.versao}`).join(', ')}): reinicie o app para aplicar.\n` : '';
   const baixar = paraBaixar?.length ? `Atualização do kit para baixar (${paraBaixar.map((p) => `${p.nome} ${p.publicada}`).join(', ')}): rode atualizar-plugins.\n` : '';
-  const att = `${atualizacao ? `${fraseDaAtualizacao(atualizacao)}\n` : ''}${baixar}`;
-  return pode ? `Pode reiniciar.\n${att}${idade}` : `Não reinicie agora:\n${motivos.map((m) => m.texto).join('\n')}\n${att}${idade}`;
+  const kit = `${aplicar}${baixar}`;
+  return pode ? `Pode reiniciar.\n${kit}${idade}` : `Não reinicie agora:\n${motivos.map((m) => m.texto).join('\n')}\n${kit}${idade}`;
 }
