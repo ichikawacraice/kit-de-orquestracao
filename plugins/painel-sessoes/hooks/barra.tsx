@@ -2,7 +2,8 @@ import type { Barra, ParaAplicar, ParaBaixar } from '../types'
 
 // A barra de status acima do prompt: o relógio do cache de 1 h, o contexto contra a janela de compactação, o selo das perguntas
 // abertas, o botão de limpar (só na orquestradora), o do modo ausente e o do painel, cada um com glifo e cor. Só lê arquivos
-// (a cada 30 s e a cada turno); o `list_sessions` fica para o pane aberto. O clique de limpar manda o prompt à própria sessão.
+// (a cada 30 s e a cada turno); o `list_sessions` fica para o pane aberto. O clique de limpar manda o prompt à própria sessão
+// com o cache quente e, com ele frio, limpa direto (F213).
 
 type Doc = { id: string; data: Record<string, unknown>; version?: number }
 export type Regua = { aviso: number; teto: number }
@@ -15,6 +16,8 @@ export const BANDEIRA_DO_APP = 'Library/Application Support/Claude/claude-code-s
 
 /** O que o clique de limpar manda à própria sessão (o prompt chega com origem `plugin`; o ok que a T7 lê é o arquivo gravado antes). */
 export const PROMPT_DE_LIMPAR = 'O operador mandou limpar pelo botão da barra: grave o estado (handoff do que estiver aberto) e limpe-se com clear_session "self".'
+/** Com o cache frio o clique limpa direto (`clear_session` pelo mod) e espera isto a sessão recomeçar (o processo morre na limpeza); passado o prazo, pede à sessão. */
+export const ESPERA_DA_LIMPEZA_DIRETA_MS = 20_000
 /** O `Limpando…` segue até a leitura ver o contexto abaixo disto e, se o clique já foi abaixo disto, abaixo da metade do que era no clique (senão a leitura apagaria o aviso antes da limpeza), ou até `LIMPANDO_MAX_MS`. */
 export const LIMPANDO_ABAIXO_DE = 150_000
 export const LIMPANDO_MAX_MS = 10 * 60_000
@@ -110,6 +113,9 @@ export function nivelDoCache(segundos: number | null, trabalhando: boolean): 'av
 
   return segundos <= AVISO_MIN ? 'aviso' : null
 }
+
+/** Cache frio: o relógio venceu e o turno está parado. Só aí o limpar vai direto, sem turno do modelo (que reescreveria a conversa sem cache); sem relógio não é frio. */
+export const cacheFrio = (segundos: number | null, trabalhando: boolean): boolean => segundos !== null && segundos <= 0 && !trabalhando
 
 const dois = (n: number) => String(n).padStart(2, '0')
 
@@ -286,6 +292,8 @@ export type EstadoBarra = {
   ehOrquestradora: boolean
   /** O limpar já foi mandado e a limpeza ainda não apareceu na leitura. */
   limpando: boolean
+  /** O cache esfriou com o turno parado: o clique limpa direto (`↺ Limpar já`). */
+  limparDireto?: boolean
   /** O aviso de reinício: `null` (ou ausente) com o aviso desligado, e a barra não diz nada. */
   reinicio?: 'esperando' | 'pode' | 'sem-dado' | 'conferindo' | null
   rodando?: number
@@ -314,7 +322,7 @@ export function textoDoContexto(tokens: number, regua: Regua | null, janela: num
 }
 
 export const rotuloDoSelo = (n: number) => `${GLIFO.perguntas.g} ${n} ${n === 1 ? 'pergunta' : 'perguntas'}`
-export const rotuloDoLimpar = (limpando: boolean) => `${GLIFO.limpar.g} ${limpando ? 'Limpando…' : 'Limpar'}`
+export const rotuloDoLimpar = (limpando: boolean, direto = false) => `${GLIFO.limpar.g} ${limpando ? 'Limpando…' : direto ? 'Limpar já' : 'Limpar'}`
 export const rotuloDoModo = (modo: 'presente' | 'ausente', trocando: boolean) =>
   `${GLIFO.modo.g} ${trocando ? (modo === 'ausente' ? 'Ligando…' : 'Desligando…') : modo === 'ausente' ? 'Estou de volta' : 'Ficar ausente'}`
 export const rotuloDoPainel = (aberto: boolean) => `${GLIFO.painel.g} ${aberto ? 'Fechar painel' : 'Abrir painel'}`
@@ -333,7 +341,7 @@ export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
   if (e.reinicio) dir.push({ k: 'reinicio', t: textoDoReinicioNaBarra({ estado: e.reinicio === 'esperando' ? 'espere' : e.reinicio, rodando: e.rodando ?? 0 }) })
   const selo = e.abertas > 0
   if (selo) dir.push({ k: 'perguntas', t: rotuloDoSelo(e.abertas) })
-  if (e.ehOrquestradora) dir.push({ k: 'limpar', t: rotuloDoLimpar(e.limpando) })
+  if (e.ehOrquestradora) dir.push({ k: 'limpar', t: rotuloDoLimpar(e.limpando, e.limparDireto) })
   if (e.modo && (e.modo === 'ausente' ? true : faixa < 2)) dir.push({ k: 'modo', t: rotuloDoModo(e.modo, e.trocando) })
   if (faixa < 2 || !selo) dir.push({ k: 'painel', t: rotuloDoPainel(e.painelAberto) })
 
@@ -342,7 +350,7 @@ export function pecasDaBarra(e: EstadoBarra, faixa: 0 | 1 | 2): Pecas {
 
 /** A largura que a faixa pede, com os textos reais: peça à esquerda com 2 de vão, botão com `[ ]` (+4), texto sem (o reinício, 16), a moldura +2. */
 export function larguraDaFaixa(e: EstadoBarra, faixa: 0 | 1 | 2): number {
-  // O limpar conta sempre como `↺ Limpando…`: a barra não se rearruma debaixo do clique.
+  // O limpar conta sempre como `↺ Limpando…` (o `↺ Limpar já` do cache frio tem a mesma largura): a barra não se rearruma debaixo do clique.
   const { esq, dir } = pecasDaBarra({ ...e, limpando: true }, faixa)
   const ladoEsq = esq.reduce((n, p) => n + largura(p.t), 0) + 2 * (esq.length - 1)
   // O reinício é texto (sem `[ ]`) e conta sempre como `⏻ Pode reiniciar`, a forma mais longa.
@@ -406,6 +414,7 @@ export function desenharBarra({ Box, Text, Button }: Elementos, d: DadosDaBarra,
     moldura: nivel !== null,
     ehOrquestradora: b.ehOrquestradora,
     limpando: d.limpando,
+    limparDireto: cacheFrio(b.cache.segundos, d.isWorking),
     reinicio: d.reinicio ? (d.reinicio.estado === 'espere' ? 'esperando' : d.reinicio.estado) : null,
     rodando: d.reinicio?.rodando ?? 0,
   }

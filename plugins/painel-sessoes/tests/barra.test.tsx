@@ -6,11 +6,13 @@ import {
   LEITURA_MS,
   GLIFO,
   LIMPANDO_ABAIXO_DE,
+  ESPERA_DA_LIMPEZA_DIRETA_MS,
   PROMPT_DE_LIMPAR,
   PALAVRA_ALTO,
   PALAVRA_LIMPAR,
   REGUAS,
   abertasDoProjeto,
+  cacheFrio,
   contarDonas,
   corDoContexto,
   faixaDaBarra,
@@ -196,12 +198,14 @@ test('faixaDaBarra: o limpar entra na soma como ↺ Limpando… (a reserva): 123
   expect(pecasDaBarra(ORQ_BARRA, 1).dir.map(p => p.k)).toEqual(['perguntas', 'limpar', 'modo', 'painel'])
 })
 
-test('faixaDaBarra: Limpar e Limpando… somam o mesmo, e a faixa não muda debaixo do clique', () => {
+test('faixaDaBarra: Limpar, Limpar já e Limpando… somam o mesmo, e a faixa não muda debaixo do clique nem quando o cache esfria', () => {
   for (const faixa of [0, 1, 2] as const) {
     expect(larguraDaFaixa({ ...ORQ_BARRA, limpando: true }, faixa), `faixa ${faixa}`).toBe(larguraDaFaixa(ORQ_BARRA, faixa))
+    expect(larguraDaFaixa({ ...ORQ_BARRA, limparDireto: true }, faixa), `faixa ${faixa} já`).toBe(larguraDaFaixa(ORQ_BARRA, faixa))
   }
   for (const cols of [125, 124, 105, 104, 62]) {
     expect(faixaDaBarra(cols, { ...ORQ_BARRA, limpando: true }), `${cols} colunas`).toBe(faixaDaBarra(cols, ORQ_BARRA))
+    expect(faixaDaBarra(cols, { ...ORQ_BARRA, limparDireto: true }), `${cols} colunas direto`).toBe(faixaDaBarra(cols, ORQ_BARRA))
   }
 })
 
@@ -216,6 +220,8 @@ test('pecasDaBarra: a ordem é selo → limpar → modo → painel; o limpar só
   const rotulos = pecasDaBarra({ ...ORQ_BARRA, modo: 'ausente', painelAberto: true }, 0).dir.map(p => p.t)
   expect(rotulos).toEqual(['● 3 perguntas', '↺ Limpar', '☾ Estou de volta', '◨ Fechar painel'])
   expect(pecasDaBarra({ ...ORQ_BARRA, limpando: true }, 0).dir.find(p => p.k === 'limpar')?.t).toBe('↺ Limpando…')
+  expect(pecasDaBarra({ ...ORQ_BARRA, limparDireto: true }, 0).dir.find(p => p.k === 'limpar')?.t).toBe('↺ Limpar já')
+  expect(pecasDaBarra({ ...ORQ_BARRA, limparDireto: true, limpando: true }, 0).dir.find(p => p.k === 'limpar')?.t, 'depois do clique vale o Limpando…').toBe('↺ Limpando…')
   expect(pecasDaBarra(ORQ_BARRA, 0).dir.find(p => p.k === 'modo')?.t).toBe('☾ Ficar ausente')
   expect(pecasDaBarra({ ...ORQ_BARRA, trocando: true }, 0).dir.find(p => p.k === 'modo')?.t).toBe('☾ Desligando…')
   expect(pecasDaBarra({ ...ORQ_BARRA, trocando: true, modo: 'ausente' }, 0).dir.find(p => p.k === 'modo')?.t).toBe('☾ Ligando…')
@@ -313,6 +319,10 @@ type Opcoes = {
   env?: Record<string, string>
   /** O `context.window` do `usage()`; `null` = o motor não informa. Padrão: 1 000 000 (a janela do modelo). */
   janelaDoModelo?: number | null
+  /** A resposta do `clear_session`: aceito (padrão), recusado pelo app (`isError` com o texto) ou negado por hook (`deny`). */
+  limpezaDireta?: { erro: string } | { deny: string }
+  /** Roda dentro do `fs.write` do ok do botão (ex.: um turno que começa entre o clique e a limpeza direta). */
+  aoGravarOk?: ($: Parameters<TestBody>[0]) => Promise<unknown>
 }
 
 function engine(on: On, opc: Opcoes = {}) {
@@ -369,9 +379,10 @@ function engine(on: On, opc: Opcoes = {}) {
     return { value: t }
   })
   const limpezas: Array<{ path: string; data: Record<string, unknown> }> = []
-  on('fs.write', (_, e) => {
+  on('fs.write', async ($e, e) => {
     if (e.path.includes('/limpeza/')) {
       if (opc.limpezaFalha) throw new Error(opc.limpezaFalha)
+      if (opc.aoGravarOk && limpezas.length === 0) await opc.aoGravarOk($e as never)
       limpezas.push({ path: e.path, data: JSON.parse(e.text) as Record<string, unknown> })
       arquivos.set(e.path, e.text)
 
@@ -398,6 +409,7 @@ function engine(on: On, opc: Opcoes = {}) {
   const chamadas: string[] = []
   const enviadas: Array<Record<string, unknown>> = []
   const notificacoes: string[] = []
+  const limpezasDiretas: Array<Record<string, unknown>> = []
   on('tool.call', (_, e) => {
     chamadas.push(e.tool)
     const entrada = e as unknown as Record<string, unknown>
@@ -411,11 +423,18 @@ function engine(on: On, opc: Opcoes = {}) {
       notificacoes.push(String(entrada.message))
       return { result: {}, text: 'ok' }
     }
+    if (e.tool === 'mcp__ccd_session_mgmt__clear_session') {
+      limpezasDiretas.push(entrada)
+      const r = opc.limpezaDireta
+      if (r && 'deny' in r) return { deny: r.deny }
+      if (r) return { result: {}, text: r.erro, isError: true }
+      return { result: {}, text: 'Clear queued.' }
+    }
     if (e.tool === 'mcp__ccd_session_mgmt__get_session') return { result: {}, text: JSON.stringify({ sessionId: EU, title: 'eu', isRunning: true }) }
     return { result: {}, text: '[]' }
   })
 
-  return { relogio: relogioDeTeste, limpezas, definirTokens: (t: number | null) => { tokensAgora = t }, escritas, bandeiras, fills, prompts, toasts, chamadas, enviadas, notificacoes, arquivos, aberturas, painelAberto: () => aberto }
+  return { relogio: relogioDeTeste, limpezas, definirTokens: (t: number | null) => { tokensAgora = t }, escritas, bandeiras, fills, prompts, toasts, chamadas, enviadas, notificacoes, limpezasDiretas, arquivos, aberturas, painelAberto: () => aberto }
 }
 
 const BARRA = {
@@ -736,6 +755,140 @@ test('o clique de limpar: grava o ok da barra, manda o prompt à própria sessã
   expect(m.prompts.length, 'o clique repetido é ignorado').toBe(1)
   await ui.unmount()
   await depois.unmount()
+})
+
+test('cacheFrio: só com o relógio vencido e o turno parado; sem relógio não é frio', () => {
+  expect(cacheFrio(0, false)).toBe(true)
+  expect(cacheFrio(-5, false)).toBe(true)
+  expect(cacheFrio(1, false), 'falta 1 s: ainda quente').toBe(false)
+  expect(cacheFrio(0, true), 'turno rodando nunca é frio').toBe(false)
+  expect(cacheFrio(null, false), 'sem relógio (nenhum turno desde que o processo subiu): não sei, pede').toBe(false)
+})
+
+/** Um turno completo e o relógio passado do TTL: o cache esfriou. */
+async function esfriar($: Parameters<TestBody>[0], m: Awaited<ReturnType<typeof iniciar>>) {
+  await $.turn.complete(turnoCompleto())
+  await m.relogio.advance(CACHE_TTL_MS + 2000)
+}
+
+test('limpar com o cache frio: rótulo Limpar já, grava o ok e chama clear_session "self" sem prompt nenhum', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  await esfriar($, m)
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await ui.find({ key: 'limpar' }))?.text, 'o botão avisa que vai limpar direto').toBe('↺ Limpar já')
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.limpezas.length, 'o ok da T7 gravado antes').toBe(1)
+  expect(m.limpezas[0]?.data.por).toBe('barra')
+  expect(m.limpezasDiretas.length, 'chamou o clear_session').toBe(1)
+  expect(m.limpezasDiretas[0]?.session_id).toBe('self')
+  expect(m.chamadas.indexOf('mcp__ccd_session_mgmt__clear_session')).toBeGreaterThan(-1)
+  expect(m.prompts, 'nenhum turno do modelo').toEqual([])
+  expect(m.toasts).toEqual([])
+  const depois = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await depois.find({ key: 'limpar' }))?.text).toBe('↺ Limpando…')
+  await ui.unmount()
+  await depois.unmount()
+  // No app o processo morre na limpeza; aqui o prazo corre para a espera não sobreviver ao teste.
+  await m.relogio.advance(ESPERA_DA_LIMPEZA_DIRETA_MS + 1000)
+})
+
+test('limpar com o cache quente: pede à sessão, nunca limpa direto', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  await $.turn.complete(turnoCompleto())
+  await m.relogio.advance(CACHE_TTL_MS - 60_000)
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await ui.find({ key: 'limpar' }))?.text).toBe('↺ Limpar')
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+  expect(m.limpezasDiretas, 'falta 1 min: ainda quente').toEqual([])
+  await ui.unmount()
+})
+
+test('limpar com o cache frio e o turno rodando: pede à sessão, nunca limpa direto', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  await esfriar($, m)
+  const ui = await montar($, 'terminal', { bodyColumns: 140, isWorking: true })
+  expect((await ui.find({ key: 'limpar' }))?.text, 'rodando, o rótulo não promete limpar direto').toBe('↺ Limpar')
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.limpezasDiretas).toEqual([])
+  expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+  await ui.unmount()
+})
+
+for (const [nome, opc, motivo] of [
+  ['o app recusa', { erro: 'session has live work' }, 'session has live work'],
+  ['um hook nega', { deny: 'T7 negou' }, 'T7 negou'],
+] as const) {
+  test(`limpar com o cache frio: ${nome} o clear_session → avisa, regrava o ok e cai no pedido à sessão`, async ($, on) => {
+    const m = await iniciar($, on, { tokens: 212_000, limpezaDireta: opc })
+    await esfriar($, m)
+    const ui = await montar($, 'terminal', { bodyColumns: 140 })
+    await ui.press({ key: 'limpar' })
+    await m.relogio.settle()
+    expect(m.limpezasDiretas.length).toBe(1)
+    expect(m.toasts.at(-1)).toBe(`A limpeza direta não pegou (${motivo}); pedi à sessão que se limpe.`)
+    expect(m.limpezas.length, 'o ok regravado: a T7 pode tê-lo gastado').toBe(2)
+    expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+    await ui.unmount()
+  })
+}
+
+test('limpar com o cache frio: o app aceita mas a sessão não recomeça em 20 s → cai no pedido à sessão', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  await esfriar($, m)
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  await m.relogio.advance(ESPERA_DA_LIMPEZA_DIRETA_MS - 1000)
+  expect(m.prompts, 'ainda esperando a limpeza').toEqual([])
+  await m.relogio.advance(2000)
+  expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+  expect(m.toasts.at(-1)).toBe('A limpeza direta não pegou (a sessão não recomeçou); pedi à sessão que se limpe.')
+  expect(m.limpezas.length).toBe(2)
+  await ui.unmount()
+})
+
+test('limpar com o cache frio: a limpeza pegou mas o processo seguiu vivo → nenhum prompt (não grava handoff vazio)', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  await esfriar($, m)
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.limpezasDiretas.length, 'precondição: chamou o clear_session').toBe(1)
+  m.definirTokens(20_000)
+  await m.relogio.advance(ESPERA_DA_LIMPEZA_DIRETA_MS + 1000)
+  expect(m.prompts).toEqual([])
+  expect(m.toasts).toEqual([])
+  await ui.unmount()
+})
+
+test('limpar com o cache frio: um turno começa entre o clique e a chamada → não limpa direto, avisa e pede à sessão', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000, aoGravarOk: async () => $.turn.start({ turnId: 't2' } as never) })
+  await esfriar($, m)
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await ui.find({ key: 'limpar' }))?.text, 'precondição: o render viu o cache frio').toBe('↺ Limpar já')
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.limpezasDiretas).toEqual([])
+  expect(m.toasts.at(-1), 'a decisão de limpar direto foi revista depois do clique').toBe('A limpeza direta não pegou (um turno começou); pedi à sessão que se limpe.')
+  expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+  await ui.unmount()
+})
+
+test('limpar com o cache frio sem leitura de contexto no clique: o app recusa → avisa e pede à sessão (não confunde com limpeza feita)', async ($, on) => {
+  const m = await iniciar($, on, { tokens: null, limpezaDireta: { erro: 'session has live work' } })
+  await esfriar($, m)
+  m.definirTokens(100_000)
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.limpezasDiretas.length).toBe(1)
+  expect(m.toasts.at(-1)).toBe('A limpeza direta não pegou (session has live work); pedi à sessão que se limpe.')
+  expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+  await ui.unmount()
 })
 
 test('Limpando… volta quando a leitura vê o contexto abaixo de 150 mil, e não antes', async ($, on) => {

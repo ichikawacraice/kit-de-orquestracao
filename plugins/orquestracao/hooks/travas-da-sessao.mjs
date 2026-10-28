@@ -86,12 +86,14 @@ function main() {
     const ehEu = [undefined, null, 'self', e.session_id, reg?.localId].includes(alvo);
     if (!ehEu || !ehOrquestradora(e.session_id, reg?.titulo)) return;
     const alvoReal = String(alvo ?? 'self');
-    const libera = (motivo) => registrar(sid, HOOK, 'liberou-limpeza', `${alvoReal} ${motivo}`);
+    // F213: o ok do botão vale uma limpeza por qualquer caminho que a libere (a limpeza direta do cache frio não abre turno, e a
+    // origem lida é a do último turno, muitas vezes `human`): se sobrasse, um clear_session de turno peer passaria nos 30 min seguintes.
+    const libera = (motivo) => { gastarOkDoBotaoDeLimpar(reg?.localId); registrar(sid, HOOK, 'liberou-limpeza', `${alvoReal} ${motivo}`); };
     if (modoAusente()) return libera('modo ausente ligado');
     let origem = null;
     try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
     if (origem === 'human') return libera('turno do operador');
-    if (okDoBotaoDeLimpar(reg?.localId)) { gastarOkDoBotaoDeLimpar(reg.localId); return libera('botão da barra'); }
+    if (okDoBotaoDeLimpar(reg?.localId)) return libera('botão da barra');
     const ok = perguntasDeLimpeza(reg?.localId).find((d) => d.estado === 'respondida' && d.respondidaPor === 'painel'
       && /^\s*sim/i.test(String(d.resposta ?? '')) && noPrazo(d.respondidaEm));
     if (ok) return libera('sim do painel');
