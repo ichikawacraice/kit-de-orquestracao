@@ -1462,6 +1462,8 @@ async function limparPelaBarra($: EngineInterface, trabalhando: boolean): Promis
       const motivo = await limparDireto($)
       // `null`: o app aceitou e o processo morreu na limpeza antes do prazo (nada mais roda aqui).
       if (motivo === null) return
+      // Limpou mas o processo seguiu vivo: o prompt agora gravaria um handoff vazio por cima do estado.
+      if (await contextoJaCaiu($, b.tokens)) return
       const aviso = `A limpeza direta não pegou (${motivo}); pedi à sessão que se limpe.`
       $.ui.toast(aviso)
       await avisar($, aviso).catch(() => {})
@@ -1474,8 +1476,20 @@ async function limparPelaBarra($: EngineInterface, trabalhando: boolean): Promis
   }
 }
 
+/** O contexto da sessão já está abaixo de `LIMPANDO_ABAIXO_DE` e da metade do clique: a limpeza aconteceu. Sem leitura, não sei (falso). */
+async function contextoJaCaiu($: EngineInterface, tokensNoClique: number | null): Promise<boolean> {
+  try {
+    const t = (await $.session.usage()).context.tokens
+    return typeof t === 'number' && t < LIMPANDO_ABAIXO_DE && (tokensNoClique === null || tokensNoClique >= LIMPANDO_ABAIXO_DE || t < tokensNoClique / 2)
+  } catch {
+    return false
+  }
+}
+
 /** Pede ao app a limpeza da própria sessão e espera ela recomeçar; devolve o motivo quando não pegou (recusa, erro ou prazo). */
 async function limparDireto($: EngineInterface): Promise<string | null> {
+  // Um turno pode ter começado entre o clique e aqui (mensagem de outra sessão): turno rodando nunca é limpo direto.
+  if (trabalhandoNaBarra) return 'um turno começou'
   try {
     const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__clear_session', session_id: 'self' })
     if (r.deny !== undefined) return r.deny || 'recusada'

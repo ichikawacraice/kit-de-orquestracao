@@ -269,6 +269,17 @@ caso('F166 T7: o ok do botão vale uma limpeza — o arquivo some na liberação
   ok(!existsSync(dir('limpeza', 'local_ORQ.json')), 'o ok do botão deveria ter sido gasto na liberação');
   nega7(limpa('ORQ', depeer()), 'segunda limpeza sem novo clique');
 });
+caso('F213 T7: o ok do botão se gasta também quando a liberação vem do turno do operador ou do modo ausente', () => {
+  okDoBotao({ em: haMin(5), por: 'barra' });
+  ok(existsSync(dir('limpeza', 'local_ORQ.json')), 'precondição: o ok do botão existe antes da limpeza');
+  passa(limpa('ORQ', humano()), 'limpeza direta lida como turno do operador');
+  ok(!existsSync(dir('limpeza', 'local_ORQ.json')), 'o ok sobrou depois da liberação pelo turno do operador');
+  nega7(limpa('ORQ', depeer()), 'turno peer depois: o ok já foi gasto');
+  okDoBotao({ em: haMin(5), por: 'barra' });
+  bandeira(Date.now() - 3600_000);
+  passa(limpa('ORQ', depeer()), 'modo ausente');
+  ok(!existsSync(dir('limpeza', 'local_ORQ.json')), 'o ok sobrou depois da liberação pelo modo ausente');
+});
 caso('T7: orquestradora limpando outra sessão passa; a dona limpando "self" passa', () => {
   passa(limpa('ORQ', depeer(), 'local_DONA'), 'orquestradora limpa outra sessão');
   passa(limpa('DONA', depeer()), 'dona self');

@@ -848,6 +848,33 @@ test('limpar com o cache frio: o app aceita mas a sessão não recomeça em 20 s
   await ui.unmount()
 })
 
+test('limpar com o cache frio: a limpeza pegou mas o processo seguiu vivo → nenhum prompt (não grava handoff vazio)', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  await esfriar($, m)
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.limpezasDiretas.length, 'precondição: chamou o clear_session').toBe(1)
+  m.definirTokens(20_000)
+  await m.relogio.advance(ESPERA_DA_LIMPEZA_DIRETA_MS + 1000)
+  expect(m.prompts).toEqual([])
+  expect(m.toasts).toEqual([])
+  await ui.unmount()
+})
+
+test('limpar com o cache frio: um turno começa entre o clique e a chamada → não limpa direto, pede à sessão', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  await esfriar($, m)
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  expect((await ui.find({ key: 'limpar' }))?.text, 'precondição: o render viu o cache frio').toBe('↺ Limpar já')
+  await $.turn.start({ turnId: 't2' } as never)
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.limpezasDiretas).toEqual([])
+  expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+  await ui.unmount()
+})
+
 test('Limpando… volta quando a leitura vê o contexto abaixo de 150 mil, e não antes', async ($, on) => {
   const m = await iniciar($, on, { tokens: 212_000 })
   const ui = await montar($, 'terminal', { bodyColumns: 140 })
