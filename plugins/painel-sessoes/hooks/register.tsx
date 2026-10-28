@@ -3,7 +3,7 @@ import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { semDona } from './sem-dona'
 import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, PROMPT_DA_VOLTA, voltaValida, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, PROMPT_DA_VOLTA, PAINEL_NA_VOLTA_MS, idadeDaVolta, paraAcordar, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
@@ -1388,6 +1388,7 @@ async function lerBarra($: EngineInterface): Promise<void> {
         erros,
       }
     })
+    if (home) await acordarQuemVoltou($, home, host).catch(() => undefined)
   } catch (err) {
     await update($, barra, b => ({ ...b, erros: [...b.erros, `leitura: ${mensagem(err)}`] })).catch(() => {})
   } finally {
@@ -1510,8 +1511,7 @@ async function limparDireto($: EngineInterface, host: string): Promise<string | 
 
 
 const PASTA_DA_VOLTA = `${BASE_ORQUESTRACAO}/volta-da-limpeza`
-/** O `em` da última marca de volta já atendida neste store: outro início no prazo (o app reiniciado logo depois) não manda de novo. */
-const VOLTA_ATENDIDA = 'voltaAtendida'
+const ACORDADA = '.acordada.json'
 
 /** Grava a marca de volta (o mesmo formato da T7). Falha só vai ao log: sem ela, a volta espera o operador, como antes. */
 async function gravarVolta($: EngineInterface, host: string, motivo: string): Promise<void> {
@@ -1530,33 +1530,65 @@ async function gravarVolta($: EngineInterface, host: string, motivo: string): Pr
 }
 
 /**
- * F219: o processo novo de uma orquestradora que acabou de se limpar (marca de volta fresca) reabre o painel e manda à própria
- * sessão carregar a skill, sem esperar o operador falar. Uma vez por marca; marca vencida, de outra sessão ou de quem não é a
- * orquestradora não faz nada.
+ * F219: o processo novo de uma orquestradora que se limpou (a marca de volta dela, acordada ou não, de até 12 h) reabre o painel e
+ * apaga a marca: daí ninguém mais a acorda. A skill vem pela mensagem que acordou a sessão (ou pelo hook de início de sessão, se
+ * quem a acordou foi o operador); daqui não sai prompt, para não somar um turno ao do operador.
  */
 async function voltarDaLimpeza($: EngineInterface): Promise<void> {
   try {
     const host = await sessaoDoApp($)
     const home = await $.env.get('HOME')
     if (!host || !home) return
-    const arquivo = `${home}/${PASTA_DA_VOLTA}/${host}.json`
-    let marca: string | null = null
-    try {
-      marca = (await $.fs.read(arquivo)) as string
-    } catch {
-      return
+    const pasta = `${home}/${PASTA_DA_VOLTA}`
+    const arquivos = [`${pasta}/${host}.json`, `${pasta}/${host}${ACORDADA}`]
+    const agora = await $.clock.now()
+    let fresca = false
+    let achou = false
+    for (const arquivo of arquivos) {
+      const marca = (await $.fs.read(arquivo).catch(() => null)) as string | null
+      if (marca === null) continue
+      achou = true
+      const idade = idadeDaVolta(marca, agora)
+      if (idade !== null && idade <= PAINEL_NA_VOLTA_MS) fresca = true
     }
-    const em = voltaValida(marca, await $.clock.now())
-    if (em === null) return
-    if (papelEApelido(await tituloDoApp($, home, host)).papel !== 'orquestradora') return
-    if ((await $.store.get(VOLTA_ATENDIDA)) === em) return
-    await $.store.set(VOLTA_ATENDIDA, em)
-    await $.process.run(['rm', '-f', arquivo], { timeoutMs: SCRIPT_TIMEOUT_MS }).catch(() => undefined)
+    if (!achou) return
+    await $.process.run(['rm', '-f', ...arquivos], { timeoutMs: SCRIPT_TIMEOUT_MS }).catch(() => undefined)
+    if (!fresca || papelEApelido(await tituloDoApp($, home, host)).papel !== 'orquestradora') return
     await abrirPainel($)
-    const r = await $.prompt.submit({ text: PROMPT_DA_VOLTA })
-    if (r.drop !== undefined) await $.ui.log(`volta da limpeza: o prompt foi recusado (${r.drop || 'sem motivo'})`)
   } catch (err) {
     await $.ui.log(`volta da limpeza: ${mensagem(err)}`).catch(() => {})
+  }
+}
+
+/**
+ * F219: o mod de toda sessão viva, a cada leitura da barra, acorda a sessão que se limpou e ainda não voltou (marca de outra sessão,
+ * de 30 s a 10 min, e a sessão parada): toma a marca renomeando-a para `.acordada.json` (o `mv` é atômico, então só um mod
+ * manda) e manda a mensagem da volta, que sobe o processo novo dela.
+ */
+async function acordarQuemVoltou($: EngineInterface, home: string, host: string | undefined): Promise<void> {
+  const pasta = `${home}/${PASTA_DA_VOLTA}`
+  let entradas: Awaited<ReturnType<EngineInterface['fs']['list']>>
+  try {
+    entradas = await $.fs.list(pasta)
+  } catch {
+    return
+  }
+  const marcas = await Promise.all(
+    entradas.filter(e => e.kind === 'file').map(async e => ({ nome: e.name, texto: (await $.fs.read(`${pasta}/${e.name}`).catch(() => null)) as string | null })),
+  )
+  for (const id of paraAcordar(marcas, host, await $.clock.now())) {
+    try {
+      const s = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__get_session', session_id: id })
+      if (s.deny !== undefined || s.isError) continue
+      const sessao = JSON.parse(s.text.slice(Math.max(0, s.text.indexOf('{')))) as { isRunning?: boolean; isArchived?: boolean }
+      if (sessao.isRunning !== false || sessao.isArchived === true) continue
+      const tomou = await $.process.run(['mv', `${pasta}/${id}.json`, `${pasta}/${id}${ACORDADA}`], { timeoutMs: SCRIPT_TIMEOUT_MS })
+      if (tomou.exitCode !== 0) continue
+      const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: id, message: PROMPT_DA_VOLTA })
+      if (r.deny !== undefined || r.isError) await $.ui.log(`volta da limpeza: não acordei ${id}: ${r.deny || r.text}`)
+    } catch (err) {
+      await $.ui.log(`volta da limpeza: ${id}: ${mensagem(err)}`).catch(() => {})
+    }
   }
 }
 
