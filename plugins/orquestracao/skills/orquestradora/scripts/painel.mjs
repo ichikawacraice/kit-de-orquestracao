@@ -22,7 +22,7 @@
 //   painel.mjs com del <F> <local_|apelido>   tira a sessão do `com` (o apelido vale se for um só no item)
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio, `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
-//   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); exit 0 nos dois casos, 1 só em erro de leitura
+//   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); (F209) traz também `atualizacao` (app, motor e plugins do kit instalados depois que o app abriu) e `paraBaixar` (plugins do kit com versão publicada mais nova, por `git fetch` no clone do marketplace com cache de 30 min em batida/kit-publicado.json); exit 0 nos dois casos, 1 só em erro de leitura
 //   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga) → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
@@ -57,7 +57,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
 import { MOTIVO_DO_FORK, SHA_VALIDADO, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
-import { julgarReinicio, lerAtualizacao, lerFichas, lerPs, textoDoReinicio } from './pode-reiniciar.mjs';
+import { julgarReinicio, lerAtualizacao, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote } from './fila-de-merge.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
@@ -1089,7 +1089,13 @@ function conferirReinicio({ linhas, listaEm, sessoesDe, agoraMs = Date.now() }) 
   // a atualização é um extra: ler mal não derruba o julgamento
   let atualizacao = null;
   try { atualizacao = lerAtualizacao({ home: homedir(), ps }); } catch { /* sem atualização */ }
-  const att = atualizacao ? { atualizacao } : {};
+  try {
+    const plugins = pluginsEsperandoReinicio({ home: homedir(), inicioDoApp: lerInicioDoApp(process.env) });
+    if (plugins.length) atualizacao = { ...(atualizacao ?? {}), plugins };
+  } catch { /* sem plugins */ }
+  let paraBaixar = [];
+  try { paraBaixar = lerParaBaixar({ home: homedir(), cache: join(ORQ(), 'batida', 'kit-publicado.json'), agoraMs }); } catch { /* sem conferência */ }
+  const att = { ...(atualizacao ? { atualizacao } : {}), ...(paraBaixar.length ? { paraBaixar } : {}) };
   const completo = { pode: motivos.length === 0, motivos, sessoesDe, em, listaEm: new Date(listaEm).toISOString(), ...att };
   const idadeMin = Math.max(0, Math.round((agoraMs - listaEm) / 60_000));
   const eu = eusDestaSessao();

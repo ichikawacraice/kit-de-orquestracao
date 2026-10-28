@@ -1,4 +1,4 @@
-import type { Barra } from '../types'
+import type { Atualizacao, Barra, ParaBaixar } from '../types'
 
 // A barra de status acima do prompt: o relógio do cache de 1 h, o contexto contra a janela de compactação, o selo das perguntas
 // abertas, o botão de limpar (só na orquestradora), o do modo ausente e o do painel, cada um com glifo e cor. Só lê arquivos
@@ -151,7 +151,7 @@ export function contarDonas(docs: Doc[], projeto: string | null): number {
 
 export type MotivoDeReinicio = { tipo: 'sessao' | 'teste' | 'merge'; texto: string; localId?: string }
 /** O que `painel pode-reiniciar` grava em `batida/pode-reiniciar.json`: TODOS os motivos, a sessão que rodou incluída. */
-export type ArquivoDeReinicio = { pode: boolean; motivos: MotivoDeReinicio[]; sessoesDe?: string; em: string; listaEm?: string }
+export type ArquivoDeReinicio = { pode: boolean; motivos: MotivoDeReinicio[]; sessoesDe?: string; em: string; listaEm?: string; atualizacao?: Atualizacao; paraBaixar?: ParaBaixar[] }
 /** `batida/aviso-de-reinicio.json`: o aviso que o operador ligou; a `vigia` é a sessão que confere a cada minuto. */
 /** `appInicio`: o instante de início do processo do app quando o aviso foi ligado (só o reinício do app o muda); `vigiaEm`: a hora da última conferência da vigia. */
 export type AvisoDeReinicio = { ligadoEm: string; vigia: string; avisadoEm?: string; naoPodeSeguidos: number; appInicio?: string; vigiaEm?: string }
@@ -244,6 +244,17 @@ export function vigiaSumiu({ aviso, agora }: { aviso: AvisoDeReinicio; agora: nu
   const ultima = emMs(aviso.vigiaEm) ?? emMs(aviso.ligadoEm) ?? 0
 
   return agora - ultima >= VIGIA_SUMIU_MS
+}
+
+/** F209: há algo instalado que só vale com o app reiniciado (app baixado, motor novo, plugin do kit instalado depois que o app abriu). */
+export const esperaReinicio = (a: { app?: unknown; motor?: unknown; plugins?: unknown[] } | null | undefined): boolean =>
+  Boolean(a && (a.app || a.motor || (a.plugins?.length ?? 0) > 0))
+
+/** O que o topo do pane mostra (as duas superfícies leem daqui): o kit para baixar (`null` = nada) e se o bloco do reinício aparece. */
+export function oQueMostrarDoReinicio({ arquivo, aviso }: { arquivo: Pick<ArquivoDeReinicio, 'atualizacao' | 'paraBaixar'> | null; aviso: unknown }): { kit: ParaBaixar[] | null; reinicio: boolean } {
+  const kit = arquivo?.paraBaixar?.length ? arquivo.paraBaixar : null
+
+  return { kit, reinicio: aviso !== null || esperaReinicio(arquivo?.atualizacao) }
 }
 
 export const textoDoReinicioNaBarra = (r: Pick<EstadoDoReinicio, 'estado' | 'rodando'>): string =>

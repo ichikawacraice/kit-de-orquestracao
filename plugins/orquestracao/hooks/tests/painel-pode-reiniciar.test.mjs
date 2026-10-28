@@ -307,3 +307,121 @@ test('app: sobra do ShipIt com versão mais velha que a instalada não é atuali
   appComAtualizacao({ instalada: '3.10.0', baixada: '3.11.0' });
   assert.deepEqual(lerAtualizacao({ home: join(base, 'home'), ps: [] }), { app: { instalada: '3.10.0', baixada: '3.11.0' } });
 });
+
+// F209: os plugins do kit. "Para baixar": a versão publicada no `main` do marketplace é mais nova que a instalada (lida por
+// `git fetch` no clone, com cache de 30 min). "Esperando reinício": instalado (`lastUpdated`) depois que o app abriu (o `lstart`
+// do processo do app, de um arquivo em PODE_REINICIAR_PS_INICIO no teste).
+const git = (cwd, ...args) => {
+  const r = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL' });
+  assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
+  return r.stdout.trim();
+};
+const manifesto = (dir, nome, versao) => {
+  mkdirSync(join(dir, 'plugins', nome, '.claude-plugin'), { recursive: true });
+  writeFileSync(join(dir, 'plugins', nome, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: nome, version: versao }));
+};
+/** Um "GitHub" local (`origem`) e o clone do marketplace no HOME, os dois com as versões dadas. */
+function marketplace(versoes) {
+  const origem = join(base, 'origem');
+  mkdirSync(join(origem, '.claude-plugin'), { recursive: true });
+  git(base, 'init', '-q', '-b', 'main', origem);
+  writeFileSync(join(origem, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: 'kit-de-orquestracao', plugins: Object.keys(versoes).map((name) => ({ name, source: `./plugins/${name}` })) }));
+  for (const [nome, v] of Object.entries(versoes)) manifesto(origem, nome, v);
+  git(origem, 'add', '-A');
+  git(origem, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'v1');
+  const clone = join(base, 'home', '.claude', 'plugins', 'marketplaces', 'kit-de-orquestracao');
+  mkdirSync(dirname(clone), { recursive: true });
+  git(base, 'clone', '-q', origem, clone);
+  return {
+    origem, clone,
+    publicar(nome, v) { manifesto(origem, nome, v); git(origem, 'add', '-A'); git(origem, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', `${nome} ${v}`); },
+  };
+}
+function instalados(lista) {
+  const f = join(base, 'home', '.claude', 'plugins', 'installed_plugins.json');
+  mkdirSync(dirname(f), { recursive: true });
+  const plugins = {};
+  for (const { id, version, lastUpdated, scope = 'user' } of lista) (plugins[id] ??= []).push({ scope, installPath: `/cache/${id}/${version}`, version, lastUpdated });
+  writeFileSync(f, JSON.stringify({ version: 2, plugins }));
+}
+const inicioDoApp = (lstart) => psCom([`${lstart} /Applications/Claude.app/Contents/MacOS/Claude`, 'Mon Oct 27 09:00:00 2026 /Applications/Claude.app/Contents/MacOS/Claude --type=renderer']);
+const kit = (nome) => `${nome}@kit-de-orquestracao`;
+const conferir = (env = {}) => painel(['pode-reiniciar', '--sessoes', sessoes(sessao(1, 'E1 · livre')), '--json'], env);
+
+test('F209: kit em dia não traz paraBaixar (prova de ausência: o próximo teste mostra que se detecta)', () => {
+  marketplace({ orquestracao: '0.1.40', 'painel-sessoes': '0.9.4' });
+  instalados([{ id: kit('orquestracao'), version: '0.1.40' }, { id: kit('painel-sessoes'), version: '0.9.4' }]);
+  const r = conferir();
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(r.json().paraBaixar, undefined);
+  assert.equal(lerArquivo().paraBaixar, undefined);
+  assert.ok(existsSync(join(base, 'orq', 'batida', 'kit-publicado.json')), 'a conferência foi feita e ficou no cache');
+});
+
+test('F209: versão publicada mais nova que a instalada vira paraBaixar, no arquivo, na saída e no texto', () => {
+  const m = marketplace({ orquestracao: '0.1.40', 'painel-sessoes': '0.9.4' });
+  instalados([{ id: kit('orquestracao'), version: '0.1.40' }, { id: kit('painel-sessoes'), version: '0.9.4' }]);
+  m.publicar('orquestracao', '0.1.41');
+  const headAntes = git(m.clone, 'rev-parse', 'HEAD');
+  const r = conferir();
+  assert.equal(r.exit, 0, r.err);
+  const esperado = [{ nome: 'orquestracao', instalada: '0.1.40', publicada: '0.1.41' }];
+  assert.deepEqual(r.json().paraBaixar, esperado);
+  assert.deepEqual(lerArquivo().paraBaixar, esperado);
+  assert.equal(git(m.clone, 'rev-parse', 'HEAD'), headAntes, 'a árvore do clone não anda (só o FETCH_HEAD)');
+  const txt = painel(['pode-reiniciar', '--sessoes', sessoes(sessao(1, 'E1 · livre'))]).out;
+  assert.match(txt, /Atualização do kit para baixar \(orquestracao 0\.1\.41\): rode atualizar-plugins\./);
+});
+
+test('F209: compara por número (0.1.9 < 0.1.10); plugin não instalado ou só de projeto não entra', () => {
+  const m = marketplace({ orquestracao: '0.1.9', 'painel-sessoes': '0.9.4', design: '0.1.8' });
+  instalados([{ id: kit('orquestracao'), version: '0.1.9' }, { id: kit('design'), version: '0.1.8', scope: 'project' }]);
+  m.publicar('orquestracao', '0.1.10');
+  m.publicar('design', '0.1.9');
+  assert.deepEqual(conferir().json().paraBaixar, [{ nome: 'orquestracao', instalada: '0.1.9', publicada: '0.1.10' }]);
+});
+
+test('F209: o cache de 30 min evita a rede; vencido, confere de novo', () => {
+  const m = marketplace({ orquestracao: '0.1.40' });
+  instalados([{ id: kit('orquestracao'), version: '0.1.40' }]);
+  assert.equal(conferir().json().paraBaixar, undefined);
+  m.publicar('orquestracao', '0.1.41');
+  assert.equal(conferir().json().paraBaixar, undefined, 'dentro dos 30 min vale o cache');
+  const cache = join(base, 'orq', 'batida', 'kit-publicado.json');
+  const c = JSON.parse(readFileSync(cache, 'utf8'));
+  writeFileSync(cache, JSON.stringify({ ...c, em: iso(Date.now() - 31 * MIN) }));
+  assert.deepEqual(conferir().json().paraBaixar, [{ nome: 'orquestracao', instalada: '0.1.40', publicada: '0.1.41' }]);
+});
+
+test('F209: sem clone, ou com a origem fora do ar, não há paraBaixar e o comando segue (exit 0)', () => {
+  instalados([{ id: kit('orquestracao'), version: '0.1.40' }]);
+  assert.equal(conferir().json().paraBaixar, undefined, 'sem clone');
+  const m = marketplace({ orquestracao: '0.1.40' });
+  rmSync(m.origem, { recursive: true, force: true });
+  const r = conferir();
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(r.json().paraBaixar, undefined);
+});
+
+test('F209: plugin do kit instalado depois que o app abriu espera reinício; antes, não (os dois lados)', () => {
+  const abriu = 'Mon Oct 27 08:00:00 2026';
+  const depois = new Date(Date.parse(abriu) + 60 * MIN).toISOString();
+  const antes = new Date(Date.parse(abriu) - 60 * MIN).toISOString();
+  instalados([
+    { id: kit('orquestracao'), version: '0.1.41', lastUpdated: depois },
+    { id: kit('painel-sessoes'), version: '0.9.4', lastUpdated: antes },
+    { id: 'outro@claude-plugins-official', version: '1.0.0', lastUpdated: depois },
+  ]);
+  const r = conferir({ PODE_REINICIAR_PS_INICIO: inicioDoApp(abriu) });
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().atualizacao, { plugins: [{ nome: 'orquestracao', versao: '0.1.41' }] });
+  assert.deepEqual(lerArquivo().atualizacao, { plugins: [{ nome: 'orquestracao', versao: '0.1.41' }] });
+  const txt = painel(['pode-reiniciar', '--sessoes', sessoes(sessao(1, 'E1 · livre'))], { PODE_REINICIAR_PS_INICIO: inicioDoApp(abriu) }).out;
+  assert.match(txt, /Atualização baixada \(orquestracao 0\.1\.41\): reinicie o app para instalar\./);
+});
+
+test('F209: sem medir o início do app (a linha não está no ps) não afirma reinício de plugin', () => {
+  instalados([{ id: kit('orquestracao'), version: '0.1.41', lastUpdated: iso(Date.now()) }]);
+  const r = conferir({ PODE_REINICIAR_PS_INICIO: psCom(['Mon Oct 27 09:00:00 2026 /usr/bin/zsh']) });
+  assert.equal(r.json().atualizacao, undefined);
+});

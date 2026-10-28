@@ -4,8 +4,8 @@
 // `gate/` (que não vai junto quando ele é instalado): a leitura das fichas repete o contrato de `gate/o-teto-da-maquina.mjs` e um
 // teste compara as duas.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const vivo = (pid) => {
@@ -142,16 +142,99 @@ export function lerAtualizacao({ home, ps }) {
   return r.app || r.motor ? r : null;
 }
 
+// F209: os plugins do kit (o marketplace `kit-de-orquestracao`, escopo user). O app carrega os plugins quando abre: plugin com
+// `lastUpdated` depois do início do processo do app ainda não vale. "Para baixar" é a versão do `main` publicado mais nova que a
+// instalada, lida por `git fetch` no clone do marketplace (só o FETCH_HEAD; a árvore do clone não anda), com cache de 30 min.
+const MARKETPLACE = 'kit-de-orquestracao';
+export const KIT_PUBLICADO_VALE_MS = 30 * 60_000;
+const GIT_TIMEOUT_MS = 20_000;
+
+/** Os plugins do kit com escopo user: [{ nome, versao, lastUpdated }]. Sem o arquivo, nenhum. */
+export function lerInstaladosDoKit(home) {
+  let reg = null;
+  try { reg = JSON.parse(readFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), 'utf8')); } catch { return []; }
+  return Object.entries(reg?.plugins ?? {}).flatMap(([id, lista]) => {
+    if (!id.endsWith(`@${MARKETPLACE}`) || !Array.isArray(lista)) return [];
+    const user = lista.find((e) => e?.scope === 'user' && typeof e.version === 'string');
+    return user ? [{ nome: id.slice(0, -MARKETPLACE.length - 1), versao: user.version, lastUpdated: user.lastUpdated ?? null }] : [];
+  });
+}
+
+/** O início do processo do app (ms) pelo `ps -axo lstart=,command=` (`LC_ALL=C`); `PODE_REINICIAR_PS_INICIO` aponta um arquivo (teste). `null` = não medi. */
+export function lerInicioDoApp(env = process.env) {
+  let bruto;
+  try {
+    bruto = env.PODE_REINICIAR_PS_INICIO
+      ? readFileSync(env.PODE_REINICIAR_PS_INICIO, 'utf8')
+      : env.PODE_REINICIAR_PS ? '' : execFileSync('ps', ['-axo', 'lstart=,command='], { encoding: 'utf8', timeout: 10_000, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024, env: { ...env, LC_ALL: 'C' } });
+  } catch { return null; }
+  for (const l of bruto.split('\n')) {
+    const m = /^\s*(\w{3}\s+\w{3}\s+\d+\s+[\d:]+\s+\d{4})\s+(.+?)\s*$/.exec(l);
+    if (m?.[2]?.endsWith('Claude.app/Contents/MacOS/Claude')) { const t = Date.parse(m[1]); return Number.isNaN(t) ? null : t; }
+  }
+  return null;
+}
+
+/** Plugins do kit instalados depois que o app abriu: [{ nome, versao }]. Sem medir o início do app, nenhum. */
+export function pluginsEsperandoReinicio({ home, inicioDoApp }) {
+  if (inicioDoApp === null) return [];
+  return lerInstaladosDoKit(home).flatMap((p) => {
+    const t = Date.parse(p.lastUpdated ?? '');
+    return !Number.isNaN(t) && t > inicioDoApp ? [{ nome: p.nome, versao: p.versao }] : [];
+  });
+}
+
+const gitNoClone = (env, clone, args) => execFileSync(env.GIT_BIN || 'git', ['-C', clone, ...args], { encoding: 'utf8', timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'] });
+
+/** As versões publicadas no `main` do marketplace ({ nome: versao }), ou `null` sem clone ou sem rede. Grava o cache. */
+function conferirPublicado({ clone, cache, agoraMs, env }) {
+  let publicado = null;
+  try {
+    gitNoClone(env, clone, ['fetch', '--quiet', 'origin', 'main']);
+    const nomes = JSON.parse(gitNoClone(env, clone, ['show', 'FETCH_HEAD:.claude-plugin/marketplace.json'])).plugins.map((p) => p.name);
+    publicado = {};
+    for (const nome of nomes) {
+      try { publicado[nome] = JSON.parse(gitNoClone(env, clone, ['show', `FETCH_HEAD:plugins/${nome}/.claude-plugin/plugin.json`])).version; } catch { /* sem manifesto */ }
+    }
+  } catch { publicado = null; }
+  // sem rede o cache guarda a tentativa: a próxima ida à rede espera a janela, e não a cada leitura do pane
+  try { mkdirSync(dirname(cache), { recursive: true }); writeFileSync(cache, `${JSON.stringify({ em: new Date(agoraMs).toISOString(), publicado })}\n`); } catch { /* sem cache */ }
+  return publicado;
+}
+
+/** Os plugins do kit com versão publicada mais nova que a instalada: [{ nome, instalada, publicada }]. */
+export function lerParaBaixar({ home, cache, agoraMs = Date.now(), env = process.env }) {
+  const instalados = lerInstaladosDoKit(home);
+  if (!instalados.length) return [];
+  const clone = env.KIT_MARKETPLACE_DIR || join(home, '.claude', 'plugins', 'marketplaces', MARKETPLACE);
+  let publicado;
+  try {
+    const c = JSON.parse(readFileSync(cache, 'utf8'));
+    const em = Date.parse(c?.em ?? '');
+    if (!Number.isNaN(em) && agoraMs - em < KIT_PUBLICADO_VALE_MS && agoraMs >= em) publicado = c.publicado ?? null;
+  } catch { /* sem cache */ }
+  if (publicado === undefined) {
+    try { readdirSync(clone); } catch { return []; }
+    publicado = conferirPublicado({ clone, cache, agoraMs, env });
+  }
+  if (!publicado) return [];
+  return instalados.flatMap((p) => {
+    const v = publicado[p.nome];
+    return RELEASE.test(v ?? '') && RELEASE.test(p.versao) && compararVersao(p.versao, v) < 0 ? [{ nome: p.nome, instalada: p.versao, publicada: v }] : [];
+  });
+}
+
 /** A linha da atualização: `null` sem nada esperando. */
 export function fraseDaAtualizacao(a) {
   if (!a) return null;
-  const partes = [a.app && `app ${a.app.baixada}`, a.motor && `motor ${a.motor.baixada}`].filter(Boolean);
+  const partes = [a.app && `app ${a.app.baixada}`, a.motor && `motor ${a.motor.baixada}`, ...(a.plugins ?? []).map((p) => `${p.nome} ${p.versao}`)].filter(Boolean);
   return `Atualização baixada (${partes.join(', ')}): reinicie o app para instalar.`;
 }
 
 /** O texto da resposta. `idadeMin` só quando a lista é a da batida. */
-export function textoDoReinicio({ pode, motivos, sessoesDe, idadeMin, atualizacao }) {
+export function textoDoReinicio({ pode, motivos, sessoesDe, idadeMin, atualizacao, paraBaixar }) {
   const idade = sessoesDe === 'batida' && idadeMin !== undefined ? `(lista de há ${idadeMin} min)\n` : '';
-  const att = atualizacao ? `${fraseDaAtualizacao(atualizacao)}\n` : '';
+  const baixar = paraBaixar?.length ? `Atualização do kit para baixar (${paraBaixar.map((p) => `${p.nome} ${p.publicada}`).join(', ')}): rode atualizar-plugins.\n` : '';
+  const att = `${atualizacao ? `${fraseDaAtualizacao(atualizacao)}\n` : ''}${baixar}`;
   return pode ? `Pode reiniciar.\n${att}${idade}` : `Não reinicie agora:\n${motivos.map((m) => m.texto).join('\n')}\n${att}${idade}`;
 }
