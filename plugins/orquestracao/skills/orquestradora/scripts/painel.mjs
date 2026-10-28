@@ -33,7 +33,7 @@
 //   (`com` só muda por `com add|del`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
 //   (`fez` e `passaram` são históricos de itens antigos: só leitura; o set guarda o gravado e recusa o diferente, o update e o batch recusam)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
-//   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
+//   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · maisFatias · depois · perguntas · donoLocalId+donoApelido
 //   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
 //   (set em fila/<id> que JÁ existe exige --se-versao N — ou "seVersao" na op do batch —: sem ele, o set apagaria o item em silêncio)
 //
@@ -867,7 +867,8 @@ function comandoMergear(args) {
     else if (fatia) data = { etapa: 'execucao', agora: `fatia mergeada (PR ${pr}, ponta ${curto}); a dona segue com a próxima` };
     else data = { com: [], agora: 'um PR entrou; falta outro' };
     efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
-    return { item: F, fechado: fecha, ...(fatia ? { fatia } : {}), agora: data.agora };
+    // a fatia volta à dona, que parou ao abrir o PR: a orquestradora a avisa pelo `dona` da saída
+    return { item: F, fechado: fecha, ...(fatia ? { fatia, dona: atual.data.donoLocalId ?? null } : {}), agora: data.agora };
   }));
   return { mergeado: true, pr, sha: c.sha, base: c.base, ...(c.aviso ? { aviso: c.aviso } : {}), itens };
 }

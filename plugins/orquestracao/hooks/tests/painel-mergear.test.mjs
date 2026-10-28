@@ -206,7 +206,7 @@ test('F222: item com maisFatias: o merge da fatia não fecha — volta a execuca
     assert.equal(d.maisFatias, true, 'a marca fica até a dona tirá-la na última fatia');
     assert.deepEqual(d.prs, [12], 'o PR mergeado continua no item');
     assert.ok(d.agora.includes('fatia') && d.agora.includes(c.sha.slice(0, 7)), d.agora);
-    assert.deepEqual(JSON.parse(r.out).itens.map((i) => [i.item, i.fechado, i.fatia]), [['F1', false, true]]);
+    assert.deepEqual(JSON.parse(r.out).itens.map((i) => [i.item, i.fechado, i.fatia, i.dona]), [['F1', false, true, LA]]);
   } finally { limpar(c); }
 });
 
