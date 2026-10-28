@@ -19,7 +19,8 @@ Você leva **um item inteiro**, do plano ao PR: mede, decide, escreve código e 
 5. **Revise:** `etapa: "validacao"`. Lance `orquestracao:validador` com o plano, `git diff origin/<base>...HEAD`, o que você afirma ter feito e a frase *"só achados que afetam correção; skip style; não grave arquivo"*. Conserte o médio e o alto; em item de risco, um segundo validador sobre o delta. O leve vai para o PR ou para `depois`.
 6. **Entregue:** commit conventional em PT-BR, `git push`, PR contra a base (`gh pr create`), sem rodar o gate completo (ele roda na fila). Grave `painel update fila F<n> '{"etapa":"merge","prs":[N],"agora":"PR N na fila de merge"}'` e mande à orquestradora uma linha: `PR N pronto, HEAD <sha completo>`. Pare.
 7. **Devolvido pela fila?** O item volta a `execucao` com o motivo no `agora` e a orquestradora manda o log. Conserte (rebase só agora, se o motivo é conflito), rode os afetados, empurre e mande de novo `PR N pronto, HEAD <sha>`.
-8. **Fechou:** a orquestradora fecha o item no merge (`feito`, dona e `com` saem). Você não se limpa nem se arquiva: a orquestradora arquiva a sessão terminada.
+7b. **Item em várias fatias** (vários PRs em sequência): ao abrir o PR de uma fatia que não é a última, grave `"maisFatias":true` no mesmo `update` do passo 6. O merge dessa fatia não fecha o item: ele volta a `execucao` com você e o `com` mantidos, e você segue com a próxima fatia (branch nova a partir da base atualizada). No PR da última fatia, grave `"maisFatias":false`: o merge dela fecha o item como o de um PR só.
+8. **Fechou:** a orquestradora fecha o item no merge (`feito`, dona e `com` saem) quando todos os PRs dele estão mergeados e ele não tem `maisFatias: true`. Você não se limpa nem se arquiva: a orquestradora arquiva a sessão terminada.
 
 <a id="painel-em-dia"></a>
 ## O painel em dia é seu

@@ -21,7 +21,7 @@
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_|apelido>   tira a sessão do `com` (o apelido vale se for um só no item)
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio, `agora` = motivo; --so-dono deixa o `com` como está
-//   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
+//   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge; com `maisFatias: true` volta a `execucao` com a dona, F222); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); (F209) traz também `paraAplicar` (plugins do kit instalados depois que o app abriu) e `paraBaixar` (plugins do kit com versão publicada mais nova, por `git fetch` no clone do marketplace com cache de 30 min em batida/kit-publicado.json); exit 0 nos dois casos, 1 só em erro de leitura
 //   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), liga cada PR ao item vivo pelo `prs`, pelo `branch` do item ou pela branch do worktree da dona e o põe em `merge` (F221), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga) → {mensagens, soltos, projetos, marcadoresApagados}; --seco não grava nada
@@ -33,7 +33,7 @@
 //   (`com` só muda por `com add|del`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
 //   (`fez` e `passaram` são históricos de itens antigos: só leitura; o set guarda o gravado e recusa o diferente, o update e o batch recusam)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
-//   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · depois · perguntas · donoLocalId+donoApelido
+//   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · maisFatias · depois · perguntas · donoLocalId+donoApelido
 //   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
 //   (set em fila/<id> que JÁ existe exige --se-versao N — ou "seVersao" na op do batch —: sem ele, o set apagaria o item em silêncio)
 //
@@ -377,6 +377,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   if (tem('prs') && !(Array.isArray(novo.prs) && novo.prs.every((n) => Number.isInteger(n) && n > 0))) {
     throw new Error(`${chave}: prs é uma lista de inteiros positivos`);
   }
+  if (tem('maisFatias') && typeof novo.maisFatias !== 'boolean') throw new Error(`${chave}: maisFatias é true (o PR em merge não é a última fatia) ou false`);
   if (tem('depois')) {
     const ok = Array.isArray(novo.depois) && novo.depois.every((d) => d && typeof d === 'object' && textoNaoVazio(d.texto) && (d.item === undefined || /^F\d+$/.test(String(d.item))));
     if (!ok) throw new Error(`${chave}: depois é uma lista de {texto, item?}, texto não vazio e item no formato F<n>`);
@@ -847,19 +848,27 @@ function comandoMergear(args) {
   const c = conferir(pr, sha, process.cwd());
   if (c.recusado) return c;
   const { projeto } = projetoDoCwd();
-  const doPr = () => [...itensVivos()].filter(([, d]) => projeto && String(d?.projeto ?? '').toLowerCase() === projeto && Array.isArray(d.prs) && d.prs.includes(pr)).map(([F, d]) => ({ F, prs: d.prs }));
-  const decidir = () => doPr().map(({ F, prs }) => ({ F, fecha: prs.filter((n) => n !== pr).every((n) => estadoDoPr(n, process.cwd()) === 'MERGED') }));
-  if (seco) return { seco: true, mergearia: { pr, sha: c.sha, base: c.base }, ...(c.aviso ? { aviso: c.aviso } : {}), itens: decidir().map(({ F, fecha }) => ({ item: F, fecharia: fecha })) };
+  // F222: com todos os PRs MERGED, o item fecha, salvo `maisFatias: true` (a dona ainda entrega outra fatia): aí volta a
+  // `execucao` com a dona e o `com`. A marca fica até a dona tirá-la ao abrir o PR da última fatia.
+  const doPr = () => [...itensVivos()].filter(([, d]) => projeto && String(d?.projeto ?? '').toLowerCase() === projeto && Array.isArray(d.prs) && d.prs.includes(pr)).map(([F, d]) => ({ F, prs: d.prs, fatia: d.maisFatias === true }));
+  const decidir = () => doPr().map(({ F, prs, fatia }) => {
+    const todos = prs.filter((n) => n !== pr).every((n) => estadoDoPr(n, process.cwd()) === 'MERGED');
+    return { F, fecha: todos && !fatia, fatia: todos && fatia };
+  });
+  if (seco) return { seco: true, mergearia: { pr, sha: c.sha, base: c.base }, ...(c.aviso ? { aviso: c.aviso } : {}), itens: decidir().map(({ F, fecha, fatia }) => ({ item: F, fecharia: fecha, ...(fatia ? { fatia } : {}) })) };
   mergearNoGitHub(pr, c.sha, process.cwd());
   const decisoes = decidir();
   const curto = c.sha.slice(0, 7);
-  const itens = comTrava(() => decisoes.map(({ F, fecha }) => {
+  const itens = comTrava(() => decisoes.map(({ F, fecha, fatia }) => {
     const atual = ler('fila', F);
     if (!atual || ETAPAS_FINAIS.has(atual.data?.etapa)) return { item: F, fechado: false, agora: null };
-    const agora = fecha ? `mergeado, ponta ${curto}` : 'um PR entrou; falta outro';
-    const data = fecha ? { etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], agora } : { com: [], agora };
+    let data;
+    if (fecha) data = { etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], agora: `mergeado, ponta ${curto}` };
+    else if (fatia) data = { etapa: 'execucao', agora: `fatia mergeada (PR ${pr}, ponta ${curto}); a dona segue com a próxima` };
+    else data = { com: [], agora: 'um PR entrou; falta outro' };
     efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
-    return { item: F, fechado: fecha, agora };
+    // a fatia volta à dona, que parou ao abrir o PR: a orquestradora a avisa pelo `dona` da saída
+    return { item: F, fechado: fecha, ...(fatia ? { fatia, dona: atual.data.donoLocalId ?? null } : {}), agora: data.agora };
   }));
   return { mergeado: true, pr, sha: c.sha, base: c.base, ...(c.aviso ? { aviso: c.aviso } : {}), itens };
 }

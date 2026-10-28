@@ -189,6 +189,49 @@ test('item com dois PRs e o outro ainda OPEN: fica em merge, com vazio, agora "u
   } finally { limpar(c); }
 });
 
+test('F222: item com maisFatias: o merge da fatia não fecha — volta a execucao com a dona e o com; o --seco diz fecharia: false', () => {
+  const c = montar();
+  try {
+    c.item('F1', { maisFatias: true });
+    const seco = JSON.parse(c.painel('mergear', '12', c.sha.slice(0, 7), '--seco').out);
+    assert.deepEqual(seco.itens.map((i) => [i.item, i.fecharia]), [['F1', false]]);
+    const comAntes = c.dado('F1').com;
+    assert.ok(comAntes.length >= 1, 'com montado');
+    const r = c.painel('mergear', '12', c.sha.slice(0, 7));
+    assert.equal(r.exit, 0, r.err);
+    const d = c.dado('F1');
+    assert.equal(d.etapa, 'execucao');
+    assert.equal(d.donoLocalId, LA); assert.equal(d.donoApelido, 'P1');
+    assert.deepEqual(d.com, comAntes);
+    assert.equal(d.maisFatias, true, 'a marca fica até a dona tirá-la na última fatia');
+    assert.deepEqual(d.prs, [12], 'o PR mergeado continua no item');
+    assert.ok(d.agora.includes('fatia') && d.agora.includes(c.sha.slice(0, 7)), d.agora);
+    assert.deepEqual(JSON.parse(r.out).itens.map((i) => [i.item, i.fechado, i.fatia, i.dona]), [['F1', false, true, LA]]);
+  } finally { limpar(c); }
+});
+
+test('F222: a última fatia (maisFatias: false) fecha como o item de um PR só', () => {
+  const c = montar();
+  try {
+    c.item('F1', { maisFatias: false });
+    const r = c.painel('mergear', '12', c.sha.slice(0, 7));
+    assert.equal(r.exit, 0, r.err);
+    const d = c.dado('F1');
+    assert.equal(d.etapa, 'feito');
+    assert.equal(d.donoLocalId, undefined);
+    assert.deepEqual(d.com, []);
+  } finally { limpar(c); }
+});
+
+test('F222: maisFatias que não é booleano é recusado', () => {
+  const c = montar();
+  try {
+    const r = c.painel('set', 'fila', 'F1', JSON.stringify({ titulo: 'T', etapa: 'merge', tema: 'editor', maisFatias: 'sim' }));
+    assert.notEqual(r.exit, 0);
+    assert.match(r.err, /maisFatias/);
+  } finally { limpar(c); }
+});
+
 test('--seco confere tudo e não chama gh pr merge nem grava o painel', () => {
   const c = montar();
   try {
