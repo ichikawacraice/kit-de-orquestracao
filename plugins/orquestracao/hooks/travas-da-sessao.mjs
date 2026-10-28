@@ -6,7 +6,7 @@
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava) e em <BASE>/limpeza/ (o ok de limpar só nasce do clique na barra).
 //   T6  Bash `gh pr merge`, `painel mergear` ou `painel fila-de-merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
 //   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o botão de limpar
-//       da barra (o ok vale uma limpeza), o sim do painel ou o da janela).
+//       da barra (o ok vale uma limpeza), o sim do painel ou o da janela). Ao liberar, grava a marca de volta (F219).
 // Limites conhecidos: o cache do registro (pool-comum.mjs, 2 min) atrasa em até 2 min a troca de título. Orquestradora
 // reconhecida só por título (sem marcador em ativas/) não ativa o T6; projeto não medido (null) pergunta; o
 // painel-das-sessoes.mjs repõe o marcador no primeiro Stop dela.
@@ -15,7 +15,7 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { registrar, lerEntrada, modoAusente, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, ehOrquestradora, origemDoTurno, gitCommonDir, projetoTemOrquestradora, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, janelasDeLimpeza, SIM_DA_JANELA_MS, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
+import { BASE, registroDaSessao, ehOrquestradora, origemDoTurno, gitCommonDir, projetoTemOrquestradora, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, marcarVoltaDaLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'travas-da-sessao';
 const H = homedir();
@@ -88,7 +88,8 @@ function main() {
     const alvoReal = String(alvo ?? 'self');
     // F213: o ok do botão vale uma limpeza por qualquer caminho que a libere (a limpeza direta do cache frio não abre turno, e a
     // origem lida é a do último turno, muitas vezes `human`): se sobrasse, um clear_session de turno peer passaria nos 30 min seguintes.
-    const libera = (motivo) => { gastarOkDoBotaoDeLimpar(reg?.localId); registrar(sid, HOOK, 'liberou-limpeza', `${alvoReal} ${motivo}`); };
+    // F219: e deixa a marca de volta, para o processo novo reabrir o painel e carregar a skill sem esperar o operador.
+    const libera = (motivo) => { gastarOkDoBotaoDeLimpar(reg?.localId); marcarVoltaDaLimpeza(reg?.localId, motivo, e.session_id); registrar(sid, HOOK, 'liberou-limpeza', `${alvoReal} ${motivo}`); };
     if (modoAusente()) return libera('modo ausente ligado');
     let origem = null;
     try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }

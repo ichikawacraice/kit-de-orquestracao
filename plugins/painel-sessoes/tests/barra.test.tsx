@@ -8,6 +8,12 @@ import {
   LIMPANDO_ABAIXO_DE,
   ESPERA_DA_LIMPEZA_DIRETA_MS,
   PROMPT_DE_LIMPAR,
+  PROMPT_DA_VOLTA,
+  VOLTA_VALE_MS,
+  ACORDAR_DEPOIS_DE_MS,
+  PAINEL_NA_VOLTA_MS,
+  paraAcordar,
+  limpezaAconteceu,
   PALAVRA_ALTO,
   PALAVRA_LIMPAR,
   REGUAS,
@@ -40,6 +46,8 @@ const HOME = '/home/teste'
 const SETTINGS = `${HOME}/.claude/settings.json`
 const PASTA = `${HOME}/.claude/orquestracao/painel`
 const BANDEIRA = `${HOME}/.claude/orquestracao/operador-ausente.json`
+const PASTA_DA_VOLTA = `${HOME}/.claude/orquestracao/volta-da-limpeza`
+const VOLTA = `${PASTA_DA_VOLTA}/${EU}.json`
 const REGISTRO_DO_APP = `${HOME}/Library/Application Support/Claude/claude-code-sessions/conta/org/${EU}.json`
 const AGORA = Date.UTC(2026, 9, 26, 12)
 
@@ -135,13 +143,14 @@ test('contarDonas: itens do projeto em etapa de trabalho com dona ou alguém no 
 })
 
 test('limparEmDestaque: exatamente quando o contexto mostra · limpar (a régua do papel)', () => {
-  expect(limparEmDestaque(150_000, REGUAS.orquestradora)).toBe(true)
-  expect(limparEmDestaque(149_999, REGUAS.orquestradora)).toBe(false)
+  expect(limparEmDestaque(250_000, REGUAS.orquestradora)).toBe(true)
+  expect(limparEmDestaque(249_999, REGUAS.orquestradora), 'a sessão nasce com ~90 mil: 150 mil já não acende (F219)').toBe(false)
+  expect(limparEmDestaque(150_000, REGUAS.orquestradora)).toBe(false)
   expect(limparEmDestaque(null, REGUAS.orquestradora)).toBe(false)
   expect(limparEmDestaque(260_000, null), 'sem régua não há palavra').toBe(false)
   expect(limparEmDestaque(260_000, REGUAS.orquestradoraAusente), 'ausente: a régua da dona, a palavra e o botão juntos').toBe(false)
   expect(limparEmDestaque(500_000, REGUAS.orquestradoraAusente)).toBe(true)
-  for (const t of [100_000, 150_000, 300_000, 500_000]) {
+  for (const t of [100_000, 150_000, 250_000, 300_000, 500_000]) {
     expect(limparEmDestaque(t, REGUAS.orquestradora), `${t}`).toBe(palavraDoContexto(t, REGUAS.orquestradora) === PALAVRA_LIMPAR)
   }
 })
@@ -186,8 +195,8 @@ test('faixaDaBarra: o relógio em bloco (alerta e venceu) soma as duas células 
   expect(faixaDaBarra(114, { ...REFERENCIA, bloco: true }), 'com o bloco a faixa 0 já não cabe').toBe(1)
 })
 
-// A orquestradora da revisão: 198 mil (acima de 150 mil), sem item, 3 perguntas, presente, painel fechado.
-const ORQ_BARRA: EstadoBarra = { ...REFERENCIA, tokens: 198_000, regua: REGUAS.orquestradora, item: null, abertas: 3, modo: 'presente', painelAberto: false, ehOrquestradora: true }
+// A orquestradora da revisão: 298 mil (acima da régua de 250 mil; a largura é a dos 198 da revisão), sem item, 3 perguntas, presente, painel fechado.
+const ORQ_BARRA: EstadoBarra = { ...REFERENCIA, tokens: 298_000, regua: REGUAS.orquestradora, item: null, abertas: 3, modo: 'presente', painelAberto: false, ehOrquestradora: true }
 
 test('faixaDaBarra: o limpar entra na soma como ↺ Limpando… (a reserva): 123, 105 e 62, e +1 com Fechar painel', () => {
   expect([0, 1, 2].map(f => larguraDaFaixa(ORQ_BARRA, f as 0 | 1 | 2)), 'as somas da revisão').toEqual([123, 105, 62])
@@ -323,6 +332,16 @@ type Opcoes = {
   limpezaDireta?: { erro: string } | { deny: string }
   /** Roda dentro do `fs.write` do ok do botão (ex.: um turno que começa entre o clique e a limpeza direta). */
   aoGravarOk?: ($: Parameters<TestBody>[0]) => Promise<unknown>
+  /** O texto da marca de volta da limpeza (`volta-da-limpeza/<local_…>.json`), que a T7 grava ao liberar a limpeza. */
+  volta?: string
+  /** Marcas de volta a mais, por nome de arquivo (ex.: a de outra sessão, ou a `.acordada.json`). */
+  voltas?: Record<string, string>
+  /** O que o `get_session` de outra sessão devolve (padrão: parada, não arquivada). */
+  alvo?: { isRunning?: boolean; isArchived?: boolean; starting?: boolean }
+  /** O `mv` que toma a marca falha (outro mod a tomou antes). */
+  mvFalha?: boolean
+  /** O registro do app da outra sessão (`local_orq`); `null` = sem arquivo. Padrão: limpa e sem processo novo (sem `cliSessionId`). */
+  registroAlvo?: Record<string, unknown> | null
 }
 
 function engine(on: On, opc: Opcoes = {}) {
@@ -366,6 +385,28 @@ function engine(on: On, opc: Opcoes = {}) {
   arquivos.set(`${PASTA}/temas.json`, JSON.stringify([{ id: 'geral', rotulo: 'Geral' }]))
   if (opc.bandeira !== undefined) arquivos.set(BANDEIRA, opc.bandeira)
   if (opc.settings !== null) arquivos.set(SETTINGS, opc.settings ?? '{"autoCompactWindow": 600000}')
+  if (opc.volta !== undefined) arquivos.set(VOLTA, opc.volta)
+  for (const [nome, t] of Object.entries(opc.voltas ?? {})) arquivos.set(`${PASTA_DA_VOLTA}/${nome}`, t)
+  if (opc.registroAlvo !== null) arquivos.set(REGISTRO_DO_APP.replace(EU, 'local_orq'), JSON.stringify(opc.registroAlvo ?? { title: '🎛 orquestradora — kit', priorCliSessionIds: ['cli-velho'] }))
+  // Só o `mv` e o `rm` da marca de volta; o resto do process.run segue sem implementação, como antes.
+  const comandos: string[][] = []
+  on('process.run', (_, e) => {
+    const argv = [...e.argv]
+    if (argv[0] === 'mv' && argv[1]?.startsWith(PASTA_DA_VOLTA)) {
+      comandos.push(argv)
+      const t = arquivos.get(argv[1])
+      if (opc.mvFalha || t === undefined) return { value: { exitCode: 1, stdout: '', stderr: 'mv: no such file', isStdoutTruncated: false, isStderrTruncated: false } }
+      arquivos.delete(argv[1])
+      arquivos.set(argv[2] as string, t)
+      return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
+    if (argv[0] === 'rm' && argv.slice(2).every(a => a.startsWith(PASTA_DA_VOLTA))) {
+      comandos.push(argv)
+      for (const a of argv.slice(2)) arquivos.delete(a)
+      return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    }
+    throw new Error(`sem process.run no teste: ${argv[0]}`)
+  })
   if (opc.titulo !== null) arquivos.set(REGISTRO_DO_APP, JSON.stringify({ title: opc.titulo ?? '🎛 orquestradora — kit' }))
   const escritas: Array<{ path: string; data: Record<string, unknown>; texto: string }> = []
   const bandeiras: Array<Record<string, unknown>> = []
@@ -424,17 +465,20 @@ function engine(on: On, opc: Opcoes = {}) {
       return { result: {}, text: 'ok' }
     }
     if (e.tool === 'mcp__ccd_session_mgmt__clear_session') {
-      limpezasDiretas.push(entrada)
+      limpezasDiretas.push({ ...entrada, voltaGravada: arquivos.has(VOLTA) })
       const r = opc.limpezaDireta
       if (r && 'deny' in r) return { deny: r.deny }
       if (r) return { result: {}, text: r.erro, isError: true }
       return { result: {}, text: 'Clear queued.' }
     }
-    if (e.tool === 'mcp__ccd_session_mgmt__get_session') return { result: {}, text: JSON.stringify({ sessionId: EU, title: 'eu', isRunning: true }) }
+    if (e.tool === 'mcp__ccd_session_mgmt__get_session') {
+      if (entrada.session_id !== 'self') return { result: {}, text: JSON.stringify({ sessionId: entrada.session_id, isRunning: false, isArchived: false, ...opc.alvo }) }
+      return { result: {}, text: JSON.stringify({ sessionId: EU, title: 'eu', isRunning: true }) }
+    }
     return { result: {}, text: '[]' }
   })
 
-  return { relogio: relogioDeTeste, limpezas, definirTokens: (t: number | null) => { tokensAgora = t }, escritas, bandeiras, fills, prompts, toasts, chamadas, enviadas, notificacoes, limpezasDiretas, arquivos, aberturas, painelAberto: () => aberto }
+  return { relogio: relogioDeTeste, comandos, limpezas, definirTokens: (t: number | null) => { tokensAgora = t }, escritas, bandeiras, fills, prompts, toasts, chamadas, enviadas, notificacoes, limpezasDiretas, arquivos, aberturas, painelAberto: () => aberto }
 }
 
 const BARRA = {
@@ -712,7 +756,7 @@ test('limpar: abaixo da régua é discreto (secundário, apagado, sem a palavra 
 })
 
 test('limpar: na régua é o único primário, cheio, e a palavra · limpar acende junto', async ($, on) => {
-  await iniciar($, on, { tokens: 212_000 })
+  await iniciar($, on, { tokens: 262_000 })
   const alto = await montar($, 'terminal', { bodyColumns: 140 })
   const destaque = await alto.find({ key: 'limpar' })
   expect(destaque?.props.variant).toBe('primary')
@@ -888,6 +932,147 @@ test('limpar com o cache frio sem leitura de contexto no clique: o app recusa �
   expect(m.limpezasDiretas.length).toBe(1)
   expect(m.toasts.at(-1)).toBe('A limpeza direta não pegou (session has live work); pedi à sessão que se limpe.')
   expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+  await ui.unmount()
+})
+
+// F219: a volta da limpeza. A T7 grava a marca ao liberar o clear_session da orquestradora (e o clique com o cache frio, antes
+// de limpar direto). O app só sobe o processo novo de uma sessão limpa quando chega uma mensagem: quem a manda é o mod de outra
+// sessão viva (a leitura da barra), e o processo novo só reabre o painel.
+const marcaDeVolta = (antesMs: number) => JSON.stringify({ em: new Date(AGORA - antesMs).toISOString(), motivo: 'botão da barra' })
+const OUTRA = 'local_orq'
+
+test('limpezaAconteceu: o registro sem cliSessionId, ou com outro que não o da marca; sem registro ou com o mesmo, não', () => {
+  expect(limpezaAconteceu('cli-velho', { priorCliSessionIds: ['cli-velho'] }), 'limpa, sem processo novo').toBe(true)
+  expect(limpezaAconteceu('cli-velho', { cliSessionId: 'cli-novo' }), 'limpa, processo novo já subiu').toBe(true)
+  expect(limpezaAconteceu('cli-velho', { cliSessionId: 'cli-velho' }), 'a limpeza foi descartada').toBe(false)
+  expect(limpezaAconteceu(null, { cliSessionId: 'cli-x' }), 'marca sem cli: só sem cliSessionId').toBe(false)
+  expect(limpezaAconteceu(null, {})).toBe(true)
+  expect(limpezaAconteceu('cli-velho', null), 'sem registro não se sabe').toBe(false)
+})
+
+test('paraAcordar: marca de outra sessão entre 30 s e 10 min; a própria, a acordada, a vencida e a ilegível ficam', () => {
+  const m = (nome: string, antes: number | null) => ({ nome, texto: antes === null ? '{nao json' : marcaDeVolta(antes) })
+  expect(
+    paraAcordar(
+      [m(`${OUTRA}.json`, 60_000), m(`${EU}.json`, 60_000), m(`local_b${'.acordada.json'}`, 60_000), m('local_c.json', ACORDAR_DEPOIS_DE_MS - 1000), m('local_d.json', VOLTA_VALE_MS + 1000), m('local_e.json', null), m('x.json', 60_000), m('local_f.json', -5 * 60_000)],
+      EU,
+      AGORA,
+    ),
+  ).toEqual([{ id: OUTRA, cli: null }])
+  expect(paraAcordar([{ nome: `${OUTRA}.json`, texto: JSON.stringify({ em: new Date(AGORA - 60_000).toISOString(), cli: 'cli-velho' }) }], EU, AGORA)).toEqual([{ id: OUTRA, cli: 'cli-velho' }])
+})
+
+test('acordar: a leitura da barra acha a marca de outra sessão parada, toma a marca e manda a mensagem da volta, uma vez', async ($, on) => {
+  const m = await iniciar($, on, { titulo: 'F1 · outra dona', voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) } })
+  const volta = m.enviadas.filter(e => e.message === PROMPT_DA_VOLTA)
+  expect(volta.map(e => e.session_id), 'já na primeira leitura, a do início da sessão').toEqual([OUTRA])
+  expect(PROMPT_DA_VOLTA).toMatch(/orquestracao:orquestradora/)
+  expect(PROMPT_DA_VOLTA).toMatch(/Ao assumir/)
+  expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${OUTRA}.json`), 'a marca foi tomada').toBe(false)
+  expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${OUTRA}.acordada.json`)).toBe(true)
+  await m.relogio.advance(LEITURA_MS + 1000)
+  expect(m.enviadas.filter(e => e.message === PROMPT_DA_VOLTA).length, 'a leitura seguinte não manda de novo').toBe(1)
+})
+
+for (const [caso, opc] of [
+  ['marca nova demais (a limpeza ainda não aconteceu)', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(5_000) } }],
+  ['marca vencida', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(VOLTA_VALE_MS + 1000) } }],
+  ['a sessão está rodando', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, alvo: { isRunning: true } }],
+  ['a sessão foi arquivada', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, alvo: { isArchived: true } }],
+  ['outro mod tomou a marca antes', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, mvFalha: true }],
+  ['a marca já foi acordada', { voltas: { [`${OUTRA}.acordada.json`]: marcaDeVolta(60_000) } }],
+  ['a limpeza foi descartada (o registro ainda traz o CLI da marca)', { voltas: { [`${OUTRA}.json`]: JSON.stringify({ em: new Date(AGORA - 60_000).toISOString(), cli: 'cli-velho' }) }, registroAlvo: { cliSessionId: 'cli-velho' } }],
+  ['sem o registro do app', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, registroAlvo: null }],
+  ['o processo novo está subindo (o operador a acordou)', { voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, alvo: { starting: true } }],
+] as const) {
+  test(`acordar: ${caso} → nenhuma mensagem (o contraste: o teste acima manda)`, async ($, on) => {
+    // Só a leitura do início: com o relógio parado, a marca nova demais segue nova demais.
+    const m = await iniciar($, on, { titulo: 'F1 · outra dona', ...opc })
+    expect(m.enviadas.filter(e => e.message === PROMPT_DA_VOLTA)).toEqual([])
+  })
+}
+
+test('acordar: a limpeza com o processo novo já de pé (outro cliSessionId) e a sessão parada → manda', async ($, on) => {
+  const m = await iniciar($, on, { titulo: 'F1 · outra dona', voltas: { [`${OUTRA}.json`]: JSON.stringify({ em: new Date(AGORA - 60_000).toISOString(), cli: 'cli-velho' }) }, registroAlvo: { cliSessionId: 'cli-novo' } })
+  expect(m.enviadas.filter(e => e.message === PROMPT_DA_VOLTA).map(e => e.session_id)).toEqual([OUTRA])
+})
+
+test('acordar: o envio falha → a marca volta ao nome de antes, e a leitura seguinte tenta de novo', async ($, on) => {
+  const m = await iniciar($, on, { titulo: 'F1 · outra dona', voltas: { [`${OUTRA}.json`]: marcaDeVolta(60_000) }, envioFalha: 'Target session is recovering its own pending input' })
+  expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${OUTRA}.json`), 'a marca foi devolvida').toBe(true)
+  expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${OUTRA}.acordada.json`)).toBe(false)
+  expect(m.comandos.filter(c => c[0] === 'mv').length, 'tomou e devolveu').toBe(2)
+  await m.relogio.advance(LEITURA_MS + 1000)
+  expect(m.comandos.filter(c => c[0] === 'mv').length, 'tentou de novo na leitura seguinte').toBe(4)
+})
+
+test('acordar: a própria marca não se acorda (o processo dela é o que vai morrer)', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 260_000, volta: marcaDeVolta(60_000), painelAbertoNoInicio: true })
+  await m.relogio.advance(LEITURA_MS + 1000)
+  expect(m.enviadas.filter(e => e.message === PROMPT_DA_VOLTA)).toEqual([])
+})
+
+test('volta: o processo novo da orquestradora com a marca reabre o painel, apaga a marca e não manda prompt', async ($, on) => {
+  const m = await iniciar($, on, { volta: marcaDeVolta(60_000) })
+  expect(m.painelAberto(), 'o painel abriu sem o operador pedir').toBe(true)
+  expect(m.prompts, 'a skill vem pela mensagem que acordou a sessão (ou pelo hook de início): nenhum turno a mais').toEqual([])
+  expect(m.arquivos.has(VOLTA), 'a marca saiu: ninguém mais a acorda').toBe(false)
+})
+
+test('volta: a marca já acordada também reabre o painel e sai', async ($, on) => {
+  const m = await iniciar($, on, { voltas: { [`${EU}.acordada.json`]: marcaDeVolta(90_000) } })
+  expect(m.painelAberto()).toBe(true)
+  expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${EU}.acordada.json`)).toBe(false)
+})
+
+test('volta: o operador voltou horas depois (até 12 h) e a marca ainda reabre o painel', async ($, on) => {
+  const m = await iniciar($, on, { volta: marcaDeVolta(PAINEL_NA_VOLTA_MS - 60_000) })
+  expect(m.painelAberto()).toBe(true)
+})
+
+for (const [caso, volta] of [
+  ['marca de mais de 12 h', marcaDeVolta(PAINEL_NA_VOLTA_MS + 1000)],
+  ['marca no futuro', marcaDeVolta(-5 * 60_000)],
+  ['marca ilegível', '{nao json'],
+] as const) {
+  test(`volta: ${caso} → o painel fica fechado, e a marca sai (o contraste: a fresca abre)`, async ($, on) => {
+    const m = await iniciar($, on, { volta })
+    expect(m.painelAberto()).toBe(false)
+    expect(m.arquivos.has(VOLTA)).toBe(false)
+  })
+}
+
+test('volta: sem marca, nada (nem rm)', async ($, on) => {
+  const m = await iniciar($, on)
+  expect(m.painelAberto()).toBe(false)
+  expect(m.comandos).toEqual([])
+})
+
+test('volta: só na orquestradora (a dona com marca fresca não abre o painel)', async ($, on) => {
+  const m = await iniciar($, on, { volta: marcaDeVolta(60_000), titulo: 'F12 · uma dona' })
+  expect(m.painelAberto()).toBe(false)
+})
+
+test('limpar com o cache frio: grava a marca de volta antes do clear_session (a limpeza direta pode não passar pela T7)', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  await esfriar($, m)
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.limpezasDiretas.length, 'chamou o clear_session').toBe(1)
+  expect(m.limpezasDiretas[0]?.voltaGravada, 'a marca de volta já estava gravada na chamada').toBe(true)
+  expect(JSON.parse(m.arquivos.get(VOLTA) ?? '{}').motivo).toBe('limpeza direta da barra')
+  await ui.unmount()
+  await m.relogio.advance(ESPERA_DA_LIMPEZA_DIRETA_MS + 1000)
+})
+
+test('limpar com o cache quente: o mod não grava a marca de volta (quem grava é a T7, quando a sessão se limpa)', async ($, on) => {
+  const m = await iniciar($, on, { tokens: 212_000 })
+  const ui = await montar($, 'terminal', { bodyColumns: 140 })
+  await ui.press({ key: 'limpar' })
+  await m.relogio.settle()
+  expect(m.prompts).toEqual([PROMPT_DE_LIMPAR])
+  expect(m.arquivos.has(VOLTA)).toBe(false)
   await ui.unmount()
 })
 

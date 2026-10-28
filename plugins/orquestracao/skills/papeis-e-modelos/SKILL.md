@@ -108,7 +108,7 @@ O critério de pronto não depende do relato. O hook `${CLAUDE_PLUGIN_ROOT}/hook
 | Papel | Regra |
 |---|---|
 | **Dona** e **orquestradora no modo ausente** | Lê `get_usage` (`"self"`, `context.tokensUsed`) a cada unidade concluída. **≥ 350 mil:** grava o handoff do item e limpa no próximo momento oportuno. **≥ 250 mil e o turno vai terminar esperando o operador:** limpa antes de encerrar — retomar custa ~90 mil, reescrever 250+ mil custa mais. **≥ 500 mil:** não pega trabalho novo até limpar. A dona continua dona depois da limpeza (o `local_…` não muda). |
-| **Orquestradora com o operador presente** | Não limpa sozinha: a partir de 150 mil o botão `↺ Limpar` da barra fica destacado, e a limpeza é do operador (skill `orquestradora`, "Orçamento de contexto"). Com o cache frio (1 h sem turno) o botão vira `↺ Limpar já` e limpa direto, sem turno da sessão: o arquivo de estado tem de estar em dia. |
+| **Orquestradora com o operador presente** | Não limpa sozinha: a partir de 250 mil o botão `↺ Limpar` da barra fica destacado (a sessão já recomeça com ~90 mil), e a limpeza é do operador (skill `orquestradora`, "Orçamento de contexto"). Com o cache frio (1 h sem turno) o botão vira `↺ Limpar já` e limpa direto, sem turno da sessão: o arquivo de estado tem de estar em dia. Na volta de toda limpeza, o painel reabre e a skill `orquestradora` é carregada sem esperar o operador. |
 | **Validador** (subagente) | **Sempre contexto novo**, inclusive para revisar o conserto do mesmo trabalho. Revisão que não cabe vira duas, por faixa de arquivo. |
 | **Explorador** (subagente) | Uma pergunta, uma resposta, fim. |
 

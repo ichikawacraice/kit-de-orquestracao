@@ -3,7 +3,7 @@ import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { cartaoACaminho, semDona, semDonoDesde } from './sem-dona'
 import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, PROMPT_DA_VOLTA, PAINEL_NA_VOLTA_MS, idadeDaVolta, paraAcordar, limpezaAconteceu, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
@@ -1310,18 +1310,22 @@ async function projetoDoCwd($: EngineInterface): Promise<string | null> {
   return slugDoProjeto(nomeDaPasta(cwd))
 }
 
-/** O título desta sessão no registro do app; fora do app (ou sem o arquivo), `null`. */
-async function tituloDoApp($: EngineInterface, home: string | undefined, id: string): Promise<string | null> {
+/** O registro de uma sessão no app (`claude-code-sessions/<conta>/<org>/<local_…>.json`); fora do app (ou sem o arquivo), `null`. */
+async function registroDoApp($: EngineInterface, home: string | undefined, id: string): Promise<Record<string, unknown> | null> {
   try {
     const conta = await $.env.get('CLAUDE_CODE_ACCOUNT_UUID')
     const org = await $.env.get('CLAUDE_CODE_ORGANIZATION_UUID')
     if (!home || !conta || !org) return null
-    const reg = JSON.parse((await $.fs.read(`${home}/${BANDEIRA_DO_APP}/${conta}/${org}/${id}.json`)) as string) as Record<string, unknown>
 
-    return texto(reg.title) ?? null
+    return JSON.parse((await $.fs.read(`${home}/${BANDEIRA_DO_APP}/${conta}/${org}/${id}.json`)) as string) as Record<string, unknown>
   } catch {
     return null
   }
+}
+
+/** O título desta sessão no registro do app; fora do app (ou sem o arquivo), `null`. */
+async function tituloDoApp($: EngineInterface, home: string | undefined, id: string): Promise<string | null> {
+  return texto((await registroDoApp($, home, id))?.title) ?? null
 }
 
 /** Uma leitura por vez; falha vira linha em `erros`, nunca exceção solta. Só arquivos: o `list_sessions` fica para o pane aberto. */
@@ -1390,6 +1394,7 @@ async function lerBarra($: EngineInterface): Promise<void> {
         erros,
       }
     })
+    if (home) await acordarQuemVoltou($, home, host).catch(() => undefined)
   } catch (err) {
     await update($, barra, b => ({ ...b, erros: [...b.erros, `leitura: ${mensagem(err)}`] })).catch(() => {})
   } finally {
@@ -1461,7 +1466,7 @@ async function limparPelaBarra($: EngineInterface, trabalhando: boolean): Promis
     }
     await gravarOk()
     if (direto) {
-      const motivo = await limparDireto($)
+      const motivo = await limparDireto($, host)
       // `null`: o app aceitou e o processo morreu na limpeza antes do prazo (nada mais roda aqui).
       if (motivo === null) return
       // Limpou mas o processo seguiu vivo: o prompt agora gravaria um handoff vazio por cima do estado.
@@ -1492,9 +1497,11 @@ async function contextoJaCaiu($: EngineInterface, tokensNoClique: number | null)
 }
 
 /** Pede ao app a limpeza da própria sessão e espera ela recomeçar; devolve o motivo quando não pegou (recusa, erro ou prazo). */
-async function limparDireto($: EngineInterface): Promise<string | null> {
+async function limparDireto($: EngineInterface, host: string): Promise<string | null> {
   // Um turno pode ter começado entre o clique e aqui (mensagem de outra sessão): turno rodando nunca é limpo direto.
   if (trabalhandoNaBarra) return 'um turno começou'
+  // F219: a marca de volta antes da chamada, porque a chamada do mod pode não passar pela T7 (que a grava no caminho do prompt).
+  await gravarVolta($, host, 'limpeza direta da barra')
   try {
     const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__clear_session', session_id: 'self' })
     if (r.deny !== undefined) return r.deny || 'recusada'
@@ -1508,6 +1515,97 @@ async function limparDireto($: EngineInterface): Promise<string | null> {
   return NAO_RECOMECOU
 }
 
+
+const PASTA_DA_VOLTA = `${BASE_ORQUESTRACAO}/volta-da-limpeza`
+const ACORDADA = '.acordada.json'
+
+/** Grava a marca de volta (o mesmo formato da T7). Falha só vai ao log: sem ela, a volta espera o operador, como antes. */
+async function gravarVolta($: EngineInterface, host: string, motivo: string): Promise<void> {
+  try {
+    const pasta = `${await $.env.get('HOME')}/${PASTA_DA_VOLTA}`
+    const cli = await $.session.id().catch(() => null)
+    const conteudo = `${JSON.stringify({ em: new Date(await $.clock.now()).toISOString(), motivo, ...(cli ? { cli } : {}) })}\n`
+    try {
+      await $.fs.write(`${pasta}/${host}.json`, conteudo)
+    } catch {
+      await $.process.run(['mkdir', '-p', pasta], { timeoutMs: SCRIPT_TIMEOUT_MS })
+      await $.fs.write(`${pasta}/${host}.json`, conteudo)
+    }
+  } catch (err) {
+    await $.ui.log(`limpar: não gravei a marca de volta: ${mensagem(err)}`).catch(() => {})
+  }
+}
+
+/**
+ * F219: o processo novo de uma orquestradora que se limpou (a marca de volta dela, acordada ou não, de até 12 h) reabre o painel e
+ * apaga a marca: daí ninguém mais a acorda. A skill vem pela mensagem que acordou a sessão (ou pelo hook de início de sessão, se
+ * quem a acordou foi o operador); daqui não sai prompt, para não somar um turno ao do operador.
+ */
+async function voltarDaLimpeza($: EngineInterface): Promise<void> {
+  try {
+    const host = await sessaoDoApp($)
+    const home = await $.env.get('HOME')
+    if (!host || !home) return
+    const pasta = `${home}/${PASTA_DA_VOLTA}`
+    const arquivos = [`${pasta}/${host}.json`, `${pasta}/${host}${ACORDADA}`]
+    const agora = await $.clock.now()
+    let fresca = false
+    let achou = false
+    for (const arquivo of arquivos) {
+      const marca = (await $.fs.read(arquivo).catch(() => null)) as string | null
+      if (marca === null) continue
+      achou = true
+      const idade = idadeDaVolta(marca, agora)
+      if (idade !== null && idade <= PAINEL_NA_VOLTA_MS) fresca = true
+    }
+    if (!achou) return
+    await $.process.run(['rm', '-f', ...arquivos], { timeoutMs: SCRIPT_TIMEOUT_MS }).catch(() => undefined)
+    if (!fresca || papelEApelido(await tituloDoApp($, home, host)).papel !== 'orquestradora') return
+    await abrirPainel($)
+  } catch (err) {
+    await $.ui.log(`volta da limpeza: ${mensagem(err)}`).catch(() => {})
+  }
+}
+
+/**
+ * F219: o mod de toda sessão viva, a cada leitura da barra, acorda a sessão que se limpou e ainda não voltou (marca de outra sessão,
+ * de 30 s a 10 min, e a sessão parada): toma a marca renomeando-a para `.acordada.json` (o `mv` é atômico, então só um mod
+ * manda) e manda a mensagem da volta, que sobe o processo novo dela.
+ */
+async function acordarQuemVoltou($: EngineInterface, home: string, host: string | undefined): Promise<void> {
+  const pasta = `${home}/${PASTA_DA_VOLTA}`
+  let entradas: Awaited<ReturnType<EngineInterface['fs']['list']>>
+  try {
+    entradas = await $.fs.list(pasta)
+  } catch {
+    return
+  }
+  const marcas = await Promise.all(
+    entradas.filter(e => e.kind === 'file').map(async e => ({ nome: e.name, texto: (await $.fs.read(`${pasta}/${e.name}`).catch(() => null)) as string | null })),
+  )
+  for (const { id, cli } of paraAcordar(marcas, host, await $.clock.now())) {
+    try {
+      // A limpeza liberada pela T7 pode ser descartada pelo app (mensagem na fila, turno novo antes de ficar parada): só acorda se ela aconteceu.
+      if (!limpezaAconteceu(cli, await registroDoApp($, home, id))) continue
+      const s = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__get_session', session_id: id })
+      if (s.deny !== undefined || s.isError) continue
+      const t = s.text ?? ''
+      const sessao = JSON.parse(t.slice(Math.max(0, t.indexOf('{')))) as { isRunning?: boolean; starting?: boolean; isArchived?: boolean }
+      // `starting`: alguém (o operador) já a acordou e o processo novo está subindo.
+      if (sessao.isRunning !== false || sessao.starting === true || sessao.isArchived === true) continue
+      const tomou = await $.process.run(['mv', `${pasta}/${id}.json`, `${pasta}/${id}${ACORDADA}`], { timeoutMs: SCRIPT_TIMEOUT_MS })
+      if (tomou.exitCode !== 0) continue
+      const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: id, message: PROMPT_DA_VOLTA })
+      if (r.deny !== undefined || r.isError) {
+        // Devolve a marca: a próxima leitura (desta ou de outra sessão) tenta de novo, dentro do prazo.
+        await $.process.run(['mv', `${pasta}/${id}${ACORDADA}`, `${pasta}/${id}.json`], { timeoutMs: SCRIPT_TIMEOUT_MS }).catch(() => undefined)
+        await $.ui.log(`volta da limpeza: não acordei ${id}: ${r.deny || r.text}`)
+      }
+    } catch (err) {
+      await $.ui.log(`volta da limpeza: ${id}: ${mensagem(err)}`).catch(() => {})
+    }
+  }
+}
 
 // ---- o reinício do app (F152): quando dá para reiniciar sem derrubar trabalho, e o aviso "me avise" ----
 // O julgamento é do script (`painel pode-reiniciar`, que grava `batida/pode-reiniciar.json`); aqui ficam a leitura dos dois arquivos
@@ -2088,6 +2186,7 @@ export const register: Register = on => {
     if ((await $.ui.panes()).some(p => p.id === PANE)) ligar($)
     else await reabrir($)
     await iniciarBarra($)
+    await voltarDaLimpeza($)
 
     return r
   })

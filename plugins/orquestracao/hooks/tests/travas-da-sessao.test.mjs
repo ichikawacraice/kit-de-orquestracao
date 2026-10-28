@@ -280,6 +280,23 @@ caso('F213 T7: o ok do botão se gasta também quando a liberação vem do turno
   passa(limpa('ORQ', depeer()), 'modo ausente');
   ok(!existsSync(dir('limpeza', 'local_ORQ.json')), 'o ok sobrou depois da liberação pelo modo ausente');
 });
+// F219: toda liberação da limpeza da orquestradora deixa a marca de volta (`<PAINEL_DIR>/../volta-da-limpeza/<local_…>.json`): no
+// processo novo, o mod reabre o painel e manda carregar a skill. A negada não deixa marca.
+const volta = () => dir('volta-da-limpeza', 'local_ORQ.json');
+caso('F219 T7: a limpeza liberada grava a marca de volta (botão, operador, ausente); a negada não grava', () => {
+  nega7(limpa('ORQ', depeer()), 'peer sem ok');
+  ok(!existsSync(volta()), 'a negada gravou a marca de volta');
+  okDoBotao({ em: haMin(5), por: 'barra' }); passa(limpa('ORQ', depeer()), 'botão');
+  ok(existsSync(volta()), 'a liberação pelo botão não gravou a marca de volta');
+  const d = JSON.parse(readFileSync(volta(), 'utf8'));
+  ok(Math.abs(Date.now() - Date.parse(d.em)) < 60_000, `em fora de agora: ${JSON.stringify(d)}`);
+  ok(d.motivo === 'botão da barra', `motivo: ${JSON.stringify(d)}`);
+  ok(d.cli === S.ORQ[0], `a marca não traz a id do CLI que pediu a limpeza: ${JSON.stringify(d)}`);
+  rmSync(volta()); passa(limpa('ORQ', humano()), 'operador'); ok(existsSync(volta()), 'turno do operador sem marca');
+  rmSync(volta()); bandeira(Date.now() - 3600_000); passa(limpa('ORQ', depeer()), 'ausente'); ok(existsSync(volta()), 'modo ausente sem marca');
+  rmSync(volta()); passa(limpa('DONA', depeer()), 'dona'); passa(limpa('ORQ', depeer(), 'local_DONA'), 'outra sessão');
+  ok(!existsSync(volta()), 'limpeza que não é da orquestradora sobre ela mesma gravou a marca');
+});
 caso('T7: orquestradora limpando outra sessão passa; a dona limpando "self" passa', () => {
   passa(limpa('ORQ', depeer(), 'local_DONA'), 'orquestradora limpa outra sessão');
   passa(limpa('DONA', depeer()), 'dona self');

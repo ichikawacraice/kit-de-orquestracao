@@ -15,7 +15,19 @@ const ALERTA_MIN = 10 * 60
 export const BANDEIRA_DO_APP = 'Library/Application Support/Claude/claude-code-sessions'
 
 /** O que o clique de limpar manda à própria sessão (o prompt chega com origem `plugin`; o ok que a T7 lê é o arquivo gravado antes). */
-export const PROMPT_DE_LIMPAR = 'O operador mandou limpar pelo botão da barra: grave o estado (handoff do que estiver aberto) e limpe-se com clear_session "self".'
+export const PROMPT_DE_LIMPAR = 'O operador mandou limpar pelo botão da barra: grave o estado (handoff do que estiver aberto) e limpe-se com clear_session "self". Na volta, o painel reabre e a skill orquestradora é carregada sem você pedir.'
+/**
+ * F219: a mensagem que acorda a orquestradora depois de uma limpeza. O app só sobe o processo novo de uma sessão limpa quando chega
+ * uma mensagem (medido no log do app: `Clearing session` e, só na mensagem seguinte, `cold-starting`); por isso quem a manda é o
+ * mod de outra sessão viva, que acha a marca de volta que a T7 gravou ao liberar o `clear_session`.
+ */
+export const PROMPT_DA_VOLTA = 'Voltei de uma limpeza de contexto (aviso automático do painel): carregue a skill `orquestracao:orquestradora` e cumpra o "Ao assumir"; o painel já foi reaberto.'
+/** A marca espera isto antes de acordar a sessão: a limpeza da própria sessão só acontece quando o turno dela termina. */
+export const ACORDAR_DEPOIS_DE_MS = 30_000
+/** Marca mais velha que isto não acorda ninguém: é limpeza que não aconteceu, ou o operador já voltou por conta própria. */
+export const VOLTA_VALE_MS = 10 * 60_000
+/** No processo novo, a marca reabre o painel até isto depois de gravada (o operador pode voltar horas depois). */
+export const PAINEL_NA_VOLTA_MS = 12 * 3_600_000
 /** Com o cache frio o clique limpa direto (`clear_session` pelo mod) e espera isto a sessão recomeçar (o processo morre na limpeza); passado o prazo, pede à sessão. */
 export const ESPERA_DA_LIMPEZA_DIRETA_MS = 20_000
 /** O `Limpando…` segue até a leitura ver o contexto abaixo disto e, se o clique já foi abaixo disto, abaixo da metade do que era no clique (senão a leitura apagaria o aviso antes da limpeza), ou até `LIMPANDO_MAX_MS`. */
@@ -42,11 +54,11 @@ export const PALAVRA_LIMPAR = ' · limpar'
 /**
  * As réguas de contexto por papel, as mesmas do hook `contexto-do-papel` (um teste da raiz compara): `aviso` marca `· alto`,
  * `teto` marca `· limpar`; nenhum dos dois é o denominador (esse é a janela de compactação). Sem faixa intermediária
- * (orquestradora com o operador presente), aviso e teto coincidem.
+ * (orquestradora com o operador presente), aviso e teto coincidem, em 250 mil: a sessão já recomeça com ~90 mil (F219).
  */
 export const REGUAS = {
   dona: { aviso: 350_000, teto: 500_000 },
-  orquestradora: { aviso: 150_000, teto: 150_000 },
+  orquestradora: { aviso: 250_000, teto: 250_000 },
   orquestradoraAusente: { aviso: 350_000, teto: 500_000 },
 } as const satisfies Record<string, Regua>
 
@@ -103,6 +115,49 @@ export function janelaDeCompactacao({ env, settings, modelo }: { env: string | u
   if (escolhida === null) return doModelo
 
   return doModelo === null ? escolhida : Math.min(escolhida, doModelo)
+}
+
+/** O `em` da marca de volta (`{ em, … }`) e a idade dela em ms: `em` legível e não no futuro (1 min de folga); senão `null`. */
+export function idadeDaVolta(textoDaMarca: string | null | undefined, agora: number): number | null {
+  try {
+    const em = texto((JSON.parse(textoDaMarca ?? '') as Record<string, unknown> | null)?.em)
+    const t = em === undefined ? NaN : Date.parse(em)
+    if (Number.isNaN(t) || t - agora > 60_000) return null
+
+    return Math.max(0, agora - t)
+  } catch {
+    return null
+  }
+}
+
+/** As sessões a acordar: marca `local_….json` (não a já acordada) de outra sessão, com idade entre `ACORDAR_DEPOIS_DE_MS` e `VOLTA_VALE_MS`; `cli` é a id do CLI que pediu a limpeza. */
+export function paraAcordar(marcas: Array<{ nome: string; texto: string | null }>, eu: string | undefined, agora: number): Array<{ id: string; cli: string | null }> {
+  return marcas.flatMap(({ nome, texto: t }) => {
+    const id = /^(local_[\w-]+)\.json$/.exec(nome)?.[1]
+    if (!id || id === eu) return []
+    const idade = idadeDaVolta(t, agora)
+    if (idade === null || idade < ACORDAR_DEPOIS_DE_MS || idade > VOLTA_VALE_MS) return []
+    let cli: string | null = null
+    try {
+      cli = texto((JSON.parse(t ?? '') as Record<string, unknown>).cli) ?? null
+    } catch {
+      cli = null
+    }
+
+    return [{ id, cli }]
+  })
+}
+
+/**
+ * A limpeza pedida aconteceu: o registro do app não traz mais como atual a id do CLI que a pediu (sem `cliSessionId` é sessão
+ * limpa ainda sem processo novo). Marca sem `cli` só vale com o registro sem `cliSessionId`. Sem registro, não se sabe: não.
+ */
+export function limpezaAconteceu(cliDaMarca: string | null, registro: { cliSessionId?: unknown } | null): boolean {
+  if (registro === null) return false
+  const atual = texto(registro.cliSessionId)
+  if (atual === undefined) return true
+
+  return cliDaMarca !== null && atual !== cliDaMarca
 }
 
 /** A moldura do cache: nunca com o turno rodando (o cache está sendo renovado); `null` sem resposta ainda. */

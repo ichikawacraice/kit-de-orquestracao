@@ -2,7 +2,7 @@
 // Stop hook: cobra a regra de contexto por papel da skill `papeis-e-modelos` ("Contexto"), que só valeria se a sessão
 // lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain) e não grava estado nenhum.
 //   orquestradora: com o operador presente o Stop não a bloqueia: a limpeza é dele, pelo botão `↺ Limpar` da barra (destacado
-//     a partir de 150 mil); o hook só registra (`contexto-alto`, ou `limpou`). Com o modo ausente ligado o papel é
+//     a partir de 250 mil: a sessão já recomeça com ~90 mil, F219); o hook só registra (`contexto-alto`, ou `limpou`). Com o modo ausente ligado o papel é
 //     `orquestradora-ausente` e segue a régua da dona; o aviso diz que a régua vem da bandeira e como desligá-la, porque a
 //     bandeira ligada pelo botão do painel fica ligada até alguém a desligar, mesmo com o operador de volta.
 //   dona (a sessão é `donoLocalId` de item vivo da fila): ≥ 500 mil cobra limpar (só `clear_session` "self" satisfaz);
@@ -19,7 +19,7 @@ import { registroDaSessao, ehOrquestradora, itensDonosDaSessao, inicioDoTurno, c
 const HOOK = 'contexto-do-papel';
 const limite = (nome, padrao) => { const v = Number(process.env[`CONTEXTO_LIMITE_${nome}`]); return Number.isFinite(v) && v > 0 ? v : padrao; };
 const ESPERA = limite('ESPERA', 250_000); const ALTO = limite('ALTO', 350_000); const TETO = limite('TETO', 500_000);
-const PEDIR = limite('PEDIR', 150_000);
+const PEDIR = limite('PEDIR', 250_000);
 const mil = (t) => Math.round(t / 1000);
 
 // Papel pela ordem: orquestradora (ou orquestradora-ausente), dona de item vivo. Sem papel → null.
@@ -61,7 +61,7 @@ function terminaEsperando(texto) {
 }
 
 // Orquestradora com o operador presente: a limpeza é dele e o sinal é o botão `↺ Limpar` da barra, destacado a partir de
-// 150 mil. O Stop não bloqueia (não há pergunta nem janela a cobrar); só registra, para o histórico.
+// 250 mil. O Stop não bloqueia (não há pergunta nem janela a cobrar); só registra, para o histórico.
 function orquestradora(e, sid, transcript, t, det) {
   if (t < PEDIR) return;
   const { limpou } = doTurno(transcript, inicioDoTurno(transcript) ?? 0, e.last_assistant_message);
