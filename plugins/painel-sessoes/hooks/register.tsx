@@ -1463,7 +1463,7 @@ async function limparPelaBarra($: EngineInterface, trabalhando: boolean): Promis
       // `null`: o app aceitou e o processo morreu na limpeza antes do prazo (nada mais roda aqui).
       if (motivo === null) return
       // Limpou mas o processo seguiu vivo: o prompt agora gravaria um handoff vazio por cima do estado.
-      if (await contextoJaCaiu($, b.tokens)) return
+      if (motivo === NAO_RECOMECOU && (await contextoJaCaiu($, b.tokens))) return
       const aviso = `A limpeza direta não pegou (${motivo}); pedi à sessão que se limpe.`
       $.ui.toast(aviso)
       await avisar($, aviso).catch(() => {})
@@ -1476,11 +1476,14 @@ async function limparPelaBarra($: EngineInterface, trabalhando: boolean): Promis
   }
 }
 
-/** O contexto da sessão já está abaixo de `LIMPANDO_ABAIXO_DE` e da metade do clique: a limpeza aconteceu. Sem leitura, não sei (falso). */
+const NAO_RECOMECOU = 'a sessão não recomeçou'
+
+/** O contexto da sessão já está abaixo de `LIMPANDO_ABAIXO_DE` e da metade do clique: a limpeza aconteceu. Sem leitura (agora ou no clique), não sei (falso). */
 async function contextoJaCaiu($: EngineInterface, tokensNoClique: number | null): Promise<boolean> {
+  if (tokensNoClique === null) return false
   try {
     const t = (await $.session.usage()).context.tokens
-    return typeof t === 'number' && t < LIMPANDO_ABAIXO_DE && (tokensNoClique === null || tokensNoClique >= LIMPANDO_ABAIXO_DE || t < tokensNoClique / 2)
+    return typeof t === 'number' && t < LIMPANDO_ABAIXO_DE && (tokensNoClique >= LIMPANDO_ABAIXO_DE || t < tokensNoClique / 2)
   } catch {
     return false
   }
@@ -1500,7 +1503,7 @@ async function limparDireto($: EngineInterface): Promise<string | null> {
   // A limpeza mata o processo do CLI (F45): se este mod ainda roda depois do prazo, a sessão não recomeçou.
   await $.clock.sleep(ESPERA_DA_LIMPEZA_DIRETA_MS)
 
-  return 'a sessão não recomeçou'
+  return NAO_RECOMECOU
 }
 
 
