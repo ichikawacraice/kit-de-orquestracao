@@ -21,7 +21,7 @@ export const PROMPT_DE_LIMPAR = 'O operador mandou limpar pelo botão da barra: 
  * uma mensagem (medido no log do app: `Clearing session` e, só na mensagem seguinte, `cold-starting`); por isso quem a manda é o
  * mod de outra sessão viva, que acha a marca de volta que a T7 gravou ao liberar o `clear_session`.
  */
-export const PROMPT_DA_VOLTA = 'Voltei de uma limpeza de contexto (aviso automático do painel): carregue a skill `orquestracao:orquestradora` e cumpra o "Ao assumir"; o painel já foi reaberto.'
+export const PROMPT_DA_VOLTA = 'Voltei de uma limpeza de contexto (aviso automático do painel: o remetente é só a sessão que notou a volta, de qualquer projeto; não responda a ela): carregue a skill `orquestracao:orquestradora` e cumpra o "Ao assumir"; o painel já foi reaberto.'
 /** A marca espera isto antes de acordar a sessão: a limpeza da própria sessão só acontece quando o turno dela termina. */
 export const ACORDAR_DEPOIS_DE_MS = 30_000
 /** Marca mais velha que isto não acorda ninguém: é limpeza que não aconteceu, ou o operador já voltou por conta própria. */

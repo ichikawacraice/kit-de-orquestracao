@@ -968,6 +968,8 @@ test('acordar: a leitura da barra acha a marca de outra sessão parada, toma a m
   expect(volta.map(e => e.session_id), 'já na primeira leitura, a do início da sessão').toEqual([OUTRA])
   expect(PROMPT_DA_VOLTA).toMatch(/orquestracao:orquestradora/)
   expect(PROMPT_DA_VOLTA).toMatch(/Ao assumir/)
+  // F241: quem manda é o mod de outra sessão, de qualquer projeto, e o app a mostra como remetente
+  expect(PROMPT_DA_VOLTA).toMatch(/o remetente é só a sessão que notou a volta, de qualquer projeto; não responda a ela/)
   expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${OUTRA}.json`), 'a marca foi tomada').toBe(false)
   expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${OUTRA}.acordada.json`)).toBe(true)
   await m.relogio.advance(LEITURA_MS + 1000)

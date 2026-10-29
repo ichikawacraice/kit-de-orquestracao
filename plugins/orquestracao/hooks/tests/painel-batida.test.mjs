@@ -333,3 +333,23 @@ test('batida F218: a sessão aberta pelo cartão que passa de 30 min sem se grav
   const depois = batida(arq, T + MIN);
   assert.deepEqual(depois.json().projetos.kit.vagas, [{ papel: 'dona', item: 'F1' }], 'sem o cartão, o F1 volta a ser vaga');
 });
+
+// F241: a batida roda no mod de uma sessão viva qualquer, de qualquer projeto, e o app mostra essa sessão como remetente.
+// O aviso vai à orquestradora do projeto do item e diz que o remetente é só quem rodou a batida.
+test('batida F241: dois projetos, cada relatório vai à orquestradora do próprio projeto e avisa que o remetente não é o autor', () => {
+  const merge = { etapa: 'merge', historico: [{ em: iso(T - 40 * MIN), etapa: 'merge', dono: 'dona' }] };
+  item('F1', merge);
+  item('F2', { ...merge, projeto: 'outro', donoLocalId: lid(2), com: [{ localId: lid(2), apelido: 'dona', oQue: 'faz' }] });
+  item('F3', { projeto: 'outro', donoLocalId: lid(3), com: [{ localId: lid(3), apelido: 'dona', oQue: 'faz' }] });
+  const r = batida(sessoes(
+    sessao(1, 'F1 · a'), sessao(2, 'F2 · b', { cwd: outro }), sessao(3, 'F3 · c', { cwd: outro }),
+    sessao(30, '🎛 orquestradora — kit'), sessao(40, '🎛 orquestradora — outro', { cwd: outro }),
+  ));
+  assert.equal(r.exit, 0, r.err);
+  const rel = msgs(r, 'relatorio');
+  assert.equal(rel.length, 2, r.out);
+  assert.deepEqual(rel.map((m) => [m.para, /F1/.test(m.texto), /F2/.test(m.texto)]).sort(), [[lid(30), true, false], [lid(40), false, true]].sort());
+  const cut = msgs(r, 'cutucada');
+  assert.deepEqual(cut.map((m) => m.para), [lid(3)], r.out);
+  for (const m of [...rel, ...cut]) assert.match(m.texto, /aviso automático da batida: o remetente é só a sessão que rodou a batida desta vez, de qualquer projeto; não responda a ela/, m.texto);
+});
