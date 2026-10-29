@@ -9,6 +9,9 @@ export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta
 export const ESPERA_MIN = 5; // sem dona há tanto: vira vaga no relatório da orquestradora
 export const CARTAO_VALIDADE_H = 12; // cartão de sessão dona sem clique há tanto sai; enquanto vale, o item não é cobrado de novo (F218)
 
+// F241: quem envia é o mod da sessão que rodou a batida, de qualquer projeto, e o app a mostra como remetente.
+export const NOTA_DO_REMETENTE = '(aviso automático da batida: o remetente é só a sessão que rodou a batida desta vez, de qualquer projeto; não responda a ela)';
+
 const ETAPAS_FINAIS = new Set(['feito', 'descartado']);
 const ms = (v) => { const t = Date.parse(v); return Number.isNaN(t) ? null : t; };
 const texto = (v) => typeof v === 'string' && v.trim() !== '';
@@ -67,7 +70,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     if (p && ehDaOrquestradora(r.title, p)) { const proj = projeto(p); proj.orquestradora = proj.orquestradora ?? r.sessionId; }
   }
   const viva = (id) => vivoNaLista(porId.get(id));
-  const nova = (para, textoDaMensagem, item, tipo) => mensagens.push({ para, texto: textoDaMensagem, item, tipo });
+  const nova = (para, textoDaMensagem, item, tipo) => mensagens.push({ para, texto: `${textoDaMensagem} ${NOTA_DO_REMETENTE}`, item, tipo });
   const vistos = new Set();
 
   for (const [F, d] of [...itens].sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }))) {
