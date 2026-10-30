@@ -1,0 +1,10 @@
+{
+  "versao": "0.1.0",
+  "guardas": {
+    "css": ["src/app/globals.css", "src/app/extra.css"],
+    "regras": {
+      "a-tela-de-entrada-tem-o-botao-grande": { "telas": ["src/components/Entrada.tsx"] },
+      "o-vocabulario-da-tela": { "glossario": [{ "codigo": "[Ss]olicitaç(ão|ões)", "tela": "pedido", "motivo": "a tabela chama solicitação; a tela chama pedido" }] }
+    }
+  }
+}
