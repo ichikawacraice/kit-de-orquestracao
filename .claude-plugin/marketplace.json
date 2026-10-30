@@ -1,0 +1,17 @@
+{
+  "name": "wicomm",
+  "owner": {
+    "name": "Wicomm"
+  },
+  "metadata": {
+    "description": "Os plugins do Claude Code da Wicomm."
+  },
+  "plugins": [
+    {
+      "name": "wicomm",
+      "source": "./plugins/wicomm",
+      "description": "Design system da Wicomm para apps React: a base, o processo de decisão de tela e as skills de projeto novo, auditoria e padronização.",
+      "category": "design"
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+# Rastreio da base Wicomm — de onde veio cada regra
+
+A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/2026; Q639). O rastro de cada regra até o produto de origem de onde foi extraída mora aqui, fora do plugin: é o que permite reabrir o raciocínio e as medições quando uma regra for discutida.
+
+- **Produto de origem:** o repositório onde a base foi medida e escrita, `main @ 7b1267cce` (30/10/2026), fatia F262 (`docs/planos/2026-10-30-F262-base-wicomm.md`).
+- **Os números de ADR e SPEC** são desse repositório; a lista conferida está em `scripts/origens-conhecidas.json`.
+- **O teste** (`scripts/base.test.mjs`) cobra que toda regra da base tem uma linha aqui, com origem rastreável, e que nenhuma regra some ou aparece sem passar por aqui.
+
+## Origens
+
+| Código | Arquivo | Origem |
+|---|---|---|
+| MARCA-01 | DESIGN.md | ADR 0146 · ADR 0124. |
+| MARCA-02 | DESIGN.md | ADR 0124. |
+| MARCA-03 | DESIGN.md | ADR 0124 · ADR 0146. |
+| MARCA-04 | DESIGN.md | Convenção do front (raster da marca) · ADR 0124. |
+| MARCA-05 | DESIGN.md | ADR 0124. |
+| COR-01 | DESIGN.md | ADR 0102 · SPEC-065. |
+| COR-02 | DESIGN.md | ADR 0124 · ADR 0125. |
+| COR-03 | DESIGN.md | ADR 0055 · ADR 0064 · ADR 0102. |
+| COR-04 | DESIGN.md | ADR 0064. |
+| COR-05 | DESIGN.md | ADR 0102 · SPEC-065. |
+| COR-06 | DESIGN.md | ADR 0102 · SPEC-065 · ADR 0425. |
+| COR-07 | DESIGN.md | SPEC-065. |
+| COR-08 | DESIGN.md | SPEC-080 · ADR 0130. |
+| COR-09 | DESIGN.md | ADR 0130 · ADR 0420 · SPEC-080 (substituída nesse ponto pelo ADR 0130). |
+| COR-10 | DESIGN.md | ADR 0064. |
+| COR-11 | DESIGN.md | ADR 0126 · SPEC-080. |
+| COR-12 | DESIGN.md | Convenção "par de cor opaco tem teste que calcula" · ADR 0126. |
+| COR-13 | DESIGN.md | Seção "Ícone" da direção de design de origem (contraste de ícone). |
+| COR-14 | DESIGN.md | Do's and Don'ts da direção de design de origem. |
+| COR-15 | DESIGN.md | Direção de design de origem, seção Neutral (o terminal) · ADR 0425. |
+| TIPO-01 | DESIGN.md | SPEC-008 · direção de design de origem, seção Typography. *Assumida, a confirmar:* Archivo como fonte Wicomm. |
+| TIPO-02 | DESIGN.md | ADR 0138 · SPEC-086 · ADR 0147 · ADR 0150 · ADR 0364 · ADR 0392. *Nota:* o frontmatter da direção de origem ainda descreve uma escala anterior (display 1,25rem/700, title 1rem…); a regra segue as classes do código, que vencem. |
+| TIPO-03 | DESIGN.md | Direção de design de origem, Regra da Medida em Mono. |
+| TIPO-04 | DESIGN.md | ADR 0147 · ADR 0150. |
+| DENS-01 | DESIGN.md | Direção de design de origem, Regra do Corpo Denso. |
+| DENS-02 | DESIGN.md | ADR 0401 · ADR 0364. |
+| LAY-01 | DESIGN.md | ADR 0396 · direção de design de origem, seção Layout. |
+| LAY-02 | DESIGN.md | Direção de design de origem, seção Layout. |
+| LAY-03 | DESIGN.md | ADR 0099 · SPEC-062. |
+| LAY-04 | DESIGN.md | Direção de design de origem, seção Layout. |
+| LAY-05 | DESIGN.md | Direção de design de origem, seção Layout. |
+| LAY-06 | DESIGN.md | Direção de design de origem, seção Movimento (larguras e respiro com nome) · ADR 0392. |
+| SUP-01 | DESIGN.md | ADR 0125 · ADR 0099. |
+| SUP-02 | DESIGN.md | ADR 0125. |
+| SUP-03 | DESIGN.md | ADR 0125 · convenção "a separação é o ar". |
+| SUP-04 | DESIGN.md | ADR 0125 · convenção "conteúdo mora em superfície". |
+| SUP-05 | DESIGN.md | ADR 0125. |
+| SUP-06 | DESIGN.md | ADR 0125 · ADR 0126. |
+| FORMA-01 | DESIGN.md | ADR 0344 · direção de design de origem, seção Shapes. *Nota:* a escala segue as classes que as peças de origem usam de fato; os tokens `--raio-cartao` (14) e `--raio-badge` (6) da origem quase não têm uso. O valor de `rounded-md` (8px pelo config, 6px pelo comentário de origem) se decide no navegador, na fatia de tokens. |
+| FORMA-02 | DESIGN.md | Direção de design de origem, Regra da Tracejada. |
+| FORMA-03 | DESIGN.md | ADR 0125. |
+| CTRL-01 | DESIGN.md | ADR 0344 · ADR 0263. |
+| CTRL-02 | DESIGN.md | ADR 0262. |
+| CTRL-03 | DESIGN.md | ADR 0124 · ADR 0344. |
+| CTRL-04 | DESIGN.md | ADR 0126 · SPEC-062 · SPEC-066. |
+| CTRL-05 | DESIGN.md | ADR 0102 · SPEC-065. |
+| CTRL-06 | DESIGN.md | ADR 0134 · SPEC-084. |
+| CTRL-07 | DESIGN.md | Decisão do dono do produto em 05/10/2026 (convenção do front). |
+| CTRL-08 | DESIGN.md | ADR 0124 · direção de design de origem, seção Navigation. |
+| CTRL-09 | DESIGN.md | ADR 0382 · inventário do estudo F261 (128 arquivos com `lucide-react`). *Assumida, a confirmar:* os tamanhos 14/16/18 como tokens. |
+| MOV-01 | DESIGN.md | ADR 0374 · ADR 0392. |
+| MOV-02 | DESIGN.md | ADR 0374. |
+| MOV-03 | DESIGN.md | ADR 0374. |
+| MED-01 | DESIGN.md | Convenção "contraste se compõe" · Do's and Don'ts da direção de origem. |
+| PRIN-01 | ANATOMIA.md | SPEC-062. |
+| PRIN-02 | ANATOMIA.md | ADR 0379 · ADR 0404. |
+| PRIN-03 | ANATOMIA.md | SPEC-062 (§7, dobra) · ADR 0379. |
+| PRIN-04 | ANATOMIA.md | SPEC-062. |
+| PRIN-05 | ANATOMIA.md | SPEC-062 · decisão do dono do produto (Q138, peça nova parte do shadcn oficial). |
+| PRIN-06 | ANATOMIA.md | ADR 0392 · ADR 0374. |
+| CASCO-01 | ANATOMIA.md | ADR 0396 · ADR 0147 · SPEC-043 · SPEC-062 · direção de design de origem (Layout e Navigation). *Assumida, a confirmar:* a divisão exata entre cabeçalho e topo da página é síntese desta base; o bloco do casco a fixa. |
+| CASCO-02 | ANATOMIA.md | ADR 0379 · SPEC-062 (§ menu rotulado não é dobra). |
+| CASCO-03 | ANATOMIA.md | SPEC-043. |
+| ARQ-01 | ANATOMIA.md | SPEC-062 · ADR 0425 · ADR 0428 · ADR 0421. |
+| ARQ-02 | ANATOMIA.md | SPEC-062. |
+| ARQ-03 | ANATOMIA.md | ADR 0379 · ADR 0404. |
+| ARQ-04 | ANATOMIA.md | ADR 0404. |
+| MSG-01 | ANATOMIA.md | SPEC-062 · SPEC-066. |
+| MSG-02 | ANATOMIA.md | SPEC-062. |
+| MSG-03 | ANATOMIA.md | SPEC-062 · ADR 0401. |
+| MSG-04 | ANATOMIA.md | SPEC-066. |
+| MSG-05 | ANATOMIA.md | Convenção "texto de UI não cita spec/doc". |
+| MSG-06 | ANATOMIA.md | ADR 0379 · anatomia de origem (o editor, ações raras no `⋯`). |
+| PECA-01 | ANATOMIA.md | SPEC-062 · ADR 0102 · ADR 0134 · ADR 0382 · ADR 0412 · ADR 0420 · ADR 0425. |
+| PECA-02 | ANATOMIA.md | Decisão do dono do produto (Q138, 23/10/2026) · Q95 · ADR 0375. |
+| PESO-01 | ANATOMIA.md | SPEC-062. |
+| PESO-02 | ANATOMIA.md | SPEC-062 · ADR 0124. |
+| PESO-03 | ANATOMIA.md | ADR 0127 · ADR 0421 · convenção "gesto bloqueado". |
+| PESO-04 | ANATOMIA.md | SPEC-062. |
+| PESO-05 | ANATOMIA.md | ADR 0272 · convenção "gesto que não grava". |
+| EST-01 | ANATOMIA.md | SPEC-062 · SPEC-067. |
+| EST-02 | ANATOMIA.md | Do's and Don'ts da direção de origem. |
+| EST-03 | ANATOMIA.md | Convenção "ação assíncrona tem estado visível". |
+| EST-04 | ANATOMIA.md | ADR 0425 · direção de design de origem (Do's and Don'ts). |
+| EST-05 | ANATOMIA.md | Direção de design de origem (Do's and Don'ts). |
+| MOVA-01 | ANATOMIA.md | ADR 0374. |
+| CONV-01 | CONVENCOES.md | Convenção "cor de tema com alfa" · direção de design de origem, Regra do Alfa por `color-mix`. |
+| CONV-02 | CONVENCOES.md | Convenção "fonte e var no mesmo escopo". |
+| CONV-03 | CONVENCOES.md | Convenção "token transparente" · ADR 0126. |
+| CONV-04 | CONVENCOES.md | ADR 0392 · ADR 0374 · ADR 0344. |
+| CONV-05 | CONVENCOES.md | Convenção "escala e caixa de conteúdo". |
+| CONV-06 | CONVENCOES.md | Convenção "estado de vista". |
+| CONV-07 | CONVENCOES.md | Convenção "ação assíncrona tem estado visível". |
+| CONV-08 | CONVENCOES.md | Convenção "o efeito entra na hora, e a recusa desfaz". |
+| CONV-09 | CONVENCOES.md | SPEC-066 · SPEC-062. |
+| CONV-10 | CONVENCOES.md | SPEC-062 · Do's and Don'ts da direção de origem. |
+| CONV-11 | CONVENCOES.md | Convenção "texto de UI não cita spec/doc". |
+| CONV-12 | CONVENCOES.md | Convenção "o glossário da interface não é o do código". |
+| CONV-13 | CONVENCOES.md | Convenção "agente não propõe ação que a tela não tem". |
+| CONV-14 | CONVENCOES.md | Convenção "guarda com insumo vazio" · convenção "a varredura que força tem piso". |
+| CONV-15 | CONVENCOES.md | Convenção "duas coisas que precisam concordar". |
+| CONV-16 | CONVENCOES.md | Convenção "guarda com insumo vazio". |
+| CONV-17 | CONVENCOES.md | Convenção "a varredura que força tem piso e régua de número". |
+| CONV-18 | CONVENCOES.md | Convenção "contraste se compõe". |
+| CONV-24 | CONVENCOES.md | Convenção "teste que mede uma ausência declara essa ausência". |
+| CONV-19 | CONVENCOES.md | ADR 0378. |
+| CONV-20 | CONVENCOES.md | ADR 0378 · ADR 0401 · estudo F261 (seção 1.4, escala da nota). |
+| CONV-21 | CONVENCOES.md | ADR 0129. |
+| CONV-22 | CONVENCOES.md | ADR 0375 · Q95. *Assumida, a confirmar:* só o detector local. |
+| CONV-23 | CONVENCOES.md | Do's and Don'ts da direção de origem · convenção "duas coisas que precisam concordar". |

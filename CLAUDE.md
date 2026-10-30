@@ -9,13 +9,13 @@ O design system dos apps React da Wicomm: a base de regras, os tokens, o registr
 
 ## A base é norma
 - [`plugins/wicomm/base/`](plugins/wicomm/base/) tem a direção de design (`DESIGN.md`), a anatomia (`ANATOMIA.md`) e as convenções (`CONVENCOES.md`). É a fonte de verdade das outras camadas: tokens, peças, guardas e o plugin citam as regras pelo **código** (`COR-03`, `ARQ-01`).
-- Toda regra tem **Regra · Por quê · Confere · Origem**. Regra sem como conferir é opinião; regra sem origem é palpite.
+- Toda regra tem **Regra · Por quê · Confere**. Regra sem como conferir é opinião. A origem de cada regra fica fora da base, em [`docs/rastreio/origens-da-base.md`](docs/rastreio/origens-da-base.md): regra sem linha de rastreio é palpite.
 - Código de regra **não se renumera** nem se reaproveita: regra que sai fica com o código marcado *revogada* e o motivo.
-- A base não cita domínio de produto nenhum. Exemplo tirado do produto de origem leva `<!-- exemplo-izanagi -->` na linha.
+- A base fala só da Wicomm: não cita domínio de produto nenhum nem o produto de origem, e não traz exemplo tirado dele.
 - Mudar regra que já existe muda a versão no frontmatter dos três arquivos (semver do sistema, estudo §2.5).
 
 ## Gate
-- `npm test` — as guardas da base (`scripts/base.test.mjs`): domínio de origem fora da base, os quatro campos e a origem de cada regra, índice igual às regras, código único, referência cruzada que existe.
+- `npm test` — as guardas da base (`scripts/base.test.mjs`): domínio de origem fora da base, os três campos de cada regra, uma linha de rastreio por regra, rastreio sem regra que a base não tem, toda origem e guarda citada conferida em `scripts/origens-conhecidas.json`, nenhuma origem na base, índice igual às regras, código único, referência cruzada que existe; mais os testes dos hooks e scripts do plugin e a concordância dos evals.
 - Todo PR roda o gate antes de pedir merge e cola a saída no PR.
 
 ## PR

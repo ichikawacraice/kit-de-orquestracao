@@ -1,6 +1,8 @@
 // Guardas da base Wicomm (plugins/wicomm/base): o critério de pronto da F261.1
-// e a forma de toda regra (Regra · Por quê · Confere · Origem), para que o
-// designer, o crítico e as guardas possam citar cada regra pelo código.
+// e a forma de toda regra (Regra · Por quê · Confere), para que o designer, o
+// crítico e as guardas possam citar cada regra pelo código. A base fala só da
+// Wicomm (Q639): a origem de cada regra mora fora do plugin, em
+// docs/rastreio/origens-da-base.md, e o teste cobra que as duas concordam.
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -9,12 +11,16 @@ import assert from 'node:assert/strict'
 const PASTA = join(import.meta.dirname, '..', 'plugins', 'wicomm', 'base')
 const ARQUIVOS = ['DESIGN.md', 'ANATOMIA.md', 'CONVENCOES.md']
 const MARCADOR = 'exemplo-izanagi'
+const RASTREIO = join(import.meta.dirname, '..', 'docs', 'rastreio', 'origens-da-base.md')
 const DOMINIO = /(?<![\p{L}\p{N}_])(job|jobs|loja|lojas|wake|vtex|ensō|enso|builder|izanagi)(?![\p{L}\p{N}_])/iu
-const CAMPOS = ['Regra.', 'Por quê.', 'Confere.', 'Origem.']
+const CAMPOS = ['Regra.', 'Por quê.', 'Confere.']
 const ORIGEM_VALIDA = /\b(ADR \d{4}|SPEC-\d{3}|Q\d+)\b|[Cc]onvenção|[Dd]ireção de design de origem|Do's and Don'ts|[Dd]ecisão do dono do produto|estudo F261/
 
 const CONHECIDAS = JSON.parse(readFileSync(join(import.meta.dirname, 'origens-conhecidas.json'), 'utf8'))
 const texto = Object.fromEntries(ARQUIVOS.map((f) => [f, readFileSync(join(PASTA, f), 'utf8')]))
+const rastreio = readFileSync(RASTREIO, 'utf8')
+/** As linhas do rastreio: código → { arquivo, origem }. */
+const origens = new Map([...rastreio.matchAll(/^\| ([A-Z]+-\d{2}) \| (\w+\.md) \| (.+) \|$/gm)].map((m) => [m[1], { arquivo: m[2], origem: m[3] }]))
 
 function regras(conteudo) {
   const blocos = conteudo.split(/^(?=### )/m).slice(1)
@@ -32,14 +38,21 @@ test('os três arquivos existem e a pasta não tem outro documento de regra', ()
   assert.deepEqual(md, [...ARQUIVOS].sort())
 })
 
-test('nenhuma linha cita o domínio de origem fora do marcador de exemplo', () => {
+test('nenhuma linha cita o domínio de origem, e não há mais exemplo marcado (Q639)', () => {
   const achados = []
   for (const [f, c] of Object.entries(texto)) {
     c.split('\n').forEach((linha, i) => {
-      if (!linha.includes(MARCADOR) && DOMINIO.test(linha)) achados.push(`${f}:${i + 1}: ${linha.trim().slice(0, 100)}`)
+      if (linha.includes(MARCADOR) || DOMINIO.test(linha)) achados.push(`${f}:${i + 1}: ${linha.trim().slice(0, 100)}`)
     })
   }
   assert.deepEqual(achados, [])
+})
+
+test('a base não carrega a origem: nem o campo, nem o commit de origem no frontmatter', () => {
+  for (const [f, c] of Object.entries(texto)) {
+    assert.doesNotMatch(c, /\*\*Origem\.?\*\*/, `${f}: campo Origem na base`)
+    assert.doesNotMatch(c.split('\n---')[0], /^origem:/m, `${f}: origem no frontmatter`)
+  }
 })
 
 test('a busca de domínio morde (prova nos dois sentidos)', () => {
@@ -48,7 +61,7 @@ test('a busca de domínio morde (prova nos dois sentidos)', () => {
 })
 
 for (const f of ARQUIVOS) {
-  test(`${f}: toda regra tem os quatro campos e uma origem rastreável`, () => {
+  test(`${f}: toda regra tem os três campos e uma origem rastreável no rastreio`, () => {
     const rs = regras(texto[f])
     const semCodigo = rs.filter((r) => !r.codigo).map((r) => r.titulo)
     assert.deepEqual(semCodigo, [], 'todo ### é uma regra com código `XXX-NN · `')
@@ -59,8 +72,10 @@ for (const f of ARQUIVOS) {
         const valor = r.corpo.match(new RegExp(`\\*\\*${campo.replace('.', '\\.')}\\*\\*([\\s\\S]*?)(?=\\n- \\*\\*|$)`))?.[1]?.trim()
         assert.ok(valor, `${r.codigo} sem ${campo} ou com ${campo} vazio`)
       }
-      const origem = r.corpo.match(/\*\*Origem\.\*\*(.*)/)[1]
-      assert.match(origem, ORIGEM_VALIDA, `${r.codigo}: origem sem ADR, SPEC, Q ou convenção`)
+      const linha = origens.get(r.codigo)
+      assert.ok(linha, `${r.codigo} sem linha no rastreio`)
+      assert.equal(linha.arquivo, f, `${r.codigo}: o rastreio diz outro arquivo`)
+      assert.match(linha.origem, ORIGEM_VALIDA, `${r.codigo}: origem sem ADR, SPEC, Q ou convenção`)
     }
   })
 
@@ -81,8 +96,14 @@ test('toda referência DESIGN/ANATOMIA, XXX-NN aponta para regra que existe', ()
   assert.deepEqual([...new Set(citados.filter((c) => !existentes.has(c) && !/^SPEC-/.test(c)))], [])
 })
 
+test('o rastreio não tem regra que a base não tem', () => {
+  const existentes = new Set(ARQUIVOS.flatMap((f) => regras(texto[f]).map((r) => r.codigo)))
+  assert.ok(origens.size > 0, 'rastreio vazio: a leitura não achou linha nenhuma')
+  assert.deepEqual([...origens.keys()].filter((c) => !existentes.has(c)), [])
+})
+
 test('toda origem e toda guarda citada foi conferida no repositório de origem', () => {
-  const tudo = Object.values(texto).join('\n')
+  const tudo = [...Object.values(texto), rastreio].join('\n')
   const fora = (re, lista) => [...new Set([...tudo.matchAll(re)].map((m) => m[1]))].filter((x) => !lista.includes(x))
   assert.deepEqual(fora(/ADR (\d{4})/g, CONHECIDAS.adr), [], 'ADR citado e não conferido')
   assert.deepEqual(fora(/SPEC-(\d{3})/g, CONHECIDAS.spec), [], 'SPEC citada e não conferida')
