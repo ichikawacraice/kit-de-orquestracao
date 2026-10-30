@@ -2,7 +2,7 @@
 
 O registro shadcn da Wicomm: o **estilo** (os tokens de [`@wicomm/tokens`](../tokens/README.md) no `globals.css` do projeto, mais o `cn`) e as **peças básicas** dos apps React, já adaptadas à base ([`plugins/wicomm/base/`](../../plugins/wicomm/base/)). O código entra no projeto pelo `shadcn add` e fica editável lá.
 
-> **Ainda não publicado.** O registro vai ser servido pelo ateliê (`/r/v{versao}/`), numa fatia própria. Até lá, `npm run num-next-vazio` serve o build localmente.
+> **Ainda não publicado.** O ateliê ([`apps/atelie`](../../apps/atelie/README.md)) serve o registro em `/r/v{versao}/` (local, `npm run dev -w @wicomm/atelie`); a publicação é outra fatia. `npm run num-next-vazio` também serve o build localmente.
 
 **Só Tailwind v4 e React 19** (Q640). Projeto em v3 migra antes de receber peças. As peças recebem `ref` como prop (sem `forwardRef`): em React 18 o `ref` não chega ao elemento, sem erro de compilação — e o `register` de formulário quebra calado.
 

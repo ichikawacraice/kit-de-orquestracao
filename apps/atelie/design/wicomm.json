@@ -1,0 +1,43 @@
+{
+  "guardas": {
+    "fontes": ["src"],
+    "kit": "src/components/ui",
+    "componentes": "src/components",
+    "paginas": "src/app",
+    "css": ["src/app/globals.css"],
+    "aliases": { "@/registry/": "../../packages/registro/registry/", "@/": "src/" },
+    "regras": {
+      "conteudo-mora-em-superficie": {
+        "superficies": ["Card", "Painel", "PainelDeSecao", "Bloco", "DialogContent", "DialogLongo", "DialogLateral"]
+      },
+      "toda-tela-de-detalhe-tem-trilha": {
+        "excecoes": [
+          {
+            "arquivo": "src/app/palco/[tema]/[nome]/page.tsx",
+            "motivo": "o palco é o miolo do iframe da página do item, que já tem a trilha; sozinho ele não é tela"
+          }
+        ]
+      },
+      "a-marca-nao-carrega-texto": {
+        "excecoes": [
+          {
+            "arquivo": "src/catalogo/demos/estilo.tsx",
+            "motivo": "a amostra de cor do tema pinta o destrutivo como cor, não como gesto"
+          }
+        ]
+      },
+      "a-tela-de-entrada-tem-o-botao-grande": {
+        "desligada": "o ateliê não tem tela de Entrada: é aberto, sem login"
+      },
+      "o-erro-de-submissao-alcanca-os-olhos": {
+        "desligada": "o ateliê não submete formulário: as demonstrações não gravam nada"
+      },
+      "o-vocabulario-da-tela": {
+        "desligada": "o ateliê não tem domínio próprio: a palavra do código é a palavra da tela"
+      },
+      "componente-que-ninguem-monta": {
+        "desligada": "os componentes do ateliê têm nome de arquivo em kebab-case, que a guarda não examina; quem monta cada demonstração é o teste do catálogo"
+      }
+    }
+  }
+}
