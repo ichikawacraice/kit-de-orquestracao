@@ -2,17 +2,18 @@
 
 - **Data:** 30/10/2026 · **Dona:** sessão `F261 · Estudo do plugin Wicomm de design system`
 - **Pedido (operador, 30/10):** um plugin da Wicomm que leve a todos os projetos o design system e o processo que o Izanagi usa para decidir uma tela, para projeto novo e para padronizar projeto existente. O resultado: o cliente sente que foi a mesma empresa — mesma navegação, hierarquia, anatomia.
-- **Este documento é o estudo e o plano.** Nada foi implementado. Decisões do operador no fim, com Q-ID; o resto está marcado *assumida, a confirmar*.
+- **Este documento é o estudo e o plano.** Nada foi implementado. As decisões Q627–Q632 foram respondidas pelo operador em 30/10 e estão aplicadas neste texto (seção 7); o resto está marcado *assumida, a confirmar*.
 
 ---
 
 ## 0. Resumo em uma tela
 
 1. **O Izanagi já tem as duas metades:** o *conteúdo* (um sistema visual medido e escrito: `DESIGN.md`, `ANATOMIA.md`, ~50 peças em `components/ui`, ~26 testes-guarda de design) e o *motor* (o plugin `design` do kit de orquestração: designer → crítico com nota → guarda que cobra a crítica). O motor é **quase genérico**: lê os caminhos do `.claude/kit.json`, mas ainda tem acoplamentos ao kit de orquestração (seção 1.4). O conteúdo é **~70% Wicomm genérico e ~30% Izanagi** (seção 1.5).
-2. **Recomendação:** um repositório só — este, `wicomm-design-system` — que é ao mesmo tempo **marketplace de plugins do Claude Code**, **registro shadcn próprio**, **pacote de tokens** e **ateliê** (catálogo vivo). O plugin `wicomm-design` carrega o processo e os documentos-base; o código (tokens e componentes) vai pelo registro shadcn e pelo pacote, não pelo plugin. Seção 2.
+2. **Recomendação:** um repositório só — este, `wicomm-design-system` — que é ao mesmo tempo **marketplace de plugins do Claude Code**, **registro shadcn próprio**, **pacote de tokens** e **ateliê** (catálogo vivo). O plugin `wicomm` carrega o processo e os documentos-base; o código (tokens e componentes) vai pelo registro shadcn e pelo pacote, não pelo plugin. Seção 2.
 3. **O que garante a direção** não é o plugin sozinho: são três travas em camadas — o *processo* (hooks + designer + crítico com nota 24/30), as *guardas em teste* (que rodam no CI, valem até para quem não usa Claude) e a *versão estampada* no projeto (que mostra a deriva). Seção 2.4.
-4. **Uma correção de premissa:** "todo projeto com o mesmo design system" não pode valer igual para tudo o que a Wicomm faz. Loja VTEX FastStore e Wake têm a **marca do cliente** e, no FastStore, outro sistema de componentes (`@faststore/ui`, SCSS) — shadcn não entra. A recomendação é separar **sistema** (fixo: anatomia, comportamento, movimento, vozes de estado, escala) de **marca** (trocável: primária, degradê, fonte) e começar pelos **apps React** (painéis, sistemas internos, apps de cliente). Q627 e Q628.
-5. **Plano em 11 fatias** (seção 4), a primeira já executável sem decisão: extrair a base Wicomm do Izanagi.
+4. **Escopo (decidido, Q627 e Q628):** só **apps próprios da Wicomm** em React — o cliente usa, mas o app é da Wicomm, **sempre com a marca Wicomm**. Lojas VTEX FastStore e Wake ficam fora (marca do cliente e, no FastStore, outro kit de componentes). Não há troca de marca por cliente.
+5. **O ateliê vira a vitrine interna da Wicomm (Q630):** um site onde todo mundo vê componentes, cores, tipografia, transições, padrões de tela e as regras — o que nem o Izanagi tem hoje fora do `/atelie` de dev.
+6. **Plano em 12 fatias** (seção 4), a primeira já executável: extrair a base Wicomm do Izanagi. Piloto de projeto existente: **WiControl** (Q632).
 
 ---
 
@@ -94,13 +95,13 @@ O ponto de decisão: **o que precisa estar no repositório do cliente para funci
 
 | Camada | Vai em | Por quê |
 |---|---|---|
-| Tokens (cor, tipo, raio, sombra, movimento, escala) | **pacote `@wicomm/tokens`** gerado de uma fonte única (JSON no formato DTCG) → CSS de tema para Tailwind v4 (`@theme`), preset para Tailwind v3, variáveis CSS puras, SCSS para FastStore (fase 2), variáveis do Figma (fase 3) | Uma fonte, vários alvos: o mesmo valor não é escrito duas vezes. O projeto atualiza com `pnpm up`. |
+| Tokens (cor, tipo, raio, sombra, movimento, escala) | **pacote `@wicomm/tokens`** gerado de uma fonte única (JSON no formato DTCG) → CSS de tema para Tailwind v4 (`@theme`), preset para Tailwind v3, variáveis CSS puras, variáveis do Figma (fase 3) | Uma fonte, vários alvos: o mesmo valor não é escrito duas vezes. O projeto atualiza com `pnpm up`. |
 | Componentes (primitivas + peças próprias) e blocos de tela (casco, arquétipos) | **registro shadcn próprio** (`registry.json` + `shadcn build`), consumido com `npx shadcn add @wicomm/<peça>` | É o modelo que o shadcn já resolve: o código entra no projeto (editável), o registro dá as dependências. O `add` traz a peça **já** adaptada à Wicomm — some a cópia manual que o Izanagi faz hoje. **O item do registro shadcn não tem campo de versão**, e o `add` não fixa uma: a versão vai **no caminho da URL** (`/r/v{versao}/{name}.json`), e cada peça instalada fica anotada com versão e hash em `design/wicomm.json` — é isso que permite ver a peça editada no projeto e fazer o diff no `atualizar`. |
 | Guardas em teste | **pacote `@wicomm/guardas`** (vitest, lê os arquivos do disco, caminhos configuráveis, com *catraca* — ver 2.4) | Precisa rodar no CI do cliente, com ou sem Claude. |
 | Documentos-base (DESIGN, ANATOMIA, princípios, convenções) | **no plugin** (fonte) e **copiados com versão estampada** para `design/` do projeto no bootstrap | O motor lê arquivos do projeto; copiar com carimbo de versão deixa o projeto autossuficiente e a deriva mensurável. |
 | Processo: designer, crítico, guarda de turno, skills de bootstrap/auditoria/padronização | **plugin `wicomm-design`** | É o que muda o comportamento do Claude. |
 | MCP | **no plugin**, `.mcp.json` com o **MCP oficial do shadcn** apontado para o registro Wicomm; Figma MCP opcional | Nenhum MCP próprio na v1: os arquivos + skills cobrem; MCP próprio só se surgir consulta que arquivo não resolve (*assumida, a confirmar*). |
-| Ateliê (catálogo vivo + docs) | **app Next neste repositório**, que também serve os JSON do registro | Uma URL onde designer, dev e cliente veem cada peça nos dois temas. |
+| Ateliê — a vitrine interna (Q630) | **app Next neste repositório**, que também serve os JSON do registro | Uma URL interna onde todo mundo da Wicomm vê o sistema inteiro: componentes e blocos vivos nos dois temas, cores e contraste, tipografia, escala, movimento (cada transição tocando), os arquétipos de tela, a matriz de mensagens, as regras com o porquê e o changelog. |
 
 **Forma do repositório (recomendada):**
 
@@ -137,7 +138,7 @@ wicomm-design-system/
   - `atualizar-sistema` — sobe a versão estampada: tokens, peças instaladas (diff contra o registro), docs-base (merge de 3 vias com o que o projeto acrescentou).
 - **Comandos:** `/wicomm:novo`, `/wicomm:auditar`, `/wicomm:padronizar`, `/wicomm:atualizar`, `/wicomm:estado` (versão do sistema, deriva, nota média das últimas críticas).
 - **Hooks:** a guarda atual (lembra o designer, nega edição de tela ao designer, cobra a crítica) + uma guarda nova de `PreToolUse` em `Edit|Write` nos caminhos de tela que **avisa** (não nega) quando o texto novo traz valor solto (`#hex`, `text-[15px]`, `h-[34px]`, `duration-200`) ou importa ícone de outra biblioteca — o aviso barato no momento da escrita; o teste no CI é quem reprova.
-- **Configuração no projeto:** `.claude/kit.json`, seção `design` (já é o contrato do motor) + `design/wicomm.json` com `versao` do sistema, `densidade` (`instrumento`|`site`), `marca` (`wicomm`|`cliente:<slug>`), `eixosExtras`, e a catraca das guardas.
+- **Configuração no projeto:** `.claude/kit.json`, seção `design` (já é o contrato do motor) + `design/wicomm.json` com `versao` do sistema, `densidade` (`instrumento`|`site`), as peças instaladas com versão e hash, e a catraca das guardas.
 - **Impeccable:** fica como **ferramenta auxiliar** (detector no eixo de consistência), não como diretor. Motivo: ele consulta rede e manda telemetria no `shape` (ADR 0375 registra); num plugin da empresa, que roda em repositório de cliente, isso precisa de ok explícito. *Assumida, a confirmar:* o plugin roda só o detector local; `shape` fica opcional por projeto.
 
 ### 2.4 Como garantir que toda tela siga a direção — as três travas
@@ -156,7 +157,7 @@ wicomm-design-system/
 
 - **Uma versão do sistema** (semver, ex. `1.3.0`) amarra plugin, `@wicomm/tokens`, `@wicomm/guardas` e o registro: o mesmo número sai nos três no release. `MAJOR` = muda token ou anatomia de forma que quebra tela; `MINOR` = peça nova, regra nova com catraca; `PATCH` = conserto. Cada release tem nota de migração que o `/wicomm:atualizar` lê.
 - **Marketplace da empresa:** o próprio repositório (`.claude-plugin/marketplace.json`). Cada projeto declara em `.claude/settings.json` o `extraKnownMarketplaces` e o `enabledPlugins` — quem abre o projeto no Claude Code recebe o convite para instalar, sem passo manual. O registro shadcn vai no `components.json` do projeto (`"registries": {"@wicomm": "https://<host>/r/{name}.json"}`), com cabeçalho de token se for privado.
-- **Onde hospedar** o repositório, o pacote e o registro publica algo para fora: Q629 e Q630.
+- **Onde mora (decidido):** repositório privado `wicomm-projects/wicomm-design-system` (Q629); ateliê e registro na Vercel da Wicomm com acesso protegido, pacotes no GitHub Packages da org (Q630).
 
 ---
 
@@ -164,8 +165,8 @@ wicomm-design-system/
 
 ### 3.1 Projeto NOVO — bootstrap (`/wicomm:novo`)
 
-1. **Detectar o tipo** (lê `package.json`): app React (Next/Vite) → fluxo completo; FastStore ou Wake → só a camada de comportamento (Q627); outro → para e diz por quê.
-2. **Entrevista curta** (vira `design/PRODUCT.md`): quem usa, em que tela e largura, com que frequência → define a **densidade** (`instrumento` ou `site`) e a **marca** (`wicomm` ou do cliente, Q628).
+1. **Detectar o tipo** (lê `package.json`): app React (Next/Vite) → segue; loja (FastStore, Wake) ou outro → para e diz que está fora do escopo (Q627).
+2. **Entrevista curta** (vira `design/PRODUCT.md`): quem usa, em que tela e largura, com que frequência → define a **densidade** (`instrumento` ou `site`). A marca é sempre a Wicomm (Q628).
 3. **Instalar a base:** `shadcn init` com o estilo Wicomm do registro (tema + tokens), `@wicomm/tokens`, as ~15 primitivas, o **casco** (barra lateral 224/64, cabeçalho, trilha, título de página) e o arquétipo da primeira tela.
 4. **Escrever a configuração:** `.claude/kit.json` (seção `design`), `design/wicomm.json` (versão), `design/DESIGN.md` e `design/ANATOMIA.md` copiados da base com carimbo, o bloco Wicomm no `CLAUDE.md`, `.claude/settings.json` com o marketplace, `components.json` com o registro.
 5. **Ligar as travas:** `@wicomm/guardas` no `vitest` com base zerada; workflow de CI que roda as guardas; rota `/atelie`.
@@ -204,17 +205,18 @@ Os números `F261.n` são provisórios: a orquestradora dá o `F` de cada fatia 
 | F261.2 | **`@wicomm/tokens`:** fonte DTCG + gerador → CSS v4 (`@theme`), preset v3, vars puras; teste de contraste portado de `os-tokens-pagam-o-piso` | Opus | F261.1 | Os valores gerados batem 1:1 com o `globals.css` do Izanagi nos tokens de sistema (teste que compara); teste de contraste verde nos dois temas; slot `marca` trocável por um arquivo só |
 | F261.3 | **Registro shadcn — estilo + 15 primitivas** em Tailwind v4 (button, input, select, label, card/painel, bloco, bloco-de-tinta, secao, dialog, confirm, menu, tooltip/ajuda, com-motivo, toast, skeleton) | Opus nas 3 primeiras (fixam a API), Sonnet no resto | F261.2 | `shadcn build` sem erro; num Next vazio com `components.json` que declara `registries: {"@wicomm": …}`, `npx shadcn add @wicomm/<peça>` instala e compila cada peça; a URL carrega a versão (`/r/v{versao}/`); cada peça tem teste dom portado; nome em PT (*assumida, a confirmar*) |
 | F261.4 | **Blocos de tela:** casco (barra lateral, cabeçalho, trilha, título) e os 4 arquétipos (Lista, Mesa, Editor, Entrada) como `registry:block` | Opus | F261.3 | Cada bloco instala num Next vazio e renderiza; crítico ≥ 24/30 em cada um a 1280 px nos dois temas |
-| F261.5 | **Ateliê** (`apps/atelie`): catálogo de todas as peças e blocos, dois temas lado a lado, serve `/r/*.json` | Sonnet | F261.3 | Toda peça do `registry.json` aparece no ateliê (teste que cruza as duas listas); build verde |
+| F261.5 | **Ateliê — catálogo** (`apps/atelie`): todas as peças e blocos vivos, dois temas lado a lado, serve `/r/v{versao}/*.json` | Sonnet | F261.3 | Toda peça do `registry.json` aparece no ateliê (teste que cruza as duas listas); build verde |
 | F261.6 | **`@wicomm/guardas`:** ~25 guardas genéricas portadas, caminhos configuráveis, catraca com base | Opus | F261.2 | Rodadas no Izanagi (base zero), não acusam nada que os testes do Izanagi aprovam (0 falso positivo); num fixture com uma violação de cada, acusam todas (0 falso negativo); catraca reprova violação nova, reprova descida sem base regravada, e `--atualizar` grava a descida (três testes) |
 | F261.7 | **Plugin `wicomm`:** motor migrado do `design` e desacoplado do kit (sem o marketplace fixo em `opcoes-do-plugin.mjs`, sem `guarda.tronco` do kit, sem "dona do item" nas skills), skills novas (`novo-projeto`, `auditar-projeto`, `plano-de-padronizacao`, `peca-do-kit`, `atualizar-sistema`), comandos, hook de aviso de valor solto, `.mcp.json` com o shadcn, `marketplace.json` | Opus | F261.1; Q631 | `claude plugin validate` limpo; casos de eval em `evals/` (≥ 10 positivos e ≥ 10 negativos por skill) e `claude plugin eval --no-publish --runs 3` com ≥ 90% de disparo nos positivos e ≤ 10% nos negativos (sem `--no-publish` o relatório vai para o claude.ai; cada rodada é uma sessão inteira, com custo); com `design@kit-de-orquestracao` desligado, a guarda do `wicomm` continua agindo (teste); testes do hook portados verdes |
 | F261.8 | **Piloto projeto novo:** `/wicomm:novo` num Next vazio | Sonnet executa, crítico Opus | F261.4–F261.7 | Os 4 critérios de 3.1 cumpridos; tempo do bootstrap medido e anotado |
-| F261.9 | **Piloto projeto existente:** `/wicomm:auditar` + primeira fatia (tokens com ponte) num projeto real | Opus | F261.6, F261.7; Q632 | Auditoria gravada com os números de deriva; PR da fatia de tokens com catraca ligada e CI verde; zero mudança visual não pretendida (captura antes/depois das 5 telas mais usadas) |
-| F261.10 | **Distribuição e adoção:** repositório na org, publicação do registro e dos pacotes, guia de entrada do time, template de CI | Sonnet | Q629, Q630 | Um dev que não é o operador instala o plugin a partir do `settings.json` de um projeto e roda `/wicomm:estado` sem ajuda |
+| F261.9 | **Piloto projeto existente — WiControl** (`/Users/ichikawacraice/Developer/Projects/WiControl/frontend`: Vite + React 19, Tailwind v3.4, shadcn `default`, 21 peças em `components/ui`): `/wicomm:auditar` só leitura, depois a fatia de tokens com ponte e catraca e a de Tailwind v4 | Opus | F261.6, F261.7 | Auditoria gravada com os números de deriva (só leitura no WiControl até o operador liberar escrita); depois, PR da fatia de tokens com catraca ligada e CI verde; zero mudança visual não pretendida (captura antes/depois das 5 telas mais usadas) |
+| F261.10 | **Distribuição e adoção:** repositório `wicomm-projects/wicomm-design-system` (criado), publicação do registro e dos pacotes no GitHub Packages, guia de entrada do time, template de CI | Sonnet | F261.7, F261.12 | Um dev que não é o operador instala o plugin a partir do `settings.json` de um projeto e roda `/wicomm:estado` sem ajuda |
 | F261.11 | **Figma:** biblioteca gerada dos tokens (variáveis) + Code Connect das peças do registro | Opus | F261.3; fase 3 | Variáveis do Figma batem com `@wicomm/tokens` (teste); cada peça do registro tem mapa no Code Connect |
+| F261.12 | **Ateliê — a vitrine interna da Wicomm (Q630):** páginas de cores (com a razão de contraste de cada par), tipografia, escala de espaço e raio, sombras e alturas, **movimento** (cada token tocando, com e sem `prefers-reduced-motion`), ícones, os 4 arquétipos montados, a matriz de mensagens e a peça de cada função, as regras com o porquê, changelog por versão; publicado na Vercel da Wicomm com acesso protegido | Opus no desenho (designer + crítico), Sonnet na execução | F261.1, F261.2, F261.4, F261.5 | Todo token de `@wicomm/tokens` aparece numa página (teste que cruza); toda regra da base tem página ou âncora; crítico ≥ 24/30 na vitrine a 1280 px nos dois temas; URL acessível só a quem tem acesso |
 
-**Ordem e paralelismo.** F261.1 → F261.2 → (F261.3 ∥ F261.6) → (F261.4 ∥ F261.5 ∥ F261.7) → (F261.8 ∥ F261.9) → F261.10. F261.11 fica para depois do primeiro piloto.
+**Ordem e paralelismo.** F261.1 → F261.2 → (F261.3 ∥ F261.6) → (F261.4 ∥ F261.5 ∥ F261.7) → (F261.8 ∥ F261.9 ∥ F261.12) → F261.10. A auditoria do WiControl (primeira metade da F261.9) só lê e pode começar logo depois da F261.7. F261.11 fica para depois do primeiro piloto.
 
-**Fora do escopo deste plano (vão para `depois`):** o Izanagi passar a consumir `@wicomm/tokens` e o registro (ele é a origem; migrar é item próprio, depois de F261.9); camada de comportamento para FastStore/Wake (depende de Q627); MCP próprio.
+**Fora do escopo deste plano:** lojas FastStore/Wake (Q627); marca de cliente (Q628); MCP próprio. **Vai para `depois`:** o Izanagi passar a consumir `@wicomm/tokens` e o registro (ele é a origem; migrar é item próprio, depois do piloto).
 
 ---
 
@@ -222,10 +224,10 @@ Os números `F261.n` são provisórios: a orquestradora dá o `F` de cada fatia 
 
 - **Copiar o Izanagi inteiro "porque funciona".** Metade das regras do DESIGN nasceu de medição num produto de *instrumento* (corpo `text-xs`). Um app de cliente de uso eventual quebra com essa densidade — por isso a densidade é escolha do projeto (`instrumento`|`site`), e a "cara de site" do builder vira a segunda densidade oficial.
 - **Tailwind v3 × v4.** O Izanagi está em v3 com a regra do alfa por `color-mix`; em v4 o problema muda de forma (`@theme inline`, oklch). O teste que pegava o defeito em v3 precisa de um equivalente em v4 — não basta portar. E peça v4 em projeto v3 falha calada (classe que não existe não gera regra): o `peca-do-kit` recusa instalar peça em projeto v3 e aponta a fatia de migração.
-- **A cor da marca mede 4,25 com branco** (aceito no ADR 0146). Num projeto com marca de cliente, a regra "a marca não cede a contraste" não pode ser herdada às cegas: o teste de contraste do slot `marca` deve reprovar preenchimento < 3:1 e avisar < 4,5.
+- **A cor da marca mede 4,25 com branco** (aceito no ADR 0146). Herda-se a decisão, com o teste que a fixa: preenchimento < 3:1 reprova.
 - **Nome de peça em português** é coerente com o Izanagi, mas o dev novo procura "Button" no shadcn. O registro deve aceitar os dois nomes na busca (descrição com o nome shadcn) — *assumida, a confirmar*.
-- **Impeccable em repositório de cliente** consulta rede e manda telemetria no `shape`; sem ok, só o detector local.
-- **Duas fontes para o mesmo motor** (plugin `design` do kit e `wicomm-design`) derivam em semanas. Q631 resolve.
+- **Impeccable em repositório da empresa** consulta rede e manda telemetria no `shape`; sem ok, só o detector local.
+- **Duas fontes para o mesmo motor** (plugin `design` do kit e `wicomm`) derivam em semanas. Resolvido na Q631: o motor muda para o `wicomm`.
 - **Guarda que lê arquivo prova que achou arquivo** (convenção do Izanagi): toda guarda do pacote afirma que a lista de arquivos não é vazia antes de inspecionar — senão um caminho errado no `kit.json` deixa tudo verde.
 
 ---
@@ -236,7 +238,7 @@ Os números `F261.n` são provisórios: a orquestradora dá o `F` de cada fatia 
 |---|---|---|
 | Nomes das peças | Português, como no Izanagi, com o nome shadcn na descrição | Coerência com o motor e as revisões já escritas |
 | Tailwind | Registro em v4; preset v3 para quem está em v3 | O shadcn atual é v4; projeto novo não deve nascer em v3 |
-| Fonte | Archivo como padrão Wicomm, trocável no slot `marca` | É a do Izanagi e já tem as medições |
+| Fonte | Archivo como fonte Wicomm | É a do Izanagi e já tem as medições |
 | Ícones | `lucide-react`, sem wrapper, com tamanhos tokenizados (14/16/18) e traço padrão | É o que 128 arquivos já usam; tokenizar fecha a lacuna |
 | Temas | Claro e escuro obrigatórios | O Izanagi mede tudo nos dois |
 | MCP | Só o oficial do shadcn (com o registro Wicomm) e o Figma opcional; nenhum próprio na v1 | Arquivo + skill resolvem; MCP próprio é custo sem pergunta que o justifique |
@@ -246,34 +248,13 @@ Os números `F261.n` são provisórios: a orquestradora dá o `F` de cada fatia 
 
 ---
 
-## 7. Decisões do operador
+## 7. Decisões do operador (respondidas em 30/10)
 
-**Q627 · F261 · Escopo da v1: apps React primeiro, lojas depois?**
-- **O caso:** a Wicomm faz dois tipos de coisa com tela. (a) **Apps React** — painéis, sistemas internos, apps para o cliente (Supabase, Next). Ali o shadcn e o Tailwind cabem e dá para ter literalmente os mesmos componentes. (b) **Lojas** VTEX FastStore e Wake — a vitrine que o consumidor final vê, com a marca e o layout do cliente; o FastStore usa outro kit de componentes (`@faststore/ui`, SCSS) e o shadcn não entra.
-- **Se não decidir:** sigo com a v1 só para apps React (fatias 1–10), e as lojas ficam fora do plano.
-- **Recomendação:** **v1 só para apps React**; para lojas, uma fase 2 que leva só a *camada de comportamento* (movimento, estados, mensagens, acessibilidade, anatomia de checkout/conta) e os tokens de sistema em SCSS — nunca a marca Wicomm na vitrine do cliente. Motivo: é onde o "mesmo projeto" é possível de verdade; na loja, o que o cliente reconhece é o comportamento, não a cor.
-
-**Q628 · F261 · Em app feito para um cliente, a marca é da Wicomm ou do cliente?**
-- **O caso:** um painel que a Wicomm entrega a um cliente pode ter o vermelho da Wicomm (cliente reconhece "a Wicomm fez") ou a cor do cliente (o painel é dele). O plano separa **sistema** (fixo em todo projeto: anatomia, navegação, escala, movimento, as cinco vozes de estado, neutros) de **marca** (trocável: cor primária, degradê, fonte).
-- **Se não decidir:** todo app nasce com a marca Wicomm, e trocar fica possível por um arquivo.
-- **Recomendação:** **sistema sempre Wicomm; marca Wicomm por padrão e do cliente quando o app é dele** (`design/wicomm.json` → `marca: cliente:<slug>`), com o mesmo teste de contraste. Motivo: o que faz o cliente "sentir o mesmo projeto" é navegação, hierarquia e comportamento — e esses não mudam; a cor do cliente no app dele evita a objeção comercial.
-
-**Q629 · F261 · Criar o repositório na organização da Wicomm no GitHub (privado)?**
-- **O caso:** este repositório precisa de um endereço para virar o marketplace da empresa — cada projeto aponta para ele no `settings.json`. Hoje ele só existe no seu Mac, sem remoto. O kit de orquestração mora na sua conta pessoal (`ichikawacraice/kit-de-orquestracao`).
-- **Se não decidir:** sigo com tudo local até a F261.9 (pilotos funcionam apontando para a pasta); a F261.10 (o time instalar) fica parada.
-- **Recomendação:** **criar `wicomm/wicomm-design-system`, privado, na org da empresa** (diga o nome exato da org). Motivo: é da empresa, não pessoal; quem sair do time não leva o marketplace junto; o acesso do time se controla pela org.
-
-**Q630 · F261 · Onde publicar o registro shadcn e os pacotes `@wicomm/tokens` e `@wicomm/guardas`?**
-- **O caso:** o `shadcn add` busca as peças numa URL, e os pacotes precisam de um registro npm. Público expõe o código do design system; privado exige token em cada projeto e no CI.
-- **Se não decidir:** nada se publica; os pilotos usam o registro servido localmente e os pacotes por caminho de pasta.
-- **Recomendação:** **registro servido pelo ateliê na Vercel da Wicomm, com proteção por token (cabeçalho no `components.json`), e pacotes no GitHub Packages da org (privado)**. Motivo: a Wicomm já usa Vercel; GitHub Packages usa o mesmo acesso da org do Q629, sem conta nova.
-
-**Q631 · F261 · O motor de design sai do seu kit pessoal e passa a morar no plugin da Wicomm?**
-- **O caso:** o designer, o crítico e a guarda de turno são hoje o plugin `design` do seu `kit-de-orquestracao`. O plugin da Wicomm precisa do mesmo motor. Manter duas cópias faz elas divergirem.
-- **Se não decidir:** o `wicomm-design` nasce com uma cópia do motor e o `design` do kit segue como está — duas fontes.
-- **Recomendação:** **mover o motor para o plugin `wicomm`**, desacoplado do kit (hoje a guarda se desliga quando `design@kit-de-orquestracao` está desligado — isso sai na migração), e deixar o `design` do kit como um apontador (a entrada do marketplace do kit passa a buscar o plugin no repositório da Wicomm). No Izanagi, desligar o `design` só depois de ligar o `wicomm` e conferir que a guarda age. Motivo: uma fonte só; o time da Wicomm não precisa instalar o seu kit de orquestração (Q-IDs, painel) para ter o processo de design.
-
-**Q632 · F261 · Qual projeto existente é o piloto da padronização?**
-- **O caso:** a F261.9 precisa de um projeto real da Wicomm para auditar e aplicar a primeira fatia. Não sei quais apps React a Wicomm mantém hoje.
-- **Se não decidir:** a F261.9 fica parada; o resto segue.
-- **Recomendação:** **um app React pequeno e ativo (painel interno ou app de cliente com Supabase), não uma loja e não o Izanagi**. Motivo: dá a medição de deriva num caso típico sem o risco de mexer na vitrine de um cliente ou na origem do próprio sistema. Diga o nome e o caminho.
+| ID | Pergunta | Resposta do operador | Efeito no plano |
+|---|---|---|---|
+| Q627 | Escopo da v1 | "é só para os APPs mesmo" | Lojas FastStore/Wake fora do plano, não só da v1 |
+| Q628 | Marca em app de cliente | "apenas para Apps próprios, nossos; o cliente usa, mas o app é nosso com a nossa marca" | Marca Wicomm sempre; sem troca de marca por cliente |
+| Q629 | Repositório na org | "sim, você tem acesso pela minha conta pessoal" | Criado `wicomm-projects/wicomm-design-system`, privado (org *assumida, a confirmar*) |
+| Q630 | Onde publicar | "ok; nesse site interno podemos montar o ateliê … vitrine de tudo" | Registro e ateliê na Vercel com acesso protegido; pacotes no GitHub Packages; nova fatia F261.12 (a vitrine) |
+| Q631 | Motor de design | "mover para o plugin de DS da Wicomm" | Motor migra para o plugin `wicomm`, desacoplado do kit (F261.7) |
+| Q632 | Piloto existente | WiControl | F261.9 no WiControl; só leitura por enquanto |
