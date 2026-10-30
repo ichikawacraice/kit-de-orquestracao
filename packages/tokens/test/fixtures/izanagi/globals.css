@@ -1,0 +1,710 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Os tokens do painel. A régua inteira está na
+   [SPEC-077](../../../../docs/specs/SPEC-077-o-sistema-visual-do-painel.md);
+   os três ADRs que a decidiram são o
+   [0124](../../../../docs/adr/0124-a-marca-e-a-da-wicomm-e-o-vermelho-nao-carrega-texto.md)
+   (a marca da Wicomm, e o vermelho que não carrega texto), o
+   [0125](../../../../docs/adr/0125-a-profundidade-e-superficie-opaca-nao-translucidez.md)
+   (superfície opaca no lugar do vidro) e o
+   [0126](../../../../docs/adr/0126-o-contorno-de-controle-paga-tres-para-um.md)
+   (contorno de controle a 3:1).
+
+   TRÊS regras sustentam os valores abaixo:
+
+   1. **A marca preenche, tinge e desenha; ela não escreve** — e a COR dela é
+      declarada, não calculada. `#F30B42` é a marca da Wicomm, e ela é a mesma
+      nos dois temas e não cede a contraste
+      ([ADR 0146](../../../../docs/adr/0146-a-cor-da-marca-e-declarada-e-nao-cede-a-contraste.md)):
+      o valor anterior (`#D60036`) tinha sido escolhido por medição — branco
+      sobre ele dava 5,37 — e era a marca ajustada, não a marca. Branco sobre
+      `#F30B42` mede **4,25**: passa os 3:1 de objeto gráfico e fica abaixo dos
+      4,5 de texto normal, o que está ACEITO e escrito no ADR. O que a regra
+      segue proibindo é a marca **escrevendo**: o vermelho da marca e o vermelho
+      de erro, os dois como texto, ficam a 1,17:1 um do outro.
+   2. **Contorno de CONTROLE (`--input`) paga 3:1; separação decorativa
+      (`--border`) não deve nada.** Confundir os dois produz os dois defeitos
+      opostos: controle invisível, e grade de 1px em tudo.
+   3. **Todo número ao lado de um token foi calculado contra o PIOR fundo em que
+      ele pode cair** — `--card`, `--background`, `--muted` e `--accent` —, nos
+      dois temas. Fundo que mudar de valor obriga a medir o par de novo.
+
+   Os neutros são FRIOS de propósito: cinza morno ao lado do vermelho vira
+   rosado. */
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --spacing: .35rem;
+    --font-size: 14px;
+
+    /* as três alturas — chão, superfície, e o degrau de dentro */
+    --background: #F9FAFC;   /* o chão. 1,04 do branco: degrau que levanta o cartão sem virar painel cinza */
+    --card: #FFFFFF;
+    --popover: #FFFFFF;
+    --muted: #F1F3F8;        /* a bandeja do cartão, o trilho de progresso */
+    --accent: #EBEEF5;       /* realce de item de lista */
+    --secondary: #F1F3F8;
+
+    /* a rampa de tinta — 15,41 · 6,81 · 5,66 no pior fundo */
+    --foreground: #131722;
+    --card-foreground: #131722;
+    --popover-foreground: #131722;
+    --foreground-2: #4B5163;
+    --muted-foreground: #565D70;
+    --secondary-foreground: #4B5163;
+    --accent-foreground: #131722;
+
+    /* A MARCA — Wicomm, `#F30B42`. Ela é DECLARADA (ADR 0146), não muda por tema
+       e não é reajustada para pagar piso: `--primary` PREENCHE e `--marca-viva`
+       DESENHA, e as duas são a mesma cor porque a marca é uma. Branco sobre ela
+       mede 4,25 — o hover é o único que se move, e só em luz (HSL), para o
+       estado ser perceptível sem trocar a cor. */
+    --primary: #F30B42;
+    --primary-hover: #DB0A3B;          /* mesma matiz (345,9°), -5pp de luz: 1,20 contra a marca — o par anterior media 1,17 */
+    --primary-foreground: #ffffff;
+    --marca-viva: #F30B42;
+    /* O gradiente ganha uma parada do meio porque as duas pontas da marca
+       (#FF0025 e #FF0073) estão a 1,04:1 de luminância uma da outra — a essa
+       distância não existe degradê, existe uma cor chapada com duas
+       declarações. O caminho de MATIZ continua o mesmo (351° → 333°); o que se
+       acrescenta é a viagem de LUZ, que é o gesto do pincel: ele encosta
+       carregado e sai seco. As pontas passam a 2,14:1. */
+    --primary-gradient-start: #C4002A;
+    --primary-gradient-mid: #FF0041;
+    --primary-gradient-end: #FF5C96;
+    --primary-gradient: linear-gradient(118deg, var(--primary-gradient-start) 0%, var(--primary-gradient-mid) 46%, var(--primary-gradient-end) 100%);
+
+    /* A escrita do *Editar com IA* (ADR 0368): violeta e azul, as mesmas matizes nos dois temas, o claro mais escuro
+       para pagar o piso sobre o cartão e o realce. O degradê começa e termina na mesma cor, para o loop não ter emenda. */
+    --ia-violeta: #5B3FD1;
+    --ia-azul: #2F5BD0;
+    --ia-gradient: linear-gradient(110deg, var(--ia-violeta) 0%, var(--ia-azul) 50%, var(--ia-violeta) 100%);
+
+    /* A camada do DESENHO na mesa de corte (SPEC-044): de que lado o pixel veio,
+       não veredito. Fica fora do idioma de cor, e fora da marca. */
+    --desenho: #6D28D9;
+
+    /* O TERMINAL: o valor cru colhido de fora (a prova do laudo, o log). Escuro nos DOIS temas, porque
+       ele precisa se separar do texto ao redor, e o mesmo valor nos dois blocos. Usa-se a 95%
+       (`bg-terminal/95`); o par com o texto é medido sobre os quatro fundos em `os-tokens-pagam-o-piso`. */
+    --terminal: #09090B;
+    --terminal-foreground: #F4F4F5;
+
+    --destructive: #B8113A;            /* a voz `ruim`: 5,69 no pior fundo */
+    --destructive-foreground: #ffffff;
+
+    /* dois fios, e eles têm empregos diferentes (ADR 0126) */
+    --border: #E6EAF1;                 /* separação decorativa — não é componente, não deve 3:1 */
+    --input: #7F8697;                  /* contorno de CONTROLE — 3,65 sobre o cartão, 3,49 sobre o chão, 3,14 sobre o realce */
+    --input-background: #FFFFFF;
+    --switch-background: #CBD2DE;
+    --ring: #F30B42;                   /* o anel é a marca: 4,25 sobre o branco, acima dos 3:1 de objeto gráfico */
+
+    /* profundidade: o anel da própria peça, e a sombra. Nunca vidro. */
+    --anel: rgba(19, 23, 34, .10);
+
+    /* IDENTIDADE DE PESSOA — quem pediu, no disco de iniciais do cartão.
+       (ADR 0128.) Quatro matizes, e eles NÃO são uma sexta voz: a voz responde
+       *o que isto pede de você* e mora em carimbo, faixa e bandeja; estes
+       respondem *quem*, e só existem dentro de um disco de 20px que sempre
+       carrega as duas letras da pessoa. A cor aqui é REFORÇO de uma informação
+       que já está escrita, nunca a portadora dela.
+       Medido: letra sobre o disco, de 6,29 a 7,61 no claro. */
+    --pessoa-a: #FFE4EA;  --pessoa-a-tinta: #A4123B;
+    --pessoa-b: #E2F0FB;  --pessoa-b-tinta: #175A8C;
+    --pessoa-c: #E7F5EC;  --pessoa-c-tinta: #166534;
+    --pessoa-d: #F1E9FB;  --pessoa-d-tinta: #5B21B6;
+    /* OS RAIOS — quatro, e cada um é de uma classe de peça (protótipo v3, `base.css`):
+       cartão 14, painel 16, controle 9, carimbo 6. Raio de controle em superfície de
+       conteúdo é o defeito que `composicao-tem-grau` já acusa. */
+    --raio-cartao: 14px;
+    --raio-painel: 16px;
+    --raio-ctrl:   7px;
+    --raio-badge:  6px;
+
+    /* A TINTA da marca — fundo tingido, opaco, para a task aberta na espinha e a
+       coluna que aceita o arrasto. Ela não escreve (ADR 0124); ela só tinge. */
+    --marca-tinta: #FFE9EE;
+
+    /* A sombra do PAINEL (as três colunas da mesa do job): mais difusa e mais
+       baixa que a do cartão, porque o painel é grande e um halo forte em peça
+       grande vira moldura. */
+    --sombra-painel: 0 0 0 1px rgba(19,23,34,.05), 0 1px 2px rgba(19,23,34,.04), 0 8px 26px -14px rgba(19,23,34,.10);
+
+    /* A ETAPA DO PERCURSO — o ponto de 7px no cabeçalho de cada coluna do
+       quadro, e nada mais.
+
+       Ele responde *em que etapa isto está*, que é pergunta diferente das duas
+       que o sistema já tinha: a VOZ responde *o que isto pede de você* e a
+       MARCA responde *isto é a Wicomm*. As cinco colunas do meio usavam a marca,
+       e o operador cortou: *"mudar a cor do deploy, validada, em execução, na
+       fila e triagem, para cores correspondentes ao status dela, não usamos a
+       cor da marca aqui"*. Ele tem razão duas vezes — a marca não é estado, e
+       cinco pontos vermelhos iguais não distinguem cinco etapas.
+
+       É uma rampa, e a ordem dela é a ordem do trabalho: cinza (ninguém pegou)
+       → ciano → azul → índigo (a máquina anda) → âmbar (é a sua vez) → teal →
+       lima → verde (acabou). As duas pontas e o âmbar coincidem de propósito
+       com `neutro`, `espera` e `ok`: nesses três a etapa e a voz dizem a mesma
+       coisa, e discordar ali seria mentira.
+
+       Medido contra o chão (piso de 3:1, objeto gráfico) — claro · escuro:
+       4,56·7,42 · 3,53·10,53 · 4,95·7,48 · 6,02·6,38 · 6,24·11,40 · 3,59·10,22
+       · 4,78·12,62 · 6,34·9,90. O ponto NUNCA fala sozinho: o nome da coluna
+       está ao lado. */
+    --etapa-backlog:     #64748B;
+    --etapa-triagem:     #0891B2;
+    --etapa-fila:        #2563EB;
+    --etapa-execucao:    #4F46E5;
+    --etapa-revisao:     #9C430A;
+    --etapa-homolog:     #9333EA;
+    --etapa-validada:    #0D9488;
+    --etapa-deploy:      #4D7C0F;
+    --etapa-concluida:   #036A4D;
+
+    /* A MARCA DE CADA PLATAFORMA — o selo de 16px do cartão, e todo lugar em
+       que a plataforma aparece. São as cores das empresas, informadas pelo
+       operador; a tinta de cada uma é medida contra ela.
+
+       Shopify recebe tinta ESCURA: branco sobre o verde dela mede 2,40, abaixo
+       do piso até de ícone. Wake e VTEX recebem branco (4,72 e 4,19 — o `W` da
+       Wake é letra e paga 4,5; os outros dois são glifo e pagam 3). */
+    --plat-wake:         #BF07EB;  --plat-wake-tinta:    #FFFFFF;
+    --plat-vtex:         #F01861;  --plat-vtex-tinta:    #FFFFFF;
+    --plat-shopify:      #8EB441;  --plat-shopify-tinta: #131722;
+
+    /* DE ONDE A SOLICITAÇÃO VEIO — o selo de origem, roxo, no cartão e no
+       registro. Ele responde *quem escreveu isto*: o laudo técnico, a validação
+       visual, uma pendência do job. Ninguém escreveu à mão.
+
+       É token de identidade, como `--pessoa-*` e `--desenho`, e não a voz
+       `alheio` — que por acaso é do mesmo matiz. A distinção não é estética: a
+       voz responde *o que isto pede de você*, e a origem não pede nada. Elas
+       coincidirem no roxo é o operador pedindo *"badge roxa"*, não as duas
+       virando a mesma coisa. Medido: 7,63 no claro, 8,70 no escuro. */
+    --origem:            #EFEAFC;  --origem-tinta:       #5B21B6;
+    --superficie-sombra: 0 0 0 1px rgba(19,23,34,.05), 0 1px 2px rgba(19,23,34,.05), 0 5px 14px -6px rgba(19,23,34,.09);
+    --superficie-sombra-alta: 0 0 0 1px rgba(19,23,34,.07), 0 2px 5px rgba(19,23,34,.07), 0 12px 26px -10px rgba(19,23,34,.15);
+    --superficie-sombra-flutuante: 0 0 0 1px rgba(19,23,34,.08), 0 24px 56px -16px rgba(19,23,34,.26), 0 4px 12px -4px rgba(19,23,34,.12);
+
+    --font-weight-medium: 500;
+    --font-weight-normal: 400;
+    --chart-1: #F30B42;
+    --chart-2: #6D28D9;
+    --chart-3: #036A4D;
+    --chart-4: #9C430A;
+    --chart-5: #0E7490;
+    --radius: .625rem;
+
+    --sidebar: #FFFFFF;
+    --sidebar-foreground: #131722;
+    --sidebar-primary: #F30B42;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #F1F3F8;
+    --sidebar-accent-foreground: #131722;
+    --sidebar-border: #E6EAF1;
+    --sidebar-ring: #F30B42;
+  }
+
+  .dark {
+    color-scheme: dark;
+    --background: #0D1017;
+    --card: #161A22;
+    --popover: #161A22;
+    --muted: #11141B;
+    --accent: #1E232D;
+    --secondary: #1E232D;
+
+    --foreground: #F2F4F8;
+    --card-foreground: #F2F4F8;
+    --popover-foreground: #F2F4F8;
+    --foreground-2: #98A0B0;           /* 5,99 no pior fundo */
+    --muted-foreground: #848C9D;       /* 4,66 no pior fundo */
+    --secondary-foreground: #98A0B0;
+    --accent-foreground: #F2F4F8;
+
+    /* a marca NÃO muda por tema — é a mesma cor declarada (ADR 0146) */
+    --primary: #F30B42;
+    --primary-hover: #F63663;          /* mesma matiz (345,9°), +9pp de luz: 1,14 contra a marca — o par anterior media 1,15 */
+    --primary-foreground: #ffffff;
+    --marca-viva: #F30B42;
+    --primary-gradient-start: #D6002E;
+    --primary-gradient-mid: #FF0041;
+    --primary-gradient-end: #FF7AAB;
+    --primary-gradient: linear-gradient(118deg, var(--primary-gradient-start) 0%, var(--primary-gradient-mid) 46%, var(--primary-gradient-end) 100%);
+
+    /* A escrita do *Editar com IA* no tema escuro (ADR 0368): as mesmas matizes do claro, com mais luz. */
+    --ia-violeta: #A08BFF;
+    --ia-azul: #6FA0FF;
+    --ia-gradient: linear-gradient(110deg, var(--ia-violeta) 0%, var(--ia-azul) 50%, var(--ia-violeta) 100%);
+
+    --desenho: #C4B5FD;
+
+    --terminal: #09090B;               /* o mesmo do claro: o terminal é escuro nos dois temas */
+    --terminal-foreground: #F4F4F5;
+
+    --destructive: #FF8095;            /* 6,58 no pior fundo */
+    --destructive-foreground: #16181D;
+
+    --border: #252B36;
+    --input: #737A8A;                  /* 4,05 sobre o cartão, 4,42 sobre o chão, 3,66 sobre o realce */
+    --input-background: #11141B;
+    --switch-background: #3A4150;
+    --ring: #F30B42;                   /* a marca também aqui: 4,44 sobre o chão escuro, acima dos 3:1 (o #FF5C96 anterior era ponta de gradiente, não a marca) */
+
+    --anel: rgba(255, 255, 255, .10);
+
+    /* Os pares do escuro (ADR 0128). Medido: 8,17 a 11,01. */
+    --pessoa-a: #3A1520;  --pessoa-a-tinta: #FDA4AF;
+    --pessoa-b: #132A3D;  --pessoa-b-tinta: #93C5FD;
+    --pessoa-c: #12291B;  --pessoa-c-tinta: #86EFAC;
+    --pessoa-d: #251C3B;  --pessoa-d-tinta: #C4B5FD;
+    --marca-tinta: #331320;
+    --sombra-painel: 0 0 0 1px rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.55);
+
+    /* A rampa da etapa clareia no escuro — ela DESENHA sobre o chão. */
+    --etapa-backlog:     #94A3B8;
+    --etapa-triagem:     #22D3EE;
+    --etapa-fila:        #60A5FA;
+    --etapa-execucao:    #818CF8;
+    --etapa-revisao:     #FBBF24;
+    --etapa-homolog:     #C084FC;
+    --etapa-validada:    #2DD4BF;
+    --etapa-deploy:      #A3E635;
+    --etapa-concluida:   #34D399;
+
+    /* A cor da plataforma é da EMPRESA: ela não muda por tema. */
+    --plat-wake:         #BF07EB;  --plat-wake-tinta:    #FFFFFF;
+    --plat-vtex:         #F01861;  --plat-vtex-tinta:    #FFFFFF;
+    --plat-shopify:      #8EB441;  --plat-shopify-tinta: #131722;
+    --origem:            #251C3B;  --origem-tinta:       #C4B5FD;
+    --superficie-sombra: 0 0 0 1px rgba(255,255,255,.055), 0 1px 2px rgba(0,0,0,.4), 0 5px 14px -6px rgba(0,0,0,.5);
+    --superficie-sombra-alta: 0 0 0 1px rgba(255,255,255,.09), 0 2px 6px rgba(0,0,0,.5), 0 12px 28px -10px rgba(0,0,0,.6);
+    --superficie-sombra-flutuante: 0 0 0 1px rgba(255,255,255,.1), 0 26px 60px -16px rgba(0,0,0,.75), 0 4px 12px -4px rgba(0,0,0,.5);
+
+    --chart-1: #F30B42;          /* a série 1 é a marca, e ela não muda por tema */
+    --chart-2: #C4B5FD;
+    --chart-3: #34D399;
+    --chart-4: #FBBF24;
+    --chart-5: #67E8F9;
+
+    --sidebar: #161A22;
+    --sidebar-foreground: #F2F4F8;
+    --sidebar-primary: #F30B42;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #1E232D;
+    --sidebar-accent-foreground: #F2F4F8;
+    --sidebar-border: #252B36;
+    --sidebar-ring: #F30B42;
+  }
+
+  /* ADR 0435 · SPEC-161 §7 — o tema da janela do kit de campanha: fora do design system do painel, contido neste
+     escopo. Só troca tokens, então o kit (botão, campo, rótulo, dica) se pinta sem código novo. O acento é o do tom
+     escolhido; o anel de foco é branco, por fora do anel da escolha. Os pares (texto, contorno de controle, texto
+     sobre o acento, foco) são calculados em `os-tokens-pagam-o-piso`. O acento mora numa propriedade registrada como
+     cor (`--campanha-acento`, abaixo), para a troca de tom cruzar de uma cor para a outra; o `--primary` lê dela. */
+  [data-tema="campanha"] {
+    color-scheme: dark;
+    --background: #0A0A0A;
+    --card: #141414;
+    --popover: #141414;
+    --muted: #1E1E1E;
+    --accent: #1E1E1E;
+    --secondary: #1E1E1E;
+    --foreground: #FAFAFA;
+    --card-foreground: #FAFAFA;
+    --popover-foreground: #FAFAFA;
+    --accent-foreground: #FAFAFA;
+    --foreground-2: #A3A3A3;
+    --secondary-foreground: #A3A3A3;
+    --muted-foreground: #A3A3A3;
+    --border: #262626;
+    --input: #737373;
+    --ring: #FAFAFA;
+    --anel: rgba(255, 255, 255, .10);
+    --campanha-acento: #FFD400;
+    --primary: var(--campanha-acento);
+    --marca-viva: var(--campanha-acento);
+    --primary-hover: var(--campanha-acento);
+    --primary-foreground: #0A0A0A;
+  }
+  [data-tema="campanha"][data-tom="neon"] { --campanha-acento: #FF6A00; }
+  [data-tema="campanha"][data-tom="luxo"] { --campanha-acento: #E8C468; }
+  [data-tema="campanha"][data-tom="vermelho"] { --campanha-acento: #D90000; --primary-foreground: #FFFFFF; }
+}
+
+/* A propriedade do acento da campanha, registrada como cor: sem o registro, a troca de tom seria seca (uma var
+   comum não interpola). `campanha-tom` no `tailwind.config.ts`. */
+@property --campanha-acento {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #FFD400;
+}
+
+/* A cortina da janela do kit de campanha (`campanha-entra`): o preto sobe de baixo, uma vez, na chegada; e a troca de
+   tom (`campanha-tom`), que cruza o acento em 300 ms. Fora de `@layer` e com três atributos para vencer a entrada de
+   zoom e a duração do diálogo (0,2,0, que levava a troca de tom a 220 ms); o escape fica no par abaixo. */
+[data-tema="campanha"][data-tamanho="tela"][data-state="open"] {
+  animation: campanha-cortina 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: --campanha-acento 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+/* O pé do corpo da janela esmaece em 32 px enquanto há o que rolar: a fileira de baixo se anuncia. */
+[data-tema="campanha"] [data-n="corpo-do-dialogo"][data-ha-mais] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 32px), transparent);
+}
+@keyframes campanha-cortina {
+  from { clip-path: inset(100% 0 0 0 round 16px); }
+  to { clip-path: inset(0 0 0 0 round 16px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-tema="campanha"][data-tamanho="tela"][data-state="open"] { animation: none; transition: none; }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(113, 113, 122, 0.45) transparent;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* A troca de tema acontece com a transição desligada, e esta é a regra que
+   desliga. Ela vale por microssegundos: `applyTheme` (`lib/theme.ts`) põe a
+   classe no `<html>`, troca o `dark`, força o cálculo de estilo e devolve a
+   transição — quem a encontrar grudada está diante de uma troca que morreu no
+   meio, e de uma aplicação sem animação de cor nenhuma.
+
+   Sem ela, trocar a classe do `<html>` põe em transição toda regra
+   `transition-colors` da página de uma vez, e o relógio de uma transição só
+   anda quando o documento RENDERIZA: em aba que não produz quadro elas ficam
+   paradas em `currentTime: 0` e cada elemento continua computando a cor do
+   tema ANTIGO, indefinidamente. Medido em `/login`, aba oculta, 2,5s depois de
+   tirar o `dark`: campo devolvendo `rgba(255, 255, 255, 0.04)`, o valor do
+   tema ESCURO, num documento já claro.
+
+   Fora de `@layer` de propósito: o `!important` precisa vencer as utilitárias
+   do Tailwind, e `::before`/`::after` entram porque halo e brilho de foco
+   também transicionam cor. O nome da classe é o mesmo de `THEME_SWITCHING_CLASS`,
+   e um teste reprova se as duas pontas divergirem. */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+  animation-duration: 0s !important;
+}
+
+/* Scrollbar fina estilo iOS (WiControl) */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(113, 113, 122, 0.38);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(113, 113, 122, 0.55);
+}
+
+/* AS VOZES DA FAMÍLIA — os cinco papéis tipográficos do protótipo v3, com os
+   valores do `base.css` (`.design-lab/base.css`, §3). Elas ficam em `components`
+   e não em `utilities` de propósito: uma utilitária ao lado (`text-foreground`,
+   `text-[11px]`) ainda pode ajustar um caso, mas o PADRÃO é o daqui.
+
+   O `font-stretch` só existe porque o Archivo é variável no eixo `wdth` e o
+   `layout.tsx` declara `62% 125%` — sem isso o navegador sintetiza a largura e
+   as vozes viram uma só. */
+@layer components {
+  .t-display { font-size: 23px; font-weight: 600; font-stretch: 106%; letter-spacing: -.024em; line-height: 1.15; }
+  .t-titulo  { font-size: 15px; font-weight: 600; letter-spacing: -.014em; line-height: 1.3; }
+  .t-denso   { font-size: 12px; font-weight: 400; }
+  /* O RÓTULO: ele nomeia SUBDIVISÃO — a seção dentro de um bloco, a faixa
+     dentro de um cartão, o campo de um formulário.
+     
+     **Não** o assunto de tela: o título de um `Bloco` é a voz acima —
+     `.t-titulo`, 15px, 600, `-.014em` —, promovida a voz oficial pelo
+     operador em 09/09
+     ([ADR 0150](../../../../docs/adr/0150-o-titulo-de-bloco-fala-a-voz-do-kit-e-criar-abre-em-dialogo.md)).
+     Ela era 16px até então, escrita à mão em dez sítios, por decisão do mesmo
+     operador, que apontou o efeito do contrário antes de qualquer medição —
+     *"os títulos têm menos destaque do que o conteúdo interno do card"*: o que
+     ele barrou foi o título CEDER ao conteúdo, e a promoção não o desfaz,
+     porque o rótulo segue abaixo dele nas duas medidas. Este comentário já
+     dizia *"nomeia toda seção do painel — nunca um `h2` de 16px em negrito"*,
+     e isso contradizia o `Bloco` desde que ele nasceu; corrigido em 08/09, ao
+     escrever a
+     [SPEC-086](../../../../docs/specs/SPEC-086-o-rotulo-tem-duas-vozes.md).
+
+     A tinta é o degrau do MEIO (`--foreground-2`), e não o terceiro que o
+     protótipo usa. Medido no navegador em 2026-09-06: o rótulo nomeia seção
+     também DENTRO de bloco de tinta, e sobre a tinta `alheio` do escuro
+     (`rgb(40,36,66)`) o terceiro degrau mede **4,39** — abaixo do piso. O do
+     meio mede 5,60 ali e 6,67 sobre o cartão. O terceiro nunca tinha sido
+     medido contra as tintas das vozes porque, antes, rótulo não caía sobre
+     elas. */
+  .t-rotulo  { font-size: 10.5px; font-weight: 700; font-stretch: 80%; letter-spacing: .13em;
+               text-transform: uppercase; color: var(--foreground-2); }
+  /* A COLUNA: a segunda voz do rótulo, e ela é a MAIS LEVE das duas.
+     
+     Papel diferente, e é o papel que escolhe: `.t-rotulo` nomeia uma SEÇÃO —
+     aparece uma vez, sozinho, e pode pesar. Este nomeia uma COLUNA: repete de
+     quatro a oito vezes na mesma linha, encima os dados, e ao peso de 700 com
+     .13em ele compete com o que está embaixo dele. Decidido pelo operador em
+     08/09 ("voz própria, mais leve"), sobre o
+     [estudo](../../../../docs/research/2026-09-08-o-rotulo-do-painel.md): 47
+     sítios escreviam este papel à mão, em 11 formas, porque ele nunca tinha voz.
+
+     Cada eixo, e por quê:
+     - `10.5px`, o MESMO do rótulo — mesma família, e cabeçalho não pode ser
+       maior que o nome da seção que o contém;
+     - `500`, e não 400: no peso do corpo o cabeçalho deixa de se ler como
+       cabeçalho, e era isso que os 42 sítios a 400 faziam;
+     - `.08em` contra os .13em do rótulo: maiúscula precisa de algum
+       espaçamento, e .13em repetido em oito colunas alarga cada uma e joga a
+       estreita para a segunda linha;
+     - **sem condensar** — o rótulo condensa a 80% porque é 700; condensar um
+       500 a 10,5px o deixa fino;
+     - a MESMA tinta do rótulo (`--foreground-2`), e esta é a parte medida: ela
+       é a única que paga o piso sobre as tintas das vozes no escuro (5,08 a
+       5,69, contra 3,95 a 4,43 de `--muted-foreground`). Uma tabela pode cair
+       dentro de um bloco de tinta, e a tinta do cabeçalho não pode depender de
+       isso não acontecer. */
+  .t-coluna  { font-size: 10.5px; font-weight: 500; letter-spacing: .08em;
+               text-transform: uppercase; color: var(--foreground-2); }
+  /* O CAMPO: a terceira voz, só no builder (ADR 0364). O rótulo de campo ali é
+     texto do lojista, lido pelo cliente — às vezes uma frase —, e em caixa alta
+     condensada vira uma tira ilegível. 13px, 500, largura normal, sem maiúsculas,
+     tinta cheia. Só `PainelDaSecao`, `ConversaComIa` e o `Label` que a define a
+     usam; outra tela pede ADR novo (a varredura `o-rotulo-tem-duas-vozes` vigia). */
+  .t-campo   { font-size: 13px; font-weight: 500; line-height: 1.35; letter-spacing: normal;
+               text-transform: none; font-stretch: 100%; color: var(--foreground); }
+  .t-medida { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+               font-size: 12px; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+
+  /* O PAINEL — a peça grande da mesa do job (espinha, assunto, prova). Superfície
+     opaca, raio 16, sombra do painel. Quem o monta emite `data-superficie`, como
+     toda superfície do kit. */
+  .painel { background-color: var(--card); border-radius: var(--raio-painel); box-shadow: var(--sombra-painel); }
+}
+
+@layer utilities {
+  /* A SUPERFÍCIE. Uma só, opaca, levantada por sombra — o vidro saiu no
+     [ADR 0125](../../../../docs/adr/0125-a-profundidade-e-superficie-opaca-nao-translucidez.md).
+     Ela inclui o anel de 5% dela mesma na própria sombra: sobre chão claro o
+     cartão branco some sem ele, e isso não é grade — é a aresta da peça.
+
+     Quem monta superfície emite `data-superficie`, e é por esse atributo que as
+     varreduras de composição a reconhecem. Elas derivavam a lista de peças
+     filtrando `components/ui/` por `glass-surface`; sem uma âncora nova, a
+     derivação viraria lista vazia e as duas guardas ficariam VERDES POR NÃO TER
+     O QUE EXAMINAR — que é o pior desfecho possível. */
+  .superficie {
+    background-color: var(--card);
+    box-shadow: var(--superficie-sombra);
+  }
+
+  .superficie-alta {
+    background-color: var(--card);
+    box-shadow: var(--superficie-sombra-alta);
+  }
+
+  /* O que de fato flutua: diálogo, menu, dica, aviso, cartão arrastado. */
+  .superficie-flutuante {
+    background-color: var(--popover);
+    box-shadow: var(--superficie-sombra-flutuante);
+  }
+
+  /* O anel do próprio controle — botão, campo, seletor. Não é sombra: controle
+     pequeno com sombra faz a barra inteira parecer levitando.
+
+     Ele usa `--input`, e a distinção é a razão de o token existir (ADR 0126):
+     `--input` é CONTORNO DE CONTROLE e paga 3:1 (WCAG 1.4.11); `--border` e
+     `--anel` são separação decorativa e não devem nada.
+
+     Esta utilitária usou `--anel` do dia em que nasceu até 06/09, e o preço foi
+     medido no navegador: `--anel` composto sobre `--card` dá **1,23** no claro e
+     **1,33** no escuro. Como a variante `outline` também pinta `bg-card` — a
+     mesma cor da superfície em que ela senta —, todo botão secundário do painel
+     ficava BRANCO NO BRANCO, sem contorno e sem preenchimento distinguível: o
+     operador os leu como "texto largado", que é exatamente o que eram.
+
+     O nome dizia a intenção e o valor dizia outra coisa. `o-anel-usa-o-token-de-controle.test.ts`
+     lê esta regra do arquivo e reprova a volta. */
+  .anel-de-controle {
+    box-shadow: inset 0 0 0 1px var(--input);
+  }
+
+  /* O gradiente da marca. Ele DESENHA — ensō, barra de progresso, filete —, e
+     nunca é fundo de texto: branco sobre a ponta clara mede 2,91. */
+  .bg-primary-gradient {
+    background-image: var(--primary-gradient);
+    background-color: var(--primary);
+  }
+
+  /* A escrita e o ícone de IA (ADR 0368, ADR 0382): degradê violeta → azul → violeta que corre em loop.
+     O fundo repete e acaba na cor em que começa, então o fim de um ciclo é o começo do seguinte.
+     O efeito é um só e mora aqui: a escrita o recorta no texto, o ícone o recorta por máscara
+     (o desenho do `Sparkles` do Lucide, copiado abaixo; `icone-da-ia.test.ts` o compara ao do Lucide). */
+  :root {
+    --icone-da-ia: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z'/%3E%3Cpath d='M20 2v4'/%3E%3Cpath d='M22 4h-4'/%3E%3Ccircle cx='4' cy='20' r='2'/%3E%3C/svg%3E");
+  }
+  .text-ia-gradient,
+  .icone-ia-gradient {
+    background-image: var(--ia-gradient);
+    background-size: 200% 100%;
+    background-repeat: repeat-x;
+    background-position: 0% 0;
+    animation: ia-corre 6s linear infinite;
+  }
+  .text-ia-gradient {
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .icone-ia-gradient,
+  .icone-ia-tinta {
+    -webkit-mask: var(--icone-da-ia) center / contain no-repeat;
+    mask: var(--icone-da-ia) center / contain no-repeat;
+  }
+  /* No botão com cor (o *Pedir*) o ícone é o mesmo desenho na tinta do texto do botão: branco, sem disco e sem corrida (F197). */
+  .icone-ia-tinta {
+    background-color: currentColor;
+  }
+  @keyframes ia-corre {
+    from {
+      background-position: 0% 0;
+    }
+    to {
+      background-position: 200% 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .text-ia-gradient,
+    .icone-ia-gradient {
+      animation: none;
+    }
+  }
+  @supports not (background-clip: text) {
+    .text-ia-gradient {
+      background-image: none;
+      color: var(--ia-violeta);
+      animation: none;
+    }
+    /* Sem o recorte no texto o degradê cai para a cor sólida; no ícone a máscara continua. */
+    .icone-ia-gradient {
+      background: var(--ia-violeta);
+      animation: none;
+    }
+  }
+  /* A IA trabalhando com a conversa fechada (ADR 0412, no lugar do `play`): um arco de 35% do
+     perímetro corre a borda do *Editar com IA* no degradê da escrita (`ContornoDaIa`). O arco é
+     traço de SVG com `pathLength`, não `conic-gradient`: por ângulo ele se arrastava no meio do
+     lado longo e disparava nos cantos. A volta é a do ensō (2,4 s), o ritmo de *espere*; quem
+     pediu menos movimento vê o anel inteiro, parado. */
+  .contorno-da-ia rect {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-dasharray: 35 65;
+    animation: ia-contorno-corre 2.4s linear infinite;
+  }
+  @keyframes ia-contorno-corre {
+    from {
+      stroke-dashoffset: 100;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .contorno-da-ia rect {
+      stroke-dasharray: none;
+      animation: none;
+    }
+  }
+
+  /* O ícone parado (rótulo, etiqueta, controle repetido por item) e o do controle desabilitado ou
+     bloqueado não correm: o movimento quer dizer *isto está à mão*. `animation: none`, nunca `paused`:
+     um `startTime` resolvido retomaria a animação pausada. */
+  .icone-ia-gradient[data-parado] {
+    animation: none;
+  }
+  :disabled .icone-ia-gradient,
+  [aria-disabled="true"] .icone-ia-gradient,
+  :disabled .text-ia-gradient,
+  [aria-disabled="true"] .text-ia-gradient {
+    animation: none;
+  }
+
+  /* Trilho vertical da marca — o que marca o bloco ABERTO da matriz do laudo.
+
+     **Cor chapada, e não o gradiente.** O trilho atravessa DUAS células de
+     tabela, e cada uma pinta o próprio pseudo-elemento: o gradiente recomeçava
+     do começo no topo de cada uma, e o que se via era um corte no meio do
+     trilho, não uma passagem.
+
+     Por que pseudo-elemento e não borda: `border-image` some sob o
+     `border-collapse` da tabela, e ele também não participa do layout, então a
+     célula não muda de largura ao abrir. */
+  .trilho-da-marca {
+    position: relative;
+  }
+
+  .trilho-da-marca::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--marca-viva);
+  }
+}
+
+/* O primeiro quadro das colunas do editor (a estrutura recolhe a um trilho quando o canvas ficaria abaixo de 60%).
+   O HTML do servidor pinta antes da hidratação, e a medida em JS (`estruturaCabe`) só chega depois: até ela chegar
+   (`data-medida="nao"`), este bloco decide, pelo tamanho do próprio contêiner, o mesmo que a medida decidirá.
+   Os dois limiares são os de `estruturaCabe` — 1610 px com o encaixe da conversa (288 + 8 + 348 + 60% do contêiner),
+   740 px sem coluna à direita —, e `colunas-do-editor.css.test.ts` lê os dois lados. Fora de `@layer` de propósito:
+   precisa vencer as classes de utilitário do componente. */
+[data-n="colunas-do-editor"] {
+  container: colunas / inline-size;
+}
+
+@media (min-width: 1280px) {
+  @container colunas (max-width: 1609px) {
+    [data-medida="nao"][data-pedida="true"][data-ocupa="encaixe"] [data-n="estrutura"] { width: 48px; }
+    [data-medida="nao"][data-pedida="true"][data-ocupa="encaixe"] [data-n="camada-da-estrutura"] { display: none; }
+    [data-medida="nao"][data-pedida="true"][data-ocupa="encaixe"] [data-n="trilho"] { display: flex; }
+  }
+}
+
+@container colunas (max-width: 739px) {
+  [data-medida="nao"][data-pedida="true"] [data-n="estrutura"] { width: 48px; }
+  [data-medida="nao"][data-pedida="true"] [data-n="camada-da-estrutura"] { display: none; }
+  [data-medida="nao"][data-pedida="true"] [data-n="trilho"] { display: flex; }
+}
+
+/* Abaixo de 1280 px a conversa abre por cima, não encaixa: o encaixe do servidor (largo até a medida) não ocupa lugar. */
+@media (max-width: 1279px) {
+  [data-medida="nao"] [data-n="encaixe-da-direita"] { display: none; }
+}
