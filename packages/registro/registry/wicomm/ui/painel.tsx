@@ -35,11 +35,28 @@ function Painel({
   )
 }
 
-function RolagemDoPainel({ className, ...props }: React.ComponentProps<"div">) {
+/**
+ * O respiro da coluna que rola, em uma de três densidades (LAY-06), nunca
+ * padding à mão: `padrao` (`px-5 pb-6`), `compacta` (`px-4 pb-5`, a coluna
+ * estreita) e `solta` (só `pb-6`, quando quem está dentro já tem a própria
+ * superfície). Sem `densidade`, nenhum respiro — o de antes.
+ */
+const RESPIRO_DA_ROLAGEM = {
+  padrao: "px-5 pb-6",
+  compacta: "px-4 pb-5",
+  solta: "pb-6",
+} as const
+
+function RolagemDoPainel({
+  className,
+  densidade,
+  ...props
+}: React.ComponentProps<"div"> & { densidade?: keyof typeof RESPIRO_DA_ROLAGEM }) {
   return (
     <div
       data-slot="rolagem-do-painel"
-      className={cn("relative min-h-0 flex-1 overflow-y-auto overscroll-contain", className)}
+      data-densidade={densidade}
+      className={cn("relative min-h-0 flex-1 overflow-y-auto overscroll-contain", densidade && RESPIRO_DA_ROLAGEM[densidade], className)}
       {...props}
     />
   )

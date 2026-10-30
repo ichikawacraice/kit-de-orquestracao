@@ -61,6 +61,11 @@ test('cada arquivo do registro está em exatamente uma peça, e cada peça apont
   assert.equal(new Set(usados).size, usados.length, 'arquivo em duas peças')
 })
 
+/** A cola de exemplo do Next: as páginas (`registry:page`) e o componente que o layout do casco usa — lista fechada. */
+const COLA_DO_NEXT = ['registry/wicomm/blocks/casco/casco-no-next.tsx']
+const ehDoNext = (item, caminho) =>
+  item.files.some((f) => f.path === caminho && f.type === 'registry:page') || COLA_DO_NEXT.includes(caminho)
+
 test('toda importação de uma peça está declarada: npm em dependencies, peça em registryDependencies', () => {
   const pacote = (dep) => dep.replace(/@[^@/]+$/, '')
   const porArquivo = Object.fromEntries(REG.items.flatMap((i) => (i.files ?? []).map((f) => [f.path, i])))
@@ -68,13 +73,18 @@ test('toda importação de uma peça está declarada: npm em dependencies, peça
     const fonte = ler(caminho)
     const npm = new Set((item.dependencies ?? []).map(pacote))
     const regs = new Set((item.registryDependencies ?? []).map((r) => r.replace('@wicomm/', '')))
-    for (const [, de] of fonte.matchAll(/from "([^"]+)"/g)) {
+    for (const [, , de] of fonte.matchAll(/from (["'])([^"']+)\1/g)) {
       if (de === 'react' || de === 'react-dom') continue
-      const interna = de.match(/^@\/registry\/wicomm\/(ui|lib)\/(.+)$/)
+      // O Next só entra na cola de exemplo do App Router: a página, e o arquivo `*-no-next` que ela usa.
+      if (de.startsWith('next/')) {
+        assert.ok(ehDoNext(item, caminho), `${caminho}: importa "${de}" fora da cola do Next`)
+        continue
+      }
+      const interna = de.match(/^@\/registry\/wicomm\/(ui|lib|blocks)\/(.+)$/)
       if (interna) {
         const alvo = PECAS.find((p) => p.files.some((f) => f.path.startsWith(`registry/wicomm/${interna[1]}/${interna[2]}.`)))
         if (de === '@/registry/wicomm/lib/utils') assert.ok(regs.has('estilo'), `${caminho}: o cn vem do estilo`)
-        else assert.ok(alvo && regs.has(alvo.name), `${caminho}: importa ${de} sem a dependência de registro`)
+        else assert.ok(alvo && (alvo === item || regs.has(alvo.name)), `${caminho}: importa ${de} sem a dependência de registro`)
       } else assert.ok(npm.has(de), `${caminho}: importa "${de}" sem declarar no item ${item.name}`)
     }
   }
@@ -89,9 +99,11 @@ test('as versões do npm nas peças são fixas e são as que os testes rodaram',
   }
 })
 
+// A página de exemplo e a cola do Next ficam fora: são do App Router (componente
+// de servidor, `next/*`), e quem as prova é o `next build` do num-next-vazio.
 test('toda peça tem teste dom que a importa', () => {
   const testes = readdirSync(join(RAIZ, 'test')).filter((f) => /\.test\.tsx?$/.test(f)).map((f) => ler(`test/${f}`)).join('\n')
-  const semTeste = PECAS.flatMap((p) => p.files.map((f) => f.path.replace(/\.tsx?$/, '')))
+  const semTeste = PECAS.flatMap((p) => p.files.filter((f) => !ehDoNext(p, f.path)).map((f) => f.path.replace(/\.tsx?$/, '')))
     .filter((p) => !testes.includes(`@/${p}"`) && !testes.includes(`@/${p}'`))
   assert.deepEqual(semTeste, [])
 })

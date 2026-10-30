@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.2.0
+versao: 0.3.0
 description: As convenções de engenharia do front dos apps React da Wicomm — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
 ---
 
@@ -31,7 +31,7 @@ description: As convenções de engenharia do front dos apps React da Wicomm —
 ### CONV-04 · Nenhum valor solto
 - **Regra.** Em código de tela: nada de `#hex`/`rgb()` literal, `text-[Npx]`, `h-[Npx]`, `rounded-[Npx]`, `duration-NNN`, `z-[N]` fora da escala. O que falta na escala entra no token, com motivo. Exceção local fica listada no projeto, com motivo, e a guarda a lê.
 - **Por quê.** Valor solto não acompanha o próximo ajuste de escala nem o tema; é a deriva lenta que faz dois apps deixarem de parecer da mesma empresa.
-- **Confere.** Hook de aviso do plugin (no momento da escrita) · `guarda` de valor arbitrário com catraca (no CI).
+- **Confere.** Hook de aviso do plugin (no momento da escrita) · `guarda:nenhum-valor-solto`, com catraca (no CI).
 
 ### CONV-05 · Escala tirada de largura medida lê a caixa de conteúdo
 - **Regra.** Toda escala, fração ou posição tirada de um nó medido lê `clientWidth`/`clientLeft` — nunca `getBoundingClientRect()`/`offsetWidth` —, e o elemento cuja largura a escala assume declara `box-content`. Largura 0 (jsdom, antes da pintura) não vira divisor: devolve "não dá para concluir".
@@ -67,7 +67,7 @@ description: As convenções de engenharia do front dos apps React da Wicomm —
 ### CONV-10 · Confirmação e dica nunca nativas
 - **Regra.** Nada de `window.confirm` (usa `useConfirm`) nem de `title` nativo para coisa importante (usa `Ajuda`, `DicaDeAjuda` ou `ComMotivo`).
 - **Por quê.** O nativo não segue tema, foco nem toque, e o `title` não aparece no teclado nem no celular.
-- **Confere.** `guarda:o-irreversivel-pede-confirmacao` · `guarda` de `title` nativo.
+- **Confere.** `guarda:o-irreversivel-pede-confirmacao` · `guarda:confirmacao-e-dica-nunca-nativas`.
 
 <a id="texto"></a>
 ## 4. Texto de interface
@@ -75,7 +75,7 @@ description: As convenções de engenharia do front dos apps React da Wicomm —
 ### CONV-11 · Texto de interface não cita documento nem identificador interno
 - **Regra.** Ver ANATOMIA, MSG-05. Vale também para log, detalhe de estado e erro que nascem no servidor e chegam à tela. Nome de campo do banco (`item_id`) também não é texto de interface.
 - **Por quê.** Guarda de marcação prova que o texto não cita documento; não prova que ele é legível — e o verde não deve ser lido como se provasse.
-- **Confere.** `guarda` de texto de UI · revisão de texto.
+- **Confere.** `guarda:o-texto-da-tela-nao-cita-documento` · revisão de texto.
 
 ### CONV-12 · O glossário da tela pode não ser o do código, e o descasamento é declarado
 - **Regra.** Quando a palavra que a pessoa vê difere do nome no código (tabela, rota, tipo), o projeto escreve o par no seu `CLAUDE.md` ou `PRODUCT.md`. Texto de interface usa o glossário da tela; código, o do banco.

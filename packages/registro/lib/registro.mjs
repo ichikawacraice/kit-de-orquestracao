@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { estiloDoShadcn } from './css.mjs'
-import { NPM, PECAS } from './itens.mjs'
+import { BLOCOS, NPM, PECAS } from './itens.mjs'
 
 const RAIZ = join(import.meta.dirname, '..')
 const require = createRequire(import.meta.url)
@@ -54,6 +54,6 @@ export function registro() {
     $schema: 'https://ui.shadcn.com/schema/registry.json',
     name: 'wicomm',
     homepage: 'https://github.com/wicomm-projects/wicomm-design-system',
-    items: [estilo(), ...PECAS],
+    items: [estilo(), ...PECAS, ...BLOCOS],
   }
 }

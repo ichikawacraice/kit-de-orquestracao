@@ -1,7 +1,9 @@
 // A prova do critério de pronto: num Next vazio, `shadcn init` com o estilo
 // Wicomm, o registro `@wicomm` declarado no `components.json`, e
-// `npx shadcn add @wicomm/<peça>` para CADA peça — e o `next build` (que
-// compila e confere os tipos) passa com uma página que usa todas.
+// `npx shadcn add @wicomm/<peça>` para CADA peça e CADA bloco de tela — e o
+// `next build` (que compila e confere os tipos) passa com uma página que usa
+// todas as peças e as páginas de exemplo dos blocos; depois, cada página de
+// exemplo é servida e responde com o título dela.
 //
 // Fica fora do `npm test`: baixa o Next e as dependências da rede e leva minutos.
 //
@@ -57,14 +59,35 @@ try {
   cfg.registries = { '@wicomm': `${url}/{name}.json` }
   writeFileSync(join(app, 'components.json'), JSON.stringify(cfg, null, 2) + '\n')
 
-  // 4. Cada peça, uma por vez: uma peça que só instala junto de outra falharia aqui.
-  const pecas = registro().items.filter((p) => p.type === 'registry:ui').map((p) => p.name)
-  for (const p of pecas) await rodar('npx', ['-y', SHADCN, 'add', `@wicomm/${p}`, '--yes'])
+  // 4. Cada peça e cada bloco, um por vez: um item que só instala junto de outro falharia aqui.
+  const itens = registro().items
+  const pecas = itens.filter((p) => p.type === 'registry:ui' || p.type === 'registry:lib').map((p) => p.name)
+  const blocos = itens.filter((p) => p.type === 'registry:block').map((p) => p.name)
+  for (const p of [...pecas, ...blocos]) await rodar('npx', ['-y', SHADCN, 'add', `@wicomm/${p}`, '--yes', '--overwrite'])
 
-  // 5. Uma página que usa todas, e o build.
+  // 5. A página que usa todas as peças, o layout raiz com a fonte da Wicomm, e o build.
   writeFileSync(join(app, 'app', 'page.tsx'), readFileSync(join(RAIZ, 'test', 'fixtures', 'pagina-com-todas.tsx'), 'utf8'))
+  writeFileSync(join(app, 'app', 'layout.tsx'), readFileSync(join(RAIZ, 'test', 'fixtures', 'layout-raiz.tsx'), 'utf8'))
   await rodar('npx', ['next', 'build'])
-  console.log(`\nOK: ${pecas.length} peças instaladas uma a uma e compiladas num Next vazio (${app}).`)
+
+  // 6. Cada página de exemplo dos blocos, servida: responde 200 com o título dela.
+  const porta = 4800 + Math.floor(Math.random() * 100)
+  const next = spawn('npx', ['next', 'start', '-p', String(porta)], { cwd: app, stdio: 'ignore' })
+  try {
+    const PAGINAS = { '/pedidos': 'Pedidos', '/pedidos/1042': 'Pedido 1042', '/entrar': 'Entrar' }
+    for (const [rota, titulo] of Object.entries(PAGINAS)) {
+      let html = ''
+      for (let tentativa = 0; tentativa < 40 && !html; tentativa++) {
+        html = await fetch(`http://127.0.0.1:${porta}${rota}`).then((r) => (r.ok ? r.text() : ''), () => '')
+        if (!html) await new Promise((ok) => setTimeout(ok, 500))
+      }
+      if (!new RegExp(`<h1[^>]*>${titulo}</h1>`).test(html)) throw new Error(`${rota} não renderizou o título "${titulo}"`)
+      console.log(`${rota}: renderiza "${titulo}"`)
+    }
+  } finally {
+    next.kill()
+  }
+  console.log(`\nOK: ${pecas.length} peças e ${blocos.length} blocos instalados um a um, compilados e servidos num Next vazio (${app}).`)
 } finally {
   servidor.close()
   if (!args.includes('--manter') && i < 0) rmSync(base, { recursive: true, force: true })

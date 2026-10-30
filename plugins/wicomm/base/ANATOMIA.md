@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.2.0
+versao: 0.3.0
 description: A anatomia dos apps React da Wicomm — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -61,10 +61,9 @@ O casco é o que faz dois apps da Wicomm parecerem um só: é a primeira coisa q
   | **Barra lateral** (esquerda, recolhível) | o logotipo Wicomm, os destinos do app (item com ícone **e** rótulo), a conta e o tema ao pé | ação de tela, aviso, filtro |
   | **Topo da página** | a trilha (em tela de detalhe), o título (`h1`, um só), o estado do objeto quando a tela é de um objeto, o primário da tela | ação rara (vai ao `⋯`) |
   | **Conteúdo** | o arquétipo da tela, em superfície | conteúdo solto no fundo |
-  Cabeçalho grudado acima do topo é opcional e só leva o que vale para o app inteiro (busca global, troca de contexto, conexão). O arquétipo Entrada fica fora do casco.
+  O **cabeçalho**, grudado acima do topo, é opcional e só leva o que vale **igual em todas as telas** e muda o app inteiro: a troca de contexto, a busca global, a conexão com um serviço de fora — nunca título, primário, conta ou tema. O **topo da página** leva o que muda quando a tela muda. Para um caso novo, o teste é: *a coisa continua valendo depois de trocar de destino?* Se sim, é do cabeçalho; se não, é do topo. O topo não rola (LAY-01). O arquétipo Entrada fica fora do casco.
 - **Por quê.** Navegação, título e primário no mesmo lugar em todo app é o que o cliente reconhece como "a mesma empresa".
-- **Confere.** Bloco do casco (registro) · `guarda:o-titulo-da-pagina-e-um-so` · `crítica:consistência`.
-- *Assumida, a confirmar:* a divisão exata entre cabeçalho e topo da página é síntese desta base; o bloco do casco a fixa.
+- **Confere.** Bloco do casco (registro, `@wicomm/casco`) · `guarda:o-titulo-da-pagina-e-um-so` · `crítica:consistência`.
 
 ### CASCO-02 · Um menu só, o do kit
 - **Regra.** Todo menu de ações é a peça `Menu` do kit (`ItemDoMenu`, `SubmenuDoMenu`). Nenhum arquivo de tela escreve a própria linha de menu nem separa grupos de menu por filete (`<hr>`).
@@ -162,7 +161,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 ### MSG-05 · Texto de interface não cita documento
 - **Regra.** Nada de `SPEC-014`, `ADR 0014`, `§3` em rótulo, dica, erro, e-mail — inclusive no texto que nasce no servidor e chega à tela. Escreva o que a coisa É.
 - **Por quê.** Rastreabilidade vive em código, commit e docs; na tela, é ruído que ninguém pode abrir.
-- **Confere.** `guarda` de texto de UI (varredura de padrões `ADR \d`, `SPEC-\d`, `§`).
+- **Confere.** `guarda:o-texto-da-tela-nao-cita-documento` (varredura de padrões `ADR \d`, `SPEC-\d`, `§`).
 
 ### MSG-06 · A mensagem que pede uma ação traz a saída
 - **Regra.** Toda mensagem que pede uma ação (a faixa, a recusa de um primário) traz a saída consigo e chama **a mesma ação** do menu, não uma cópia. O andamento dela mora no botão que a disparou; disparada de um menu, que fecha, mora no chip da barra. Numa faixa com vários assuntos, uma linha por assunto, na ordem: erro, desfecho de gesto, conexão, prévia, versão, escopo.
@@ -182,12 +181,17 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | Agrupar dentro da peça | `BlocoDeTinta` (degrau de tinta) | segunda superfície, filete |
   | Título de bloco | `Secao`, `TopoDoPainel` | `h3` com classe à mão |
   | Esconder o informativo | `Dobra` (dentro de uma peça; numa linha de lista, a própria frase abre), `PainelDobravel` (a peça inteira) | esconder ação disponível |
-  | Assunto da janela ou do item, antes da leitura | `MedalhaoDoIcone` (`md` no cabeçalho, `sm` no item; neutro por padrão, `tom` quando a tela diz erro, ausência ou recusa) | disco com ícone feito à mão |
+  | Assunto da janela ou do item, antes da leitura | `MedalhaoDoIcone` (`md` no cabeçalho, `sm` no item; neutro por padrão, `tom` quando a tela diz erro ou recusa — a ausência é neutra, COR-10) | disco com ícone feito à mão |
   | Estado em uma palavra | `ChipDeEstado` (declara `tom`) | `span` colorido |
   | Estado que abre o detalhe | `ChipQueAbre` | `button` à mão em volta do chip |
   | Valor rotulado | `Badge` | chip para valor |
   | Marcador mínimo de voz | `Estado` (`ponto`, `play`) | círculo à mão |
-  | Onde no percurso (a etapa) | `PontoDaEtapa`, declarando a etapa | `Estado` com `tom`, cor da etapa à mão |
+  | O percurso de um objeto (na Mesa) | `TrilhoDoPercurso`: as etapas em ordem, só a atual com `Estado` e `tom`, a feita com o ícone de feito, a que vem sem ponto; a cor de etapa, quando o projeto a declara, entra como `PontoDaEtapa` dentro da estação | `Estado` com `tom` em toda etapa, cor da etapa à mão, `Passos` ou `Progress` para o percurso |
+  | Região sem itens | `Vazio`, declarando a causa (`nada-ainda`, `filtro`, `nao-se-aplica`, `nao-informado`) e a saída quando há | ✓ sobre nada, cartão de voz, texto solto |
+  | Lista de objetos | `Table` (linha de 40px, cabeçalho `t-coluna` grudado, a linha inteira abre por `LinkDaLinha`) | filete entre linhas, grade de `div` à mão |
+  | O topo da tela dentro do casco | `PaginaDoApp` + `TopoDaPagina` (o único que escreve o `h1`) | `h1` e linha de ações à mão em cada tela |
+  | A marca no casco e na Entrada | `Logotipo` | imagem ou texto da marca à mão |
+  | Conta e tema | `MenuDaConta`, `MenuDoTema` (no pé da barra lateral) | conta ou tema no cabeçalho, `Select` de tema |
   | De quem é o menu, quando o gatilho só tem ícone | `TopoDoMenu`, primeiro filho do menu | repetir o que o gatilho já mostra; rótulo de menu em caixa alta |
   | A IA trabalhando com a conversa fechada | o contorno que corre a borda do botão de IA (`ContornoDaIa`; anel inteiro parado com movimento reduzido) e um `role="status"` escondido que diz começo e fim | ponto ou play ao lado da escrita |
   | Pares rótulo/valor | `Ficha`, `ParDaFicha` | tabela de duas colunas |
@@ -249,7 +253,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Confere.** `crítica:hierarquia`.
 
 ### PESO-05 · Gesto que não grava não disputa o gesto que grava
-- **Regra.** Em superfície de **conferência**, a imagem abre inteira — sem teto de altura, sem pan, sem zoom — e quem rola é a página. Arrastar fica só na **edição**, onde grava valor. Onde a tela empilha outros assuntos, a conferência pode morar numa janela (`DialogLongo`) aberta pela miniatura.
+- **Regra.** Em superfície de **conferência**, a imagem abre inteira — sem teto de altura, sem pan, sem zoom — e quem rola é a página (dentro do casco, a região do arquétipo — LAY-01). Arrastar fica só na **edição**, onde grava valor. Onde a tela empilha outros assuntos, a conferência pode morar numa janela (`DialogLongo`) aberta pela miniatura.
 - **Por quê.** Com os dois gestos no mesmo pixel, quem é expulso para outra superfície é o que grava; e teto de altura deixou ~91% de uma imagem alcançável só arrastando.
 - **Confere.** `crítica:clareza da ação` · guarda por projeto quando houver componente de conferência.
 

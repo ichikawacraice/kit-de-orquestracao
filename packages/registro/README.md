@@ -57,8 +57,44 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `toast` | sonner/toast | o aviso do desfecho; o de erro fica até ser fechado |
 | `skeleton` | skeleton | a espera; `EsperaDaLista` |
 | `menu` | dropdown-menu | grupos por ar, linha bloqueada com motivo, confirmação pela peça, escolha, submenu |
+| `antes-do-desenho` | — | o script que aplica o tema e a barra recolhida no `<html>` antes do primeiro desenho (layout raiz) |
+| `link-do-app` | — | o link das peças: `<a>` por padrão, o do framework pelo `ProvedorDeLink` |
+| `chip-de-estado` | badge | o estado em uma palavra (`ChipDeEstado`, `ChipQueAbre`), com a forma única do carimbo |
+| `estado` | — | o ponto de 6px e a palavra |
+| `medalhao-do-icone` | — | o disco com o ícone do assunto |
+| `trilha` | breadcrumb | a trilha de volta da tela de detalhe |
+| `vazio` | empty | a região sem itens diz a causa |
+| `tela-de-erro` | — | a rota ou o bloco que não deu para mostrar |
+| `topo-da-pagina` | — | `PaginaDoApp` e `TopoDaPagina`: o `h1` único, o estado, o primário, o ⋯, o desfecho, os filtros |
+| `seletor-de-vista` | tabs/toggle-group | `BarraDeModos`: abas e modos, a pílula que desliza |
+| `table` | table | a tabela sem filete, a linha inteira que abre |
+| `ficha` | — | pares rótulo/valor |
+| `trilho-do-percurso` | stepper | o percurso de um objeto na Mesa |
+| `logotipo` | — | a marca Wicomm (provisória até o desenho oficial) |
+| `menu-do-tema` | — | claro, escuro ou do sistema; `useTema`, `ScriptDoTema` |
+| `menu-da-conta` | — | o monograma, a conta e Sair |
 
 Nomes: as primitivas do shadcn mantêm o nome do shadcn (`button`, `dialog`); as peças próprias são em português. As props seguem a mesma regra: as do shadcn com o nome do shadcn (`variant`, `size`), as acrescentadas em português (`tamanho`, `voz`, `tom`).
+
+## Os blocos de tela
+
+Os blocos (`registry:block`) são as telas inteiras montadas com as peças: o **casco** e os arquétipos da ANATOMIA (ARQ-01). Cada um traz o componente (puro: recebe a carga por props), os dados de exemplo e uma **página de exemplo no App Router**, que escolhe o estado por `?estado=`. O projeto apaga os dados de exemplo e liga a própria consulta à mesma carga.
+
+| bloco | o que instala | página de exemplo |
+|---|---|---|
+| `casco` | `CascoDoApp` (barra lateral, cabeçalho opcional, região que rola), `BarraLateral`, `CabecalhoDoApp`, a cola do Next (`casco-no-next`) e a navegação de exemplo (`lib/navegacao.ts`) | `app/(casco)/layout.tsx` |
+| `lista` | `ListaDePedidos` e `lib/dados-da-lista.ts` | `app/(casco)/pedidos/page.tsx` |
+| `mesa` | `MesaDoPedido` e `lib/dados-da-mesa.ts` | `app/(casco)/pedidos/[id]/page.tsx` |
+| `entrada` | `TelaDeEntrada` | `app/(tela-inteira)/entrar/page.tsx` |
+
+```bash
+npx shadcn@latest add @wicomm/casco @wicomm/lista @wicomm/mesa @wicomm/entrada
+```
+
+- **O script antes do desenho vai no layout raiz.** `<ScriptsAntesDoDesenho />` (`@wicomm/antes-do-desenho`) no `<head>` do `app/layout.tsx` — no Vite, `CODIGO_ANTES_DO_DESENHO` num `<script>` do `index.html` — aplica o tema guardado e a barra recolhida no `<html>` antes do primeiro desenho, sem clarão nem pulo. Nunca dentro de componente que o cliente desenha: lá o React não executa `<script>`. O `<html>` leva `suppressHydrationWarning`.
+- **Só a cola é do Next.** As peças e os componentes dos blocos não importam `next/*`: o caminho atual entra por prop (ou pelo gancho do roteador, `useCaminhoAtual`) e o link pelo `ProvedorDeLink`. Num app Vite, refaça a cola (`casco-no-next`) com o roteador dele e use os componentes como estão.
+- **As rotas de exemplo** usam nomes reais (`/pedidos`, `/entrar`) para as guardas lerem a topologia certa (a Mesa é tela de detalhe e tem trilha). Num projeto que já tem essas rotas, o `add` pergunta antes de sobrescrever.
+- **O Editor** vem na fatia seguinte.
 
 ## Desenvolver
 
@@ -80,5 +116,7 @@ Os testes:
 | `test/registro.test.mjs` | O estilo carrega todo token do pacote com o mesmo valor; cada arquivo está em uma peça; toda importação está declarada (npm e registro); as versões do npm são as que os testes rodaram; toda peça tem teste dom; nada do produto de origem no que se instala; o `shadcn build` sai na pasta da versão. |
 | `test/*.dom.test.tsx` | O comportamento de cada peça em jsdom: escala e variantes, superfícies, diálogos, dica, aviso, confirmação, ⓘ e menu. |
 | `test/cn.test.ts` | O `cn` conhece os nomes do tema (`text-legenda`, `rounded-ctrl`, `h-ctrl`, `duration-*`, superfícies e vozes). |
-| `tsc --noEmit` | As peças compilam em modo estrito. |
-| `scripts/num-next-vazio.mjs` | (fora do gate) `init` + `add` de cada peça, uma a uma, num Next vazio, e o `next build` de uma página que usa todas. |
+| `test/as-pecas-dos-blocos.dom.test.tsx`, `test/os-blocos.dom.test.tsx` | As peças que os blocos pedem, e cada bloco nos estados da revisão de arquitetura. |
+| `test/guardas-nos-blocos.test.mjs` | As guardas de `@wicomm/guardas` sobre o que o registro instala, no lugar em que o `add` o põe, com base zero; e a prova de que a varredura morde. |
+| `tsc --noEmit` | As peças e os blocos compilam em modo estrito (a cola do Next fica com o `next build`). |
+| `scripts/num-next-vazio.mjs` | (fora do gate) `init` + `add` de cada peça e cada bloco, um a um, num Next vazio, o `next build`, e cada página de exemplo servida com o título dela. |

@@ -7,6 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { GUARDAS } from '../packages/guardas/lib/index.mjs'
 
 const PASTA = join(import.meta.dirname, '..', 'plugins', 'wicomm', 'base')
 const ARQUIVOS = ['DESIGN.md', 'ANATOMIA.md', 'CONVENCOES.md']
@@ -102,10 +103,13 @@ test('o rastreio não tem regra que a base não tem', () => {
   assert.deepEqual([...origens.keys()].filter((c) => !existentes.has(c)), [])
 })
 
-test('toda origem e toda guarda citada foi conferida no repositório de origem', () => {
+// A guarda citada vem do repositório de origem (conferida lá) ou nasceu no pacote @wicomm/guardas.
+const GUARDAS_DO_PACOTE = GUARDAS.map((g) => g.id)
+
+test('toda origem e toda guarda citada foi conferida no repositório de origem ou existe no pacote de guardas', () => {
   const tudo = [...Object.values(texto), rastreio].join('\n')
   const fora = (re, lista) => [...new Set([...tudo.matchAll(re)].map((m) => m[1]))].filter((x) => !lista.includes(x))
   assert.deepEqual(fora(/ADR (\d{4})/g, CONHECIDAS.adr), [], 'ADR citado e não conferido')
   assert.deepEqual(fora(/SPEC-(\d{3})/g, CONHECIDAS.spec), [], 'SPEC citada e não conferida')
-  assert.deepEqual(fora(/guarda:([a-z0-9-]+)/g, CONHECIDAS.guardas), [], 'guarda citada e não conferida')
+  assert.deepEqual(fora(/guarda:([a-z0-9-]+)/g, [...CONHECIDAS.guardas, ...GUARDAS_DO_PACOTE]), [], 'guarda citada e não conferida')
 })

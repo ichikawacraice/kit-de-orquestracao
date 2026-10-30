@@ -688,6 +688,450 @@
           "type": "registry:ui"
         }
       ]
+    },
+    {
+      "name": "antes-do-desenho",
+      "type": "registry:lib",
+      "title": "Antes do desenho",
+      "description": "theme script — o script que aplica o tema guardado e a barra recolhida no <html> antes do primeiro desenho; vai uma vez, no layout raiz (ou no index.html).",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/lib/antes-do-desenho.tsx",
+          "type": "registry:lib"
+        }
+      ]
+    },
+    {
+      "name": "link-do-app",
+      "type": "registry:lib",
+      "title": "Link do app",
+      "description": "link — o link das peças: um <a> por padrão e o do framework (next/link, react-router) quando o app o declara no ProvedorDeLink. É o que mantém as peças valendo em Next e Vite.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/lib/link-do-app.tsx",
+          "type": "registry:lib"
+        }
+      ]
+    },
+    {
+      "name": "chip-de-estado",
+      "type": "registry:ui",
+      "title": "Chip de estado",
+      "description": "badge/status — o estado em uma palavra, com a forma única do carimbo e a voz declarada em tom (CTRL-05); o ChipQueAbre abre o detalhe.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/chip-de-estado.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "estado",
+      "type": "registry:ui",
+      "title": "Estado",
+      "description": "status dot — o marcador mínimo de voz: o ponto de 6px e a palavra, à vista ou só para o leitor de tela.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/estado.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "medalhao-do-icone",
+      "type": "registry:ui",
+      "title": "Medalhão do ícone",
+      "description": "icon badge — o disco com o ícone que diz o assunto antes da leitura; neutro por padrão, tom só para erro, ausência ou recusa.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/medalhao-do-icone.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "trilha",
+      "type": "registry:ui",
+      "title": "Trilha",
+      "description": "breadcrumb — a trilha de volta da tela de detalhe até a lista de onde veio (CASCO-03); o último degrau é a página atual.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/link-do-app"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/trilha.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "vazio",
+      "type": "registry:ui",
+      "title": "Vazio",
+      "description": "empty state — a região sem itens diz a causa (nada ainda, filtro, não se aplica, não informado) e a saída, nunca um ✓ (EST-02).",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/medalhao-do-icone"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/vazio.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "tela-de-erro",
+      "type": "registry:ui",
+      "title": "Tela de erro",
+      "description": "error state — o que não deu para mostrar: a rota inteira (erro, não encontrado, sem permissão) ou um bloco que falhou com a tela de pé.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/medalhao-do-icone",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/tela-de-erro.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "topo-da-pagina",
+      "type": "registry:ui",
+      "title": "Topo da página",
+      "description": "page header — a página dentro do casco (largura e respiro) e o topo dela: trilha, o h1 único, o estado, o primário, o ⋯, o desfecho e os filtros (CASCO-01).",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/topo-da-pagina.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "seletor-de-vista",
+      "type": "registry:ui",
+      "title": "Seletor de vista",
+      "description": "tabs/toggle-group — a troca de vista em duas densidades (abas e modos): trilha de tinta, pílula que desliza, o estado no texto (CTRL-06).",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/seletor-de-vista.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "table",
+      "type": "registry:ui",
+      "title": "Tabela",
+      "description": "table — a tabela em densidade instrumento: linha de 40px, cabeçalho grudado na voz de coluna, sem filete entre linhas, e a linha inteira que abre o objeto.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/link-do-app"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/table.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "ficha",
+      "type": "registry:ui",
+      "title": "Ficha",
+      "description": "description list — pares rótulo/valor numa grade, com o ausente dito como \"não informado\".",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/ficha.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "trilho-do-percurso",
+      "type": "registry:ui",
+      "title": "Trilho do percurso",
+      "description": "stepper — o percurso de um objeto no arquétipo Mesa: as etapas em ordem, cada uma com o estado, e a aberta marcada.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/estado",
+        "@wicomm/secao",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/trilho-do-percurso.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "logotipo",
+      "type": "registry:ui",
+      "title": "Logotipo",
+      "description": "logo — a marca Wicomm no casco e na Entrada, em símbolo e horizontal (provisória até o desenho oficial).",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/logotipo.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "menu-do-tema",
+      "type": "registry:ui",
+      "title": "Menu do tema",
+      "description": "theme switcher — claro, escuro ou do sistema, numa escolha de menu que já é a ação, e o useTema.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/menu",
+        "@wicomm/antes-do-desenho"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/menu-do-tema.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "menu-da-conta",
+      "type": "registry:ui",
+      "title": "Menu da conta",
+      "description": "user menu — o monograma, o nome e o e-mail da pessoa, e as linhas Minha conta e Sair.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/menu"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/menu-da-conta.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "casco",
+      "type": "registry:block",
+      "title": "Casco",
+      "description": "sidebar/app shell — o casco de todo app autenticado: a barra lateral (marca, destinos com ícone e rótulo, recolher, tema e conta), o cabeçalho opcional e a região que rola; com o layout de exemplo do App Router.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/link-do-app",
+        "@wicomm/antes-do-desenho",
+        "@wicomm/idioma-de-cor",
+        "@wicomm/toast",
+        "@wicomm/tooltip",
+        "@wicomm/button",
+        "@wicomm/menu",
+        "@wicomm/chip-de-estado",
+        "@wicomm/logotipo",
+        "@wicomm/menu-do-tema",
+        "@wicomm/menu-da-conta"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/blocks/casco/barra-lateral.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/casco/cabecalho-do-app.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/casco/casco-do-app.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/casco/menu-do-contexto.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/casco/casco-no-next.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/casco/navegacao.ts",
+          "type": "registry:lib"
+        },
+        {
+          "path": "registry/wicomm/blocks/casco/layout.tsx",
+          "type": "registry:page",
+          "target": "app/(casco)/layout.tsx"
+        }
+      ]
+    },
+    {
+      "name": "lista",
+      "type": "registry:block",
+      "title": "Tela de Lista",
+      "description": "list page — o arquétipo Lista (o que pede a minha atenção?): topo com título, modos com contagem, busca e primário; a tabela numa superfície; o vazio que diz a causa. Exemplo com pedidos, dentro do casco.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/casco",
+        "@wicomm/idioma-de-cor",
+        "@wicomm/link-do-app",
+        "@wicomm/button",
+        "@wicomm/chip-de-estado",
+        "@wicomm/input",
+        "@wicomm/painel",
+        "@wicomm/seletor-de-vista",
+        "@wicomm/skeleton",
+        "@wicomm/table",
+        "@wicomm/tela-de-erro",
+        "@wicomm/toast",
+        "@wicomm/topo-da-pagina",
+        "@wicomm/vazio"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/blocks/lista/lista-de-pedidos.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/lista/dados-da-lista.ts",
+          "type": "registry:lib"
+        },
+        {
+          "path": "registry/wicomm/blocks/lista/page.tsx",
+          "type": "registry:page",
+          "target": "app/(casco)/pedidos/page.tsx"
+        }
+      ]
+    },
+    {
+      "name": "mesa",
+      "type": "registry:block",
+      "title": "Tela de Mesa",
+      "description": "detail page — o arquétipo Mesa (em que pé está isto, e o que eu faço agora?): trilha, nome, estado e primário no topo; o trilho do percurso; o conteúdo da etapa; a variante de leitura com abas. Exemplo com um pedido, dentro do casco.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/casco",
+        "@wicomm/lista",
+        "@wicomm/bloco",
+        "@wicomm/button",
+        "@wicomm/chip-de-estado",
+        "@wicomm/estado",
+        "@wicomm/ficha",
+        "@wicomm/menu",
+        "@wicomm/painel",
+        "@wicomm/seletor-de-vista",
+        "@wicomm/skeleton",
+        "@wicomm/table",
+        "@wicomm/tela-de-erro",
+        "@wicomm/toast",
+        "@wicomm/topo-da-pagina",
+        "@wicomm/trilha",
+        "@wicomm/trilho-do-percurso",
+        "@wicomm/vazio",
+        "@wicomm/link-do-app",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/blocks/mesa/mesa-do-pedido.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/mesa/dados-da-mesa.ts",
+          "type": "registry:lib"
+        },
+        {
+          "path": "registry/wicomm/blocks/mesa/page.tsx",
+          "type": "registry:page",
+          "target": "app/(casco)/pedidos/[id]/page.tsx"
+        }
+      ]
+    },
+    {
+      "name": "entrada",
+      "type": "registry:block",
+      "title": "Tela de Entrada",
+      "description": "login page — o arquétipo Entrada (qual é o único passo?): o cartão sozinho no fundo, fora do casco, campos e botão xl, a recusa no próprio cartão.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/card",
+        "@wicomm/input",
+        "@wicomm/label",
+        "@wicomm/logotipo",
+        "@wicomm/menu-do-tema",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/blocks/entrada/tela-de-entrada.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/entrada/page.tsx",
+          "type": "registry:page",
+          "target": "app/(tela-inteira)/entrar/page.tsx"
+        }
+      ]
     }
   ]
 }

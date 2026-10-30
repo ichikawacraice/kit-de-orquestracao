@@ -1,7 +1,7 @@
 {
   "name": "@wicomm/registro",
   "version": "0.1.0",
-  "description": "O registro shadcn da Wicomm: o estilo (tokens) e as peças básicas, instaláveis com npx shadcn add @wicomm/<peça>.",
+  "description": "O registro shadcn da Wicomm: o estilo (tokens) e as pe\u00e7as b\u00e1sicas, instal\u00e1veis com npx shadcn add @wicomm/<pe\u00e7a>.",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,6 +21,7 @@
     "@testing-library/user-event": "14.6.8",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.2.3",
+    "@wicomm/guardas": "*",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "jsdom": "30.1.3",

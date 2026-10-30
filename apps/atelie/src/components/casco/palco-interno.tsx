@@ -18,6 +18,19 @@ export function Palco({ tema, children }: { tema: string; children: React.ReactN
     avisar()
     return () => observador.disconnect()
   }, [])
+  // O tema do palco é o do endereço. Peça que aplica o tema da pessoa no
+  // `<html>` ao montar (o menu do tema, no pé da barra do casco) não o troca.
+  React.useEffect(() => {
+    const html = document.documentElement
+    const escuro = tema === "escuro"
+    const manter = () => {
+      if (html.classList.contains("dark") !== escuro) html.classList.toggle("dark", escuro)
+    }
+    const vigia = new MutationObserver(manter)
+    vigia.observe(html, { attributes: true, attributeFilter: ["class"] })
+    manter()
+    return () => vigia.disconnect()
+  }, [tema])
   return (
     <main ref={ref} data-tema={tema} className="bg-background p-6">
       {children}

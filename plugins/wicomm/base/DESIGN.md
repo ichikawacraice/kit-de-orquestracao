@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.2.0
+versao: 0.3.0
 description: A direção de design dos apps React da Wicomm — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   claro:
@@ -352,8 +352,8 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 ## 5. Layout e ritmo
 
 ### LAY-01 · O casco não rola; o conteúdo rola
-- **Regra.** Raiz `h-screen overflow-hidden`; quem rola é o `<main>`. Barra lateral de **224px** que recolhe para **64px**; recolhe sozinha em tela estreita (< 768px) e em telas declaradas densas, e a largura só anima no gesto do botão (troca de tela e F5 mudam de uma vez). O estado guardado no navegador é lido **depois** da hidratação.
-- **Por quê.** Ler o estado antes da hidratação faz servidor e cliente discordarem, e o React descarta a árvore.
+- **Regra.** Raiz `h-screen overflow-hidden`. Dentro da página, o **topo fica parado** e quem rola é a **região do arquétipo**, pela peça de rolagem do kit (`RolagemDoPainel`); o `<main>` rola só como reserva, quando a janela fica mais baixa que o mínimo da página. Barra lateral de **224px** que recolhe para **64px**; recolhe sozinha em tela estreita (< 768px) e em telas declaradas densas, e a largura só anima no gesto do botão (troca de tela e F5 mudam de uma vez). Abaixo de 768px, a barra aberta passa **por cima** do conteúdo, na camada de gaveta (LAY-05). O estado guardado no navegador é lido **depois** da hidratação; antes dela, um script no `<head>` do layout raiz (no Vite, no `index.html`) marca o `<html>` com a preferência, e a barra se desenha pelo CSS a partir dessa marca — sem pulo no F5.
+- **Por quê.** Ler o estado antes da hidratação faz servidor e cliente discordarem, e o React descarta a árvore; lê-lo só depois, sem a marca, faz a barra nascer larga e encolher no F5. O topo que rola junto leva embora o título e o primário quando a lista desce.
 - **Confere.** Bloco do casco (registro) · `crítica:consistência`.
 
 ### LAY-02 · Largura de página
@@ -491,7 +491,7 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 ### CTRL-09 · Ícones
 - **Regra.** Uma biblioteca: **`lucide-react`**. Ícone de função tem rótulo ao lado (ou `aria-label` quando é botão de ícone com dica). Tamanhos: 14, 16 e 18px; traço padrão da biblioteca. O ícone de IA é a única peça com degradê próprio (`IconeDaIa`), fora da marca e das vozes; usar degradê em outro ícone pede ADR.
 - **Por quê.** Duas bibliotecas de ícone dão dois traços e duas métricas na mesma barra.
-- **Confere.** `guarda` de biblioteca de ícone (aviso na escrita; reprova no CI).
+- **Confere.** `guarda:icone-de-uma-biblioteca` (aviso na escrita; reprova no CI).
 - *Assumida, a confirmar:* os tamanhos 14/16/18 como tokens.
 
 ---

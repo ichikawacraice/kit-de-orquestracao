@@ -29,6 +29,8 @@ export const PISO_DO_PALCO: Record<string, number> = {
   tooltip: 200,
   "dica-de-ajuda": 200,
   "com-motivo": 200,
+  "menu-do-tema": 240,
+  "menu-da-conta": 260,
 }
 
 /**

@@ -1,0 +1,354 @@
+// As peças que os blocos de tela pedem: carimbo de estado, ponto, medalhão,
+// trilha, vazio, tela de erro, topo da página, seletor de vista, tabela, ficha,
+// trilho do percurso, logotipo, menus do tema e da conta, e o link do app.
+import * as React from "react"
+import { describe, expect, it, vi } from "vitest"
+import { fireEvent, render, screen, within } from "@testing-library/react"
+import { InboxIcon } from "lucide-react"
+
+import { LinkDoApp, ProvedorDeLink } from "@/registry/wicomm/lib/link-do-app"
+import { ChipDeEstado, ChipQueAbre } from "@/registry/wicomm/ui/chip-de-estado"
+import { Estado } from "@/registry/wicomm/ui/estado"
+import { Ficha, ParDaFicha } from "@/registry/wicomm/ui/ficha"
+import { Logotipo } from "@/registry/wicomm/ui/logotipo"
+import { MedalhaoDoIcone } from "@/registry/wicomm/ui/medalhao-do-icone"
+import { MenuDaConta, iniciais } from "@/registry/wicomm/ui/menu-da-conta"
+import { MenuDoTema } from "@/registry/wicomm/ui/menu-do-tema"
+import { CODIGO_ANTES_DO_DESENHO, ScriptsAntesDoDesenho } from "@/registry/wicomm/lib/antes-do-desenho"
+import { RolagemDoPainel } from "@/registry/wicomm/ui/painel"
+import { BarraDeModos } from "@/registry/wicomm/ui/seletor-de-vista"
+import { LinkDaLinha, Table, TableBody, TableCell, TableRow } from "@/registry/wicomm/ui/table"
+import { TelaDeErro } from "@/registry/wicomm/ui/tela-de-erro"
+import { PaginaDoApp, TopoDaPagina } from "@/registry/wicomm/ui/topo-da-pagina"
+import { Trilha } from "@/registry/wicomm/ui/trilha"
+import { TrilhoDoPercurso } from "@/registry/wicomm/ui/trilho-do-percurso"
+import { Vazio } from "@/registry/wicomm/ui/vazio"
+
+const classes = (el: Element) => el.className.split(/\s+/)
+
+/** O Radix abre o menu no `pointerdown`; a tecla também abre. */
+const abrir = (gatilho: HTMLElement) => fireEvent.keyDown(gatilho, { key: "Enter" })
+
+describe("o carimbo de estado (CTRL-05, COR-05)", () => {
+  it("tem a forma única do carimbo e declara o tom, sem contorno", () => {
+    render(<ChipDeEstado tom="espera">Aguarda você</ChipDeEstado>)
+    const chip = screen.getByText("Aguarda você")
+    expect(chip.dataset.tom).toBe("espera")
+    expect(classes(chip)).toEqual(expect.arrayContaining(["rounded-md", "px-2", "text-[11px]"]))
+    expect(classes(chip).filter((c) => /^border/.test(c))).toEqual([])
+  })
+
+  it("em curso gira, e para com movimento reduzido (MOV-02)", () => {
+    const { container } = render(
+      <ChipDeEstado tom="neutro" emCurso>
+        Processando
+      </ChipDeEstado>
+    )
+    const giro = container.querySelector("svg")!
+    expect(giro.getAttribute("class")).toContain("motion-reduce:animate-none")
+    expect(giro.getAttribute("aria-hidden")).toBe("true")
+  })
+
+  it("o chip que abre é botão e chama quem abre", () => {
+    const onAbrir = vi.fn()
+    render(
+      <ChipQueAbre tom="espera" onAbrir={onAbrir} aberto={false}>
+        1 pendência
+      </ChipQueAbre>
+    )
+    const botao = screen.getByRole("button", { name: "1 pendência" })
+    expect(botao.getAttribute("aria-expanded")).toBe("false")
+    fireEvent.click(botao)
+    expect(onAbrir).toHaveBeenCalledOnce()
+  })
+})
+
+describe("o ponto de voz (COR-08)", () => {
+  it("a palavra vem sempre — à vista, ou só para o leitor de tela", () => {
+    const { rerender } = render(<Estado tom="ok">Conferido</Estado>)
+    expect(classes(screen.getByText("Conferido"))).not.toContain("sr-only")
+    rerender(
+      <Estado tom="espera" soPonto>
+        com pendência
+      </Estado>
+    )
+    expect(classes(screen.getByText("com pendência"))).toContain("sr-only")
+  })
+})
+
+describe("o medalhão do ícone", () => {
+  it("é enfeite (aria-hidden) e neutro por padrão", () => {
+    const { container } = render(<MedalhaoDoIcone icone={InboxIcon} />)
+    const disco = container.firstElementChild as HTMLElement
+    expect(disco.getAttribute("aria-hidden")).toBe("true")
+    expect(disco.dataset.tom).toBe("neutro")
+  })
+})
+
+describe("o link do app", () => {
+  it("é um <a> sem provedor, e o do framework com ele", () => {
+    const { rerender } = render(<LinkDoApp href="/a">ir</LinkDoApp>)
+    expect(screen.getByRole("link", { name: "ir" }).getAttribute("href")).toBe("/a")
+    const Roteador = ({ href, ...p }: React.ComponentProps<"a">) => <a data-roteador="" href={href} {...p} />
+    rerender(
+      <ProvedorDeLink componente={Roteador}>
+        <LinkDoApp href="/b">ir</LinkDoApp>
+      </ProvedorDeLink>
+    )
+    expect(screen.getByRole("link", { name: "ir" }).hasAttribute("data-roteador")).toBe(true)
+  })
+})
+
+describe("a trilha (CASCO-03)", () => {
+  it("todo degrau é link, menos o último, que é a página atual", () => {
+    render(<Trilha degraus={[{ rotulo: "Pedidos", href: "/pedidos" }, { rotulo: "Pedido 1042" }]} />)
+    const nav = screen.getByRole("navigation", { name: "Trilha" })
+    expect(within(nav).getByRole("link", { name: "Pedidos" }).getAttribute("href")).toBe("/pedidos")
+    expect(within(nav).queryByRole("link", { name: "Pedido 1042" })).toBeNull()
+    expect(screen.getByText("Pedido 1042").getAttribute("aria-current")).toBe("page")
+    expect(nav.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true")
+  })
+})
+
+describe("o vazio diz a causa (EST-02)", () => {
+  it("declara a causa e não tem voz", () => {
+    const { container } = render(
+      <Vazio causa="filtro" icone={InboxIcon} titulo="Nada aqui">
+        O filtro escondeu tudo.
+      </Vazio>
+    )
+    const vazio = container.querySelector('[data-slot="vazio"]') as HTMLElement
+    expect(vazio.dataset.causa).toBe("filtro")
+    expect(container.querySelector('[data-slot="medalhao-do-icone"]')!.getAttribute("data-tom")).toBe("neutro")
+  })
+})
+
+describe("a tela de erro", () => {
+  it("no bloco: alerta, sem título, com Tentar de novo", () => {
+    const tentar = vi.fn()
+    render(
+      <TelaDeErro escala="bloco" onTentarDeNovo={tentar}>
+        Não deu para carregar.
+      </TelaDeErro>
+    )
+    expect(screen.getByRole("alert").textContent).toContain("Não deu para carregar.")
+    expect(screen.queryByRole("heading")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Tentar de novo" }))
+    expect(tentar).toHaveBeenCalledOnce()
+  })
+
+  it("na rota: o h1 da tela, na voz de título da página, nunca tracejada", () => {
+    const { container } = render(
+      <TelaDeErro escala="rota" tipo="sem-permissao" titulo="Pedidos">
+        Sem acesso.
+      </TelaDeErro>
+    )
+    expect(classes(screen.getByRole("heading", { level: 1, name: "Pedidos" }))).toContain("t-display")
+    expect(container.innerHTML).not.toContain("border-dashed")
+  })
+})
+
+describe("o topo da página (CASCO-01, TIPO-04, PESO-01)", () => {
+  it("escreve um h1 só, e as ações à direita na ordem secundária · primário · menu", () => {
+    render(
+      <PaginaDoApp>
+        <TopoDaPagina
+          titulo="Pedidos"
+          secundarias={<button>Exportar</button>}
+          primario={<button>Novo pedido</button>}
+          menu={<button aria-label="Mais ações">⋯</button>}
+        />
+      </PaginaDoApp>
+    )
+    const titulos = screen.getAllByRole("heading", { level: 1 })
+    expect(titulos).toHaveLength(1)
+    expect(classes(titulos[0]!)).toContain("t-display")
+    const nomes = screen.getAllByRole("button").map((b) => b.getAttribute("aria-label") ?? b.textContent)
+    expect(nomes).toEqual(["Exportar", "Novo pedido", "Mais ações"])
+  })
+
+  it("o desfecho ruim é alerta, com a saída; o ok é status", () => {
+    const { rerender } = render(<TopoDaPagina titulo="X" desfecho={{ tom: "ruim", texto: "Não deu.", saida: <button>Tentar de novo</button> }} />)
+    expect(screen.getByRole("alert").textContent).toContain("Tentar de novo")
+    rerender(<TopoDaPagina titulo="X" desfecho={{ tom: "ok", texto: "Feito." }} />)
+    expect(screen.getByRole("status").textContent).toBe("Feito.")
+  })
+
+  it("a página é o contêiner de largura da LAY-02", () => {
+    const { container } = render(<PaginaDoApp>x</PaginaDoApp>)
+    expect(classes(container.firstElementChild!)).toEqual(expect.arrayContaining(["max-w-[100rem]", "px-6"]))
+  })
+})
+
+describe("o seletor de vista (CTRL-06, EST-04)", () => {
+  const modos = [
+    { chave: "a", rotulo: "Pedem você", numero: 3, tom: "espera" as const },
+    { chave: "b", rotulo: "Concluídos", numero: 0 },
+    { chave: "c", rotulo: "Andando", numero: null },
+  ]
+
+  it("abas: tablist com o ativo selecionado; o zero é número e o não contado é —", () => {
+    render(<BarraDeModos rotulo="Fila" densidade="abas" modos={modos} valor="a" onTrocar={() => {}} />)
+    const abas = screen.getAllByRole("tab")
+    expect(screen.getByRole("tablist", { name: "Fila" })).toBeTruthy()
+    expect(abas.map((a) => a.getAttribute("aria-selected"))).toEqual(["true", "false", "false"])
+    expect(abas[1]!.getAttribute("aria-label")).toBe("Concluídos, 0")
+    expect(abas[2]!.textContent).toContain("‒")
+    expect(abas[2]!.getAttribute("aria-label")).toBe("Andando, sem contagem")
+  })
+
+  it("as setas trocam a escolha", () => {
+    const onTrocar = vi.fn()
+    render(<BarraDeModos rotulo="Fila" densidade="abas" modos={modos} valor="a" onTrocar={onTrocar} />)
+    fireEvent.keyDown(screen.getByRole("tablist"), { key: "ArrowRight" })
+    expect(onTrocar).toHaveBeenCalledWith("b")
+    fireEvent.keyDown(screen.getByRole("tablist"), { key: "ArrowLeft" })
+    expect(onTrocar).toHaveBeenLastCalledWith("c")
+  })
+
+  it("modos: um grupo de botões pressionados, que não mente sendo aba", () => {
+    render(<BarraDeModos rotulo="Vista" modos={modos.slice(0, 2)} valor="b" onTrocar={() => {}} />)
+    expect(screen.queryByRole("tab")).toBeNull()
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "true"])
+  })
+
+  it("sem escolha (busca), a primeira aba continua alcançável pelo Tab", () => {
+    render(<BarraDeModos rotulo="Fila" densidade="abas" modos={modos} valor={null} onTrocar={() => {}} />)
+    expect(screen.getAllByRole("tab").map((a) => a.tabIndex)).toEqual([0, -1, -1])
+  })
+})
+
+describe("a tabela (SUP-03, TIPO-03)", () => {
+  it("a linha abre pelo link esticado, a medida é mono, e não há filete", () => {
+    const { container } = render(
+      <Table>
+        <TableBody>
+          <TableRow>
+            <TableCell>
+              <LinkDaLinha href="/pedidos/1">1</LinkDaLinha>
+            </TableCell>
+            <TableCell medida>R$ 1,00</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    )
+    expect(classes(screen.getByRole("link", { name: "1" }))).toContain("after:absolute")
+    expect(classes(screen.getByText("R$ 1,00"))).toContain("t-medida")
+    expect(container.innerHTML).not.toMatch(/\bborder-b\b/)
+  })
+})
+
+describe("a ficha (EST-02)", () => {
+  it("o valor ausente diz não informado", () => {
+    render(
+      <Ficha>
+        <ParDaFicha rotulo="Cliente">Ana</ParDaFicha>
+        <ParDaFicha rotulo="Entrega">{null}</ParDaFicha>
+      </Ficha>
+    )
+    expect(screen.getByText("não informado").previousElementSibling!.textContent).toBe("Entrega")
+  })
+})
+
+describe("o trilho do percurso", () => {
+  it("só a estação atual tem voz; a que vem não abre; a aberta é o passo atual", () => {
+    const onAbrir = vi.fn()
+    const { container } = render(
+      <TrilhoDoPercurso
+        estacoes={[
+          { chave: "a", nome: "Recebido", situacao: "feita" },
+          { chave: "b", nome: "Conferência", situacao: "atual", palavra: "aguarda você", tom: "espera" },
+          { chave: "c", nome: "Envio", situacao: "a-frente" },
+        ]}
+        aberta="b"
+        onAbrir={onAbrir}
+      />
+    )
+    expect(container.querySelectorAll('[data-slot="estado"]')).toHaveLength(1)
+    expect(screen.getByRole("button", { name: /Conferência/ }).getAttribute("aria-current")).toBe("step")
+    expect(screen.queryByRole("button", { name: /Envio/ })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: /Recebido/ }))
+    expect(onAbrir).toHaveBeenCalledWith("a")
+  })
+})
+
+describe("o logotipo", () => {
+  it("é uma imagem chamada Wicomm, e a marca não escreve (MARCA-02)", () => {
+    const { container } = render(<Logotipo />)
+    expect(screen.getByRole("img", { name: "Wicomm" })).toBeTruthy()
+    expect(container.innerHTML).not.toMatch(/text-primary\b|text-marca/)
+  })
+})
+
+describe("a rolagem do painel (LAY-06)", () => {
+  it("o respiro sai de uma de três densidades", () => {
+    const { container } = render(<RolagemDoPainel densidade="compacta">x</RolagemDoPainel>)
+    expect(classes(container.firstElementChild!)).toEqual(expect.arrayContaining(["px-4", "pb-5"]))
+  })
+})
+
+describe("o menu do tema", () => {
+  it("a escolha já é a ação: grava e põe a classe no <html>", () => {
+    localStorage.clear()
+    render(<MenuDoTema>{(tema) => <button>Tema: {tema}</button>}</MenuDoTema>)
+    abrir(screen.getByRole("button", { name: "Tema: sistema" }))
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Escuro" }))
+    expect(localStorage.getItem("wicomm-tema")).toBe("escuro")
+    expect(document.documentElement.classList.contains("dark")).toBe(true)
+    document.documentElement.classList.remove("dark")
+  })
+
+  it("lê o guardado antes de aplicar: o tema não troca por um instante ao montar", () => {
+    localStorage.setItem("wicomm-tema", "escuro")
+    document.documentElement.classList.add("dark")
+    const trocas: boolean[] = []
+    const vigia = new MutationObserver(() => trocas.push(document.documentElement.classList.contains("dark")))
+    vigia.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+    render(<MenuDoTema>{(tema) => <button>Tema: {tema}</button>}</MenuDoTema>)
+    vigia.disconnect()
+    expect(trocas.every(Boolean)).toBe(true)
+    expect(screen.getByRole("button", { name: "Tema: escuro" })).toBeTruthy()
+    document.documentElement.classList.remove("dark")
+    localStorage.clear()
+  })
+})
+
+describe("antes do desenho", () => {
+  it("o código, executado, aplica o tema e a barra guardados no <html>", () => {
+    const html = document.documentElement
+    localStorage.setItem("wicomm-tema", "escuro")
+    localStorage.setItem("wicomm-barra", "recolhida")
+    new Function(CODIGO_ANTES_DO_DESENHO)()
+    expect(html.classList.contains("dark")).toBe(true)
+    expect(html.hasAttribute("data-barra-recolhida")).toBe(true)
+    localStorage.setItem("wicomm-tema", "claro")
+    localStorage.removeItem("wicomm-barra")
+    new Function(CODIGO_ANTES_DO_DESENHO)()
+    expect(html.classList.contains("dark")).toBe(false)
+    expect(html.hasAttribute("data-barra-recolhida")).toBe(false)
+    localStorage.clear()
+  })
+
+  it("o componente é um <script> com esse código, para o layout raiz", () => {
+    const { container } = render(<ScriptsAntesDoDesenho />)
+    expect(container.querySelector("script")!.innerHTML).toBe(CODIGO_ANTES_DO_DESENHO)
+  })
+})
+
+describe("o menu da conta", () => {
+  it("as iniciais, o e-mail sob demanda e Sair", () => {
+    expect(iniciais("Ana Maria Souza")).toBe("AS")
+    expect(iniciais("Ana")).toBe("A")
+    const onSair = vi.fn()
+    render(
+      <MenuDaConta nome="Ana Souza" email="ana@exemplo.com.br" onSair={onSair}>
+        <button>Conta</button>
+      </MenuDaConta>
+    )
+    expect(screen.queryByText("ana@exemplo.com.br")).toBeNull()
+    abrir(screen.getByRole("button", { name: "Conta" }))
+    expect(screen.getByText("ana@exemplo.com.br")).toBeTruthy()
+    fireEvent.click(screen.getByRole("menuitem", { name: "Sair" }))
+    expect(onSair).toHaveBeenCalledOnce()
+  })
+})

@@ -15,7 +15,24 @@ export const NPM = {
 }
 
 const ui = (nome) => ({ path: `registry/wicomm/ui/${nome}.tsx`, type: 'registry:ui' })
-const lib = (nome) => ({ path: `registry/wicomm/lib/${nome}.ts`, type: 'registry:lib' })
+const lib = (nome, ext = 'ts') => ({ path: `registry/wicomm/lib/${nome}.${ext}`, type: 'registry:lib' })
+
+const doBloco = (bloco, nome, type, ext = 'tsx') => ({ path: `registry/wicomm/blocks/${bloco}/${nome}.${ext}`, type })
+const comp = (bloco, nome) => doBloco(bloco, nome, 'registry:component')
+const dados = (bloco, nome) => doBloco(bloco, nome, 'registry:lib', 'ts')
+/** A página de exemplo, no lugar dela no App Router (`target`). Só ela conhece o Next. */
+const pagina = (bloco, nome, target) => ({ ...doBloco(bloco, nome, 'registry:page'), target })
+
+/** Um bloco de tela: componentes, os dados de exemplo e a página que o mostra. */
+const bloco = ({ name, title, description, npm = [], pecas = [], files }) => ({
+  name,
+  type: 'registry:block',
+  title,
+  description,
+  ...(npm.length ? { dependencies: npm } : {}),
+  registryDependencies: ['@wicomm/estilo', ...pecas.map((p) => `@wicomm/${p}`)],
+  files,
+})
 
 /** Uma peça: toda peça depende do estilo, e das outras peças pelo nome no registro. */
 const peca = ({ name, title, description, npm = [], pecas = [], files }) => ({
@@ -158,4 +175,170 @@ export const PECAS = [
     pecas: ['idioma-de-cor', 'confirm-dialog', 'skeleton'],
     files: [ui('menu')],
   }),
+  peca({
+    name: 'antes-do-desenho',
+    title: 'Antes do desenho',
+    description: 'theme script — o script que aplica o tema guardado e a barra recolhida no <html> antes do primeiro desenho; vai uma vez, no layout raiz (ou no index.html).',
+    files: [lib('antes-do-desenho', 'tsx')],
+  }),
+  peca({
+    name: 'link-do-app',
+    title: 'Link do app',
+    description: 'link — o link das peças: um <a> por padrão e o do framework (next/link, react-router) quando o app o declara no ProvedorDeLink. É o que mantém as peças valendo em Next e Vite.',
+    files: [lib('link-do-app', 'tsx')],
+  }),
+  peca({
+    name: 'chip-de-estado',
+    title: 'Chip de estado',
+    description: 'badge/status — o estado em uma palavra, com a forma única do carimbo e a voz declarada em tom (CTRL-05); o ChipQueAbre abre o detalhe.',
+    npm: [NPM.lucide],
+    pecas: ['idioma-de-cor'],
+    files: [ui('chip-de-estado')],
+  }),
+  peca({
+    name: 'estado',
+    title: 'Estado',
+    description: 'status dot — o marcador mínimo de voz: o ponto de 6px e a palavra, à vista ou só para o leitor de tela.',
+    pecas: ['idioma-de-cor'],
+    files: [ui('estado')],
+  }),
+  peca({
+    name: 'medalhao-do-icone',
+    title: 'Medalhão do ícone',
+    description: 'icon badge — o disco com o ícone que diz o assunto antes da leitura; neutro por padrão, tom só para erro, ausência ou recusa.',
+    pecas: ['idioma-de-cor'],
+    files: [ui('medalhao-do-icone')],
+  }),
+  peca({
+    name: 'trilha',
+    title: 'Trilha',
+    description: 'breadcrumb — a trilha de volta da tela de detalhe até a lista de onde veio (CASCO-03); o último degrau é a página atual.',
+    npm: [NPM.lucide],
+    pecas: ['link-do-app'],
+    files: [ui('trilha')],
+  }),
+  peca({
+    name: 'vazio',
+    title: 'Vazio',
+    description: 'empty state — a região sem itens diz a causa (nada ainda, filtro, não se aplica, não informado) e a saída, nunca um ✓ (EST-02).',
+    pecas: ['medalhao-do-icone'],
+    files: [ui('vazio')],
+  }),
+  peca({
+    name: 'tela-de-erro',
+    title: 'Tela de erro',
+    description: 'error state — o que não deu para mostrar: a rota inteira (erro, não encontrado, sem permissão) ou um bloco que falhou com a tela de pé.',
+    npm: [NPM.lucide],
+    pecas: ['button', 'medalhao-do-icone', 'idioma-de-cor'],
+    files: [ui('tela-de-erro')],
+  }),
+  peca({
+    name: 'topo-da-pagina',
+    title: 'Topo da página',
+    description: 'page header — a página dentro do casco (largura e respiro) e o topo dela: trilha, o h1 único, o estado, o primário, o ⋯, o desfecho e os filtros (CASCO-01).',
+    pecas: ['idioma-de-cor'],
+    files: [ui('topo-da-pagina')],
+  }),
+  peca({
+    name: 'seletor-de-vista',
+    title: 'Seletor de vista',
+    description: 'tabs/toggle-group — a troca de vista em duas densidades (abas e modos): trilha de tinta, pílula que desliza, o estado no texto (CTRL-06).',
+    pecas: ['idioma-de-cor'],
+    files: [ui('seletor-de-vista')],
+  }),
+  peca({
+    name: 'table',
+    title: 'Tabela',
+    description: 'table — a tabela em densidade instrumento: linha de 40px, cabeçalho grudado na voz de coluna, sem filete entre linhas, e a linha inteira que abre o objeto.',
+    pecas: ['link-do-app'],
+    files: [ui('table')],
+  }),
+  peca({
+    name: 'ficha',
+    title: 'Ficha',
+    description: 'description list — pares rótulo/valor numa grade, com o ausente dito como "não informado".',
+    files: [ui('ficha')],
+  }),
+  peca({
+    name: 'trilho-do-percurso',
+    title: 'Trilho do percurso',
+    description: 'stepper — o percurso de um objeto no arquétipo Mesa: as etapas em ordem, cada uma com o estado, e a aberta marcada.',
+    npm: [NPM.lucide],
+    pecas: ['estado', 'secao', 'idioma-de-cor'],
+    files: [ui('trilho-do-percurso')],
+  }),
+  peca({
+    name: 'logotipo',
+    title: 'Logotipo',
+    description: 'logo — a marca Wicomm no casco e na Entrada, em símbolo e horizontal (provisória até o desenho oficial).',
+    files: [ui('logotipo')],
+  }),
+  peca({
+    name: 'menu-do-tema',
+    title: 'Menu do tema',
+    description: 'theme switcher — claro, escuro ou do sistema, numa escolha de menu que já é a ação, e o useTema.',
+    npm: [NPM.lucide],
+    pecas: ['menu', 'antes-do-desenho'],
+    files: [ui('menu-do-tema')],
+  }),
+  peca({
+    name: 'menu-da-conta',
+    title: 'Menu da conta',
+    description: 'user menu — o monograma, o nome e o e-mail da pessoa, e as linhas Minha conta e Sair.',
+    npm: [NPM.lucide],
+    pecas: ['menu'],
+    files: [ui('menu-da-conta')],
+  }),
 ]
+
+/**
+ * Os blocos de tela (ANATOMIA CASCO-01, ARQ-01): o casco e os arquétipos, cada
+ * um com uma página de exemplo no App Router. O componente do bloco recebe a
+ * carga por props; a página de exemplo escolhe o estado por `?estado=`.
+ */
+export const BLOCOS = [
+  bloco({
+    name: 'casco',
+    title: 'Casco',
+    description:
+      'sidebar/app shell — o casco de todo app autenticado: a barra lateral (marca, destinos com ícone e rótulo, recolher, tema e conta), o cabeçalho opcional e a região que rola; com o layout de exemplo do App Router.',
+    npm: [NPM.lucide],
+    pecas: ['link-do-app', 'antes-do-desenho', 'idioma-de-cor', 'toast', 'tooltip', 'button', 'menu', 'chip-de-estado', 'logotipo', 'menu-do-tema', 'menu-da-conta'],
+    files: [
+      comp('casco', 'barra-lateral'),
+      comp('casco', 'cabecalho-do-app'),
+      comp('casco', 'casco-do-app'),
+      comp('casco', 'menu-do-contexto'),
+      comp('casco', 'casco-no-next'),
+      dados('casco', 'navegacao'),
+      pagina('casco', 'layout', 'app/(casco)/layout.tsx'),
+    ],
+  }),
+  bloco({
+    name: 'lista',
+    title: 'Tela de Lista',
+    description:
+      'list page — o arquétipo Lista (o que pede a minha atenção?): topo com título, modos com contagem, busca e primário; a tabela numa superfície; o vazio que diz a causa. Exemplo com pedidos, dentro do casco.',
+    npm: [NPM.lucide],
+    pecas: ['casco', 'idioma-de-cor', 'link-do-app', 'button', 'chip-de-estado', 'input', 'painel', 'seletor-de-vista', 'skeleton', 'table', 'tela-de-erro', 'toast', 'topo-da-pagina', 'vazio'],
+    files: [comp('lista', 'lista-de-pedidos'), dados('lista', 'dados-da-lista'), pagina('lista', 'page', 'app/(casco)/pedidos/page.tsx')],
+  }),
+  bloco({
+    name: 'mesa',
+    title: 'Tela de Mesa',
+    description:
+      'detail page — o arquétipo Mesa (em que pé está isto, e o que eu faço agora?): trilha, nome, estado e primário no topo; o trilho do percurso; o conteúdo da etapa; a variante de leitura com abas. Exemplo com um pedido, dentro do casco.',
+    npm: [NPM.lucide],
+    pecas: ['casco', 'lista', 'bloco', 'button', 'chip-de-estado', 'estado', 'ficha', 'menu', 'painel', 'seletor-de-vista', 'skeleton', 'table', 'tela-de-erro', 'toast', 'topo-da-pagina', 'trilha', 'trilho-do-percurso', 'vazio', 'link-do-app', 'idioma-de-cor'],
+    files: [comp('mesa', 'mesa-do-pedido'), dados('mesa', 'dados-da-mesa'), pagina('mesa', 'page', 'app/(casco)/pedidos/[id]/page.tsx')],
+  }),
+  bloco({
+    name: 'entrada',
+    title: 'Tela de Entrada',
+    description:
+      'login page — o arquétipo Entrada (qual é o único passo?): o cartão sozinho no fundo, fora do casco, campos e botão xl, a recusa no próprio cartão.',
+    pecas: ['button', 'card', 'input', 'label', 'logotipo', 'menu-do-tema', 'idioma-de-cor'],
+    files: [comp('entrada', 'tela-de-entrada'), pagina('entrada', 'page', 'app/(tela-inteira)/entrar/page.tsx')],
+  }),
+]
+
