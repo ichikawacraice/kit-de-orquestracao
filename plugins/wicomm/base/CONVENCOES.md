@@ -1,0 +1,207 @@
+---
+name: Wicomm
+versao: 0.1.0
+origem: "repositório de origem, main @ 7b1267cce (30/10/2026)"
+description: As convenções de engenharia do front dos apps React da Wicomm — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
+---
+
+# Convenções do front Wicomm
+
+> A [`DESIGN.md`](DESIGN.md) diz como a tela parece e a [`ANATOMIA.md`](ANATOMIA.md) diz o que vai onde. Este arquivo diz **como o código sustenta as duas**: Tailwind e CSS, estado de tela, formulário, texto de interface, como se escreve uma guarda e como uma tela passa pelo processo de design. Mesmo formato de regra: **Regra · Por quê · Confere · Origem** ([como ler](DESIGN.md#como-ler-uma-regra)).
+>
+> Estas convenções valem para todo app React da Wicomm (Next ou Vite) com Tailwind. Onde Tailwind v3 e v4 diferem, a regra diz as duas.
+
+<a id="css"></a>
+## 1. Tailwind e CSS
+
+### CONV-01 · Cor de tema aceita alfa
+- **Regra.** Toda cor de tema funciona com modificador de alfa (`bg-background/80`). **Tailwind v3:** a cor entra no config como `color-mix(in srgb, var(--x) calc(<alpha-value> * 100%), transparent)`, nunca a var crua. **Tailwind v4:** a cor entra no `@theme` (o v4 compõe o alfa por `color-mix`); um teste confere que a classe com alfa gera regra.
+- **Por quê.** Com a var crua, o v3 não gera regra nenhuma para `bg-background/80`: a classe não existe, o elemento fica sem fundo, e o build e o teste em jsdom passam. Foram 33 regras nesse estado.
+- **Confere.** `guarda` de config (lê o config/tema e reprova a var crua) · `navegador`.
+- **Origem.** Convenção "cor de tema com alfa" · direção de design de origem, Regra do Alfa por `color-mix`.
+
+### CONV-02 · A fonte do produto é a chave `sans`, e a var mora onde a regra a lê
+- **Regra.** A fonte da marca substitui a família `sans` (v3: `theme.extend.fontFamily.sans`; v4: `--font-sans` no `@theme`) — nunca uma chave nova como `archivo`. A variável CSS da fonte é declarada no **`<html>`**, não no `<body>`.
+- **Por quê.** Chave nova só cria um utilitário, e o preflight segue escrevendo a fonte do sistema no `<html>`. `var(--x)` ausente no elemento onde a declaração é resolvida invalida a declaração inteira, e a página vira serifada. Nenhum dos dois aparece em build ou jsdom.
+- **Confere.** `guarda` de fonte · `navegador` (família computada no `<html>`).
+- **Origem.** Convenção "fonte e var no mesmo escopo".
+
+### CONV-03 · Token de cor nunca vale `transparent`
+- **Regra.** Nenhum token de tema tem valor `transparent`. Se a peça não deve ter contorno, não peça contorno.
+- **Por quê.** `transparent` é válido, computa `rgba(0,0,0,0)` e ainda sobrescreve o reset de borda: o elemento fica com **menos** contorno do que sem a classe, e o token parece existir.
+- **Confere.** `tokens` (nenhum valor `transparent`).
+- **Origem.** Convenção "token transparente" · ADR 0126.
+
+### CONV-04 · Nenhum valor solto
+- **Regra.** Em código de tela: nada de `#hex`/`rgb()` literal, `text-[Npx]`, `h-[Npx]`, `rounded-[Npx]`, `duration-NNN`, `z-[N]` fora da escala. O que falta na escala entra no token, com motivo. Exceção local fica listada no projeto, com motivo, e a guarda a lê.
+- **Por quê.** Valor solto não acompanha o próximo ajuste de escala nem o tema; é a deriva lenta que faz dois apps deixarem de parecer da mesma empresa.
+- **Confere.** Hook de aviso do plugin (no momento da escrita) · `guarda` de valor arbitrário com catraca (no CI).
+- **Origem.** ADR 0392 · ADR 0374 · ADR 0344.
+
+### CONV-05 · Escala tirada de largura medida lê a caixa de conteúdo
+- **Regra.** Toda escala, fração ou posição tirada de um nó medido lê `clientWidth`/`clientLeft` — nunca `getBoundingClientRect()`/`offsetWidth` —, e o elemento cuja largura a escala assume declara `box-content`. Largura 0 (jsdom, antes da pintura) não vira divisor: devolve "não dá para concluir".
+- **Por quê.** Com `border-box`, 1px de contorno come 2px de dentro: a escala sai 0,48% adiantada (29px no fim de uma imagem longa), e a conferência ingênua aprova o defeito, porque a caixa de borda devolve o número esperado.
+- **Confere.** Revisão de código · teste com contorno.
+- **Origem.** Convenção "escala e caixa de conteúdo".
+
+<a id="estado"></a>
+## 2. Estado de tela
+
+### CONV-06 · Estado de vista vive no URL e não pede nada ao servidor
+- **Regra.** O que só governa o desenho — item selecionado, aba aberta, coluna expandida — vive no URL para sobreviver ao F5, mas é escrito com `history.replaceState(null, '', url)` por uma função única do projeto, nunca por uma navegação que re-renderiza no servidor (`router.replace` no Next). Navegação de verdade continua sendo `router.push`.
+- **Por quê.** Medido: um clique para mudar a linha destacada custava 1,6 s e baixava 954 KB que o navegador já tinha. O defeito compila, funciona e só demora — por isso só uma varredura o pega. O estado passado tem de ser `null`: com o `history.state` atual, o Next devolve a chamada ao método original.
+- **Confere.** `guarda:estado-de-vista-nao-vai-ao-servidor` (projetos Next).
+- **Origem.** Convenção "estado de vista".
+
+### CONV-07 · Ação assíncrona tem estado visível e sobrevive ao F5
+- **Regra.** Ver ANATOMIA, EST-03. No código: o estado da rodada mora no servidor (banco ou arquivo), nunca em variável de módulo; a tela observa **a ação** (id e estado próprios), nunca um efeito colateral dela; revalida no `visibilitychange`; quem enfileira trabalho observa o que enfileirou.
+- **Por quê.** Variável de módulo evapora no recompile; observar efeito colateral deixa a tela girando quando a ação falhou sem efeito.
+- **Confere.** `guarda` por projeto (quem dispara observa).
+- **Origem.** Convenção "ação assíncrona tem estado visível".
+
+### CONV-08 · O efeito entra na hora, e a recusa desfaz
+- **Regra.** Gesto que grava pode mostrar o efeito na hora (otimista); se o servidor recusa, a tela **desfaz** e diz o motivo no bloco do gesto. Efeito otimista sem caminho de recusa é defeito.
+- **Por quê.** O efeito que fica na tela depois da recusa afirma um estado que o banco não tem.
+- **Confere.** Auditoria de clique · revisão de código.
+- **Origem.** Convenção "o efeito entra na hora, e a recusa desfaz".
+
+<a id="formulario"></a>
+## 3. Formulário
+
+### CONV-09 · O erro de submissão alcança os olhos
+- **Regra.** Falha de validação é desfecho e aparece no ponto do clique: o botão entra em trabalho e volta **junto com** um resumo no bloco dele que diz **quantos** campos pedem conserto (nunca "erro ao salvar") e leva ao primeiro — `.focus()` e depois `scrollIntoView` no primeiro inválido **na ordem do DOM**. Todo campo tem `id` e todo `<label>` o `htmlFor`; campo reprovado declara `aria-invalid` e aponta a mensagem por `aria-describedby`. Campo de lista leva o índice no id, derivado do caminho do erro (`campo-itens-2-nome`).
+- **Por quê.** Uma chave de erro sem nenhum JSX que a lesse deu clique com zero efeito na tela; num formulário de mil linhas não havia um `id`. Toast foi recusado: diz que falhou e não diz onde.
+- **Confere.** `guarda:o-erro-de-submissao-alcanca-os-olhos` cobre a chave de erro com quem a renderize e o desfecho que não sai em cinza; `id`, `htmlFor`, `aria-invalid` e o foco no primeiro inválido ficam com revisão e `navegador` até a guarda própria (fatia de guardas).
+- **Origem.** SPEC-066 · SPEC-062.
+
+### CONV-10 · Confirmação e dica nunca nativas
+- **Regra.** Nada de `window.confirm` (usa `useConfirm`) nem de `title` nativo para coisa importante (usa `Ajuda`, `DicaDeAjuda` ou `ComMotivo`).
+- **Por quê.** O nativo não segue tema, foco nem toque, e o `title` não aparece no teclado nem no celular.
+- **Confere.** `guarda:o-irreversivel-pede-confirmacao` · `guarda` de `title` nativo.
+- **Origem.** SPEC-062 · Do's and Don'ts da direção de origem.
+
+<a id="texto"></a>
+## 4. Texto de interface
+
+### CONV-11 · Texto de interface não cita documento nem identificador interno
+- **Regra.** Ver ANATOMIA, MSG-05. Vale também para log, detalhe de estado e erro que nascem no servidor e chegam à tela. Nome de campo do banco (`item_id`) também não é texto de interface.
+- **Por quê.** Guarda de marcação prova que o texto não cita documento; não prova que ele é legível — e o verde não deve ser lido como se provasse.
+- **Confere.** `guarda` de texto de UI · revisão de texto.
+- **Origem.** Convenção "texto de UI não cita spec/doc".
+
+### CONV-12 · O glossário da tela pode não ser o do código, e o descasamento é declarado
+- **Regra.** Quando a palavra que a pessoa vê difere do nome no código (tabela, rota, tipo), o projeto escreve o par no seu `CLAUDE.md` ou `PRODUCT.md`. Texto de interface usa o glossário da tela; código, o do banco.
+- **Por quê.** Sem o par escrito, a palavra do código vaza para a tela (e vice-versa) a cada tela nova.
+- **Confere.** Revisão de texto.
+- **Origem.** Convenção "o glossário da interface não é o do código".
+
+### CONV-13 · Agente não propõe ação que a tela não tem
+- **Regra.** Todo texto gerado por IA que recomenda algo a quem usa o app enumera as ações que existem de verdade na tela e proíbe o resto. Mudou o que a tela faz, o prompt muda junto.
+- **Por quê.** A IA que sugere um botão que não existe ensina a pessoa a desconfiar da tela.
+- **Confere.** Revisão do prompt junto com a tela.
+- **Origem.** Convenção "agente não propõe ação que a tela não tem".
+
+<a id="guardas"></a>
+## 5. Como se escreve uma guarda
+
+As guardas do pacote Wicomm e as de cada projeto seguem estas regras. Elas valem para qualquer teste que afirma uma regra de design.
+
+### CONV-14 · Guarda prova que achou o que examinar
+- **Regra.** Todo teste que inspeciona um valor ou uma lista de arquivos afirma antes que o insumo **existe e não é vazio** — e o piso fica perto do total real medido, não em "maior que zero".
+- **Por quê.** O vazio não reprova, atravessa: `[].filter(ruim)` devolve `[]`, que é o que o teste espera. Uma guarda dizia examinar âncoras e examinava 59 de 464.
+- **Confere.** Revisão das guardas (toda guarda do pacote tem o caso "o insumo não é vazio").
+- **Origem.** Convenção "guarda com insumo vazio" · convenção "a varredura que força tem piso".
+
+### CONV-15 · Duas coisas que precisam concordar têm algo que force
+- **Regra.** Quando a mesma verdade está em dois lugares (lista de telas × telas com trilha, registro × ateliê, tokens × CSS gerado), ou uma **deriva** da outra, ou um teste lê as duas dos arquivos de verdade e reprova a divergência. Combinar de "manter em dia" não é mecanismo.
+- **Por quê.** Acrescentar na segunda lista não é necessário para compilar nem para passar no teste — só para funcionar. O catálogo que existe para conferir o que jsdom não vê é ele próprio uma lista gêmea, e a mais traiçoeira: a ausência parece catálogo completo.
+- **Confere.** Revisão das guardas.
+- **Origem.** Convenção "duas coisas que precisam concordar".
+
+### CONV-16 · Guarda prova que morde
+- **Regra.** Guarda nova é provada por mutação: muta-se o valor real e vê-se vermelho **na linha certa**. Ler o alvo antes de mutar.
+- **Por quê.** Verde contra um alvo que não existe é indistinguível de prova.
+- **Confere.** O PR da guarda mostra a mutação e o vermelho.
+- **Origem.** Convenção "guarda com insumo vazio".
+
+### CONV-17 · Número que decide é finito e positivo
+- **Regra.** Medida que decide um veredito só se aceita com `Number.isFinite(x) && x > 0` (ou o intervalo declarado).
+- **Por quê.** `NaN <= 0` é falso e `Infinity > 0` é verdadeiro: guarda de polaridade única deixa passar o número que ninguém mediu.
+- **Confere.** Revisão das guardas.
+- **Origem.** Convenção "a varredura que força tem piso e régua de número".
+
+### CONV-18 · Contraste se mede compondo a pilha
+- **Regra.** A medição de contraste no navegador compõe o fundo **real** sob o texto (pilha de hit-test, com alfa), para e declara "não medível" diante de `background-image` ou `filter`, aplica o piso certo (DESIGN, COR-12), e antes de valer prova que enxerga: um caso sabidamente ruim que tem de acusar e um bom que tem de ignorar. Antes e depois na mesma viewport.
+- **Por quê.** Token computa `color(srgb …)`, não `rgb()`; o ponto do texto pode não ser do elemento; a viewport pode vir zerada. Sem a prova nos dois sentidos, "zero defeitos" é indistinguível de "não examinou".
+- **Confere.** A sonda de contraste do ateliê roda os dois casos de prova antes de medir.
+- **Origem.** Convenção "contraste se compõe".
+
+### CONV-24 · Teste que mede uma ausência declara essa ausência
+- **Regra.** Quando o desfecho de um teste depende de algo que o git não versiona — um binário ignorado, uma CLI no PATH, uma variável do shell —, o teste declara esse algo como precondição e a **afirma antes de medir**, pelo ponto de injeção que o código já tem; a afirmação cobre o ramo, não só o desfecho.
+- **Por quê.** O verde passa a significar "esta máquina" e não "este código", e a falha é assimétrica: só reprova para quem tem o arquivo a mais, e nada no relatório nomeia o que decidiu.
+- **Confere.** Revisão das guardas.
+- **Origem.** Convenção "teste que mede uma ausência declara essa ausência".
+
+<a id="processo"></a>
+## 6. O processo de uma tela
+
+### CONV-19 · Quem desenha não julga
+- **Regra.** Toda criação ou mudança de interface começa no agente `designer`, que escreve a **revisão de arquitetura** (tarefa, inventário com a decisão que cada dado gera, arquétipo, hierarquia, lugar de cada mensagem, peças do kit, estados, movimento, o que sai) e **não edita código de tela**. O `critico-de-ui` julga em contexto separado, com no máximo 5 problemas, cada um com *Onde* e *Correção*. Depois do código, nova crítica.
+- **Por quê.** Quem desenhou defende o desenho; o julgamento precisa de outro contexto.
+- **Confere.** Hook do plugin (nega edição de tela ao designer; cobra a crítica uma vez no turno que mudou o visual).
+- **Origem.** ADR 0378.
+
+### CONV-20 · A nota é a porta
+- **Regra.** A crítica dá nota em seis eixos de 0 a 5 — hierarquia, densidade, consistência com o design system, ruído visual, clareza da ação primária, aderência à DESIGN e à ANATOMIA. **24/30 sem ressalva alta** libera o PR da tela; no máximo duas recríticas. Em densidade site, entra o sétimo eixo, *cara de site*, e o teto vira 28/35 (80%).
+- **Por quê.** Um número dá ao dono do produto como comparar telas e projetos; a escala fixa evita a nota que muda de régua por tela.
+- **Confere.** Skill de crítica (forma da entrega) · `/wicomm:estado` (média das últimas críticas).
+- **Origem.** ADR 0378 · ADR 0401 · estudo F261 (seção 1.4, escala da nota).
+
+### CONV-21 · O protótipo aprovado é o contrato
+- **Regra.** Tela com protótipo ou revisão aprovada é implementada **como aprovada**. Mudança de desenho durante a implementação volta à revisão; não se decide no código.
+- **Por quê.** O desenho que muda no código perde a crítica que o aprovou.
+- **Confere.** A crítica pós-código compara a tela com a revisão aprovada.
+- **Origem.** ADR 0129.
+
+### CONV-22 · Ferramenta de terceiros é auxiliar, e sem rede por padrão
+- **Regra.** Detector de anti-padrões de terceiros pode rodar **localmente** como insumo do crítico. Comando que consulta rede ou manda telemetria só roda com ok explícito do projeto. Catálogo de estilo de terceiros não entra (propõe outra marca, outra fonte e padrão de landing page).
+- **Por quê.** O plugin roda em repositório de cliente.
+- **Confere.** Configuração do plugin.
+- **Origem.** ADR 0375 · Q95. *Assumida, a confirmar:* só o detector local.
+
+### CONV-23 · Conferir no ateliê antes de afirmar
+- **Regra.** Todo app Wicomm tem a rota `/atelie` com as peças reais, dados de exemplo, os dois temas lado a lado e `data-vitrine="<nome>"` em cada peça. Mudança de cor, tipo ou peça se confere ali antes do PR (DESIGN, MED-01). A lista de peças do kit e a do ateliê concordam por teste (CONV-15).
+- **Por quê.** Os piores defeitos visuais não aparecem em build nem em jsdom.
+- **Confere.** `guarda` ateliê × kit · crítica.
+- **Origem.** Do's and Don'ts da direção de origem · convenção "duas coisas que precisam concordar".
+
+---
+
+## Índice das regras
+
+| Código | Regra | Confere |
+|---|---|---|
+| CONV-01 | Cor de tema aceita alfa | guarda, navegador |
+| CONV-02 | Fonte é a chave `sans`, var no `<html>` | guarda, navegador |
+| CONV-03 | Token nunca `transparent` | tokens |
+| CONV-04 | Nenhum valor solto | hook, guarda |
+| CONV-05 | Escala lê a caixa de conteúdo | revisão |
+| CONV-06 | Estado de vista no URL, sem servidor | guarda |
+| CONV-07 | Ação assíncrona visível | guarda |
+| CONV-08 | Efeito na hora, recusa desfaz | auditoria, revisão |
+| CONV-09 | Erro de submissão alcança os olhos | guarda |
+| CONV-10 | Confirmação e dica nunca nativas | guarda |
+| CONV-11 | Texto não cita documento | guarda, revisão |
+| CONV-12 | Glossário da tela declarado | revisão |
+| CONV-13 | Agente não propõe ação inexistente | revisão |
+| CONV-14 | Guarda prova que achou | revisão |
+| CONV-15 | Duas coisas concordam por força | revisão |
+| CONV-16 | Guarda prova que morde | PR |
+| CONV-17 | Número finito e positivo | revisão |
+| CONV-18 | Contraste compõe a pilha | sonda |
+| CONV-24 | Teste de ausência declara a ausência | revisão |
+| CONV-19 | Quem desenha não julga | hook |
+| CONV-20 | A nota é a porta | skill |
+| CONV-21 | Protótipo aprovado é contrato | crítica |
+| CONV-22 | Terceiros sem rede por padrão | config |
+| CONV-23 | Conferir no ateliê | guarda, crítica |
