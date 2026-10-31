@@ -33,7 +33,7 @@ Leia as notas de release do sistema entre a versão antiga e a nova (no reposit�
 
 ## 4. Tokens e guardas
 
-Se o projeto usa `@wicomm/tokens` e `@wicomm/guardas`, suba os dois para a versão nova (o gerenciador de pacotes do projeto) e rode as guardas: regra nova entra com catraca, então a contagem atual vira a linha de base e só o que é novo reprova. Pacote não publicado: diga e siga.
+Se o projeto usa `@wicomm/tokens` e `@wicomm/guardas`, suba os dois para a versão nova pelo alias com que foram instalados (`npm install @wicomm/tokens@npm:@wicomm-projects/tokens@<versão> @wicomm/guardas@npm:@wicomm-projects/guardas@<versão>`, com o `.npmrc` do GitHub Packages; nunca `@wicomm/tokens` direto, que iria ao npm público) e rode as guardas: regra nova entra com catraca, então a contagem atual vira a linha de base e só o que é novo reprova. Pacote não publicado: diga e siga.
 
 ## 5. As peças instaladas
 

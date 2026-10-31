@@ -71,6 +71,14 @@ describe('decidir — só arquivo de tela, só aviso', () => {
     assert.equal(decidir(ev('/r/web/src/Tela.tsx', 'h-[34px]'), { ...ctx(), config: () => null }), null);
     assert.equal(decidir(ev('/r/web/src/Tela.tsx', 'h-[34px]'), { ...ctx(), raiz: () => null }), null);
   });
+  it('paleta direto (COR-05) avisa fora do idioma de cor e cala dentro dele', () => {
+    const projeto = { guardas: { regras: { 'o-carimbo-tem-forma': { idioma: './web/src/lib/idioma-de-cor.ts' } } } };
+    const CONFIG_TS = { visual: ['web/src/**/*.ts', 'web/src/**/*.tsx'] };
+    const c = { raiz: () => '/r', config: () => CONFIG_TS, projeto: () => projeto };
+    assert.match(decidir(ev('/r/web/src/Tela.tsx', '<p className="text-zinc-700" />'), c).hookSpecificOutput.additionalContext, /text-zinc-700.*COR-05/);
+    assert.equal(decidir(ev('/r/web/src/lib/idioma-de-cor.ts', "export const OK = 'text-emerald-700'"), c), null);
+    assert.match(decidir(ev('/r/web/src/lib/idioma-de-cor.ts', "export const X = 'text-[#000]'"), c).hookSpecificOutput.additionalContext, /#000/, 'no idioma, o resto continua avisando');
+  });
   it('mais de 8 achados: mostra 8 e conta o resto', () => {
     const muitos = Array.from({ length: 11 }, (_, i) => `h-[${i + 10}px]`).join(' ');
     assert.match(decidir(ev('/r/web/src/Tela.tsx', muitos), ctx()).hookSpecificOutput.additionalContext, /e mais 3/);

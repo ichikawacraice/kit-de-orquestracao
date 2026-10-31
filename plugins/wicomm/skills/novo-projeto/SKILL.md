@@ -46,7 +46,7 @@ E no projeto:
 ## 4. Tokens, peças, casco e guardas — o que já existe
 
 Confira antes de prometer: o pacote `@wicomm/tokens`, o registro shadcn `@wicomm` e o pacote `@wicomm/guardas` são fatias próprias do sistema e podem ainda não estar publicados.
-- **Publicado:** instale os tokens (`@wicomm/tokens`, CSS para Tailwind v4), rode o `shadcn init` com o estilo Wicomm do registro, traga as primitivas e o **casco** (barra lateral, cabeçalho, trilha, título — ANATOMIA, CASCO-01) com o `peca-do-kit`, ligue as guardas no teste com base zero e crie a rota `/atelie` (CONV-23).
+- **Publicado:** instale os tokens e as guardas (publicados como `@wicomm-projects/*` no GitHub Packages da org: o `.npmrc` aponta `@wicomm-projects:registry=https://npm.pkg.github.com` e a instalação é por alias, `npm install @wicomm/tokens@npm:@wicomm-projects/tokens @wicomm/guardas@npm:@wicomm-projects/guardas` — instalar pelo nome `@wicomm/tokens` sozinho iria ao npm público; detalhe em `docs/instalar-pacotes.md` do repositório do sistema) — os tokens são o CSS para Tailwind v4 —, rode o `shadcn init` com o estilo Wicomm do registro, traga as primitivas e o **casco** (barra lateral, cabeçalho, trilha, título — ANATOMIA, CASCO-01) com o `peca-do-kit`, ligue as guardas no teste com base zero e crie a rota `/atelie` (CONV-23).
 - **Ainda não publicado:** não copie peça à mão nem invente token. Escreva o que ficou de fora numa lista "Falta do sistema" no `design/PRODUCT.md` (qual pacote, qual passo) e siga: a base e o processo já valem sem eles.
 
 ## 5. A primeira tela pelo processo

@@ -3,4 +3,4 @@ description: Monta, a partir da auditoria, o plano de padronização para a base
 argument-hint: "[caminho da auditoria]"
 ---
 
-Siga a skill `plano-de-padronizacao` do plugin `wicomm`. Auditoria: `$ARGUMENTS` (vazio = a mais recente em `docs/design/auditoria-*.md`; sem nenhuma, rode antes o `/wicomm:auditar`). Escreva só o plano; não execute fatia nenhuma.
+Siga a skill `plano-de-padronizacao` do plugin `wicomm`. Auditoria: `$ARGUMENTS` (o caminho do arquivo da auditoria, em qualquer pasta; vazio = a mais recente em `docs/design/auditoria-*.md`; sem nenhuma, rode antes o `/wicomm:auditar`). Escreva só o plano; não execute fatia nenhuma.

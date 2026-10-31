@@ -32,10 +32,10 @@ describe('medir-deriva', () => {
     assert.equal(cat['ícone de outra biblioteca (CTRL-09)'], 1);
     assert.deepEqual(Object.fromEntries(m.icones), { 'lucide-react': 1, 'react-icons': 1 });
     assert.deepEqual(Object.fromEntries(m.tamanhosDeFonte), { 'text-sm': 2, 'text-[15px]': 1 });
-    assert.deepEqual(Object.fromEntries(m.raios), { 'rounded-lg': 1, rounded: 1 });
-    assert.deepEqual(Object.fromEntries(m.alturas), { 'h-[34px]': 1, 'h-9': 1 });
-    assert.deepEqual(m.animacaoSemEscape, ['a.tsx'], 'b.tsx tem o escape');
-    assert.deepEqual(m.valorSolto.piores[0], ['a.tsx', 4]);
+    assert.deepEqual(m.raios, [['rounded', 1, 4], ['rounded-lg', 1, 8]], 'o raio em px, pela escala padrão do v3');
+    assert.deepEqual(Object.fromEntries(m.alturas.outra), { 'h-[34px]': 1, 'h-9': 1 });
+    assert.deepEqual(m.animacaoSemEscape.arquivos, [['a.tsx', 1]], 'b.tsx tem o escape');
+    assert.deepEqual(m.valorSolto.piores[0], ['a.tsx', 4, []]);
   });
   it('o projeto inteiro: stack, peças da pasta ui, e larga node_modules, dist e testes', () => {
     const raiz = pasta('deriva');
@@ -215,6 +215,16 @@ describe('estado', () => {
     const md = estadoMd(e);
     assert.match(md, /atrasado/);
     assert.match(md, /2 com deriva/);
+  });
+  it('densidade por rota (app misto) aparece, e o valor inválido é apontado', () => {
+    const raiz = pasta('por-rota');
+    estampar(raiz, { densidade: 'instrumento' });
+    const c = JSON.parse(readFileSync(join(raiz, 'design', 'wicomm.json'), 'utf-8'));
+    c.densidadePorRota = { '/p/*': 'site', '/qa/*': 'denso' };
+    writeFileSync(join(raiz, 'design', 'wicomm.json'), JSON.stringify(c));
+    const e = estado(raiz, versaoDaBase());
+    assert.deepEqual(e.densidadePorRota, { '/p/*': 'site', '/qa/*': 'denso' });
+    assert.match(estadoMd(e), /`\/p\/\*` site, `\/qa\/\*` \*\*denso\*\* \(inválida/);
   });
   it('notas lê só .md e aceita nota em negrito', () => {
     const p = pasta('notas');

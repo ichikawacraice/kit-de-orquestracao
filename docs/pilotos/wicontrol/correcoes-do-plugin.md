@@ -54,3 +54,28 @@ Esta fatia não mexe em `plugins/wicomm/`: o F269 e o F270 trabalham ao lado. Ca
 O §3.2 do estudo ainda põe os tokens antes do Tailwind v4 e fala em "preset v3". A Q640 inverteu a ordem e o plugin já segue a nova. O texto do estudo deve ganhar uma nota apontando para a Q640.
 
 A skill `plano-de-padronizacao` só procura a auditoria em `docs/design/auditoria-*.md`. A do WiControl ficou em `docs/padronizacao-wicomm/`. A skill deve aceitar o caminho como argumento. O plano em fatias, um arquivo por fatia, também funcionou melhor que um plano único para a execução depois, e vale como formato da skill.
+
+## Situação depois do F275 (30/10/2026)
+
+O F275 resolveu as 20 correções do plugin (1 a 20), cada uma com um teste que falha na `main` anterior e passa depois: `plugins/wicomm/scripts/tests/deriva-wicontrol.test.mjs`, sobre o fixture `fixtures/wicontrol/`, e `medidas.test.mjs`. Duas decisões:
+- **6 · contraste no plugin.** Script próprio, `scripts/medir-contraste.mjs`, com cópia da aritmética de `@wicomm/tokens` e da leitura de folha de `@wicomm/guardas`. O plugin é instalado sozinho, sem os pacotes do repositório, então importar não funciona. Um teste de concordância reprova se a cópia andar sem o original.
+- **7 · nota por tela sem navegador.** A skill aceita a nota **por leitura de código**, com a coluna *Fonte* (`tela` ou `código`) obrigatória. O agente não ganhou navegador: ver a tela exige subir o app, e o auditor só lê (no WiControl, o login é o do sistema real).
+
+A medida do WiControl contra a contagem à mão da auditoria:
+
+| Medida | Plugin 0.1.0 | Agora | À mão |
+|---|---|---|---|
+| Valor solto, total | 338 | 453 | cerca de 450 |
+| Cor literal | 24 | 122 | 123 (o 1 que falta é um `#hex` de reserva num `.ts` sem classe) |
+| Arbitrário composto | 0 | 78 | 61 sombras + 15 `grid-cols` + `w-[min(…)]` |
+| Paleta usada direto | 0 | 768 | 767 |
+| Alfa que não gera CSS | 0 | 96 | 95 |
+| Animação sem escape | 31 arquivos | 61 ocorrências em 22 arquivos | 61 em 22 |
+| Variáveis sem uso | — | 24 de 57 | 24 de 57 |
+| Ícones fora de 14/16/18 | — | 61 por uso | 73 pelo par `h-N w-N`, que também conta quadrado que não é ícone |
+| CSS morto | medido | `App.css` fora da medida | `App.css` |
+
+**Ficam para depois:**
+- 21: a ARQ-01 avaliar o arquétipo novo. A skill já pede o mais próximo ao lado do "nenhum".
+- 22 e 23: regra nova na base, que muda a versão. São itens próprios.
+- A nota no §3.2 do estudo sobre a Q640.

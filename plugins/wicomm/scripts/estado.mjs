@@ -54,6 +54,8 @@ export function estado(raiz, versaoDoPlugin = versaoDaBase()) {
     versaoDoPlugin,
     atrasado: Boolean(versao && versao !== versaoDoPlugin),
     densidade: config.densidade ?? null,
+    // App misto (instrumento por dentro, site no link público): a densidade de cada rota, por padrão de caminho.
+    densidadePorRota: config.densidadePorRota && typeof config.densidadePorRota === "object" ? config.densidadePorRota : null,
     base,
     pecas,
     notas: ultimas,
@@ -69,7 +71,7 @@ export function emMarkdown(e) {
     "## Estado no sistema Wicomm",
     "",
     `- **Versão:** ${e.versao ?? "não estampada"} (plugin: ${e.versaoDoPlugin})${e.atrasado ? " — **atrasado**: rode `/wicomm:atualizar`" : ""}`,
-    `- **Densidade:** ${e.densidade ?? "não declarada"}`,
+    `- **Densidade:** ${e.densidade ?? "não declarada"}${e.densidadePorRota ? ` · por rota: ${Object.entries(e.densidadePorRota).map(([rota, d]) => `\`${rota}\` ${["instrumento", "site"].includes(d) ? d : `**${d}** (inválida: instrumento ou site)`}`).join(", ")}` : ""}`,
     `- **Base no projeto:** ${e.base.map((b) => `${b.arquivo} ${b.situacao}`).join(" · ")}`,
     `- **Peças anotadas:** ${e.pecas.length}${editadas.length ? ` — **${editadas.length} com deriva:** ${editadas.map((p) => `${p.nome} (${p.situacao})`).join(", ")}` : e.pecas.length ? " — todas como instaladas" : ""}`,
     `- **Nota das últimas ${e.notas.length} críticas:** ${e.mediaPct === null ? "nenhuma crítica gravada" : `${e.mediaPct}% (teto 80%) ${e.acimaDoTeto ? "— no teto ou acima" : "— **abaixo do teto**"}`}`,
