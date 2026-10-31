@@ -82,7 +82,7 @@ describe('blocos do modelos/CLAUDE.md (K10)', () => {
   test('kit:regras-de-operacao v3 declara o CI só no PR para a main (F298)', () => {
     const b = bloco(t, 'regras-de-operacao');
     assert.ok(b, 'bloco ausente'); assert.equal(b[1], '3');
-    for (const frase of ['CI só no PR para a produção', 'branches: [main]', 'testes afetados', '`exit=0`']) {
+    for (const frase of ['CI só no PR para a produção', 'branches: [main]', 'integração roda só os testes afetados', '`exit=0`', 'espera']) {
       assert.ok(b[2].includes(frase), `kit:regras-de-operacao não diz "${frase}"`);
     }
   });
@@ -93,7 +93,7 @@ describe('blocos do modelos/CLAUDE.md (K10)', () => {
     const dona = ler('dona.md', pool);
     const secao = /<a id="ci-so-na-producao"><\/a>\n## [^\n]+\n([\s\S]*?)(?=\n<a id=|$)/.exec(protocolo);
     assert.ok(secao && secao[1].trim(), 'seção ci-so-na-producao ausente ou vazia no protocolo');
-    for (const frase of ['branches: [main]', '`push:`', 'testes afetados', '`exit=0`', 'Por quê', 'fila de merge']) {
+    for (const frase of ['branches: [main]', '`push:`', 'protegida', 'squash', 'testes afetados', '`exit=0`', 'Por quê', 'espera', 'fila de merge']) {
       assert.ok(secao[1].includes(frase), `a seção não diz "${frase}"`);
     }
     assert.match(dona, /protocolo\.md#ci-so-na-producao/);

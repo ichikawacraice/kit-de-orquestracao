@@ -25,7 +25,7 @@ Lidos de `.claude/kit.json`:
 - **A dona mantém o próprio item no painel** a cada passo (`agora`, etapa, PR); a orquestradora grava ao abrir a dona e ao mergear.
 - **Ninguém rebaseia por merge alheio:** a fila devolve à dona só o conflito real ou o gate vermelho. Rebase em vez de merge commit quando rebasear.
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
-- **CI só no PR para a produção:** o CI (GitHub Actions ou similar) dispara só no `pull_request` contra a `main` (`on: pull_request: branches: [main]`); o PR para a branch de integração roda só os testes afetados, com o comando e a saída (`exit=0`) colados no PR, e o gate da fila protege a integração. Minuto de CI custa e acaba.
+- **CI só no PR para a produção:** o CI (GitHub Actions ou similar) dispara só no `pull_request` contra a `main` (`on: pull_request: branches: [main]`); o PR para a branch de integração roda só os testes afetados, com o comando e a saída (`exit=0`) colados no PR, e o gate da fila protege a integração (CI em todo PR é espera e minuto para repetir o que a fila já mede).
 <!-- /kit:regras-de-operacao -->
 
 <!-- kit:regras-de-trabalho v3 -->
