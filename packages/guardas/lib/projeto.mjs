@@ -20,6 +20,35 @@ export const PADRAO = Object.freeze({
   regras: {},
 })
 
+/**
+ * Os caminhos de um app Next sem `src/` (o `create-next-app` sem `--src-dir`):
+ * tudo na raiz. As `fontes` são toda pasta de código da raiz, e não uma lista
+ * fixa: código em `features/` ou `providers/` que ninguém listou ficaria fora
+ * da conta, verde sem ter sido examinado (CONV-14).
+ */
+export const PADRAO_SEM_SRC = Object.freeze({
+  ...PADRAO,
+  fontes: [],
+  kit: 'components/ui',
+  componentes: 'components',
+  paginas: 'app',
+  css: ['app/globals.css'],
+  aliases: { '@/': '' },
+})
+
+/** Pastas da raiz que não são código do app: docs, a base, o estático, scripts e testes. */
+const FORA_DO_APP = new Set(['public', 'design', 'docs', 'scripts', 'test', 'tests', 'e2e'])
+
+/** O padrão que serve ao projeto: sem `src/` e com `app/` na raiz, o da raiz. */
+function padraoDe(raiz) {
+  if (existsSync(join(raiz, 'src')) || !existsSync(join(raiz, 'app'))) return PADRAO
+  const fontes = readdirSync(raiz, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !PASTAS_FORA.has(e.name) && !FORA_DO_APP.has(e.name))
+    .map((e) => e.name)
+    .sort()
+  return { ...PADRAO_SEM_SRC, fontes }
+}
+
 const PASTAS_FORA = new Set(['node_modules', '.next', 'dist', 'build', 'coverage', '.git', '.turbo'])
 const EH_TESTE = /\.(test|spec)\.[cm]?[jt]sx?$|(^|\/)__tests__\//
 
@@ -34,11 +63,12 @@ export function lerConfig(raiz, caminhoDaConfig) {
   const arquivo = caminhoDaConfig ? resolve(raiz, caminhoDaConfig) : join(raiz, ARQUIVO_DE_CONFIG)
   if (!existsSync(arquivo)) {
     if (caminhoDaConfig) throw new Error(`a configuração ${caminhoDaConfig} não existe`)
-    return { ...PADRAO, origem: null }
+    return { ...padraoDe(raiz), origem: null }
   }
   const lido = JSON.parse(readFileSync(arquivo, 'utf8'))
   const g = lido.guardas ?? {}
-  return { ...PADRAO, ...g, aliases: { ...PADRAO.aliases, ...(g.aliases ?? {}) }, regras: g.regras ?? {}, origem: paraPosix(relative(raiz, arquivo)) }
+  const padrao = padraoDe(raiz)
+  return { ...padrao, ...g, aliases: { ...padrao.aliases, ...(g.aliases ?? {}) }, regras: g.regras ?? {}, origem: paraPosix(relative(raiz, arquivo)) }
 }
 
 export function criarProjeto({ raiz = process.cwd(), config } = {}) {

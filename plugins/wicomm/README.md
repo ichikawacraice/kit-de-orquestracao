@@ -15,7 +15,7 @@ No `.claude/settings.json` do projeto (quem abrir o projeto no Claude Code receb
 }
 ```
 
-Ou, na mão: `/plugin marketplace add wicomm-projects/wicomm-design-system` e `/plugin install wicomm@wicomm`.
+Ou, na mão: `/plugin marketplace add wicomm-projects/wicomm-design-system` e `/plugin install wicomm@wicomm`. No terminal, num projeto novo, os dois escrevem esse mesmo `.claude/settings.json`: `claude plugin marketplace add wicomm-projects/wicomm-design-system --scope project` e `claude plugin install wicomm@wicomm --scope project`. O aviso de "4 userConfig options not yet set" pode ficar: as quatro opções têm padrão, e o `design/wicomm.json` do projeto vence cada uma.
 
 ## O que vem
 

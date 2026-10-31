@@ -37,7 +37,7 @@ A conferência **nunca** escreve a base: no CI o arquivo reescrito se perderia, 
 
 ## Configuração
 
-Na chave `guardas` de `design/wicomm.json`. Sem ela, vale o padrão de um app Next com `src/`:
+Na chave `guardas` de `design/wicomm.json`. Sem ela, vale o padrão de um app Next com `src/`; num app sem `src/` e com `app/` na raiz (o `create-next-app` sem `--src-dir`), o mesmo padrão na raiz (`fontes`: toda pasta de código da raiz, fora `public`, `design`, `docs`, `scripts` e as de teste; `kit: "components/ui"`, `paginas: "app"`, `css: ["app/globals.css"]`, `aliases: { "@/": "" }`). O arquivo do idioma de cor (`o-carimbo-tem-forma`, opção `idioma`) sai do alias `@/`: `src/lib/idioma-de-cor.ts` ou `lib/idioma-de-cor.ts`, onde o registro o instala.
 
 ```json
 {
@@ -78,7 +78,7 @@ E as opções próprias da guarda (a última coluna da tabela). Guarda que não 
 | `a-tela-de-entrada-tem-o-botao-grande` | CTRL-02 | A tela de Entrada tem o botão grande | `telas`, `campos` |
 | `a-tinta-clara-nao-vai-em-texto-pequeno` | COR-05, COR-12 | A tinta clara não vai em texto pequeno, e a voz tem a metade escura | `claro`, `denso` |
 | `a-troca-de-vista-tem-uma-forma` | CTRL-06 | A troca de vista tem uma forma | — |
-| `componente-que-ninguem-monta` | PRIN-05 | Componente que ninguém monta | — |
+| `componente-que-ninguem-monta` | PRIN-05 | Componente que ninguém monta (fora do kit, em PascalCase ou kebab-case) | — |
 | `composicao-tem-grau` | PESO-02, FORMA-01, LAY-03, SUP-03 | A composição tem grau | `blocos`, `assuntos`, `paleta` |
 | `confirmacao-e-dica-nunca-nativas` | CONV-10 | Confirmação e dica nunca nativas | — |
 | `conteudo-mora-em-superficie` | SUP-04 | O conteúdo mora em superfície, e a superfície se declara | `superficies`, `niveis` |

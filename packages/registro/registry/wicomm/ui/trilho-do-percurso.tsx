@@ -14,8 +14,8 @@ type Estacao<T extends string> = {
   situacao: SituacaoDaEstacao
   /** A palavra do estado da estação ATUAL: "aguarda você", "em curso". As outras não levam palavra. */
   palavra?: string
-  /** A voz da estação atual: `espera` (pede você), `neutro` (andando), `ruim` (falhou). */
-  tom?: Extract<Tom, "espera" | "neutro" | "ruim">
+  /** A voz da estação atual: `espera` (pede você), `alheio` (parada com outra pessoa), `neutro` (andando), `ruim` (falhou). */
+  tom?: Extract<Tom, "espera" | "alheio" | "neutro" | "ruim">
 }
 
 /**

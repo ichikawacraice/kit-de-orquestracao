@@ -270,6 +270,17 @@ describe("o trilho do percurso", () => {
     fireEvent.click(screen.getByRole("button", { name: /Recebido/ }))
     expect(onAbrir).toHaveBeenCalledWith("a")
   })
+
+  it("a estação atual que está com outra pessoa fala na voz alheio (COR-03)", () => {
+    const { container } = render(
+      <TrilhoDoPercurso
+        estacoes={[{ chave: "a", nome: "Aprovação", situacao: "atual", palavra: "com o financeiro", tom: "alheio" }]}
+        aberta="a"
+        onAbrir={() => {}}
+      />
+    )
+    expect(container.querySelector('[data-slot="estado"]')!.getAttribute("data-tom")).toBe("alheio")
+  })
 })
 
 describe("o logotipo", () => {

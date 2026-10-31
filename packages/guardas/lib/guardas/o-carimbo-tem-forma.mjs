@@ -3,6 +3,8 @@
 // arquivo só (o idioma de cor) e a voz se declara em `Tom`, nunca num
 // vocabulário paralelo. Foram medidos oito vocabulários de cor e 40 pílulas em
 // 22 construções antes do mapa único.
+import { posix } from 'node:path'
+
 import { escapar, semComentarios } from '../fonte.mjs'
 import { CODIGO, ocorrencias, violacao } from './_comum.mjs'
 
@@ -76,10 +78,12 @@ export default {
   regras: ['CTRL-05', 'COR-03', 'COR-05'],
   titulo: 'O carimbo tem forma, e a voz sai do idioma de cor',
   // `casco`: os nomes que provam que a pílula vem do kit. `idioma`: o arquivo
-  // único onde a voz se escreve com a paleta. `naoSaoVoz`: aliases de tipo que
+  // único onde a voz se escreve com a paleta (sem ele, o `lib/idioma-de-cor.ts`
+  // do alias `@/`, onde o registro o instala). `naoSaoVoz`: aliases de tipo que
   // têm `Tom` no nome e não são voz ({ arquivo, alias, motivo }).
-  padrao: { casco: ['CASCO_DO_CHIP', 'ChipDeEstado'], idioma: 'src/lib/idioma-de-cor.ts', naoSaoVoz: [] },
+  padrao: { casco: ['CASCO_DO_CHIP', 'ChipDeEstado'], naoSaoVoz: [] },
   examinar(p, op) {
+    const idioma = op.idioma ?? posix.join(p.config.aliases['@/'] ?? 'src/', 'lib/idioma-de-cor.ts')
     const fontes = p.fontes({ ext: CODIGO, ignorar: [p.config.kit] })
     const erros = []
     const aceitos = new Set()
@@ -98,7 +102,7 @@ export default {
         for (const { linha, m } of pilulas(codigo)) v.push(violacao(arquivo, linha, 'carimbo montado fora do casco: use ChipDeEstado (CTRL-05)', m[1]))
       }
       for (const { linha, m } of ocorrencias(codigo, MATIZ_DE_FORA)) v.push(violacao(arquivo, linha, 'matiz fora das cinco vozes (COR-03)', m[0]))
-      if (arquivo !== op.idioma) {
+      if (arquivo !== idioma) {
         const deFora = new Set(ocorrencias(codigo, MATIZ_DE_FORA).map(({ m }) => m.index))
         for (const { linha, m } of ocorrencias(codigo, PALETA)) {
           if (!deFora.has(m.index)) v.push(violacao(arquivo, linha, 'cor de voz escrita à mão: componha o idioma de cor (COR-05)', m[0]))

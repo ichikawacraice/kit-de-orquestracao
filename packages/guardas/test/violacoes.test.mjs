@@ -9,7 +9,7 @@ import { apagar, montar } from './_apoio.mjs'
 
 /** Onde cada guarda tem a sua violação plantada; o padrão é `src/telas/<id>.tsx`. */
 const ONDE = {
-  'componente-que-ninguem-monta': ['src/components/Orfao.tsx'],
+  'componente-que-ninguem-monta': ['src/components/Orfao.tsx', 'src/components/orfao-do-registro.tsx'],
   'toda-tela-de-detalhe-tem-trilha': ['src/app/sem-trilha/[id]/page.tsx'],
   'conteudo-mora-em-superficie': ['src/app/solta/page.tsx', 'src/telas/conteudo-mora-em-superficie.tsx'],
   'os-tokens-pagam-o-piso': ['src/app/extra.css'],

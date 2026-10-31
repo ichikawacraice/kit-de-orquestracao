@@ -2,7 +2,7 @@
 // é erro, não verde; exceção sem motivo, exceção velha e desligamento sem
 // motivo também.
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, test } from 'node:test'
@@ -71,4 +71,32 @@ test('a guarda que exige configuração diz o que falta', () => {
   comRegras(raiz, { 'a-tela-de-entrada-tem-o-botao-grande': { telas: [] } })
   const r = verificar({ raiz, so: ['a-tela-de-entrada-tem-o-botao-grande'] })
   assert.match(r.resultados[0].erros.join(' '), /falta configurar "telas"/)
+})
+
+test('app sem src/ (o create-next-app sem --src-dir): o padrão segue a raiz, sem configurar caminho', () => {
+  const raiz = montar()
+  pastas.push(raiz)
+  for (const d of ['app', 'components', 'lib']) renameSync(join(raiz, 'src', d), join(raiz, d))
+  rmSync(join(raiz, 'src'), { recursive: true })
+  const cfg = JSON.parse(ler(raiz, 'design/wicomm.json'))
+  delete cfg.guardas.css
+  cfg.guardas.regras['a-tela-de-entrada-tem-o-botao-grande'].telas = ['components/Entrada.tsx']
+  escrever(raiz, 'design/wicomm.json', JSON.stringify(cfg))
+  const r = verificar({ raiz })
+  assert.equal(r.ok, true, r.relatorio)
+})
+
+test('app sem src/: código numa pasta que o padrão não nomeia também é examinado', () => {
+  const raiz = montar()
+  pastas.push(raiz)
+  for (const d of ['app', 'components', 'lib']) renameSync(join(raiz, 'src', d), join(raiz, d))
+  rmSync(join(raiz, 'src'), { recursive: true })
+  const cfg = JSON.parse(ler(raiz, 'design/wicomm.json'))
+  delete cfg.guardas.css
+  cfg.guardas.regras['a-tela-de-entrada-tem-o-botao-grande'].telas = ['components/Entrada.tsx']
+  escrever(raiz, 'design/wicomm.json', JSON.stringify(cfg))
+  escrever(raiz, 'features/Vidro.tsx', 'export const Vidro = () => <div className="backdrop-blur-sm" />\n')
+  const r = verificar({ raiz })
+  const vidro = r.resultados.find((g) => g.id === 'nada-de-vidro')
+  assert.ok(vidro.violacoes.some((v) => v.arquivo === 'features/Vidro.tsx'), r.relatorio)
 })

@@ -55,10 +55,6 @@ const CONFIG = {
     'a-tela-de-entrada-tem-o-botao-grande': { telas: ['components/tela-de-entrada.tsx'] },
     'o-carimbo-tem-forma': { idioma: 'lib/idioma-de-cor.ts' },
     'o-vocabulario-da-tela': { desligada: 'o registro não tem produto: não há palavra de código diferente da palavra da tela' },
-    // Achado para o pacote de guardas: a guarda só examina arquivo com inicial
-    // maiúscula, e o shadcn nomeia em kebab-case. Aqui, quem prova que todo
-    // arquivo é montado é o teste do registro (cada arquivo numa peça, cada peça importada).
-    'componente-que-ninguem-monta': { desligada: 'só examina nome de arquivo com inicial maiúscula, e o registro shadcn nomeia em kebab-case' },
   },
 }
 

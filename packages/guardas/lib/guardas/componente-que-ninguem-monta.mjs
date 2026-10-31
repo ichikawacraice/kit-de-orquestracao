@@ -1,8 +1,7 @@
 // PRIN-05 — componente antes de layout, e componente escrito que ninguém monta
-// não alcança quem usa. Todo `.tsx` com nome de componente (inicial maiúscula)
-// da pasta de componentes é importado por algum outro arquivo.
-import { posix } from 'node:path'
-
+// não alcança quem usa. Todo `.tsx` da pasta de componentes, fora do kit, é
+// importado por algum outro arquivo — com o nome em PascalCase ou em
+// kebab-case, que é como o registro instala os blocos (`lista-de-pedidos.tsx`).
 import { CODIGO, especificadores, violacao } from './_comum.mjs'
 
 export default {
@@ -11,7 +10,7 @@ export default {
   titulo: 'Componente que ninguém monta',
   padrao: {},
   examinar(p) {
-    const componentes = p.fontes({ ext: /\.[jt]sx$/, em: [p.config.componentes] }).filter((f) => /^[A-Z]/.test(posix.basename(f.arquivo)))
+    const componentes = p.fontes({ ext: /\.[jt]sx$/, em: [p.config.componentes], ignorar: [p.config.kit] })
     const importados = new Set()
     // Quem importa vale de QUALQUER lugar, inclusive do que a guarda ignora:
     // o componente que só o ateliê monta é montado.
