@@ -2,7 +2,7 @@
 
 As guardas de design da Wicomm: testes que leem os arquivos do projeto e reprovam tela fora da base ([`plugins/wicomm/base/`](../../plugins/wicomm/base/)). Rodam no CI, com ou sem Claude, e ligam no dia 1 de um projeto que já existe pela **catraca**. Cada guarda cita pelo código a regra que confere (`SUP-02`, `CTRL-07`).
 
-> **Ainda não publicado.** O pacote é `private` até a fatia de distribuição.
+> **Privado, no GitHub Packages da org `wicomm-projects`.** Como instalar (o `.npmrc` e o token): [`docs/instalar-pacotes.md`](../../docs/instalar-pacotes.md).
 
 ## Uso
 

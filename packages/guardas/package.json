@@ -2,7 +2,16 @@
   "name": "@wicomm/guardas",
   "version": "0.1.0",
   "description": "As guardas de design da Wicomm: testes que leem o projeto e reprovam tela fora da base, com catraca para projeto existente.",
-  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wicomm-projects/wicomm-design-system.git",
+    "directory": "packages/guardas"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
   "type": "module",
   "files": [
     "bin",
