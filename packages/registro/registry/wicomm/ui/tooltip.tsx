@@ -14,7 +14,7 @@ import { cn } from "@/registry/wicomm/lib/utils"
  * desabilitado, deixar isso com o navegador é perder a explicação.
  *
  * Superfície flutuante (SUP-01), raio de dica (10px, FORMA-01), movimento de
- * dica (MOV-01). `Ajuda` é o atalho do caso comum — um gatilho, um texto.
+ * dica (MOV-01). Cabe na tela como todo flutuante (SUP-07). `Ajuda` é o atalho do caso comum — um gatilho, um texto.
  */
 function TooltipProvider({ delayDuration = 200, ...props }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return <TooltipPrimitive.Provider data-slot="tooltip-provider" delayDuration={delayDuration} {...props} />
@@ -33,7 +33,7 @@ function TooltipContent({
   sideOffset = 6,
   collisionPadding = 8,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+}: Omit<React.ComponentProps<typeof TooltipPrimitive.Content>, "avoidCollisions">) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -42,7 +42,7 @@ function TooltipContent({
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={cn(
-          "superficie-flutuante z-50 max-w-xs rounded-lg px-2.5 py-1.5 text-xs text-popover-foreground",
+          "superficie-flutuante z-50 max-h-(--radix-tooltip-content-available-height) max-w-xs overflow-x-hidden overflow-y-auto rounded-lg px-2.5 py-1.5 text-xs text-popover-foreground",
           "data-[state=delayed-open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:duration-dica data-[state=closed]:duration-dica data-[state=delayed-open]:ease-abre data-[state=closed]:ease-fecha motion-reduce:!animate-none",
           className
         )}

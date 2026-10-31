@@ -34,7 +34,7 @@ test('o fixture limpo passa em todas as guardas, e cada uma examinou alguma cois
 test('o fixture de violações planta uma de cada guarda do pacote', () => {
   const plantadas = new Set(GUARDAS.flatMap((g) => onde(g.id)))
   assert.ok(plantadas.size >= GUARDAS.length - 1)
-  assert.equal(GUARDAS.length, 27)
+  assert.equal(GUARDAS.length, 28)
 })
 
 const r = verificar({ raiz: sujo })

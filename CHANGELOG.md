@@ -4,6 +4,19 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.6.0 · 31/10/2026
+
+Camadas: base, registro, guardas
+
+### O que muda
+- Regra nova **SUP-07** (superfície): o que flutua cabe na tela — troca de lado quando falta espaço, para a 8px da borda, limita a altura ao visível e rola por dentro; a troca de lado nunca se desliga.
+- O registro: menu, submenu, seletor e popover ganham a folga de 8px da borda (a dica já tinha); o popover e a dica passam a limitar a altura ao visível e a rolar por dentro; as peças flutuantes deixam de aceitar `avoidCollisions`.
+- Guarda nova **`o-que-flutua-cabe-na-tela`**: reprova `avoidCollisions={false}` e o conteúdo flutuante do Radix montado direto sem limite de altura.
+
+### Migração
+- Atualizar as peças `menu`, `select`, `popover` e `tooltip` do registro (`npx shadcn add` de novo).
+- Projeto com base de catraca: a guarda nova acusa como violação nova o que já existia; conserte (troque o primitivo pela peça do kit, ou acrescente `max-h-(--radix-…-available-height) overflow-y-auto`) ou registre a dívida na base num PR revisado.
+
 ## 0.5.0 · 31/10/2026
 
 Camadas: base, plugin

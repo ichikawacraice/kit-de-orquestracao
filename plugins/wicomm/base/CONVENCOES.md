@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.5.0
+versao: 0.6.0
 description: As convenções de engenharia do front dos apps React da Wicomm — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
 ---
 

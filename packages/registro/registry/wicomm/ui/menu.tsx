@@ -66,6 +66,10 @@ const GatilhoDoMenu = DropdownMenuPrimitive.Trigger
 /**
  * A caixa flutuante. `align` padrão `"end"`, `sideOffset` padrão 4.
  *
+ * Cabe na tela (SUP-07): troca de lado quando falta espaço, para a 8px da
+ * borda (`collisionPadding`) e limita a altura ao que sobra, rolando por
+ * dentro. A troca de lado não se desliga: o `avoidCollisions` não é aceito.
+ *
  * Com `aria-label`, o menu leva esse nome, e não o do gatilho. Se o foco foi
  * movido para outro lugar depois do fechamento (um diálogo, um campo), ele fica
  * onde está; senão volta ao gatilho.
@@ -74,9 +78,10 @@ function ConteudoDoMenu({
   className,
   align = "end",
   sideOffset = 4,
+  collisionPadding = 8,
   onCloseAutoFocus,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: Omit<React.ComponentProps<typeof DropdownMenuPrimitive.Content>, "avoidCollisions">) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -84,6 +89,7 @@ function ConteudoDoMenu({
         data-superficie
         align={align}
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
         className={cn(CAIXA_DO_MENU, className)}
         {...(props["aria-label"] ? { "aria-labelledby": undefined } : {})}
         onCloseAutoFocus={(e) => {
@@ -339,7 +345,7 @@ function SubmenuDoMenu({
         <ChevronRightIcon className="ml-auto size-3.5 text-foreground-2" aria-hidden />
       </DropdownMenuPrimitive.SubTrigger>
       <DropdownMenuPrimitive.Portal>
-        <DropdownMenuPrimitive.SubContent data-superficie sideOffset={4} alignOffset={-6} className={CAIXA_DO_MENU}>
+        <DropdownMenuPrimitive.SubContent data-superficie sideOffset={4} alignOffset={-6} collisionPadding={8} className={CAIXA_DO_MENU}>
           {carregando ? (
             <EsperaDaLista linhas={2} alturaDaLinha="h-[30px] rounded-md" rotulo={rotuloDaEspera} className="gap-0.5" />
           ) : erro ? (

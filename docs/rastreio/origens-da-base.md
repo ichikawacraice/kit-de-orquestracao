@@ -48,6 +48,7 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | SUP-04 | DESIGN.md | ADR 0125 · convenção "conteúdo mora em superfície". |
 | SUP-05 | DESIGN.md | ADR 0125. |
 | SUP-06 | DESIGN.md | ADR 0125 · ADR 0126. |
+| SUP-07 | DESIGN.md | Decisão do dono do produto (pedido do operador, 31/10/2026, F301): o menu de acrescentar seção de um app abria sempre para baixo e, com muitos itens, cortava no fim da tela sem deixar clicar. |
 | FORMA-01 | DESIGN.md | ADR 0344 · direção de design de origem, seção Shapes. *Nota:* a escala segue as classes que as peças de origem usam de fato; os tokens `--raio-cartao` (14) e `--raio-badge` (6) da origem quase não têm uso. O valor de `rounded-md` (8px pelo config, 6px pelo comentário de origem) se decide no navegador, na fatia de tokens. |
 | FORMA-02 | DESIGN.md | Direção de design de origem, Regra da Tracejada. |
 | FORMA-03 | DESIGN.md | ADR 0125. |

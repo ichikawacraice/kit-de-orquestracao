@@ -20,6 +20,7 @@ import { declaracoes, varsDoTema } from '../lib/guardas/os-tokens-pagam-o-piso.m
 import { superficieAMao } from '../lib/guardas/conteudo-mora-em-superficie.mjs'
 import { titulos } from '../lib/guardas/o-titulo-da-pagina-e-um-so.mjs'
 import { TEXTO_DE_ESPERA } from '../lib/guardas/a-espera-nao-e-texto-solto.mjs'
+import { flutuantesQueNaoCabem, nomesDosFlutuantes } from '../lib/guardas/o-que-flutua-cabe-na-tela.mjs'
 
 test('leitura: comentário sai, URL fica, linha se mantém, variante se separa', () => {
   const comBarraEmString = semComentarios('<input accept="image/*" />\n<a href="//cdn.x" className="backdrop-blur-md" />\n/** fim */ <i />')
@@ -173,4 +174,24 @@ test('composição: o gesto que só abre a confirmação destrutiva pode ser gho
   assert.equal(g.examinar(p('<Button variant="ghost">Excluir</Button>'), op).violacoes.length, 1)
   const abre = "const [d, confirmar] = useConfirm()\nasync function x() { await confirmar({}) }\n<Button variant=\"ghost\" onClick={x}>Excluir</Button>"
   assert.equal(g.examinar(p(abre), op).violacoes.length, 0)
+})
+
+test('o que flutua cabe na tela: a troca de lado desligada e o primitivo sem limite acusam; o kit, a constante e o item-aligned não', () => {
+  const msgs = (t) => flutuantesQueNaoCabem(t).map((a) => a.msg.split(':')[0])
+  const pop = 'import { Popover as PopoverPrimitive, Slot } from "radix-ui"\n'
+  assert.deepEqual(nomesDosFlutuantes(pop + 'import * as Dica from "@radix-ui/react-tooltip"\nimport * as Aba from "@radix-ui/react-tabs"'), ['PopoverPrimitive', 'Dica'])
+  assert.deepEqual(msgs('<ConteudoDoMenu avoidCollisions={false} />'), ['troca de lado desligada'])
+  assert.deepEqual(msgs('const o = { avoidCollisions: false }'), ['troca de lado desligada'])
+  assert.deepEqual(msgs('<ConteudoDoMenu avoidCollisions />'), [])
+  assert.deepEqual(msgs('// avoidCollisions={false} saiu'), [])
+  assert.deepEqual(msgs(pop + '<PopoverPrimitive.Content className="w-72" />'), ['PopoverPrimitive.Content sem limite de altura'])
+  assert.deepEqual(msgs('import { DropdownMenu } from "radix-ui"\n<DropdownMenu.SubContent className="p-1">'), ['DropdownMenu.SubContent sem limite de altura'])
+  assert.deepEqual(msgs(pop + '<PopoverPrimitive.Content className="max-h-(--radix-popover-content-available-height) overflow-y-auto" />'), [])
+  assert.deepEqual(msgs(pop + '<PopoverPrimitive.Content style={{ maxHeight: 320 }} />'), [])
+  assert.deepEqual(msgs(pop + 'const CAIXA = "max-h-(--radix-popover-content-available-height)"\n<PopoverPrimitive.Content className={cn(CAIXA, className)} />'), [])
+  assert.deepEqual(msgs(pop + '<PopoverPrimitive.Content className={cn("w-72", className)} />'), ['PopoverPrimitive.Content sem limite de altura'])
+  assert.deepEqual(msgs('import { Select as S } from "radix-ui"\n<S.Content position="item-aligned">'), [])
+  assert.deepEqual(msgs('import { Select as S } from "radix-ui"\n<S.Content className="p-1">'), [])
+  assert.deepEqual(msgs('import { Select as S } from "radix-ui"\n<S.Content position="popper" className="p-1">'), ['S.Content sem limite de altura'])
+  assert.deepEqual(msgs('<PopoverContent className="w-72" />'), [])
 })

@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.5.0
+versao: 0.6.0
 description: A direção de design dos apps React da Wicomm — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   claro:
@@ -416,6 +416,11 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 - **Por quê.** Duas escalas de anel para a mesma ideia é o defeito puro.
 - **Confere.** `guarda` de anel (classes de foco do kit) · `navegador`.
 
+### SUP-07 · O que flutua cabe na tela
+- **Regra.** Todo flutuante ancorado (menu, submenu, seletor, popover, cartão de hover, dica) troca de lado quando falta espaço, para a **8px da borda** da janela (`collisionPadding`) e limita a altura ao espaço visível (`max-h-(--radix-…-available-height)`), rolando por dentro (`overflow-y-auto`). Nunca se desliga a troca de lado (`avoidCollisions={false}`). As peças do kit já cumprem; quem monta o primitivo direto cumpre à mão.
+- **Por quê.** Um menu longo que sempre abre para baixo, aberto perto do fim da tela, corta a lista: as últimas linhas ficam fora da janela e não se clicam. Os testes em jsdom não medem layout, e o defeito só aparece na tela de quem usa.
+- **Confere.** `guarda:o-que-flutua-cabe-na-tela` · `navegador` (o menu longo perto da borda de baixo, no ateliê).
+
 ---
 
 <a id="forma"></a>
@@ -568,6 +573,7 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 | SUP-04 | Superfície se declara | guarda |
 | SUP-05 | Controle sem sombra | crítica, guarda |
 | SUP-06 | Anel só para foco | guarda, navegador |
+| SUP-07 | O que flutua cabe na tela | guarda, navegador |
 | FORMA-01 | O raio sobe com a superfície | tokens, guarda |
 | FORMA-02 | Tracejada é ausência | crítica, guarda |
 | FORMA-03 | Borda não é o padrão | crítica |

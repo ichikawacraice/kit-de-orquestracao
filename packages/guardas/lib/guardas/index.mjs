@@ -19,6 +19,7 @@ import oCarimboTemForma from './o-carimbo-tem-forma.mjs'
 import oErroDeSubmissaoAlcancaOsOlhos from './o-erro-de-submissao-alcanca-os-olhos.mjs'
 import oIrreversivelPedeConfirmacao from './o-irreversivel-pede-confirmacao.mjs'
 import oMovimentoTemEscape from './o-movimento-tem-escape.mjs'
+import oQueFlutuaCabeNaTela from './o-que-flutua-cabe-na-tela.mjs'
 import oRotuloTemDuasVozes from './o-rotulo-tem-duas-vozes.mjs'
 import oTextoDaTelaNaoCitaDocumento from './o-texto-da-tela-nao-cita-documento.mjs'
 import oTituloDaPaginaEUmSo from './o-titulo-da-pagina-e-um-so.mjs'
@@ -48,6 +49,7 @@ export const GUARDAS = [
   oErroDeSubmissaoAlcancaOsOlhos,
   oIrreversivelPedeConfirmacao,
   oMovimentoTemEscape,
+  oQueFlutuaCabeNaTela,
   oRotuloTemDuasVozes,
   oTextoDaTelaNaoCitaDocumento,
   oTituloDaPaginaEUmSo,

@@ -92,6 +92,7 @@ E as opções próprias da guarda (a última coluna da tabela). Guarda que não 
 | `o-erro-de-submissao-alcanca-os-olhos` | CONV-09, MSG-04 | O erro de submissão alcança os olhos | `semCampo` |
 | `o-irreversivel-pede-confirmacao` | PESO-02, CONV-10 | O irreversível pede confirmação | `hooks`, `funcoes` |
 | `o-movimento-tem-escape` | MOV-02 | O movimento tem escape | — |
+| `o-que-flutua-cabe-na-tela` | SUP-07 | O que flutua cabe na tela: a troca de lado não se desliga, e o conteúdo flutuante do Radix montado direto limita a altura | — |
 | `o-rotulo-tem-duas-vozes` | TIPO-02 | O rótulo tem duas vozes, e nenhuma se escreve à mão | — |
 | `o-texto-da-tela-nao-cita-documento` | MSG-05, CONV-11 | O texto da tela não cita documento | — |
 | `o-titulo-da-pagina-e-um-so` | TIPO-04 | O título da página é um só, e é h1 | `voz` |

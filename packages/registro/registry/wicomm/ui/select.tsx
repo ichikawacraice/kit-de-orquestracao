@@ -11,6 +11,9 @@ import { cn } from "@/registry/wicomm/lib/utils"
  * contorno do `Input` —, e a lista abre numa superfície flutuante (SUP-01) com
  * o raio de agrupador (FORMA-01) e o movimento de menu (MOV-01, MOV-02).
  *
+ * A lista cabe na tela (SUP-07): troca de lado, para a 8px da borda e rola
+ * por dentro quando passa da altura que sobra.
+ *
  * Para o `<select>` nativo de um formulário que se submete de uma vez, use
  * `classeDoCampo()` do `input`, não uma cópia destas classes.
  */
@@ -86,8 +89,9 @@ function SelectContent({
   className,
   children,
   position = "popper",
+  collisionPadding = 8,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+}: Omit<React.ComponentProps<typeof SelectPrimitive.Content>, "avoidCollisions">) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
@@ -100,6 +104,7 @@ function SelectContent({
           className
         )}
         position={position}
+        collisionPadding={collisionPadding}
         {...props}
       >
         <SelectScrollUpButton />
