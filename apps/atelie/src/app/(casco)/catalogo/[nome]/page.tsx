@@ -2,10 +2,12 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 
 import { Bloco } from "@/components/ui/bloco"
-import { Button } from "@/components/ui/button"
 import { Comando } from "@/components/casco/comando"
 import { Palcos } from "@/components/casco/palcos"
-import { Trilha } from "@/components/casco/trilha"
+import { Ficha, ParDaFicha } from "@/components/ui/ficha"
+import { Trilha } from "@/components/ui/trilha"
+import { PaginaDaVitrine } from "@/components/vitrine/pagina"
+import { exportsDoItem } from "@/vitrine/kit"
 import { HOST, ITENS, SECOES, VERSAO, descricaoDoItem, itemPeloNome, nomeDaDependencia, secaoDoItem } from "@/catalogo/registro"
 
 export const dynamicParams = false
@@ -31,54 +33,51 @@ export default async function PaginaDoItem({ params }: { params: Promise<{ nome:
     item.type === "registry:style"
       ? `npx shadcn@latest init ${HOST}/r/v${VERSAO}/estilo.json`
       : `npx shadcn@latest add @wicomm/${item.name}`
+  const bloco = secao?.id === "blocos"
+  const destino = bloco ? { rotulo: "Telas", href: "/telas/" } : { rotulo: "Peças", href: "/pecas/" }
   return (
-    <article className="flex max-w-6xl flex-col gap-8">
-      <header className="flex flex-col gap-2">
-        <Trilha passos={[{ rotulo: "Início", href: "/" }, { rotulo: secao?.titulo ?? "Catálogo", href: `/#secao-${secao?.id ?? "pecas"}` }]} />
-        <h1 className="t-display">{item.title}</h1>
-        <p className="max-w-medida text-sm text-foreground-2">{texto}</p>
-      </header>
+    <PaginaDaVitrine titulo={item.title} trilha={<Trilha degraus={[destino, { rotulo: item.title }]} />} abertura={texto}>
+      <Palcos nome={item.name} titulo={item.title} largo={bloco} />
 
-      <Palcos nome={item.name} titulo={item.title} largo={secao?.id === "blocos"} />
-
-      <Bloco titulo="Instalar" nivel={2}>
+      <Bloco titulo="Instalar">
         <Comando texto={comando} />
-        {/* Provisório: vale até `Ficha`/`ParDaFicha` entrarem no registro (PECA-01). */}
-        <dl className="grid items-baseline gap-x-6 gap-y-2 text-controle sm:grid-cols-[max-content_1fr]">
+        <Ficha>
           {equivalente ? (
-            <>
-              <dt className="t-coluna">No shadcn</dt>
-              <dd className="font-mono">{equivalente}</dd>
-            </>
+            <ParDaFicha rotulo="No shadcn" mono>
+              {equivalente}
+            </ParDaFicha>
           ) : null}
-          <dt className="t-coluna">Item</dt>
-          <dd>
-            <Button asChild variant="link" className="font-mono">
-              <a href={`/r/v${VERSAO}/${item.name}.json`}>/r/v{VERSAO}/{item.name}.json</a>
-            </Button>
-          </dd>
-          <dt className="t-coluna">Arquivos</dt>
-          <dd className="font-mono">{item.files.map((f) => f.path.replace(/^registry\/wicomm\//, "")).join(", ")}</dd>
+          {exportsDoItem().get(item.name)?.length ? (
+            <ParDaFicha rotulo="Importa" mono>
+              {exportsDoItem().get(item.name)!.join(", ")}
+            </ParDaFicha>
+          ) : null}
+          <ParDaFicha rotulo="Item" mono>
+            <a href={`/r/v${VERSAO}/${item.name}.json`} className="underline underline-offset-2">
+              /r/v{VERSAO}/{item.name}.json
+            </a>
+          </ParDaFicha>
+          <ParDaFicha rotulo="Arquivos" mono>
+            {item.files.map((f) => f.path.replace(/^registry\/wicomm\//, "")).join(", ")}
+          </ParDaFicha>
           {doRegistro.length > 0 ? (
-            <>
-              <dt className="t-coluna">Traz junto</dt>
-              <dd className="flex flex-wrap gap-x-3">
+            <ParDaFicha rotulo="Traz junto">
+              <span className="flex flex-wrap gap-x-3">
                 {doRegistro.map((d) => (
-                  <Button key={d} asChild variant="link">
-                    <Link href={`/catalogo/${d}/`}>{itemPeloNome(d)?.title ?? d}</Link>
-                  </Button>
+                  <Link key={d} href={`/catalogo/${d}/`} className="underline underline-offset-2">
+                    {itemPeloNome(d)?.title ?? d}
+                  </Link>
                 ))}
-              </dd>
-            </>
+              </span>
+            </ParDaFicha>
           ) : null}
           {item.dependencies?.length ? (
-            <>
-              <dt className="t-coluna">Do npm</dt>
-              <dd className="font-mono">{item.dependencies.join(", ")}</dd>
-            </>
+            <ParDaFicha rotulo="Do npm" mono>
+              {item.dependencies.join(", ")}
+            </ParDaFicha>
           ) : null}
-        </dl>
+        </Ficha>
       </Bloco>
-    </article>
+    </PaginaDaVitrine>
   )
 }

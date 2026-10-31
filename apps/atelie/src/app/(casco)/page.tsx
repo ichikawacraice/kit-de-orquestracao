@@ -1,28 +1,99 @@
 import Link from "next/link"
 
-import { Bloco, VOZ_DO_NOME_DE_BLOCO } from "@/components/ui/bloco"
-import { Comando } from "@/components/casco/comando"
-import { cn } from "@/lib/utils"
+import { Bloco } from "@/components/ui/bloco"
+import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { HOST, ITENS, SECOES, VERSAO, descricaoDoItem, itensDaSecao } from "@/catalogo/registro"
+import { Secao } from "@/components/ui/secao"
+import { Comando } from "@/components/casco/comando"
+import { PaginaDaVitrine } from "@/components/vitrine/pagina"
+import { HOST, VERSAO, itensDaSecao } from "@/catalogo/registro"
+import { todasAsRegras, tabelaDaRegra } from "@/vitrine/base"
+import { GRUPOS_DE_COR } from "@/vitrine/cores"
+import { NOMES_DOS_ICONES } from "@/vitrine/icones"
+import { mudancas } from "@/vitrine/mudancas"
+import { DESTINOS } from "@/vitrine/navegacao"
+import { TOKENS } from "@/vitrine/tokens"
 
 const COMPONENTS_JSON = `"registries": {
   "@wicomm": "${HOST}/r/v${VERSAO}/{name}.json"
 }`
 
-export default function Inicio() {
-  return (
-    <div className="flex max-w-6xl flex-col gap-8">
-      <header className="flex flex-col gap-2">
-        <h1 className="t-display">Ateliê Wicomm</h1>
-        <p className="max-w-medida text-sm text-foreground-2">
-          Todas as peças do registro, vivas, nos dois temas. O ateliê monta a si mesmo com elas, e serve o registro que os
-          projetos instalam: {ITENS.length} itens na versão {VERSAO}.
-        </p>
-      </header>
+/** A pergunta que cada destino responde, e quanto há lá. */
+function portas(): Record<string, { pergunta: string; contagem: string }> {
+  const n = (x: number, um: string, varios: string) => `${x} ${x === 1 ? um : varios}`
+  const movimento = [TOKENS.duracoes, TOKENS.atrasos, TOKENS.curvas, TOKENS.animacoes].reduce((s, o) => s + Object.keys(o).length, 0)
+  return {
+    "/cores": { pergunta: "Que cor uso, e ela passa sobre este fundo?", contagem: n(GRUPOS_DE_COR.flatMap((g) => g.cores).length, "cor", "cores") },
+    "/tipografia": { pergunta: "Que voz tem este texto?", contagem: n(Object.keys(TOKENS.vozes).length, "voz", "vozes") },
+    "/espaco-e-forma": { pergunta: "Que espaço, raio e altura?", contagem: n(Object.keys(TOKENS.raios).length, "raio", "raios") },
+    "/superficie": { pergunta: "Em que altura isto mora?", contagem: "3 alturas" },
+    "/movimento": { pergunta: "Quanto dura, e com que curva?", contagem: n(movimento, "token", "tokens") },
+    "/icones": { pergunta: "Que glifo tem esta função?", contagem: n(NOMES_DOS_ICONES.length, "ícone", "ícones") },
+    "/pecas": { pergunta: "Que peça cumpre esta função, e como instalo?", contagem: n(itensDaSecao("pecas").length + itensDaSecao("fundamentos").length, "peça", "peças") },
+    "/telas": { pergunta: "Que tipo de tela é a minha?", contagem: n(itensDaSecao("blocos").length, "bloco", "blocos") },
+    "/padroes": { pergunta: "Onde ponho esta mensagem?", contagem: n(tabelaDaRegra("MSG-01").linhas.length, "lugar", "lugares") },
+    "/regras": { pergunta: "O que a base exige, e por quê?", contagem: n(todasAsRegras().length, "regra", "regras") },
+    "/mudancas": { pergunta: "O que mudou desde a minha versão?", contagem: n(mudancas().length, "versão", "versões") },
+  }
+}
 
-      <Bloco titulo="Num projeto novo" nivel={2} recolhivel resumo="3 passos: o estilo, o registro, as peças" abertoPorPadrao={false}>
-        {/* Provisório: vale até `Passos`/`Passo` entrarem no registro (PECA-01). */}
+export default function Inicio() {
+  const doDestino = portas()
+  const [atual] = mudancas()
+  const destaques = atual ? [...atual.muda.matchAll(/<li>([\s\S]*?)<\/li>/g)].slice(0, 1).map((m) => m[1]!) : []
+  return (
+    <PaginaDaVitrine
+      titulo="Ateliê Wicomm"
+      abertura="O design system da Wicomm: os valores, as peças, as telas e as regras, vivos nos dois temas."
+    >
+      <div className="grid gap-6 xl:grid-cols-[1fr_16rem]">
+        <div className="flex min-w-0 flex-col">
+          {DESTINOS.filter((g) => g.rotulo).map((g, i) => (
+            <Secao key={g.rotulo} titulo={g.rotulo!} nivel={2} primeira={i === 0}>
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {g.destinos.map((d) => {
+                  const p = doDestino[d.href]
+                  const Icone = d.icone
+                  return (
+                    <li key={d.href}>
+                      <Link href={`${d.href}/`} className="block h-full rounded-cartao focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+                        <Card className="h-full transition-shadow duration-cor hover:superficie-alta motion-reduce:transition-none">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <Icone aria-hidden="true" className="size-4.5 text-foreground-2" />
+                              {d.rotulo}
+                            </CardTitle>
+                            <CardDescription>{p?.pergunta}</CardDescription>
+                            <span className="t-medida text-legenda text-muted-foreground">{p?.contagem}</span>
+                          </CardHeader>
+                        </Card>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </Secao>
+          ))}
+        </div>
+        <Bloco titulo="O que mudou" legenda={atual ? `v${atual.versao} · ${atual.data}` : undefined}>
+          {atual ? (
+            <>
+              <ul className="flex flex-col gap-2 text-sm text-foreground-2">
+                {destaques.map((h, i) => (
+                  <li key={i} dangerouslySetInnerHTML={{ __html: h }} />
+                ))}
+              </ul>
+              <Button asChild variant="link" className="self-start px-0">
+                <Link href="/mudancas/">Todas as mudanças</Link>
+              </Button>
+            </>
+          ) : (
+            <p className="t-denso text-muted-foreground">Ainda não há versão registrada.</p>
+          )}
+        </Bloco>
+      </div>
+
+      <Bloco titulo="Num projeto novo" recolhivel resumo="3 passos: o estilo, o registro, as peças" abertoPorPadrao={false}>
         <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm text-foreground-2">
           <li>
             O estilo:
@@ -38,36 +109,6 @@ export default function Inicio() {
           </li>
         </ol>
       </Bloco>
-
-      {SECOES.map((secao) => {
-        const itens = itensDaSecao(secao.id)
-        return (
-          <section key={secao.id} id={`secao-${secao.id}`} aria-labelledby={`titulo-${secao.id}`} className="flex scroll-mt-8 flex-col gap-2">
-            <h2 id={`titulo-${secao.id}`} className={cn(VOZ_DO_NOME_DE_BLOCO, "px-1")}>
-              {secao.titulo}
-              <span className="ml-2 text-xs font-normal text-muted-foreground">{itens.length}</span>
-            </h2>
-            {itens.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{secao.vazio}</p>
-            ) : (
-              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {itens.map((item) => (
-                  <li key={item.name}>
-                    <Link href={`/catalogo/${item.name}/`} className="block h-full rounded-cartao focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
-                      <Card className="h-full transition-shadow duration-cor hover:superficie-alta">
-                        <CardHeader>
-                          <CardTitle>{item.title}</CardTitle>
-                          <CardDescription className="line-clamp-2">{descricaoDoItem(item).texto}</CardDescription>
-                        </CardHeader>
-                      </Card>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )
-      })}
-    </div>
+    </PaginaDaVitrine>
   )
 }

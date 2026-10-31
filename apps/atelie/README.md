@@ -1,8 +1,8 @@
 # Ateliê Wicomm (`apps/atelie`)
 
-O catálogo vivo do design system: toda peça do registro ([`@wicomm/registro`](../../packages/registro/README.md)) montada de verdade, nos dois temas lado a lado, e o próprio registro servido em `/r/v{versao}/*.json` — a URL que o `components.json` dos projetos aponta.
+A vitrine do design system da Wicomm — os fundamentos (cores com o contraste de cada par, tipografia, espaço e forma, superfície, movimento, ícones), as peças e as telas montadas, os padrões (onde mora cada mensagem, a peça de cada função), as regras da base com o porquê e as mudanças por versão — e o catálogo vivo: toda peça do registro ([`@wicomm/registro`](../../packages/registro/README.md)) montada de verdade, nos dois temas lado a lado, e o próprio registro servido em `/r/v{versao}/*.json` — a URL que o `components.json` dos projetos aponta.
 
-> **Ainda não publicado.** Roda local (`npm run dev`) e gera um site estático (`npm run build` → `out/`). A publicação com acesso protegido é outra fatia.
+> **Ainda não publicado.** Roda local (`npm run dev`) e gera um site estático (`npm run build` → `out/`). Como publicar, com acesso protegido: [`docs/publicar-atelie.md`](../../docs/publicar-atelie.md).
 
 ## Rodar
 
@@ -27,17 +27,21 @@ npm test -w @wicomm/atelie        # o gate do app (abaixo)
 
 Peça ou bloco novo no `registry.json` aparece sozinho na navegação, mas **o gate reprova até ele ter demonstração**: escreva `src/catalogo/demos/{nome}.tsx` (export default, sem props) e registre no mapa de `demos.ts`.
 
-### Espaço para a vitrine
+### A vitrine
 
-A vitrine completa (cores com contraste, tipografia, movimento, ícones, regras, changelog) entra como páginas novas em `src/app/(casco)/` e uma seção a mais em `SECOES` — o casco e a navegação já são por seção.
+- **O casco é o do kit** (`blocks/casco`, sem conta), com os destinos em [`src/vitrine/navegacao.ts`](src/vitrine/navegacao.ts). Cada página monta `PaginaDaVitrine` ([`src/components/vitrine/pagina.tsx`](src/components/vitrine/pagina.tsx)): o topo parado e o conteúdo que rola.
+- **Nada é copiado à mão da fonte.** Os tokens vêm do `tokens.json` de `@wicomm/tokens`, e a conta de contraste é a do pacote ([`src/vitrine/tokens.ts`](src/vitrine/tokens.ts)); as regras, a matriz das mensagens e a peça de cada função saem dos `.md` da base, lidos no build ([`src/vitrine/base.ts`](src/vitrine/base.ts)); as mudanças, do [`CHANGELOG.md`](../../CHANGELOG.md) da raiz. O que é escrito à mão (o papel de cada cor, os pares de contraste, a função de cada ícone, as classes de movimento) tem teste que o compara com a fonte.
+- **Todo token e toda regra têm lugar.** Cada amostra de token leva `data-token="<grupo>:<nome>"`, e cada regra leva `id="<CÓDIGO>"` em `/regras/{arquivo}/`. O `scripts/conferir-saida.mjs` cruza a saída do build com o `tokens.json` e com a base: token sem página, token que o pacote não tem, regra sem âncora ou fora do índice reprovam.
+- **Estado de vista no endereço** (`?q=`, `?movimento=reduzido`): lido depois de montar, para a página estática nascer inteira no HTML.
 
 ## O gate (`npm test`)
 
 | passo | o que prova |
 |---|---|
+| `vitest run` (`test/vitrine.test.ts`) | A base lida inteira (toda regra com os três campos, links entre regras que existem); as listas da vitrine iguais às da fonte (classes de movimento, cores por grupo, ícones do registro); os pares de contraste medem e pagam o piso; a versão da base tem entrada no `CHANGELOG.md`. |
 | `vitest run` (`test/catalogo.test.tsx`) | O `registry.json` lido é o que o registro gera; **todo item do registro tem demonstração e toda demonstração é de um item**; todo item cai numa seção; cada demonstração monta em jsdom sem erro. |
 | `tsc --noEmit` | O app e as peças compilam em modo estrito. |
 | `wicomm-guardas` | As guardas de design no próprio ateliê, com a configuração de [`design/wicomm.json`](design/wicomm.json) (as desligadas dizem por quê). |
-| `npm run build` | O export estático, e `scripts/conferir-saida.mjs`: cada item tem o JSON em `out/r/v{versao}/`, a página do catálogo e os dois palcos. |
+| `npm run build` | O export estático, e `scripts/conferir-saida.mjs`: cada item tem o JSON em `out/r/v{versao}/`, a página do catálogo e os dois palcos; todo token tem página e toda regra tem âncora. |
 
 A fonte é a Archivo com o eixo de largura (`@fontsource-variable/archivo`, servida pelo próprio app): o build não depende de rede.

@@ -40,7 +40,13 @@ function UmPalco({ src, rotulo, tema, piso }: { src: string; rotulo: string; tem
   }, [src, piso])
   return (
     <figure className="flex min-w-0 flex-col gap-2">
-      <figcaption className="t-coluna">{tema}</figcaption>
+      <figcaption className="flex items-center justify-between gap-3">
+        <span className="t-coluna">{tema}</span>
+        {/* A largura real: o palco tem a largura da página, e o bloco desenha dentro dele a própria barra. */}
+        <a href={src} target="_blank" rel="noreferrer" className="text-legenda text-foreground-2 underline underline-offset-2 hover:text-foreground">
+          Abrir em tela inteira
+        </a>
+      </figcaption>
       {/* A janela é diagrama, não peça: linha de 1px, sem sombra — a peça de dentro é que se levanta. */}
       <iframe src={src} title={rotulo} style={{ height: altura }} className="w-full rounded-cartao bg-background ring-1 ring-border" />
     </figure>

@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
 import type { ReactNode } from "react"
 
+import { CODIGO_ANTES_DO_DESENHO } from "@/lib/antes-do-desenho"
+
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -9,16 +11,13 @@ export const metadata: Metadata = {
 }
 
 /**
- * O tema escolhe-se antes da pintura: o palco escuro (`/palco/escuro/…`) é
- * sempre escuro; o resto segue o que a pessoa escolheu no casco, guardado no
- * navegador.
+ * O tema e a barra recolhida escolhem-se antes da pintura (o script do kit). O
+ * palco (`/palco/{tema}/…`) é a exceção: o tema dele é o do endereço.
  */
 const TEMA_ANTES_DA_PINTURA = `(() => {
-  try {
-    const p = location.pathname
-    const escuro = p.startsWith("/palco/") ? p.startsWith("/palco/escuro/") : localStorage.getItem("atelie-tema") === "escuro"
-    document.documentElement.classList.toggle("dark", escuro)
-  } catch {}
+  const p = location.pathname
+  if (p.startsWith("/palco/")) document.documentElement.classList.toggle("dark", p.startsWith("/palco/escuro/"))
+  else { ${CODIGO_ANTES_DO_DESENHO} }
 })()`
 
 export default function RootLayout({ children }: { children: ReactNode }) {

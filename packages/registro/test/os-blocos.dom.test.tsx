@@ -97,6 +97,20 @@ describe("o casco (CASCO-01, LAY-01, CTRL-08)", () => {
     expect(localStorage.getItem("wicomm-barra")).toBeNull()
   })
 
+  it("com conta, o pé tem o botão da conta; sem conta (app sem login), o pé fica com recolher e tema, e o resto é igual", () => {
+    const pe = (c: HTMLElement) => [...c.querySelectorAll("aside > div:last-child > *")].map((e) => e.getAttribute("aria-label") ?? e.textContent)
+    const com = render(<BarraLateral grupos={DESTINOS} caminhoAtual="/pedidos" conta={conta} />)
+    expect(screen.getByRole("button", { name: "Conta de Ana Souza" })).toBeTruthy()
+    const peComConta = pe(com.container)
+    const destinosCom = com.container.querySelector("nav")!.innerHTML
+    com.unmount()
+    const sem = render(<BarraLateral grupos={DESTINOS} caminhoAtual="/pedidos" />)
+    expect(screen.queryByRole("button", { name: /^Conta de / })).toBeNull()
+    // O pé sem conta é o pé com conta menos o último item; os destinos não mudam.
+    expect(pe(sem.container)).toEqual(peComConta.slice(0, -1))
+    expect(sem.container.querySelector("nav")!.innerHTML).toBe(destinosCom)
+  })
+
   it("a contagem do exemplo não discorda da tela, e sem permissão o destino some", () => {
     expect(navegacaoDoExemplo("/pedidos", null).contagens["/pedidos"]!.numero).toBe(3)
     expect(navegacaoDoExemplo("/pedidos", "vazio").contagens).toEqual({})

@@ -172,7 +172,8 @@ function BarraLateral({
   caminhoAtual: string
   /** A contagem de cada destino, pelo `href`. */
   contagens?: Record<string, Contagem>
-  conta: Conta
+  /** A pessoa logada. O app sem login (o acesso protegido fora dele) não passa, e o pé fica com recolher e tema. */
+  conta?: Conta
   recolherNestaTela?: boolean
 }) {
   const estreita = useTelaEstreita()
@@ -304,12 +305,14 @@ function BarraLateral({
               )
             }}
           </MenuDoTema>
-          <MenuDaConta nome={conta.nome} email={conta.email} onAbrirConta={conta.onAbrirConta} onSair={conta.onSair} lado={lado}>
-            <button type="button" aria-label={`Conta de ${conta.nome}`} className={linha}>
-              <Monograma nome={conta.nome} />
-              {recolhida ? null : <span className={cn(texto, "text-foreground")}>{conta.nome}</span>}
-            </button>
-          </MenuDaConta>
+          {conta ? (
+            <MenuDaConta nome={conta.nome} email={conta.email} onAbrirConta={conta.onAbrirConta} onSair={conta.onSair} lado={lado}>
+              <button type="button" aria-label={`Conta de ${conta.nome}`} className={linha}>
+                <Monograma nome={conta.nome} />
+                {recolhida ? null : <span className={cn(texto, "text-foreground")}>{conta.nome}</span>}
+              </button>
+            </MenuDaConta>
+          ) : null}
         </div>
       </aside>
     </>

@@ -63,7 +63,8 @@ function CascoDoApp({
    * não segura a tela inteira, e enquanto isso a barra se desenha sem destino ativo.
    */
   useNavegacao?: () => Navegacao
-  conta: Conta
+  /** A pessoa logada; o app sem login não passa. */
+  conta?: Conta
   /** O `CabecalhoDoApp`, quando o app tem algo que vale para todas as telas. */
   cabecalho?: React.ReactNode
   /** O link do framework (`next/link`); sem ele, `<a>`. */

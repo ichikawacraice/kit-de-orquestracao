@@ -1,20 +1,51 @@
 {
   "guardas": {
-    "fontes": ["src"],
+    "fontes": [
+      "src"
+    ],
     "kit": "src/components/ui",
     "componentes": "src/components",
     "paginas": "src/app",
-    "css": ["src/app/globals.css"],
-    "aliases": { "@/registry/": "../../packages/registro/registry/", "@/": "src/" },
+    "css": [
+      "src/app/globals.css"
+    ],
+    "aliases": {
+      "@/registry/": "../../packages/registro/registry/",
+      "@/": "src/"
+    },
     "regras": {
       "conteudo-mora-em-superficie": {
-        "superficies": ["Card", "Painel", "PainelDeSecao", "Bloco", "DialogContent", "DialogLongo", "DialogLateral"]
+        "superficies": [
+          "Card",
+          "Painel",
+          "PainelDeSecao",
+          "Bloco",
+          "DialogContent",
+          "DialogLongo",
+          "DialogLateral"
+        ]
       },
       "toda-tela-de-detalhe-tem-trilha": {
         "excecoes": [
           {
             "arquivo": "src/app/palco/[tema]/[nome]/page.tsx",
             "motivo": "o palco é o miolo do iframe da página do item, que já tem a trilha; sozinho ele não é tela"
+          },
+          {
+            "arquivo": "src/app/(casco)/cores/contraste/page.tsx",
+            "motivo": "é aba de um destino da barra lateral (a mesma tela, outra vista, CTRL-06), não tela de detalhe: a trilha voltaria para a aba vizinha"
+          },
+          {
+            "arquivo": "src/app/(casco)/cores/vozes/page.tsx",
+            "motivo": "é aba de um destino da barra lateral (a mesma tela, outra vista, CTRL-06), não tela de detalhe: a trilha voltaria para a aba vizinha"
+          },
+          {
+            "arquivo": "src/app/(casco)/padroes/pecas-por-funcao/page.tsx",
+            "motivo": "é aba de um destino da barra lateral (a mesma tela, outra vista, CTRL-06), não tela de detalhe: a trilha voltaria para a aba vizinha"
+          },
+          {
+            "arquivo": "src/app/(casco)/regras/[arquivo]/page.tsx",
+            "motivo": "é aba de um destino da barra lateral (a mesma tela, outra vista, CTRL-06), não tela de detalhe: a trilha voltaria para a aba vizinha"
           }
         ]
       },
@@ -34,9 +65,6 @@
       },
       "o-vocabulario-da-tela": {
         "desligada": "o ateliê não tem domínio próprio: a palavra do código é a palavra da tela"
-      },
-      "componente-que-ninguem-monta": {
-        "desligada": "os componentes do ateliê têm nome de arquivo em kebab-case, que a guarda não examina; quem monta cada demonstração é o teste do catálogo"
       }
     }
   }
