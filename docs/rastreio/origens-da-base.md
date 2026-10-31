@@ -120,3 +120,4 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | CONV-21 | CONVENCOES.md | ADR 0129. |
 | CONV-22 | CONVENCOES.md | ADR 0375 · Q95. *Assumida, a confirmar:* só o detector local. |
 | CONV-23 | CONVENCOES.md | Do's and Don'ts da direção de origem · convenção "duas coisas que precisam concordar". |
+| CONV-25 | CONVENCOES.md | Decisão do operador Q701, 31/10/2026, piloto WiControl (F293). *Assumida, a confirmar:* o Confere é por revisão. |

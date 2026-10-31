@@ -4,6 +4,17 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.5.0 · 31/10/2026
+
+Camadas: base, plugin
+
+### O que muda
+- Regra nova **CONV-25** (seção 7, distribuição e instalação): projeto com pacote privado `@wicomm` faz o build de produção na máquina (`vercel build --prod && vercel deploy --prebuilt --prod`), e a Vercel não recebe o token dos pacotes.
+- O `/wicomm:novo` passa a gerar o `docs/deploy.md` do projeto novo com esse fluxo.
+
+### Migração
+- Projeto que já usa pacote privado: tirar `NPM_RC`/`NPM_TOKEN`/`NODE_AUTH_TOKEN` da Vercel, publicar por `vercel build --prod && vercel deploy --prebuilt --prod` e ter um `docs/deploy.md` que diga isso (modelo: `plugins/wicomm/skills/novo-projeto/modelos/deploy.md`).
+
 ## 0.4.0 · 30/10/2026
 
 Camadas: base, registro, guardas

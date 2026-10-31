@@ -41,6 +41,7 @@ Isso copia DESIGN, ANATOMIA e CONVENCOES para `design/` (e a cópia intocada par
 E no projeto:
 - **`.claude/settings.json`**: `extraKnownMarketplaces` com o marketplace `wicomm` (repositório `wicomm-projects/wicomm-design-system`) e `enabledPlugins: { "wicomm@wicomm": true }` — quem abrir o projeto no Claude Code recebe o convite para instalar.
 - **`CLAUDE.md`**: um bloco curto "Design system Wicomm" dizendo que toda tela passa pelo `designer` e pelo `critico-de-ui`, que a norma está em `design/`, e que a nota de 24/30 (28/35 em site) é a porta do PR (CONV-19, CONV-20).
+- **`docs/deploy.md`**: copie `${CLAUDE_PLUGIN_ROOT}/skills/novo-projeto/modelos/deploy.md` e troque `<app>`, `<pasta>` e `<time>` pelos do projeto. Diz que o build de produção sai da máquina (`vercel build --prod && vercel deploy --prebuilt --prod`) e que a Vercel não recebe o token dos pacotes (CONV-25).
 - **`components.json`** com o registro `@wicomm` em `registries`, quando o registro estiver publicado (veja o passo 4).
 
 ## 4. Tokens, peças, casco e guardas — o que já existe
@@ -69,6 +70,7 @@ Cada crítica, você grava ao fim do arquivo da revisão (skill `critica-de-ui`,
 - O app sobe (`npm run dev` sem erro) e o build passa.
 - `design/` tem os quatro documentos e o `design/wicomm.json` tem a versão; `node "${CLAUDE_PLUGIN_ROOT}/scripts/estado.mjs" <raiz>` mostra a versão e "igual à base".
 - A primeira tela tem crítica no teto ou acima (24/30; 28/35 em site), gravada no arquivo da revisão (o `estado` mostra a nota).
+- `docs/deploy.md` existe e descreve o build local (CONV-25).
 - O que dependia de pacote não publicado está na lista "Falta do sistema".
 
 Diga à pessoa, no fim: o que foi criado, a nota da primeira tela, e o que ficou na lista "Falta do sistema".

@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.4.0
+versao: 0.5.0
 description: As convenções de engenharia do front dos apps React da Wicomm — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
 ---
 
@@ -151,6 +151,15 @@ As guardas do pacote Wicomm e as de cada projeto seguem estas regras. Elas valem
 - **Por quê.** Os piores defeitos visuais não aparecem em build nem em jsdom.
 - **Confere.** `guarda` ateliê × kit · crítica.
 
+<a id="distribuicao"></a>
+## 7. Distribuição e instalação
+
+### CONV-25 · O build de produção com pacote privado `@wicomm` é feito na máquina, e a Vercel não recebe o token
+- **Regra.** Projeto que instala pacote privado `@wicomm` (tokens, guardas) faz o build de produção **na máquina de quem publica**, com o `~/.npmrc` dele: `vercel build --prod && vercel deploy --prebuilt --prod`. Nunca `vercel --prod` sem `--prebuilt`, nunca build na Vercel, e a Vercel não recebe o token dos pacotes (`NPM_RC`, `NPM_TOKEN`, `NODE_AUTH_TOKEN`). O projeto descreve o fluxo em `docs/deploy.md`.
+- **Por quê.** O `install` na Vercel baixa os pacotes do GitHub Packages da org e recebe 401 sem token; pôr o token lá espalha uma credencial de leitura da org por mais um lugar. Decisão do operador (piloto WiControl): o token fica fora da Vercel e o build sai da máquina.
+- **Confere.** Revisão: `vercel.json` e as variáveis de ambiente da Vercel sem `NPM_RC`, `NPM_TOKEN` nem `NODE_AUTH_TOKEN`, e `docs/deploy.md` com o comando do build local.
+- *Assumida, a confirmar:* o Confere é por revisão; uma guarda sobre o `vercel.json` entra se o desvio aparecer.
+
 ---
 
 ## Índice das regras
@@ -181,3 +190,4 @@ As guardas do pacote Wicomm e as de cada projeto seguem estas regras. Elas valem
 | CONV-21 | Protótipo aprovado é contrato | crítica |
 | CONV-22 | Terceiros sem rede por padrão | config |
 | CONV-23 | Conferir no ateliê | guarda, crítica |
+| CONV-25 | Build de produção na máquina, sem token na Vercel | revisão |

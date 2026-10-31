@@ -51,7 +51,7 @@
   ```
 
   O `GITHUB_TOKEN` de outro repositório só lê o pacote se o pacote der acesso a ele: na página do pacote na org, *Package settings → Manage Actions access → Add repository*, com papel *Read*. Uma vez por pacote e por repositório que consome.
-- **Em build fora do GitHub (Vercel e afins):** a variável `NODE_AUTH_TOKEN` no ambiente de build, com um token *classic* `read:packages` de uma conta com acesso à org.
+- **Em build fora do GitHub (Vercel e afins):** não dê o token ao ambiente de build (CONV-25). O build de produção sai da máquina de quem publica, com o `NODE_AUTH_TOKEN` dele: `vercel build --prod && vercel deploy --prebuilt --prod`.
 
 ## Versão nova
 
