@@ -54,6 +54,14 @@ A dona é uma sessão só, mas troca de chapéu a cada etapa: **ao entrar numa e
 - **Vermelho: uma repetição, depois bisseção.** A combinação vermelha roda o gate de novo uma vez na mesma árvore; verde na repetição mergeia o lote e registra suspeita de teste instável (`instavel.txt` nos logs, `suspeitaDeInstavel` na saída). Ainda vermelha, divide ao meio sobre a parte verde: a metade verde entra e não se retesta, a vermelha divide de novo até sobrar o PR que quebra; a metade de depois de uma verde é vermelha por dedução, sem gate próprio. O item devolvido volta a `execucao` com o motivo no `agora`, e a orquestradora manda à dona (`dona` na saída) uma linha com o motivo e o log. `--preparar` instala as dependências na árvore temporária (ex.: `pnpm install --frozen-lockfile`); `--seco` monta e testa sem mergear.
 - Depois do lote, a versão dos plugins sobe num commit só (`subir-versao`).
 
+<a id="ci-so-na-producao"></a>
+## CI só no PR para a produção
+- **O CI do projeto (GitHub Actions ou similar) dispara só no `pull_request` contra a branch de produção** (`main`): no GitHub, `on: pull_request: branches: [main]`. Sem `pull_request:` sem filtro, sem `push:` na integração e sem `push:` na produção para validar (o workflow de deploy pode disparar no `push: main`: ele sobe, não valida). Novo push na mesma branch cancela a execução anterior (`concurrency` com `cancel-in-progress`), menos na produção.
+- **O PR para a branch de integração** (`develop`) não roda CI: a dona roda os [testes afetados](#testes-afetados) (e o typecheck, se o projeto tem) e **cola no corpo do PR o comando e o fim da saída, com o `exit=0`**. Esse é o teste do PR; o gate completo roda na [fila de merge](#fila-de-merge), sobre a combinação, antes de mergear.
+- **Por quê:** minuto de CI custa e acaba (no projeto de onde o padrão veio, a conta tinha 2.000 min/mês, cada execução levava ~7 min com piso de ~4 min mesmo em PR só de doc, e o mês que rodava CI em todo PR travou o CI no dia 24). Na integração ele repetiria o que o gate da fila já garante, sobre a combinação real; na produção ele é o último portão antes do deploy, e ali ninguém o pula, nem em PR só de doc.
+- **Projeto sem branch de integração** (o trabalho vai direto para a `main`): todo PR é de produção, e o CI, se o projeto tiver um, dispara nele. O kit não exige CI; exige que, havendo um, ele não rode na integração.
+- **O workflow existente que contraria a regra** (gatilho sem filtro de branch, `push:` na integração) é ajustado por um item próprio, com o operador sabendo: mexer no CI muda o que protege a produção.
+
 <a id="teto-de-donas"></a>
 ## Quantas donas ao mesmo tempo
 - **No máximo 4 donas trabalhando** por projeto (`KIT_TETO_DE_DONAS`, padrão 4), **3 com a máquina cheia** ([teto de núcleos](#teto-de-nucleos)). Conta o item com dona ou `com` em `planejamento`, `design`, `execucao` ou `validacao`; `merge` não conta (a dona só espera). Item além do teto espera na fila sem pedir sessão.

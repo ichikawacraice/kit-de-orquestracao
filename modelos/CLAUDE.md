@@ -17,7 +17,7 @@ Lidos de `.claude/kit.json`:
 - **Teste isolado:** `node scripts/kit/com-fichas.mjs -- <comando>` (teto de núcleos da máquina, somando todas as sessões; o gate completo tem faixa e vez próprias).
 <!-- /kit:comandos -->
 
-<!-- kit:regras-de-operacao v2 -->
+<!-- kit:regras-de-operacao v3 -->
 ## Regras de operação
 - **Uma sessão dona por item, do plano ao PR:** ela planeja, escreve, testa, revisa e abre o PR. Título da sessão: `F<n> · <tema em palavras do produto>`. Modelo pelo risco: Opus para item com decisão, contrato, estado gravado, segurança ou produção; Sonnet para item mecânico com o plano escrito.
 - **Revisão por subagente** `orquestracao:validador` de contexto limpo antes do PR: só achados que afetam correção; o leve vai ao PR ou ao `depois` do item, nunca vira item.
@@ -25,6 +25,7 @@ Lidos de `.claude/kit.json`:
 - **A dona mantém o próprio item no painel** a cada passo (`agora`, etapa, PR); a orquestradora grava ao abrir a dona e ao mergear.
 - **Ninguém rebaseia por merge alheio:** a fila devolve à dona só o conflito real ou o gate vermelho. Rebase em vez de merge commit quando rebasear.
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
+- **CI só no PR para a produção:** o CI (GitHub Actions ou similar) dispara só no `pull_request` contra a `main` (`on: pull_request: branches: [main]`); o PR para a branch de integração roda só os testes afetados, com o comando e a saída (`exit=0`) colados no PR, e o gate da fila protege a integração. Minuto de CI custa e acaba.
 <!-- /kit:regras-de-operacao -->
 
 <!-- kit:regras-de-trabalho v3 -->

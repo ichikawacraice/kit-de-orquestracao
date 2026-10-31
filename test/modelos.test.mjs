@@ -79,6 +79,26 @@ describe('blocos do modelos/CLAUDE.md (K10)', () => {
     }
   });
 
+  test('kit:regras-de-operacao v3 declara o CI só no PR para a main (F298)', () => {
+    const b = bloco(t, 'regras-de-operacao');
+    assert.ok(b, 'bloco ausente'); assert.equal(b[1], '3');
+    for (const frase of ['CI só no PR para a produção', 'branches: [main]', 'testes afetados', '`exit=0`']) {
+      assert.ok(b[2].includes(frase), `kit:regras-de-operacao não diz "${frase}"`);
+    }
+  });
+
+  test('o protocolo tem a âncora ci-so-na-producao e o dona.md aponta para ela (F298)', () => {
+    const pool = join(RAIZ, 'plugins/orquestracao/pool');
+    const protocolo = ler('protocolo.md', pool);
+    const dona = ler('dona.md', pool);
+    const secao = /<a id="ci-so-na-producao"><\/a>\n## [^\n]+\n([\s\S]*?)(?=\n<a id=|$)/.exec(protocolo);
+    assert.ok(secao && secao[1].trim(), 'seção ci-so-na-producao ausente ou vazia no protocolo');
+    for (const frase of ['branches: [main]', '`push:`', 'testes afetados', '`exit=0`', 'Por quê', 'fila de merge']) {
+      assert.ok(secao[1].includes(frase), `a seção não diz "${frase}"`);
+    }
+    assert.match(dona, /protocolo\.md#ci-so-na-producao/);
+  });
+
   test('kit:regras-de-trabalho sobe para v3 e aponta para o bloco de documentos', () => {
     const b = bloco(t, 'regras-de-trabalho');
     assert.ok(b, 'bloco ausente'); assert.equal(b[1], '3');
