@@ -38,3 +38,17 @@ Motivo: os cinco blocos pedem ~18 peças novas; num PR só, crítica e revisão 
 - **Validação, B3 parcial:** a prova de que a varredura morde cobre 2 das 27 guardas.
 - **`ItemDaNavegacao`** mora no bloco do casco, não no kit (as duas críticas o citam sem pesar).
 - **Demonstração no ateliê** de cada bloco: quem mergear por último entre F272 e F273.
+
+## PR 2 · o bloco Editor (30/10/2026)
+- **Peças:** `dobra`, `popover` (a P5 da crítica 1: "Não publicou" abre o que fazer), `barra-do-editor` (`BarraDoEditor` com `voltar` obrigatório e o `h1` em `t-titulo`, `GrupoDaBarra`, `GrupoDaPessoa`) e `colunas-do-editor` (`ColunasDoEditor`, `ItemDaEstrutura`, `ItemDoTrilho`, `estruturaCabe`).
+- **Bloco** `editor`: `CascoDoEditor` (a moldura fora do casco), `EditorDeDocumento` e a cola `editor-no-next`; página de exemplo em `app/(tela-inteira)/documentos/[id]/editar`, com `?estado=` para os nove momentos.
+- **Base 0.4.0 (MINOR):** CASCO-01 (Editor fora do casco, E1), CASCO-03 (a barra com a volta cumpre a trilha, E2), TIPO-04 e TIPO-02 (o `h1` do Editor em `t-titulo`, E3 e P4), PECA-01 (a linha das colunas do Editor), PECA-02 (as colunas do Editor sem `Resizable`).
+- **Guarda** `toda-tela-de-detalhe-tem-trilha`: aceita a `BarraDoEditor` (opção `voltas`), segue o import até 2 níveis (`niveis`), e só por componente (`.tsx`), nunca por índice (`.ts`). O `h1` em `t-titulo` não pede mudança na guarda do título: ele mora no kit, que ela não examina.
+- **Ateliê:** demonstração das 4 peças e do bloco.
+
+### Assumido, a confirmar (PR 2)
+- **D1 · o Editor fora do casco**, com E1, E2 e E3.
+- **D6 e D7:** sem alça de arrasto, sem conversa, sem barra flutuante sobre o canvas.
+- **Com nada selecionado, o inspector fica fechado** (a tabela de larguras da revisão), e não aberto com o vazio "Escolha uma seção".
+- **A pendência impede publicar:** o Publicar leva à pendência, como o carimbo.
+- **O tema continua como controle próprio na barra** (o ruído baixo da crítica 1 fica para o `depois`).

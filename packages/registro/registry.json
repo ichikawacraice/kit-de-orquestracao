@@ -965,6 +965,92 @@
       ]
     },
     {
+      "name": "dobra",
+      "type": "registry:ui",
+      "title": "Dobra",
+      "description": "collapsible — um grupo dentro de uma peça que se abre sob demanda: os campos de um assunto no inspector, ou o informativo que pouca gente lê; nunca esconde ação.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/dobra.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "popover",
+      "type": "registry:ui",
+      "title": "Popover",
+      "description": "popover — o detalhe sob demanda, colado ao carimbo ou ao controle que o abre no clique, na superfície flutuante.",
+      "dependencies": [
+        "radix-ui@1.8.1"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/popover.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "barra-do-editor",
+      "type": "registry:ui",
+      "title": "Barra do editor",
+      "description": "editor toolbar — a linha única do topo do Editor: a volta e o nome (o h1), o rascunho, a vista ao centro, o primário, o ⋯ e a pessoa; altura fixa, sem quebra.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/card",
+        "@wicomm/menu-da-conta",
+        "@wicomm/menu-do-tema",
+        "@wicomm/tooltip",
+        "@wicomm/link-do-app"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/barra-do-editor.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "colunas-do-editor",
+      "type": "registry:ui",
+      "title": "Colunas do editor",
+      "description": "resizable/editor layout — a estrutura que recolhe a um trilho, o canvas que nunca fica abaixo de 60% e a coluna da direita que vira gaveta abaixo de 1280px; com a linha da estrutura e o item do trilho.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/dialog",
+        "@wicomm/estado",
+        "@wicomm/painel",
+        "@wicomm/secao",
+        "@wicomm/tooltip",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/colunas-do-editor.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "casco",
       "type": "registry:block",
       "title": "Casco",
@@ -1130,6 +1216,56 @@
           "path": "registry/wicomm/blocks/entrada/page.tsx",
           "type": "registry:page",
           "target": "app/(tela-inteira)/entrar/page.tsx"
+        }
+      ]
+    },
+    {
+      "name": "editor",
+      "type": "registry:block",
+      "title": "Tela de Editor",
+      "description": "editor page — o arquétipo Editor (como fica se eu mudar isto?): fora do casco, a barra com a volta, o rascunho e o Publicar; a estrutura que recolhe, o canvas com a página e o inspector em dobras. Exemplo com um documento.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/barra-do-editor",
+        "@wicomm/colunas-do-editor",
+        "@wicomm/dobra",
+        "@wicomm/popover",
+        "@wicomm/button",
+        "@wicomm/card",
+        "@wicomm/chip-de-estado",
+        "@wicomm/dialog",
+        "@wicomm/input",
+        "@wicomm/label",
+        "@wicomm/menu",
+        "@wicomm/select",
+        "@wicomm/seletor-de-vista",
+        "@wicomm/skeleton",
+        "@wicomm/tela-de-erro",
+        "@wicomm/toast",
+        "@wicomm/tooltip",
+        "@wicomm/vazio",
+        "@wicomm/link-do-app"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/blocks/editor/editor-de-documento.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/editor/editor-no-next.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/wicomm/blocks/editor/dados-do-editor.ts",
+          "type": "registry:lib"
+        },
+        {
+          "path": "registry/wicomm/blocks/editor/page.tsx",
+          "type": "registry:page",
+          "target": "app/(tela-inteira)/documentos/[id]/editar/page.tsx"
         }
       ]
     }

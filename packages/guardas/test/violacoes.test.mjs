@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict'
 import { after, test } from 'node:test'
 
-import { GUARDAS, verificar } from '../lib/index.mjs'
+import { GUARDAS, lerConfig, verificar } from '../lib/index.mjs'
 import { apagar, montar } from './_apoio.mjs'
 
 /** Onde cada guarda tem a sua violação plantada; o padrão é `src/telas/<id>.tsx`. */
@@ -54,4 +54,25 @@ for (const g of GUARDAS) {
 test('com as violações plantadas e sem base, a catraca reprova', () => {
   assert.equal(r.ok, false)
   assert.ok(r.comparacao.novas.length >= GUARDAS.length)
+})
+
+test('no Editor, a barra com a volta cumpre a trilha (CASCO-03, emenda E2); sem ela, a mesma rota reprova', () => {
+  const comBarra = verificar({ raiz: limpo }).resultados.find((x) => x.id === 'toda-tela-de-detalhe-tem-trilha')
+  assert.equal(comBarra.estado, 'ok')
+  const cfg = lerConfig(limpo)
+  const config = { ...cfg, regras: { ...cfg.regras, 'toda-tela-de-detalhe-tem-trilha': { voltas: [] } } }
+  const semVolta = verificar({ raiz: limpo, config }).resultados.find(
+    (x) => x.id === 'toda-tela-de-detalhe-tem-trilha',
+  )
+  assert.deepEqual(
+    semVolta.violacoes.map((v) => v.arquivo),
+    ['src/app/documentos/[id]/editar/page.tsx'],
+  )
+})
+
+test('a trilha não vale por tabela: a página que só importa um índice de telas continua reprovando', () => {
+  const r = verificar({ raiz: sujo }).resultados.find((x) => x.id === 'toda-tela-de-detalhe-tem-trilha')
+  for (const arquivo of ['src/app/por-tabela/[id]/page.tsx', 'src/app/por-tabela-tsx/[id]/page.tsx']) {
+    assert.ok(r.violacoes.some((v) => v.arquivo === arquivo), `${arquivo}: ${r.violacoes.map((v) => v.arquivo).join(', ')}`)
+  }
 })

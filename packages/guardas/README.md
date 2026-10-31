@@ -97,7 +97,7 @@ E as opções próprias da guarda (a última coluna da tabela). Guarda que não 
 | `o-titulo-da-pagina-e-um-so` | TIPO-04 | O título da página é um só, e é h1 | `voz` |
 | `o-vocabulario-da-tela` | CONV-12 | O vocabulário da tela | `glossario` |
 | `os-tokens-pagam-o-piso` | COR-12, COR-11, MARCA-01 | Os tokens pagam o piso de contraste | `temas` |
-| `toda-tela-de-detalhe-tem-trilha` | CASCO-03 | Toda tela de detalhe tem trilha | `trilha` |
+| `toda-tela-de-detalhe-tem-trilha` | CASCO-03 | Toda tela de detalhe tem trilha (no Editor, a `BarraDoEditor` com a volta) | `trilha`, `voltas`, `niveis` |
 | `um-menu-so` | CASCO-02 | Um menu só, o do kit | — |
 
 Fica para depois: `o-raster-da-marca-sai-do-token` (MARCA-04), que confere pixel de favicon e de lockup contra o token e depende dos scripts de raster da marca.

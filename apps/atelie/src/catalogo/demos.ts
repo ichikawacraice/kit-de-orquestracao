@@ -4,16 +4,20 @@
 import type { ComponentType } from "react"
 
 import AntesDoDesenho from "./demos/antes-do-desenho"
+import BarraDoEditor from "./demos/barra-do-editor"
 import Bloco from "./demos/bloco"
 import BlocoDeTinta from "./demos/bloco-de-tinta"
 import Button from "./demos/button"
 import Card from "./demos/card"
 import Casco from "./demos/casco"
 import ChipDeEstado from "./demos/chip-de-estado"
+import ColunasDoEditor from "./demos/colunas-do-editor"
 import ComMotivo from "./demos/com-motivo"
 import ConfirmDialog from "./demos/confirm-dialog"
 import Dialog from "./demos/dialog"
 import DicaDeAjuda from "./demos/dica-de-ajuda"
+import Dobra from "./demos/dobra"
+import Editor from "./demos/editor"
 import Entrada from "./demos/entrada"
 import Estado from "./demos/estado"
 import Estilo from "./demos/estilo"
@@ -30,6 +34,7 @@ import MenuDaConta from "./demos/menu-da-conta"
 import MenuDoTema from "./demos/menu-do-tema"
 import Mesa from "./demos/mesa"
 import Painel from "./demos/painel"
+import Popover from "./demos/popover"
 import Secao from "./demos/secao"
 import Select from "./demos/select"
 import SeletorDeVista from "./demos/seletor-de-vista"
@@ -45,16 +50,20 @@ import Vazio from "./demos/vazio"
 
 export const DEMOS: Record<string, ComponentType> = {
   "antes-do-desenho": AntesDoDesenho,
+  "barra-do-editor": BarraDoEditor,
   "bloco": Bloco,
   "bloco-de-tinta": BlocoDeTinta,
   "button": Button,
   "card": Card,
   "casco": Casco,
   "chip-de-estado": ChipDeEstado,
+  "colunas-do-editor": ColunasDoEditor,
   "com-motivo": ComMotivo,
   "confirm-dialog": ConfirmDialog,
   "dialog": Dialog,
   "dica-de-ajuda": DicaDeAjuda,
+  "dobra": Dobra,
+  "editor": Editor,
   "entrada": Entrada,
   "estado": Estado,
   "estilo": Estilo,
@@ -71,6 +80,7 @@ export const DEMOS: Record<string, ComponentType> = {
   "menu-do-tema": MenuDoTema,
   "mesa": Mesa,
   "painel": Painel,
+  "popover": Popover,
   "secao": Secao,
   "select": Select,
   "seletor-de-vista": SeletorDeVista,

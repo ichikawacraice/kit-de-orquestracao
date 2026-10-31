@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react"
+import { MoonIcon, SunIcon, SunMoonIcon } from "lucide-react"
 
 import { CHAVE_DO_TEMA, ESCURO } from "@/registry/wicomm/lib/antes-do-desenho"
 import { ConteudoDoMenu, GatilhoDoMenu, GrupoDeEscolhaDoMenu, ItemDeEscolhaDoMenu, Menu } from "@/registry/wicomm/ui/menu"
@@ -11,7 +11,7 @@ type Tema = "claro" | "escuro" | "sistema"
 const ICONE_DO_TEMA: Record<Tema, React.ComponentType<{ className?: string }>> = {
   claro: SunIcon,
   escuro: MoonIcon,
-  sistema: MonitorIcon,
+  sistema: SunMoonIcon,
 }
 
 const ROTULO_DO_TEMA: Record<Tema, string> = {

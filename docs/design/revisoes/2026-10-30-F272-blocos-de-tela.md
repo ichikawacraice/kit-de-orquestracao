@@ -935,3 +935,75 @@ Ficou de fora 1 problema, de consistência e de peso baixo: na Lista, a busca te
 - **P3:** a frase da leitura vira "A conferência dos itens é feita noutra tela." (o título do bloco fica, porque a peça `Bloco` pede um).
 - **P4:** o não contado é o travessão numérico (U+2012) numa caixa de 1ch: a barra de modos não muda de largura quando a contagem chega.
 - **P5:** a senha aparece preenchida nos momentos depois do envio; o cartão que sobe vai para o `depois`.
+
+---
+
+## Crítica 4 (30/10/2026, `critico-de-ui`, contexto limpo): o Editor do F272 a 1280×800, claro e escuro
+
+**Antes da nota**
+- Julgada por 16 capturas (8 estados × 2 temas, do Next vazio com o registro instalado), pelo código do bloco e das peças novas, por esta revisão e pela base. Detector e Impeccable sem achados. Nenhum problema aparece só num tema.
+- **P4 da crítica 1, resolvida:** a TIPO-02 tem a exceção, e o `h1` em `t-titulo` mora na peça. **P5 da crítica 1, resolvida:** "Não publicou" é `ChipQueAbre` que abre um `Popover` com o que fazer; o "Publicar" segue sendo a saída.
+
+Nota: 24/30 (hierarquia 4 · densidade 5 · consistência 4 · ruído 4 · ação primária 4 · aderência 3)
+Veredito: **volta**, por duas ressalvas altas (P1 e P2).
+
+#### P1 · hierarquia · A seção selecionada perde o próprio fundo
+- **Peso:** alta
+- **Onde:** `editor-de-documento.tsx`, a seção no canvas: `bg-accent` só sem seleção, e o `superficie-alta` pinta o fundo de `--card`.
+- **O que se vê:** a Capa "Com tinta" aparece tingida sem seleção e lisa quando selecionada; a seção que se edita nunca mostra o fundo que tem.
+- **Por que pesa:** a pergunta do Editor é *como fica se eu mudar isto?* (ARQ-01); trocar "Fundo" não muda nada à vista.
+- **Correção:** a seleção marca altura sem trocar o preenchimento (o fundo numa camada de dentro), com teste dom.
+
+#### P2 · aderência · O que se edita durante a publicação some quando ela termina
+- **Peso:** alta
+- **Onde:** `publicar` volta o rascunho ao instantâneo de antes da espera; os campos seguem editáveis durante "Publicando".
+- **Por que pesa:** perda de trabalho escondida por "Publicado"; o bloco é o que o projeto copia.
+- **Correção:** a publicação guarda o índice do passo publicado; ao terminar, os passos dados depois continuam e contam como mudança. Teste dom que digita durante "Publicando".
+
+#### P3 · aderência · O carregando não tem a forma do pronto
+- **Peso:** média
+- **Onde:** no carregando, `selecionada: null`, sem inspector e sem trilho (a revisão, l. 401, pede o inspector em espera).
+- **O que se vê:** a página anda 294 px para a esquerda quando a carga chega.
+- **Correção:** o carregando desenha o pouso padrão: trilho com 4 `Skeleton` e a coluna da direita aberta com 3 campos em espera.
+
+#### P4 · aderência · O Editor não tem estado para "o documento não carregou"
+- **Peso:** média
+- **Onde:** `MomentoDoEditor` não tem erro de carga; o `erro` é a publicação que falhou.
+- **Por que pesa:** o projeto entregaria `secoes: []`, e a tela diria "Nenhuma seção ainda" (EST-02).
+- **Correção:** momento `erro-de-carga`: a barra de pé sem chip nem "Publicar"; estrutura e canvas com `TelaDeErro escala="bloco"` e *Tentar de novo*.
+
+#### P5 · consistência · O mesmo ícone de monitor diz duas coisas na barra
+- **Peso:** baixa
+- **Onde:** `menu-do-tema.tsx` (`sistema: MonitorIcon`) e o modo "Computador" da vista.
+- **Correção:** o tema "do sistema" com um ícone que não é aparelho (`SunMoonIcon`), também no casco; `Ajuda` no tema e na conta.
+
+Ficaram de fora 4 problemas baixos: "Publicando" no chip e no botão (MSG-06 põe o andamento no botão); no carregando, o `⋯` já oferece "Excluir documento"; o sem-permissão diz "pode ler", mas não leva à leitura; no vazio claro, o tracejado quase some.
+
+### Fica como está
+- As larguras medidas: trilho 48, canvas 860 (67 %), inspector 340; sem seleção, estrutura 288 e canvas 968 (76 %); a estrutura recolhe sozinha abaixo de 60 %.
+- O "Publicar" em cada estado: não desenhado sem mudanças, "Não publicou" com o que fazer, "1 pendência" que leva ao campo, destrutivos no `⋯` com confirmação.
+- A barra de uma linha só, 44 px em todos os estados.
+
+### O que a dona fez com a crítica 4 (30/10/2026)
+- **P1:** a seção selecionada leva o `superficie-alta` por fora e o fundo por dentro; teste dom confere `bg-accent` na Capa selecionada.
+- **P2:** `publicar` guarda o passo publicado e mantém os seguintes (`passos.slice(publicado)`); teste dom digita durante "Publicando" e vê "1 mudança" e o texto depois de "Publicado".
+- **P3:** o carregando pousa com seleção: trilho com 4 esperas e o inspector aberto com 3 campos em espera.
+- **P4:** momento `erro-de-carga` (`?estado=erro-de-carga`), com teste dom.
+- **P5:** o tema "do sistema" usa `SunMoonIcon` (vale no casco também). A `Ajuda` no tema e na conta fica para o `depois`: o gatilho do menu não aceita a dica por fora sem uma peça de gatilho com dica.
+
+---
+
+## Crítica 5 (30/10/2026, `critico-de-ui`, contexto limpo, recrítica 1 de 2): o Editor do F272 a 1280×800, claro e escuro
+
+- **O delta da crítica 4:** P1 resolvida (o fundo da Capa é o mesmo com e sem seleção, medido nos dois temas). P2 resolvida no código, com teste. P3 resolvida: a espera tem a forma do pronto. P4 resolvida. P5 resolvida em parte: a dica no tema e na conta fica no `depois`.
+
+Nota: 26/30 (hierarquia 5 · densidade 5 · consistência 4 · ruído 4 · ação primária 4 · aderência 4)
+Veredito: **aprovada com ressalvas**, sem ressalva alta. As ressalvas vão para o `depois` do item.
+
+- **P1 · média · ação primária.** No `erro-de-carga` e no carregando, "Adicionar seção", o `⋯` do documento e a vista ficam oferecidos sobre um documento que não chegou. Correção: não desenhar esses gestos nesses momentos; a fixação do `erro-de-carga` passa `secoes: []`.
+- **P2 · baixa · ruído.** Duas mensagens e dois "Tentar de novo" para uma só falha de carga. Correção: a estrutura pousa recolhida e só o canvas diz a falha.
+- **P3 · baixa · ruído.** "Publicando" aparece no chip e no botão. Correção: o chip mantém o estado do rascunho (MSG-06).
+- **P4 · baixa · aderência.** A revisão promete o vazio "Escolha uma seção" no inspector, que a tela (fechada sem seleção) não mostra. Correção: tirar a linha da revisão.
+- **P5 · baixa · consistência.** O tracejado do vazio quase some no claro (`--border` sobre `--muted`, ≈1,07:1). Correção: um contorno de ausência que contraste sobre `muted`.
+- **Fora dos eixos:** `aoPublicar` não recebe o rascunho; a correção da P2 vale no exemplo, mas num projeto a função não sabe o que publicar.
+- Ficou de fora: o sem-permissão diz "pode ler" e não leva à leitura.

@@ -31,9 +31,9 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | COR-14 | DESIGN.md | Do's and Don'ts da direção de design de origem. |
 | COR-15 | DESIGN.md | Direção de design de origem, seção Neutral (o terminal) · ADR 0425. |
 | TIPO-01 | DESIGN.md | SPEC-008 · direção de design de origem, seção Typography. *Assumida, a confirmar:* Archivo como fonte Wicomm. |
-| TIPO-02 | DESIGN.md | ADR 0138 · SPEC-086 · ADR 0147 · ADR 0150 · ADR 0364 · ADR 0392. *Nota:* o frontmatter da direção de origem ainda descreve uma escala anterior (display 1,25rem/700, title 1rem…); a regra segue as classes do código, que vencem. |
+| TIPO-02 | DESIGN.md | ADR 0138 · SPEC-086 · ADR 0147 · ADR 0150 · ADR 0364 · ADR 0392. *Nota:* o frontmatter da direção de origem ainda descreve uma escala anterior (display 1,25rem/700, title 1rem…); a regra segue as classes do código, que vencem. A exceção do `h1` do Editor (TIPO-04) · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. |
 | TIPO-03 | DESIGN.md | Direção de design de origem, Regra da Medida em Mono. |
-| TIPO-04 | DESIGN.md | ADR 0147 · ADR 0150. |
+| TIPO-04 | DESIGN.md | ADR 0147 · ADR 0150. O `h1` do Editor na barra, em `t-titulo` · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. (emenda E3, P4 da crítica 1). |
 | DENS-01 | DESIGN.md | Direção de design de origem, Regra do Corpo Denso. |
 | DENS-02 | DESIGN.md | ADR 0401 · ADR 0364. |
 | LAY-01 | DESIGN.md | ADR 0396 · direção de design de origem, seção Layout. O topo parado, a barra por cima abaixo de 768px e a marca antes da hidratação · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. |
@@ -70,9 +70,9 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | PRIN-04 | ANATOMIA.md | SPEC-062. |
 | PRIN-05 | ANATOMIA.md | SPEC-062 · decisão do dono do produto (Q138, peça nova parte do shadcn oficial). |
 | PRIN-06 | ANATOMIA.md | ADR 0392 · ADR 0374. |
-| CASCO-01 | ANATOMIA.md | ADR 0396 · ADR 0147 · SPEC-043 · SPEC-062 · direção de design de origem (Layout e Navigation). A divisão entre cabeçalho e topo da página, que era síntese desta base, foi fixada pelo bloco do casco · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. |
+| CASCO-01 | ANATOMIA.md | ADR 0396 · ADR 0147 · SPEC-043 · SPEC-062 · direção de design de origem (Layout e Navigation). A divisão entre cabeçalho e topo da página, que era síntese desta base, foi fixada pelo bloco do casco · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. O Editor também fora do casco (emenda E1, D1 *assumida, a confirmar*). |
 | CASCO-02 | ANATOMIA.md | ADR 0379 · SPEC-062 (§ menu rotulado não é dobra). |
-| CASCO-03 | ANATOMIA.md | SPEC-043. |
+| CASCO-03 | ANATOMIA.md | SPEC-043. O Editor fora do casco, com a volta e o nome da barra no lugar da trilha · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. (emenda E2, D1 *assumida, a confirmar*). |
 | ARQ-01 | ANATOMIA.md | SPEC-062 · ADR 0425 · ADR 0428 · ADR 0421. |
 | ARQ-02 | ANATOMIA.md | SPEC-062. |
 | ARQ-03 | ANATOMIA.md | ADR 0379 · ADR 0404. |
@@ -83,8 +83,8 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | MSG-04 | ANATOMIA.md | SPEC-066. |
 | MSG-05 | ANATOMIA.md | Convenção "texto de UI não cita spec/doc". |
 | MSG-06 | ANATOMIA.md | ADR 0379 · anatomia de origem (o editor, ações raras no `⋯`). |
-| PECA-01 | ANATOMIA.md | SPEC-062 · ADR 0102 · ADR 0134 · ADR 0382 · ADR 0412 · ADR 0420 · ADR 0425. As linhas do percurso, do vazio, da tabela, do topo, do logotipo, da conta e do tema, e o medalhão neutro na ausência · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. |
-| PECA-02 | ANATOMIA.md | Decisão do dono do produto (Q138, 23/10/2026) · Q95 · ADR 0375. |
+| PECA-01 | ANATOMIA.md | SPEC-062 · ADR 0102 · ADR 0134 · ADR 0382 · ADR 0412 · ADR 0420 · ADR 0425. As linhas do percurso, do vazio, da tabela, do topo, do logotipo, da conta e do tema, e o medalhão neutro na ausência · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. A linha das colunas do Editor e o `GrupoDaPessoa` na barra (F272, fatia 2). |
+| PECA-02 | ANATOMIA.md | Decisão do dono do produto (Q138, 23/10/2026) · Q95 · ADR 0375. As colunas do Editor sem `Resizable` · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. (crítica 1, conflito da E5). |
 | PESO-01 | ANATOMIA.md | SPEC-062. |
 | PESO-02 | ANATOMIA.md | SPEC-062 · ADR 0124. |
 | PESO-03 | ANATOMIA.md | ADR 0127 · ADR 0421 · convenção "gesto bloqueado". |

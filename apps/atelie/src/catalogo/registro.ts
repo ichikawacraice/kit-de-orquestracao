@@ -31,6 +31,7 @@ export const PISO_DO_PALCO: Record<string, number> = {
   "com-motivo": 200,
   "menu-do-tema": 240,
   "menu-da-conta": 260,
+  popover: 220,
 }
 
 /**

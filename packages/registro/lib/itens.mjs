@@ -289,6 +289,37 @@ export const PECAS = [
     pecas: ['menu'],
     files: [ui('menu-da-conta')],
   }),
+  peca({
+    name: 'dobra',
+    title: 'Dobra',
+    description: 'collapsible — um grupo dentro de uma peça que se abre sob demanda: os campos de um assunto no inspector, ou o informativo que pouca gente lê; nunca esconde ação.',
+    npm: [NPM.lucide],
+    pecas: ['button'],
+    files: [ui('dobra')],
+  }),
+  peca({
+    name: 'popover',
+    title: 'Popover',
+    description: 'popover — o detalhe sob demanda, colado ao carimbo ou ao controle que o abre no clique, na superfície flutuante.',
+    npm: [NPM.radix],
+    files: [ui('popover')],
+  }),
+  peca({
+    name: 'barra-do-editor',
+    title: 'Barra do editor',
+    description: 'editor toolbar — a linha única do topo do Editor: a volta e o nome (o h1), o rascunho, a vista ao centro, o primário, o ⋯ e a pessoa; altura fixa, sem quebra.',
+    npm: [NPM.lucide],
+    pecas: ['button', 'card', 'menu-da-conta', 'menu-do-tema', 'tooltip', 'link-do-app'],
+    files: [ui('barra-do-editor')],
+  }),
+  peca({
+    name: 'colunas-do-editor',
+    title: 'Colunas do editor',
+    description: 'resizable/editor layout — a estrutura que recolhe a um trilho, o canvas que nunca fica abaixo de 60% e a coluna da direita que vira gaveta abaixo de 1280px; com a linha da estrutura e o item do trilho.',
+    npm: [NPM.lucide],
+    pecas: ['button', 'dialog', 'estado', 'painel', 'secao', 'tooltip', 'idioma-de-cor'],
+    files: [ui('colunas-do-editor')],
+  }),
 ]
 
 /**
@@ -339,6 +370,20 @@ export const BLOCOS = [
       'login page — o arquétipo Entrada (qual é o único passo?): o cartão sozinho no fundo, fora do casco, campos e botão xl, a recusa no próprio cartão.',
     pecas: ['button', 'card', 'input', 'label', 'logotipo', 'menu-do-tema', 'idioma-de-cor'],
     files: [comp('entrada', 'tela-de-entrada'), pagina('entrada', 'page', 'app/(tela-inteira)/entrar/page.tsx')],
+  }),
+  bloco({
+    name: 'editor',
+    title: 'Tela de Editor',
+    description:
+      'editor page — o arquétipo Editor (como fica se eu mudar isto?): fora do casco, a barra com a volta, o rascunho e o Publicar; a estrutura que recolhe, o canvas com a página e o inspector em dobras. Exemplo com um documento.',
+    npm: [NPM.lucide],
+    pecas: ['barra-do-editor', 'colunas-do-editor', 'dobra', 'popover', 'button', 'card', 'chip-de-estado', 'dialog', 'input', 'label', 'menu', 'select', 'seletor-de-vista', 'skeleton', 'tela-de-erro', 'toast', 'tooltip', 'vazio', 'link-do-app'],
+    files: [
+      comp('editor', 'editor-de-documento'),
+      comp('editor', 'editor-no-next'),
+      dados('editor', 'dados-do-editor'),
+      pagina('editor', 'page', 'app/(tela-inteira)/documentos/[id]/editar/page.tsx'),
+    ],
   }),
 ]
 

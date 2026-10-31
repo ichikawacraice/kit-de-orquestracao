@@ -1,0 +1,46 @@
+"use client"
+
+import * as React from "react"
+import { Popover as PopoverPrimitive } from "radix-ui"
+
+import { cn } from "@/registry/wicomm/lib/utils"
+
+/**
+ * O POPOVER (ANATOMIA PECA-01: o detalhe sob demanda) — o que o clique num
+ * carimbo ou num controle abre, colado a ele, na superfície flutuante: a frase
+ * do que fazer depois de uma falha, o detalhe de uma pendência. Não é dica de
+ * hover (CTRL-08): abre no clique e no teclado, e fecha no Esc.
+ *
+ * Abre com `duration-menu-abre`, fecha com `duration-menu-fecha`, e para com
+ * movimento reduzido (MOV-02).
+ */
+const Popover = PopoverPrimitive.Root
+
+const PopoverTrigger = PopoverPrimitive.Trigger
+
+const PopoverAnchor = PopoverPrimitive.Anchor
+
+function PopoverContent({
+  className,
+  align = "start",
+  sideOffset = 6,
+  ...props
+}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+  return (
+    <PopoverPrimitive.Portal>
+      <PopoverPrimitive.Content
+        data-slot="popover-content"
+        data-superficie
+        align={align}
+        sideOffset={sideOffset}
+        className={cn(
+          "superficie-flutuante z-50 w-72 rounded-xl p-4 text-sm text-popover-foreground outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:duration-menu-abre data-[state=closed]:duration-menu-fecha data-[state=open]:ease-abre data-[state=closed]:ease-fecha motion-reduce:!animate-none",
+          className
+        )}
+        {...props}
+      />
+    </PopoverPrimitive.Portal>
+  )
+}
+
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger }

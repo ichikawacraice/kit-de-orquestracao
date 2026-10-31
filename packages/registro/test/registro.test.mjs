@@ -61,8 +61,8 @@ test('cada arquivo do registro está em exatamente uma peça, e cada peça apont
   assert.equal(new Set(usados).size, usados.length, 'arquivo em duas peças')
 })
 
-/** A cola de exemplo do Next: as páginas (`registry:page`) e o componente que o layout do casco usa — lista fechada. */
-const COLA_DO_NEXT = ['registry/wicomm/blocks/casco/casco-no-next.tsx']
+/** A cola de exemplo do Next: as páginas (`registry:page`) e os componentes `*-no-next` que elas usam — lista fechada. */
+const COLA_DO_NEXT = ['registry/wicomm/blocks/casco/casco-no-next.tsx', 'registry/wicomm/blocks/editor/editor-no-next.tsx']
 const ehDoNext = (item, caminho) =>
   item.files.some((f) => f.path === caminho && f.type === 'registry:page') || COLA_DO_NEXT.includes(caminho)
 

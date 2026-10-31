@@ -74,7 +74,7 @@ try {
   const porta = 4800 + Math.floor(Math.random() * 100)
   const next = spawn('npx', ['next', 'start', '-p', String(porta)], { cwd: app, stdio: 'ignore' })
   try {
-    const PAGINAS = { '/pedidos': 'Pedidos', '/pedidos/1042': 'Pedido 1042', '/entrar': 'Entrar' }
+    const PAGINAS = { '/pedidos': 'Pedidos', '/pedidos/1042': 'Pedido 1042', '/entrar': 'Entrar', '/documentos/7/editar': 'Proposta comercial' }
     for (const [rota, titulo] of Object.entries(PAGINAS)) {
       let html = ''
       for (let tentativa = 0; tentativa < 40 && !html; tentativa++) {

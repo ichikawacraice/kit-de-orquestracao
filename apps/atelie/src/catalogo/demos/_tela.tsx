@@ -10,7 +10,7 @@ import * as React from "react"
  */
 export function Tela({ children }: { children: React.ReactNode }) {
   return (
-    <div className="h-160 transform-gpu overflow-hidden rounded-cartao ring-1 ring-border [&_[data-slot=casco-do-app]]:h-full [&_[data-slot=tela-de-entrada]]:min-h-full">
+    <div className="h-160 transform-gpu overflow-hidden rounded-cartao ring-1 ring-border [&_[data-slot=casco-do-app]]:h-full [&_[data-slot=casco-do-editor]]:h-full [&_[data-slot=tela-de-entrada]]:min-h-full">
       {children}
     </div>
   )

@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.3.0
+versao: 0.4.0
 description: A direção de design dos apps React da Wicomm — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   claro:
@@ -301,7 +301,7 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 - **Regra.** Todo texto usa uma voz do frontmatter (classes `t-*`, na camada `components`), escolhida pelo **papel**:
   | voz | papel |
   |---|---|
-  | `t-display` | o título da página — um por tela |
+  | `t-display` | o título da página — um por tela (no Editor, o `h1` da barra vai em `t-titulo`, TIPO-04) |
   | `t-titulo` | o nome de bloco, de cartão e de diálogo |
   | `t-denso` | o corpo em densidade instrumento: célula, metadado, linha de lista |
   | `t-rotulo` | nomeia um **conjunto** (seção dentro de um bloco, faixa, grupo de campos) — aparece uma vez, sozinho |
@@ -318,8 +318,8 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 - **Confere.** `crítica:consistência`.
 
 ### TIPO-04 · O título da página é um só, e é `h1`
-- **Regra.** Uma tela tem **um** título, `h1` na voz `t-display`, onde quer que a tela o monte (página ou componente). Título nunca é vazio nem um símbolo só: quando a parte distintiva do nome é vazia, ele ganha um nome.
-- **Por quê.** Dois títulos disputam a resposta a "onde estou"; um título de um caractere (`/`) cumpriu a letra de "não vazio" e não o espírito.
+- **Regra.** Uma tela tem **um** título, `h1` na voz `t-display`, onde quer que a tela o monte (página ou componente). No Editor, o `h1` é o nome do objeto dentro da `BarraDoEditor`, na voz `t-titulo`. Título nunca é vazio nem um símbolo só: quando a parte distintiva do nome é vazia, ele ganha um nome.
+- **Por quê.** Dois títulos disputam a resposta a "onde estou"; um título de um caractere (`/`) cumpriu a letra de "não vazio" e não o espírito. No Editor, 23px numa barra de 44px disputariam o canvas (PRIN-02).
 - **Confere.** `guarda:o-titulo-da-pagina-e-um-so`.
 
 ---

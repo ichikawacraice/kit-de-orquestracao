@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.3.0
+versao: 0.4.0
 description: A anatomia dos apps React da Wicomm — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -61,9 +61,9 @@ O casco é o que faz dois apps da Wicomm parecerem um só: é a primeira coisa q
   | **Barra lateral** (esquerda, recolhível) | o logotipo Wicomm, os destinos do app (item com ícone **e** rótulo), a conta e o tema ao pé | ação de tela, aviso, filtro |
   | **Topo da página** | a trilha (em tela de detalhe), o título (`h1`, um só), o estado do objeto quando a tela é de um objeto, o primário da tela | ação rara (vai ao `⋯`) |
   | **Conteúdo** | o arquétipo da tela, em superfície | conteúdo solto no fundo |
-  O **cabeçalho**, grudado acima do topo, é opcional e só leva o que vale **igual em todas as telas** e muda o app inteiro: a troca de contexto, a busca global, a conexão com um serviço de fora — nunca título, primário, conta ou tema. O **topo da página** leva o que muda quando a tela muda. Para um caso novo, o teste é: *a coisa continua valendo depois de trocar de destino?* Se sim, é do cabeçalho; se não, é do topo. O topo não rola (LAY-01). O arquétipo Entrada fica fora do casco.
+  O **cabeçalho**, grudado acima do topo, é opcional e só leva o que vale **igual em todas as telas** e muda o app inteiro: a troca de contexto, a busca global, a conexão com um serviço de fora — nunca título, primário, conta ou tema. O **topo da página** leva o que muda quando a tela muda. Para um caso novo, o teste é: *a coisa continua valendo depois de trocar de destino?* Se sim, é do cabeçalho; se não, é do topo. O topo não rola (LAY-01). Os arquétipos **Entrada e Editor ficam fora do casco**; no Editor, a barra (ARQ-03) faz o papel dele e leva a volta, o nome do objeto e a conta.
 - **Por quê.** Navegação, título e primário no mesmo lugar em todo app é o que o cliente reconhece como "a mesma empresa".
-- **Confere.** Bloco do casco (registro, `@wicomm/casco`) · `guarda:o-titulo-da-pagina-e-um-so` · `crítica:consistência`.
+- **Confere.** Bloco do casco (registro, `@wicomm/casco`) · bloco do Editor (registro, `@wicomm/editor`) · `guarda:o-titulo-da-pagina-e-um-so` · `crítica:consistência`.
 
 ### CASCO-02 · Um menu só, o do kit
 - **Regra.** Todo menu de ações é a peça `Menu` do kit (`ItemDoMenu`, `SubmenuDoMenu`). Nenhum arquivo de tela escreve a própria linha de menu nem separa grupos de menu por filete (`<hr>`).
@@ -71,7 +71,7 @@ O casco é o que faz dois apps da Wicomm parecerem um só: é a primeira coisa q
 - **Confere.** `guarda:um-menu-so`.
 
 ### CASCO-03 · Tela de detalhe tem trilha
-- **Regra.** Toda tela de um objeto (detalhe, edição) abre com a trilha até a lista de onde veio. A lista das telas que existem e a das que montam a trilha são forçadas a concordar por teste.
+- **Regra.** Toda tela de um objeto (detalhe, edição) abre com a trilha até a lista de onde veio. No Editor, fora do casco, a volta e o nome da `BarraDoEditor` cumprem a trilha: a volta é obrigatória na peça. A lista das telas que existem e a das que montam a trilha são forçadas a concordar por teste.
 - **Por quê.** A tela onde mais se passava tempo não tinha volta nenhuma, e a peça de trilha já existia.
 - **Confere.** `guarda:toda-tela-de-detalhe-tem-trilha`.
 
@@ -203,7 +203,8 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | Ajuda curta | `Ajuda` (tooltip) no controle; `AjudaNoTexto` no texto que explica | `title` nativo para coisa importante |
   | Ajuda que não gera decisão | `DicaDeAjuda` (abre no foco e no toque) | texto escondido em hover |
   | Motivo do desabilitado | `ComMotivo` | `title` nativo, botão que some (salvo o gesto recusado pelo estado, PESO-03) |
-  | Barra de topo do Editor | `BarraDoEditor`, `GrupoDaBarra` | linha com `flex-wrap`, barra de duas linhas |
+  | Barra de topo do Editor | `BarraDoEditor`, `GrupoDaBarra`, `GrupoDaPessoa` | linha com `flex-wrap`, barra de duas linhas |
+  | Colunas do Editor | `ColunasDoEditor`, `ItemDaEstrutura`, `ItemDoTrilho` (a regra dos 60% medida pela peça) | larguras escritas na tela, estrutura e inspector abertos abaixo do piso |
   | Primário com alternativas | `BotaoDividido` | dois botões soltos, menu sem o primário |
   | Menu de ações | `Menu`, `ItemDoMenu`, `SubmenuDoMenu`, `AncoraDoMenu` | `Popover` com linhas à mão |
   | Trocar de contexto num gesto (o tema, a versão) | `GrupoDeEscolhaDoMenu`: a escolha JÁ é a ação | `Select`, que só vale com *Salvar* |
@@ -223,7 +224,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Confere.** `crítica:consistência` · `guarda:componente-que-ninguem-monta` · `guarda:o-irreversivel-pede-confirmacao`.
 
 ### PECA-02 · De onde a peça nova parte
-- **Regra.** Peça nova parte do componente equivalente do **shadcn oficial** quando existe (menu ← `DropdownMenu`, botão dividido ← `ButtonGroup`, faixa ← `Alert`, colunas ← `Resizable`), adaptada aos tokens e à escala da DESIGN e à forma do kit (nome em português, `tom`, motivo no desabilitado). Entra pelo **registro Wicomm**; o projeto a instala com `shadcn add @wicomm/<peça>`. As peças que o kit já tem não são trocadas pelas do catálogo oficial: já são shadcn por baixo e estão ajustadas à escala. Catálogo de terceiros serve só de referência visual: não se copia nem se instala. O crítico julga a peça antes de ela chegar a uma tela.
+- **Regra.** Peça nova parte do componente equivalente do **shadcn oficial** quando existe (menu ← `DropdownMenu`, botão dividido ← `ButtonGroup`, faixa ← `Alert`, colunas ← `Resizable`; as colunas do Editor são a exceção: `ColunasDoEditor` mede a regra da ARQ-03 e não se redimensiona à mão até um projeto pedir), adaptada aos tokens e à escala da DESIGN e à forma do kit (nome em português, `tom`, motivo no desabilitado). Entra pelo **registro Wicomm**; o projeto a instala com `shadcn add @wicomm/<peça>`. As peças que o kit já tem não são trocadas pelas do catálogo oficial: já são shadcn por baixo e estão ajustadas à escala. Catálogo de terceiros serve só de referência visual: não se copia nem se instala. O crítico julga a peça antes de ela chegar a uma tela.
 - **Por quê.** O shadcn já resolveu acessibilidade e comportamento; o que é da Wicomm é a forma. Peça de catálogo de terceiros traz outra marca, outra fonte e padrão de landing page.
 - **Confere.** Revisão de arquitetura · `crítica:consistência`.
 
