@@ -27,9 +27,9 @@ test('a fila e o passo 7 da dona nomeiam o mesmo caminho para o conflito', async
     assert.match(m, new RegExp(termo), `a fila diz ${termo}`);
     assert.match(p7, new RegExp(termo), `o passo 7 diz ${termo}`);
   }
-  // a dona só usa o app quando a base do worktree é a do PR
-  assert.match(p7, /sourceBranch/);
+  // a dona passa ao app a base do PR, e a recusa do app cai no rebase em vez de parar
   assert.match(p7, /baseRefName/);
+  assert.match(p7, /recus/);
 });
 
 test('o protocolo da fila e a regra do CLAUDE.md abrem a exceção do merge do app', () => {
@@ -45,8 +45,11 @@ test('o protocolo da fila e a regra do CLAUDE.md abrem a exceção do merge do a
 test('a skill da orquestradora lê o aviso de fim de turno como segundo sinal', () => {
   const s = secao(ler(PLUGIN, 'skills', 'orquestradora', 'SKILL.md'), 'aviso-de-fim-de-turno');
   assert.match(s, /side-sessions-event/);
+  assert.match(s, /you started/, 'o formato real do aviso');
   assert.match(s, /PR N pronto/);
   assert.match(s, /segundo sinal/);
+  // o cabeçalho traz o PR sempre que a branch tem um: só se pede a entrega com o item em merge ou a frase no relato
+  assert.match(s, /etapa: "merge"/);
   // e a dona põe a frase no começo da mensagem final, onde os 400 caracteres a alcançam
   assert.match(passo(ler(PLUGIN, 'pool', 'dona.md'), 6), /400 caracteres/);
 });
