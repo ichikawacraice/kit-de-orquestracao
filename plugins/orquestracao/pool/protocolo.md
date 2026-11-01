@@ -122,7 +122,7 @@ A limpeza apaga a lembrança, não as perguntas: elas ficam no painel com `sessa
 <a id="nunca-travar"></a>
 ## Nunca travar
 - Decisão reversível, de baixo risco ou com recomendação forte: **assuma** e siga, marcando *assumida, a confirmar* no item e no PR, **e gravando a decisão como pergunta `estado:"assumida"`** (Q-ID de `proxima-pergunta`, `sessaoId`, `titulo`, `caso`, `recomendacao` = o que se assumiu; vira `respondida` quando o operador confirma ou muda — é por ela que o resumo da ausência as conta); se o operador discordar depois, ajuste. Pergunta de verdade (irreversível, destrutiva, produção, gasto de job, publicar para fora) leva Q-ID (`proxima-pergunta`), vai ao painel e só a etapa que depende dela espera.
-- **Modo ausente** (`/ausente on` até `/ausente off`, ou o botão do painel): o turno que o operador não começou não abre sessão, só propõe o cartão (`initiation: "own_initiative"`), que fica pronto para quando ele voltar. O app já recusa sozinho o turno de outra sessão, de notificação e de plugin; a trava `travas-da-sessao.mjs` (T3) recusa a exceção dele, o aviso de fim de turno de uma sessão aberta antes, que o app deixaria abrir. O item sem dona espera na fila.
+- **Modo ausente** (`/ausente on` até `/ausente off`, ou o botão do painel): o turno que o operador não começou não abre sessão, só propõe o cartão (`initiation: "own_initiative"`), que fica pronto para quando ele voltar; a trava `travas-da-sessao.mjs` (T3) recusa o resto. O item sem dona espera na fila.
 
 <a id="arquivar"></a>
 ## Quem arquiva

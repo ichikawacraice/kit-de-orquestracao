@@ -7,26 +7,29 @@ Data: 2026-11-01. Medição pedida na [R5 do estudo de sessões nativas](2026-11
 
 | Trava | Disparos medidos | O app teria barrado sozinho | Recomendação |
 |---|---|---|---|
-| **T3** (`travas-da-sessao.mjs`, modo ausente) | 10 recusas (7 em conversa, 3 do mod) | 4 de 10 | **Encolher** — feito neste PR: a T3 passa a recusar só o aviso de fim de turno; o resto fica com o app |
+| **T3** (`travas-da-sessao.mjs`, modo ausente) | 10 recusas (7 em conversa, 3 do mod) | 4 de 4 recusas certas; as outras 6 foram erros da T3 | **Manter, corrigida** neste PR: o operador que digita no meio do turno passa a contar |
 | **`injecao-entre-sessoes`** (aviso) | 0 avisos em 849 mensagens de outra sessão | — (o app não examina conteúdo) | **Manter**, sem mudança |
 
-O achado que mudou o desenho: **a T3 não cobria a exceção que justificava existir.** O app marca com origem `human` o aviso de fim de turno em que ele deixa abrir sessão; a T3 lia só a origem e deixava esse aviso abrir sessão com o modo ausente ligado (2 vezes, 27/10). As 6 recusas que só a T3 fez foram do mesmo aviso, quando ele chegou enfileirado no meio de um turno: a T3 olhava a linha que abriu o turno e não a mensagem que chegou depois. Mesma situação, desfecho oposto conforme o aviso abria o turno ou entrava na fila.
+- **O app já faz o trabalho da T3 em tudo o que se observou.** Nenhum turno sem o operador abriu sessão de 20/10 a 01/11: o app recusou todos (`peer`, `task-notification`, `sdk`, `plugin`), inclusive o aviso de fim de turno.
+- **A exceção prevista na R5 não apareceu.** O estudo supunha que o app abre sessão no aviso de fim de turno logo depois do operador e que só a T3 o barrava. O aviso marcado `human` é outra coisa: o app cola o aviso pendente na frente da mensagem que o operador digitou (301 de 301 casos). O turno é do operador.
+- **As 6 recusas que só a T3 fez foram erros.** O operador tinha voltado ("voltar aos trabalhos, confira as sessões…") e a mensagem dele chegou enfileirada no meio de um turno aberto por outra sessão. A T3 lia só a linha que abriu o turno.
+- **Por que não remover:** o app documenta a exceção do aviso logo depois do operador, e não há medição para as origens `scheduled` e `system`. A T3 corrigida é barata e não recusou nenhum turno do operador na reprise.
 
 <a id="fontes"></a>
 ## Fontes e método
 
 - `~/.claude/orquestracao/hooks-crewai.log`: 9.246 linhas, de 23/10 04:12 a 01/11 10:54 (SP: 01:12 a 07:54). Lido, nunca gravado.
-- Transcripts em `~/.claude/projects/*/*.jsonl` modificados desde 20/10: cada `mcp__ccd_session__start_session`, a origem do turno em que ele foi chamado e o `tool_result` que voltou (abriu, o app recusou, a T3 recusou).
+- Transcripts em `~/.claude/projects/*/*.jsonl` modificados desde 20/10: cada `mcp__ccd_session__start_session`, quem escreveu no turno em que ele foi chamado e o `tool_result` que voltou (abriu, o app recusou, a T3 recusou).
 - `~/.claude/orquestracao/ausencias/`: 13 períodos de modo ausente, de 26/10 a 01/11.
-- Scripts de leitura no scratchpad da sessão (não versionados); a lógica de cada um está descrita junto da saída.
+- Scripts de leitura no scratchpad da sessão (não versionados); a lógica de cada um vem descrita junto da saída.
 
 O que o transcript registra, e que a medição usa:
 - A linha `user` que abre o turno traz `origin.kind` e/ou `turnOrigin` (`human`, `peer`, `task-notification`, `plugin`, `sdk`).
-- O que chega no meio de um turno vira um anexo `queued_command`, com `origin` quando o app deu uma.
-- O aviso de fim de turno de uma sessão aberta antes (`<system-reminder>The session "…" you started …`, hoje fechado por `</side-sessions-event>`) vem marcado `sdk` (só `turnOrigin`) ou `human` (`origin` e `turnOrigin`).
+- O que chega no meio de um turno vira um anexo `queued_command`, com `origin` quando o app deu uma. **É assim que chega o que o operador digita enquanto a sessão trabalha.**
+- O aviso de fim de turno de uma sessão aberta antes (`<system-reminder>The session "…" you started …`) chega sozinho marcado `sdk` (só `turnOrigin`) ou colado na frente da mensagem do operador, marcado `human`.
 
 <a id="t3"></a>
-## 1. T3 — o modo ausente contra a recusa nativa de abrir sessão
+## 1. T3: o modo ausente contra a recusa nativa de abrir sessão
 
 ### 1a. O que o log do kit registra
 
@@ -44,126 +47,100 @@ O que o transcript registra, e que a medição usa:
 2026-11-01T01:03:59.143Z	f58fc2bb-…	travas-da-sessao	recusou	T3 sessao mcp__ccd_session__start_session start_session
 ```
 
-O log subconta: as 6 recusas de 27/10 09:55 (06:55 SP) aparecem nos transcripts (texto da T3 no `tool_result`) mas não no log; o log não tem nenhuma linha da `travas-da-sessao` nesse minuto. As 3 de 29/10 são da sonda do F240 (o mod chamando `start_session` pelo temporizador), não de conversa.
+O log fica abaixo do real. As 6 recusas de 27/10 09:55 (06:55 SP) aparecem nos transcripts, com o texto da T3 no `tool_result`, mas não no log, que não tem nenhuma linha da `travas-da-sessao` nesse minuto. As 3 de 29/10 vêm da sonda do F240 (o mod chamando `start_session` pelo temporizador), não de conversa.
 
-### 1b. O que o app recusou sozinho
+### 1b. O aviso marcado `human` é o operador
 
-Toda chamada que não é cartão (`initiation` diferente de `own_initiative`), feita em turno que não é do operador, desde 20/10. Coluna 3 = desfecho; coluna 4 = as origens dos últimos turnos (`*` = aviso de fim de turno; `QUEUED` = mensagem enfileirada). Recorte da saída:
-
-```
-2026-10-23T02:39 6a6d90b1 APP-RECUSOU peer>peer>sdk*>sdk*>sdk*
-2026-10-23T13:50 6a6d90b1 APP-RECUSOU sdk*>sdk*>sdk*>sdk*>sdk
-2026-10-23T16:58 6a6d90b1 APP-RECUSOU sdk*>sdk>task-notification>human>plugin
-2026-10-24T01:44 f80f81a2 APP-RECUSOU sdk>peer>sdk>task-notification
-2026-10-27T13:35 0b48e9f1 APP-RECUSOU peer>sdk*>task-notification>task-notification>QUEUED   (×3)
-2026-10-27T14:24 26ea46e7 APP-RECUSOU human>sdk   (×2, "The app was quit while you were working")
-2026-10-30T15:08 c99c272e APP-RECUSOU human>human>task-notification
-2026-10-30T18:24 71b52df7 APP-RECUSOU sdk*>sdk*>sdk*>human>peer
-2026-10-30T18:32 f5d8811d SEM-CARTAO  sdk*>peer>QUEUED>QUEUED>QUEUED
-```
-
-A recusa vem no `tool_result`, com o texto *"Start sessions only on the user's own words to you here; this turn runs an automated event, another session's message, or the task another session gave you."* Os casos de `peer` que abriram sessão em 26/10 (00:08, 00:11) tinham o operador digitando no meio do turno (anexo `queued_command` com `origin: human`): o app os tratou como turno dele, corretamente.
-
-A mesma recusa vale para o mod: na sonda do F240, o clique do operador no pane (29/10 21:23, 18:23 SP), com o modo ausente desligado, foi recusado pelo app (`"contexto":"clique","isError":true,"text":"Start sessions only on the user's own words…"`). As 3 recusas da T3 pelo temporizador do mesmo mod, 1h antes, o app também teria feito. O mod de hoje não chama mais `start_session` (manda o pedido à orquestradora, `textoDoPedidoDeVaga`).
-
-### 1c. A exceção: o aviso de fim de turno que o app marca `human`
-
-Avisos de fim de turno por origem dada pelo app (linha que abre o turno ou mensagem enfileirada), por dia:
+Avisos de fim de turno por marca do app, separando o que sobra depois de tirar os `<system-reminder>` e o `<side-sessions-event>`:
 
 ```
-2026-10-27 fila:- 37
-2026-10-27 fila:human 7
-2026-10-27 linha:human 30
-2026-10-27 linha:sdk 227
-…
-2026-11-01 fila:- 8
-2026-11-01 linha:human 5
-2026-11-01 linha:sdk 75
+{
+  'linha:sdk TEXTO': 922,
+  'linha:sdk vazio': 822,
+  'fila:- vazio': 2,
+  'linha:human TEXTO': 245,
+  'fila:- TEXTO': 102,
+  'fila:human TEXTO': 54,
+  'fila:human vazio': 2
+}
 ```
 
-Cerca de 1 em 10 avisos vem marcado `human`: é a exceção nativa (o aviso de uma sessão que o operador pediu deixa abrir a próxima). Em todos os transcripts, chamadas não-cartão por quem abriu o turno (classificação da T3 nova) × desfecho real:
+Exemplos do que sobra: `linha:human` e `fila:human` trazem a fala do operador ("Q496 - os clientes também veem esses componentes…", "a sessão do ajuste de layout acabou, faça o deploy…"). `linha:sdk` e `fila:-` trazem só outro `<cross-session-message>` ou nada. Os 2 `fila:human vazio` têm uma imagem colada pelo operador. Resultado: 301 de 301 avisos marcados `human` vêm com o operador.
+
+### 1c. Quem escreveu no turno × o que aconteceu
+
+Toda chamada que não é cartão (`initiation` diferente de `own_initiative`) nos transcripts. A coluna `quem` vem da função nova `operadorNoTurno`: `operador` quando há origem `human` na linha que abriu o turno ou em alguma mensagem enfileirada nele; senão, a origem de quem abriu.
 
 ```
-  177 operador → ABRIU
-   56 aviso → ABRIU
-    8 aviso → outro
-    6 operador → outro
-    6 aviso → T3-RECUSOU
-    5 task-notification → APP-RECUSOU
-    4 plugin → outro
-    3 aviso → APP-RECUSOU
-    3 sdk → APP-RECUSOU
+todas as chamadas (quem → desfecho real):
+  233 operador → ABRIU
+   14 operador → outro
+    6 sem-operador:sdk → APP-RECUSOU
+    6 operador → T3-RECUSOU
+    5 sem-operador:task-notification → APP-RECUSOU
+    4 sem-operador:plugin → outro
     2 operador → SEM-CARTAO
-    2 peer → APP-RECUSOU
-    1 plugin → APP-RECUSOU
-    1 plugin → T3-RECUSOU
+    2 sem-operador:peer → APP-RECUSOU
+    1 sem-operador:plugin → APP-RECUSOU
+    1 sem-operador:plugin → T3-RECUSOU
 ```
 
-(`outro` = erro de entrada, como `background` curto, ou cartão que já não estava pendente.) O aviso abre sessão de verdade (56 vezes); `peer`, `task-notification`, `sdk` e `plugin` nunca abriram.
+`outro` é erro de entrada (`background` curto) ou cartão que já não estava pendente; `SEM-CARTAO` é o `offer` respondido com "No card was shown". **Nenhuma chamada sem o operador abriu sessão.** A recusa nativa vem no `tool_result`: *"Start sessions only on the user's own words to you here; this turn runs an automated event, another session's message, or the task another session gave you."*
+
+A mesma recusa vale para o mod. Na sonda do F240, o clique do operador no pane (29/10 21:23, 18:23 SP), com o modo ausente desligado, foi recusado pelo app: `"contexto":"clique","isError":true,"text":"Start sessions only on the user's own words…"`. As 3 recusas que a T3 fez pelo temporizador do mesmo mod, uma hora antes, o app também teria feito. O mod de hoje não chama mais `start_session`: manda o pedido à orquestradora (`textoDoPedidoDeVaga`).
 
 ### 1d. O modo ausente, chamada por chamada
 
-As 20 chamadas não-cartão dentro dos 13 períodos de modo ausente: o que a T3 antiga lia, a última origem que o app registrou e o desfecho.
+As 20 chamadas não-cartão feitas dentro dos 13 períodos de modo ausente, com o que a T3 corrigida faria:
 
 ```
-  2026-10-27T09:55:05 b736f98b T3-le=sdk     app-ultima=human   (sem)       T3-RECUSOU
-  2026-10-27T09:55:10 ac8b62c3 T3-le=sdk     app-ultima=human   user_asked  T3-RECUSOU   (×5 até 09:55:29)
-  2026-10-27T17:19:19 26ea46e7 T3-le=human   app-ultima=human   user_asked  ABRIU
-  2026-10-27T18:10:25 859859f4 T3-le=human   app-ultima=human   user_asked  ABRIU        (×4 até 18:10:51)
-  2026-10-27T18:20:57 26ea46e7 T3-le=human   app-ultima=human   user_asked  ABRIU
-  2026-10-27T18:21:49 859859f4 T3-le=human   app-ultima=human   user_asked  ABRIU   ← turno era aviso de fim de turno
-  2026-10-27T19:47:53 154337e1 T3-le=human   app-ultima=human   user_asked  ABRIU   ← turno era aviso de fim de turno
-  2026-10-27T21:27:05 3e69766f T3-le=human   app-ultima=human   user_asked  ABRIU
-  2026-10-31T04:22:16 71b52df7 T3-le=human   app-ultima=human   user_asked  ABRIU        (×2)
-  2026-11-01T01:03:59 f58fc2bb T3-le=plugin  app-ultima=plugin  user_asked  T3-RECUSOU
-  2026-11-01T01:58:21 f58fc2bb T3-le=human   app-ultima=human   user_asked  ABRIU
-  2026-11-01T02:02:59 c881afa0 T3-le=human   app-ultima=human   user_asked  ABRIU
+2026-10-27T09:55:05 b736f98b quem=operador real=T3-RECUSOU T3-nova=passa
+2026-10-27T09:55:10 ac8b62c3 quem=operador real=T3-RECUSOU T3-nova=passa   (×5 até 09:55:29)
+2026-10-27T17:19:19 26ea46e7 quem=operador real=ABRIU T3-nova=passa
+2026-10-27T18:10:25 859859f4 quem=operador real=ABRIU T3-nova=passa        (×4 até 18:10:51)
+2026-10-27T18:20:57 26ea46e7 quem=operador real=ABRIU T3-nova=passa
+2026-10-27T18:21:49 859859f4 quem=operador real=ABRIU T3-nova=passa
+2026-10-27T19:47:53 154337e1 quem=operador real=ABRIU T3-nova=passa
+2026-10-27T21:27:05 3e69766f quem=operador real=ABRIU T3-nova=passa
+2026-10-31T04:22:16 71b52df7 quem=operador real=ABRIU T3-nova=passa        (×2)
+2026-11-01T01:03:59 f58fc2bb quem=sem-operador:plugin real=T3-RECUSOU T3-nova=NEGA
+2026-11-01T01:58:21 f58fc2bb quem=operador real=ABRIU T3-nova=passa
+2026-11-01T02:02:59 c881afa0 quem=operador real=ABRIU T3-nova=passa
 ```
 
-O texto dos dois turnos marcados (`18:21:49` e `19:47:53`) começa com `<system-reminder> The session "F176 · …" you started … finished a turn` e `<system-reminder> The session "F191 · …" you started …`: avisos que o app marcou `human`. A T3 antiga os deixou abrir sessão.
-
-Nos 6 de 09:55, o turno abriu com uma fila de mensagens marcadas `sdk` e `peer`, e às 09:53:56 / 09:54:10 entrou enfileirado um aviso marcado `human`: o app teria deixado abrir; a T3 recusou porque olhava a linha que abriu o turno.
+**Às 09:55** os dois turnos abriram com uma fila de mensagens de outras sessões e avisos marcados `sdk`. Às 09:53:56 e 09:54:10 entrou enfileirada a mensagem do operador, marcada `human`, com o aviso pendente na frente: "voltar aos trabalhos, confira as sessões e o painel, tinha pareado por quota". A T3 antiga olhou só a linha que abriu o turno e recusou o operador 6 vezes.
 
 ### 1e. Conta da T3
 
-| Recusa da T3 | Quantas | O app teria barrado? | Prova |
+| Recusa da T3 | Quantas | Certa? | O app teria barrado? |
 |---|---|---|---|
-| Turno de plugin (01/11 01:03) | 1 | Sim | `plugin → APP-RECUSOU` em 23/10 16:58; nenhum turno de plugin abriu sessão |
-| Temporizador do mod (29/10, sonda F240) | 3 | Sim | o clique do mesmo mod foi recusado pelo app no mesmo dia |
-| Aviso `human` enfileirado (27/10 09:55) | 6 | Não | o app trata o turno pela última origem; aviso `human` abriu sessão 56 vezes |
-| **Total** | **10** | **4** | |
-
-E o que a T3 deixou passar contra a própria regra: 2 avisos `human` que abriram o turno (27/10 18:21 e 19:47).
+| Turno de plugin (01/11 01:03) | 1 | Sim | Sim: nenhum turno de plugin abriu sessão (`plugin → APP-RECUSOU`) |
+| Temporizador do mod (29/10, sonda F240) | 3 | Sim | Sim: o clique do mesmo mod foi recusado pelo app no mesmo dia |
+| Operador enfileirado (27/10 09:55) | 6 | **Não** | — (o operador estava ali) |
+| **Total** | **10** | **4** | **4 de 4** |
 
 <a id="t3-mudanca"></a>
-### 1f. A mudança (neste PR)
+### 1f. A correção (neste PR)
 
-`quemAbreSessao` (`pool-comum.mjs`) lê o turno atual inteiro — a linha que o abriu e cada `queued_command` que chegou nele — e devolve:
-- `operador`: alguma entrada com origem `human` que não é aviso e tem texto (ou anexo) além dos `<system-reminder>` iniciais;
-- `aviso`: sem o operador, com um aviso de fim de turno (pelo texto, qualquer que seja a marca do app);
-- a origem de quem abriu o turno, no resto.
+`operadorNoTurno` (`pool-comum.mjs`) lê o turno atual inteiro: a linha que o abriu e cada `queued_command` que chegou nele. Devolve `true` quando alguma delas tem origem `human`, `false` quando nenhuma tem, e `null` quando não há turno com origem. A T3, com o modo ausente ligado, recusa tudo o que não é `true`, como antes. A diferença é que o operador que digitou no meio do turno passa a contar. `origemDoTurno` e a T7 não mudam.
 
-A T3, com o modo ausente ligado, recusa só `aviso`. `operador` passa. O resto passa ao app e deixa a linha `deixou-ao-app T3 <origem>` no log, para remedir sem varrer transcripts.
+- **Fica igual:** o turno de outra sessão, de notificação, de plugin e de aviso sozinho continua recusado, agora pelo app e pela T3. Sem transcript, a T3 também recusa.
+- **Muda:** as 6 recusas erradas de 27/10 deixam de acontecer.
 
-Reprise da T3 nova sobre o histórico do modo ausente (mesmas 20 chamadas):
+<a id="t3-por-que-manter"></a>
+### 1g. Por que manter, e não remover
 
-```
-2026-10-27T09:55:05 b736f98b quem=aviso real=T3-RECUSOU T3-nova=NEGA      (e as 5 de ac8b62c3)
-2026-10-27T17:19:19 26ea46e7 quem=operador real=ABRIU T3-nova=passa
-2026-10-27T18:21:49 859859f4 quem=aviso real=ABRIU T3-nova=NEGA
-2026-10-27T19:47:53 154337e1 quem=aviso real=ABRIU T3-nova=NEGA
-2026-11-01T01:03:59 f58fc2bb quem=plugin real=T3-RECUSOU T3-nova=passa   (o app recusa turno de plugin)
-… as outras 11, todas operador → passa, como antes
-```
+O app recusou todos os turnos sem o operador que se observaram, então remover a T3 não teria aberto nenhuma sessão a mais na janela medida. Ela fica por três motivos:
+- **A exceção é documentada, mas não foi observada.** O app documenta que um aviso de fim de turno logo depois do turno do operador pode abrir sessão. Nos dados, o aviso que abriu sessão sempre vinha com a fala do operador, e os 6 turnos `sdk` sem o operador (avisos sozinhos e o "The app was quit while you were working") foram recusados. Mas o caso em que a exceção vale de fato (o operador pede "abra as sessões" e sai, e os avisos dessas sessões chegam depois) é justamente o do modo ausente.
+- **Há origens sem medição.** `scheduled` (8 linhas) e `system` (43 linhas meta) aparecem nos transcripts, mas nenhuma chamou `start_session`.
+- **O custo é pequeno.** Uma leitura do transcript por chamada de `start_session`, só com o modo ausente ligado.
 
-Também corrige o caso oposto, que não apareceu nos dados mas a T3 antiga tinha: o operador digita no meio de um turno de outra sessão (mensagem enfileirada `human`) e a T3 recusava, com ele ali.
-
-**O que se perde:** se o app voltar a abrir sessão em turno de outra sessão, de notificação ou de plugin, o modo ausente não segura mais por conta própria. A linha `deixou-ao-app` no log mostra quando isso acontecer. **O que se ganha:** a exceção nativa (aviso `human`) fica coberta nos dois caminhos, e a regra do kit para de repetir a do app.
+Para remover, é preciso uma medição que pegue a exceção do aviso logo depois do operador acontecendo: o app abrindo sessão num turno sem o operador. Enquanto ela não aparecer, a T3 repete a recusa do app sem custar nada visível.
 
 <a id="injecao"></a>
-## 2. `injecao-entre-sessoes` — o aviso de injeção contra a citação nativa
+## 2. `injecao-entre-sessoes`: o aviso de injeção contra a citação nativa
 
-O hook (UserPromptSubmit) acrescenta uma linha de aviso quando a mensagem de outra sessão casa com um dos 7 padrões de injeção (`varredura-entre-sessoes.mjs`). O app, por sua vez, entrega a mensagem citada e atribuída (`<cross-session-message from=… name=…>`, com `origin: {kind: "peer", from, hostInjected, fromMode}`) e a sessão receptora pode recusar ou pedir aprovação (`crossSessionInbound`); o app não examina o conteúdo.
+O hook (UserPromptSubmit) acrescenta uma linha de aviso quando a mensagem de outra sessão casa com um dos 7 padrões de injeção (`varredura-entre-sessoes.mjs`). O app entrega a mensagem citada e atribuída (`<cross-session-message from=… name=…>`, com `origin: {kind: "peer", from, hostInjected, fromMode}`), e a sessão que recebe pode recusar ou pedir aprovação (`crossSessionInbound`). O app não examina o conteúdo.
 
 Disparos no log desde a instalação (25/10): nenhuma linha `injecao-entre-sessoes`. Reprise do mesmo `avisoDoPrompt` do hook sobre todas as mensagens de outra sessão desde 25/10 13:00 (10:00 SP):
 
@@ -180,23 +157,23 @@ CRU 2026-10-29T14:15 linha exfiltracao tag-em=-1 ini="Another Claude session sen
 ```
 
 - 849 mensagens, 0 avisos: o hook nunca disparou, nem por falso positivo.
-- A única que casa no texto cru é um `<agent-message>` (o retorno de um subagente, formato de 29/10), que o hook não olha; o app já o entrega com moldura própria dizendo que é saída de modelo, sem autoridade do usuário. Foi falso positivo (um laudo de validação citando "tokens").
-- O UserPromptSubmit roda também para a mensagem enfileirada (anexo `hook_additional_context` do evento logo depois do `queued_command`, conferido em `ac8b62c3` às 09:53): não há caminho de mensagem que escape do hook.
-- Formato do prompt que o hook recebe: medido em 25/10 (354 entradas `viu nao-humano <cross-session-message…` do log do `operador-ausente` antigo); não remedido hoje, porque nenhum hook atual registra o começo do prompt.
+- A única mensagem que casa no texto cru é um `<agent-message>` (o retorno de um subagente, formato de 29/10), que o hook não olha. O app já o entrega com moldura própria, dizendo que é saída de modelo, sem autoridade do usuário. Era falso positivo: um laudo de validação que citava "tokens".
+- O UserPromptSubmit roda também para a mensagem enfileirada. Conferido em `ac8b62c3` às 09:53: o anexo `hook_additional_context` do evento vem logo depois do `queued_command`. Nenhum caminho de mensagem escapa do hook.
+- Formato do prompt que o hook recebe: medido em 25/10 (354 entradas `viu nao-humano <cross-session-message…` do log do `operador-ausente` antigo). Não foi remedido hoje, porque nenhum hook atual registra o começo do prompt.
 
-**Recomendação: manter.** Cobre uma coisa que o app não faz (olhar o conteúdo), custa um processo Node por prompt, e em 849 mensagens não deu um falso positivo. Não há o que encolher: a citação e a atribuição nativas não substituem a varredura do conteúdo.
+**Recomendação: manter.** O hook cobre o que o app não faz (olhar o conteúdo), custa um processo Node por prompt e não deu nenhum falso positivo em 849 mensagens. Não há o que encolher: a citação e a atribuição nativas não substituem a varredura do conteúdo.
 
 <a id="limites"></a>
 ## Limites
 
 - "O app teria barrado" vem de casos parecidos no mesmo período, não de reexecução: a recusa nativa acontece depois do PreToolUse, então a chamada que a T3 recusou nunca chegou ao app.
-- A regra exata do app para marcar `human` o aviso não está documentada; os dados mostram avisos `human` depois de turnos de `peer`, `task-notification` e `plugin`, não só logo depois do operador. A T3 nova não depende dessa regra: separa o aviso pelo texto.
-- O texto do aviso é do app (`The session "…" you started`, `<side-sessions-event>`). Se ele mudar de formato, a T3 nova deixa de reconhecê-lo e volta a passar (o mesmo que fazia antes com o aviso `human`); o teste usa as formas medidas.
+- A regra exata com que o app decide abrir sessão não está nos transcripts. O que se mede é o desfecho.
 - Janela: 20/10 a 01/11, um operador, uma máquina.
+- Correção de rota: a primeira versão deste laudo, ainda no mesmo PR, leu o aviso marcado `human` como a exceção nativa e encolhia a T3 para recusar só ele. A revisão por subagente mostrou que esse aviso vem sempre colado à mensagem do operador, e a mudança foi trocada pela correção acima.
 
 <a id="remedir"></a>
 ## Como remedir
 
-- T3: `grep -P '\ttravas-da-sessao\t(recusou\tT3|deixou-ao-app)' ~/.claude/orquestracao/hooks-crewai.log`. Uma linha `deixou-ao-app` seguida de sessão aberta (no transcript, `Started session`) é o app deixando passar o que antes recusava: aí a T3 volta a cobrir aquela origem.
+- T3: `grep -P '\ttravas-da-sessao\trecusou\tT3' ~/.claude/orquestracao/hooks-crewai.log` e, nos transcripts, o `tool_result` de cada `start_session` cruzado com quem escreveu no turno (`operadorNoTurno`). Para remover a T3: uma chamada sem o operador que o app deixou abrir.
 - `injecao-entre-sessoes`: `grep -c $'\tinjecao-entre-sessoes\tavisou' ~/.claude/orquestracao/hooks-crewai.log`.
-- Remedir em 60 dias (até 31/12/2026) ou a cada versão do app que mude sessões ligadas.
+- Remedir em 60 dias (até 31/12/2026) ou a cada versão do app que mude as sessões ligadas.
