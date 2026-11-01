@@ -961,7 +961,8 @@
       ],
       "registryDependencies": [
         "@wicomm/estilo",
-        "@wicomm/menu"
+        "@wicomm/menu",
+        "@wicomm/monograma"
       ],
       "files": [
         {
@@ -1112,6 +1113,101 @@
       "files": [
         {
           "path": "registry/wicomm/ui/popover.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "monograma",
+      "type": "registry:ui",
+      "title": "Monograma",
+      "description": "avatar — o círculo de 20px com as iniciais, em tinta neutra (sem cor por pessoa), e o círculo tracejado da pessoa que não há.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/monograma.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "pessoa",
+      "type": "registry:ui",
+      "title": "Pessoa",
+      "description": "avatar group — a pessoa numa linha de lista (monograma, nome, papel; ausente, sem nome, carregando) e a pilha de pessoas com +N e a frase inteira na dica.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/monograma",
+        "@wicomm/skeleton",
+        "@wicomm/tooltip"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/pessoa.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "linha-do-grupo",
+      "type": "registry:ui",
+      "title": "Linha do grupo",
+      "description": "table/collapsible — o grupo de linhas de uma tabela: o próprio tbody, a linha do grupo no degrau de tinta que abre e fecha, a contagem, a trilha compacta e as células alinhadas às colunas.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/table",
+        "@wicomm/progress",
+        "@wicomm/chip-de-estado"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/linha-do-grupo.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "prazo",
+      "type": "registry:ui",
+      "title": "Prazo",
+      "description": "date cell — o prazo numa linha: a data ou o intervalo em medida e a legenda relativa (em 12 dias), com a voz só quando quem chama a declara; sem data, proposta, concluído e parcial.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/estado",
+        "@wicomm/chip-de-estado",
+        "@wicomm/tooltip",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/prazo.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "escolha-na-celula",
+      "type": "registry:ui",
+      "title": "Escolha na célula",
+      "description": "dropdown-menu/popover — trocar um valor na própria célula: a leitura no peso dela com o chevron de 14px, o menu ou o popover com Salvar, gravando, recusado e sem permissão.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/menu",
+        "@wicomm/popover",
+        "@wicomm/button",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/wicomm/ui/escolha-na-celula.tsx",
           "type": "registry:ui"
         }
       ]

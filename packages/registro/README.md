@@ -69,11 +69,16 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `topo-da-pagina` | — | `PaginaDoApp` e `TopoDaPagina`: o `h1` único, o estado, o primário, o ⋯, o desfecho, os filtros |
 | `seletor-de-vista` | tabs/toggle-group | `BarraDeModos`: abas e modos, a pílula que desliza |
 | `table` | table | a tabela sem filete, a linha inteira que abre |
+| `linha-do-grupo` | table/collapsible | o grupo de linhas: o `tbody` com a linha do grupo no degrau de tinta, a contagem e as células alinhadas |
+| `prazo` | — | a data em medida e a legenda relativa; a voz só com o `tom` de quem chama |
+| `escolha-na-celula` | dropdown-menu/popover | trocar o valor na célula: a leitura e o chevron, o menu ou o popover com Salvar |
 | `ficha` | — | pares rótulo/valor |
 | `trilho-do-percurso` | stepper | o percurso de um objeto na Mesa |
 | `logotipo` | — | a marca Wicomm (provisória até o desenho oficial) |
 | `menu-do-tema` | — | claro, escuro ou do sistema; `useTema`, `ScriptDoTema` |
 | `menu-da-conta` | — | o monograma, a conta e Sair |
+| `monograma` | avatar | o círculo das iniciais, em tinta neutra; o tracejado da pessoa que não há |
+| `pessoa` | avatar group | `Pessoa` (monograma, nome, papel; ausente, sem nome) e `PilhaDePessoas` (+N, a frase na dica) |
 | `checkbox` | checkbox | a caixa de marcar e a `OpcaoDeMarcar` (a caixa com o texto) |
 | `progress` | progress | o progresso de uma etapa conhecida, com o valor escrito |
 | `medidor` | — | o número contra o teto (`meter`), a barra neutra |

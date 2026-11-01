@@ -4,6 +4,19 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.8.0 · 01/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- Quatro peças de lista no registro, pedidas pelo piloto WiControl: o grupo de linhas da tabela (`linha-do-grupo`), a pessoa e a pilha de pessoas (`pessoa`), o prazo com a legenda relativa (`prazo`) e a troca de valor na própria célula (`escolha-na-celula`).
+- O `Monograma` sai do `menu-da-conta` para um item próprio (`monograma`), com o círculo tracejado da pessoa que não há (`MonogramaAusente`).
+- PECA-01 ganha as linhas do grupo de linhas, da pessoa, do prazo e da escolha na célula.
+
+### Migração
+- Nenhuma tela existente muda; o `menu-da-conta` segue exportando `Monograma` e `iniciais`.
+- Projeto com linha de grupo, pilha de monogramas, célula de prazo ou escolha na célula feitas à mão troca pela peça do registro: `npx shadcn add @wicomm/linha-do-grupo @wicomm/pessoa @wicomm/prazo @wicomm/escolha-na-celula`.
+
 ## 0.7.0 · 31/10/2026
 
 Camadas: base, tokens, registro

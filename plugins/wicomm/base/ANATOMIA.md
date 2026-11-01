@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.7.0
+versao: 0.8.0
 description: A anatomia dos apps React da Wicomm — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -189,6 +189,10 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | O percurso de um objeto (na Mesa) | `TrilhoDoPercurso`: as etapas em ordem, só a atual com `Estado` e `tom`, a feita com o ícone de feito, a que vem sem ponto; a cor de etapa, quando o projeto a declara, entra como `PontoDaEtapa` dentro da estação | `Estado` com `tom` em toda etapa, cor da etapa à mão, `Passos` ou `Progress` para o percurso |
   | Região sem itens | `Vazio`, declarando a causa (`nada-ainda`, `filtro`, `nao-se-aplica`, `nao-informado`) e a saída quando há | ✓ sobre nada, cartão de voz, texto solto |
   | Lista de objetos | `Table` (linha de 40px, cabeçalho `t-coluna` grudado, a linha inteira abre por `LinkDaLinha`) | filete entre linhas, grade de `div` à mão |
+  | Grupo de linhas numa lista (etapa, semana, assunto) | `LinhaDoGrupo`: o próprio `<tbody>`, com a linha do grupo em `th scope="rowgroup"` no degrau de tinta e raio de agrupador, o vão de 6px entre grupos, a contagem (*7 de 10*) em `t-medida`, a trilha compacta da marca ou o `Medidor compacto` opcionais e as células alinhadas às colunas; o grupo vazio fica inerte sem opacidade; a linha do grupo não acende no hover | linha de grupo à mão em cada tela, `tr` com fundo e `colSpan` à mão, filete entre grupos, opacidade no grupo vazio |
+  | A pessoa numa linha | `Pessoa`: o `Monograma` de 20px e o nome, o papel na legenda; a ausência no círculo tracejado com a frase de quem chama; o id sem nome é *Pessoa sem nome*; várias pessoas, `PilhaDePessoas` (até 3 monogramas e *+N*; com uma a mais que o limite, a pessoa no lugar do *+1*; a frase inteira na dica e no nome acessível) | cor por pessoa, o id cru no lugar do nome, pilha sem a frase inteira |
+  | Prazo numa linha | `Prazo`: a data ou o intervalo em `t-medida` e a legenda relativa embaixo (*em 12 dias*); a voz só com o `tom` que quem chama declara (o limiar é do projeto); `forma="chip"` quando o prazo é o estado do objeto da linha; *Sem data* quando não há | data crua sem legenda, prazo que se pinta sozinho, uma célula de prazo diferente por tela |
+  | Trocar um valor na própria célula | `EscolhaNaCelula`: a leitura no peso dela e o chevron de 14px sempre à vista; o menu (a escolha é a ação) ou o popover com *Salvar*; gravando inerte com o valor novo na hora, a recusa desfaz e diz *Não mudou*; quem não pode trocar vê só a leitura | `Select` com contorno na célula, controle que só aparece no hover, gatilho que esconde o valor |
   | Coluna que rola | `RolagemDoPainel`, numa das densidades da LAY-06 | `ScrollArea`, `overflow-y-auto` com respiro à mão |
   | O topo da tela dentro do casco | `PaginaDoApp` + `TopoDaPagina` (o único que escreve o `h1`) | `h1` e linha de ações à mão em cada tela |
   | A marca no casco e na Entrada | `Logotipo` | imagem ou texto da marca à mão |

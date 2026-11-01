@@ -53,8 +53,18 @@ import Faixa from "./demos/faixa"
 import Medidor from "./demos/medidor"
 import Progress from "./demos/progress"
 import Vazio from "./demos/vazio"
+import EscolhaNaCelula from "./demos/escolha-na-celula"
+import LinhaDoGrupo from "./demos/linha-do-grupo"
+import Monograma from "./demos/monograma"
+import Pessoa from "./demos/pessoa"
+import Prazo from "./demos/prazo"
 
 export const DEMOS: Record<string, ComponentType> = {
+  "escolha-na-celula": EscolhaNaCelula,
+  "linha-do-grupo": LinhaDoGrupo,
+  "monograma": Monograma,
+  "pessoa": Pessoa,
+  "prazo": Prazo,
   "progress": Progress,
   "medidor": Medidor,
   "faixa": Faixa,

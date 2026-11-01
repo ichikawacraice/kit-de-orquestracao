@@ -3,36 +3,8 @@
 import * as React from "react"
 import { LogOutIcon, UserCogIcon } from "lucide-react"
 
-import { cn } from "@/registry/wicomm/lib/utils"
 import { ConteudoDoMenu, GatilhoDoMenu, GrupoDoMenu, ItemDoMenu, Menu } from "@/registry/wicomm/ui/menu"
-
-/** As iniciais de um nome: "Ana Souza" → "AS". */
-function iniciais(nome: string): string {
-  const partes = nome.trim().split(/\s+/).filter(Boolean)
-  const primeira = partes[0]?.[0] ?? "?"
-  const ultima = partes.length > 1 ? (partes[partes.length - 1]?.[0] ?? "") : ""
-  return (primeira + ultima).toUpperCase()
-}
-
-/**
- * O monograma da pessoa (CTRL-05): círculo de 20px com as iniciais, em tinta
- * neutra — nunca na cor da marca (MARCA-02). É enfeite do nome que vem ao lado
- * ou da dica: `aria-hidden`.
- */
-function Monograma({ nome, className }: { nome: string; className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      data-slot="monograma"
-      className={cn(
-        "inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/[0.07] text-[10px] font-[650] text-foreground-2",
-        className
-      )}
-    >
-      {iniciais(nome)}
-    </span>
-  )
-}
+import { Monograma, iniciais } from "@/registry/wicomm/ui/monograma"
 
 /**
  * O menu da conta (ANATOMIA CASCO-01: a conta mora no pé da barra lateral). O
@@ -80,4 +52,5 @@ function MenuDaConta({
   )
 }
 
+// O monograma mora em `monograma`; segue exportado daqui para quem já o importava do menu.
 export { MenuDaConta, Monograma, iniciais }
