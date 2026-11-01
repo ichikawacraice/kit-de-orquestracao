@@ -10,12 +10,16 @@ import { useDensidadeDaTabela } from "@/registry/wicomm/ui/table"
 
 type Densidade = "instrumento" | "site"
 
-/** O degrau tem a altura da linha de duas linhas e é fixo em toda célula do topo: o peso vem da tinta, do nome e do vão. */
-const ALTURA: Record<Densidade, string> = { instrumento: "h-12", site: "h-14" }
-/** O vão antes do grupo (menos no primeiro) e o ar curto depois do topo: o topo pertence às linhas de baixo (SUP-03). */
+/** O degrau tem, no mínimo, a altura da linha de duas linhas em toda célula do topo (o peso vem da tinta, do nome e do vão); cresce só quando o prazo estreito quebra a legenda. */
+const ALTURA: Record<Densidade, string> = { instrumento: "min-h-12", site: "min-h-14" }
+/**
+ * O vão grande só vem depois de grupo aberto, e o ar curto depois do topo só com o grupo aberto: o topo
+ * pertence às linhas de baixo (SUP-03). Entre grupos fechados fica o espaço curto, para a lista toda fechada
+ * continuar um índice compacto.
+ */
 const AR: Record<Densidade, string> = {
-  instrumento: "pb-1 [tbody:not(:first-of-type)_&]:pt-4",
-  site: "pb-1.5 [tbody:not(:first-of-type)_&]:pt-6",
+  instrumento: "[tbody:not(:first-of-type)_&]:pt-1.5 [tbody[data-aberto=true]+tbody_&]:pt-4 [tbody[data-aberto=true]_&]:pb-1",
+  site: "[tbody:not(:first-of-type)_&]:pt-2 [tbody[data-aberto=true]+tbody_&]:pt-6 [tbody[data-aberto=true]_&]:pb-1.5",
 }
 /** Uma célula sob uma coluna; `esconderNoCelular` quando a coluna some abaixo de 640px. */
 type CelulaDoGrupo = { conteudo: React.ReactNode; esconderNoCelular?: boolean }
@@ -38,9 +42,11 @@ const NOME: Record<Densidade, string> = { instrumento: "text-sm font-[600]", sit
  * - **Forma e ar** (SUP-03). O degrau de tinta (`bg-muted`) com raio de
  *   agrupador nas pontas (FORMA-01), na altura da linha de duas linhas (48px
  *   no instrumento, 56 no site) e o nome um degrau de tipo acima do corpo
- *   (TIPO-02). O vão antes de cada grupo, menos o primeiro (16px; 24 no site),
- *   é maior que o ar depois do topo (4px; 6): o topo pertence às linhas de
- *   baixo. As linhas recuam até o nome do grupo, e a linha acesa (o hover e o
+ *   (TIPO-02). O vão antes de um grupo, menos o primeiro, é maior que o ar
+ *   depois do topo (4px; 6) só quando o grupo de cima está aberto (16px; 24 no
+ *   site); entre grupos fechados fica o espaço curto (6px; 8) e o ar depois do
+ *   topo não existe: o topo pertence às linhas de baixo, que só há aberto. As linhas recuam até o nome do grupo (com a identidade, até depois do ponto: quando algum grupo da tabela a
+ *   tem, todo grupo reserva o lugar dela, 14px), e a linha acesa (o hover e o
  *   anel de foco) começa no recuo: mais estreita que o degrau, ela não se lê
  *   como outro grupo. Vão, ar e recuo são da peça: a tela não os escreve. A
  *   densidade vem da `Table`.
@@ -139,10 +145,11 @@ function LinhaDoGrupo({
 
   // O degrau mora num `div` dentro de cada célula: raio em célula de tabela não
   // se desenha com `border-collapse`, e o vão antes do grupo é o `pt` da célula.
-  const celula = cn("p-0 align-middle font-normal", AR[densidade])
+  // `h-px` na célula e `h-full` no degrau: o topo cresce inteiro (th e td com a mesma altura) quando o prazo quebra a legenda.
+  const celula = cn("h-px p-0 align-middle font-normal", AR[densidade])
   const degrau = (primeira: boolean, ultima: boolean, ultimaNoCelular = ultima) =>
     cn(
-      "flex items-center gap-1.5 bg-muted px-3",
+      "flex h-full items-center gap-1.5 bg-muted px-3",
       ALTURA[densidade],
       primeira && "rounded-l-xl",
       ultima && "rounded-r-xl",
@@ -162,7 +169,18 @@ function LinhaDoGrupo({
   const rotulo = (
     <>
       {chevron}
-      {identidade}
+      {identidade ? (
+        <span data-slot="lugar-da-identidade" className="flex w-2 shrink-0 items-center">
+          {identidade}
+        </span>
+      ) : (
+        // O grupo sem ponto guarda o lugar enquanto algum grupo da tabela tem: os nomes começam no mesmo x.
+        <span
+          aria-hidden="true"
+          data-slot="lugar-da-identidade"
+          className="hidden w-2 shrink-0 [table:has(>tbody[data-com-identidade])_&]:block"
+        />
+      )}
       <span className={cn("min-w-20 truncate text-left text-foreground", NOME[densidade])}>{nome}</span>
     </>
   )
@@ -172,11 +190,16 @@ function LinhaDoGrupo({
       data-slot="linha-do-grupo"
       data-aberto={aberto}
       data-vazio={vazio || undefined}
+      data-com-identidade={identidade ? true : undefined}
       // O recuo é da peça: o texto da linha alinha com o nome do grupo (32px = 12 + 14 do chevron + 6). Os 20px de
       // fora são borda transparente com o fundo recortado nela: a linha acesa (e o anel de foco) começa no recuo,
       // mais estreita que o degrau, e se lê filha do grupo, não um segundo topo. O raio de 28px na borda dá 8 por dentro.
       className={cn(
         "[&>tr[data-slot=table-row]>td:first-child]:border-l-[20px] [&>tr[data-slot=table-row]>td:first-child]:border-l-transparent [&>tr[data-slot=table-row]>td:first-child]:bg-clip-padding [&>tr[data-slot=table-row]>td:first-child]:rounded-l-[28px_8px] [&_[data-slot=link-da-linha]]:after:left-5",
+        // Alguma tabela com grupo de identidade: o recuo soma o lugar do ponto (8px + 6 de vão = 14).
+        "[table:has(>tbody[data-com-identidade])_&>tr[data-slot=table-row]>td:first-child]:border-l-[34px]",
+        "[table:has(>tbody[data-com-identidade])_&>tr[data-slot=table-row]>td:first-child]:rounded-l-[42px_8px]",
+        "[table:has(>tbody[data-com-identidade])_&_[data-slot=link-da-linha]]:after:left-[34px]",
         className
       )}
     >

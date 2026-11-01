@@ -127,6 +127,46 @@ export default function DemoDaLinhaDoGrupo() {
           <ListaGrande densidade="site" />
         </div>
       </Amostra>
+      <Amostra titulo="Lista grande, todos os grupos fechados: o espaço entre eles é curto (instrumento)">
+        <div className="w-full">
+          <ListaGrande abertos="nenhum" />
+        </div>
+      </Amostra>
+      <Amostra titulo="Fechados e abertos misturados: o vão grande só vem depois do aberto (site)">
+        <div className="w-full">
+          <ListaGrande densidade="site" abertos="alguns" />
+        </div>
+      </Amostra>
+      <Amostra titulo="Com identidade em só alguns grupos: todo grupo guarda o lugar do ponto (instrumento)">
+        <div className="w-full">
+          <ListaGrande abertos="alguns" comIdentidade />
+        </div>
+      </Amostra>
+      <Amostra titulo="Coluna de prazo estreita: a legenda quebra e o degrau cresce inteiro">
+        <div className="w-full max-w-sm">
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tarefa</TableHead>
+                <TableHead className="w-24">Prazo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <LinhaDoGrupo
+              nome="Desenho"
+              colunas={2}
+              contagem={{ feitas: 1, total: 3 }}
+              celulas={[<Prazo key="z" periodo={{ inicio: "2026-06-02", fim: "2026-07-24" }} tom="espera" hoje={HOJE} />]}
+            >
+              <TableRow>
+                <TableCell>Protótipo navegável</TableCell>
+                <TableCell>
+                  <Prazo periodo="2026-07-14" hoje={HOJE} />
+                </TableCell>
+              </TableRow>
+            </LinhaDoGrupo>
+          </Table>
+        </div>
+      </Amostra>
       <Amostra titulo="Com medida e fechado">
         <div className="w-full">
           <Table>

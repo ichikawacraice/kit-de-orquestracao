@@ -4,6 +4,18 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.9.1 · 01/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **Grupo de linhas fechado não guarda o vão de grupo aberto** (SUP-03). O vão grande (16px; 24 no site) só vem depois de grupo aberto; entre grupos fechados fica o espaço curto (6px; 8), e o ar depois do topo só existe com o grupo aberto. Uma lista toda fechada ficava 44–54% mais alta sem ganho de leitura. O bloco `lista` da DESIGN ganha `vao-entre-fechados` e `recuo-com-identidade`.
+- `linha-do-grupo`: o topo mede 48px (56 no site) **no mínimo** e cresce inteiro quando o prazo quebra a legenda no celular. Quando algum grupo da tabela tem `identidade`, o recuo das linhas e o do cabeçalho somam o lugar do ponto (46px), e todo grupo reserva esse lugar: o nome do grupo e o texto das linhas começam no mesmo x.
+- `prazo`: a data não quebra linha; só a legenda cede.
+
+### Migração
+- `npx shadcn add @wicomm/linha-do-grupo @wicomm/prazo @wicomm/table`. Nada a mudar nas telas: o vão e o recuo continuam da peça. Quem escrevia à mão um vão entre grupos fechados ou o lugar do ponto nos grupos sem identidade, remove.
+
 ## 0.9.0 · 01/11/2026
 
 Camadas: base, tokens, registro

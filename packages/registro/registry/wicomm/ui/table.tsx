@@ -46,7 +46,7 @@ function Table({
         data-densidade={densidade}
         // Com grupos, a primeira coluna do cabeçalho recua junto com as linhas (até o nome do grupo).
         className={cn(
-          "w-full caption-bottom border-separate border-spacing-0 [&:has(>[data-slot=linha-do-grupo])>thead>tr>th:first-child]:pl-8",
+          "w-full caption-bottom border-separate border-spacing-0 [&:has(>[data-slot=linha-do-grupo])>thead>tr>th:first-child]:pl-8 [&:has(>tbody[data-com-identidade])>thead>tr>th:first-child]:pl-[46px]",
           className
         )}
         {...props}

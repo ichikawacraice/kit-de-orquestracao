@@ -51,14 +51,14 @@ describe('LinhaDoGrupo', () => {
     expect(degrau.className).toContain('rounded-l-xl')
     expect(degrau.className).toContain('rounded-r-xl')
     // Um degrau acima da linha de 40px: 48px no instrumento.
-    expect(degrau.className).toContain('h-12')
+    expect(degrau.className).toContain('min-h-12')
   })
 
   it('concluído troca a barra pelo carimbo ok; site tem 56px', () => {
     render(<Grupo progresso concluido densidade="site" />)
     expect(document.querySelector('[data-slot=trilha-do-progresso]')).toBeNull()
     expect(screen.getByText('Concluído').dataset.tom).toBe('ok')
-    expect((screen.getByRole('rowheader').firstElementChild as HTMLElement).className).toContain('h-14')
+    expect((screen.getByRole('rowheader').firstElementChild as HTMLElement).className).toContain('min-h-14')
   })
 
   it('vazio: sem botão, o chevron guarda o lugar invisível, sem opacidade', () => {
@@ -178,8 +178,71 @@ describe('LinhaDoGrupo', () => {
   it('o vão antes do grupo (menos no primeiro) é maior que o ar depois do topo, e os dois são da peça', () => {
     render(<Grupo />)
     const th = screen.getByRole('rowheader')
-    expect(th.className).toContain('[tbody:not(:first-of-type)_&]:pt-4')
-    expect(th.className).toContain('pb-1')
+    expect(th.className).toContain('[tbody[data-aberto=true]+tbody_&]:pt-4')
+    expect(th.className).toContain('[tbody[data-aberto=true]_&]:pb-1')
+  })
+
+  it('o vão grande só vem depois de grupo aberto: entre grupos fechados fica o espaço curto, e o ar depois do topo só com o grupo aberto', () => {
+    render(<Grupo />)
+    const cn = screen.getByRole('rowheader').className
+    // Nenhum vão nem ar incondicional: o fechado não guarda o vão do aberto (+44% de altura numa lista toda fechada).
+    expect(cn).not.toContain('[tbody:not(:first-of-type)_&]:pt-4')
+    expect(cn).not.toMatch(/(^| )pb-1( |$)/)
+    expect(cn).toContain('[tbody:not(:first-of-type)_&]:pt-1.5')
+  })
+
+  it('o vão grande segue o grupo aberto no DOM: o seletor casa só depois de data-aberto=true', () => {
+    render(
+      <Table>
+        <LinhaDoGrupo nome="A" colunas={1} abertoDeInicio={false}><TableRow><TableCell>a</TableCell></TableRow></LinhaDoGrupo>
+        <LinhaDoGrupo nome="B" colunas={1} abertoDeInicio={false}><TableRow><TableCell>b</TableCell></TableRow></LinhaDoGrupo>
+        <LinhaDoGrupo nome="C" colunas={1}><TableRow><TableCell>c</TableCell></TableRow></LinhaDoGrupo>
+        <LinhaDoGrupo nome="D" colunas={1}><TableRow><TableCell>d</TableCell></TableRow></LinhaDoGrupo>
+      </Table>
+    )
+    const depoisDeAberto = (nome: string) => !!screen.getByText(nome).closest('tbody')!.matches('tbody[data-aberto=true]+tbody')
+    expect(['B', 'C', 'D'].map(depoisDeAberto)).toEqual([false, false, true])
+  })
+
+  it('o degrau tem altura mínima, não fixa: o prazo de quatro linhas no celular não vaza', () => {
+    render(<Grupo />)
+    const degrau = screen.getByRole('rowheader').firstElementChild as HTMLElement
+    expect(degrau.className).toContain('min-h-12')
+    expect(degrau.className).not.toMatch(/(^| )h-12( |$)/)
+    // O topo cresce inteiro: o degrau ocupa a célula (th e td com a mesma altura).
+    expect(degrau.className).toContain('h-full')
+    expect(screen.getByRole('rowheader').className).toContain('h-px')
+  })
+
+  it('a identidade de um grupo reserva o lugar dela em todo grupo da tabela e soma ao recuo das linhas', () => {
+    render(
+      <Table>
+        <LinhaDoGrupo nome="Com ponto" colunas={1} identidade={<span data-testid="ponto" aria-hidden="true" />}>
+          <TableRow><TableCell>a</TableCell></TableRow>
+        </LinhaDoGrupo>
+        <LinhaDoGrupo nome="Sem ponto" colunas={1}>
+          <TableRow><TableCell>b</TableCell></TableRow>
+        </LinhaDoGrupo>
+      </Table>
+    )
+    const com = screen.getByText('Com ponto').closest('tbody')!
+    const sem = screen.getByText('Sem ponto').closest('tbody')!
+    expect(com.dataset.comIdentidade).toBe('true')
+    expect(sem.dataset.comIdentidade).toBeUndefined()
+    // O grupo sem ponto guarda o lugar, escondido enquanto nenhum grupo da tabela tem identidade.
+    const lugar = sem.querySelector('[data-slot=lugar-da-identidade]') as HTMLElement
+    expect(lugar.className).toContain('hidden')
+    expect(lugar.className).toContain('[table:has(>tbody[data-com-identidade])_&]:block')
+    expect(com.querySelector('[data-slot=lugar-da-identidade]')!.className).not.toContain('hidden')
+    // O recuo das linhas e o do cabeçalho somam os 14px (8 do ponto + 6 de vão) quando a tabela tem identidade.
+    expect(sem.className).toContain('[table:has(>tbody[data-com-identidade])_&>tr[data-slot=table-row]>td:first-child]:border-l-[34px]')
+    expect(sem.className).toContain('[table:has(>tbody[data-com-identidade])_&_[data-slot=link-da-linha]]:after:left-[34px]')
+    expect(sem.closest('table')!.className).toContain('[&:has(>tbody[data-com-identidade])>thead>tr>th:first-child]:pl-[46px]')
+  })
+
+  it('o prazo não quebra a data: a data fica numa linha e a altura cede', () => {
+    render(<Prazo periodo={{ inicio: '2026-06-02', fim: '2026-07-24' }} hoje={new Date('2026-07-12T12:00:00-03:00')} />)
+    expect(screen.getByText('2 jun → 24 jul').className).toContain('whitespace-nowrap')
   })
 
   it('Pessoa e Prazo dentro de uma Table site medem por ela, sem repetir a prop', () => {
@@ -212,8 +275,8 @@ describe('LinhaDoGrupo', () => {
       </Table>
     )
     const th = screen.getByRole('rowheader')
-    expect((th.firstElementChild as HTMLElement).className).toContain('h-14')
-    expect(th.className).toContain('[tbody:not(:first-of-type)_&]:pt-6')
+    expect((th.firstElementChild as HTMLElement).className).toContain('min-h-14')
+    expect(th.className).toContain('[tbody[data-aberto=true]+tbody_&]:pt-6')
     expect(screen.getByText('Descoberta').className).toContain('t-titulo')
     expect(screen.getByText('Briefing').className).toContain('text-sm')
   })

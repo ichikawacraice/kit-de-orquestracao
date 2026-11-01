@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.9.0
+versao: 0.9.1
 description: A direção de design dos apps React da Wicomm — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   claro:
@@ -95,8 +95,8 @@ spacing:
   xl: "16px"
   2xl: "24px"
 lista:
-  instrumento: { linha: "40px no mínimo; 6px de ar em cima e embaixo, e cresce com o conteúdo (as entrelinhas + 12px)", topo-do-grupo: "48px", vao-antes-do-grupo: "16px", ar-depois-do-topo: "4px", recuo: "32px" }
-  site: { linha: "48px no mínimo; 8px de ar em cima e embaixo, e cresce com o conteúdo (as entrelinhas + 16px)", topo-do-grupo: "56px", vao-antes-do-grupo: "24px", ar-depois-do-topo: "6px", recuo: "32px" }
+  instrumento: { linha: "40px no mínimo; 6px de ar em cima e embaixo, e cresce com o conteúdo (as entrelinhas + 12px)", topo-do-grupo: "48px no mínimo", vao-antes-do-grupo: "16px depois de grupo aberto", vao-entre-fechados: "6px", ar-depois-do-topo: "4px só com o grupo aberto", recuo: "32px", recuo-com-identidade: "46px" }
+  site: { linha: "48px no mínimo; 8px de ar em cima e embaixo, e cresce com o conteúdo (as entrelinhas + 16px)", topo-do-grupo: "56px no mínimo", vao-antes-do-grupo: "24px depois de grupo aberto", vao-entre-fechados: "8px", ar-depois-do-topo: "6px só com o grupo aberto", recuo: "32px", recuo-com-identidade: "46px" }
 controle:
   sm: "26px, raio rounded-md (ver FORMA-01), texto 12px"
   default: "30px, raio 7, texto 13px"
@@ -400,7 +400,7 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 - **Confere.** `guarda:nada-de-vidro`.
 
 ### SUP-03 · A separação é o ar
-- **Regra.** O que separa assunto de assunto é, nesta ordem: **vão** entre peças · **degrau de tinta** dentro da peça (`bg-muted`, raio de agrupador, sem contorno) · **ar mais rótulo** entre seções. **Numa lista, a linha se separa da vizinha só por ar:** a célula guarda o ar de cima e de baixo (`lista`, no frontmatter), e a linha cresce com o conteúdo, nunca o espreme. **O grupo de linhas se separa pelo degrau**, com o vão antes dele maior que o ar depois: o topo pertence às linhas de baixo. Nunca filete entre seções nem entre linhas, nunca zebra, nunca contorno de coluna. A linha de 1px sobrevive só no anel da própria peça e no que é diagrama. O degrau mede **pelo menos 1,10:1 contra o cartão, nos dois temas**.
+- **Regra.** O que separa assunto de assunto é, nesta ordem: **vão** entre peças · **degrau de tinta** dentro da peça (`bg-muted`, raio de agrupador, sem contorno) · **ar mais rótulo** entre seções. **Numa lista, a linha se separa da vizinha só por ar:** a célula guarda o ar de cima e de baixo (`lista`, no frontmatter), e a linha cresce com o conteúdo, nunca o espreme. **O grupo de linhas se separa pelo degrau**, com o vão antes dele maior que o ar depois: o topo pertence às linhas de baixo. O vão grande só vem depois de grupo aberto; entre grupos fechados fica o espaço curto, para a lista toda fechada continuar um índice. Nunca filete entre seções nem entre linhas, nunca zebra, nunca contorno de coluna. A linha de 1px sobrevive só no anel da própria peça e no que é diagrama. O degrau mede **pelo menos 1,10:1 contra o cartão, nos dois temas**.
 - **Por quê.** Linha demais vira grade, e grade é planilha. Numa lista de seis grupos e 36 linhas de duas linhas, a célula de 40px deixava 4px entre os textos vizinhos e o grupo encostava na primeira linha: a lista virou um bloco só, sem filete nenhum faltando. No escuro, o degrau media 1,057:1 contra o cartão, metade do claro (1,110), e o grupo sumia. Zebra seria uma segunda tinta disputando com o degrau a mesma pergunta.
 - **Confere.** `crítica:ruído` · `guarda:composicao-tem-grau` · `tokens` (`muted` × `card` ≥ 1,10 nos dois temas) · `navegador` (a lista grande do ateliê, nos dois temas e nas duas densidades: ar entre textos de linhas vizinhas ≥ 12px).
 

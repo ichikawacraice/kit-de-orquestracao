@@ -45,6 +45,9 @@ const GRUPOS = [
   { nome: "Lançamento", linhas: 5 },
 ]
 
+// A cor de identidade é declarada por quem chama, por grupo — nunca pela posição, nunca a da marca nem a de uma voz.
+const IDENTIDADE: Record<string, string> = { Construção: "var(--chart-5)" }
+
 type Tarefa = { id: string; nome: string; tipo: string; quem: string | null; prazo: string; etapa: (typeof ETAPAS)[number] }
 
 // Determinístico: a vitrine nasce no build e não pode mudar a cada abertura.
@@ -65,7 +68,17 @@ const DADOS = GRUPOS.map((g, gi) => {
 })
 
 /** Uma lista grande e complexa: seis grupos, 36 linhas de duas linhas cada — o caso da leitura que cansa. */
-export function ListaGrande({ densidade = "instrumento" }: { densidade?: "instrumento" | "site" }) {
+export function ListaGrande({
+  densidade = "instrumento",
+  abertos = "todos",
+  comIdentidade = false,
+}: {
+  densidade?: "instrumento" | "site"
+  /** Quais grupos nascem abertos: todos, nenhum ou só o primeiro e o quarto (fechados e abertos misturados). */
+  abertos?: "todos" | "nenhum" | "alguns"
+  /** O ponto de cor antes do nome, em só alguns grupos: o recuo das linhas conta o lugar dele em todos. */
+  comIdentidade?: boolean
+}) {
   return (
     <ProvedorDeLink componente={LinkDoPalco}>
       <Table className="table-fixed" densidade={densidade} data-vitrine="lista-grande">
@@ -84,7 +97,7 @@ export function ListaGrande({ densidade = "instrumento" }: { densidade?: "instru
             </TableHead>
           </TableRow>
         </TableHeader>
-        {DADOS.map((g) => {
+        {DADOS.map((g, gi) => {
           const feitas = g.tarefas.filter((t) => t.etapa.tom === "ok").length
           const pessoas = [...new Set(g.tarefas.map((t) => t.quem).filter(Boolean))].map((nome) => ({ nome: nome! }))
           const prazos = g.tarefas.map((t) => t.prazo).sort()
@@ -95,6 +108,12 @@ export function ListaGrande({ densidade = "instrumento" }: { densidade?: "instru
               colunas={5}
               contagem={{ feitas, total: g.tarefas.length }}
               progresso
+              abertoDeInicio={abertos === "todos" || (abertos === "alguns" && gi % 3 === 0)}
+              identidade={
+                comIdentidade && g.nome in IDENTIDADE ? (
+                  <span aria-hidden="true" className="size-2 rounded-full" style={{ background: IDENTIDADE[g.nome] }} />
+                ) : undefined
+              }
               celulas={[
                 { conteudo: <PilhaDePessoas pessoas={pessoas} sobre="muted" />, esconderNoCelular: true },
                 <Prazo key="z" periodo={{ inicio: prazos[0], fim: prazos.at(-1) }} hoje={HOJE} />,

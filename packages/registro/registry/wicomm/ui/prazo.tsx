@@ -146,7 +146,7 @@ function Prazo({
         : `desde ${escreverDia(inicio!, hoje)}`
 
   const data = (
-    <span className={cn("t-medida text-foreground", densidade === "site" && "text-sm")}>
+    <span className={cn("t-medida whitespace-nowrap text-foreground", densidade === "site" && "text-sm")}>
       {parcial ? (
         <Ajuda texto={parcial}>
           <span
