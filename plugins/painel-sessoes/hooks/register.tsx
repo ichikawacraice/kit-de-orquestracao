@@ -46,6 +46,18 @@ const verAnteriores = atom({ plugin: 'painel-sessoes', key: 'verAnteriores' } as
 const verAssumidas = atom({ plugin: 'painel-sessoes', key: 'verAssumidas' } as const, false)
 const verFeitos = atom({ plugin: 'painel-sessoes', key: 'verFeitos' } as const, false)
 const verTodos = atom({ plugin: 'painel-sessoes', key: 'verTodos' } as const, false)
+// Lista longa: a página de cada lista longa do rodapé; a lista inteira passou do que o desktop desenha e o pane ficou vazio.
+const paginas = atom({ plugin: 'painel-sessoes', key: 'paginas' } as const, {} as Record<string, number>)
+export const POR_PAGINA = 10
+/** A fatia da lista na página pedida (presa entre a 1ª e a última, e `pagina` diz qual valeu: os botões andam dela) e o rótulo `11–20 de 25`; até POR_PAGINA, sem rótulo. */
+export function janela<T>(lista: readonly T[], pagina: number | undefined): { itens: T[]; pagina: number; rotulo: string | null; antes: boolean; depois: boolean } {
+  if (lista.length <= POR_PAGINA) return { itens: [...lista], pagina: 0, rotulo: null, antes: false, depois: false }
+  const ultima = Math.ceil(lista.length / POR_PAGINA) - 1
+  const p = Math.min(Math.max(0, Math.trunc(pagina ?? 0)), ultima)
+  const de = p * POR_PAGINA
+
+  return { itens: lista.slice(de, de + POR_PAGINA), pagina: p, rotulo: `${de + 1}–${Math.min(de + POR_PAGINA, lista.length)} de ${lista.length}`, antes: p > 0, depois: p < ultima }
+}
 const filtroTodos = atom({ plugin: 'painel-sessoes', key: 'filtroTodos' } as const, '')
 const limpezas = atom({ plugin: 'painel-sessoes', key: 'limpezas' } as const, 0)
 // A resposta em curso (a pergunta e a opção pressionada) e a sessão que o botão "abrir" está abrindo, com o botão pressionado; null = nenhuma.
@@ -824,7 +836,15 @@ async function enviarPedidos(
 }
 
 // O último lugar onde uma superfície desenhou o pane: o que a tool de diagnóstico relata.
-const desenhos: Record<string, { placement: string; bodyColumns: number; em: string }> = {}
+const desenhos: Record<string, { placement: string; bodyColumns: number; em: string; terminou: string | null; tamanho: number | null }> = {}
+/** Os caracteres da árvore em JSON (as funções dos botões ficam de fora): o que a superfície recebe, em ordem de grandeza. */
+export function tamanhoDaArvore(arvore: unknown): number | null {
+  try {
+    return JSON.stringify(arvore)?.length ?? null
+  } catch {
+    return null
+  }
+}
 
 
 // Uma leitura por vez; a falha que escapa vira erro visível, nunca rejeição solta.
@@ -2227,6 +2247,10 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const comeco = hora(await $.clock.now())
+    desenhos[e.surface] = { placement: e.props.placement, bodyColumns: e.props.bodyColumns, em: comeco, terminou: null, tamanho: null }
+    // Lista longa: o registro do começo dizia "desenhou" quando o desktop não desenhou; o fim e o tamanho dizem o que saiu.
+    const arvore = await (async () => {
     const elementos = $.ui.resolve(e)
     const { Box, Text, Button } = elementos
     const enviandoAgora = await read($, enviando)
@@ -2370,7 +2394,6 @@ export const register: Register = on => {
     // Campo de texto só onde a superfície tem um; sem ele, a opção "outra" fica sem campo.
     const Input = 'Input' in elementos ? elementos.Input : undefined
     const agora = await $.clock.now()
-    desenhos[e.surface] = { placement: e.props.placement, bodyColumns: e.props.bodyColumns, em: hora(agora) }
     const l = await read($, leitura)
     // O estado da sessão sobrevive ao reload: o de antes desta versão não tem `avisos`, `sessoes` nem `semLista`.
     const avisos = l.avisos ?? []
@@ -2592,16 +2615,46 @@ export const register: Register = on => {
         </Button>
       ) : null
 
+    // Abrir ou fechar a lista a devolve à 1ª página.
+    const primeiraPagina = (lista: string) => void update($, paginas, p => ({ ...p, [lista]: 0 }))
+    const paginasAgora = await read($, paginas)
+    const jAssumidas = janela(assumidas, paginasAgora.assumidas)
+    const jAnteriores = janela(l.anteriores, paginasAgora.anteriores)
+    const jFeitos = janela(sec.feitos, paginasAgora.feitos)
+    // A linha `11–20 de 25 · Anteriores · Próximas` embaixo da lista longa; nada até POR_PAGINA.
+    const paginacao = (lista: string, j: ReturnType<typeof janela>) =>
+      j.rotulo === null ? null : (
+        <Box key={`pagina:${lista}`} flexDirection="row" columnGap={1} alignItems="center" flexWrap="wrap">
+          <Text dimColor>{j.rotulo}</Text>
+          {j.antes && (
+            <Button key={`pagina:${lista}:antes`} variant="secondary" onPress={() => void update($, paginas, p => ({ ...p, [lista]: j.pagina - 1 }))}>
+              ‹ Anteriores
+            </Button>
+          )}
+          {j.depois && (
+            <Button key={`pagina:${lista}:depois`} variant="secondary" onPress={() => void update($, paginas, p => ({ ...p, [lista]: j.pagina + 1 }))}>
+              Próximas ›
+            </Button>
+          )}
+        </Box>
+      )
+
     const botaoAnteriores =
       l.anteriores.length > 0 ? (
-        <Button key="anteriores" variant="secondary" onPress={() => void update($, verAnteriores, v => !v)}>
+        <Button key="anteriores" variant="secondary" onPress={() => {
+          void update($, verAnteriores, v => !v)
+          primeiraPagina('anteriores')
+        }}>
           {`${verVelhas ? '▾' : '▸'} Perguntas respondidas · ${l.anteriores.length}`}
         </Button>
       ) : null
 
     const botaoAssumidas =
       assumidas.length > 0 ? (
-        <Button key="assumidas" variant="secondary" onPress={() => void update($, verAssumidas, v => !v)}>
+        <Button key="assumidas" variant="secondary" onPress={() => {
+          void update($, verAssumidas, v => !v)
+          primeiraPagina('assumidas')
+        }}>
           {`${verAss ? '▾' : '▸'} Decisões assumidas · ${assumidas.length}`}
         </Button>
       ) : null
@@ -2632,7 +2685,10 @@ export const register: Register = on => {
 
     const botaoFeitos =
       sec.feitos.length > 0 ? (
-        <Button key="feitos" variant="secondary" onPress={() => void update($, verFeitos, v => !v)}>
+        <Button key="feitos" variant="secondary" onPress={() => {
+          void update($, verFeitos, v => !v)
+          primeiraPagina('feitos')
+        }}>
           {`${verFeitosAgora ? '▾' : '▸'} Feitos hoje · ${sec.feitos.length}`}
         </Button>
       ) : null
@@ -2842,9 +2898,10 @@ export const register: Register = on => {
               </Box>
             </Box>
           )}
-          {verFeitosAgora && sec.feitos.map(i => cartao(i, 'subtle'))}
+          {verFeitosAgora && jFeitos.itens.map(i => cartao(i, 'subtle'))}
+          {verFeitosAgora && paginacao('feitos', jFeitos)}
           {verAss &&
-            assumidas.map(q => {
+            jAssumidas.itens.map(q => {
               const citadosQ = citadosDaPergunta(q)
               const card = perguntaSvg(W, q, citadosQ, 'Assumido')
 
@@ -2861,12 +2918,14 @@ export const register: Register = on => {
                 </Box>
               )
             })}
+          {verAss && paginacao('assumidas', jAssumidas)}
           {verVelhas &&
-            l.anteriores.map(a => {
+            jAnteriores.itens.map(a => {
               const linha = anteriorSvg(W, a, agora)
 
               return <Svg key={`anterior:${a.id}`} source={linha.source} alt={linha.alt} width={W} height={linha.height} />
             })}
+          {verVelhas && paginacao('anteriores', jAnteriores)}
           {verTodosAgora && (
             <Box flexDirection="column" gap={1}>
               {campoAchar}
@@ -3126,9 +3185,10 @@ export const register: Register = on => {
             {botaoAnteriores}
           </Box>
         )}
-        {verFeitosAgora && sec.feitos.map(i => linhaItem(i))}
+        {verFeitosAgora && jFeitos.itens.map(i => linhaItem(i))}
+        {verFeitosAgora && paginacao('feitos', jFeitos)}
         {verAss &&
-          assumidas.map(q => (
+          jAssumidas.itens.map(q => (
             <Box key={`assumida:${q.id}`} flexDirection="column" borderStyle="round" borderColor="inactive" paddingX={1}>
               <Text wrap="wrap">
                 <Text bold>{q.id}</Text>{' '}
@@ -3144,8 +3204,9 @@ export const register: Register = on => {
               {acoesAssumida(q)}
             </Box>
           ))}
+        {verAss && paginacao('assumidas', jAssumidas)}
         {verVelhas &&
-          l.anteriores.map(a => (
+          jAnteriores.itens.map(a => (
             <Box flexDirection="column">
               <Text wrap="wrap">
                 <Text bold>{a.id}</Text>
@@ -3155,6 +3216,7 @@ export const register: Register = on => {
               <Text color="success" wrap="wrap">{`Resposta: ${a.resposta ?? a.estado}`}</Text>
             </Box>
           ))}
+        {verVelhas && paginacao('anteriores', jAnteriores)}
         {verTodosAgora && (
           <Box flexDirection="column">
             {campoAchar}
@@ -3173,5 +3235,9 @@ export const register: Register = on => {
         )}
       </Box>
     )
+    })()
+    desenhos[e.surface] = { placement: e.props.placement, bodyColumns: e.props.bodyColumns, em: comeco, terminou: hora(await $.clock.now()), tamanho: tamanhoDaArvore(arvore) }
+
+    return arvore
   })
 }

@@ -3124,3 +3124,108 @@ test('F218: item com cartão esperando o clique não tem "Pedir dona" nem entra 
   expect(enviadas).toEqual([])
   await ui.unmount()
 })
+
+// Lista longa: a lista aberta inteira (102 assumidas numa orquestradora real) passou do que o desktop desenha e o pane ficou vazio.
+// As listas do rodapé desenham uma página de 10 por vez, com Anteriores e Próximas.
+const MUITAS_ASSUMIDAS = Array.from({ length: 25 }, (_, k) => ASSUMIDA(`Q${100 + k}`))
+const MUITAS_RESPONDIDAS = Array.from({ length: 25 }, (_, k) => doc(`Q${200 + k}`, { projeto: 'alfa', sessao: 'frente B', titulo: `fechada ${k}`, estado: 'respondida', resposta: 'sim' }, 2))
+const cartoesDe = async (ui: { findAll: (q: object) => Promise<Array<{ key?: string; props: Record<string, unknown> }>> }, sufixo: string) =>
+  (await ui.findAll({})).map(el => String(el.key ?? el.props.key ?? '')).filter(k => k.endsWith(sufixo))
+
+for (const surface of ['desktop', 'terminal'] as const) {
+  test(`lista longa (${surface}): Decisões assumidas desenha 10 por página, a mais nova primeiro, e anda com Próximas e Anteriores`, async ($, on) => {
+    const { ui } = await abrirAssumidas($, on, surface, { perguntas: MUITAS_ASSUMIDAS })
+    expect((await ui.find({ key: 'assumidas' }))?.text).toBe('▸ Decisões assumidas · 25')
+    await ui.press({ key: 'assumidas' })
+    expect(await ui.find({ key: 'Q124:confirmar' }), 'a mais nova está na 1ª página').toBeDefined()
+    expect(await ui.find({ key: 'Q115:confirmar' }), 'a 10ª está na 1ª página').toBeDefined()
+    expect(await ui.find({ key: 'Q114:confirmar' }), 'a 11ª não está').toBeUndefined()
+    expect((await ui.find({ key: 'pagina:assumidas' }))?.text).toMatch(/^1–10 de 25(?!\d)/)
+    expect(await ui.find({ key: 'pagina:assumidas:antes' }), 'na 1ª página não há Anteriores').toBeUndefined()
+    await ui.press({ key: 'pagina:assumidas:depois' })
+    expect(await ui.find({ key: 'Q124:confirmar' })).toBeUndefined()
+    expect(await ui.find({ key: 'Q114:confirmar' })).toBeDefined()
+    expect((await ui.find({ key: 'pagina:assumidas' }))?.text).toMatch(/^11–20 de 25(?!\d)/)
+    await ui.press({ key: 'pagina:assumidas:depois' })
+    expect((await ui.find({ key: 'pagina:assumidas' }))?.text).toMatch(/^21–25 de 25(?!\d)/)
+    expect(await ui.find({ key: 'Q100:confirmar' }), 'a mais antiga na última').toBeDefined()
+    expect(await ui.find({ key: 'pagina:assumidas:depois' }), 'na última página não há Próximas').toBeUndefined()
+    await ui.press({ key: 'pagina:assumidas:antes' })
+    expect((await ui.find({ key: 'pagina:assumidas' }))?.text).toMatch(/^11–20 de 25(?!\d)/)
+    await ui.unmount()
+  })
+}
+
+test('lista longa: fechar e reabrir a lista volta à 1ª página', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on, 'desktop', { perguntas: MUITAS_ASSUMIDAS })
+  await ui.press({ key: 'assumidas' })
+  await ui.press({ key: 'pagina:assumidas:depois' })
+  expect((await ui.find({ key: 'pagina:assumidas' }))?.text, 'precondição: andou').toMatch(/^11–20 de 25(?!\d)/)
+  await ui.press({ key: 'assumidas' })
+  await ui.press({ key: 'assumidas' })
+  expect((await ui.find({ key: 'pagina:assumidas' }))?.text).toMatch(/^1–10 de 25(?!\d)/)
+  await ui.unmount()
+})
+
+test('lista longa: até 10 a lista não tem paginação (a presença é medida acima)', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on)
+  await ui.press({ key: 'assumidas' })
+  expect(await ui.find({ key: 'Q30:confirmar' }), 'precondição: a lista abriu').toBeDefined()
+  expect(await ui.find({ key: 'pagina:assumidas' })).toBeUndefined()
+  await ui.unmount()
+})
+
+for (const surface of ['desktop', 'terminal'] as const) {
+  test(`lista longa (${surface}): Perguntas respondidas (as 15 que a leitura guarda) também desenha 10 por página`, async ($, on) => {
+    const { ui } = await abrirAssumidas($, on, surface, { perguntas: MUITAS_RESPONDIDAS })
+    await ui.press({ key: 'anteriores' })
+    const lido = await lerTudo(ui)
+    expect(lido, 'precondição: a lista abriu').toMatch(/fechada 24/)
+    expect(lido).toMatch(/fechada 15/)
+    expect(lido).not.toMatch(/fechada 14\b/)
+    expect((await ui.find({ key: 'pagina:anteriores' }))?.text).toMatch(/^1–10 de 15(?!\d)/)
+    await ui.press({ key: 'pagina:anteriores:depois' })
+    expect(await lerTudo(ui)).toMatch(/fechada 14\b/)
+    await ui.unmount()
+  })
+}
+
+test('lista longa: com 102 assumidas abertas o desenho cresce só uma página', async ($, on) => {
+  const { ui } = await abrirAssumidas($, on, 'desktop', { perguntas: Array.from({ length: 102 }, (_, k) => ASSUMIDA(`Q${300 + k}`)) })
+  const tamanho = async () => JSON.stringify((await ui.findAll({})).map(el => el.props)).length
+  const fechado = await tamanho()
+  await ui.press({ key: 'assumidas' })
+  expect(await ui.find({ key: 'Q401:confirmar' }), 'precondição: a lista abriu').toBeDefined()
+  const aberto = await tamanho()
+  expect(fechado, 'precondição: há desenho').toBeGreaterThan(1000)
+  expect(aberto - fechado, 'cresce por 10 cartões, não por 102').toBeLessThan(10 * 6000)
+  await ui.unmount()
+})
+
+test('lista longa: o diagnóstico diz quando o desenho terminou e o tamanho dele, além de quando começou', async ($, on) => {
+  const { ui, relogio } = await abrirAssumidas($, on)
+  const pedido = $.tool.call({ tool: 'mcp__painel-sessoes__onde_esta_o_painel' } as never)
+  await relogio.settle()
+  await relogio.advance(2000)
+  await relogio.settle()
+  const r = (await pedido) as unknown as { text: string }
+  const d = JSON.parse(r.text) as { desenhos: Record<string, { em: string; terminou: string | null; tamanho: number | null }> }
+  expect(d.desenhos.desktop, 'precondição: o desktop desenhou').toBeDefined()
+  expect(d.desenhos.desktop!.terminou).toMatch(/^\d\d:\d\d:\d\d$/)
+  expect(d.desenhos.desktop!.tamanho).toBeGreaterThan(1000)
+  await ui.unmount()
+})
+
+test('lista longa: a lista encolhe com a última página aberta e Anteriores anda já no 1º clique', async ($, on) => {
+  const { ui, relogio } = await abrirAssumidas($, on, 'desktop', { perguntas: Array.from({ length: 21 }, (_, k) => ASSUMIDA(`Q${100 + k}`)) })
+  await ui.press({ key: 'assumidas' })
+  await ui.press({ key: 'pagina:assumidas:depois' })
+  await ui.press({ key: 'pagina:assumidas:depois' })
+  expect((await ui.find({ key: 'pagina:assumidas' }))?.text, 'precondição: na 3ª página').toMatch(/^21–21 de 21(?!\d)/)
+  await ui.press({ key: 'Q100:confirmar' })
+  await relogio.settle()
+  expect((await ui.find({ key: 'pagina:assumidas' }))?.text, 'a lista encolheu e a tela mostra a última').toMatch(/^11–20 de 20(?!\d)/)
+  await ui.press({ key: 'pagina:assumidas:antes' })
+  expect((await ui.find({ key: 'pagina:assumidas' }))?.text).toMatch(/^1–10 de 20(?!\d)/)
+  await ui.unmount()
+})

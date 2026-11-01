@@ -185,6 +185,8 @@ declare module 'claude-code' {
       verFeitos: boolean
       /** A lista de todos os itens aberta. */
       verTodos: boolean
+      /** A página (de 0) de cada lista longa do rodapé (`assumidas`, `anteriores`, `feitos`); ausente = a 1ª. */
+      paginas: Record<string, number>
       /** O texto do campo Achar da lista de todos os itens. */
       filtroTodos: string
       /** Sobe a cada Limpar: o campo nasce vazio (o motor não diz se o Input é controlado). */
