@@ -24,6 +24,8 @@ import { EsperaDaLista } from "@/registry/wicomm/ui/skeleton"
  *   frequente.
  */
 type Pedir = (opcoes: OpcoesDaConfirmacao) => Promise<boolean>
+/** As opções da confirmação, menos o que o item decide; distribui pela união, para o `onConfirmar` seguir exigindo o `rotuloRodando`. */
+type ConfirmacaoDoItem = OpcoesDaConfirmacao extends infer O ? (O extends unknown ? Omit<O, "destrutivo" | "devolverFoco"> : never) : never
 const PedirDoMenu = React.createContext<Pedir | null>(null)
 
 /** A forma da linha, exportada para o teste e para quem precisar medir. Ninguém a copia. */
@@ -143,8 +145,10 @@ type ItemDoMenuProps = {
    * `onEscolher` só roda com o "sim". Com `destrutivo`, o diálogo também é
    * destrutivo. Depois do diálogo, nos dois desfechos, o foco volta ao gatilho
    * do menu se ninguém o moveu. Sem `confirmacao`, `onEscolher` roda direto.
+   * Com `onConfirmar` (a ação que roda no servidor e pode falhar), ela roda
+   * com o diálogo aberto e `onEscolher` só depois do sucesso.
    */
-  confirmacao?: Omit<OpcoesDaConfirmacao, "destrutivo" | "devolverFoco">
+  confirmacao?: ConfirmacaoDoItem
 }
 
 function IconeDaLinha({ icone: Icone, destrutivo, trancado }: { icone?: IconeDeLinha; destrutivo?: boolean; trancado: boolean }) {
@@ -264,9 +268,11 @@ function ItemDeEscolhaDoMenu({
   const trancado = !!bloqueado
   React.useEffect(() => {
     if (!bloqueados || !trancado) return
-    bloqueados.current.add(valor)
+    // O conjunto é um só pela vida do menu; guardá-lo aqui cala o aviso do exhaustive-deps sobre o `.current` na limpeza.
+    const conjunto = bloqueados.current
+    conjunto.add(valor)
     return () => {
-      bloqueados.current.delete(valor)
+      conjunto.delete(valor)
     }
   }, [bloqueados, trancado, valor])
 

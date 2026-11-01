@@ -4,6 +4,22 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.7.0 · 31/10/2026
+
+Camadas: base, tokens, registro
+
+### O que muda
+- Seis peças novas no registro, pedidas pelo piloto WiControl: a caixa de marcar (`checkbox`, com a `OpcaoDeMarcar`), o progresso de etapa (`progress`), o número contra teto (`medidor`), o valor rotulado (`badge`), a troca de contexto (`carregando-por-cima`) e a faixa (`faixa`).
+- A confirmação aceita `onConfirmar`: a ação roda com o diálogo aberto, o botão fica em curso sem perder o foco, e a falha aparece no próprio diálogo, na frase de quem usa.
+- A `Faixa` deixa de ser só do Editor: vale para toda tela, uma por tela, abaixo do topo. O véu de carregamento cobre a região que mente, nunca o casco, e espera 120ms também com movimento reduzido.
+- PECA-01 diz qual peça usar no lugar de `Sheet`, `Tabs`, `HoverCard`, `ScrollArea` e `Command`. O token `rounded-marcacao` (5px) entra nos tokens.
+- O `link-do-app`, o casco e o Editor passam no eslint do template Vite: o `componente` do `ProvedorDeLink` é tipado (`ComponenteDeLink`), sem `any`.
+
+### Migração
+- Nenhuma tela existente muda. `OpcoesDaConfirmacao` passou de `interface` a união de tipos: código que a estende com `interface … extends` passa a usar `type … = OpcoesDaConfirmacao & {…}`. Confirmação feita à mão que roda a ação com o diálogo aberto passa a usar `useConfirm` com `onConfirmar` e `rotuloRodando`; o texto do erro sai do `descreverErro`, nunca da mensagem técnica.
+- Quem passava ao `ProvedorDeLink` um link de props próprias (o `Link` do react-router, que pede `to`) o embrulha uma vez, fora de componente, com as props do `<a>`.
+- Projeto com `Faixa`, `Badge`, `Medidor` ou caixa de marcar feitos à mão troca pela peça do registro.
+
 ## 0.6.0 · 31/10/2026
 
 Camadas: base, registro, guardas

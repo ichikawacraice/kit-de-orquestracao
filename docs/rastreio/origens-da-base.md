@@ -49,7 +49,7 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | SUP-05 | DESIGN.md | ADR 0125. |
 | SUP-06 | DESIGN.md | ADR 0125 · ADR 0126. |
 | SUP-07 | DESIGN.md | Decisão do dono do produto (pedido do operador, 31/10/2026, F301): o menu de acrescentar seção de um app abria sempre para baixo e, com muitos itens, cortava no fim da tela sem deixar clicar. |
-| FORMA-01 | DESIGN.md | ADR 0344 · direção de design de origem, seção Shapes. *Nota:* a escala segue as classes que as peças de origem usam de fato; os tokens `--raio-cartao` (14) e `--raio-badge` (6) da origem quase não têm uso. O valor de `rounded-md` (8px pelo config, 6px pelo comentário de origem) se decide no navegador, na fatia de tokens. |
+| FORMA-01 | DESIGN.md | ADR 0344 · direção de design de origem, seção Shapes. *Nota:* a escala segue as classes que as peças de origem usam de fato; os tokens `--raio-cartao` (14) e `--raio-badge` (6) da origem quase não têm uso. O valor de `rounded-md` (8px pelo config, 6px pelo comentário de origem) se decide no navegador, na fatia de tokens. A trilha de progresso na pílula · revisão de arquitetura das peças, F294, 31/10/2026. |
 | FORMA-02 | DESIGN.md | Direção de design de origem, Regra da Tracejada. |
 | FORMA-03 | DESIGN.md | ADR 0125. |
 | CTRL-01 | DESIGN.md | ADR 0344 · ADR 0263. |
@@ -63,7 +63,7 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | CTRL-09 | DESIGN.md | ADR 0382 · inventário do estudo F261 (128 arquivos com `lucide-react`). *Assumida, a confirmar:* os tamanhos 14/16/18 como tokens. |
 | MOV-01 | DESIGN.md | ADR 0374 · ADR 0392. |
 | MOV-02 | DESIGN.md | ADR 0374. |
-| MOV-03 | DESIGN.md | ADR 0374. |
+| MOV-03 | DESIGN.md | ADR 0374. A espera de 120ms vale também com movimento reduzido · revisão de arquitetura das peças, F294, 31/10/2026. |
 | MED-01 | DESIGN.md | Convenção "contraste se compõe" · Do's and Don'ts da direção de origem. |
 | PRIN-01 | ANATOMIA.md | SPEC-062. |
 | PRIN-02 | ANATOMIA.md | ADR 0379 · ADR 0404. |
@@ -78,13 +78,13 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | ARQ-02 | ANATOMIA.md | SPEC-062. |
 | ARQ-03 | ANATOMIA.md | ADR 0379 · ADR 0404. |
 | ARQ-04 | ANATOMIA.md | ADR 0404. |
-| MSG-01 | ANATOMIA.md | SPEC-062 · SPEC-066. |
+| MSG-01 | ANATOMIA.md | SPEC-062 · SPEC-066. A faixa abaixo do topo, a confirmação que espera a ação terminar e o véu só sobre a região · revisão de arquitetura das peças, F294 (`docs/design/revisoes/2026-10-31-F294-pecas-do-wicontrol.md`), 31/10/2026. |
 | MSG-02 | ANATOMIA.md | SPEC-062. |
 | MSG-03 | ANATOMIA.md | SPEC-062 · ADR 0401. |
 | MSG-04 | ANATOMIA.md | SPEC-066. |
 | MSG-05 | ANATOMIA.md | Convenção "texto de UI não cita spec/doc". |
 | MSG-06 | ANATOMIA.md | ADR 0379 · anatomia de origem (o editor, ações raras no `⋯`). |
-| PECA-01 | ANATOMIA.md | SPEC-062 · ADR 0102 · ADR 0134 · ADR 0382 · ADR 0412 · ADR 0420 · ADR 0425. As linhas do percurso, do vazio, da tabela, do topo, do logotipo, da conta e do tema, e o medalhão neutro na ausência · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. A linha das colunas do Editor e o `GrupoDaPessoa` na barra (F272, fatia 2). |
+| PECA-01 | ANATOMIA.md | SPEC-062 · ADR 0102 · ADR 0134 · ADR 0382 · ADR 0412 · ADR 0420 · ADR 0425. As linhas do percurso, do vazio, da tabela, do topo, do logotipo, da conta e do tema, e o medalhão neutro na ausência · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. A linha das colunas do Editor e o `GrupoDaPessoa` na barra (F272, fatia 2). As linhas da caixa de marcar, do `Select`, da coluna que rola, da `Faixa` (que deixa de ser só do Editor), do `Badge`, do `Medidor`, do `Progress`, do `CarregandoPorCima` e da confirmação com `onConfirmar`, e o nome do shadcn na coluna "Não use" · piloto WiControl e revisão de arquitetura das peças, F294 (`docs/design/revisoes/2026-10-31-F294-pecas-do-wicontrol.md`), 31/10/2026. |
 | PECA-02 | ANATOMIA.md | Decisão do dono do produto (Q138, 23/10/2026) · Q95 · ADR 0375. As colunas do Editor sem `Resizable` · revisão de arquitetura dos blocos de tela, F272 (`docs/design/revisoes/2026-10-30-F272-blocos-de-tela.md`), 30/10/2026. (crítica 1, conflito da E5). |
 | PESO-01 | ANATOMIA.md | SPEC-062. |
 | PESO-02 | ANATOMIA.md | SPEC-062 · ADR 0124. |

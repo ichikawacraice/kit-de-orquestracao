@@ -58,7 +58,8 @@
       "--raio-cartao": "14px",
       "--raio-painel": "16px",
       "--raio-ctrl": "7px",
-      "--raio-badge": "6px"
+      "--raio-badge": "6px",
+      "--raio-marcacao": "5px"
     },
     "escuro": {
       "--background": "#0D1017",

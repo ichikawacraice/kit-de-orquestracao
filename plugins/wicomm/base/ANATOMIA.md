@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.6.0
+versao: 0.7.0
 description: A anatomia dos apps React da Wicomm — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -134,12 +134,12 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | **No item, no canvas** | estado de UM item (trabalhando, oculto, alterado e não publicado) | enquanto vale | `Estado` (ponto/play) na barra flutuante ou na linha da árvore | o item que a IA está editando |
   | **No cabeçalho do inspector** | o pedido em andamento sobre o item aberto, e o desfecho ainda não visto | enquanto anda; o desfecho até ser visto | `ChipQueAbre`; o clique abre a conversa no pedido | "editando" |
   | **Chip da barra** | estado do conjunto inteiro, em uma palavra e com número | enquanto vale | `ChipDeEstado`; o clique abre o detalhe | "3 mudanças" |
-  | **Faixa abaixo da barra** | **só** quando a tela inteira mente se a pessoa não souber (está editando algo que não está no ar, ou num escopo diferente do normal) | enquanto vale, **com a saída na própria faixa** | `FaixaDoEditor` (uma só) | "Você está vendo uma versão que não está no ar" + "Voltar à versão no ar" |
+  | **Faixa abaixo do topo** | **só** quando a tela inteira mente se a pessoa não souber (está editando algo que não está no ar, ou num escopo diferente do normal) | enquanto vale, **com a saída na própria faixa**; sem X | `Faixa` (uma só): no casco, entre o `TopoDaPagina` e a região que rola; no Editor, abaixo da barra | "Você está vendo uma versão que não está no ar" + "Voltar à versão no ar" |
   | **Conversa** | o que a IA fez, o que ela pergunta e o desfecho | o histórico do pedido | a bolha do desfecho em uma frase; o técnico na dobra *Detalhes* | "Preciso de uma escolha sua." |
-  | **Diálogo** | confirmação de ação irreversível ou cara | até a pessoa responder | `useConfirm`, com a variante destrutiva | "Publicar agora?" |
+  | **Diálogo** | confirmação de ação irreversível ou cara | até a pessoa responder; com `onConfirmar`, até a ação terminar, e a falha fica no diálogo | `useConfirm`, com a variante destrutiva | "Publicar agora?" |
   | **Diálogo que bloqueia** | a tela não serve até uma condição de fora mudar | até a condição mudar; a saída no rodapé | `DialogLongo` com `bloqueia` (`alertdialog`, sem X, sem Esc, sem clique fora) | "A sua conexão com o serviço venceu" |
   | **Toast** | desfecho de ação cujo bloco **sumiu** (fechou, navegou) | some sozinho | `useToast`, só `ok`/`ruim`/`neutro` | "Agendamento cancelado" |
-  | **Carregando por cima** | troca de contexto que bloqueia a tela inteira | enquanto dura, a partir de 120ms | `CarregandoPorCima` | "Abrindo a versão" |
+  | **Carregando por cima** | troca de contexto: o que está na região deixou de valer até o novo chegar | enquanto dura, a partir de 120ms | `CarregandoPorCima` em volta da região que mente, nunca do casco | "Abrindo a versão" |
 - **Por quê.** Mensagem longe da coisa de que fala não é lida; mensagem que dura mais do que vale vira ruído permanente.
 - **Confere.** `crítica:aderência` (o crítico confere o lugar de cada mensagem da revisão contra esta matriz).
 
@@ -184,42 +184,45 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | Assunto da janela ou do item, antes da leitura | `MedalhaoDoIcone` (`md` no cabeçalho, `sm` no item; neutro por padrão, `tom` quando a tela diz erro ou recusa — a ausência é neutra, COR-10) | disco com ícone feito à mão |
   | Estado em uma palavra | `ChipDeEstado` (declara `tom`) | `span` colorido |
   | Estado que abre o detalhe | `ChipQueAbre` | `button` à mão em volta do chip |
-  | Valor rotulado | `Badge` | chip para valor |
+  | Valor rotulado (um valor que classifica, não um estado) | `Badge`: neutro por padrão; `variant="marca"` explícito, na tinta da marca com texto em tinta | chip para valor, `Badge` com `tom`, `ChipDeEstado` para valor |
   | Marcador mínimo de voz | `Estado` (`ponto`, `play`) | círculo à mão |
   | O percurso de um objeto (na Mesa) | `TrilhoDoPercurso`: as etapas em ordem, só a atual com `Estado` e `tom`, a feita com o ícone de feito, a que vem sem ponto; a cor de etapa, quando o projeto a declara, entra como `PontoDaEtapa` dentro da estação | `Estado` com `tom` em toda etapa, cor da etapa à mão, `Passos` ou `Progress` para o percurso |
   | Região sem itens | `Vazio`, declarando a causa (`nada-ainda`, `filtro`, `nao-se-aplica`, `nao-informado`) e a saída quando há | ✓ sobre nada, cartão de voz, texto solto |
   | Lista de objetos | `Table` (linha de 40px, cabeçalho `t-coluna` grudado, a linha inteira abre por `LinkDaLinha`) | filete entre linhas, grade de `div` à mão |
+  | Coluna que rola | `RolagemDoPainel`, numa das densidades da LAY-06 | `ScrollArea`, `overflow-y-auto` com respiro à mão |
   | O topo da tela dentro do casco | `PaginaDoApp` + `TopoDaPagina` (o único que escreve o `h1`) | `h1` e linha de ações à mão em cada tela |
   | A marca no casco e na Entrada | `Logotipo` | imagem ou texto da marca à mão |
   | Conta e tema | `MenuDaConta`, `MenuDoTema` (no pé da barra lateral) | conta ou tema no cabeçalho, `Select` de tema |
   | De quem é o menu, quando o gatilho só tem ícone | `TopoDoMenu`, primeiro filho do menu | repetir o que o gatilho já mostra; rótulo de menu em caixa alta |
   | A IA trabalhando com a conversa fechada | o contorno que corre a borda do botão de IA (`ContornoDaIa`; anel inteiro parado com movimento reduzido) e um `role="status"` escondido que diz começo e fim | ponto ou play ao lado da escrita |
   | Pares rótulo/valor | `Ficha`, `ParDaFicha` | tabela de duas colunas |
-  | Número contra teto | `Medidor`, `Medidas` | barra de progresso para cota |
-  | Progresso de etapa | `Progress`; `LinhaDeAndamento` para espera de uma linha só, sem etapas conhecidas | indicador girando sem texto |
+  | Número contra teto | `Medidor` (o número em `t-medida` primeiro, a barra neutra depois; `tom` pinta só o número; sem teto, `—` e sem barra), `Medidas` | `Progress` para cota, porcentagem sozinha, barra pintada pela voz |
+  | Progresso de etapa | `Progress`, com o valor escrito (`3 de 8`) e o indicador no gradiente; `LinhaDeAndamento` para espera de uma linha só, sem etapas conhecidas | indicador girando sem texto, `Progress` sem valor escrito ou pintado pela voz |
   | Escolha com mais de dois desfechos e estado no servidor | `DialogLongo` (com `icone`) com o fato num parágrafo e a consequência de cada saída numa lista curta acima do rodapé (`Consequencias`), cada item encabeçado pelo termo do botão; as saídas lado a lado no rodapé (`AcoesDoDialogo`), o terciário como link | `useConfirm` com alternativa |
-  | Troca de vista | `BarraDeModos` / `TrilhaDoSeletor` (`seletor-de-vista`) | botões `secondary`/`ghost` alternados |
+  | Troca de vista | `BarraDeModos` / `TrilhaDoSeletor` (`seletor-de-vista`) | botões `secondary`/`ghost` alternados, `Tabs`, `ToggleGroup` |
   | Escolha com imagem | `EscolhaVisual` | radio com imagem à mão |
+  | Marcar itens de uma lista, ou o sim/não de um formulário que se grava com *Salvar* | `Checkbox`; com o texto ao lado, `OpcaoDeMarcar`; na lista, a primeira coluna, com *Marcar todos* indeterminado no cabeçalho | caixa à mão, botão que alterna com ✓, `Select` sim/não |
+  | Escolher um valor de uma lista num formulário (vale com *Salvar*) | `Select` | `Command` (a escolha com busca ainda não tem regra) |
   | Ajuda curta | `Ajuda` (tooltip) no controle; `AjudaNoTexto` no texto que explica | `title` nativo para coisa importante |
-  | Ajuda que não gera decisão | `DicaDeAjuda` (abre no foco e no toque) | texto escondido em hover |
+  | Ajuda que não gera decisão | `DicaDeAjuda` (abre no foco e no toque) | texto escondido em hover, `HoverCard` |
   | Motivo do desabilitado | `ComMotivo` | `title` nativo, botão que some (salvo o gesto recusado pelo estado, PESO-03) |
   | Barra de topo do Editor | `BarraDoEditor`, `GrupoDaBarra`, `GrupoDaPessoa` | linha com `flex-wrap`, barra de duas linhas |
   | Colunas do Editor | `ColunasDoEditor`, `ItemDaEstrutura`, `ItemDoTrilho` (a regra dos 60% medida pela peça) | larguras escritas na tela, estrutura e inspector abertos abaixo do piso |
   | Primário com alternativas | `BotaoDividido` | dois botões soltos, menu sem o primário |
   | Menu de ações | `Menu`, `ItemDoMenu`, `SubmenuDoMenu`, `AncoraDoMenu` | `Popover` com linhas à mão |
   | Trocar de contexto num gesto (o tema, a versão) | `GrupoDeEscolhaDoMenu`: a escolha JÁ é a ação | `Select`, que só vale com *Salvar* |
-  | Aviso do Editor sobre o canvas | `FaixaDoEditor` | faixas empilhadas, parágrafo vermelho solto |
+  | A tela inteira mente se a pessoa não souber (versão, escopo, prévia, conexão) | `Faixa`, uma por tela: uma linha por assunto, na ordem da MSG-06, cada uma com `tom` e a saída; no casco, entre o `TopoDaPagina` e a região que rola; no Editor, entre a `BarraDoEditor` e as colunas | faixas empilhadas, parágrafo vermelho solto, aviso com X, faixa dentro da região que rola ou sobre o canvas |
   | Ícone de IA | `IconeDaIa`; em botão com cor, `IconeDaIa sobrePreenchido` (branco, sem disco) | ícone cru, disco atrás do ícone, `✦` escrito |
   | Instrução numerada | `Passos` / `Passo`, com a falha dentro do passo | `ol` à mão |
-  | Detalhe sob demanda | `Popover` | faixa permanente |
-  | Coluna lateral sob demanda | `DialogLateral` | painel `fixed` à mão |
+  | Detalhe sob demanda | `Popover` | faixa permanente, `HoverCard` |
+  | Coluna lateral sob demanda (consultar ao lado do trabalho) | `DialogLateral` | painel `fixed` à mão, `Sheet` (o trabalho que pede janela é `DialogLongo`) |
   | Conteúdo alto em janela | `DialogLongo`; tela cheia é `DialogLongo` com `tamanho="tela"` | imagem com teto de altura; camada `fixed inset-0` à mão |
-  | Confirmação | `useConfirm` (`confirm-dialog`) | `window.confirm` |
+  | Confirmação | `useConfirm` (`confirm-dialog`); com `onConfirmar`, a ação roda com o diálogo aberto e a falha aparece nele | `window.confirm`, rodar a ação depois de fechar sem dizer a falha, segundo diálogo para o erro |
   | Bloquear a tela até uma condição de fora | `DialogLongo` com `bloqueia` (exige o rodapé com a saída) | faixa, cartão no lugar do conteúdo |
   | Rota sem o que mostrar (erro, não encontrado, sem permissão) | `TelaDeErro` (`error.tsx`, `not-found.tsx`), com a saída de quem chama | cartão tracejado |
   | Uma região que falhou, com a tela de pé | `TelaDeErro escala="bloco"` dentro do bloco: sem título nem saída, *Tentar de novo* em `outline sm` | cartão tracejado (tracejada é ausência), a tela de erro de rota no meio da tela |
   | Desfecho depois que o bloco sumiu | `useToast` | toast para erro de formulário |
-  | Carregando | `Skeleton` (lugar), `CarregandoPorCima` (troca de contexto) | indicador solto |
+  | Carregando | `Skeleton` (lugar), `CarregandoPorCima` (troca de contexto: cobre a região que mente, nunca o casco) | indicador solto, véu `fixed inset-0` à mão |
 - **Por quê.** Uma função com duas peças é a origem de toda deriva visual medida no produto de origem.
 - **Confere.** `crítica:consistência` · `guarda:componente-que-ninguem-monta` · `guarda:o-irreversivel-pede-confirmacao`.
 

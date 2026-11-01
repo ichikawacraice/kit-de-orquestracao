@@ -345,6 +345,10 @@
     },
     "raio-badge": {
       "$value": "6px"
+    },
+    "raio-marcacao": {
+      "$value": "5px",
+      "$description": "FORMA-01: a caixa de marcação (checkbox)."
     }
   },
   "tipo": {

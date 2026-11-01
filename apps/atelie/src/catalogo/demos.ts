@@ -46,9 +46,21 @@ import Tooltip from "./demos/tooltip"
 import TopoDaPagina from "./demos/topo-da-pagina"
 import Trilha from "./demos/trilha"
 import TrilhoDoPercurso from "./demos/trilho-do-percurso"
+import Badge from "./demos/badge"
+import CarregandoPorCima from "./demos/carregando-por-cima"
+import Checkbox from "./demos/checkbox"
+import Faixa from "./demos/faixa"
+import Medidor from "./demos/medidor"
+import Progress from "./demos/progress"
 import Vazio from "./demos/vazio"
 
 export const DEMOS: Record<string, ComponentType> = {
+  "progress": Progress,
+  "medidor": Medidor,
+  "faixa": Faixa,
+  "checkbox": Checkbox,
+  "carregando-por-cima": CarregandoPorCima,
+  "badge": Badge,
   "antes-do-desenho": AntesDoDesenho,
   "barra-do-editor": BarraDoEditor,
   "bloco": Bloco,

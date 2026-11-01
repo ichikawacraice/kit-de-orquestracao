@@ -38,7 +38,8 @@ const RAIOS: { classe: string; token?: string; variavel?: string; peca: string; 
   { classe: "rounded-sm", token: "sm", peca: "Sem classe de peça na base" },
   { classe: "rounded-ctrl", token: "ctrl", variavel: "--raio-ctrl", peca: "Controle: botão default e lg, campo, select" },
   { classe: "rounded-badge", token: "badge", variavel: "--raio-badge", peca: "Sem classe de peça na base" },
-  { classe: "rounded-full", peca: "Pílula: botão de ícone, contador, alça" },
+  { classe: "rounded-marcacao", token: "marcacao", variavel: "--raio-marcacao", peca: "Caixa de marcação" },
+  { classe: "rounded-full", peca: "Pílula: botão de ícone, contador, alça, trilha de progresso" },
 ]
 
 export default function EspacoEForma() {

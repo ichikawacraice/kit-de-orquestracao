@@ -36,6 +36,14 @@ const EXCLUIDOS = {
   '--plat-*': 'domínio: as plataformas que o produto atende',
   '--icone-da-ia': 'o desenho (máscara SVG) do ícone de IA: vai com a peça IconeDaIa, no registro (F261.3)',
 }
+/**
+ * Os tokens que o pacote tem e a origem não, e por quê. Token só da Wicomm
+ * entra aqui com o motivo; os outros seguem 1:1 com a origem.
+ */
+const PROPRIOS = {
+  '--raio-marcacao': 'FORMA-01 declara 5px para a caixa de marcação; a origem a escrevia como valor solto (rounded-[5px]), e o registro ganhou a peça (F294)',
+}
+
 const excluido = (nome) => Object.keys(EXCLUIDOS).some((e) => (e.endsWith('*') ? nome.startsWith(e.slice(0, -1)) : nome === e))
 
 /**
@@ -101,6 +109,7 @@ describe('paridade com o globals.css da origem', () => {
       const origem = blocoDaOrigem(tema)
       const diferentes = []
       for (const [nome, valor] of Object.entries(VARS[tema])) {
+        if (nome in PROPRIOS) continue
         if (norma(valor) !== norma(origem[nome] ?? '(ausente)')) diferentes.push(`${nome}: pacote ${valor} · origem ${origem[nome] ?? '(ausente)'}`)
       }
       assert.deepEqual(diferentes, [])
@@ -156,7 +165,8 @@ describe('paridade com o tailwind.config da origem', () => {
   })
 
   it('raio, tamanho de letra, altura de controle e largura de leitura iguais', () => {
-    assert.deepEqual(MD.raios, entradas(blocoDoConfig('borderRadius')))
+    const raiosProprios = Object.keys(PROPRIOS).filter((n) => n.startsWith('--raio-')).map((n) => n.slice('--raio-'.length))
+    assert.deepEqual(Object.fromEntries(Object.entries(MD.raios).filter(([k]) => !raiosProprios.includes(k))), entradas(blocoDoConfig('borderRadius')))
     assert.deepEqual(MD.tamanhos, semCampanha(entradas(blocoDoConfig('fontSize'))))
     assert.deepEqual(MD.alturas, { ctrl: entradas(blocoDoConfig('height')).ctrl }) // espera-* é peça do registro
     assert.deepEqual(MD.alturas, entradas(blocoDoConfig('size')))

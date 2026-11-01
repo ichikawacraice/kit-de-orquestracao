@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import { ProvedorDeLink } from "@/registry/wicomm/lib/link-do-app"
+import { ProvedorDeLink, type ComponenteDeLink } from "@/registry/wicomm/lib/link-do-app"
 import { ToastProvider } from "@/registry/wicomm/ui/toast"
 import { TooltipProvider } from "@/registry/wicomm/ui/tooltip"
 import { BarraLateral, type Contagem, type Conta, type GrupoDeDestinos } from "@/registry/wicomm/blocks/casco/barra-lateral"
@@ -68,7 +68,7 @@ function CascoDoApp({
   /** O `CabecalhoDoApp`, quando o app tem algo que vale para todas as telas. */
   cabecalho?: React.ReactNode
   /** O link do framework (`next/link`); sem ele, `<a>`. */
-  link?: React.ComponentType<any>
+  link?: ComponenteDeLink
   /** A tela declarada densa: a barra começa recolhida nela. */
   recolherNestaTela?: boolean
   children: React.ReactNode

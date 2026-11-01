@@ -61,6 +61,7 @@
   --raio-painel: 16px;
   --raio-ctrl: 7px;
   --raio-badge: 6px;
+  --raio-marcacao: 5px;
 }
 
 .dark {
@@ -173,6 +174,7 @@
   --radius-painel: var(--raio-painel);
   --radius-ctrl: var(--raio-ctrl);
   --radius-badge: var(--raio-badge);
+  --radius-marcacao: var(--raio-marcacao);
   --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --text-legenda: 11px;
   --text-controle: 13px;

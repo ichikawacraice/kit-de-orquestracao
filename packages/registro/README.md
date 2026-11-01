@@ -50,7 +50,7 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `bloco` | — | o nome solto e o cartão com o conteúdo; recolhível |
 | `bloco-de-tinta` | callout | o degrau de tinta da voz; `GrupoDeTinta` |
 | `dialog` | dialog | o curto, o `DialogLongo` (com `bloqueia`) e o `DialogLateral` |
-| `confirm-dialog` | alert-dialog | `useConfirm()` no lugar do `window.confirm` |
+| `confirm-dialog` | alert-dialog | `useConfirm()` no lugar do `window.confirm`; com `onConfirmar`, a ação roda com o diálogo aberto |
 | `tooltip` | tooltip | a dica; `Ajuda` (um gatilho, um texto) |
 | `dica-de-ajuda` | — | o ⓘ ao lado do controle (hover, foco e toque) |
 | `com-motivo` | — | o gesto desabilitado diz por quê |
@@ -59,7 +59,8 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `menu` | dropdown-menu | grupos por ar, linha bloqueada com motivo, confirmação pela peça, escolha, submenu |
 | `antes-do-desenho` | — | o script que aplica o tema e a barra recolhida no `<html>` antes do primeiro desenho (layout raiz) |
 | `link-do-app` | — | o link das peças: `<a>` por padrão, o do framework pelo `ProvedorDeLink` |
-| `chip-de-estado` | badge | o estado em uma palavra (`ChipDeEstado`, `ChipQueAbre`), com a forma única do carimbo |
+| `chip-de-estado` | — | o estado em uma palavra (`ChipDeEstado`, `ChipQueAbre`), com a forma única do carimbo |
+| `badge` | badge | o valor que classifica (não o estado), no mesmo casco do carimbo; neutro ou `marca` |
 | `estado` | — | o ponto de 6px e a palavra |
 | `medalhao-do-icone` | — | o disco com o ícone do assunto |
 | `trilha` | breadcrumb | a trilha de volta da tela de detalhe |
@@ -73,6 +74,21 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `logotipo` | — | a marca Wicomm (provisória até o desenho oficial) |
 | `menu-do-tema` | — | claro, escuro ou do sistema; `useTema`, `ScriptDoTema` |
 | `menu-da-conta` | — | o monograma, a conta e Sair |
+| `checkbox` | checkbox | a caixa de marcar e a `OpcaoDeMarcar` (a caixa com o texto) |
+| `progress` | progress | o progresso de uma etapa conhecida, com o valor escrito |
+| `medidor` | — | o número contra o teto (`meter`), a barra neutra |
+| `carregando-por-cima` | — | a troca de contexto: o véu sobre a região, a partir de 120ms |
+| `faixa` | alert | o aviso de quando a tela inteira mente: uma por tela, uma linha por assunto, com a saída |
+
+**Procurou pelo nome do shadcn e não achou?** Algumas funções já têm peça com outro nome (ANATOMIA, PECA-01):
+
+| no shadcn | na Wicomm |
+|---|---|
+| `sheet` | `DialogLateral` (`dialog`), para consultar ao lado do trabalho; o formulário que pede janela é o `DialogLongo` |
+| `tabs`, `toggle-group` | `BarraDeModos` (`seletor-de-vista`): `densidade="abas"` troca o painel, `"modos"` troca o desenho |
+| `hover-card` | `Popover` (detalhe sob demanda, no clique) ou `DicaDeAjuda` (ajuda que não gera decisão); hover como pista só na barra recolhida |
+| `scroll-area` | `RolagemDoPainel` (`painel`): a rolagem nativa, com o respiro nas três densidades |
+| `command`, `combobox` | `Select`, por enquanto: a escolha com busca ainda não tem regra |
 
 Nomes: as primitivas do shadcn mantêm o nome do shadcn (`button`, `dialog`); as peças próprias são em português. As props seguem a mesma regra: as do shadcn com o nome do shadcn (`variant`, `size`), as acrescentadas em português (`tamanho`, `voz`, `tom`).
 
@@ -115,6 +131,7 @@ Os testes:
 |---|---|
 | `test/registro.test.mjs` | O estilo carrega todo token do pacote com o mesmo valor; cada arquivo está em uma peça; toda importação está declarada (npm e registro); as versões do npm são as que os testes rodaram; toda peça tem teste dom; nada do produto de origem no que se instala; o `shadcn build` sai na pasta da versão. |
 | `test/*.dom.test.tsx` | O comportamento de cada peça em jsdom: escala e variantes, superfícies, diálogos, dica, aviso, confirmação, ⓘ e menu. |
+| `test/marcar-medir-e-avisar.dom.test.tsx` | A caixa de marcar, o progresso, o medidor, o valor rotulado, o véu da troca de contexto (os 120ms) e a faixa (a ordem dos assuntos). |
 | `test/cn.test.ts` | O `cn` conhece os nomes do tema (`text-legenda`, `rounded-ctrl`, `h-ctrl`, `duration-*`, superfícies e vozes). |
 | `test/as-pecas-dos-blocos.dom.test.tsx`, `test/os-blocos.dom.test.tsx` | As peças que os blocos pedem, e cada bloco nos estados da revisão de arquitetura. |
 | `test/guardas-nos-blocos.test.mjs` | As guardas de `@wicomm/guardas` sobre o que o registro instala, no lugar em que o `add` o põe, com base zero; e a prova de que a varredura morde. |

@@ -21,17 +21,28 @@ function ProvedorDeLink({
   componente,
   children,
 }: {
-  // O `Link` do Next tem props a mais (`prefetch`, `replace`); o que a peça passa é o subconjunto do `<a>`.
-  componente: React.ComponentType<any>
+  /**
+   * O `Link` do Next entra como está: as props a mais dele (`prefetch`,
+   * `replace`) são opcionais, e o que a peça passa é o subconjunto do `<a>`. O
+   * do react-router pede `to`: embrulhe-o uma vez, FORA de componente
+   * (`const LinkDoRoteador = ({ href, ...p }: PropsDoLink) => <Link to={href} {...p} />`),
+   * senão cada desenho cria um componente novo e o link remonta.
+   */
+  componente: ComponenteDeLink
   children: React.ReactNode
 }) {
-  return <LinkDoContexto.Provider value={componente as ComponenteDeLink}>{children}</LinkDoContexto.Provider>
+  return <LinkDoContexto.Provider value={componente}>{children}</LinkDoContexto.Provider>
 }
 
 function LinkDoApp(props: PropsDoLink) {
   const Componente = React.useContext(LinkDoContexto)
-  if (Componente) return <Componente {...props} />
+  // O componente vem do contexto: o app o declara uma vez, no casco, e ele não
+  // muda entre desenhos — o estado do link não reinicia. Em JSX, o
+  // `react-hooks/static-components` (v7) o lê como criado no desenho; e uma
+  // diretiva que o desligue quebraria o lint do projeto sem esse plugin
+  // ("Definition for rule … was not found"). Por isso o `createElement`.
+  if (Componente) return React.createElement(Componente, props)
   return <a {...props} />
 }
 
-export { LinkDoApp, ProvedorDeLink, type PropsDoLink }
+export { LinkDoApp, ProvedorDeLink, type ComponenteDeLink, type PropsDoLink }

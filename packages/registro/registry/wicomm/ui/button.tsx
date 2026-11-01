@@ -32,9 +32,12 @@ import { cn } from "@/registry/wicomm/lib/utils"
  * (COR-11). Nenhuma sombra: controle pequeno com sombra faz a barra levitar
  * (SUP-05). Foco: anel de 2px na marca com 2px de deslocamento (SUP-06).
  * Rótulo sem reticências (CTRL-07).
+ *
+ * `aria-disabled` tem a cara do `disabled`: é o botão em curso que guarda o
+ * foco do teclado (o `disabled` o joga no `body`). Quem usa ignora o clique.
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-[550] transition-colors duration-cor focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-[.42] [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-[550] transition-colors duration-cor focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-[.42] aria-disabled:pointer-events-none aria-disabled:opacity-[.42] [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
   {
     variants: {
       variant: {

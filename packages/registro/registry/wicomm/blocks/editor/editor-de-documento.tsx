@@ -37,7 +37,7 @@ import { TelaDeErro } from "@/registry/wicomm/ui/tela-de-erro"
 import { ToastProvider, useToast } from "@/registry/wicomm/ui/toast"
 import { TooltipProvider, Ajuda } from "@/registry/wicomm/ui/tooltip"
 import { Vazio } from "@/registry/wicomm/ui/vazio"
-import { LinkDoApp, ProvedorDeLink } from "@/registry/wicomm/lib/link-do-app"
+import { LinkDoApp, ProvedorDeLink, type ComponenteDeLink } from "@/registry/wicomm/lib/link-do-app"
 import { cn } from "@/registry/wicomm/lib/utils"
 import {
   pendenciasDe,
@@ -67,7 +67,7 @@ type Campo = "titulo" | "subtitulo" | "alinhamento" | "fundo"
  * dentro de um respiro de `p-2`. Os provedores que as peças pedem (aviso, dica,
  * link) moram aqui, como no casco.
  */
-function CascoDoEditor({ link, children }: { link?: React.ComponentType<any>; children: React.ReactNode }) {
+function CascoDoEditor({ link, children }: { link?: ComponenteDeLink; children: React.ReactNode }) {
   const conteudo = (
     <ToastProvider>
       <TooltipProvider>

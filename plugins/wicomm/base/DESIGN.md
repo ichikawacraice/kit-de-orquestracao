@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.6.0
+versao: 0.7.0
 description: A direção de design dos apps React da Wicomm — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   claro:
@@ -427,7 +427,7 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 ## 7. Forma
 
 ### FORMA-01 · O raio sobe com o tamanho da superfície
-- **Regra.** Um raio por classe de peça, do frontmatter `rounded`: **container** 16px (cartão, painel, tabela, diálogo) · **agrupador** 12px (popover, menu, degrau de tinta) · **dica** 10px · **controle** 7px (botão default e lg, campo, select) · **`rounded-md`** (carimbo, botão `sm`) · **caixa de marcação** 5px · **pílula** (botão de ícone, contador, alça). Raio fora dessa escala é defeito.
+- **Regra.** Um raio por classe de peça, do frontmatter `rounded`: **container** 16px (cartão, painel, tabela, diálogo) · **agrupador** 12px (popover, menu, degrau de tinta) · **dica** 10px · **controle** 7px (botão default e lg, campo, select) · **`rounded-md`** (carimbo, botão `sm`) · **caixa de marcação** 5px · **pílula** (botão de ícone, contador, alça, trilha de progresso). Raio fora dessa escala é defeito.
 - **Por quê.** Raio por classe de peça mantém a família visual entre telas que nunca foram desenhadas juntas.
 - **Confere.** `tokens` · `guarda` de valor arbitrário.
 
@@ -515,7 +515,7 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 - **Confere.** `guarda:o-movimento-tem-escape`.
 
 ### MOV-03 · O que entra se move; o que sai some
-- **Regra.** Transição nova entra só na chegada (`animate-in fade-in-0`), sem animação de saída. Mudança de estado só troca a cor (`duration-cor`). O que aparece no hover/foco usa `duration-revela`. Véu de carregamento só aparece se a espera passar de 120ms (`delay-veu`).
+- **Regra.** Transição nova entra só na chegada (`animate-in fade-in-0`), sem animação de saída. Mudança de estado só troca a cor (`duration-cor`). O que aparece no hover/foco usa `duration-revela`. Véu de carregamento só aparece se a espera passar de 120ms (`delay-veu`), **também com movimento reduzido: o escape tira o esmaecer, não a espera**.
 - **Por quê.** Animação de saída atrasa a resposta ao gesto que a pessoa já fez.
 - **Confere.** `crítica:ruído` · `guarda:o-movimento-tem-escape`.
 
