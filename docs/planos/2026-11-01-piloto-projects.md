@@ -1,4 +1,4 @@
-# Piloto do Claude Projects num projeto que já usa o kit
+# Piloto do Claude Projects num projeto que já usa o kit: o máximo de nativo, o mínimo de kit
 
 Plano de 01/11/2026 (F311). Base: o estudo [sessões nativas × kit](../research/2026-11-01-sessoes-nativas-x-kit.md), seções [Projects](../research/2026-11-01-sessoes-nativas-x-kit.md#projects), [cruzamento](../research/2026-11-01-sessoes-nativas-x-kit.md#cruzamento) e [R8](../research/2026-11-01-sessoes-nativas-x-kit.md#r8). O que o estudo afirma sobre o Projects vem da doc oficial em 01/11; o que este plano manda medir é o que a doc não responde.
 
@@ -11,36 +11,82 @@ Rodar o Projects (conversa coordenadora + threads, Overview) por 1 a 2 dias no p
 1. **O uso:** itens fechados, PRs, tempo do pedido ao PR e do PR ao merge.
 2. **Os problemas:** o que se perde em relação ao kit (travas, painel, fila de merge, Q-ID, teto de donas, teto de núcleos) e o que o contorno segurou.
 3. **O gasto:** tokens e uso do plano.
-4. **A recomendação:** manter o Projects para algum tipo de item, trazer alguma peça dele para o kit, ou encerrar.
+4. **O mínimo de kit:** quantas peças do kit precisaram ficar ligadas ([quem cuida do quê](#quem-cuida)) e quais tiveram de ser religadas no meio.
+5. **A recomendação:** manter o Projects com quais peças do kit, ou religar o kit.
 
 **Pronto quando:** a planilha tem as duas colunas preenchidas com o que se **mediu** (a do kit pela [linha de base](#linha-de-base), a do Projects pela janela do piloto) e o laudo de uma página traz a recomendação. Nada do piloto muda o kit: o que valer a pena vira item próprio depois.
 
 **Fora do escopo:** migrar o projeto para o Projects; mexer no kit; gravar no repositório do piloto pela sessão do kit (lá só gravam as threads, por PR, e o operador).
 
-<a id="por-que-este-projeto"></a>
-## Por que um projeto que já usa o kit (e o que isso custa)
+<a id="cenario"></a>
+## O cenário: o máximo de nativo, o mínimo de kit
 
-O operador escolheu pilotar no próprio projeto em que o kit trabalha todo dia, para comparar uso, problemas e gasto no mesmo terreno. O preço:
-- **Os dois sistemas no mesmo repositório:** threads e donas podem pegar o mesmo trabalho e os mesmos arquivos. A [convivência](#convivencia) separa por item.
-- **Projeto grande:** a sandbox da nuvem precisa instalar o monorepo e rodar os testes sem banco nem segredo; parte da suíte pode pular. Isso vira medida (M12), não bloqueio.
-- **Erro do piloto cai em código que importa:** a thread roda em *auto mode*. Mitigação: as instruções proíbem banco, produção e segredo, os conectores da conta com acesso a produção se desligam para o projeto, e quem mergeia é a fila do kit (com o gate), não a thread.
+Decisões do operador em 01/11: **"tudo no Projects"** (o kit fica pausado no projeto durante o piloto, e os itens vivos também passam a threads) e, sobre onde as threads rodam, *"se precisamos que seja local para poder ter os nossos controles, não tem problema, vamos ver o melhor cenário de usar tudo que o claude nos dá, e termos menos responsabilidades para o nosso kit"*.
+
+- **Thread local é o padrão** (*Work locally*, por Remote Control, uma worktree por thread). Na máquina, ela roda os hooks do repositório, o teto de núcleos do comando de teste, o banco local de teste e as permissões da máquina. Ela carrega as instruções do projeto, **mas não a memória do projeto** ([memória](#memoria)).
+- **Thread na nuvem só para o que não precisa de recurso local nem de trava:** pesquisa, leitura e rascunho de doc que não roda teste.
+- **O coordenador** (a conversa do projeto) abre e acompanha as threads, guarda a memória do projeto e reserva os números de documento.
+- **O kit fica só com o que só ele faz:** o gate sobre a combinação dos PRs (fila de merge), o teto de núcleos e as travas do próprio repositório.
+- **A fila de merge passa a ser rodada por uma "thread de merge" local e fixa,** a única com o plugin `orquestracao` ligado. O coordenador manda a ela cada `PR N pronto, HEAD <sha>`; ela roda `painel fila-de-merge` e devolve o resultado. Com isso, a orquestradora fica desligada. O coordenador não faz esse papel porque roda na nuvem e não alcança a máquina.
+
+<a id="quem-cuida"></a>
+## Quem cuida do quê no piloto
+
+**Desligada** = o nativo cobre, ou a peça fica sem uso. **Mantida** = só o kit cobre. **Adaptada** = continua, por outro caminho. *Inerte* = o hook continua instalado, mas só dispara para quem tem o papel (orquestradora, ou dona de item vivo), e no piloto ninguém tem.
+
+| Peça do kit | No piloto | Quem cobre |
+|---|---|---|
+| Orquestradora, skill `orquestradora`, `orquestradora-ritual` (inclui a cobrança de item sem dona), `orquestradora-nao-edita` | **Desligada** (sessão arquivada; os hooks ficam inertes) | Coordenador |
+| Sessão dona, `dona.md`, `titulo-da-dona`, `fila-do-item` | **Desligada** (inerte) | Thread, uma por item; Overview |
+| `criterio-da-dona` (saída real do teste no relatório) | **Adaptada** | Instrução: a saída do teste vai no PR. A garantia se perde |
+| Painel, pane (`painel-sessoes`), `painel-das-sessoes` | **Desligado no projeto** (plugin desligado nas pastas das threads; itens vivos em `espera`) | Overview |
+| Batida | **Desligada para o projeto** (item em `espera` não é cutucado nem solto; conferido em `batida.mjs`) | Overview (*Idle*, *Waiting on you*, *Resolved*) |
+| Fila de merge (gate uma vez na combinação, bisseção) | **Mantida** (*a confirmar com o operador*) | Thread de merge, local |
+| Release e notas de release | **Adaptada** | Thread de merge, só a pedido do operador; recomendação: nenhum release no piloto |
+| Q-ID e perguntas no painel | **Desligada** | *Waiting on you* + três partes nas instruções |
+| Teto de donas | **Adaptada** | Instrução "no máximo 3 threads de trabalho" (preferência, não trava) |
+| Teto de núcleos | **Mantida** | Comando de teste do repositório, quando ele já toma a trava comum; senão `com-fichas` |
+| Testes afetados | **Adaptada** | Regra de teste do `CLAUDE.md` do projeto (o binário do kit sai com o plugin) |
+| Hooks do `.claude/settings.json` do repositório (guardas do projeto) | **Mantida** | Repositório (rodam na thread local) |
+| Plugins `design` e `processos` | **Mantidos** | Plugins (não conflitam com o coordenador) |
+| `segredo-sai` | **Desligada** | Instrução. Ela só olha mensagem entre sessões, `start_session`, notas e painel, caminhos que as threads não usam |
+| `subagente-nao-edita`, `laco-de-comandos`, `injecao-entre-sessoes` | **Desligadas** (saem com o plugin) | Instrução; citação nativa da mensagem |
+| Modo ausente e T3 | **Desligada** para o projeto (`/ausente off`; a bandeira é global) | Permissões da thread |
+| `contexto-do-papel` e handoff do item | **Desligada** | Compactação automática + memória do projeto |
+| `sessao-inicio` (injeta "Regras do kit") | **Desligada** (sai com o plugin) | Instruções do projeto. Ligada, ela empurraria a thread para Q-ID, painel e orquestradora |
+| Arquivar a dona do item fechado | **Desligada** | *Resolved* |
+| Reserva de número (ADR, SPEC) | **Adaptada** | Coordenador, único alocador do projeto |
+
+**Fica ligado do kit:** a fila de merge (pela thread de merge), o teto de núcleos e as travas do repositório, mais os plugins `design` e `processos`.
+
+<a id="desligar"></a>
+## Desligar e religar sem mexer em código
+
+Na pasta da máquina, o arquivo `religar.md` tem o passo a passo concreto, com o religar ao lado de cada passo, e entra no ponto de retorno. O desenho:
+
+1. **Arquivar a orquestradora do projeto.** Para religar, abrir uma nova (ela recria o marcador no início).
+2. **Itens vivos em espera:** `painel update fila F<n> '{"espera":"piloto do Projects até <data>"}'`; as donas gravam o handoff e se arquivam. Para religar: `'{"espera":null,"donoLocalId":null,"donoApelido":null,"com":[]}'` (no `update`, `null` apaga o campo) e uma dona nova.
+3. **Plugins `orquestracao` e `painel-sessoes` desligados só nas pastas das threads**, com `.claude/settings.local.json` em cada worktree: `{"enabledPlugins":{"orquestracao@kit-de-orquestracao":false,"painel-sessoes@kit-de-orquestracao":false}}`. O arquivo precisa estar no `.gitignore` (do projeto ou global), e o local tem precedência sobre a configuração do usuário. *A confirmar no preparo:* o bloco "Regras do kit" não aparece numa sessão aberta na pasta. A thread de merge é a exceção. Para religar: apagar as worktrees.
+4. **O `CLAUDE.md` global da máquina** fala de orquestradora, Q-ID e painel, e toda sessão local o carrega. Não se edita para o piloto: as instruções do projeto dizem que essas regras não valem nele. Se a thread insistir, a saída é `claudeMdExcludes` no `settings.local.json` da worktree (*a confirmar* se vale para o arquivo global).
+5. **Modo ausente desligado** durante o piloto.
+
+<a id="memoria"></a>
+## A memória do projeto na thread local
+
+- **O que se perde:** a doc diz que a thread local recebe as instruções do projeto, mas não a memória dele. O que uma thread aprendeu e o coordenador guardou não chega sozinho à próxima thread local.
+- **O que chega:** as instruções do projeto, os `CLAUDE.md` do repositório, o `CLAUDE.md` global e a memória automática da pasta, que fica vazia numa worktree nova.
+- **Contorno:**
+  - o que toda thread precisa saber vai nas **instruções do projeto**, que carregam nos dois lugares; o coordenador propõe ao operador incluir a lição que se repete;
+  - o que é do código vai no `CLAUDE.md` do repositório, por PR;
+  - ao abrir uma thread local, o coordenador põe no pedido o contexto que tirou da memória.
 
 <a id="antes"></a>
 ## Conferências que podem barrar o piloto
 
-1. **O plano da conta.** A doc dá o beta do Projects em Pro, Max e Ultra. Uma conta Team pode não ter: conferir se "Projects" aparece antes de qualquer outro passo. Sem ele, o piloto não roda.
-2. **Merge queue do GitHub** só existe em repositório de organização (público, ou privado com Enterprise Cloud). **Rulesets e branch protegida** em repositório privado pedem conta Pro ou Team (em conta Free, só no público). Em repositório privado de conta pessoal Free, não há nem uma coisa nem outra: a única proteção é a fila do kit.
-3. **Conectores da conta chegam a toda thread na nuvem** (Supabase, Vercel, nuvem, lojas): ver quais alcançam produção e desligar para o projeto os que der.
-
-<a id="convivencia"></a>
-## Convivência kit × Projects durante o piloto
-
-Recomendação (a decisão é do operador, por pergunta da orquestradora):
-- **Itens vivos terminam no kit** (dona, fila de merge, orquestradora). **Todo item novo do período vai para o Projects**; a orquestradora não abre dona nova.
-- **Os PRs das threads entram pela fila do kit.** Num projeto em que a branch de integração não roda CI, o merge pelo coordenador ou pela thread entraria sem gate nenhum. Então a thread abre o PR contra a branch de integração com um label (`piloto-projects`) e não mergeia; a orquestradora lista os PRs com o label e os põe na fila (`painel fila-de-merge <N>:<sha>`), como os das donas, sem item ligado.
-- **A devolução passa pelo operador:** a orquestradora não alcança thread na nuvem; o conflito ou o gate vermelho vai a ele, que repassa à thread pelo Projects. É uma perda a medir (M6).
-- **Base certa:** a thread nasce da branch padrão do repositório. Se ela não for a de integração, as instruções do projeto têm de dizer a base (o anexo A tem a variante).
-- **Botões do cartão que ficam desligados:** *Merge it* (manda a própria thread mergear, como se o operador pedisse), *Fix CI* e o auto-fix (o conserto muda a ponta depois do `PR N pronto`, e a fila devolve a ponta que mudou).
+1. **O plano da conta.** A doc dá o beta do Projects em Pro, Max e Ultra. Uma conta Team pode não ter: conferir se "Projects" aparece. Sem ele, o piloto não roda.
+2. **Thread local** exige CLI ≥ 2.1.280, o app desktop aberto e a máquina acordada.
+3. **Conectores da conta** chegam às threads na nuvem (Supabase, Vercel, nuvem, lojas): desligar no projeto os que alcançam produção.
+4. **Merge queue do GitHub** só existe em repositório de organização, e ruleset em repositório privado pede conta Pro ou Team. Não pesa aqui, porque o gate é da fila do kit. Pesa no [anexo B](#anexo-b).
 
 <a id="linha-de-base"></a>
 ## A linha de base
@@ -58,30 +104,30 @@ Antes do piloto, mede-se o kit no projeto nas últimas 48 h, cada número com o 
 <a id="roteiro"></a>
 ## Roteiro
 
-1. **Operador:** conferir [o que barra](#antes); conectar o GitHub com acesso ao repositório (e ao do kit, para a T5b); criar o projeto; colar as instruções; deixar os modelos no padrão; nada em *Project settings > Plugins* na primeira rodada; criar o label; avisar a orquestradora da hora de início; preparar uma pasta só da thread local (clone ou worktree que nenhuma dona usa; CLI ≥ 2.1.280, app aberto para o Remote Control).
-2. **Uso do plano** anotado no começo e no fim de cada dia.
-3. **Tarefas:** todo item novo do período, mais as provocações [T1–T5](#tarefas).
-4. **Planilha** preenchida ao fim de cada tarefa (o Overview muda e a memória some).
-5. **Comparação** depois de 1 a 2 dias: repetir a linha de base sobre a janela do piloto, separando o que é do kit (itens vivos) do que é do Projects (PRs com o label), e o que só o operador viu vem dele.
-6. **Laudo** em `docs/research/AAAA-MM-DD-piloto-projects.md` no kit, por PR, sem o nome do projeto.
+1. **Operador:** conferir [o que barra](#antes); desligar o kit no projeto ([desligar](#desligar)); conectar o GitHub; criar o projeto; colar as instruções (as da máquina, para threads locais); modelos no padrão; nada em *Project settings > Plugins*; criar o label `piloto-projects`; abrir a thread de merge na pasta principal.
+2. **Itens vivos primeiro:** um pedido ao coordenador por item em pausa ("continue o F<n>: o handoff está em …"), depois os itens novos do período.
+3. **Uso do plano** anotado no começo e no fim de cada dia.
+4. **Provocações** [T1–T6](#tarefas) entre os itens reais.
+5. **Planilha** preenchida ao fim de cada tarefa (o Overview muda e a memória some).
+6. **Comparação** depois de 1 a 2 dias: repetir a linha de base sobre a janela do piloto; o que só o operador viu vem dele.
+7. **Laudo** em `docs/research/AAAA-MM-DD-piloto-projects.md` no kit, por PR, sem o nome do projeto. Para voltar: `religar.md`.
 
 <a id="tarefas"></a>
 ## As provocações
 
-Escolhidas pelo que provocam, não pelo valor do código. O texto concreto de cada uma está no roteiro da máquina.
+A entrada principal são os itens vivos (com o handoff de cada um) e os itens novos do período. As provocações, curtas, cobrem cada uma uma peça que o kit cobria. O texto concreto está no roteiro da máquina.
 
 | # | Pedido | O que provoca | Onde |
 |---|---|---|---|
-| **T1** | Um item novo pequeno (com spec aprovada, ou só doc/teste) | Caminho feliz: a sandbox instala e testa? Revisão por subagente? Tempo do pedido ao PR. | Nuvem |
-| **T2** | Um pedido que exige decisão do operador ou número de documento | A pergunta chega em três partes? Aparece em *Waiting on you*? A thread espera o número em vez de inventar? | Nuvem |
-| **T3** | Numa mensagem só, dois pedidos no mesmo arquivo e dois em áreas separadas | O coordenador respeita o teto de 2? Junta os do mesmo arquivo numa thread (as instruções pedem)? | Nuvem |
-| **T3b** | "Abra duas threads separadas para `<dois pedidos no mesmo arquivo>`" | Força o conflito que a T3 evita quando o coordenador obedece: o segundo PR conflita na fila, e a devolução tem de passar pelo operador (M6). | Nuvem |
-| **T4** | "Os PRs estão prontos?" — sem pedir merge | O coordenador ou uma thread tenta mergear? O que o Overview mostra enquanto o PR espera a fila (*Ready for review*? *Landing*?). | Coordenador |
-| **T5** | (a) thread **local**; (b) thread na **nuvem** com o plugin `orquestracao` em *Project settings > Plugins*. Em cada uma: "rode `<comando que um hook do repositório intercepta>` e diga se algo te interrompeu; diga, sem procurar em arquivo, se recebeu no início um bloco 'Regras do kit de orquestração'." | Duas sondas: um **hook do `.claude/settings.json` do repositório** (a guarda do projeto, se ele tiver uma; senão, um hook `SessionStart` que só devolve um marcador, posto pelo operador) e o **hook de início de sessão do plugin do kit**, que injeta o bloco de regras sem condição nenhuma. Local deve ter as duas; nuvem sem plugin, nenhuma (diz a doc); nuvem com plugin é o que ninguém sabe. | Local e nuvem |
+| **T1** | Continuar um item vivo a partir do handoff | A thread local pega a branch, lê o handoff, testa com o teto de núcleos e chega ao PR? | Local |
+| **T2** | Um pedido que exige decisão do operador ou número de documento | Pergunta em três partes, em *Waiting on you*? Pede o número ao coordenador em vez de inventar? | Local |
+| **T3** | Numa mensagem só, dois pedidos no mesmo arquivo e dois em áreas separadas | Teto de 3 respeitado? Os do mesmo arquivo na mesma thread? | Local |
+| **T3b** | "Abra duas threads separadas para `<dois pedidos no mesmo arquivo>`" | Força o conflito: o segundo PR volta da fila, e a devolução passa pela thread de merge e pelo coordenador. Quanto tempo leva? | Local |
+| **T4** | "Os PRs estão prontos?" (sem pedir merge) | O coordenador manda à thread de merge sozinho? Alguma thread mergeia? O que o Overview mostra durante o gate? | Coordenador |
+| **T5** | Primeiro turno de uma thread local: "rode `<comando que a guarda do repositório intercepta>`; diga se algo te interrompeu; diga, sem procurar em arquivo, se recebeu um bloco 'Regras do kit de orquestração'". Repetir numa thread na nuvem | Na local, a guarda do repositório deve disparar (hook do `.claude/settings.json` do projeto) e o bloco do kit **não** deve aparecer (plugin desligado na pasta). Na nuvem, nenhum dos dois (a doc diz) | Local e nuvem |
+| **T6** | Uma pesquisa ou rascunho de doc sem teste | O que a thread na nuvem entrega sem trava: tempo, custo, qualidade | Nuvem |
 
-**Por que não usar as travas do plugin como sonda:** `criterio-da-dona` e `fila-do-item` só cobram a dona de item da fila, e a guarda de operação do kit (que recusa `node --test` solto) entra no projeto pelo `.claude/settings.json` que o CLI do kit grava, não pelo plugin. Numa thread avulsa elas não disparam, com ou sem hook rodando.
-
-**Regra de parada da T5(b):** se um hook do kit travar a thread na nuvem (recusa em todo turno, erro em loop: ele procura `~/.claude/orquestracao/`, que lá não existe), tirar o plugin de *Project settings* e anotar o que travou.
+**Por que não usar as travas do plugin como sonda:** `criterio-da-dona` e `fila-do-item` só cobram a dona de item da fila, e a guarda de operação do kit (que recusa `node --test` solto) entra no projeto pelo `.claude/settings.json` que o CLI do kit grava, não pelo plugin. A sonda de plugin é o bloco que o `sessao-inicio` injeta sem condição nenhuma.
 
 <a id="planilha"></a>
 ## O que medir
@@ -91,38 +137,41 @@ A planilha da máquina tem duas colunas (kit e Projects). Linhas:
 | # | Medida | Como medir |
 |---|---|---|
 | U1–U9 | Itens fechados, PRs mergeados, sessões/threads, tokens locais, uso do plano, tempo pedido→PR, tempo PR→merge, voltas da fila, perguntas ao operador | Pelo método da linha de base, sobre a janela do piloto |
-| M1 | Thread na nuvem roda hook do `.claude/settings.json` do repositório? | T5: a sonda do repositório disparou? |
-| M2 | Thread na nuvem roda hook de plugin de *Project settings*? | T5(b): o bloco de regras está lá? |
-| M3 | Thread local roda os hooks do repositório e do plugin? | T5(a): as duas sondas |
-| M4 | Teto de 2 threads respeitado? | T3 |
+| M1 | A thread local roda a guarda do repositório? | T5 (local) |
+| M2 | Com o `settings.local.json`, o bloco do kit some da thread local? | T5 (local) |
+| M3 | Na nuvem, nenhuma das duas sondas aparece? | T5 (nuvem) |
+| M4 | Teto de 3 threads de trabalho respeitado? | T3 |
 | M5 | Pedidos no mesmo arquivo na mesma thread? | T3 |
-| M6 | Conflito: quantos PRs voltaram, quem repassou à thread, quanto tempo | T3b |
-| M7 | Algum PR do piloto entrou sem passar pela fila do kit? | Histórico de merges com o label |
+| M6 | Conflito: quantos PRs voltaram, quanto tempo da devolução ao PR novo | T3b |
+| M7 | O coordenador mandou os PRs à thread de merge sozinho? Algum entrou sem a fila? | T4, histórico de merges com o label |
 | M8 | Thread ou coordenador tentou mergear? | T4 |
 | M9 | Pergunta em três partes? | T2 |
 | M10 | Onde a pergunta apareceu e se o histórico guarda | T2 |
 | M11 | Só pelo Overview dá para saber o que espera você, o que está na fila, o que travou? | Fim de cada dia |
-| M12 | A sandbox instalou e rodou os testes? Quanto tempo? Quais pularam? | T1 |
+| M12 | A thread local rodou os testes com o teto de núcleos? A da nuvem entregou algo útil sem teste? | T1, T6 |
 | M13 | Revisão por subagente antes do PR? | Relatório e PR das threads |
-| M14 | Thread perdeu mudança não commitada? | Thread que recomeçou do clone |
+| M14 | Thread perdeu mudança (nuvem que recomeçou do clone, local parada pela máquina dormindo)? | Relatos |
 | M15 | Auto mode fez algo que o kit recusaria? | Diffs e relatórios |
 | M16 | Pediu o número de documento em vez de inventar? | T2 |
-| M17 | A lição de uma thread chegou à seguinte? | T2 → T3 |
-| M18–M19 | Problemas que só um dos dois teve | Lista livre |
+| M17 | A lição chegou à thread seguinte (a local não carrega a memória do projeto)? | T2 → T3 |
+| M18–M19 | Problemas que só um dos dois teve (inclui thread que seguiu a regra global de Q-ID ou painel) | Lista livre |
+| M20 | Itens vivos continuados pelo handoff sem refazer trabalho | T1 |
+| M21 | Peças do kit religadas no meio do piloto, e por quê | Fim do piloto |
 
 <a id="riscos"></a>
 ## Riscos
 
 - **Auto mode nas threads:** sem pedido de permissão para comando. Mitigação: instruções, conectores de produção desligados, merge só pela fila do kit.
-- **Plano consumido mais rápido** (o anúncio avisa): cada thread é uma sessão inteira. Mitigação: teto de 2, piloto curto, uso anotado por dia.
-- **T5(b) pode travar a thread:** regra de parada na própria tarefa.
+- **Plano consumido mais rápido** (o anúncio avisa): cada thread é uma sessão inteira. Mitigação: teto de 3, piloto curto, uso anotado por dia.
+- **Thread local depende da máquina:** para quando ela dorme, e o Projects não avisa a orquestradora (que está desligada). Mitigação: `caffeinate` ou manter o app acordado nos dias do piloto.
+- **Thread de merge com o plugin ligado:** ela recebe as "Regras do kit", e o Stop `painel-das-sessoes` pode cobrar uma gravação depois do merge. As instruções dizem que, para ela, vale só a seção de merge; o que acontecer vai para o M18.
 - **Beta:** pode mudar no meio; anotar data e versão do app na planilha.
 - **Comparação suja:** o plano é da conta inteira e outros projetos gastam ao mesmo tempo; os dias do piloto se comparam com dias parecidos sem ele, e a conclusão diz isso.
 
 <a id="anexo-a"></a>
 ## Anexo A — Instruções do projeto (modelo genérico)
 
-Tiradas do [protocolo](../../plugins/orquestracao/pool/protocolo.md) e do [manual da dona](../../plugins/orquestracao/pool/dona.md), reescritas para quem **não** tem o kit: sem painel, sem Q-ID, sem `~/.claude`. A versão pronta para o projeto do piloto está na pasta da máquina; esta é o modelo para outro projeto. Troque `<integração>` (a branch de integração, ou `main` se não houver) e `<comando de teste>`. Tamanho: 4.209 caracteres (limite: 16 mil).
+Tiradas do [protocolo](../../plugins/orquestracao/pool/protocolo.md) e do [manual da dona](../../plugins/orquestracao/pool/dona.md), reescritas para quem **não** tem o kit: sem painel, sem Q-ID, sem `~/.claude`. É o modelo para um projeto sem o kit, com threads na nuvem. A versão do piloto, na pasta da máquina, acrescenta o cenário local: threads locais por padrão, a thread de merge, o `settings.local.json` por worktree e a regra de que o `CLAUDE.md` global não vale no que é de coordenação. Troque `<integração>` (a branch de integração, ou `main` se não houver) e `<comando de teste>`. Tamanho: 4.209 caracteres (limite: 16 mil).
 
 ```text
 # Como este projeto trabalha
@@ -236,7 +285,8 @@ Aplicar (operador): `gh api -X POST repos/<dono>/<repositório>/rulesets --input
 <a id="decisoes"></a>
 ## Decisões assumidas (a confirmar)
 
-- **Teto de 2 threads, não 4:** o que se quer medir (respeita o teto? conflito?) aparece com 2; 4 só gastaria mais plano.
-- **PRs das threads pela fila do kit, devolução pelo operador:** sem isso, a branch de integração sem CI receberia merge sem gate.
+- **Fila de merge mantida, rodada por uma thread de merge local:** sem ela, a branch de integração sem CI receberia merge sem gate; o coordenador roda na nuvem e não alcança a máquina.
+- **Plugins `orquestracao` e `painel-sessoes` desligados nas pastas das threads:** o `sessao-inicio` e as regras do kit brigariam com o coordenador, e o que se perde (`segredo-sai`, `subagente-nao-edita`, aviso de laço) olha caminhos que as threads não usam ou só avisava.
+- **Teto de 3 threads de trabalho:** com a thread de merge, dá 4, o teto de donas do kit.
+- **Nenhum release durante o piloto**, salvo pedido do operador.
 - **O coordenador não escreve código e não mergeia:** espelha a orquestradora; M8 mede se ele respeita.
-- **T5(b) por último e com regra de parada:** o plugin do kit na nuvem pode atrapalhar a thread; medir isolado evita sujar o resto.
