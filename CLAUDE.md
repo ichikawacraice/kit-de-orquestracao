@@ -15,7 +15,7 @@ O design system dos apps React da Wicomm: a base de regras, os tokens, o registr
 - Mudar regra que já existe muda a versão no frontmatter dos três arquivos (semver do sistema, estudo §2.5).
 
 ## Gate
-- `npm test` — as guardas da base (`scripts/base.test.mjs`): domínio de origem fora da base, os três campos de cada regra, uma linha de rastreio por regra, rastreio sem regra que a base não tem, toda origem e guarda citada conferida em `scripts/origens-conhecidas.json`, nenhuma origem na base, índice igual às regras, código único, referência cruzada que existe; mais os testes dos hooks e scripts do plugin e a concordância dos evals.
+- `npm test` — as guardas da base (`scripts/base.test.mjs`): domínio de origem fora da base, os três campos de cada regra, uma linha de rastreio por regra, rastreio sem regra que a base não tem, toda origem e guarda citada conferida em `scripts/origens-conhecidas.json`, nenhuma origem na base, índice igual às regras, código único, referência cruzada que existe; mais os testes dos hooks e scripts do plugin, a concordância dos evals e a versão dos pacotes (`scripts/versao-dos-pacotes.test.mjs`: mudar o que `@wicomm/tokens` ou `@wicomm/guardas` publica sem subir o `version` reprova, porque o `publicar-pacotes` só publica versão nova).
 - Todo PR roda o gate antes de pedir merge e cola a saída no PR.
 
 ## PR

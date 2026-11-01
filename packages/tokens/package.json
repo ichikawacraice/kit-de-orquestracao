@@ -1,6 +1,6 @@
 {
   "name": "@wicomm/tokens",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Os tokens de design da Wicomm: uma fonte DTCG gerada para o tema do Tailwind v4 e variáveis CSS.",
   "license": "UNLICENSED",
   "repository": {
