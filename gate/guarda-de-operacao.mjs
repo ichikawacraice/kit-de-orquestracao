@@ -24,7 +24,8 @@
  *     no `guarda.tronco` (padrão `${tronco}`) — o banco local é um só para
  *     todos os worktrees;
  *   - `merge-commit`: `git merge` sem `--ff-only` e `git pull` sem
- *     `--rebase`/`--ff-only` — o tronco é rebase sobre a base;
+ *     `--rebase`/`--ff-only` — o tronco é rebase sobre a base (o merge que o
+ *     `sync_with_base_branch` do app faz roda no host, fora do Bash, e não passa aqui);
  *   - `stash-sem-u`: `git stash` sem `-u` e `-m`, `stash pop`, `stash apply` sem
  *     sha, `stash drop|clear` — o stash é COMPARTILHADO entre worktrees;
  *   - `staging-amplo`: `git add -A|--all|-u|.|:/|*` e `git commit -a` — varrem
@@ -336,7 +337,7 @@ export function avaliarSegmento(seg, ctx) {
     switch (sub) {
       case "merge":
         if (tem(g, "--ff-only", "--abort", "--continue", "--quit")) return null;
-        return "`git merge` sem `--ff-only` cria merge commit; o tronco é rebase sobre a base.";
+        return "`git merge` sem `--ff-only` cria merge commit; o tronco é rebase sobre a base. Na devolução por conflito da fila, traga a base pelo `sync_with_base_branch` do app (sessão em worktree do app) ou por `git rebase`.";
       case "pull":
         // `--rebase=false` e `--no-rebase` pedem o MERGE — só os valores de rebase liberam.
         if (tem(g, "--rebase", "-r", "--ff-only") || g.some((a) => /^--rebase=(true|merges|interactive|i|m)$/.test(a))) return null;

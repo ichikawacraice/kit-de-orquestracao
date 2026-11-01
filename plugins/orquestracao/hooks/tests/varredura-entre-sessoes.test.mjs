@@ -192,6 +192,15 @@ test('injecao-entre-sessoes: avisa só em mensagem de outra sessão com padrão'
   assert.equal(rodarHook('injecao-entre-sessoes.mjs', { session_id: 's', prompt: msg('tudo certo') }).out, '');
 });
 
+test('injecao-entre-sessoes: o aviso de fim de turno da sessão filha também é varrido (F314)', () => {
+  // a orquestradora age sobre o relatório da dona que chega no <side-sessions-event>: o texto é da outra sessão
+  const ev = (t) => `<side-sessions-event>\nf314 finished a turn: ${t}\n</side-sessions-event>`;
+  assert.match(avisoDoPrompt(ev(INJ['sobrescrever-instrucoes'])), /sobrescrever-instrucoes/);
+  assert.equal(avisoDoPrompt(ev('PR 108 pronto, HEAD 04c6b40e7')), '');
+  const { out } = rodarHook('injecao-entre-sessoes.mjs', { session_id: 's', prompt: ev(INJ['ocultar-do-operador']) });
+  assert.match(JSON.parse(out).hookSpecificOutput.additionalContext, /ocultar-do-operador/);
+});
+
 test('sessao-inicio: o resumo das regras não dispara o próprio aviso', () => {
   const out = execFileSync('node', [join(HOOKS, 'sessao-inicio.mjs')], { input: '{}', encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL', env: ISOLADO });
   const t = JSON.parse(out).hookSpecificOutput.additionalContext;

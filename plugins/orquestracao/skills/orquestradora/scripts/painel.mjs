@@ -58,7 +58,7 @@ import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparAr
 import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
 import { MOTIVO_DO_FORK, SHA_VALIDADO, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
-import { GATE_PADRAO, montarLote } from './fila-de-merge.mjs';
+import { GATE_PADRAO, montarLote, motivoDeConflito } from './fila-de-merge.mjs';
 import { donoDaFilaVivo, lerFilaOrfa } from './fila-orfa.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
@@ -1102,7 +1102,7 @@ function rodadaDaFila(pedidos, { seco, gate, preparar, cwd }) {
     // um merge que falha (gh, fetch) não derruba o lote: vira devolução e os outros seguem
     let r;
     try { r = comandoMergear([String(pr), sha]); } catch (e) { r = { recusado: true, motivo: `o merge falhou: ${String(e?.message || e).split('\n')[0]}` }; }
-    if (r.recusado) lote.devolvidos.push({ pr, sha, motivo: r.motivo });
+    if (r.recusado) lote.devolvidos.push({ pr, sha, motivo: r.conflito ? motivoDeConflito({ pr, sobre: lote.base, arquivos: r.arquivos ?? [], base: lote.base }) : r.motivo });
     else mergeados.push({ pr, itens: r.itens });
   }
   const devolvidos = lote.devolvidos.map(({ pr, sha, motivo, log, semItem }) => {

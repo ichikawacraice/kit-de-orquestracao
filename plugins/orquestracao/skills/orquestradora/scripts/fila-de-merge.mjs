@@ -58,6 +58,13 @@ function aplicar(wt, pr, sha) {
   return { ok: true };
 }
 
+// F314: o motivo do conflito diz à dona como resolver, antes da lista de arquivos: a devolução corta o `agora` do item em
+// 300 caracteres, e o corte cai na lista (até 3 arquivos, o resto vira "e mais N"; a lista inteira segue em `arquivos`).
+export function motivoDeConflito({ pr, sobre, arquivos, base }) {
+  const lista = arquivos.length ? `${arquivos.slice(0, 3).join(', ')}${arquivos.length > 3 ? ` e mais ${arquivos.length - 3}` : ''}` : 'arquivos não listados';
+  return `conflito com ${sobre}: traga a base pelo sync_with_base_branch do app (ou git rebase origin/${base}), resolva, rode os afetados e mande PR ${pr} pronto de novo; arquivos: ${lista}`;
+}
+
 // prs: [{ pr, sha }] na ordem. → { base, aprovados: [{pr, sha}], devolvidos: [{pr, sha, motivo, arquivos?, log?}], gates, pasta }
 export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null }) {
   if (!Array.isArray(prs) || prs.length === 0) throw new Error('fila-de-merge: nenhum PR');
@@ -81,7 +88,7 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
     for (const item of prs) {
       const a = aplicar(wt, item.pr, item.sha);
       if (a.ok) aplicados.push(item);
-      else devolvidos.push({ ...item, motivo: `conflito com ${base} + o lote em ${a.arquivos.join(', ') || 'arquivos não listados'}`, arquivos: a.arquivos });
+      else devolvidos.push({ ...item, motivo: motivoDeConflito({ pr: item.pr, sobre: `${base} + o lote`, arquivos: a.arquivos, base }), arquivos: a.arquivos });
     }
     if (aplicados.length === 0) return { base, aprovados: [], devolvidos, gates, pasta };
     const todos = gateAqui('lote');
@@ -107,7 +114,7 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
       for (const item of grupo) {
         const a = aplicar(wt, item.pr, item.sha);
         if (a.ok) montado.push(item);
-        else devolvidos.push({ ...item, motivo: `conflito com ${sobre()} em ${a.arquivos.join(', ')}`, arquivos: a.arquivos });
+        else devolvidos.push({ ...item, motivo: motivoDeConflito({ pr: item.pr, sobre: sobre(), arquivos: a.arquivos, base }), arquivos: a.arquivos });
       }
       if (!montado.length) return { ok: true, grupo: montado };
       const g = gateAqui(`pr-${montado.map((x) => x.pr).join('-')}`);
