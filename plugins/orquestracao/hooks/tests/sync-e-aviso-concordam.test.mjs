@@ -29,7 +29,8 @@ test('a fila e o passo 7 da dona nomeiam o mesmo caminho para o conflito', async
   }
   // a dona passa ao app a base do PR, e a recusa do app cai no rebase em vez de parar
   assert.match(p7, /baseRefName/);
-  assert.match(p7, /recus/);
+  assert.match(p7, /se o app recusar[\s\S]*Nothing was merged[\s\S]*git rebase origin\/<base>/, 'a recusa do app leva ao rebase');
+  assert.match(p7, /git rebase --abort/, 'o rebase que também esbarra tem saída');
 });
 
 test('o protocolo da fila e a regra do CLAUDE.md abrem a exceção do merge do app', () => {

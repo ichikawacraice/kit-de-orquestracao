@@ -11,8 +11,9 @@ import { avisoDeInjecao, injecaoEm, nomesDe } from './varredura-entre-sessoes.mj
 const HOOK = 'injecao-entre-sessoes';
 // F314: o aviso de fim de turno da sessão filha traz o relatório dela, e a orquestradora age sobre ele. Medido em 01/11 nos
 // transcripts: chega como `<system-reminder>` que abre com `The session "…" you started (…) finished a turn`; a tag
-// `<side-sessions-event>` que o app descreve fica também, para quando vier assim.
-const ENTRE_SESSOES = /^\s*(<(cross-session-message|side-sessions-event)\b|(<system-reminder>\s*)?The session "[^"\n]*" you started \()/;
+// `<side-sessions-event>` que o app descreve fica também, para quando vier assim. O aviso pode vir em lote, atrás de outro
+// lembrete (ex.: "The user started your proposal…"), e o título pode ter aspas.
+const ENTRE_SESSOES = /^\s*<(cross-session-message|side-sessions-event)\b|(^|<system-reminder>)\s*The session "[^\n]*?" you started \(/;
 
 /** A linha de aviso para este prompt, ou '' quando não veio de outra sessão ou não casa. */
 export const avisoDoPrompt = (prompt) => (ENTRE_SESSOES.test(String(prompt ?? '')) ? avisoDeInjecao(prompt) : '');
