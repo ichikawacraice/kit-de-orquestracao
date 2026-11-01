@@ -4,6 +4,28 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.9.0 · 01/11/2026
+
+Camadas: base, tokens, registro
+
+### O que muda
+- **As listas se leem separadas** (SUP-03). A linha se separa da vizinha só por ar: a célula guarda 6px em cima e embaixo (8px no site) e cresce com o conteúdo — com duas linhas de texto, 48px em vez de espremida em 40. O grupo de linhas fica um degrau acima: topo de 48px (56 no site), nome em 14px/600 (`t-titulo` no site), 16px de vão antes de cada grupo (24 no site) e 4px de ar depois do topo, e as linhas recuam até o nome do grupo. O hover acende as células com o raio do anel de foco. Sem filete e sem zebra.
+- `table`: a `densidade` passa a ser da `Table` (`instrumento` ou `site`), e as células e a `LinhaDoGrupo` medem por ela. A tabela vira `border-separate` (o raio do hover precisa).
+- Tokens: o degrau escuro (`muted`) vai de `#11141B` a `#0B0E14` — contra o cartão, de 1,057:1 a 1,108:1, o mesmo contraste do claro. Vale para todo degrau no escuro (o `BlocoDeTinta`, o rodapé do diálogo, o carimbo neutro, o canvas do Editor). Catraca nova: o degrau mede ≥ 1,10:1 contra o cartão nos dois temas.
+- TIPO-02 diz a voz do nome do grupo de linhas; a DESIGN ganha o bloco `lista` no frontmatter.
+- `escolha-na-celula`: no popover, os campos vão dentro de um `<form>` — o Enter grava, o *Cancelar* fecha sem gravar, o `aoSalvar` que devolve `false` deixa aberto e o `motivoParaNaoSalvar` desabilita o *Salvar* e escreve a frase no formulário, ligada ao botão. O `valor` nunca é nulo: sem valor, a célula mostra a leitura vazia da peça (*Sem data*, a pessoa tracejada) com o chevron. A peça repassa o `ref` ao gatilho, e a frase da recusa é configurável (`rotuloDaRecusa`).
+- `prazo`: o intervalo de um dia escreve o dia uma vez; `relativo={false}` mostra só a data, sem legenda nem voz (o tipo recusa o `tom` junto); `emLinha` põe a legenda ao lado da data.
+- `linha-do-grupo`: a contagem e a trilha encostam no fim da linha do grupo, em lugar fixo — as barras de uma coluna começam no mesmo x. No estreito o nome guarda 5rem e o fim cede pela largura que sobra (sai a trilha, depois a medida, por último a contagem). A célula sob uma coluna que some no celular (`{ conteudo, esconderNoCelular: true }`) esvazia sem transbordar.
+- `table`: `TableHead` e `TableCell` ganham `esconderNoCelular` — a coluna fica com largura zero abaixo de 640px, sem que as outras troquem de coluna.
+- PECA-01 diz isso nas linhas do grupo de linhas, do prazo e da escolha na célula.
+
+### Migração
+- `npx shadcn add @wicomm/estilo @wicomm/table @wicomm/escolha-na-celula @wicomm/prazo @wicomm/linha-do-grupo` (o `estilo` traz o degrau escuro novo).
+- Lista que passava `densidade` a cada `LinhaDoGrupo` passa a declará-la uma vez na `Table` (a da `LinhaDoGrupo` segue valendo como sobreposição). Linha que se espremia em altura fixa (`h-10` à mão na célula) perde a classe: a célula já guarda o ar. Recuo escrito à mão na primeira célula das linhas de um grupo sai: a peça recua. Hover pintado à mão no `tr` (`hover:bg-…`) passa às células ou sai. Com `border-separate`, borda escrita no `tr` (o `border-b` do shadcn) deixa de pintar — e a SUP-03 já não a queria.
+- `EscolhaNaCelula` com `valor` que pode ser nulo passa a mandar a leitura vazia da peça (`<Prazo periodo={null} />`, `<Pessoa pessoa={null} />`); `Prazo` com `relativo={false}` deixa de passar `tom`; botão dentro dos campos do popover sem `type="button"` (um *Hoje*, um *Limpar*) passa a gravar, porque os campos agora estão num `<form>` — declare o `type`; o aberto do gatilho se lê em `aria-expanded` (quem estilizava `data-[state=open]` por fora troca).
+- Superfície fixa por cima da tabela (rodapé `sticky`, barra de ações) declara `z-10` ou mais, como o `TableHeader`: a célula editável sobe um degrau (`z-[1]`) para ficar por cima do link da linha.
+- Contornos que a tela fez por falta disso saem: formulário que se protegia da inversão só por `min`/`max`, `span` em volta da peça para a `Ajuda`, data passada à mão quando início e fim são iguais, prazo em texto para não mostrar a legenda, as classes `max-sm:[&>tr:first-child>td]:hidden` e `max-sm:[&_[data-slot=trilha-do-progresso]]:hidden` no grupo, e a coluna escondida à mão (`w-0 p-0`), que vira `esconderNoCelular`.
+
 ## 0.8.0 · 01/11/2026
 
 Camadas: base, registro

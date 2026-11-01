@@ -6,6 +6,7 @@ import { COR_DO_TOM_DENSO, type Tom } from "@/registry/wicomm/lib/idioma-de-cor"
 import { cn } from "@/registry/wicomm/lib/utils"
 import { ChipDeEstado } from "@/registry/wicomm/ui/chip-de-estado"
 import { Estado } from "@/registry/wicomm/ui/estado"
+import { useDensidadeDaTabela } from "@/registry/wicomm/ui/table"
 import { Ajuda } from "@/registry/wicomm/ui/tooltip"
 
 type Densidade = "instrumento" | "site"
@@ -30,6 +31,8 @@ function diaDe(d: Data): Dia | null {
   return { ano: Number(p.year), mes: Number(p.month), dia: Number(p.day) }
 }
 
+const mesmoDia = (a: Dia, b: Dia) => a.ano === b.ano && a.mes === b.mes && a.dia === b.dia
+
 const diasEntre = (de: Dia, ate: Dia) =>
   Math.round((Date.UTC(ate.ano, ate.mes - 1, ate.dia) - Date.UTC(de.ano, de.mes - 1, de.dia)) / 86_400_000)
 
@@ -50,9 +53,23 @@ function relativo(dias: number, comVoz: boolean): string {
 }
 
 /**
+ * A voz mora na legenda: só a data (`relativo={false}`) não tem onde pintar,
+ * e o tipo recusa o `tom` nela, para ninguém entregar um vencido achando que pinta.
+ */
+type VozOuSoData =
+  | {
+      /** A legenda relativa ao fim (*em 12 dias*); `false` mostra só a data. */
+      relativo?: true
+      /** A voz que o projeto declarou para este prazo; sem ela, a peça não pinta. */
+      tom?: Tom
+    }
+  | { relativo: false; tom?: never }
+
+/**
  * O PRAZO numa linha de lista (ANATOMIA PECA-01): a data ou o intervalo em
  * `t-medida` (*24 jul*, *2 jun → 24 jul*, *até 24 jul*, *desde 2 jun*), e
- * embaixo a legenda relativa ao fim (*em 12 dias*).
+ * embaixo a legenda relativa ao fim (*em 12 dias*). O intervalo que começa e
+ * acaba no mesmo dia escreve o dia uma vez só.
  *
  * - **A voz é de quem chama** (`tom`, COR-05): o limiar de quando um prazo
  *   pede alguma coisa é do projeto, não da peça. **Sem `tom`, nunca pinta**: a
@@ -64,6 +81,11 @@ function relativo(dias: number, comVoz: boolean): string {
  *   solto. **Só a proposta**: a legenda é *proposta*, sem voz. **Concluído**:
  *   sem legenda relativa (o prazo não pede mais nada). **Parcial**: a data
  *   abre a dica que diz de quantos é o prazo (*Prazo de 4 de 20 tarefas*).
+ * - **Sem legenda relativa** (`relativo={false}`): só a data, para quem não
+ *   deve ler a contagem (o cliente não lê *venceu há 158 dias*). Sem legenda,
+ *   também não há voz: o tipo recusa o `tom`.
+ * - **Numa linha** (`emLinha`): a legenda ao lado da data, para o degrau
+ *   baixo (a linha do grupo) quando a coluna comporta as duas.
  * - O dia é o de São Paulo, e o ano só aparece quando não é o corrente.
  */
 function Prazo({
@@ -74,13 +96,13 @@ function Prazo({
   concluido = false,
   parcial,
   semData = "Sem data",
+  relativo: comRelativo = true,
+  emLinha = false,
   hoje: hojeDeFora,
-  densidade = "instrumento",
+  densidade: densidadeDeFora,
   className,
 }: {
   periodo: Periodo | null | undefined
-  /** A voz que o projeto declarou para este prazo; sem ela, a peça não pinta. */
-  tom?: Tom
   forma?: "estado" | "chip"
   /** A data ainda é proposta: legenda *proposta*, sem voz. */
   proposta?: boolean
@@ -89,18 +111,23 @@ function Prazo({
   /** O prazo é de parte do conjunto: a frase da dica (*Prazo de 4 de 20 tarefas*). */
   parcial?: string
   semData?: string
+  /** A legenda ao lado da data, numa linha só. */
+  emLinha?: boolean
   /** O dia de referência; o padrão é agora. */
   hoje?: Date
+  /** Sem ela, a da `Table` em volta (instrumento fora de tabela). */
   densidade?: Densidade
   className?: string
-}) {
+} & VozOuSoData) {
+  const densidadeDaTabela = useDensidadeDaTabela()
+  const densidade = densidadeDeFora ?? densidadeDaTabela
   const hoje = (hojeDeFora && diaDe(hojeDeFora)) || diaDe(new Date())!
   const { inicio, fim } =
     periodo && typeof periodo === "object" && !(periodo instanceof Date)
       ? { inicio: periodo.inicio ? diaDe(periodo.inicio) : null, fim: periodo.fim ? diaDe(periodo.fim) : null }
       : { inicio: null, fim: periodo ? diaDe(periodo) : null }
 
-  const raiz = cn("flex min-w-0 flex-col gap-0.5", className)
+  const raiz = cn("flex min-w-0", emLinha ? "flex-row flex-wrap items-baseline gap-x-1.5" : "flex-col", className)
   if (!inicio && !fim) {
     return (
       <span data-slot="prazo" data-vazio="" className={raiz}>
@@ -111,7 +138,9 @@ function Prazo({
 
   const escrito =
     inicio && fim
-      ? `${escreverDia(inicio, hoje)} → ${escreverDia(fim, hoje)}`
+      ? mesmoDia(inicio, fim)
+        ? escreverDia(fim, hoje)
+        : `${escreverDia(inicio, hoje)} → ${escreverDia(fim, hoje)}`
       : fim
         ? `${periodo && typeof periodo === "object" && !(periodo instanceof Date) ? "até " : ""}${escreverDia(fim, hoje)}`
         : `desde ${escreverDia(inicio!, hoje)}`
@@ -135,8 +164,8 @@ function Prazo({
   )
 
   // Só o fim dá legenda relativa: *desde 2 jun* não vence.
-  const legenda = proposta ? "proposta" : concluido || !fim ? null : relativo(diasEntre(hoje, fim), !!tom)
-  const voz = proposta ? undefined : tom
+  const legenda = proposta ? "proposta" : concluido || !fim || !comRelativo ? null : relativo(diasEntre(hoje, fim), !!tom)
+  const voz = proposta || !comRelativo ? undefined : tom
 
   return (
     <span data-slot="prazo" data-tom={voz} className={raiz}>

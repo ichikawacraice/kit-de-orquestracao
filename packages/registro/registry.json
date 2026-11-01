@@ -143,7 +143,7 @@
           "background": "#0D1017",
           "card": "#161A22",
           "popover": "#161A22",
-          "muted": "#11141B",
+          "muted": "#0B0E14",
           "accent": "#1E232D",
           "secondary": "#1E232D",
           "foreground": "#F2F4F8",
@@ -1141,7 +1141,8 @@
         "@wicomm/estilo",
         "@wicomm/monograma",
         "@wicomm/skeleton",
-        "@wicomm/tooltip"
+        "@wicomm/tooltip",
+        "@wicomm/table"
       ],
       "files": [
         {
@@ -1154,7 +1155,7 @@
       "name": "linha-do-grupo",
       "type": "registry:ui",
       "title": "Linha do grupo",
-      "description": "table/collapsible — o grupo de linhas de uma tabela: o próprio tbody, a linha do grupo no degrau de tinta que abre e fecha, a contagem, a trilha compacta e as células alinhadas às colunas.",
+      "description": "table/collapsible — o grupo de linhas de uma tabela: o próprio tbody, a linha do grupo no degrau de tinta que abre e fecha, a contagem e a trilha encostadas no fim (as barras no mesmo x), e as células alinhadas às colunas, que esvaziam no celular quando a coluna some.",
       "dependencies": [
         "lucide-react@1.57.0"
       ],
@@ -1175,12 +1176,13 @@
       "name": "prazo",
       "type": "registry:ui",
       "title": "Prazo",
-      "description": "date cell — o prazo numa linha: a data ou o intervalo em medida e a legenda relativa (em 12 dias), com a voz só quando quem chama a declara; sem data, proposta, concluído e parcial.",
+      "description": "date cell — o prazo numa linha: a data ou o intervalo em medida e a legenda relativa (em 12 dias), com a voz só quando quem chama a declara; o intervalo de um dia só, só a data (sem a legenda), numa linha; sem data, proposta, concluído e parcial.",
       "registryDependencies": [
         "@wicomm/estilo",
         "@wicomm/estado",
         "@wicomm/chip-de-estado",
         "@wicomm/tooltip",
+        "@wicomm/table",
         "@wicomm/idioma-de-cor"
       ],
       "files": [
@@ -1194,7 +1196,7 @@
       "name": "escolha-na-celula",
       "type": "registry:ui",
       "title": "Escolha na célula",
-      "description": "dropdown-menu/popover — trocar um valor na própria célula: a leitura no peso dela com o chevron de 14px, o menu ou o popover com Salvar, gravando, recusado e sem permissão.",
+      "description": "dropdown-menu/popover — trocar um valor na própria célula: a leitura no peso dela com o chevron de 14px, o menu ou o popover com o formulário (Salvar, Cancelar e Enter, e o motivo de não salvar escrito nele), gravando, recusado e sem permissão.",
       "dependencies": [
         "lucide-react@1.57.0"
       ],
@@ -1203,6 +1205,7 @@
         "@wicomm/menu",
         "@wicomm/popover",
         "@wicomm/button",
+        "@wicomm/table",
         "@wicomm/idioma-de-cor"
       ],
       "files": [

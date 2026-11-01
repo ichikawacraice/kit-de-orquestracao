@@ -5,6 +5,7 @@ import * as React from "react"
 import { cn } from "@/registry/wicomm/lib/utils"
 import { Monograma, MonogramaAusente } from "@/registry/wicomm/ui/monograma"
 import { Skeleton } from "@/registry/wicomm/ui/skeleton"
+import { useDensidadeDaTabela } from "@/registry/wicomm/ui/table"
 import { Ajuda } from "@/registry/wicomm/ui/tooltip"
 
 type Densidade = "instrumento" | "site"
@@ -42,7 +43,7 @@ function Pessoa({
   semPessoa = "Sem responsável",
   carregando = false,
   soMonograma = false,
-  densidade = "instrumento",
+  densidade: densidadeDeFora,
   className,
 }: {
   pessoa: DadosDaPessoa | null
@@ -52,9 +53,12 @@ function Pessoa({
   semPessoa?: string
   carregando?: boolean
   soMonograma?: boolean
+  /** Sem ela, a da `Table` em volta (instrumento fora de tabela). */
   densidade?: Densidade
   className?: string
 }) {
+  const densidadeDaTabela = useDensidadeDaTabela()
+  const densidade = densidadeDeFora ?? densidadeDaTabela
   if (carregando) {
     return (
       <span data-slot="pessoa" aria-busy="true" className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>

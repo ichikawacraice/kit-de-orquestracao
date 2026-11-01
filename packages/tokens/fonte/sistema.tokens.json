@@ -29,7 +29,7 @@
       "$description": "O degrau de tinta dentro da peça; um dos quatro fundos em que o texto pode cair.",
       "$extensions": {
         "com.wicomm": {
-          "escuro": "#11141B"
+          "escuro": "#0B0E14"
         }
       }
     },

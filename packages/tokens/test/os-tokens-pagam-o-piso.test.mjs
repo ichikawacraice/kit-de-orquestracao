@@ -230,3 +230,18 @@ describe('COR-11 · a utilitária do anel de controle gasta o token do controle'
     assert.ok(!comoEra.includes('var(--input)'))
   })
 })
+
+describe('SUP-03 · o degrau de tinta se vê contra o cartão nos dois temas', () => {
+  const PISO_DEGRAU = 1.1
+
+  for (const tema of ['claro', 'escuro']) {
+    it(`no ${tema}, \`muted\` × \`card\` mede pelo menos ${PISO_DEGRAU}:1`, () => {
+      const r = razao(token('--muted', tema), token('--card', tema))
+      assert.ok(r >= PISO_DEGRAU, `${tema}: ${r.toFixed(3)}:1`)
+    })
+  }
+
+  it('a conta enxerga: o degrau escuro antigo (#11141B) reprova', () => {
+    assert.ok(razao('#11141B', token('--card', 'escuro')) < PISO_DEGRAU)
+  })
+})

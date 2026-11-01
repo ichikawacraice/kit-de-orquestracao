@@ -45,6 +45,38 @@ function useGravacao<T>(inicial: T) {
   return { valor, trocar, gravando, recusado, tentarDeNovo: () => trocar(tentado.current) }
 }
 
+/** O período que não pode inverter: o Salvar diz por quê, e o Enter não grava. */
+function PeriodoNaCelula() {
+  const [periodo, setPeriodo] = React.useState({ inicio: "2026-07-20", fim: "2026-07-24" })
+  const [rascunho, setRascunho] = React.useState(periodo)
+  const invertido = rascunho.fim < rascunho.inicio
+  return (
+    <EscolhaNaCelula
+      rotulo="Período"
+      variante="popover"
+      valor={<Prazo periodo={periodo} hoje={HOJE} />}
+      aoSalvar={() => setPeriodo(rascunho)}
+      motivoParaNaoSalvar={invertido ? "O término vem antes do início." : null}
+    >
+      <div className="flex gap-2">
+        <Input
+          type="date"
+          aria-label="Início"
+          value={rascunho.inicio}
+          onChange={(e) => setRascunho((r) => ({ ...r, inicio: e.target.value }))}
+        />
+        <Input
+          type="date"
+          aria-label="Término"
+          value={rascunho.fim}
+          aria-invalid={invertido || undefined}
+          onChange={(e) => setRascunho((r) => ({ ...r, fim: e.target.value }))}
+        />
+      </div>
+    </EscolhaNaCelula>
+  )
+}
+
 export default function DemoDaEscolhaNaCelula() {
   const etapa = useGravacao<Etapa>("curso")
   const quem = useGravacao<string | null>("Ana Souza")
@@ -121,6 +153,14 @@ export default function DemoDaEscolhaNaCelula() {
             </TableBody>
           </Table>
         </ProvedorDeLink>
+      </Amostra>
+      <Amostra titulo="Popover com formulário: Enter grava, Cancelar fecha, o Salvar diz por que não">
+        <PeriodoNaCelula />
+      </Amostra>
+      <Amostra titulo="Sem valor: a leitura vazia da peça, com o chevron">
+        <EscolhaNaCelula rotulo="Prazo" variante="popover" valor={<Prazo periodo={null} />} aoSalvar={() => {}}>
+          <Input type="date" aria-label="Prazo" />
+        </EscolhaNaCelula>
       </Amostra>
       <Amostra titulo="Sem permissão: só a leitura">
         <EscolhaNaCelula rotulo="Responsável" editavel={false} valor={<Pessoa pessoa={{ nome: "Ana Souza" }} />}>

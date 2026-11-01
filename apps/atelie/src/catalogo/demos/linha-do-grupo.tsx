@@ -11,6 +11,7 @@ import { LinkDaLinha, Table, TableCell, TableHead, TableHeader, TableRow } from 
 import { ProvedorDeLink } from "@/lib/link-do-app"
 
 import { Amostra, Amostras } from "./_amostra"
+import { ListaGrande } from "./_lista-grande"
 import { LinkDoPalco } from "./_tela"
 
 const HOJE = new Date("2026-07-12T12:00:00-03:00")
@@ -42,13 +43,15 @@ const GRUPOS: { nome: string; prazo: string; tom?: "espera"; tarefas: Tarefa[] }
 function Tabela({ densidade }: { densidade: "instrumento" | "site" }) {
   return (
     <ProvedorDeLink componente={LinkDoPalco}>
-      <Table className="table-fixed">
+      <Table className="table-fixed" densidade={densidade}>
         <TableHeader>
           <TableRow>
             <TableHead>Tarefa</TableHead>
-            <TableHead className="w-36">Responsável</TableHead>
+            <TableHead className="w-36" esconderNoCelular>
+              Responsável
+            </TableHead>
             <TableHead className="w-32">Prazo</TableHead>
-            <TableHead className="w-12">
+            <TableHead className="w-12" esconderNoCelular>
               <span className="sr-only">Ações</span>
             </TableHead>
           </TableRow>
@@ -62,33 +65,35 @@ function Tabela({ densidade }: { densidade: "instrumento" | "site" }) {
               key={g.nome}
               nome={g.nome}
               colunas={4}
-              densidade={densidade}
               contagem={{ feitas, total: g.tarefas.length }}
               semLinhas="Sem tarefas"
               progresso
               concluido={concluido}
               celulas={[
-                <PilhaDePessoas key="p" pessoas={pessoas} sobre="muted" />,
+                { conteudo: <PilhaDePessoas pessoas={pessoas} sobre="muted" />, esconderNoCelular: true },
                 <Prazo key="z" periodo={g.prazo} tom={concluido ? undefined : g.tom} concluido={concluido} hoje={HOJE} />,
               ]}
-              acao={
-                <Button variant="ghost" size="icon" aria-label={`Ações de ${g.nome}`}>
-                  <MoreHorizontalIcon />
-                </Button>
-              }
+              acao={{
+                conteudo: (
+                  <Button variant="ghost" size="icon" aria-label={`Ações de ${g.nome}`}>
+                    <MoreHorizontalIcon />
+                  </Button>
+                ),
+                esconderNoCelular: true,
+              }}
             >
               {g.tarefas.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell className="truncate">
                     <LinkDaLinha href={`/tarefas/${t.id}`}>{t.nome}</LinkDaLinha>
                   </TableCell>
-                  <TableCell>
+                  <TableCell esconderNoCelular>
                     <Pessoa pessoa={t.quem ? { nome: t.quem } : null} />
                   </TableCell>
                   <TableCell>
                     <Prazo periodo={t.prazo} concluido={t.feita} hoje={HOJE} />
                   </TableCell>
-                  <TableCell />
+                  <TableCell esconderNoCelular />
                 </TableRow>
               ))}
             </LinhaDoGrupo>
@@ -110,6 +115,16 @@ export default function DemoDaLinhaDoGrupo() {
       <Amostra titulo="Densidade site (48px)">
         <div className="w-full">
           <Tabela densidade="site" />
+        </div>
+      </Amostra>
+      <Amostra titulo="Lista grande: seis grupos, 36 linhas (instrumento)">
+        <div className="w-full">
+          <ListaGrande />
+        </div>
+      </Amostra>
+      <Amostra titulo="Lista grande (site)">
+        <div className="w-full">
+          <ListaGrande densidade="site" />
         </div>
       </Amostra>
       <Amostra titulo="Com medida e fechado">

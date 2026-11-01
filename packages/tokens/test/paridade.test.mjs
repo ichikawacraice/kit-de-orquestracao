@@ -44,6 +44,19 @@ const PROPRIOS = {
   '--raio-marcacao': 'FORMA-01 declara 5px para a caixa de marcação; a origem a escrevia como valor solto (rounded-[5px]), e o registro ganhou a peça (F294)',
 }
 
+/**
+ * Os tokens que a Wicomm já moveu de propósito, num tema só, e por quê. O valor
+ * fica escrito aqui: a fonte que andar de novo sem passar por esta lista reprova.
+ */
+const DIVERGEM = {
+  escuro: {
+    '--muted': {
+      valor: '#0B0E14',
+      motivo: 'SUP-03 (F307): o degrau media 1,057:1 contra o cartão no escuro, metade do claro, e o grupo de linhas sumia',
+    },
+  },
+}
+
 const excluido = (nome) => Object.keys(EXCLUIDOS).some((e) => (e.endsWith('*') ? nome.startsWith(e.slice(0, -1)) : nome === e))
 
 /**
@@ -110,6 +123,11 @@ describe('paridade com o globals.css da origem', () => {
       const diferentes = []
       for (const [nome, valor] of Object.entries(VARS[tema])) {
         if (nome in PROPRIOS) continue
+        const diverge = DIVERGEM[tema]?.[nome]
+        if (diverge) {
+          if (norma(valor) !== norma(diverge.valor)) diferentes.push(`${nome}: pacote ${valor} · divergência declarada ${diverge.valor}`)
+          continue
+        }
         if (norma(valor) !== norma(origem[nome] ?? '(ausente)')) diferentes.push(`${nome}: pacote ${valor} · origem ${origem[nome] ?? '(ausente)'}`)
       }
       assert.deepEqual(diferentes, [])

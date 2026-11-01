@@ -14,6 +14,14 @@ export default function DemoDoPrazo() {
           <Prazo periodo={{ inicio: "2026-06-02", fim: "2026-07-24" }} hoje={HOJE} />
           <Prazo periodo={{ fim: "2027-01-10" }} hoje={HOJE} />
           <Prazo periodo={{ inicio: "2026-06-02" }} hoje={HOJE} />
+          <Prazo periodo={{ inicio: "2026-07-27", fim: "2026-07-27" }} hoje={HOJE} />
+        </div>
+      </Amostra>
+      <Amostra titulo="Só a data (sem a legenda relativa) e numa linha">
+        <div className="flex flex-wrap items-start gap-10">
+          <Prazo periodo="2026-02-04" relativo={false} hoje={HOJE} />
+          <Prazo periodo={{ inicio: "2026-06-02", fim: "2026-07-24" }} relativo={false} hoje={HOJE} />
+          <Prazo periodo="2026-07-14" tom="espera" emLinha hoje={HOJE} />
         </div>
       </Amostra>
       <Amostra titulo="Com a voz que quem chama declara">

@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.8.0
+versao: 0.9.0
 description: A direção de design dos apps React da Wicomm — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   claro:
@@ -37,7 +37,7 @@ colors:
     marca-tinta: "#331320"
     background: "#0D1017"
     card: "#161A22"
-    muted: "#11141B"
+    muted: "#0B0E14"
     accent: "#1E232D"
     foreground: "#F2F4F8"
     foreground-2: "#98A0B0"
@@ -72,7 +72,7 @@ typography:
     t-campo: { fontSize: "13px", fontWeight: 500, lineHeight: 1.35, letterSpacing: normal, fontStretch: "100%", textTransform: none, color: "foreground" }
     t-medida: { fontFamily: "familia-medida", fontSize: "12px", fontVariantNumeric: "tabular-nums", letterSpacing: "-.02em" }
   tamanhos-utilitarios:
-    text-sm: "14px — corpo em densidade site"
+    text-sm: "14px — corpo em densidade site; nome do grupo de linhas em instrumento"
     controle: "13px (botão e campo default), 12px (sm), 14px (lg)"
     text-legenda: "11px — etiqueta, legenda, carimbo"
 rounded:
@@ -94,6 +94,9 @@ spacing:
   lg: "12px"
   xl: "16px"
   2xl: "24px"
+lista:
+  instrumento: { linha: "40px no mínimo; 6px de ar em cima e embaixo, e cresce com o conteúdo (as entrelinhas + 12px)", topo-do-grupo: "48px", vao-antes-do-grupo: "16px", ar-depois-do-topo: "4px", recuo: "32px" }
+  site: { linha: "48px no mínimo; 8px de ar em cima e embaixo, e cresce com o conteúdo (as entrelinhas + 16px)", topo-do-grupo: "56px", vao-antes-do-grupo: "24px", ar-depois-do-topo: "6px", recuo: "32px" }
 controle:
   sm: "26px, raio rounded-md (ver FORMA-01), texto 12px"
   default: "30px, raio 7, texto 13px"
@@ -302,14 +305,14 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
   | voz | papel |
   |---|---|
   | `t-display` | o título da página — um por tela (no Editor, o `h1` da barra vai em `t-titulo`, TIPO-04) |
-  | `t-titulo` | o nome de bloco, de cartão e de diálogo |
+  | `t-titulo` | o nome de bloco, de cartão e de diálogo; em densidade site, também o nome do grupo de linhas |
   | `t-denso` | o corpo em densidade instrumento: célula, metadado, linha de lista |
   | `t-rotulo` | nomeia um **conjunto** (seção dentro de um bloco, faixa, grupo de campos) — aparece uma vez, sozinho |
   | `t-coluna` | nomeia um **valor** que se repete (cabeçalho de coluna, legenda de imagem, unidade) — mais leve que o rótulo |
   | `t-campo` | o rótulo de campo em densidade **site** (frase de quem usa, sem caixa alta) |
   | `t-medida` | número que se compara (TIPO-03) |
-  Fora das vozes, só os tamanhos utilitários do frontmatter (`text-sm` para corpo em densidade site, os tamanhos de controle do kit, `text-legenda`). `text-[15px]` e afins são defeito; voz escrita à mão (`text-xl font-bold tracking-tight` no lugar de `t-display`) também.
-- **Por quê.** O papel de cabeçalho de coluna nunca teve voz e era escrito à mão em 47 lugares, de 11 formas; um título de tela na voz anterior passou por uma varredura que só olhava um tipo de arquivo.
+  Fora das vozes, só os tamanhos utilitários do frontmatter (`text-sm` para corpo em densidade site e, com peso 600, para o nome do grupo de linhas em densidade instrumento, os tamanhos de controle do kit, `text-legenda`). `text-[15px]` e afins são defeito; voz escrita à mão (`text-xl font-bold tracking-tight` no lugar de `t-display`) também.
+- **Por quê.** O papel de cabeçalho de coluna nunca teve voz e era escrito à mão em 47 lugares, de 11 formas; um título de tela na voz anterior passou por uma varredura que só olhava um tipo de arquivo. O nome do grupo no mesmo corpo da linha (12px, só com o peso a mais) não se achava ao rolar uma lista de seis grupos.
 - **Confere.** `guarda:o-rotulo-tem-duas-vozes` · `guarda:o-titulo-da-pagina-e-um-so` · `guarda` de valor arbitrário (aviso na escrita; reprova no CI).
 
 ### TIPO-03 · Medida em mono
@@ -397,9 +400,9 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 - **Confere.** `guarda:nada-de-vidro`.
 
 ### SUP-03 · A separação é o ar
-- **Regra.** O que separa assunto de assunto é, nesta ordem: **vão** entre peças · **degrau de tinta** dentro da peça (`bg-muted`, raio de agrupador, sem contorno) · **ar mais rótulo** entre seções. Nunca filete entre seções, nunca contorno de coluna. A linha de 1px sobrevive só no anel da própria peça e no que é diagrama.
-- **Por quê.** Linha demais vira grade, e grade é planilha.
-- **Confere.** `crítica:ruído` · `guarda:composicao-tem-grau`.
+- **Regra.** O que separa assunto de assunto é, nesta ordem: **vão** entre peças · **degrau de tinta** dentro da peça (`bg-muted`, raio de agrupador, sem contorno) · **ar mais rótulo** entre seções. **Numa lista, a linha se separa da vizinha só por ar:** a célula guarda o ar de cima e de baixo (`lista`, no frontmatter), e a linha cresce com o conteúdo, nunca o espreme. **O grupo de linhas se separa pelo degrau**, com o vão antes dele maior que o ar depois: o topo pertence às linhas de baixo. Nunca filete entre seções nem entre linhas, nunca zebra, nunca contorno de coluna. A linha de 1px sobrevive só no anel da própria peça e no que é diagrama. O degrau mede **pelo menos 1,10:1 contra o cartão, nos dois temas**.
+- **Por quê.** Linha demais vira grade, e grade é planilha. Numa lista de seis grupos e 36 linhas de duas linhas, a célula de 40px deixava 4px entre os textos vizinhos e o grupo encostava na primeira linha: a lista virou um bloco só, sem filete nenhum faltando. No escuro, o degrau media 1,057:1 contra o cartão, metade do claro (1,110), e o grupo sumia. Zebra seria uma segunda tinta disputando com o degrau a mesma pergunta.
+- **Confere.** `crítica:ruído` · `guarda:composicao-tem-grau` · `tokens` (`muted` × `card` ≥ 1,10 nos dois temas) · `navegador` (a lista grande do ateliê, nos dois temas e nas duas densidades: ar entre textos de linhas vizinhas ≥ 12px).
 
 ### SUP-04 · Toda superfície se declara
 - **Regra.** Quem monta superfície emite **`data-superficie`** — inclusive a que não vem do kit. O conteúdo de toda página mora numa superfície; faixa de destaque e ação primária podem ficar fora de propósito.
@@ -569,7 +572,7 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 | LAY-06 | Largura de leitura e respiro | crítica, guarda |
 | SUP-01 | Três alturas | guarda, crítica |
 | SUP-02 | Nada de vidro | guarda |
-| SUP-03 | A separação é o ar | crítica, guarda |
+| SUP-03 | A separação é o ar | crítica, guarda, tokens, navegador |
 | SUP-04 | Superfície se declara | guarda |
 | SUP-05 | Controle sem sombra | crítica, guarda |
 | SUP-06 | Anel só para foco | guarda, navegador |
