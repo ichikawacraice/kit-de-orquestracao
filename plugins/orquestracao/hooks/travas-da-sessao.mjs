@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // PreToolUse: as regras que dependem de QUEM chama viram trava. Quem chama: orquestradora (marcador em ativas/ ou título
 // `🎛 orquestradora`) ou qualquer outra sessão. Evento de subagente usa o título da sessão-mãe (mesmo `session_id`).
-//   T3  start_session: com o modo ausente ligado (/ausente on), só abre sessão o turno que o operador começou; o cartão
+//   T3  start_session: com o modo ausente ligado (/ausente on), só abre sessão o turno em que o operador escreveu (inclusive a
+//       mensagem que ele digitou no meio do turno, F315); o cartão
 //       (initiation own_initiative) só propõe e passa.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava) e em <BASE>/limpeza/ (o ok de limpar só nasce do clique na barra).
 //   T6  Bash `gh pr merge`, `painel mergear` ou `painel fila-de-merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
@@ -15,7 +16,7 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { registrar, lerEntrada, modoAusente, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, ehOrquestradora, origemDoTurno, gitCommonDir, projetoTemOrquestradora, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, marcarVoltaDaLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
+import { BASE, registroDaSessao, ehOrquestradora, origemDoTurno, operadorNoTurno, gitCommonDir, projetoTemOrquestradora, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, marcarVoltaDaLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'travas-da-sessao';
 const H = homedir();
@@ -109,14 +110,15 @@ function main() {
   }
 
   if (tool === 'mcp__ccd_session__start_session') {
-    // Modo ausente (/ausente on até /ausente off): abre sessão só o turno que o OPERADOR começou — ele está ali. Turno de
-    // notificação, de mensagem de outra sessão ou de evento não abre: propõe o cartão (own_initiative), que fica pronto para a volta dele.
+    // Modo ausente (/ausente on até /ausente off): abre sessão só o turno em que o OPERADOR escreveu — ele está ali —, na linha
+    // que abriu o turno ou numa mensagem que ele digitou no meio dele (F315). Turno de notificação, de mensagem de outra sessão ou
+    // de evento não abre: propõe o cartão (own_initiative), que fica pronto para a volta dele.
     const b = modoAusente();
     if (!b || ti.initiation === 'own_initiative') return;
-    let origem = null;
-    try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
-    if (origem !== 'human') {
-      return nega('T3', 'sessao', 'start_session', `Modo ausente ligado desde ${b.desde} (/ausente on). Este turno não foi aberto pelo operador: não abra sessão; proponha o cartão (initiation own_initiative) e deixe o item na fila.`);
+    let operador = null;
+    try { operador = e.transcript_path ? operadorNoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
+    if (operador !== true) {
+      return nega('T3', 'sessao', 'start_session', `Modo ausente ligado desde ${b.desde} (/ausente on). O operador não escreveu neste turno: não abra sessão; proponha o cartão (initiation own_initiative) e deixe o item na fila.`);
     }
   }
 }

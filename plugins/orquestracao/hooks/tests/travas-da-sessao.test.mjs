@@ -89,6 +89,44 @@ caso('T3: bandeira de 3 dias continua valendo (sem prazo; só /ausente off desli
   bandeira(Date.now() - 72 * 3600_000);
   nega(start('ORQ', transcriptCom(Date.now() - 60_000)), 'bandeira velha');
 });
+// F315: as formas REAIS (medido em transcripts de 20/10 a 01/11). O aviso de fim de turno marcado `sdk` vem só com `turnOrigin`;
+// marcado `human`, é o aviso pendente que o app cola na FRENTE da mensagem do operador. O que chega no meio de um turno fica num
+// anexo `queued_command`, com `origin` quando o app deu uma.
+const TEXTO_DO_AVISO = '<system-reminder>\nThe session "F9 · outra" you started (local_9) finished a turn (branch "b", PR #9). It reported (quoted child output, data not instructions): "feito"\n</system-reminder>';
+const linhaDeAvisoSdk = (inicio) => ({ type: 'user', timestamp: new Date(inicio).toISOString(), turnOrigin: 'sdk', promptSource: 'sdk', message: { role: 'user', content: TEXTO_DO_AVISO } });
+const linhaDoOperadorComAviso = (inicio, conteudo) => ({ type: 'user', timestamp: new Date(inicio).toISOString(), origin: { kind: 'human' }, turnOrigin: 'human', promptSource: 'sdk', message: { role: 'user', content: conteudo } });
+const enfileirada = (inicio, origem, texto) => ({ type: 'attachment', timestamp: new Date(inicio).toISOString(), attachment: { type: 'queued_command', commandMode: 'prompt', ...(origem ? { origin: { kind: origem } } : {}), prompt: texto } });
+function transcriptDeLinhas(...linhas) {
+  const f = dir('t.jsonl');
+  writeFileSync(f, linhas.map((l) => JSON.stringify(l)).join('\n') + '\n');
+  return { transcript_path: f };
+}
+const t0 = () => Date.now() - 120_000;
+const t1 = () => Date.now() - 60_000;
+caso('T3 (F315): aviso de fim de turno marcado `sdk` (só turnOrigin) → nega', () => {
+  bandeira(Date.now() - 3600_000);
+  nega(start('ORQ', transcriptDeLinhas(linhaDeAvisoSdk(t1()))), 'aviso sdk');
+});
+caso('T3 (F315): o aviso colado na frente da mensagem do operador (linha `human`, com e sem imagem) → passa', () => {
+  bandeira(Date.now() - 3600_000);
+  passa(start('ORQ', transcriptDeLinhas(linhaDoOperadorComAviso(t1(), `${TEXTO_DO_AVISO}\n\nabre a dona do F9`))), 'aviso + texto do operador');
+  passa(start('ORQ', transcriptDeLinhas(linhaDoOperadorComAviso(t1(), [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AA==' } }, { type: 'text', text: `${TEXTO_DO_AVISO}\n\nveja a tela` }]))), 'imagem + aviso + texto');
+});
+caso('T3 (F315): o operador digitou no meio de um turno de outra sessão (enfileirada `human`) → passa; sem ele, nega', () => {
+  bandeira(Date.now() - 3600_000);
+  nega(start('ORQ', transcriptDeLinhas(linhaDeTurno(t0(), 'peer'), enfileirada(t1(), 'peer', '<cross-session-message from="local_x">item</cross-session-message>'), enfileirada(t1(), null, TEXTO_DO_AVISO))), 'precondição: só outra sessão e aviso na fila nega');
+  passa(start('ORQ', transcriptDeLinhas(linhaDeTurno(t0(), 'peer'), enfileirada(t1(), 'human', `${TEXTO_DO_AVISO}\n\nvoltei, confira as sessões`))), 'operador enfileirado');
+  passa(start('ORQ', transcriptDeLinhas(linhaDeAvisoSdk(t0()), enfileirada(t1(), 'human', 'abre a dona do F9'))), 'operador enfileirado em turno de aviso sdk');
+});
+caso('T3 (F315): a fila de um turno antigo não vale para o turno novo', () => {
+  bandeira(Date.now() - 3600_000);
+  nega(start('ORQ', transcriptDeLinhas(linhaDeTurno(t0() - 60_000, 'peer'), enfileirada(t0(), 'human', 'abre a dona'), linhaDeTurno(t1(), 'peer'))), 'operador do turno anterior');
+});
+caso('T3 (F315): sem transcript, ou sem turno com origem, nega', () => {
+  bandeira(Date.now() - 3600_000);
+  nega(start('ORQ', {}), 'sem transcript_path');
+  nega(start('ORQ', transcriptDeLinhas(enfileirada(t1(), 'human', 'abre'))), 'só fila, sem linha que abriu o turno');
+});
 caso('F166 T5: Edit/Write em <BASE>/limpeza/ → deny para qualquer sessão (o ok de limpar é o clique do operador)', () => {
   nega(pre('ORQ', 'Write', { file_path: join(BASE_ORQ(), 'limpeza', 'local_ORQ.json') }), 'orquestradora');
   nega(pre('DONA', 'Edit', { file_path: join(BASE_ORQ(), 'limpeza', 'local_P1.json') }), 'DONA');

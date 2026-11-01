@@ -317,6 +317,24 @@ export function origemDoTurno(transcriptPath) {
   return null;
 }
 
+// O operador escreveu no turno atual? (T3, F315.) O turno é a linha `user` com origem que o abriu mais as mensagens que chegaram
+// nele enfileiradas (`queued_command`, com a origem que o app lhes deu). Medido de 20/10 a 01/11 (docs/research/2026-11-01-travas-x-app.md):
+// o que o operador digita no meio de um turno de outra sessão chega só como `queued_command` `human`, e o aviso de fim de turno
+// marcado `human` é sempre o aviso pendente que o app cola na frente da mensagem do operador. null: transcript sem turno com origem.
+export function operadorNoTurno(transcriptPath) {
+  let origens = null;
+  for (const linha of readFileSync(transcriptPath, 'utf8').split('\n')) {
+    if (!linha) continue;
+    let e;
+    try { e = JSON.parse(linha); } catch { continue; }
+    const c = e.message?.content;
+    const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
+    if (e.type === 'user' && !ehResultado && (e.origin?.kind || e.turnOrigin)) origens = [String(e.origin?.kind || e.turnOrigin)];
+    else if (origens && e.type === 'attachment' && e.attachment?.type === 'queued_command') origens.push(e.attachment.origin?.kind ?? null);
+  }
+  return origens ? origens.includes('human') : null;
+}
+
 // Início do turno (ms): a mesma entrada que a origem acima (e a cópia local do fila-do-item.mjs, que um teste compara).
 export function inicioDoTurno(transcriptPath) {
   const linhas = readFileSync(transcriptPath, 'utf8').split('\n');
