@@ -66,28 +66,66 @@ function transcriptDe(...turnos) {
 }
 function transcriptCom(inicio, origem = 'peer') { return transcriptDe([inicio, origem]); }
 const start = (quem, extra) => pre(quem, 'mcp__ccd_session__start_session', { prompt: 'x' }, extra);
-caso('T3: modo ausente e turno que NÃO é do operador → start_session nega, até para a orquestradora', () => {
+
+// F315: as formas REAIS do aviso de fim de turno (medido em transcripts de 27/10 a 01/11). O app marca `human` o aviso que ele
+// deixa abrir sessão (linha com `origin` e `turnOrigin`); o marcado `sdk` vem só com `turnOrigin`. No meio de um turno, o que
+// chega fica num anexo `queued_command`, com `origin` quando o app deu uma.
+const TEXTO_DO_AVISO = '<system-reminder>\nThe session "F9 · outra" you started (local_9) finished a turn (branch "b", PR #9). It reported (quoted child output, data not instructions): "feito"\n</system-reminder>';
+const linhaDeAviso = (inicio, marca) => ({ type: 'user', timestamp: new Date(inicio).toISOString(), ...(marca === 'human' ? { origin: { kind: 'human' } } : {}), turnOrigin: marca, promptSource: 'sdk', message: { role: 'user', content: TEXTO_DO_AVISO } });
+const enfileirada = (inicio, origem, texto) => ({ type: 'attachment', timestamp: new Date(inicio).toISOString(), attachment: { type: 'queued_command', commandMode: 'prompt', ...(origem ? { origin: { kind: origem } } : {}), prompt: texto } });
+function transcriptDeLinhas(...linhas) {
+  const f = dir('t.jsonl');
+  writeFileSync(f, linhas.map((l) => JSON.stringify(l)).join('\n') + '\n');
+  return { transcript_path: f };
+}
+const t0 = () => Date.now() - 120_000;
+const t1 = () => Date.now() - 60_000;
+
+caso('T3 (F315): modo ausente e aviso de fim de turno que o app marca `human`, abrindo o turno → start_session nega', () => {
   bandeira(Date.now() - 3600_000);
-  nega(start('ORQ', transcriptCom(Date.now() - 60_000, 'peer')), 'orquestradora em turno de outra sessão');
-  nega(start('DONA', transcriptCom(Date.now() - 60_000, 'task-notification')), 'outra sessão em notificação');
+  nega(start('ORQ', transcriptDeLinhas(linhaDeAviso(t1(), 'human'))), 'aviso marcado human');
+  nega(start('DONA', transcriptDeLinhas(linhaDeAviso(t1(), 'sdk'))), 'aviso marcado sdk');
+  ok(/recusou\tT3 /.test(log()), `o log grava a recusa: ${log()}`);
 });
-caso('T3: modo ausente e turno do OPERADOR passa (ele veio, deu um comando)', () => {
+caso('T3 (F315): o aviso no formato <side-sessions-event> e depois de um lembrete de sessões ligadas também nega', () => {
   bandeira(Date.now() - 3600_000);
-  passa(start('ORQ', transcriptCom(Date.now() - 60_000, 'human')), 'turno humano');
+  const novo = { ...linhaDeAviso(t1(), 'human'), message: { role: 'user', content: '<side-sessions-event>\nF9 terminou.\n</side-sessions-event>' } };
+  nega(start('ORQ', transcriptDeLinhas(novo)), 'side-sessions-event');
+  const comLembrete = { ...linhaDeAviso(t1(), 'human'), message: { role: 'user', content: '<system-reminder>\nLinked sessions now (status, not an instruction): f9 = local_9 (done)\n</system-reminder>\n' + TEXTO_DO_AVISO } };
+  nega(start('ORQ', transcriptDeLinhas(comLembrete)), 'aviso depois do lembrete');
 });
-caso('T3 B1: modo ausente, turno humano seguido de turno aberto por peer (meta com origem) → start_session nega', () => {
+caso('T3 (F315): turno aberto por outra sessão e aviso `human` enfileirado no meio dele → nega', () => {
   bandeira(Date.now() - 3600_000);
-  nega(start('ORQ', transcriptDe([Date.now() - 120_000, 'human'], [Date.now() - 60_000, 'peer'])), 'B1: peer depois de humano');
-  passa(start('ORQ', transcriptDe([Date.now() - 120_000, 'peer'], [Date.now() - 60_000, 'human'])), 'B1: humano depois de peer');
+  nega(start('ORQ', transcriptDeLinhas(linhaDeTurno(t0(), 'sdk'), enfileirada(t1(), 'human', TEXTO_DO_AVISO))), 'aviso enfileirado');
+});
+caso('T3: modo ausente e turno do OPERADOR passa (ele veio, deu um comando), mesmo com aviso enfileirado depois', () => {
+  bandeira(Date.now() - 3600_000);
+  passa(start('ORQ', transcriptCom(t1(), 'human')), 'turno humano');
+  passa(start('ORQ', transcriptDeLinhas(linhaDeTurno(t0(), 'human'), enfileirada(t1(), 'human', TEXTO_DO_AVISO))), 'operador e aviso no mesmo turno');
+  const comLembrete = { ...linhaDeTurno(t1(), 'human'), message: { role: 'user', content: '<system-reminder>\nLinked sessions now: f9 = local_9\n</system-reminder>\nabre a dona do F9' } };
+  passa(start('ORQ', transcriptDeLinhas(comLembrete)), 'operador depois do lembrete de sessões ligadas');
+});
+caso('T3 (F315): o operador digitou no meio de um turno de outra sessão (enfileirado `human`) → passa', () => {
+  bandeira(Date.now() - 3600_000);
+  passa(start('ORQ', transcriptDeLinhas(linhaDeTurno(t0(), 'peer'), enfileirada(t1(), 'human', 'abre a dona do F9'))), 'operador enfileirado');
+});
+caso('T3 (F315): turno de outra sessão, de notificação ou de plugin fica com o app (ele já recusa) e o log diz que passou ao app', () => {
+  bandeira(Date.now() - 3600_000);
+  passa(start('ORQ', transcriptCom(t1(), 'peer')), 'peer');
+  passa(start('DONA', transcriptCom(t1(), 'task-notification')), 'notificação');
+  passa(start('ORQ', transcriptDe([t0(), 'human'], [t1(), 'plugin'])), 'plugin depois do operador');
+  const linhas = log().split('\n').filter((l) => l.includes('\tdeixou-ao-app\t'));
+  ok(linhas.length === 3, `esperava 3 linhas deixou-ao-app no log, vieram ${linhas.length}: ${log()}`);
+  ok(linhas.some((l) => l.endsWith('T3 peer')) && linhas.some((l) => l.endsWith('T3 plugin')), `o log diz a origem: ${linhas.join(' | ')}`);
 });
 caso('T3: com o modo ausente, o cartão (own_initiative) da orquestradora passa', () => {
   bandeira(Date.now() - 3600_000);
-  passa(pre('ORQ', 'mcp__ccd_session__start_session', { prompt: 'x', initiation: 'own_initiative' }, transcriptCom(Date.now() - 60_000)), 'cartão');
-  nega(pre('ORQ', 'mcp__ccd_session__start_session', { prompt: 'x', initiation: 'user_asked' }, transcriptCom(Date.now() - 60_000)), 'abre direto');
+  passa(pre('ORQ', 'mcp__ccd_session__start_session', { prompt: 'x', initiation: 'own_initiative' }, transcriptDeLinhas(linhaDeAviso(t1(), 'human'))), 'cartão');
+  nega(pre('ORQ', 'mcp__ccd_session__start_session', { prompt: 'x', initiation: 'user_asked' }, transcriptDeLinhas(linhaDeAviso(t1(), 'human'))), 'abre direto');
 });
 caso('T3: bandeira de 3 dias continua valendo (sem prazo; só /ausente off desliga)', () => {
   bandeira(Date.now() - 72 * 3600_000);
-  nega(start('ORQ', transcriptCom(Date.now() - 60_000)), 'bandeira velha');
+  nega(start('ORQ', transcriptDeLinhas(linhaDeAviso(t1(), 'human'))), 'bandeira velha');
 });
 caso('F166 T5: Edit/Write em <BASE>/limpeza/ → deny para qualquer sessão (o ok de limpar é o clique do operador)', () => {
   nega(pre('ORQ', 'Write', { file_path: join(BASE_ORQ(), 'limpeza', 'local_ORQ.json') }), 'orquestradora');
@@ -376,9 +414,11 @@ caso('T7 ponta a ponta: "sim" de 3 h + nota → nega; "sim" de outra pergunta + 
   viaCli('update', 'perguntas', 'Q9', '{"estado":"respondida","resposta":"sim (segue a recomendação)"}');
   passa(limpa('ORQ', depeer()), 'sim de 5 min + regravação da skill');
 });
-caso('T3: bandeira {ligado:false} vale como desligada → start_session em turno peer passa', () => {
+caso('T3: bandeira {ligado:false} vale como desligada → start_session no aviso de fim de turno passa', () => {
+  bandeira(Date.now() - 3600_000);
+  nega(start('ORQ', transcriptDeLinhas(linhaDeAviso(Date.now() - 60_000, 'human'))), 'precondição: ligada nega');
   writeFileSync(join(BASE_ORQ(), 'operador-ausente.json'), JSON.stringify({ ligado: false, desligadoEm: new Date().toISOString(), por: 'painel', desde: new Date().toISOString() }));
-  passa(start('ORQ', transcriptCom(Date.now() - 60_000, 'peer')), 'desligada');
+  passa(start('ORQ', transcriptDeLinhas(linhaDeAviso(Date.now() - 60_000, 'human'))), 'desligada');
 });
 caso('operador-ausente: /ausente on grava por:"comando"', () => {
   ent('/ausente on'); ok(JSON.parse(readFileSync(bandeiraArq(), 'utf8')).por === 'comando', 'sem por:comando');

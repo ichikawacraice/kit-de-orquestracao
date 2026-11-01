@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // PreToolUse: as regras que dependem de QUEM chama viram trava. Quem chama: orquestradora (marcador em ativas/ ou título
 // `🎛 orquestradora`) ou qualquer outra sessão. Evento de subagente usa o título da sessão-mãe (mesmo `session_id`).
-//   T3  start_session: com o modo ausente ligado (/ausente on), só abre sessão o turno que o operador começou; o cartão
+//   T3  start_session: com o modo ausente ligado (/ausente on), o aviso de fim de turno de outra sessão não abre sessão (o resto
+//       que não é do operador o app já recusa sozinho, F315); o cartão
 //       (initiation own_initiative) só propõe e passa.
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava) e em <BASE>/limpeza/ (o ok de limpar só nasce do clique na barra).
 //   T6  Bash `gh pr merge`, `painel mergear` ou `painel fila-de-merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
@@ -15,7 +16,7 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { registrar, lerEntrada, modoAusente, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, ehOrquestradora, origemDoTurno, gitCommonDir, projetoTemOrquestradora, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, marcarVoltaDaLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
+import { BASE, registroDaSessao, ehOrquestradora, origemDoTurno, quemAbreSessao, gitCommonDir, projetoTemOrquestradora, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, marcarVoltaDaLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'travas-da-sessao';
 const H = homedir();
@@ -109,15 +110,18 @@ function main() {
   }
 
   if (tool === 'mcp__ccd_session__start_session') {
-    // Modo ausente (/ausente on até /ausente off): abre sessão só o turno que o OPERADOR começou — ele está ali. Turno de
-    // notificação, de mensagem de outra sessão ou de evento não abre: propõe o cartão (own_initiative), que fica pronto para a volta dele.
+    // Modo ausente (/ausente on até /ausente off): abre sessão só o turno em que o OPERADOR escreveu — ele está ali. F315: o app já
+    // recusa sozinho o turno de outra sessão, de notificação, de plugin e o aviso de fim de turno que ele marca `sdk`; a T3 fecha só
+    // a exceção dele, o aviso de fim de turno que ele marca `human` (laudo em docs/research/2026-11-01-travas-x-app.md). O resto
+    // passa ao app e vai para o log (`deixou-ao-app`), para remedir.
     const b = modoAusente();
     if (!b || ti.initiation === 'own_initiative') return;
-    let origem = null;
-    try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
-    if (origem !== 'human') {
-      return nega('T3', 'sessao', 'start_session', `Modo ausente ligado desde ${b.desde} (/ausente on). Este turno não foi aberto pelo operador: não abra sessão; proponha o cartão (initiation own_initiative) e deixe o item na fila.`);
+    let turno = null;
+    try { turno = e.transcript_path ? quemAbreSessao(e.transcript_path) : null; } catch { /* sem transcript */ }
+    if (turno === 'aviso') {
+      return nega('T3', 'sessao', 'start_session', `Modo ausente ligado desde ${b.desde} (/ausente on). Este turno é o aviso de fim de turno de outra sessão, não o operador: não abra sessão; proponha o cartão (initiation own_initiative) e deixe o item na fila.`);
     }
+    if (turno !== 'operador') registrar(sid, HOOK, 'deixou-ao-app', `T3 ${turno ?? 'sem-transcript'}`);
   }
 }
 

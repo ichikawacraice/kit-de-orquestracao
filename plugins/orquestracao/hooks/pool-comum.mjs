@@ -317,6 +317,53 @@ export function origemDoTurno(transcriptPath) {
   return null;
 }
 
+// --- Quem pode abrir sessão neste turno (T3, F315) ---
+// O aviso de fim de turno de uma sessão que esta abriu: `<system-reminder>The session "…" you started …` (hoje fechado por
+// `</side-sessions-event>`) ou `<side-sessions-event>`. Medido de 27/10 a 01/11 (docs/research/2026-11-01-travas-x-app.md): o app
+// marca `human` o aviso em que ele deixa abrir sessão, então a origem sozinha não o separa do operador; o texto separa.
+const AVISO_DE_FIM_DE_TURNO = /^\s*(?:<system-reminder>\s*The session "[^"]*" you started\b|<side-sessions-event>)/;
+const LEMBRETE_INICIAL = /^\s*<system-reminder>[\s\S]*?<\/system-reminder>/;
+const textoDoConteudo = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((b) => (b?.type === 'text' ? b.text : '')).join('\n') : '');
+
+function ehAvisoDeFimDeTurno(texto) {
+  let t = texto;
+  while (!AVISO_DE_FIM_DE_TURNO.test(t) && LEMBRETE_INICIAL.test(t)) t = t.replace(LEMBRETE_INICIAL, '');
+  return AVISO_DE_FIM_DE_TURNO.test(t);
+}
+
+/**
+ * O turno atual para a T3: 'operador' (o operador escreveu nele: origem `human` que não é aviso, na linha que o abriu ou
+ * enfileirada depois), 'aviso' (sem o operador, com um aviso de fim de turno), a origem de quem o abriu ('peer', 'plugin'…),
+ * ou null sem turno com origem. Entram a linha `user` com origem que abriu o turno e os `queued_command` que chegaram nele.
+ */
+export function quemAbreSessao(transcriptPath) {
+  let entradas = null;
+  for (const linha of readFileSync(transcriptPath, 'utf8').split('\n')) {
+    if (!linha) continue;
+    let e;
+    try { e = JSON.parse(linha); } catch { continue; }
+    const c = e.message?.content;
+    const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
+    if (e.type === 'user' && !ehResultado && (e.origin?.kind || e.turnOrigin)) {
+      entradas = [{ origem: String(e.origin?.kind || e.turnOrigin), conteudo: c }];
+    } else if (entradas && e.type === 'attachment' && e.attachment?.type === 'queued_command') {
+      entradas.push({ origem: e.attachment.origin?.kind ?? null, conteudo: e.attachment.prompt });
+    }
+  }
+  if (!entradas) return null;
+  let aviso = false;
+  for (const { origem, conteudo } of entradas) {
+    const texto = textoDoConteudo(conteudo);
+    if (ehAvisoDeFimDeTurno(texto)) { aviso = true; continue; }
+    if (origem !== 'human') continue;
+    let resto = texto;
+    while (LEMBRETE_INICIAL.test(resto)) resto = resto.replace(LEMBRETE_INICIAL, '');
+    const temAnexo = Array.isArray(conteudo) && conteudo.some((b) => b && b.type !== 'text');
+    if (resto.trim() || temAnexo) return 'operador';
+  }
+  return aviso ? 'aviso' : entradas[0].origem;
+}
+
 // Início do turno (ms): a mesma entrada que a origem acima (e a cópia local do fila-do-item.mjs, que um teste compara).
 export function inicioDoTurno(transcriptPath) {
   const linhas = readFileSync(transcriptPath, 'utf8').split('\n');
