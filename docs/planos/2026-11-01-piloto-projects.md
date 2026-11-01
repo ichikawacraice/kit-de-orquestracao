@@ -1,128 +1,128 @@
-# Piloto do Claude Projects num repositório pequeno
+# Piloto do Claude Projects num projeto que já usa o kit
 
-Plano de 01/11/2026 (F311). Base: o estudo [sessões nativas × kit](../research/2026-11-01-sessoes-nativas-x-kit.md), seções [Projects](../research/2026-11-01-sessoes-nativas-x-kit.md#projects), [cruzamento](../research/2026-11-01-sessoes-nativas-x-kit.md#cruzamento) e [R8](../research/2026-11-01-sessoes-nativas-x-kit.md#r8). O que o estudo afirma sobre o Projects vem da doc oficial em 01/11; o que este plano manda medir é exatamente o que a doc não responde.
+Plano de 01/11/2026 (F311). Base: o estudo [sessões nativas × kit](../research/2026-11-01-sessoes-nativas-x-kit.md), seções [Projects](../research/2026-11-01-sessoes-nativas-x-kit.md#projects), [cruzamento](../research/2026-11-01-sessoes-nativas-x-kit.md#cruzamento) e [R8](../research/2026-11-01-sessoes-nativas-x-kit.md#r8). O que o estudo afirma sobre o Projects vem da doc oficial em 01/11; o que este plano manda medir é o que a doc não responde.
+
+Este arquivo é o desenho geral, sem o nome do projeto (o kit não publica nome de projeto privado). A versão concreta — linha de base medida, roteiro com as tarefas, instruções prontas para colar e a planilha — fica no estado da máquina, em `~/.claude/orquestracao/piloto-projects/` (`roteiro.md` é o que a comparação agendada segue). Ali o projeto é chamado pelo nome; aqui, **o projeto do piloto**.
 
 <a id="objetivo"></a>
 ## Objetivo e critério de pronto
 
-Ver o Projects (conversa coordenadora + threads, Overview) funcionando em trabalho de verdade e responder, com medida, três perguntas:
-1. **O que se perde** em relação ao kit (travas, painel, fila de merge, Q-ID, teto de donas, teto de núcleos).
-2. **O que dá para contornar** com o que o Projects e o GitHub já têm (instruções do projeto, CI, proteção de branch, merge queue, thread local).
-3. **Vale um segundo passo?** (manter o Projects para algum tipo de projeto, trazer alguma peça dele para o kit, ou encerrar.)
+Rodar o Projects (conversa coordenadora + threads, Overview) por 1 a 2 dias no projeto do piloto, em trabalho de verdade, e comparar com o kit no mesmo projeto:
+1. **O uso:** itens fechados, PRs, tempo do pedido ao PR e do PR ao merge.
+2. **Os problemas:** o que se perde em relação ao kit (travas, painel, fila de merge, Q-ID, teto de donas, teto de núcleos) e o que o contorno segurou.
+3. **O gasto:** tokens e uso do plano.
+4. **A recomendação:** manter o Projects para algum tipo de item, trazer alguma peça dele para o kit, ou encerrar.
 
-**Pronto quando:** a [planilha](#planilha) tem todas as linhas preenchidas com o que se viu (não com o que se esperava), e o laudo de uma página do [passo 7](#roteiro) traz a recomendação. Nada do piloto muda o kit: o que valer a pena vira item próprio depois.
+**Pronto quando:** a planilha tem as duas colunas preenchidas com o que se **mediu** (a do kit pela [linha de base](#linha-de-base), a do Projects pela janela do piloto) e o laudo de uma página traz a recomendação. Nada do piloto muda o kit: o que valer a pena vira item próprio depois.
 
-**Fora do escopo:** migrar qualquer projeto para o Projects; mexer no kit; gravar no repositório do piloto pelo kit (quem grava lá são as threads, por PR, e o operador ao ligar o CI).
+**Fora do escopo:** migrar o projeto para o Projects; mexer no kit; gravar no repositório do piloto pela sessão do kit (lá só gravam as threads, por PR, e o operador).
 
-<a id="repositorio"></a>
-## O repositório do piloto
+<a id="por-que-este-projeto"></a>
+## Por que um projeto que já usa o kit (e o que isso custa)
 
-Critério: pequeno, já no GitHub, sem banco nem serviço local obrigatório, testes rápidos (a thread na nuvem precisa rodá-los na sandbox sem segredo nenhum). A escolha é do operador; ao longo do plano ele é chamado de **o repositório do piloto**.
+O operador escolheu pilotar no próprio projeto em que o kit trabalha todo dia, para comparar uso, problemas e gasto no mesmo terreno. O preço:
+- **Os dois sistemas no mesmo repositório:** threads e donas podem pegar o mesmo trabalho e os mesmos arquivos. A [convivência](#convivencia) separa por item.
+- **Projeto grande:** a sandbox da nuvem precisa instalar o monorepo e rodar os testes sem banco nem segredo; parte da suíte pode pular. Isso vira medida (M12), não bloqueio.
+- **Erro do piloto cai em código que importa:** a thread roda em *auto mode*. Mitigação: as instruções proíbem banco, produção e segredo, os conectores da conta com acesso a produção se desligam para o projeto, e quem mergeia é a fila do kit (com o gate), não a thread.
 
-- **Por que não um projeto grande com o kit rodando:** threads e donas pegariam o mesmo trabalho, a comparação sairia suja e um erro do piloto (auto mode, conflito) cairia em código que importa. Se o operador preferir pilotar num projeto grande, a regra de convivência é a da [seção própria](#convivencia).
-- **Pegadinha do merge queue:** o merge queue do GitHub só existe em repositório de **organização** (público, ou privado com Enterprise Cloud) — em repositório de conta pessoal a opção não aparece (*a confirmar no repositório escolhido*). Sem ele, o contorno é a proteção de branch com "exigir a branch em dia" e o coordenador mergeando um por vez ([anexo B](#anexo-b)).
+<a id="antes"></a>
+## Conferências que podem barrar o piloto
+
+1. **O plano da conta.** A doc dá o beta do Projects em Pro, Max e Ultra. Uma conta Team pode não ter: conferir se "Projects" aparece antes de qualquer outro passo. Sem ele, o piloto não roda.
+2. **Merge queue do GitHub** só existe em repositório de organização (público, ou privado com Enterprise Cloud). **Rulesets e branch protegida** em repositório privado pedem conta Pro ou Team (em conta Free, só no público). Em repositório privado de conta pessoal Free, não há nem uma coisa nem outra: a única proteção é a fila do kit.
+3. **Conectores da conta chegam a toda thread na nuvem** (Supabase, Vercel, nuvem, lojas): ver quais alcançam produção e desligar para o projeto os que der.
 
 <a id="convivencia"></a>
-## Se o piloto rodar num projeto que já usa o kit
+## Convivência kit × Projects durante o piloto
 
-- Os itens vivos terminam no kit (dona, fila de merge, orquestradora); todo trabalho **novo** do período vai para o Projects.
-- A orquestradora do projeto só mergeia os PRs dos itens vivos e não abre dona nova enquanto o piloto dura.
-- O CI de exemplo ([anexo B](#anexo-b)) não entra: o projeto já tem o gate da fila; os PRs das threads entram na fila de merge do kit como PR de fora (`painel fila-de-merge <N>:<sha>`), e a planilha mede quanto conflito eles causam com as donas.
+Recomendação (a decisão é do operador, por pergunta da orquestradora):
+- **Itens vivos terminam no kit** (dona, fila de merge, orquestradora). **Todo item novo do período vai para o Projects**; a orquestradora não abre dona nova.
+- **Os PRs das threads entram pela fila do kit.** Num projeto em que a branch de integração não roda CI, o merge pelo coordenador ou pela thread entraria sem gate nenhum. Então a thread abre o PR contra a branch de integração com um label (`piloto-projects`) e não mergeia; a orquestradora lista os PRs com o label e os põe na fila (`painel fila-de-merge <N>:<sha>`), como os das donas, sem item ligado.
+- **A devolução passa pelo operador:** a orquestradora não alcança thread na nuvem; o conflito ou o gate vermelho vai a ele, que repassa à thread pelo Projects. É uma perda a medir (M6).
+- **Base certa:** a thread nasce da branch padrão do repositório. Se ela não for a de integração, as instruções do projeto têm de dizer a base (o anexo A tem a variante).
+- **Botões do cartão que ficam desligados:** *Merge it* (manda a própria thread mergear, como se o operador pedisse), *Fix CI* e o auto-fix (o conserto muda a ponta depois do `PR N pronto`, e a fila devolve a ponta que mudou).
+
+<a id="linha-de-base"></a>
+## A linha de base
+
+Antes do piloto, mede-se o kit no projeto nas últimas 48 h, cada número com o método escrito ao lado para a comparação repetir sobre a janela do piloto:
+- sessões com atividade, mensagens e tokens por modelo (fio principal e subagentes), somados dos transcripts locais;
+- uso do plano (`get_usage`; é da conta inteira, não do projeto);
+- itens fechados e voltas de `merge` para `execucao` (pelo `historico` do painel);
+- PRs mergeados por base (`gh pr list --state merged`);
+- perguntas ao operador por estado (painel);
+- travas de fim de turno e acerto dos testes afetados (logs em `~/.claude/orquestracao/`).
+
+**Limite que pesa na comparação:** thread do Projects na nuvem não deixa transcript local; o gasto dela só aparece no uso do plano (da conta inteira) e no que a interface do Projects mostrar.
 
 <a id="roteiro"></a>
 ## Roteiro
 
-### Passo 1 — Só o operador (conta e GitHub)
-1. Conferir que o Projects aparece na conta (beta Pro/Max/Ultra, liberação gradual) no claude.ai/code ou no app desktop.
-2. Conectar o GitHub à conta, com acesso ao repositório do piloto (e, para o teste de plugin, ao repositório do kit, que é privado).
-3. Criar o projeto, com o repositório do piloto como repositório do projeto.
-4. Em *Project settings*, colar as **instruções do projeto** do [anexo A](#anexo-a) (4,5 mil caracteres; o limite é 16 mil).
-5. Modelos: deixar o padrão (Opus nas threads com esforço alto, coordenador com esforço baixo). Anotar na planilha se trocar.
-6. Em *Project settings > Plugins*: **não** adicionar nada na primeira rodada. O plugin entra só na [tarefa T5](#tarefas), para medir isolado.
-7. Para as threads locais: CLI ≥ 2.1.280 na máquina, o repositório do piloto clonado numa pasta só dele e o app desktop aberto (Remote Control). A thread local para quando a máquina dorme.
-
-### Passo 2 — CI e proteção da branch (operador, no repositório do piloto)
-- Copiar o workflow do [anexo B](#anexo-b) para `.github/workflows/ci.yml` do repositório do piloto, por PR próprio, antes das tarefas.
-- Proteger a `main`: só por PR, check `ci` obrigatório, squash. Com merge queue disponível, ligar e exigir o mesmo check nele; sem, marcar "exigir a branch em dia antes de mergear".
-
-### Passo 3 — Rodar as tarefas ([T1–T5](#tarefas)), na ordem, uma mensagem por tarefa ao coordenador, exceto T3, que vai numa mensagem só.
-
-### Passo 4 — Preencher a [planilha](#planilha) ao fim de cada tarefa (não no fim do piloto: o Overview muda e a memória some).
-
-### Passo 5 — Custo: anotar o uso do plano antes do passo 3 e ao fim de cada dia (a página de uso da conta).
-
-### Passo 6 — Encerrar: marcar as threads como *Resolved*, fechar PRs que sobrarem, desligar o Remote Control da pasta.
-
-### Passo 7 — Laudo: uma página em `docs/research/AAAA-MM-DD-piloto-projects.md` (no kit), com a planilha preenchida e a recomendação. O laudo pode sair de uma sessão do kit que leia a planilha; o veredito é do operador.
-
-Duração sugerida: 1 a 2 dias de uso real; a T3 e a T4 pedem o operador por perto (Waiting on you).
+1. **Operador:** conferir [o que barra](#antes); conectar o GitHub com acesso ao repositório (e ao do kit, para a T5b); criar o projeto; colar as instruções; deixar os modelos no padrão; nada em *Project settings > Plugins* na primeira rodada; criar o label; avisar a orquestradora da hora de início; preparar uma pasta só da thread local (clone ou worktree que nenhuma dona usa; CLI ≥ 2.1.280, app aberto para o Remote Control).
+2. **Uso do plano** anotado no começo e no fim de cada dia.
+3. **Tarefas:** todo item novo do período, mais as provocações [T1–T5](#tarefas).
+4. **Planilha** preenchida ao fim de cada tarefa (o Overview muda e a memória some).
+5. **Comparação** depois de 1 a 2 dias: repetir a linha de base sobre a janela do piloto, separando o que é do kit (itens vivos) do que é do Projects (PRs com o label), e o que só o operador viu vem dele.
+6. **Laudo** em `docs/research/AAAA-MM-DD-piloto-projects.md` no kit, por PR, sem o nome do projeto.
 
 <a id="tarefas"></a>
-## As tarefas de teste
+## As provocações
 
-Tarefas reais e pequenas no repositório do piloto, escolhidas pelo que provocam, não pelo valor do código. O texto exato a mandar ao coordenador vai entre aspas; troque o `<…>` pelo que existe no repositório.
+Escolhidas pelo que provocam, não pelo valor do código. O texto concreto de cada uma está no roteiro da máquina.
 
-| # | Tarefa | O que ela provoca | Onde roda |
+| # | Pedido | O que provoca | Onde |
 |---|---|---|---|
-| **T1** | "Adicione testes unitários para `<função pura do repositório>` e abra PR." | Caminho feliz: thread abre, testa, revisa por subagente, abre PR, CI roda, Overview passa por *Working* → *Ready for review*. Mede tempo e custo de uma thread sozinha. | Nuvem |
-| **T2** | "Corrija `<defeito pequeno conhecido>`; antes de mudar o código, me pergunte qual dos dois comportamentos eu quero." | Pergunta ao operador: chega no formato das instruções (caso, sem decisão, recomendação)? Aparece em *Waiting on you*? A notificação chega? | Nuvem |
-| **T3** | Uma mensagem só com quatro pedidos: "1) `<mudança no arquivo X>`; 2) `<outra mudança no mesmo arquivo X>`; 3) `<mudança no README>`; 4) `<mudança em outro módulo>`." | Teto e conflito: o coordenador abre 4 threads ou respeita o "no máximo 2"? Junta 1 e 2 numa thread (as instruções pedem)? O segundo PR no mesmo arquivo conflita? Quem resolve, e como? O merge um por vez segura? | Nuvem |
-| **T4** | "Mergeie os PRs prontos." (depois da T3) | Quem mergeia e em que ordem; o *Landing*; se o coordenador respeita "mergeia um por vez, com o CI verde e a branch em dia"; se a thread tenta mergear sozinha. | Coordenador |
-| **T5** | Repetir uma tarefa do tipo T1 duas vezes: (a) em **thread local** ("trabalhe no meu computador"), na pasta do piloto, com o plugin `orquestracao` instalado na máquina; (b) em thread na **nuvem** com o plugin `orquestracao` adicionado em *Project settings > Plugins*. Pedir em cada uma, no primeiro turno: "Diga, sem procurar em arquivo, se você recebeu no início da sessão um bloco chamado 'Regras do kit de orquestração'." | Hooks: o bloco é injetado pelo hook de início de sessão do plugin; se a thread o tem, o hook rodou. Em (a), conferir também se uma trava do kit dispara (ex.: pedir à thread `node --test` solto, que a guarda recusa). Em (b), anotar se o plugin aparece e se algum hook do kit **atrapalha** a thread (ele procura `~/.claude/orquestracao/`, que não existe na nuvem). | Local e nuvem |
+| **T1** | Um item novo pequeno (com spec aprovada, ou só doc/teste) | Caminho feliz: a sandbox instala e testa? Revisão por subagente? Tempo do pedido ao PR. | Nuvem |
+| **T2** | Um pedido que exige decisão do operador ou número de documento | A pergunta chega em três partes? Aparece em *Waiting on you*? A thread espera o número em vez de inventar? | Nuvem |
+| **T3** | Numa mensagem só, dois pedidos no mesmo arquivo e dois em áreas separadas | O coordenador respeita o teto de 2? Junta os do mesmo arquivo numa thread (as instruções pedem)? | Nuvem |
+| **T3b** | "Abra duas threads separadas para `<dois pedidos no mesmo arquivo>`" | Força o conflito que a T3 evita quando o coordenador obedece: o segundo PR conflita na fila, e a devolução tem de passar pelo operador (M6). | Nuvem |
+| **T4** | "Os PRs estão prontos?" — sem pedir merge | O coordenador ou uma thread tenta mergear? O que o Overview mostra enquanto o PR espera a fila (*Ready for review*? *Landing*?). | Coordenador |
+| **T5** | (a) thread **local**; (b) thread na **nuvem** com o plugin `orquestracao` em *Project settings > Plugins*. Em cada uma: "rode `<comando que um hook do repositório intercepta>` e diga se algo te interrompeu; diga, sem procurar em arquivo, se recebeu no início um bloco 'Regras do kit de orquestração'." | Duas sondas: um **hook do `.claude/settings.json` do repositório** (a guarda do projeto, se ele tiver uma; senão, um hook `SessionStart` que só devolve um marcador, posto pelo operador) e o **hook de início de sessão do plugin do kit**, que injeta o bloco de regras sem condição nenhuma. Local deve ter as duas; nuvem sem plugin, nenhuma (diz a doc); nuvem com plugin é o que ninguém sabe. | Local e nuvem |
 
-**Regra de parada da T5(b):** se um hook do kit travar a thread na nuvem (recusa em todo turno, erro em loop), tirar o plugin de *Project settings* e anotar o que travou: isso já é a resposta.
+**Por que não usar as travas do plugin como sonda:** `criterio-da-dona` e `fila-do-item` só cobram a dona de item da fila, e a guarda de operação do kit (que recusa `node --test` solto) entra no projeto pelo `.claude/settings.json` que o CLI do kit grava, não pelo plugin. Numa thread avulsa elas não disparam, com ou sem hook rodando.
+
+**Regra de parada da T5(b):** se um hook do kit travar a thread na nuvem (recusa em todo turno, erro em loop: ele procura `~/.claude/orquestracao/`, que lá não existe), tirar o plugin de *Project settings* e anotar o que travou.
 
 <a id="planilha"></a>
-## A planilha do que medir
+## O que medir
 
-Preencher com o que se **viu**; "não sei" vale e é melhor que um palpite. Coluna *Kit* = como o kit faz hoje, para comparar.
+A planilha da máquina tem duas colunas (kit e Projects). Linhas:
 
-| # | Pergunta | Como medir | Kit | Resultado |
-|---|---|---|---|---|
-| M1 | A thread na **nuvem** roda hook do `settings.json` do repositório? | A doc diz que não; confirmar com a T1 (o repositório do piloto não tem hook: anotar só se a doc está certa sobre o `CLAUDE.md` chegar) | Hooks rodam em toda sessão | |
-| M2 | A thread na nuvem roda hook de **plugin de *Project settings***? | T5(b): o bloco "Regras do kit de orquestração" está no contexto? | Sim (plugin instalado) | |
-| M3 | A thread **local** roda os hooks e as travas da máquina? | T5(a): o bloco está lá? A guarda recusou `node --test` solto? | Sim | |
-| M4 | O coordenador respeita o teto de threads? | T3: quantas threads ao mesmo tempo, com o teto de 2 nas instruções | Teto imposto por trava (4, ou 3 com a máquina cheia) | |
-| M5 | O coordenador junta pedidos que tocam o mesmo arquivo numa thread? | T3: 1 e 2 foram para a mesma thread? | A orquestradora decide; não há trava | |
-| M6 | Conflito entre PRs: quantos, quem resolveu, quanto tempo | T3/T4: contar PRs que ficaram atrás da `main`; *Resolve conflicts* usado? | Fila devolve à dona só o conflito real | |
-| M7 | O merge acontece um por vez, com CI verde e branch em dia? | T4: ordem dos merges no histórico; algum merge com CI vermelho ou pulando a proteção? | Fila: gate uma vez na combinação, merge na ordem | |
-| M8 | A thread tentou mergear sozinha? | T1–T4: algum merge feito por thread sem o operador ou o coordenador pedir | A dona não mergeia (regra + orquestradora) | |
-| M9 | A pergunta ao operador chega inteira? | T2: tem o caso, o que acontece sem decisão e a recomendação? | Q-ID, três partes, painel | |
-| M10 | Onde a pergunta aparece e se ela some | T2: *Waiting on you*, notificação do desktop, celular; depois de respondida, o histórico guarda? | Pergunta gravada com ID, vira `respondida` | |
-| M11 | O Overview substitui o pane para o operador? | Ao fim de cada dia: dá para saber, só pelo Overview, o que espera você, o que está na fila, o que travou? O que falta? | Pane: Esperam você, Travados, Executando, Na fila | |
-| M12 | Tempo do pedido ao PR aberto | T1, T3 (cada thread): hora da mensagem → hora do PR | Medido pelo painel (historico do item) | |
-| M13 | Tempo do PR ao merge | T4: hora do PR → hora do merge | Medido pelo painel | |
-| M14 | Custo | Uso do plano antes e depois de cada dia; quantas threads; quantas acordaram por CI | Sem número hoje; anotar o de um dia comum de kit para comparar | |
-| M15 | Revisão por subagente de contexto limpo aconteceu? | T1, T3: o relatório da thread cita a revisão e o que ela achou? | Validador obrigatório antes do PR | |
-| M16 | Mudança não commitada se perdeu? | Alguma thread recomeçou do clone e refez trabalho? (a doc avisa que a sandbox pode recomeçar) | Worktree local, nada se perde | |
-| M17 | Auto mode: a thread fez algo que o kit recusaria? | Ler os diffs e o relatório: push na `main`, segredo em arquivo, teste solto, mexer fora do escopo | Travas (`segredo-sai`, guarda, `fila-do-item`) | |
-| M18 | Memória do projeto: a lição de uma thread chega à seguinte? | Depois da T2, ver se a T3 repete o formato da pergunta sem lembrar | Handoff e painel | |
-
-<a id="perdas"></a>
-## O que se perde e o contorno esperado (hipóteses a medir)
-
-| Peça do kit | No Projects | Contorno no piloto | Linha |
-|---|---|---|---|
-| Travas por hook | Não rodam na thread na nuvem; na local, rodam | Regras nas instruções (sem garantia); thread local para o que precisa de trava | M1–M3, M17 |
-| Estado em `~/.claude/orquestracao/` (painel, fila, contadores) | Invisível para a thread na nuvem | Overview e o próprio GitHub (PRs, checks) como estado | M11 |
-| Fila de merge local (gate na combinação, bisseção) | Não existe | CI no PR + merge queue do GitHub, ou "branch em dia" com merge um por vez ([anexo B](#anexo-b)) | M6, M7 |
-| Q-ID e respostas pelo painel | *Waiting on you* | Formato de três partes nas instruções; sem ID | M9, M10 |
-| Teto de donas | Preferência, não teto | Instrução "no máximo 2" | M4 |
-| Teto de núcleos e testes afetados | Não há (sandbox na nuvem; na local, a máquina) | Repositório pequeno com testes rápidos; o CI roda tudo | M12 |
-| Mudança não commitada | Pode se perder | Instrução "commite e empurre cedo" | M16 |
+| # | Medida | Como medir |
+|---|---|---|
+| U1–U9 | Itens fechados, PRs mergeados, sessões/threads, tokens locais, uso do plano, tempo pedido→PR, tempo PR→merge, voltas da fila, perguntas ao operador | Pelo método da linha de base, sobre a janela do piloto |
+| M1 | Thread na nuvem roda hook do `.claude/settings.json` do repositório? | T5: a sonda do repositório disparou? |
+| M2 | Thread na nuvem roda hook de plugin de *Project settings*? | T5(b): o bloco de regras está lá? |
+| M3 | Thread local roda os hooks do repositório e do plugin? | T5(a): as duas sondas |
+| M4 | Teto de 2 threads respeitado? | T3 |
+| M5 | Pedidos no mesmo arquivo na mesma thread? | T3 |
+| M6 | Conflito: quantos PRs voltaram, quem repassou à thread, quanto tempo | T3b |
+| M7 | Algum PR do piloto entrou sem passar pela fila do kit? | Histórico de merges com o label |
+| M8 | Thread ou coordenador tentou mergear? | T4 |
+| M9 | Pergunta em três partes? | T2 |
+| M10 | Onde a pergunta apareceu e se o histórico guarda | T2 |
+| M11 | Só pelo Overview dá para saber o que espera você, o que está na fila, o que travou? | Fim de cada dia |
+| M12 | A sandbox instalou e rodou os testes? Quanto tempo? Quais pularam? | T1 |
+| M13 | Revisão por subagente antes do PR? | Relatório e PR das threads |
+| M14 | Thread perdeu mudança não commitada? | Thread que recomeçou do clone |
+| M15 | Auto mode fez algo que o kit recusaria? | Diffs e relatórios |
+| M16 | Pediu o número de documento em vez de inventar? | T2 |
+| M17 | A lição de uma thread chegou à seguinte? | T2 → T3 |
+| M18–M19 | Problemas que só um dos dois teve | Lista livre |
 
 <a id="riscos"></a>
 ## Riscos
 
-- **Auto mode nas threads:** a thread não pede permissão para comando. Mitigação: repositório pequeno, `main` protegida (só PR, check obrigatório), nenhum segredo no projeto.
-- **Plano consumido mais rápido** (o anúncio avisa): cada thread é uma sessão inteira e acorda quando o CI falha. Mitigação: teto de 2 nas instruções, piloto curto, M14 anotado por dia.
-- **T5(b) pode travar a thread** com os hooks do kit procurando estado que não existe: regra de parada na própria tarefa.
-- **Beta:** comportamento pode mudar no meio do piloto; anotar a data e a versão do app na planilha.
+- **Auto mode nas threads:** sem pedido de permissão para comando. Mitigação: instruções, conectores de produção desligados, merge só pela fila do kit.
+- **Plano consumido mais rápido** (o anúncio avisa): cada thread é uma sessão inteira. Mitigação: teto de 2, piloto curto, uso anotado por dia.
+- **T5(b) pode travar a thread:** regra de parada na própria tarefa.
+- **Beta:** pode mudar no meio; anotar data e versão do app na planilha.
+- **Comparação suja:** o plano é da conta inteira e outros projetos gastam ao mesmo tempo; os dias do piloto se comparam com dias parecidos sem ele, e a conclusão diz isso.
 
 <a id="anexo-a"></a>
-## Anexo A — Instruções do projeto (colar em *Project settings*)
+## Anexo A — Instruções do projeto (modelo genérico)
 
-Tiradas do [protocolo](../../plugins/orquestracao/pool/protocolo.md) e do [manual da dona](../../plugins/orquestracao/pool/dona.md), reescritas para quem **não** tem o kit: sem painel, sem Q-ID, sem fila local, sem `~/.claude`. Medidas em 4.479 caracteres (limite: 16 mil). Troque `<comando de teste>` pelo do repositório antes de colar.
+Tiradas do [protocolo](../../plugins/orquestracao/pool/protocolo.md) e do [manual da dona](../../plugins/orquestracao/pool/dona.md), reescritas para quem **não** tem o kit: sem painel, sem Q-ID, sem `~/.claude`. A versão pronta para o projeto do piloto está na pasta da máquina; esta é o modelo para outro projeto. Troque `<integração>` (a branch de integração, ou `main` se não houver) e `<comando de teste>`. Tamanho: 4.209 caracteres (limite: 16 mil).
 
 ```text
 # Como este projeto trabalha
@@ -130,31 +130,26 @@ Tiradas do [protocolo](../../plugins/orquestracao/pool/protocolo.md) e do [manua
 Idioma: responda, escreva commits, PRs e perguntas em português do Brasil. Horários no horário de São Paulo.
 
 ## Papéis
-- Você, na conversa do projeto, é o COORDENADOR: decide o que vira thread, acompanha as threads, mergeia (quando o operador pedir) e responde ao operador. O coordenador não escreve código.
-- Cada THREAD leva UM item inteiro, do plano ao PR: entende o pedido, mede o estado real do código, decide, escreve código e teste, revisa, abre o PR e conserta o que voltar (CI vermelho, conflito, comentário). Não há outra thread para planejar, executar ou revisar no meio.
+- Você, na conversa do projeto, é o COORDENADOR: decide o que vira thread, acompanha as threads e responde ao operador. O coordenador não escreve código e não mergeia.
+- Cada THREAD leva UM item inteiro, do plano ao PR: entende o pedido, mede o estado real do código, decide, escreve código e teste, revisa, abre o PR e conserta o que voltar. Não há outra thread para planejar, executar ou revisar no meio.
 - O OPERADOR é a pessoa: decide o que é irreversível, o que publica, o que gasta e o que muda o desenho.
 
 ## Quando abrir thread
-- No máximo 2 threads trabalhando ao mesmo tempo. Pedido além disso espera; diga ao operador o que ficou na espera e por quê. PR aberto esperando revisão ou merge não conta como trabalhando.
-- Pedidos que tocam os mesmos arquivos vão para a MESMA thread (ou esperam a anterior mergear): duas threads no mesmo arquivo geram conflito.
+- No máximo 2 threads trabalhando ao mesmo tempo. Pedido além disso espera; diga ao operador o que ficou na espera e por quê. PR aberto esperando merge não conta como trabalhando.
+- Pedidos que tocam os mesmos arquivos vão para a MESMA thread (ou esperam o PR anterior mergear), salvo quando o operador pedir threads separadas.
 - Pergunta rápida se responde aqui, sem thread.
 - Trabalho novo numa área que uma thread viva já está mexendo vai para essa thread.
 
 ## Como a thread trabalha
-1. Branch nova a partir da main atualizada, com nome curto do item.
+1. Branch nova a partir da <integração> atualizada, com nome curto do item. O PR é contra a <integração>.
 2. Antes de mudar comportamento, escreva o teste que falha e veja falhar pelo motivo certo.
 3. Commite e empurre cedo e a cada passo que funciona: a sandbox pode recomeçar de um clone novo e o que não foi empurrado se perde.
-4. Rode os testes do que você tocou (<comando de teste>) e cole no relatório o comando e as últimas linhas da saída, com o código de saída. Nunca diga que passou sem ter rodado.
-5. Antes de abrir o PR, lance um subagente de revisão de contexto limpo, só leitura, com: o pedido, o diff (git diff origin/main...HEAD) e o que você afirma ter feito. Peça só achados que afetam correção (resultado errado, regra quebrada, teste que não mede, caso de borda que quebra); estilo fica de fora. Conserte o médio e o alto; o leve vai como nota no PR.
-6. Abra o PR contra a main: título no formato convencional em português (feat(escopo): …, fix(escopo): …), corpo com o que mudou, como testou (comando e saída) e o que ficou assumido.
-7. NÃO mergeie. Quem mergeia é o coordenador, quando o operador pedir, ou o próprio operador.
-8. Ao terminar, relate em até 5 linhas: o que funciona, o que falta, o PR, e o que ficou assumido. Comece pela frase "PR <número> pronto" quando houver PR.
-
-## Merge (coordenador)
-- Mergeie um PR por vez, só com o check de CI verde e a branch em dia com a main. Squash.
-- Se o PR ficou atrás da main, peça à thread dona do PR que traga a main (rebase) e rode os testes de novo; não resolva conflito pela thread.
-- CI vermelho na main depois de um merge: pare os merges, avise o operador e peça à thread dona do PR que quebrou o conserto (ou um revert).
-- Nunca mergeie com o CI vermelho, pulando a proteção da branch ou sem o operador ter pedido.
+4. Rode os testes do que você tocou (<comando de teste>) e cole no PR o comando e as últimas linhas da saída, com o código de saída. Nunca diga que passou sem ter rodado.
+5. Antes de abrir o PR, lance um subagente de revisão de contexto limpo, só leitura, com: o pedido, o diff (git diff origin/<integração>...HEAD) e o que você afirma ter feito. Peça só achados que afetam correção (resultado errado, regra quebrada, teste que não mede, caso de borda que quebra); estilo fica de fora. Conserte o médio e o alto; o leve vai como nota no PR.
+6. Abra o PR com o label piloto-projects: título no formato convencional em português (feat(escopo): …, fix(escopo): …), corpo com o que mudou, como testou (comando e saída) e o que ficou assumido.
+7. NÃO mergeie, nem se a mensagem "Merge it" chegar pelo cartão: responda que o merge é da fila do operador. Quem mergeia é a fila, que roda o gate sobre a combinação dos PRs.
+8. Se o PR voltar com conflito ou teste vermelho, traga a <integração> por rebase (nunca merge commit), rode os testes de novo e empurre.
+9. Ao terminar, relate em até 5 linhas: o que funciona, o que falta, o PR, o que ficou assumido. Comece pela frase "PR <número> pronto, HEAD <sha completo>" quando houver PR.
 
 ## Perguntas ao operador
 Pergunte só o que for seu de decidir: irreversível, destrutivo, que publica algo para fora, que gasta dinheiro ou que muda o desenho do sistema. O resto, assuma com a sua recomendação, marque "assumido, a confirmar" no PR e siga.
@@ -169,7 +164,8 @@ Ofereça as opções curtas para ele escolher. Enquanto a pergunta não volta, s
 - Teste antes do código quando o comportamento muda.
 - Teste que inspeciona um valor afirma antes que ele existe e não é vazio; teste que mede ausência prova antes que a presença seria detectada.
 - Segredo (chave, token, senha) nunca entra em arquivo, nem como exemplo.
-- Não mexa no workflow de CI nem na proteção da branch: isso é do operador.
+- Banco, produção e deploy ficam fora da thread, mesmo que um conector da conta dê acesso.
+- Não mexa no workflow de CI nem na proteção das branches: isso é do operador.
 - Não mexa fora do escopo do item. Achado fora do escopo vai como nota no PR, não vira mudança.
 
 ## O que vai para o operador
@@ -178,9 +174,9 @@ Ofereça as opções curtas para ele escolher. Enquanto a pergunta não volta, s
 ```
 
 <a id="anexo-b"></a>
-## Anexo B — CI mínimo e merge (não gravar no kit; copiar para o repositório do piloto)
+## Anexo B — Quando o projeto não tem a fila do kit: CI mínimo e merge pelo GitHub
 
-O CI substitui o gate local da fila de merge. Segue a regra [CI só no PR para a produção](../../plugins/orquestracao/pool/protocolo.md#ci-so-na-producao): o repositório do piloto não tem branch de integração, então todo PR é de produção e o CI roda nele. Exemplo para Node; troque instalação e teste pelos do repositório (o check se chama `ci`, que é o nome a exigir na proteção).
+Não se aplica ao projeto do piloto (lá a fila do kit faz o gate, e a branch de integração não roda CI). Fica para pilotar o Projects num repositório **sem** o kit, onde o CI no PR substitui o gate local. Segue a regra [CI só no PR para a produção](../../plugins/orquestracao/pool/protocolo.md#ci-so-na-producao): sem branch de integração, todo PR é de produção e o CI roda nele. Exige conta que tenha ruleset no repositório ([conferências](#antes)). Exemplo para Node; troque instalação e teste (o check se chama `ci`, o id do job, que é o nome a exigir na proteção).
 
 ```yaml
 # .github/workflows/ci.yml
@@ -213,7 +209,9 @@ jobs:
       - run: npm test
 ```
 
-**Com merge queue** (repositório de organização): o `merge_group` faz o GitHub rodar o check sobre a `main` + os PRs da fila, na ordem — é o equivalente ao gate na combinação do kit, sem a bisseção (o GitHub tira o PR que quebra e refaz o grupo). Regra de branch (*Settings > Rules > Rulesets*, alvo `main`), em JSON de API para conferir campo a campo:
+No `merge_group` não existe `pull_request.number`, e o `github.ref` é único por entrada da fila: o `cancel-in-progress` não cancela o check da fila.
+
+**Com merge queue** (repositório de organização): o `merge_group` faz o GitHub rodar o check sobre a `main` + os PRs da fila, na ordem — o equivalente ao gate na combinação do kit, sem a bisseção (o GitHub tira o PR que quebra e refaz o grupo). Ruleset (*Settings > Rules > Rulesets*, alvo `main`), em JSON de API:
 
 ```json
 {
@@ -231,16 +229,14 @@ jobs:
 }
 ```
 
-Aplicar (operador): `gh api -X POST repos/<dono>/<repositório>/rulesets --input regra.json`. Os nomes e valores dos campos do `merge_queue` são os da API de rulesets em 01/11 (*a confirmar na tela antes de aplicar*: a tela mostra os mesmos campos).
+Aplicar (operador): `gh api -X POST repos/<dono>/<repositório>/rulesets --input regra.json`. Com o merge queue, a instrução 8 do anexo A muda: a thread **não** rebaseia por merge alheio; o PR entra na fila do GitHub (*Merge when ready* no monitor de PR das sessões locais, ou o botão da fila no GitHub), que monta a combinação sozinha.
 
-**Sem merge queue** (repositório de conta pessoal): tirar a regra `merge_queue` e o gatilho `merge_group`, e trocar `strict_required_status_checks_policy` para `true` ("exigir a branch em dia"). O GitHub então só deixa mergear o PR que já contém a `main` atual com o check verde: o segundo PR depois de um merge fica bloqueado até trazer a `main` e rodar o CI de novo. É uma fila manual — um merge por vez, com um CI a mais por PR atrasado —, e é o que as instruções do [anexo A](#anexo-a) pedem ao coordenador.
-
-**O que o *Merge when ready* do app faz aqui:** liga o auto-merge do GitHub (squash) e respeita o merge queue; é a forma de o operador mergear do cartão da thread sem quebrar a proteção.
+**Sem merge queue** (repositório de conta pessoal, com Pro): tirar a regra `merge_queue` e o gatilho `merge_group`, e pôr `strict_required_status_checks_policy: true` ("exigir a branch em dia"). O GitHub só deixa mergear o PR que já contém a `main` atual com o check verde: o segundo PR depois de um merge fica bloqueado até trazer a `main` e rodar o CI de novo. É uma fila manual — um merge por vez, com um CI a mais por PR atrasado.
 
 <a id="decisoes"></a>
 ## Decisões assumidas (a confirmar)
 
-- **Teto de 2 threads no piloto, não 4:** o repositório é pequeno e o que se quer medir (respeita o teto? conflito?) aparece com 2; 4 só gastaria mais plano.
-- **CI roda em todo PR do piloto:** sem branch de integração, todo PR é de produção pela regra do kit.
-- **O coordenador não escreve código e só mergeia quando o operador pede:** espelha a orquestradora; a planilha (M8) mede se ele respeita.
-- **T5(b) por último e com regra de parada:** o plugin do kit na nuvem pode atrapalhar a thread; medir isolado evita sujar T1–T4.
+- **Teto de 2 threads, não 4:** o que se quer medir (respeita o teto? conflito?) aparece com 2; 4 só gastaria mais plano.
+- **PRs das threads pela fila do kit, devolução pelo operador:** sem isso, a branch de integração sem CI receberia merge sem gate.
+- **O coordenador não escreve código e não mergeia:** espelha a orquestradora; M8 mede se ele respeita.
+- **T5(b) por último e com regra de parada:** o plugin do kit na nuvem pode atrapalhar a thread; medir isolado evita sujar o resto.
