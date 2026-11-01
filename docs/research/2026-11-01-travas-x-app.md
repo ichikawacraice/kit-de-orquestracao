@@ -10,7 +10,7 @@ Data: 2026-11-01. Medição pedida na [R5 do estudo de sessões nativas](2026-11
 | **T3** (`travas-da-sessao.mjs`, modo ausente) | 10 recusas (7 em conversa, 3 do mod) | 4 de 4 recusas certas; as outras 6 foram erros da T3 | **Manter, corrigida** neste PR: o operador que digita no meio do turno passa a contar |
 | **`injecao-entre-sessoes`** (aviso) | 0 avisos em 849 mensagens de outra sessão | — (o app não examina conteúdo) | **Manter**, sem mudança |
 
-- **O app já faz o trabalho da T3 em tudo o que se observou.** Nenhum turno sem o operador abriu sessão de 20/10 a 01/11: o app recusou todos (`peer`, `task-notification`, `sdk`, `plugin`), inclusive o aviso de fim de turno.
+- **O app já faz o trabalho da T3 em tudo o que se observou.** Nenhum turno sem o operador abriu sessão de 20/10 a 01/11. Os que chegaram ao app foram recusados por ele (`peer`, `task-notification`, `sdk`, `plugin`), inclusive o aviso de fim de turno; os demais pararam antes, em erro de entrada ou em cartão vencido.
 - **A exceção prevista na R5 não apareceu.** O estudo supunha que o app abre sessão no aviso de fim de turno logo depois do operador e que só a T3 o barrava. O aviso marcado `human` é outra coisa: o app cola o aviso pendente na frente da mensagem que o operador digitou (301 de 301 casos). O turno é do operador.
 - **As 6 recusas que só a T3 fez foram erros.** O operador tinha voltado ("voltar aos trabalhos, confira as sessões…") e a mensagem dele chegou enfileirada no meio de um turno aberto por outra sessão. A T3 lia só a linha que abriu o turno.
 - **Por que não remover:** o app documenta a exceção do aviso logo depois do operador, e não há medição para as origens `scheduled` e `system`. A T3 corrigida é barata e não recusou nenhum turno do operador na reprise.
@@ -47,7 +47,17 @@ O que o transcript registra, e que a medição usa:
 2026-11-01T01:03:59.143Z	f58fc2bb-…	travas-da-sessao	recusou	T3 sessao mcp__ccd_session__start_session start_session
 ```
 
-O log fica abaixo do real. As 6 recusas de 27/10 09:55 (06:55 SP) aparecem nos transcripts, com o texto da T3 no `tool_result`, mas não no log, que não tem nenhuma linha da `travas-da-sessao` nesse minuto. As 3 de 29/10 vêm da sonda do F240 (o mod chamando `start_session` pelo temporizador), não de conversa.
+Antes de 27/10 (PR #91) a T3 morava no hook `papel-do-pool`, com o nome `T3a`; o log guarda as recusas dos dois nomes:
+
+```
+   6 papel-do-pool T3a
+   4 papel-do-pool T3b
+   4 travas-da-sessao T3
+2026-10-27T09:55:05.724Z	b736f98b-…	papel-do-pool	recusou	T3a sessao mcp__ccd_session__start_session start_session
+2026-10-27T09:55:10.422Z	ac8b62c3-…	papel-do-pool	recusou	T3a sessao mcp__ccd_session__start_session start_session   (×5 até 09:55:29)
+```
+
+As 10 recusas da T3 (6 `T3a` + 4 `T3`) batem com os transcripts. `T3b` era uma regra do pool de papéis, que saiu com a ADR 0012, e não entra na conta. As 3 de 29/10 vêm da sonda do F240 (o mod chamando `start_session` pelo temporizador), não de conversa.
 
 ### 1b. O aviso marcado `human` é o operador
 
@@ -174,6 +184,6 @@ CRU 2026-10-29T14:15 linha exfiltracao tag-em=-1 ini="Another Claude session sen
 <a id="remedir"></a>
 ## Como remedir
 
-- T3: `grep -P '\ttravas-da-sessao\trecusou\tT3' ~/.claude/orquestracao/hooks-crewai.log` e, nos transcripts, o `tool_result` de cada `start_session` cruzado com quem escreveu no turno (`operadorNoTurno`). Para remover a T3: uma chamada sem o operador que o app deixou abrir.
+- T3: `grep -P '\t(travas-da-sessao\trecusou\tT3|papel-do-pool\trecusou\tT3a) ' ~/.claude/orquestracao/hooks-crewai.log` (o segundo nome é o de antes de 27/10) e, nos transcripts, o `tool_result` de cada `start_session` cruzado com quem escreveu no turno (`operadorNoTurno`). Para remover a T3: uma chamada sem o operador que o app deixou abrir.
 - `injecao-entre-sessoes`: `grep -c $'\tinjecao-entre-sessoes\tavisou' ~/.claude/orquestracao/hooks-crewai.log`.
 - Remedir em 60 dias (até 31/12/2026) ou a cada versão do app que mude as sessões ligadas.
