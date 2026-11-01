@@ -135,6 +135,14 @@ describe("pnpm build que toca o front", () => {
   });
 });
 
+describe("o merge da base aponta o caminho do app (F314)", () => {
+  it("`git merge` da base diz para trazer a base pelo sync_with_base_branch", () => {
+    const motivos = avaliar("git merge origin/main", ctx(false));
+    expect(motivos).toHaveLength(1);
+    expect(motivos[0]).toMatch(/sync_with_base_branch/);
+  });
+});
+
 describe("regras de operação e destrutivos", () => {
   cada([
     "psql postgres://localhost -f supabase/migrations/001.sql",

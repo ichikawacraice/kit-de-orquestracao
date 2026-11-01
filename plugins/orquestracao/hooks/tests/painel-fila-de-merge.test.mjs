@@ -133,6 +133,12 @@ test('conflito e gate vermelho: devolve os dois à dona com o motivo, mergeia o 
     assert.deepEqual(s.mergeados.map((m) => m.pr), [21]);
     assert.deepEqual(s.devolvidos.map((d) => d.pr), [22, 23]);
     assert.match(s.devolvidos[0].motivo, /conflito/);
+    // F314: o motivo do conflito diz à dona como resolver, e o `agora` dela o carrega
+    assert.match(s.devolvidos[0].motivo, /sync_with_base_branch/);
+    assert.match(s.devolvidos[0].motivo, /rebase origin\/main/);
+    assert.match(s.devolvidos[0].motivo, /PR 22 pronto/);
+    assert.doesNotMatch(s.devolvidos[1].motivo, /sync_with_base_branch/, 'gate vermelho não manda trazer a base');
+    assert.match(c.dado('F2').agora, /sync_with_base_branch/);
     assert.match(s.devolvidos[1].motivo, /gate vermelho/);
     assert.equal(s.gates, 3, 'lote, repetição e o 21 sozinho (o 23 sai por dedução)');
     assert.deepEqual(c.merges(), [21]);
@@ -677,4 +683,20 @@ test('F221: o item devolvido numa rodada não volta a merge pela religação do 
     assert.deepEqual(s.mergeados.map((x) => x.pr), [24]);
     assert.equal(c.dado('F5').etapa, 'execucao', 'o 23 voltou à dona: o item fica em execucao');
   } finally { limpar(c); }
+});
+
+test('motivoDeConflito: lista longa de arquivos encurta e o caminho de resolver cabe no agora (F314)', async () => {
+  const { motivoDeConflito } = await import(join(SCRIPTS, 'fila-de-merge.mjs'));
+  const arquivos = Array.from({ length: 12 }, (_, i) => `plugins/orquestracao/skills/orquestradora/scripts/arquivo-${i}.mjs`);
+  const m = motivoDeConflito({ pr: 123, sobre: 'main + o lote', arquivos, base: 'main' });
+  assert.ok(m.length > 0);
+  assert.match(m, /arquivo-0\.mjs/);
+  assert.ok(m.indexOf('sync_with_base_branch') < m.indexOf('arquivo-0'), 'o caminho vem antes da lista');
+  assert.doesNotMatch(m, /arquivo-3\.mjs/);
+  assert.match(m, /e mais 9/);
+  // o painel corta o `agora` em 300: o caminho de resolver vem antes da lista e sobrevive ao corte
+  const agora = `devolvido pela fila de merge (PR 123): ${m}`.slice(0, 300);
+  assert.match(agora, /sync_with_base_branch/);
+  assert.match(agora, /PR 123 pronto/);
+  assert.match(motivoDeConflito({ pr: 1, sobre: 'main', arquivos: [], base: 'main' }), /arquivos não listados/);
 });

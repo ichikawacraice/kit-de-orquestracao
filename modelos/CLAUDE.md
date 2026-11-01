@@ -23,7 +23,7 @@ Lidos de `.claude/kit.json`:
 - **Revisão por subagente** `orquestracao:validador` de contexto limpo antes do PR: só achados que afetam correção; o leve vai ao PR ou ao `depois` do item, nunca vira item.
 - **Durante o trabalho, só os testes afetados;** o gate completo roda uma vez, na fila de merge da orquestradora. Um gate por vez; gate verde sobre a mesma árvore não se repete (o verde é guardado pela árvore exata).
 - **A dona mantém o próprio item no painel** a cada passo (`agora`, etapa, PR); a orquestradora grava ao abrir a dona e ao mergear.
-- **Ninguém rebaseia por merge alheio:** a fila devolve à dona só o conflito real ou o gate vermelho. Rebase em vez de merge commit quando rebasear.
+- **Ninguém rebaseia por merge alheio:** a fila devolve à dona só o conflito real ou o gate vermelho. Rebase em vez de merge commit quando rebasear; a exceção é o `sync_with_base_branch` do app na devolução por conflito (o merge commit fica só na branch: a fila mergeia por squash).
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
 - **CI só no PR para a produção:** o CI (GitHub Actions ou similar) dispara só no `pull_request` contra a `main` (`on: pull_request: branches: [main]`); o PR para a branch de integração roda só os testes afetados, com o comando e a saída (`exit=0`) colados no PR, e o gate da fila protege a integração (CI em todo PR é espera e minuto para repetir o que a fila já mede).
 <!-- /kit:regras-de-operacao -->
