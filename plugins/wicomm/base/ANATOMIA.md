@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.12.0
+versao: 0.13.0
 description: A anatomia dos apps React da Wicomm — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -189,7 +189,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | Assunto da janela ou do item, antes da leitura | `MedalhaoDoIcone` (`md` no cabeçalho, `sm` no item; neutro por padrão, `tom` quando a tela diz erro ou recusa — a ausência é neutra, COR-10) | disco com ícone feito à mão |
   | Estado em uma palavra | `ChipDeEstado` (declara `tom`) | `span` colorido |
   | Estado que abre o detalhe | `ChipQueAbre` | `button` à mão em volta do chip |
-  | Valor rotulado (um valor que classifica, não um estado) | `Badge`: neutro por padrão; `variant="marca"` explícito, na tinta da marca com texto em tinta | chip para valor, `Badge` com `tom`, `ChipDeEstado` para valor |
+  | Valor rotulado (um valor que classifica, não um estado) | `Badge`: neutro por padrão; `variant="marca"` explícito, na tinta neutra com texto em tinta e o filete da marca (CTRL-05) | chip para valor, `Badge` com `tom`, `ChipDeEstado` para valor, `Badge` de marca em tinta rosa |
   | Marcador mínimo de voz | `Estado` (`ponto`, `play`) | círculo à mão |
   | O percurso de um objeto (na Mesa) | `TrilhoDoPercurso`: as etapas em ordem, só a atual com `Estado` e `tom`, a feita com o ícone de feito, a que vem sem ponto; a cor de etapa, quando o projeto a declara, entra como `PontoDaEtapa` dentro da estação | `Estado` com `tom` em toda etapa, cor da etapa à mão, `Passos` ou `Progress` para o percurso |
   | Região sem itens | `Vazio`, declarando a causa (`nada-ainda`, `filtro`, `nao-se-aplica`, `nao-informado`) e a saída quando há | ✓ sobre nada, cartão de voz, texto solto |

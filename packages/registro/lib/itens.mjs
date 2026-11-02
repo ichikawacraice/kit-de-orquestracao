@@ -315,7 +315,7 @@ export const PECAS = [
   peca({
     name: 'badge',
     title: 'Valor rotulado',
-    description: 'badge — o valor que classifica um objeto (não um estado), no casco do carimbo: neutro, ou de marca quando explícito (CTRL-05).',
+    description: 'badge — o valor que classifica um objeto (não um estado), no casco do carimbo: neutro, ou de marca quando explícito, aberto pelo filete da marca (CTRL-05).',
     pecas: ['chip-de-estado', 'idioma-de-cor'],
     files: [ui('badge')],
   }),

@@ -43,12 +43,15 @@ export const COR_DO_TOM_DENSO: Record<Tom, string> = {
   alheio: "text-violet-700 dark:text-violet-400",
 }
 
+/** A tinta do carimbo neutro, com o alfa fixado (COR-07): a do estado neutro e a do `Badge`, neutro ou de marca (CTRL-05). */
+export const TINTA_DO_CARIMBO_NEUTRO = "bg-foreground/[0.07]"
+
 /** O carimbo: tinta chapada e o texto sobre ela (CTRL-05). O neutro tem tinta, com alfa fixado (COR-07). */
 export const BADGE_DO_TOM: Record<Tom, string> = {
   ok: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
   espera: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
   ruim: "bg-rose-500/15 text-rose-800 dark:text-rose-300",
-  neutro: "bg-foreground/[0.07] text-muted-foreground dark:text-foreground-2",
+  neutro: `${TINTA_DO_CARIMBO_NEUTRO} text-muted-foreground dark:text-foreground-2`,
   alheio: "bg-violet-500/15 text-violet-800 dark:text-violet-300",
 }
 

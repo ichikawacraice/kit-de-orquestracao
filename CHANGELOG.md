@@ -4,6 +4,17 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.13.0 · 01/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **O `Badge` de marca sai do rosa e abre com o filete da marca** (CTRL-05): tinta neutra do carimbo (`bg-foreground/[0.07]`), texto em `foreground` e um filete de 2×10px no gradiente da marca antes da palavra. A tinta da marca e a do carimbo `ruim` eram o mesmo rosa — no escuro, medidas com a tinta composta, ficavam a ΔE2000 0,75–2,7, abaixo do que o olho separa —, e só a cor da letra distinguia o valor que a Wicomm assina do estado que quebrou.
+- O token `--marca-tinta` não muda. O `Badge` neutro e o carimbo de estado não mudam.
+
+### Migração
+- `npx shadcn add @wicomm/badge`. Nada muda no uso: a peça desenha a tinta e o filete sozinha. Tela que sobrescrevia a tinta do de marca por `className` revê a escolha.
+
 ## 0.12.0 · 01/11/2026
 
 Camadas: base, registro

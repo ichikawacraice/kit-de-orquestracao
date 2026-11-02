@@ -60,7 +60,7 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `antes-do-desenho` | — | o script que aplica o tema e a barra recolhida no `<html>` antes do primeiro desenho (layout raiz) |
 | `link-do-app` | — | o link das peças: `<a>` por padrão, o do framework pelo `ProvedorDeLink` |
 | `chip-de-estado` | — | o estado em uma palavra (`ChipDeEstado`, `ChipQueAbre`), com a forma única do carimbo; o neutro abre com o ponto |
-| `badge` | badge | o valor que classifica (não o estado), no mesmo casco do carimbo; neutro ou `marca` |
+| `badge` | badge | o valor que classifica (não o estado), no mesmo casco do carimbo; neutro ou `marca`, com o filete da marca |
 | `estado` | — | o ponto de 6px e a palavra |
 | `medalhao-do-icone` | — | o disco com o ícone do assunto |
 | `trilha` | breadcrumb | a trilha de volta da tela de detalhe |
