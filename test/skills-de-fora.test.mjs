@@ -156,6 +156,43 @@ describe('conferirSkillsDeFora', () => {
     } finally { rmSync(h, { recursive: true, force: true }); }
   });
 
+  // F348: o ponytail injeta texto por hook em toda sessão, por fora da trava; ligado num projeto com o kit, o doutor avisa.
+  const comHooks = { ...catalogo, plugins: [...catalogo.plugins, { plugin: 'ponytail', marketplace: 'ponytail', saida: 'livre', motivo: 'absorvido', hooks: 'os hooks SessionStart e SubagentStart passam por fora da trava.' }] };
+  const SP = { 'superpowers@claude-plugins-official': true };
+
+  it('plugin com hooks ligado: aviso que explica os hooks e como desligar', () => {
+    const h = casa({ cli: ['superpowers@claude-plugins-official', 'ponytail@ponytail'], settings: { enabledPlugins: { ...SP, 'ponytail@ponytail': true } } });
+    try {
+      const aviso = conferirSkillsDeFora({ home: h, catalogo: comHooks }).linhas.find((l) => l.startsWith('aviso:') && l.includes('ponytail'));
+      assert.ok(aviso, 'o aviso existe');
+      assert.match(aviso, /ligado num projeto com o kit: os hooks SessionStart e SubagentStart passam por fora da trava\./);
+      assert.match(aviso, /claude plugin disable ponytail@ponytail --scope local/);
+    } finally { rmSync(h, { recursive: true, force: true }); }
+  });
+
+  it('plugin com hooks instalado e desligado (a camada do projeto vence a da conta): sem aviso de hooks', () => {
+    const h = casa({ cli: ['superpowers@claude-plugins-official', 'ponytail@ponytail'], settings: { enabledPlugins: { ...SP, 'ponytail@ponytail': true } } });
+    try {
+      const ligado = conferirSkillsDeFora({ home: h, catalogo: comHooks, configs: [{ enabledPlugins: { ...SP, 'ponytail@ponytail': true } }] }).linhas;
+      assert.ok(ligado.some((l) => l.includes('ligado num projeto com o kit')), 'com a camada ligada, o aviso aparece');
+      const r = conferirSkillsDeFora({ home: h, catalogo: comHooks, configs: [{ enabledPlugins: { ...SP, 'ponytail@ponytail': true } }, { enabledPlugins: { 'ponytail@ponytail': false } }] });
+      assert.ok(!r.linhas.some((l) => l.includes('ligado num projeto com o kit')), r.linhas.join('\n'));
+    } finally { rmSync(h, { recursive: true, force: true }); }
+  });
+
+  it('o catálogo real barra o ponytail-review, dá a escada como absorvida e explica os hooks do ponytail', async () => {
+    const { readFileSync } = await import('node:fs');
+    const real = JSON.parse(readFileSync(new URL('../plugins/orquestracao/skills-de-fora.json', import.meta.url), 'utf8'));
+    const p = real.plugins.find((x) => x.plugin === 'ponytail');
+    assert.ok(p && p.saida === 'livre' && /SessionStart/.test(p.hooks ?? ''), 'o plugin, livre, com os hooks');
+    assert.equal(real.skills.find((s) => s.skill === 'ponytail:ponytail-review')?.saida, 'barrar');
+    const esc = real.skills.find((s) => s.skill === 'ponytail:ponytail');
+    assert.equal(esc?.saida, 'absorver');
+    assert.equal(esc?.feito, true);
+    const prot = readFileSync(new URL('../plugins/orquestracao/pool/protocolo.md', import.meta.url), 'utf8');
+    assert.match(prot, /<a id="menor-diff"><\/a>[\s\S]{0,300}ponytail[\s\S]{0,120}MIT, Dietrich Gebert/, 'a absorção feita existe, com o crédito');
+  });
+
   it('o catálogo real do plugin carrega e dá ao menos uma linha', () => {
     const h = casa();
     try {

@@ -592,6 +592,9 @@ ${vivo ? `<circle class="vivo ${ANDA}" cx="${selo - 2}" cy="${y + 2}" r="3.5"/>`
  * O cartão do item em sessão (§1 do desenho): sobre (tema e tempo), título, chips, trava, espera, quem, agora e depois.
  * Sem fundo e sem filete: a moldura é o `Box round` da composição, com a borda na cor do tom, e os botões ficam dentro dela.
  */
+/** F348: o custo do item feito, em milhões de tokens-equivalentes de entrada (`custo 12,3 M`), para comparar item com item. */
+export const textoDoCusto = (relativo: number): string => `custo ${relativo.toFixed(1).replace('.', ',')} M`
+
 export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: OpcoesDoCartao): { source: string; height: number; alt: string } {
   const partes: string[] = []
   const tempo = tempoDoItem(item, agora)
@@ -612,6 +615,7 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   const selo = seloDaEspera(item)
   if (selo && item.espera?.motivo === 'gate') chips.push({ t: selo, texto: 's', traco: 'ms' })
   chips.push(...chipDoPr(item))
+  if (item.situacao === 'feito' && item.custo !== undefined) chips.push({ t: textoDoCusto(item.custo), texto: 's', traco: 'ms' })
   const linhaDeChips = chipsSvg(0, y + 9, W, chips)
   partes.push(...linhaDeChips.partes)
   y += 9 + linhaDeChips.altura

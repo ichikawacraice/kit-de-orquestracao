@@ -35,8 +35,45 @@ A dona é uma sessão só, mas troca de chapéu a cada etapa: **ao entrar numa e
 
 <a id="revisao"></a>
 ## Revisão por subagente
+- **Item pequeno, dentro do corte, pode ir pela [via rápida da revisão](#via-rapida-da-revisao):** autorrevisão na própria sessão, com o laudo no PR. Fora do corte, sempre o validador separado.
 - Antes do PR, a dona lança `orquestracao:validador` (só leitura, contexto limpo) com o plano, o diff (`git diff origin/<base>...HEAD`) e o que ela afirma ter feito. O briefing pede **só achados que afetam correção**: resultado errado, regra do projeto quebrada, teste que não mede, caso de borda que quebra. Estilo, nome e comentário ficam de fora ("skip style").
 - Achado médio ou alto: a dona conserta e, em item de risco (contrato, estado gravado, segurança, produção), lança um segundo validador sobre o delta. Achado leve vira nota no PR ou entra em `depois` do item, **nunca item novo**.
+
+<a id="menor-diff"></a>
+## Escrever: o menor diff que resolve inteiro
+Ideia do plugin [ponytail](https://github.com/dietrichgebert/ponytail) (MIT, Dietrich Gebert), reescrita para o kit.
+- **Antes de escrever, liste o que a mudança alcança:** os arquivos, quem chama o que vai mudar e o teste que vai provar. Depois desça a escada e pare no primeiro degrau que resolve o pedido **inteiro**: (1) não escrever nada (o pedido já está atendido, ou não deve ser); (2) usar o que o repositório já tem; (3) a biblioteca padrão da linguagem; (4) uma dependência que o projeto já declara; (5) a menor mudança nova. Dependência nova, abstração, opção de configuração e código "para depois" ficam fora, salvo pedido explícito.
+- **A escada decide *o que* escrever, não *se* testa.** Quando o comportamento muda, o teste vem antes do código (`CLAUDE.md` do projeto); o degrau escolhido só diz quanto código entra para fazê-lo passar. Validação de entrada, perda de dados, segurança e acessibilidade nunca saem para o diff ficar menor.
+- **Menor não é pela metade:** o diff que deixa um chamador quebrado, um caso conhecido de fora ou o doc dizendo o contrário não é o menor que resolve. O que ficou de fora de propósito vai ao PR, com o motivo.
+
+<a id="juntar-chamadas"></a>
+## Juntar chamadas: cada ida e volta relê o contexto inteiro
+- Cada chamada de ferramenta é um turno do modelo, e cada turno relê a conversa inteira do cache ([orçamento de contexto](../skills/orquestradora/SKILL.md), medição de 02/11: ~180 mil tokens relidos por chamada). Dez leituras em dez turnos custam dez releituras; em um turno, uma.
+- **Chamadas independentes vão juntas no mesmo turno:** os `Read`, `grep` e `git` que não dependem um do outro, as edições de arquivos diferentes.
+- **Vários passos encadeados vão num script só:** um `node - <<'EOF'` ou um `sh -c` que lê, troca e confere, com a saída curta (o fim do log, o `exit=`), em vez de uma chamada por passo. A saída do script entra no contexto: corte-a ao que decide o próximo passo.
+
+<a id="via-rapida-da-revisao"></a>
+## Via rápida da revisão: item pequeno se autorrevisa
+Desde o F348 (Q851). O validador de contexto limpo custa um subagente inteiro (piso de ~33 mil tokens mais o que ele lê); no item pequeno ele custa mais que o trabalho. A via rápida troca o subagente por um roteiro fixo, **só dentro de um corte que se mede**.
+- **O corte, medido pelo script** `node "${CLAUDE_PLUGIN_ROOT}/pool/via-rapida.mjs" [--base origin/<base>]` (sai com `cabe: true` ou com os motivos de fora). Cabe quando **tudo** vale:
+  - até **60 linhas** mudadas (adições mais remoções) em até **4 arquivos**;
+  - nenhum arquivo de contrato ou de trava: ADR, spec, migration, schema, SQL, `package.json` e lockfiles, `.claude/kit.json`, `settings.json`, manifesto de plugin, hook (`hooks/`), gate, o protocolo e os agentes do kit, o catálogo de skills de fora; mais os padrões que o projeto puser em `viaRapida.fora` do `.claude/kit.json`;
+  - nenhum arquivo removido ou renomeado.
+- **O que o script não vê, a dona declara** no laudo, e qualquer "sim" tira o item da via rápida: o item grava estado (banco, arquivo de estado, painel), toca segurança, dinheiro ou produção, muda texto de regra, já voltou da fila, ou é item de risco pela classificação da orquestradora ([modelo e esforço](#modelo-e-esforco)). Quem abriu a dona em Opus por risco não autoriza via rápida.
+- **O roteiro da autorrevisão**, depois dos testes afetados verdes e antes do PR, com o diff (`git diff origin/<base>...HEAD`) relido do disco, não de memória:
+  1. cada arquivo do diff contra o plano: o que o plano pedia e não está, o que está e o plano não pedia;
+  2. **quem chama** cada função ou export mudado, fora do diff (`grep` pelo nome): continua certo com a mudança?;
+  3. o caso de borda que o teste não pega: entrada vazia, ausente, repetida; o teste afirma que o valor existe antes de comparar;
+  4. o teste falha sem o conserto (rode-o sobre a base, ou diga por que não dá);
+  5. regra do projeto (`CLAUDE.md`) que o diff toca.
+- **O laudo no PR:** uma seção `## Autorrevisão (via rápida)` com a saída do `via-rapida.mjs`, as declarações do que o script não vê e uma linha por passo do roteiro com o que foi conferido. Achado no roteiro: conserte; se o conserto tira o diff do corte, o item volta ao validador separado.
+- **Fora da via rápida:** o item que não cabe, e todo item que muda regra de revisão (inclusive o que mexe nesta seção), passa pelo `orquestracao:validador` separado. Nenhuma trava do kit exige o validador; a fila de merge e o gate valem igual nas duas vias.
+
+<a id="custo-do-item"></a>
+## Custo por item
+- Ao fechar o item, `painel mergear` (e a fila de merge, que passa por ele) soma o gasto das sessões que trabalharam nele, lido dos transcripts (o fio principal e os subagentes), e grava `custo` no item: `{ relativo, chamadas, entrada, escrita5m, escrita1h, leitura, saida, sessoes, medidoEm }`. As sessões são as do `com` e a dona no momento do merge, mais as que entraram no `com` antes (`painel com add` as anota em `sessoes` do item).
+- **`relativo`** é o custo em milhões de tokens-equivalentes de entrada, com os pesos do preço relativo do Opus 5.5: entrada 1, escrita de cache de 5 min 1,25, escrita de 1 h 2, leitura de cache 0,1, saída 5. Serve para comparar item com item (a absorção do ponytail baixou o custo?), não é fatura.
+- O pane mostra `custo N M` na linha do item feito. Transcript que não está na máquina conta zero e o `sessoes` diz quantas foram lidas. `painel custo F<n>` mede de novo um item já fechado.
 
 <a id="testes-afetados"></a>
 ## Testes: os afetados no trabalho, o gate uma vez na fila

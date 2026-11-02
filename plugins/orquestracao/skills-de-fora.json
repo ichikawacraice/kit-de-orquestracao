@@ -31,6 +31,14 @@
       "origem": "Anthropic (anthropics/knowledge-work-plugins)",
       "saida": "livre",
       "motivo": "Plugins do Cowork: fora do escopo do kit."
+    },
+    {
+      "plugin": "ponytail",
+      "marketplace": "ponytail",
+      "origem": "dietrichgebert/ponytail (MIT, Dietrich Gebert)",
+      "saida": "livre",
+      "motivo": "O que ele tem de bom é texto e o kit absorveu (a escada do menor diff, o roteiro de revisão fora do diff); o resto (faixa, quadro, mapa do código) não tem par no kit.",
+      "hooks": "os hooks SessionStart, UserPromptSubmit e SubagentStart dele injetam as regras em toda sessão, prompt e subagente (~1,5–2 mil tokens por sessão), por fora da trava skills-de-fora, que só pega a skill chamada: os subagentes do kit (validador, explorador, design) recebem o texto dele junto do briefing."
     }
   ],
   "skills": [
@@ -86,6 +94,21 @@
       "licenca": "Apache-2.0 (anthropics/knowledge-work-plugins); a atribuição fica no design system que a absorveu",
       "motivo": "Auditar e documentar o design system é do próprio design system, que conhece os tokens e os componentes; a skill da Anthropic é genérica.",
       "semPrefixo": false
+    },
+    {
+      "skill": "ponytail:ponytail-review",
+      "saida": "barrar",
+      "use": "orquestracao:validador, ou a via rápida da revisão do kit no item pequeno (protocolo, âncora via-rapida-da-revisao)",
+      "motivo": "Revisa na sessão de quem escreveu, fora do corte e do roteiro do kit; o que ele tem a mais (ler quem chama fora do diff, declarar a carga, conserto no chamador) já está no validador e no roteiro da via rápida."
+    },
+    {
+      "skill": "ponytail:ponytail",
+      "saida": "absorver",
+      "em": "pool/protocolo.md do plugin orquestracao, âncora menor-diff (a escada do menor diff que resolve inteiro)",
+      "feito": true,
+      "use": "a escada do menor diff do kit (protocolo, âncora menor-diff)",
+      "licenca": "MIT (dietrichgebert/ponytail); a atribuição fica na seção do protocolo que a absorveu",
+      "motivo": "A escada do menor diff completo preenche o que o kit não dizia: como escolher o que escrever. Reescrita no formato do kit, casada com o teste antes do código."
     }
   ]
 }

@@ -94,5 +94,22 @@ export function conferirSkillsDeFora({ home, destino = '', configs, catalogo = l
     if (dependencia) { linhas.push(`info: o kit barra neste projeto ${lista}, do plugin ${plugin} (dependência do kit: o plugin fica)`); continue; }
     linhas.push(`aviso: plugin ${plugin} instalado; o kit barra neste projeto ${lista} (as outras skills dele seguem livres); se não usa as outras, desligue-o ${como.join(' e ')}: cada sessão deixa de carregar as descrições`);
   }
+  // F348: plugin cujos hooks injetam texto em toda sessão passa por fora da trava (ela só pega a skill chamada): ligado
+  // neste projeto, o doutor avisa e explica os hooks. O da conta do app conta como ligado (o app não diz).
+  for (const p of (catalogo.plugins ?? []).filter((x) => typeof x.hooks === 'string' && x.hooks)) {
+    const ligados = (presentes.get(p.plugin) ?? []).filter((o) => o.origem === 'app' || ligadoAqui(o.id, configs));
+    if (!ligados.length) continue;
+    const como = ligados.map((o) => (o.origem === 'app' ? 'no app (lista de plugins da conta)' : `só para você neste projeto com \`claude plugin disable ${o.id} --scope local\``));
+    linhas.push(`aviso: plugin ${p.plugin} ligado num projeto com o kit: ${p.hooks} Desligue-o ${como.join(' e ')}`);
+  }
   return { linhas, falhas };
+}
+
+// O plugin `id` está ligado pelas camadas de settings (a mais próxima vence); sem camada que o ligue, desligado.
+function ligadoAqui(id, configs) {
+  for (const c of [...configs].reverse()) {
+    const v = c?.enabledPlugins?.[id];
+    if (typeof v === 'boolean') return v;
+  }
+  return false;
 }
