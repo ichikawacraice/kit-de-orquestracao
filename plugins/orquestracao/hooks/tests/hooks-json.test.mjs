@@ -22,7 +22,7 @@ const ESPERADO = [
   ['Stop', null, 'fila-do-item.mjs'],
   ['Stop', null, 'contexto-do-papel.mjs'],
   ['PreToolUse', PRE_EDICAO, 'orquestradora-nao-edita.mjs'],
-  ['PreToolUse', PRE_EDICAO, 'subagente-nao-edita.mjs'],
+  ['PreToolUse', `Bash|${PRE_EDICAO}`, 'subagente-nao-edita.mjs'],
   ['PreToolUse', `Bash|${PRE_EDICAO}|mcp__ccd_session__start_session|mcp__ccd_session_mgmt__clear_session`, 'travas-da-sessao.mjs'],
   ['PreToolUse', 'SendMessage|mcp__ccd_session_mgmt__send_message|mcp__ccd_session__start_session|Write|Edit|MultiEdit|Bash', 'segredo-sai.mjs'],
   ['PreToolUse', 'mcp__ccd_session__start_session', 'titulo-da-dona.mjs'],
