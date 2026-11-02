@@ -8,7 +8,7 @@ import { booleanoDaOpcao, opcoesDoPlugin, pastaDeConfig } from '../gate/opcoes-d
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { conferirPerformance, lerPraticas } from './performance.mjs';
 import { conferirSkillsDeFora } from './skills-de-fora.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, MARKETPLACE_ANTIGO, PLUGIN, REPO_DO_KIT, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, MARKETPLACE_ANTIGO, PLUGIN, REPO_DO_KIT, idNovoDe, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
@@ -106,7 +106,8 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
 
 /** O que `enabledPlugins` diz do plugin: a camada mais próxima (local > projeto > conta), o nome velho valendo quando o novo não diz; `undefined` se ninguém diz. */
 function ligadoEm(id, configs) {
-  const ids = [id, ...Object.keys(PLUGINS_RENOMEADOS).filter((v) => PLUGINS_RENOMEADOS[v] === id)];
+  // o nome velho de qualquer plugin do kit (F332 e o marketplace antigo do F344): vale quando o novo não diz
+  const ids = [id, ...[...Object.keys(PLUGINS_RENOMEADOS), id.replace(`@${MARKETPLACE}`, `@${MARKETPLACE_ANTIGO}`)].filter((v, i, l) => l.indexOf(v) === i && v !== id && idNovoDe(v) === id)];
   for (const s of [configs[2], configs[1], configs[0]]) for (const i of ids) if (typeof s?.enabledPlugins?.[i] === 'boolean') return s.enabledPlugins[i];
   return undefined;
 }

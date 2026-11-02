@@ -8,7 +8,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync,
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
-import { MARKETPLACE, MARKETPLACE_ANTIGO, REPASSES, idNovoDe, repasse, semBom, serializar, trocarNomesDoKit } from './pacote.mjs';
+import { MARKETPLACE, MARKETPLACE_ANTIGO, REPASSES, REPO_DO_KIT, idNovoDe, repasse, semBom, serializar, trocarNomesDoKit } from './pacote.mjs';
 
 const LONGO_MS = 300_000;
 const ARQUIVOS_DO_PROJETO = ['.claude/settings.json', '.claude/settings.local.json'];
@@ -42,7 +42,8 @@ function argumentoDaOrigem(source) {
 function projetosAOlhar(home, C, instalados, extras) {
   const caminhos = new Set(extras.map((p) => resolve(p)));
   for (const lista of Object.values(instalados)) for (const e of Array.isArray(lista) ? lista : []) if (typeof e?.projectPath === 'string') caminhos.add(e.projectPath);
-  for (const p of Object.keys(lerJson(join(home, '.claude.json'))?.projects ?? {})) caminhos.add(p);
+  // a lista de projetos do Claude Code: em `~/.claude.json`, ou na pasta de configuração quando `CLAUDE_CONFIG_DIR` a muda
+  for (const arq of [join(home, '.claude.json'), join(C, '.claude.json')]) for (const p of Object.keys(lerJson(arq)?.projects ?? {})) caminhos.add(p);
   const projetos = []; const vistos = new Set();
   for (const raiz of caminhos) {
     let real; try { real = realpathSync(raiz); } catch { continue; } // pasta que sumiu: nada a trocar
@@ -84,10 +85,11 @@ function planejar({ home, C, extras }) {
     if (!id.endsWith(`@${MARKETPLACE_ANTIGO}`) || !Array.isArray(lista)) continue;
     const idNovo = idNovoDe(id);
     for (const e of lista) {
-      if (e?.scope === 'user') daConta.push({ id, idNovo, installPath: e.installPath, ligado: conta.enabledPlugins?.[id] !== false, opcoes: objeto(conta.pluginConfigs?.[id]?.options) ? conta.pluginConfigs[id].options : {} });
+      // sem entrada no enabledPlugins o Claude Code o trata como desligado (medido; ver skills-de-fora.mjs): só `true` volta ligado
+      if (e?.scope === 'user') daConta.push({ id, idNovo, installPath: e.installPath, jaInstalado: (instalados[idNovo] ?? []).some((x) => x?.scope === 'user'), ligado: conta.enabledPlugins?.[id] === true, opcoes: objeto(conta.pluginConfigs?.[id]?.options) ? conta.pluginConfigs[id].options : {} });
       else if (['project', 'local'].includes(e?.scope) && typeof e.projectPath === 'string') {
         // a pasta que sumiu não tem settings a trocar, e o CLI não roda nela: fica como está, com aviso
-        if (existsSync(e.projectPath)) doProjeto.push({ id, idNovo, scope: e.scope, projectPath: e.projectPath }); else semPasta.push(`${id} (escopo ${e.scope} em ${e.projectPath})`);
+        if (existsSync(e.projectPath)) doProjeto.push({ id, idNovo, scope: e.scope, projectPath: e.projectPath, installPath: e.installPath, jaInstalado: (instalados[idNovo] ?? []).some((x) => x?.scope === e.scope && x.projectPath === e.projectPath) }); else semPasta.push(`${id} (escopo ${e.scope} em ${e.projectPath})`);
       }
     }
   }
@@ -144,10 +146,14 @@ function fazerBackup(plano, C) {
   guardar(join(C, 'plugins', 'cache', MARKETPLACE));
   guardar(join(C, 'plugins', 'marketplaces', MARKETPLACE));
   for (const pr of plano.projetos) for (const a of pr.arquivos) guardar(a.arq);
-  for (const p of plano.doProjeto) for (const rel of ARQUIVOS_DO_PROJETO) guardar(join(p.projectPath, rel));
+  for (const p of plano.doProjeto) {
+    for (const rel of ARQUIVOS_DO_PROJETO) guardar(join(p.projectPath, rel));
+    if (p.installPath) guardar(p.installPath);
+    for (const id of [p.id, p.idNovo]) guardar(pastaDeDados(C, id));
+  }
   for (const r of plano.repasses) guardar(r);
   writeFileSync(join(dir, 'manifesto.json'), `${JSON.stringify({ item: 'F344', em: new Date().toISOString(), itens }, null, 2)}\n`);
-  writeFileSync(join(dir, 'DESFAZER.md'), `# Desfazer a migração do marketplace\n\n\`npx -y github:ichikawacraice/kit-de-orquestracao migrar-marketplace --desfazer ${dir}\`\n\nSem o comando: cada item de \`manifesto.json\` com \`existia: true\` volta de \`copia\` para \`origem\`; os com \`existia: false\` saem.\n`);
+  writeFileSync(join(dir, 'DESFAZER.md'), `# Desfazer a migração do marketplace\n\n\`npx -y github:ichikawacraice/kit-de-orquestracao migrar-marketplace --desfazer ${dir}\`\n\nSem o comando: cada item de \`manifesto.json\` com \`existia: true\` volta de \`copia\` para \`origem\`; os com \`existia: false\` saem.\n\nAtenção: o desfazer volta ao estado do backup. O que nasceu depois com o nome novo (o cache e a pasta de dados de \`ichikawa-kit\`, com o que acumulou desde a troca) sai junto.\n`);
   return dir;
 }
 
@@ -168,9 +174,12 @@ function aplicar(plano, { C, env, claude }) {
   const passo = (r, oQue) => { if (r.status !== 0) throw new Error(`${oQue}: ${r.err || `exit ${r.status}`}`); };
   for (const p of plano.conta) for (const id of [p.id, ...(p.tambem ?? [])]) passo(claude(['plugin', 'uninstall', id, '-s', 'user', '--keep-data']), `uninstall ${id}`);
   for (const p of plano.doProjeto) passo(claude(['plugin', 'uninstall', p.id, '-s', p.scope, '--keep-data'], p.projectPath), `uninstall ${p.id} (${p.projectPath})`);
-  if (plano.antigo) passo(claude(['plugin', 'marketplace', 'remove', MARKETPLACE_ANTIGO]), `marketplace remove ${MARKETPLACE_ANTIGO}`);
+  // só a declaração da conta: sem `--scope`, o CLI tira também a do projeto da pasta de onde a pessoa rodou, fora do backup
+  if (plano.antigo) passo(claude(['plugin', 'marketplace', 'remove', MARKETPLACE_ANTIGO, '--scope', 'user']), `marketplace remove ${MARKETPLACE_ANTIGO}`);
   const conhecidos = () => lerJson(join(C, 'plugins', 'known_marketplaces.json')) ?? {};
-  if (!conhecidos()[MARKETPLACE]) {
+  const reinstalar = plano.conta.some((p) => !p.jaInstalado) || plano.doProjeto.some((p) => !p.jaInstalado);
+  if (reinstalar && !conhecidos()[MARKETPLACE]) {
+    if (!plano.origem) throw new Error(`sem o marketplace ${MARKETPLACE_ANTIGO} registrado, não sei de onde adicionar o ${MARKETPLACE}: rode claude plugin marketplace add ${REPO_DO_KIT}`);
     passo(claude(['plugin', 'marketplace', 'add', plano.origem]), `marketplace add ${plano.origem}`);
     if (!conhecidos()[MARKETPLACE]) throw new Error(`o marketplace add de ${plano.origem} não registrou ${MARKETPLACE} (o publicado ainda tem o nome antigo?)`);
   }
@@ -179,13 +188,21 @@ function aplicar(plano, { C, env, claude }) {
     // só a opção que o manifesto novo declara: a que saiu dele faria o install recusar
     const declaradas = Object.keys(lerJson(join(clone ?? '', 'plugins', nomeDe(p.idNovo), '.claude-plugin', 'plugin.json'))?.userConfig ?? {});
     const configs = Object.entries(p.opcoes).filter(([k, v]) => declaradas.includes(k) && ['string', 'number', 'boolean'].includes(typeof v) && v !== '').flatMap(([k, v]) => ['--config', `${k}=${v}`]);
-    passo(claude(['plugin', 'install', p.idNovo, '-s', 'user', ...configs]), `install ${p.idNovo}`);
-    if (!p.ligado) passo(claude(['plugin', 'disable', p.idNovo, '-s', 'user']), `disable ${p.idNovo}`);
+    if (!p.jaInstalado) passo(claude(['plugin', 'install', p.idNovo, '-s', 'user', ...configs]), `install ${p.idNovo}`);
+    if (!p.ligado && !p.jaInstalado) passo(claude(['plugin', 'disable', p.idNovo, '-s', 'user']), `disable ${p.idNovo}`);
     const dados = pastaDeDados(C, p.idNovo);
     const deOnde = [p.id, ...(p.tambem ?? [])].map((id) => pastaDeDados(C, id)).find((d) => !vazia(d));
     if (deOnde && vazia(dados)) cpSync(deOnde, dados, { recursive: true, verbatimSymlinks: true });
   }
-  for (const p of plano.doProjeto) passo(claude(['plugin', 'install', p.idNovo, '-s', p.scope], p.projectPath), `install ${p.idNovo} (${p.projectPath})`);
+  // `design@` e `kit-design@` do nome antigo no mesmo projeto e escopo viram um install só
+  const feitos = new Set();
+  for (const p of plano.doProjeto) {
+    const chave = `${p.idNovo} ${p.scope} ${p.projectPath}`;
+    if (!p.jaInstalado && !feitos.has(chave)) passo(claude(['plugin', 'install', p.idNovo, '-s', p.scope], p.projectPath), `install ${p.idNovo} (${p.projectPath})`);
+    feitos.add(chave);
+    const dados = pastaDeDados(C, p.idNovo); const deOnde = pastaDeDados(C, p.id);
+    if (!vazia(deOnde) && vazia(dados)) cpSync(deOnde, dados, { recursive: true, verbatimSymlinks: true });
+  }
   // os settings dos projetos saem do texto de antes do CLI, com as chaves trocadas: o valor (o `false` de quem desligou) fica
   for (const pr of plano.projetos) for (const a of pr.arquivos) writeFileSync(a.arq, a.novo);
   for (const r of plano.repasses) writeFileSync(r, repasse(r.split('/').pop()), { mode: 0o755 });
@@ -194,7 +211,9 @@ function aplicar(plano, { C, env, claude }) {
   passo(r, 'plugin list');
   const lista = JSON.parse(r.out);
   const faltam = plano.conta.filter((p) => !lista.some((x) => x.id === p.idNovo && x.scope === 'user')).map((p) => p.idNovo);
-  const sobram = lista.filter((x) => String(x.id).endsWith(`@${MARKETPLACE_ANTIGO}`) && x.scope === 'user').map((x) => x.id);
+  const faltamProjeto = plano.doProjeto.filter((p) => !lista.some((x) => x.id === p.idNovo && x.scope === p.scope)).map((p) => `${p.idNovo} (${p.projectPath})`);
+  faltam.push(...faltamProjeto);
+  const sobram = lista.filter((x) => String(x.id).endsWith(`@${MARKETPLACE_ANTIGO}`) && (x.scope === 'user' || plano.doProjeto.some((p) => p.id === x.id && p.scope === x.scope))).map((x) => x.id);
   if (faltam.length || sobram.length) throw new Error(`depois da troca${faltam.length ? `, faltam ${faltam.join(', ')}` : ''}${sobram.length ? `, sobram ${sobram.join(', ')}` : ''}`);
 }
 

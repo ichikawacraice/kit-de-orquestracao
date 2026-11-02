@@ -110,7 +110,7 @@ Não tem trava nem opção: é o pane `/painel`, a barra acima do prompt e a bat
 <a id="kit-performance"></a>
 ## Plugin `kit-performance`
 
-Opcional: o `kit iniciar` e o `kit adotar` não o ligam. Para ligar só num projeto, instale-o no escopo do projeto, de dentro dele: `claude plugin install kit-performance@kit-de-orquestracao --scope project` (grava `"kit-performance@kit-de-orquestracao": true` no `enabledPlugins` do `.claude/settings.json` dele). O `install` sem `--scope` liga na conta, para todo projeto. Não tem trava nem opção de conta; funciona sem os outros plugins do kit.
+Opcional: o `kit iniciar` e o `kit adotar` não o ligam. Para ligar só num projeto, instale-o no escopo do projeto, de dentro dele: `claude plugin install kit-performance@ichikawa-kit --scope project` (grava `"kit-performance@ichikawa-kit": true` no `enabledPlugins` do `.claude/settings.json` dele). O `install` sem `--scope` liga na conta, para todo projeto. Não tem trava nem opção de conta; funciona sem os outros plugins do kit.
 
 O que traz:
 - **Quatro skills por camada** (`performance-front`, `performance-dados`, `performance-entrega`, `medir-performance`) com as 31 práticas do catálogo `praticas.json`, cada uma com quando vale, quando não vale e o sinal no código. As de infra (cache de dados, região do servidor, balanceamento) são decisão, não regra: ninguém as cobra por ausência.

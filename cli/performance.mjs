@@ -18,8 +18,8 @@ export function conferirPerformance(kj, ligado, praticas) {
   if (secao === undefined) return [];
   const linhas = [];
   const aviso = (m) => linhas.push(`aviso: ${m}`);
-  if (ligado === false) aviso('plugin kit-performance desligado, mas o .claude/kit.json tem a seção performance: o kit.json não o religa; para religar, enabledPlugins "kit-performance@kit-de-orquestracao": true');
-  else if (ligado === undefined) aviso('o .claude/kit.json tem a seção performance, mas o plugin kit-performance não está ligado em nenhuma camada do enabledPlugins: as skills e o revisor não rodam; instale-o (claude plugin install kit-performance@kit-de-orquestracao) ou ligue-o no .claude/settings.json');
+  if (ligado === false) aviso('plugin kit-performance desligado, mas o .claude/kit.json tem a seção performance: o kit.json não o religa; para religar, enabledPlugins "kit-performance@ichikawa-kit": true');
+  else if (ligado === undefined) aviso('o .claude/kit.json tem a seção performance, mas o plugin kit-performance não está ligado em nenhuma camada do enabledPlugins: as skills e o revisor não rodam; instale-o (claude plugin install kit-performance@ichikawa-kit) ou ligue-o no .claude/settings.json');
   if (!objeto(secao)) { aviso(`performance precisa ser um objeto, e veio ${JSON.stringify(secao)}`); return linhas; }
   const { naoSeAplica, orcamento } = secao;
   if (naoSeAplica !== undefined) {

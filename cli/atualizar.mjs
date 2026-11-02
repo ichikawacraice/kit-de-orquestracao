@@ -2,10 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { pluginLigado } from '../gate/opcoes-do-plugin.mjs';
+import { pastaDeConfig, pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { diffTexto } from './diff.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, RAIZ_DO_KIT, idNovoDe, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
+import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, RAIZ_DO_KIT, REPO_DO_KIT, idNovoDe, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -88,13 +88,20 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
   if (texto !== null) {
     let s = null; try { s = JSON.parse(semBom(texto)); } catch { /* ilegível: o doutor acusa; o atualizar não o lê para mais nada */ }
     const ligados = s?.enabledPlugins;
-    const trocas = s ? trocarNomesDoKit(s) : [];
+    // o app desta máquina só conhece os ids do marketplace que a conta registrou: trocar a chave antes de a conta migrar faria o app
+    // ignorar o `false` do projeto (o id novo ele não conhece; o velho segue ligado na conta)
+    let contaMigrada = false;
+    try { contaMigrada = MARKETPLACE in JSON.parse(readFileSync(join(pastaDeConfig(homedir()), 'plugins', 'known_marketplaces.json'), 'utf8')); } catch { /* sem o arquivo: não migrou */ }
+    const copia = s ? structuredClone(s) : null;
+    const pendentes = copia ? trocarNomesDoKit(copia) : [];
+    if (pendentes.length && !contaMigrada) linhas.push(`aviso: o .claude/settings.json usa o nome antigo do marketplace (${MARKETPLACE_ANTIGO}), e esta máquina ainda não migrou: rode \`npx -y github:${REPO_DO_KIT} migrar-marketplace\` (ele troca também este projeto) e depois o kit atualizar`);
+    const trocas = s && contaMigrada ? trocarNomesDoKit(s) : [];
     if (trocas.length) {
       for (const t of trocas) linhas.push(`trocado: ${t} (.claude/settings.json)`);
       const base = mudancas.find((m) => m.arquivo === '.claude/settings.json');
       if (base) base.novo = serializar(s, texto); else mudancas.push({ arquivo: '.claude/settings.json', antigo: texto, novo: serializar(s, texto) });
     }
-    if (ligados && typeof ligados === 'object') {
+    if (contaMigrada && ligados && typeof ligados === 'object') {
       const cs = lock.chaves?.settings;
       // a chave nova que já estava não foi o kit que pôs: o lock larga a velha e não a toma (o remover não apaga o que é da pessoa)
       if (Array.isArray(cs?.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => (!idNovoDe(n) ? [n] : idNovoDe(n) in ligados ? [] : [idNovoDe(n)])))];

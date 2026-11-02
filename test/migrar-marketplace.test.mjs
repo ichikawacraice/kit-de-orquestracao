@@ -97,6 +97,8 @@ function montar({ publicadoComNomeNovo = true, semPublicar = null } = {}) {
   for (const p of ['orquestracao', 'painel-sessoes', 'processos']) claude(['plugin', 'install', `${p}@${VELHO}`, '-s', 'user']);
   claude(['plugin', 'install', `kit-design@${VELHO}`, '-s', 'user', '--config', 'guarda=false', '--config', 'saiu=1']);
   claude(['plugin', 'disable', `processos@${VELHO}`, '-s', 'user']);
+  // instalado sem entrada no enabledPlugins da conta: para o Claude Code, desligado
+  const st0 = lerJ(join(C, 'settings.json')); delete st0.enabledPlugins[`painel-sessoes@${VELHO}`]; gravarJ(join(C, 'settings.json'), st0);
   gravarJ(join(C, 'plugins', 'data', `orquestracao-${VELHO}`, 'estado.json'), { guardado: true });
   // o projeto: settings com o nome antigo (com um false) e uma instalação de escopo projeto
   gravarJ(join(proj, '.claude', 'settings.json'), { extraKnownMarketplaces: { [VELHO]: { source: { source: 'github', repo: 'ichikawacraice/kit-de-orquestracao' } } }, enabledPlugins: { [`orquestracao@${VELHO}`]: true, [`processos@${VELHO}`]: false } });
@@ -160,6 +162,7 @@ test('--aplicar troca conta e projeto, guarda liga/desliga, opções e dados; --
   const st = lerJ(join(C, 'settings.json'));
   assert.equal(st.enabledPlugins[`processos@${NOVO}`], false);
   assert.equal(st.enabledPlugins[`orquestracao@${NOVO}`], true);
+  assert.equal(st.enabledPlugins[`painel-sessoes@${NOVO}`], false, 'sem entrada no enabledPlugins da conta era desligado: segue desligado');
   assert.deepEqual(st.pluginConfigs[`kit-design@${NOVO}`].options, { guarda: false }); // a `saiu` não está no manifesto: fica de fora
   assert.deepEqual(Object.keys(st.extraKnownMarketplaces), [NOVO]);
   assert.deepEqual(lerJ(join(C, 'plugins', 'data', `orquestracao-${NOVO}`, 'estado.json')), { guardado: true });
@@ -249,6 +252,12 @@ test('kit atualizar num projeto com o nome antigo: troca marketplace, plugins e 
   assert.match(antes, /plugin instalado na máquina: sim/);
   assert.match(antes, /aviso: os plugins do kit estão com o nome antigo do marketplace.*migrar-marketplace/);
   assert.match(antes, /declara o marketplace com o nome antigo.*kit atualizar/);
+  // a conta ainda não migrou: trocar a chave faria o app ignorar o false do projeto; o atualizar só avisa
+  const cedo = kit('atualizar');
+  assert.equal(cedo.status, 0, cedo.stdout + cedo.stderr);
+  assert.match(cedo.stdout, /esta máquina ainda não migrou: rode .*migrar-marketplace/);
+  assert.equal(lerJ(arq).enabledPlugins[`processos@${VELHO}`], false, 'sem a conta migrada, o settings fica');
+  gravarJ(join(casa, '.claude', 'plugins', 'known_marketplaces.json'), { [NOVO]: {} });
   const r = kit('atualizar');
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /trocado: marketplace kit-de-orquestracao → ichikawa-kit no extraKnownMarketplaces/);

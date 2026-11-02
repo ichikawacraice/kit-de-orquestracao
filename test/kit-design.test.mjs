@@ -22,6 +22,9 @@ const VELHO = 'design@kit-de-orquestracao';
 const nova = (prefixo) => realpathSync(mkdtempSync(join(tmpdir(), prefixo)));
 function projeto() { const d = nova('kit-f332-'); execFileSync('git', ['init', '-q', d], { timeout: 10000, killSignal: 'SIGKILL' }); return d; }
 const casa = nova('kit-f332-casa-');
+// a conta já migrou para o ichikawa-kit (F344): sem isso o kit atualizar não troca o nome do projeto
+mkdirSync(join(casa, '.claude', 'plugins'), { recursive: true });
+writeFileSync(join(casa, '.claude', 'plugins', 'known_marketplaces.json'), JSON.stringify({ 'ichikawa-kit': {} }));
 const base = nova('kit-f332-base-');
 const kit = (cwd, ...args) => spawnSync('node', [KIT, ...args], { cwd, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, HOME: casa, HOOKS_CREWAI_BASE: base, CI: '' } });
 const ler = (d, ...p) => readFileSync(join(d, ...p), 'utf8');
