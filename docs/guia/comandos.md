@@ -66,7 +66,7 @@ O gate tem os seus, em `scripts/kit/` do projeto: `npm test` é o gate completo 
 | `/ausente off` | Desliga o modo ausente; a orquestradora entrega o resumo do período |
 | `/ausente` | Só diz se o modo está ligado |
 
-As skills do kit também se chamam por barra quando você quiser forçar uma: `/orquestracao:handoff-de-sessao` (passar o trabalho a outra sessão ou retomar), `/orquestracao:notas-de-release`, `/processos:spec-driven`, `/processos:revisar-diff`, `/processos:auditoria-de-clique`. No uso normal as sessões as carregam sozinhas.
+As skills do kit também se chamam por barra quando você quiser forçar uma: `/orquestracao:handoff-de-sessao` (passar o trabalho a outra sessão ou retomar), `/orquestracao:notas-de-release`, `/processos:spec-driven`, `/processos:revisar-diff`, `/processos:auditoria-de-clique` e, com o plugin opcional de performance, `/kit-performance:performance-front`, `/kit-performance:performance-dados`, `/kit-performance:performance-entrega` e `/kit-performance:medir-performance`. No uso normal as sessões as carregam sozinhas.
 
 ## Frases que as sessões reconhecem
 

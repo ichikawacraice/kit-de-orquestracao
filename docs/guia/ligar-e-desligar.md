@@ -106,3 +106,23 @@ Para silenciar só o detector do Impeccable, use o `config.local.json` da pasta 
 ## Plugin `painel-sessoes`
 
 Não tem trava nem opção: é o pane `/painel`, a barra acima do prompt e a batida. Desligado num projeto, o pane e a barra não aparecem nas sessões dele; as travas do `orquestracao` continuam.
+
+<a id="kit-performance"></a>
+## Plugin `kit-performance`
+
+Opcional: o `kit iniciar` e o `kit adotar` não o ligam. Para ligar só num projeto, instale-o no escopo do projeto, de dentro dele: `claude plugin install kit-performance@kit-de-orquestracao --scope project` (grava `"kit-performance@kit-de-orquestracao": true` no `enabledPlugins` do `.claude/settings.json` dele). O `install` sem `--scope` liga na conta, para todo projeto. Não tem trava nem opção de conta; funciona sem os outros plugins do kit.
+
+O que traz:
+- **Quatro skills por camada** (`performance-front`, `performance-dados`, `performance-entrega`, `medir-performance`) com as 31 práticas do catálogo `praticas.json`, cada uma com quando vale, quando não vale e o sinal no código. As de infra (cache de dados, região do servidor, balanceamento) são decisão, não regra: ninguém as cobra por ausência.
+- **O agente `revisor-de-performance`**, só leitura: audita o diff (ou o projeto, se pedido) e devolve até 8 achados com a prática, onde, a evidência e o conserto.
+
+Com o `processos` ligado, o `revisar-diff` chama o revisor quando o diff toca código de aplicação. Com o plugin `vercel` ligado, as skills apontam para as dele no detalhe da plataforma; nenhuma é barrada.
+
+Para o time, a seção `performance` do `.claude/kit.json` (opcional; o `kit doutor` confere):
+
+| Chave | O que faz |
+|---|---|
+| `performance.naoSeAplica` | `{ "<id da prática>": "<motivo>" }`: a prática dispensada no projeto; o revisor não a cobra. O id vem do `praticas.json` do plugin |
+| `performance.orcamento` | `{ "lcpMs": 2500, "inpMs": 200, "cls": 0.1 }`: o orçamento de web vitals no p75 do usuário real; sem a chave, valem esses padrões |
+
+Com o plugin desligado no projeto, a seção não o religa (o `kit doutor` avisa).

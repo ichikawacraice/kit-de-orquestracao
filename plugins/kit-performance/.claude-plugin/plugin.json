@@ -1,0 +1,8 @@
+{
+  "name": "kit-performance",
+  "version": "0.0.2",
+  "description": "Práticas de performance por camada (front, dados, entrega, medir), cada uma com quando vale e quando não vale, e o revisor de performance que audita um diff ou um projeto. Opcional: funciona sem os outros plugins do kit.",
+  "author": {
+    "name": "ichikawacraice"
+  }
+}

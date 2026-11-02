@@ -1,0 +1,48 @@
+{
+  "doc": "O catálogo das práticas de performance do kit. Cada prática mora numa camada, e a camada numa skill do plugin, que traz a seção com a âncora do id (quando vale, quando não vale, como conferir). tipo: regra (o revisor cobra quando o sinal aparece) · decisao (decisão de infra: o revisor não cobra a ausência; leva o sinal medido ao dono da decisão). O projeto dispensa uma prática em performance.naoSeAplica do .claude/kit.json, com o motivo.",
+  "camadas": {
+    "front": { "skill": "performance-front", "titulo": "Front e render" },
+    "dados": { "skill": "performance-dados", "titulo": "Dados e back" },
+    "entrega": { "skill": "performance-entrega", "titulo": "Entrega e infra" },
+    "medir": { "skill": "medir-performance", "titulo": "Medir" }
+  },
+  "praticas": [
+    { "id": "skeleton", "camada": "front", "tipo": "regra", "titulo": "Skeleton no lugar do conteúdo que carrega" },
+    { "id": "ui-otimista", "camada": "front", "tipo": "regra", "titulo": "UI otimista: o efeito entra na hora e a recusa desfaz" },
+    { "id": "lazy-load-de-imagem", "camada": "front", "tipo": "regra", "titulo": "Imagem fora da primeira dobra carrega preguiçosa" },
+    { "id": "imagem-webp-avif", "camada": "front", "tipo": "regra", "titulo": "Imagem em WebP/AVIF, no tamanho em que aparece" },
+    { "id": "split-de-js", "camada": "front", "tipo": "regra", "titulo": "JS partido por rota e por componente pesado" },
+    { "id": "virtualizar-listas", "camada": "front", "tipo": "regra", "titulo": "Lista longa virtualizada" },
+    { "id": "re-render", "camada": "front", "tipo": "regra", "titulo": "Re-render só de quem mudou" },
+    { "id": "scripts-de-terceiros-depois", "camada": "front", "tipo": "regra", "titulo": "Script de terceiro depois do conteúdo" },
+    { "id": "fontes-self-hosted", "camada": "front", "tipo": "regra", "titulo": "Fonte servida pelo próprio site, com display swap" },
+    { "id": "ssr-ssg", "camada": "front", "tipo": "regra", "titulo": "Página renderizada no servidor ou no build quando o conteúdo permite" },
+    { "id": "debounce", "camada": "front", "tipo": "regra", "titulo": "Debounce na busca e no evento que dispara em rajada" },
+    { "id": "dedupe-de-chamadas", "camada": "front", "tipo": "regra", "titulo": "A mesma chamada não sai duas vezes" },
+    { "id": "n-mais-1", "camada": "dados", "tipo": "regra", "titulo": "Sem N+1: uma consulta por lista, não uma por item" },
+    { "id": "indices", "camada": "dados", "tipo": "regra", "titulo": "Índice para o filtro e a ordenação que a consulta usa" },
+    { "id": "select-so-das-colunas", "camada": "dados", "tipo": "regra", "titulo": "Select só das colunas usadas" },
+    { "id": "paginacao", "camada": "dados", "tipo": "regra", "titulo": "Lista paginada no banco, não no cliente" },
+    { "id": "pool-de-conexoes", "camada": "dados", "tipo": "regra", "titulo": "Pool de conexões no banco, sobretudo em serverless" },
+    { "id": "requisicoes-em-paralelo", "camada": "dados", "tipo": "regra", "titulo": "Chamadas independentes em paralelo" },
+    { "id": "timeout-em-api-externa", "camada": "dados", "tipo": "regra", "titulo": "Timeout em toda chamada a API externa" },
+    { "id": "fila-de-jobs", "camada": "dados", "tipo": "regra", "titulo": "Trabalho lento vai para fila, fora da requisição" },
+    { "id": "cache-de-dados", "camada": "dados", "tipo": "decisao", "titulo": "Cache de dados (Redis ou similar)" },
+    { "id": "cdn", "camada": "entrega", "tipo": "regra", "titulo": "Estático e página pública pela CDN" },
+    { "id": "compressao", "camada": "entrega", "tipo": "regra", "titulo": "Resposta comprimida (Brotli, Gzip)" },
+    { "id": "cache-de-navegador", "camada": "entrega", "tipo": "regra", "titulo": "Cache-Control certo para cada resposta" },
+    { "id": "dependencias-nao-usadas", "camada": "entrega", "tipo": "regra", "titulo": "Sem dependência que ninguém importa" },
+    { "id": "streaming-de-ia", "camada": "entrega", "tipo": "regra", "titulo": "Resposta de IA em streaming" },
+    { "id": "servidor-perto-do-banco", "camada": "entrega", "tipo": "decisao", "titulo": "Servidor na região do banco" },
+    { "id": "load-balancing", "camada": "entrega", "tipo": "decisao", "titulo": "Balanceamento de carga" },
+    { "id": "rum", "camada": "medir", "tipo": "regra", "titulo": "Medição no usuário real (RUM, web vitals)" },
+    { "id": "opentelemetry", "camada": "medir", "tipo": "regra", "titulo": "Rastreio do back (OpenTelemetry)" },
+    { "id": "celular-e-rede-lenta", "camada": "medir", "tipo": "regra", "titulo": "Teste em celular médio e rede lenta" }
+  ],
+  "orcamento": {
+    "doc": "Os padrões do orçamento de web vitals (p75 do usuário real, limiar 'bom' do Google). O projeto troca em performance.orcamento do .claude/kit.json.",
+    "lcpMs": 2500,
+    "inpMs": 200,
+    "cls": 0.1
+  }
+}
