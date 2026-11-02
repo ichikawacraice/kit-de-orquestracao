@@ -41,12 +41,21 @@ function tipoLiberado(tipo) {
     .some((t) => [tipo, semPrefixoDoKit(tipo)].some((n) => (t.endsWith('*') ? n.startsWith(t.slice(0, -1)) : n === t)));
 }
 
-// A raiz do projeto: a pasta mais próxima do arquivo com `.claude/kit.json` ou `.git` (arquivo ou pasta).
+// A raiz do projeto: a pasta mais próxima do arquivo com `.claude/kit.json` ou `.git` (arquivo ou pasta),
+// salvo a que mora dentro da pasta de revisões de um projeto acima: o designer grava ali e um kit.json
+// aninhado declararia designers novos (ou outra pasta). Essa vale como pasta comum do projeto de fora.
 function raizDoProjeto(p) {
+  const candidatas = [];
   for (let d = dirname(p); ; d = dirname(d)) {
-    if (existsSync(join(d, '.claude', 'kit.json')) || existsSync(join(d, '.git'))) return d;
-    if (dirname(d) === d) return null;
+    if (existsSync(join(d, '.claude', 'kit.json')) || existsSync(join(d, '.git'))) candidatas.push(d);
+    if (dirname(d) === d) break;
   }
+  let raiz = null;
+  for (const d of candidatas.reverse()) {
+    if (raiz && d.startsWith(resolve(raiz, designDoProjeto(raiz).rel) + '/')) continue;
+    raiz = d;
+  }
+  return raiz;
 }
 
 // A seção `design` do kit.json do projeto: a pasta de revisões (inválida vale o padrão) e os designers

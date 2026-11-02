@@ -673,6 +673,17 @@ caso('F322.4 a declaração vale só para o projeto que a faz', () => comRepo(()
     igual(decisao(rodar(SN, editar(join(outro, REV, 'a.md'), sub('wicomm:designer')))), 'deny', 'outro projeto');
   } finally { rmSync(outro, { recursive: true, force: true }); }
 }));
+caso('F322.5 kit.json aninhado na pasta de revisões não declara designer', () => comRepo(() => {
+  kitDesign({ designers: ['wicomm:designer'] });
+  const aninhado = join(REPO, REV, 'x');
+  mkdirSync(join(aninhado, '.claude'), { recursive: true });
+  igual(rodar(SN, pre('Write', { file_path: join(aninhado, '.claude', 'kit.json'), content: 'x' }, sub('wicomm:designer'))), null, 'precondição: o declarado grava dentro da revisão');
+  writeFileSync(join(aninhado, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'y', designers: ['general-purpose'] } }));
+  igual(decisao(rodar(SN, editar(join(aninhado, 'y', 'a.ts'), sub('general-purpose')))), 'deny', 'o tipo declarado pelo aninhado segue recusado');
+  igual(rodar(SN, editar(join(aninhado, 'y', 'a.ts'), sub('wicomm:designer'))), null, 'o declarado pelo projeto de fora segue na revisão');
+  mkdirSync(join(aninhado, '.git'), { recursive: true });
+  igual(decisao(rodar(SN, editar(join(aninhado, 'y', 'a.ts'), sub('general-purpose')))), 'deny', 'nem com .git aninhado');
+}));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
   const f = transcript([...trabalho(), fala('Pronto, editei.')]);
   const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');
