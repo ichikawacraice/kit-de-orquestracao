@@ -35,14 +35,17 @@ export const IMPECCABLE = { marketplace: 'impeccable', plugin: 'impeccable@impec
  * sai. `design@` e `kit-design@` do nome antigo caem no mesmo id novo: vale o valor do que já tinha o nome do plugin novo.
  * → as trocas feitas, em texto (vazio: nada a trocar).
  */
+/** O id novo de um id antigo do kit (qualquer plugin do marketplace antigo, inclusive os que nasceram depois do F344), ou `undefined`. */
+export const idNovoDe = (id) => PLUGINS_RENOMEADOS[id] ?? (String(id).endsWith(`@${MARKETPLACE_ANTIGO}`) ? `${String(id).slice(0, -MARKETPLACE_ANTIGO.length - 1)}@${MARKETPLACE}` : undefined);
+
 export function trocarNomesDoKit(s) {
   const trocas = [];
   const trocar = (campo, mapa, rotulo) => {
     const atual = s?.[campo];
-    if (!atual || typeof atual !== 'object' || Array.isArray(atual) || !Object.keys(atual).some((k) => k in mapa)) return;
+    if (!atual || typeof atual !== 'object' || Array.isArray(atual) || !Object.keys(atual).some((k) => mapa(k))) return;
     const novos = {};
     for (const [k, v] of Object.entries(atual)) {
-      const novo = mapa[k];
+      const novo = mapa(k);
       if (!novo) { if (!(k in novos)) novos[k] = v; continue; }
       if (novo in atual) trocas.push(`${k} saiu do ${campo} (${novo} já estava lá)`);
       else if (novo in novos && k.split('@')[0] !== novo.split('@')[0]) trocas.push(`${k} saiu do ${campo} (${novo} vem do outro nome)`);
@@ -50,8 +53,8 @@ export function trocarNomesDoKit(s) {
     }
     s[campo] = novos;
   };
-  trocar('extraKnownMarketplaces', { [MARKETPLACE_ANTIGO]: MARKETPLACE }, 'marketplace');
-  trocar('enabledPlugins', PLUGINS_RENOMEADOS, 'plugin');
+  trocar('extraKnownMarketplaces', (k) => (k === MARKETPLACE_ANTIGO ? MARKETPLACE : undefined), 'marketplace');
+  trocar('enabledPlugins', idNovoDe, 'plugin');
   return trocas;
 }
 /** Os repasses em `~/.claude/skills/orquestradora/scripts/` (K8): o caminho que a CLAUDE.md do operador cita, levado ao bin do plugin instalado. */

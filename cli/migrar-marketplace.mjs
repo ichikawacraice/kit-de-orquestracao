@@ -8,7 +8,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync,
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
-import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, REPASSES, repasse, semBom, serializar, trocarNomesDoKit } from './pacote.mjs';
+import { MARKETPLACE, MARKETPLACE_ANTIGO, REPASSES, idNovoDe, repasse, semBom, serializar, trocarNomesDoKit } from './pacote.mjs';
 
 const LONGO_MS = 300_000;
 const ARQUIVOS_DO_PROJETO = ['.claude/settings.json', '.claude/settings.local.json'];
@@ -82,7 +82,7 @@ function planejar({ home, C, extras }) {
   const daConta = []; const doProjeto = []; const semPasta = [];
   for (const [id, lista] of Object.entries(instalados)) {
     if (!id.endsWith(`@${MARKETPLACE_ANTIGO}`) || !Array.isArray(lista)) continue;
-    const idNovo = PLUGINS_RENOMEADOS[id] ?? `${nomeDe(id)}@${MARKETPLACE}`;
+    const idNovo = idNovoDe(id);
     for (const e of lista) {
       if (e?.scope === 'user') daConta.push({ id, idNovo, installPath: e.installPath, ligado: conta.enabledPlugins?.[id] !== false, opcoes: objeto(conta.pluginConfigs?.[id]?.options) ? conta.pluginConfigs[id].options : {} });
       else if (['project', 'local'].includes(e?.scope) && typeof e.projectPath === 'string') {

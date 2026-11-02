@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { diffTexto } from './diff.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, RAIZ_DO_KIT, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
+import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, RAIZ_DO_KIT, idNovoDe, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -97,7 +97,7 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
     if (ligados && typeof ligados === 'object') {
       const cs = lock.chaves?.settings;
       // a chave nova que já estava não foi o kit que pôs: o lock larga a velha e não a toma (o remover não apaga o que é da pessoa)
-      if (Array.isArray(cs?.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => (!PLUGINS_RENOMEADOS[n] ? [n] : PLUGINS_RENOMEADOS[n] in ligados ? [] : [PLUGINS_RENOMEADOS[n]])))];
+      if (Array.isArray(cs?.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => (!idNovoDe(n) ? [n] : idNovoDe(n) in ligados ? [] : [idNovoDe(n)])))];
     }
   }
   const local = lerTexto(destino, '.claude/settings.local.json');

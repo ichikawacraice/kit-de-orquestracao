@@ -224,6 +224,9 @@ test('trocarNomesDoKit: chave no mesmo lugar, false fica; design e kit-design do
   trocarNomesDoKit(ja);
   assert.deepEqual(ja.enabledPlugins, { [`processos@${NOVO}`]: true }, 'a nova que já estava vence');
   assert.deepEqual(trocarNomesDoKit({ enabledPlugins: { 'a@b': true } }), []);
+  const nascido = { enabledPlugins: { [`kit-performance@${VELHO}`]: false } };
+  trocarNomesDoKit(nascido);
+  assert.deepEqual(nascido.enabledPlugins, { [`kit-performance@${NOVO}`]: false }, 'plugin que nasceu depois da lista também troca');
 });
 
 test('kit atualizar num projeto com o nome antigo: troca marketplace, plugins e lock; o doutor avisa antes e o remover tira depois', () => {
