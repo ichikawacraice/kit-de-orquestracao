@@ -1,4 +1,4 @@
-// `kit doutor`: confere o ambiente (plugin, hooks duplicados, kit.json, versão, Node, git) e o disco contra o lock.
+// `kit doutor`: confere o ambiente (plugin, hooks duplicados, kit.json, skills de fora, versão, Node, git) e o disco contra o lock.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { avisoDeLaco, carregarConfig, opcaoDaRegra, REGRAS_DE_DOCUMENTO } from '../gate/config.mjs';
 import { booleanoDaOpcao, opcoesDoPlugin, pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
+import { conferirSkillsDeFora } from './skills-de-fora.mjs';
 import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
@@ -47,6 +48,11 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   try { const cfg = carregarConfig(destino); ok('.claude/kit.json válido'); const laco = avisoDeLaco(cfg.gate?.comandoCompleto); if (laco) linhas.push(`aviso: ${laco}`); } catch (e) { falha(`.claude/kit.json: ${e.message}`); }
 
   processos(destino, home, configs, linhas);
+
+  // skills de fora (ADR 0014): a dependência que falta reprova; o plugin com skill barrada só avisa
+  const fora = conferirSkillsDeFora({ home });
+  falhas += fora.falhas;
+  linhas.push(...fora.linhas);
 
   // versões, Node e git
   if (lock.versao === versao) ok(`versão do lock (${lock.versao}) igual à do CLI`);

@@ -45,19 +45,38 @@ O repositório é privado: peça acesso a quem mantém o kit e entre no GitHub c
    ```bash
    claude plugin install orquestracao@kit-de-orquestracao
    ```
-   Repita o `install` para `painel-sessoes`, `processos` e `design`. Reinicie o app.
+   Repita o `install` para `painel-sessoes`, `processos` e `design`. O `orquestracao` traz junto o plugin `superpowers` (do marketplace oficial `claude-plugins-official`): as skills de planejar, testar antes e conferir antes de dizer pronto são dele. Reinicie o app.
 2. O kit no projeto, na raiz do repositório:
    ```bash
    npx -y github:ichikawacraice/kit-de-orquestracao adotar --simular
    ```
    Sem `--simular`, grava. Projeto novo, sem `CLAUDE.md`: use `iniciar` no lugar de `adotar` (o `iniciar` não tem `--simular`). Com front: acrescente `--design <pasta do front>`.
-3. Confira:
+3. Confira (inclui as [skills de fora](#skills-de-fora): o que falta instalar e o que vale desligar):
    ```bash
    npx -y github:ichikawacraice/kit-de-orquestracao doutor
    ```
 4. Numa sessão do projeto, declare a orquestradora: *"você é a orquestradora"*. Ela se renomeia `🎛 orquestradora — <projeto>` e passa a abrir as donas.
 
 Os outros comandos do CLI (`atualizar`, `remover`) estão em `npx -y github:ichikawacraice/kit-de-orquestracao ajuda`.
+
+<a id="skills-de-fora"></a>
+## Skills de fora: o que ter e o que desligar
+
+O kit decide, num catálogo ([`plugins/orquestracao/skills-de-fora.json`](plugins/orquestracao/skills-de-fora.json), [ADR 0014](docs/adr/0014-o-kit-decide-as-skills-de-fora-num-catalogo.md)), o que faz com cada plugin de fora que costuma estar instalado. O `kit doutor` confere a sua máquina contra ele.
+
+- **Precisa ter:** `superpowers`. Vem junto com o `orquestracao`; quem instalou o kit antes vê a falta no `kit doutor`, com o comando de instalar.
+- **O kit barra, em projeto com o kit**, as skills que repetem uma peça dele e brigam com as regras do projeto. A sessão que tentar usá-las recebe a recusa com a peça certa:
+
+  | Skill barrada | Use no lugar | Por quê |
+  |---|---|---|
+  | `engineering:architecture` | `processos:spec-driven` | escreve ADR sem número reservado, fora da pasta do projeto e sem "Alternativas consideradas" |
+  | `engineering:code-review` | `orquestracao:validador` | a revisão do kit é por subagente de contexto limpo, só com o que afeta correção |
+  | `superpowers:requesting-code-review` | `orquestracao:validador` | idem |
+  | `engineering:debug` | `superpowers:systematic-debugging` | repete a skill de causa de defeito que o kit já usa |
+  | `design:design-critique` | o crítico de UI do plugin de design do kit | repete o crítico, que dá nota de 0 a 30 com teto de recríticas |
+
+  Para liberar uma delas num projeto, ponha o nome em `skillsDeFora.liberar` do `.claude/kit.json`. Fora de projeto com o kit, nada é barrado.
+- **Desligue, se não usa o resto:** os plugins da Anthropic `engineering`, `design`, `data` e `cowork-plugin-management` costumam chegar pela conta do app e carregam a descrição de cada skill em toda sessão. O kit não usa nenhum deles; as skills não barradas seguem livres. Se você não as usa, desligue o plugin na lista de plugins da conta, no app: a sessão fica mais leve e não há skill repetida. O que foi instalado pelo CLI se desliga só para você, neste projeto, com `claude plugin disable <plugin> --scope local`.
 
 ## Atualizar os plugins na máquina
 

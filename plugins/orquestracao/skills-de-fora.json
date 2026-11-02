@@ -1,0 +1,76 @@
+{
+  "doc": "O que o kit faz com cada plugin e skill de fora (ADR 0014). saida: depender (o kit chama; vem em dependencies do plugin.json) · barrar (duplica uma peça do kit: a trava skills-de-fora recusa e diz qual usar) · absorver (a ideia entra numa peça do kit; barrada só quando feito: true) · livre (fora do escopo do kit). Skill sem linha herda a saída do plugin; plugin fora daqui é livre. O projeto libera uma skill em skillsDeFora.liberar do .claude/kit.json.",
+  "plugins": [
+    {
+      "plugin": "superpowers",
+      "marketplace": "claude-plugins-official",
+      "saida": "depender",
+      "motivo": "As fixas da dona são dele: writing-plans (planejamento), test-driven-development e verification-before-completion (execução), systematic-debugging (causa de defeito)."
+    },
+    {
+      "plugin": "engineering",
+      "origem": "Anthropic (anthropics/knowledge-work-plugins), costuma chegar pela conta do app",
+      "saida": "livre",
+      "motivo": "Standup, incidente, deploy, dívida técnica e desenho de sistema não têm par no kit."
+    },
+    {
+      "plugin": "design",
+      "origem": "Anthropic (anthropics/knowledge-work-plugins), costuma chegar pela conta do app",
+      "saida": "livre",
+      "motivo": "Pesquisa com usuário, design system, handoff e texto de interface não têm par no kit. O nome repetido com o plugin de design do kit é o F332."
+    },
+    {
+      "plugin": "data",
+      "origem": "Anthropic (anthropics/knowledge-work-plugins)",
+      "saida": "livre",
+      "motivo": "Análise de dados, SQL e gráfico: fora do escopo do kit."
+    },
+    {
+      "plugin": "cowork-plugin-management",
+      "origem": "Anthropic (anthropics/knowledge-work-plugins)",
+      "saida": "livre",
+      "motivo": "Plugins do Cowork: fora do escopo do kit."
+    }
+  ],
+  "skills": [
+    {
+      "skill": "engineering:architecture",
+      "saida": "barrar",
+      "use": "processos:spec-driven",
+      "motivo": "Escreve ADR fora da regra do kit: sem número reservado na orquestradora, fora da pasta de ADR do kit.json e sem a seção Alternativas consideradas."
+    },
+    {
+      "skill": "engineering:code-review",
+      "saida": "barrar",
+      "use": "orquestracao:validador (com processos:revisar-diff no briefing)",
+      "motivo": "A revisão do kit é por subagente de contexto limpo, só com achados que afetam correção; a revisão na mesma sessão de quem escreveu não conta."
+    },
+    {
+      "skill": "engineering:debug",
+      "saida": "barrar",
+      "use": "superpowers:systematic-debugging",
+      "motivo": "Duplica a skill de causa de defeito que o kit já carrega no planejamento e na execução."
+    },
+    {
+      "skill": "superpowers:requesting-code-review",
+      "saida": "barrar",
+      "use": "orquestracao:validador (com processos:revisar-diff no briefing)",
+      "motivo": "Lança um revisor genérico; no kit a revisão antes do PR é o validador, com o plano e só achados que afetam correção."
+    },
+    {
+      "skill": "design:design-critique",
+      "saida": "barrar",
+      "use": "o subagente critico-de-ui do plugin de design do kit",
+      "motivo": "Duplica o crítico de UI do kit, que julga por seis eixos com nota de 0 a 30 e o teto de recríticas."
+    },
+    {
+      "skill": "design:accessibility-review",
+      "saida": "absorver",
+      "em": "critica-de-ui (plugin de design do kit)",
+      "feito": false,
+      "use": "o subagente critico-de-ui do plugin de design do kit",
+      "licenca": "Apache-2.0 no repositório anthropics/knowledge-work-plugins (a cópia local não traz o LICENSE: conferir na fatia da absorção)",
+      "motivo": "O crítico do kit não olha acessibilidade: contraste AA, teclado e foco visível, alvo de toque, rótulo de campo e nome/papel de componente entram como eixo dele. Fatia depois do F332."
+    }
+  ]
+}
