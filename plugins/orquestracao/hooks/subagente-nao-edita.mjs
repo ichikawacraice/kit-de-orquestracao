@@ -15,7 +15,7 @@
 // rm, writeFile…): nome vindo de variável, `claude plugin` e afins passam — é cerca contra deslize, não cofre.
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
 // fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam; e o
-// designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista, como
+// designer do kit (`kit-design:` ou o sucessor `design-system:`) grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista, como
 // os designers de outro plugin que o projeto declara em `design.designers` (tipo exato, sem curinga:
 // `*:designer` daria escrita a todo plugin instalado); a pasta é
 // cercada: valor inválido (absoluto, `..`, a própria raiz) vale o padrão e symlink não libera

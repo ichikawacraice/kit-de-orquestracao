@@ -112,7 +112,10 @@ function main(argv) {
   escolherMarketplace(lista);
   const antes = instalados(lista);
   const clone = atualizarClone();
-  const publicados = lerJson(join(CLONE, '.claude-plugin', 'marketplace.json')).plugins.map((p) => p.name);
+  const entradas = lerJson(join(CLONE, '.claude-plugin', 'marketplace.json')).plugins;
+  // origem remota (F350: git-subdir do repositório da empresa): a versão publicada não está no clone, então não se confere aqui
+  const publicados = entradas.filter((p) => typeof p.source === 'string').map((p) => p.name);
+  const remotos = entradas.filter((p) => typeof p.source !== 'string').map((p) => p.name);
   const versaoPublicada = (nome) => lerJson(join(CLONE, 'plugins', nome, '.claude-plugin', 'plugin.json')).version;
   const plugins = []; let falhou = false; let atualizou = false;
   const renomear = new Map(); // novo → a instalação user do velho
@@ -157,6 +160,13 @@ function main(argv) {
     if (u.status !== 0) { falhou = true; plugins.push({ id, antes: user.version, publicado, depois: user.version, acao: 'falhou', mensagem: u.err || `exit ${u.status}` }); continue; }
     plugins.push({ id, antes: user.version, publicado, depois: user.version, acao: 'conferir' });
   }
+  for (const nome of remotos) {
+    const id = `${nome}@${MARKETPLACE}`;
+    const user = antes.find((p) => p.id === id && p.scope === 'user');
+    plugins.push(user
+      ? { id, antes: user.version, publicado: null, depois: user.version, acao: `origem remota, não conferido aqui (claude plugin update ${id} -s user)` }
+      : { id, antes: null, publicado: null, depois: null, acao: 'não instalado' });
+  }
   if (plugins.some((p) => p.acao === 'conferir')) {
     const relidos = instalados();
     for (const p of plugins.filter((x) => x.acao === 'conferir')) {
@@ -182,7 +192,7 @@ function main(argv) {
         : p.acao === 'não pegou' ? `${p.antes} (não pegou: ${p.mensagem})`
         : p.acao === 'em dia' ? `${p.antes} (em dia)`
           : p.acao === 'falhou' ? `${p.antes} (falhou: ${p.mensagem})`
-            : p.acao.startsWith('não mexido') ? `${p.antes} (${p.acao})` : `(${p.acao})`;
+            : /^(não mexido|origem remota)/.test(p.acao) ? `${p.antes} (${p.acao})` : `(${p.acao})`;
       process.stdout.write(`${nome}  ${quadro}\n`);
     }
     const faltaAtualizar = plugins.some((p) => /^(atualizaria|renomearia|desinstalaria)/.test(p.acao));

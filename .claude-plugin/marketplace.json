@@ -25,12 +25,34 @@
     {
       "name": "kit-design",
       "source": "./plugins/kit-design",
-      "description": "Processo de design: designer, crítico de UI e a guarda que cobra a crítica do trabalho visual."
+      "description": "Processo de design: designer, crítico de UI e a guarda que cobra a crítica do trabalho visual. Sai do kit quando o design-system, o sucessor, ficar sem marca."
     },
     {
       "name": "kit-performance",
       "source": "./plugins/kit-performance",
       "description": "Práticas de performance por camada (front, dados, entrega, medir) e o revisor de performance. Opcional: o kit iniciar não o liga."
+    },
+    {
+      "name": "design-system",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/wicomm-projects/wicomm-design-system.git",
+        "path": "plugins/design-system",
+        "ref": "main",
+        "sha": "2a6e5cdf6984cb9977265bc7ae88de45c2e89e43"
+      },
+      "description": "Design system para apps React: a base (direção de design, anatomia, convenções), o designer, o crítico com nota e a guarda que cobra a crítica. Sucessor do kit-design; a marca vem de um plugin de tema. Opcional: o kit iniciar não o liga."
+    },
+    {
+      "name": "tema-wicomm",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/wicomm-projects/wicomm-design-system.git",
+        "path": "plugins/tema-wicomm",
+        "ref": "main",
+        "sha": "2a6e5cdf6984cb9977265bc7ae88de45c2e89e43"
+      },
+      "description": "O tema Wicomm para o design-system: a cor da marca, a fonte, o logotipo e o registro. Só nos projetos internos da Wicomm; o kit iniciar não o liga."
     }
   ],
   "description": "Ichikawa's Kit: plugins opcionais para orquestrar sessões do Claude Code — escolha os que for usar (marketplace privado)."

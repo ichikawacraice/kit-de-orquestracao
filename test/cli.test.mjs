@@ -43,8 +43,9 @@ test('package.json: bin, engines, test e type module', () => {
 test('marketplace.json lista os plugins do kit, cada um com versão semver no plugin.json', () => {
   const m = json('.claude-plugin', 'marketplace.json');
   const nomes = m.plugins.map((p) => p.name).sort();
-  assert.deepEqual(nomes, ['kit-design', 'kit-performance', 'orquestracao', 'painel-sessoes', 'processos']);
-  for (const pl of m.plugins) {
+  assert.deepEqual(nomes, ['design-system', 'kit-design', 'kit-performance', 'orquestracao', 'painel-sessoes', 'processos', 'tema-wicomm']);
+  // os de origem remota (F350) têm o manifesto no repositório deles: confere-se em test/design-system.test.mjs
+  for (const pl of m.plugins.filter((p) => typeof p.source === 'string')) {
     const pj = json(pl.source, '.claude-plugin', 'plugin.json');
     assert.equal(pj.name, pl.name);
     assert.match(pj.version, /^\d+\.\d+\.\d+$/);
@@ -70,7 +71,8 @@ test('CLAUDE.md do repo traz todos os blocos do modelo (escrito a partir dele)',
 
 test('nenhum teste fixa a versão atual de um plugin (a versão sobe no lote, pela orquestradora)', () => {
   const m = json('.claude-plugin', 'marketplace.json');
-  const versoes = m.plugins.map((p) => json(p.source, '.claude-plugin', 'plugin.json').version);
+  // só os plugins deste repositório: a versão do de origem remota (F350) mora no repositório dele
+  const versoes = m.plugins.filter((p) => typeof p.source === 'string').map((p) => json(p.source, '.claude-plugin', 'plugin.json').version);
   const testes = [];
   const varrer = (dir) => {
     if (!existsSync(dir)) return;

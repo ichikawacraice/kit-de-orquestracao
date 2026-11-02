@@ -28,13 +28,21 @@ function arquivos() {
   return lista;
 }
 
-/** O texto que conta: o manifesto perde o campo de autor e dono (é o usuário que publica), e o endereço publicado vira `DONO/…`. */
-function textoQueConta(p) {
-  let t = readFileSync(p, 'utf8');
+// A entrada do marketplace que pode citar a marca da empresa no texto (F350): o plugin de tema dela. As outras, não.
+const ENTRADA_DA_MARCA = 'tema-wicomm';
+
+/**
+ * O texto que conta: o manifesto perde o campo de autor e dono (é o usuário que publica), a entrada do tema da empresa perde o
+ * texto de exibição, e o endereço publicado vira `DONO/…`.
+ */
+function textoQueConta(p, t = readFileSync(p, 'utf8')) {
   if (['plugin.json', 'marketplace.json'].includes(basename(p))) {
     const j = JSON.parse(t);
     delete j.author; delete j.owner;
-    for (const pl of j.plugins ?? []) delete pl.author;
+    for (const pl of j.plugins ?? []) {
+      delete pl.author;
+      if (basename(p) === 'marketplace.json' && pl.name === ENTRADA_DA_MARCA) { delete pl.description; delete pl.displayName; }
+    }
     t = JSON.stringify(j);
   }
   return semOEnderecoPublicado(t);
@@ -62,6 +70,19 @@ describe('o kit sai sem nome pessoal', () => {
     const marca = Buffer.from('aWNoaWthd2E=', 'base64').toString();
     assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`orquestracao@${marca}-kit e ${marca[0].toUpperCase()}${marca.slice(1)}'s Kit`)), []);
     assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`o ${marca} disse`)), [marca]);
+  });
+
+  it('a marca da empresa passa só nos nomes fixos e no texto da entrada do tema (F350)', () => {
+    const marca = Buffer.from('d2ljb21t', 'base64').toString();
+    const Marca = `${marca[0].toUpperCase()}${marca.slice(1)}`;
+    assert.deepEqual(nomesDoAutorEm(`o ${Marca} decide`), [marca], 'precondição: a marca sozinha é pega');
+    assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`tema-${marca}@ichikawa-kit e ${marca}-projects/${marca}-design-system`)), []);
+    assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`${marca}-projects/outro e tema-${marca}x`)).length > 0, true, 'outra forma continua barrada');
+    const mk = (desc) => JSON.stringify({ name: 'm', owner: { name: 'x' }, plugins: [{ name: 'design-system', description: desc('design-system') }, { name: `tema-${marca}`, description: desc(`tema-${marca}`) }] });
+    const so = (nome) => (n) => (n === nome ? `o tema ${Marca}` : 'genérico');
+    assert.deepEqual(nomesDoAutorEm(textoQueConta('x/marketplace.json', mk(so(`tema-${marca}`)))), [], 'na entrada do tema a marca passa');
+    assert.deepEqual(nomesDoAutorEm(textoQueConta('x/marketplace.json', mk(so('design-system')))), [marca], 'na do design-system, não');
+    assert.deepEqual(nomesDoAutorEm(textoQueConta('x/plugin.json', JSON.stringify({ name: `tema-${marca}`, description: `o tema ${Marca}` }))), [marca], 'só o marketplace tem a exceção');
   });
 
   it('nenhum arquivo publicado cita nome do autor nem pasta pessoal', () => {

@@ -103,6 +103,28 @@ Só age com a pasta do front declarada: `design.pasta` ou `design.visual` no `ki
 
 Para silenciar só o detector do Impeccable, use o `config.local.json` da pasta do front, nunca `hooks off` (apaga o aviso para todo mundo).
 
+O `design-system` é o sucessor do `kit-design` ([abaixo](#design-system)). O `kit-design` fica no kit enquanto a base do `design-system` ainda traz a marca da empresa; quando ela ficar genérica, o `kit-design` sai do marketplace e os projetos passam ao `design-system`.
+
+<a id="design-system"></a>
+## Plugin `design-system`
+
+Opcional: o `kit iniciar` e o `kit adotar` não o ligam. Não mora neste repositório: o marketplace o lista vindo do repositório da empresa, que é privado (a instalação usa o git da máquina, então quem instala precisa de acesso de leitura a ele). Traz a base (direção de design, anatomia, convenções), o `designer`, o `critico-de-ui` com nota, a guarda de design e as skills de projeto novo, auditoria e padronização. O manual dele está no README do plugin.
+
+- **Ligar num projeto:** de dentro dele, `claude plugin install design-system@ichikawa-kit --scope project` (grava `"design-system@ichikawa-kit": true` no `enabledPlugins` do `.claude/settings.json`).
+- **Não ligue junto do `kit-design`** no mesmo projeto: as duas guardas rodariam e cobrariam a crítica duas vezes. Ao trocar, ponha `"kit-design@ichikawa-kit": false` no mesmo `enabledPlugins`.
+- **A configuração do projeto** é o `design/design-system.json`; a seção `design` do `.claude/kit.json` vale por compatibilidade quando ele não diz a chave.
+- **As travas do kit o tratam como o `kit-design`:** o `design-system:designer` grava só na pasta de revisões (a mesma cerca, sem lista), a cobrança da crítica aceita o `design-system:critico-de-ui`, e a dona carrega as skills dele na etapa `design`.
+- **A versão é um commit fixo:** as duas entradas do marketplace apontam o mesmo `sha` do repositório da empresa, então o que ela publica só chega quando o kit troca o `sha`. Para subir: pegue o commit novo (`gh api repos/wicomm-projects/wicomm-design-system/commits/main --jq .sha`), troque o `sha` das duas entradas num PR e, depois do merge, `claude plugin marketplace update ichikawa-kit` e `claude plugin update design-system@ichikawa-kit -s <escopo>`. O `subir-versao` não os toca (a versão mora no `plugin.json` de lá) e o `atualizar-plugins` os lista como origem remota, sem atualizar.
+
+<a id="tema-wicomm"></a>
+### Plugin `tema-wicomm`: a marca, só nos projetos internos
+
+O `design-system` não sabe de marca: a cor, a fonte, o logotipo e o prefixo do registro vêm de um plugin de tema. O `tema-wicomm` é o da empresa e só vale nos projetos internos dela.
+
+- **Ligar:** no projeto interno, junto do `design-system`, `claude plugin install tema-wicomm@ichikawa-kit --scope project`; depois, a skill `tema-wicomm:aplicar` liga o projeto ao tema. Quem liga plugin é o `enabledPlugins` do `.claude/settings.json` (commitado, vale para o time), não o `.claude/kit.json`.
+- **Nunca no escopo da conta** (`install` sem `--scope`): a marca valeria em todo projeto da máquina, inclusive nos de fora da empresa.
+- **Trocar as cores é trocar o tema:** outro plugin `tema-<marca>` no lugar do `tema-wicomm`, e o `design-system` fica como está. Cor da marca não se edita no projeto.
+
 ## Plugin `painel-sessoes`
 
 Não tem trava nem opção: é o pane `/painel`, a barra acima do prompt e a batida. Desligado num projeto, o pane e a barra não aparecem nas sessões dele; as travas do `orquestracao` continuam.

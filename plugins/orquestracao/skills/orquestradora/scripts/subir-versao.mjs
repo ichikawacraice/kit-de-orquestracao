@@ -36,7 +36,9 @@ function main() {
   const marketplace = JSON.parse(readFileSync(join(raiz, '.claude-plugin', 'marketplace.json'), 'utf8'));
   const subiu = []; const pulados = []; const tocados = [];
   for (const pl of marketplace.plugins ?? []) {
-    const fonte = String(pl.source).replace(/^\.\//, '').replace(/\/$/, '');
+    // origem remota (F350: git-subdir do repositório da empresa): a versão mora lá, e o kit só move o sha da entrada
+    if (typeof pl.source !== 'string') continue;
+    const fonte = pl.source.replace(/^\.\//, '').replace(/\/$/, '');
     const arquivoJson = `${fonte}/.claude-plugin/plugin.json`;
     const ref = git(['log', '-1', '--format=%H', '-G"version"', '--', arquivoJson]);
     if (!ref) { pulados.push({ nome: pl.name, motivo: 'plugin.json nunca teve versão commitada' }); continue; }

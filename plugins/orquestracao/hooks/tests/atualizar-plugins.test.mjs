@@ -72,9 +72,10 @@ function montar(publicadas, instalados, mp = MP) {
   git(raiz, 'init', '-q', '--bare', '-b', 'main', origin);
   git(raiz, 'clone', '-q', origin, work);
   git(work, 'checkout', '-q', '-b', 'main');
-  const publicar = (versoes) => {
+  // `remotos`: entradas com origem fora do clone (F350: o design-system vem do repositório da empresa por git-subdir)
+  const publicar = (versoes, remotos = []) => {
     mkdirSync(join(work, '.claude-plugin'), { recursive: true });
-    writeFileSync(join(work, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: mp, plugins: Object.keys(versoes).map((n) => ({ name: n, source: `./plugins/${n}` })) }));
+    writeFileSync(join(work, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: mp, plugins: Object.keys(versoes).map((n) => ({ name: n, source: `./plugins/${n}` })).concat(remotos.map((n) => ({ name: n, source: { source: 'git-subdir', url: 'acme/ds', path: `plugins/${n}`, sha: 'a'.repeat(40) } }))) }));
     for (const [n, v] of Object.entries(versoes)) {
       mkdirSync(join(work, 'plugins', n, '.claude-plugin'), { recursive: true });
       const userConfig = n === 'kit-design' ? { guarda: {}, cobrar_critica: {}, pasta_do_front: {}, largura: {} } : undefined;
@@ -185,6 +186,23 @@ test('cópia scope project: "não mexido (projeto …)", sem plugin update para 
     const p = JSON.parse(r.out).plugins.find((x) => x.acao.startsWith('não mexido'));
     assert.ok(p, r.out);
     assert.equal(p.acao, 'não mexido (projeto /x/rascunho)');
+  } finally { limpar(c); }
+});
+
+test('plugin de origem remota (git-subdir): não lê versão do clone, não chama plugin update e diz como atualizar', () => {
+  const c = montar({ orquestracao: '0.1.2' }, [inst('orquestracao', '0.1.2'), inst('design-system', '0.1.13')]);
+  try {
+    c.publicar({ orquestracao: '0.1.2' }, ['design-system', 'tema-x']);
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.equal(achar(s, 'orquestracao').acao, 'em dia', 'precondição: o local segue conferido');
+    const ds = achar(s, 'design-system');
+    assert.ok(ds, JSON.stringify(s.plugins));
+    assert.match(ds.acao, /^origem remota/);
+    assert.match(ds.acao, /claude plugin update design-system@/);
+    assert.equal(achar(s, 'tema-x').acao, 'não instalado');
+    assert.equal(c.updates().length, 0);
   } finally { limpar(c); }
 });
 

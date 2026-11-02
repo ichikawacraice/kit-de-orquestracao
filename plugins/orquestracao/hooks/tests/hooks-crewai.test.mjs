@@ -551,6 +551,18 @@ caso('F60.6 os outros tipos não ganham a pasta de revisões', () => comRepo(() 
     igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', t);
   }
 }));
+// F350: o designer do plugin design-system (o sucessor do kit-design) é liberado pelo papel, com a mesma cerca.
+caso('F350.1 design-system:designer sem lista grava só na pasta de revisões', () => comRepo(() => {
+  igual(existsSync(LISTA()), false, 'precondição: sem lista');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('outro:designer')))), 'deny', 'precondição: designer de plugin de fora é negado');
+  igual(rodar(SN, editar(`${REPO}/${REV}/2026-11-02-a.md`, sub('design-system:designer'))), null, 'Edit');
+  igual(rodar(SN, pre('Write', { file_path: `${REPO}/${REV}/README.md`, content: 'x' }, sub('design-system:designer'))), null, 'Write');
+  igual(log().some((l) => l[3] === 'liberado-por-papel' && l[4].includes('design-system:designer')), true, 'log');
+  for (const p of [`${REPO}/web/index.html`, `${REPO}/CLAUDE.md`, `${REPO}/${REV}/../../src/a.ts`]) {
+    igual(decisao(rodar(SN, editar(p, sub('design-system:designer')))), 'deny', p);
+  }
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design-system:critico-de-ui')))), 'deny', 'o crítico não ganha a pasta');
+}));
 // F61: a pasta de revisões é cercada: valor inválido vale o padrão e symlink não leva a escrita para fora.
 caso('F61.1 valor inválido de design.revisoes vale o padrão', () => comRepo(() => {
   mkdirSync(join(REPO, '.claude'), { recursive: true });
