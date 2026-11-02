@@ -119,6 +119,9 @@ export const KIT_PUBLICADO_VALE_MS = 30 * 60_000;
 const GIT_TIMEOUT_MS = 20_000;
 
 /** Os plugins do kit com escopo user: [{ nome, versao, lastUpdated }]. Sem o arquivo, nenhum. */
+/** Plugin do kit que mudou de nome: velho → novo (o mesmo mapa do `atualizar-plugins`). */
+const RENOMEADOS = { design: 'kit-design' };
+
 export function lerInstaladosDoKit(home) {
   let reg = null;
   try { reg = JSON.parse(readFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), 'utf8')); } catch { return []; }
@@ -190,6 +193,9 @@ export function lerParaBaixar({ home, cache, agoraMs = Date.now(), env = process
   }
   if (!publicado) return [];
   return instalados.flatMap((p) => {
+    // plugin renomeado (F332): o velho instalado e só o novo publicado pede o atualizar-plugins, que troca um pelo outro
+    const novo = RENOMEADOS[p.nome];
+    if (novo && publicado[novo] && !publicado[p.nome]) return RELEASE.test(publicado[novo]) ? [{ nome: novo, instalada: p.versao, publicada: publicado[novo] }] : [];
     const v = publicado[p.nome];
     return RELEASE.test(v ?? '') && RELEASE.test(p.versao) && compararVersao(p.versao, v) < 0 ? [{ nome: p.nome, instalada: p.versao, publicada: v }] : [];
   });

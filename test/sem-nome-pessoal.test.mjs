@@ -6,9 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { nomesDoAutorEm, semOEnderecoPublicado } from './nomes-do-autor.mjs';
 
 // O que o kit publica não cita nome de projeto nem de pessoa do autor, nem caminho da pasta pessoal de alguém.
-// Fica de fora o histórico datado (docs/), que não se reescreve.
+// Fica de fora o histórico datado (docs/), que não se reescreve; o guia de uso (docs/guia/) é publicado e entra.
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PASTAS = ['plugins', 'cli', 'gate', 'scripts', 'test', 'modelos', '.claude-plugin'];
+const PASTAS = ['plugins', 'cli', 'gate', 'scripts', 'test', 'modelos', '.claude-plugin', 'docs/guia'];
 const AVULSOS = ['README.md', 'CLAUDE.md', 'package.json'];
 const TEXTO = /\.(md|mjs|js|cjs|ts|tsx|json|sh|html|css|txt)$/;
 // a pasta pessoal de alguém; os nomes genéricos dos testes (`/Users/x`, `/home/teste`…) passam

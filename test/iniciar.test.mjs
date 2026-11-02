@@ -62,7 +62,7 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       assert.equal(hooks[0].matcher, 'Bash');
       assert.equal(hooks[0].hooks[0].command, 'node "$CLAUDE_PROJECT_DIR/scripts/kit/guarda-de-operacao.mjs"');
       assert.equal(s.extraKnownMarketplaces['kit-de-orquestracao'].source.repo, 'ichikawacraice/kit-de-orquestracao');
-      assert.deepEqual(s.enabledPlugins, { 'orquestracao@kit-de-orquestracao': true, 'painel-sessoes@kit-de-orquestracao': true, 'processos@kit-de-orquestracao': true, 'design@kit-de-orquestracao': true });
+      assert.deepEqual(s.enabledPlugins, { 'orquestracao@kit-de-orquestracao': true, 'painel-sessoes@kit-de-orquestracao': true, 'processos@kit-de-orquestracao': true, 'kit-design@kit-de-orquestracao': true });
     } finally { limpar(d); }
   });
 

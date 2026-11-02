@@ -23,8 +23,8 @@
       "description": "Processos de desenvolvimento: spec-driven, revisar-diff e auditoria-de-clique."
     },
     {
-      "name": "design",
-      "source": "./plugins/design",
+      "name": "kit-design",
+      "source": "./plugins/kit-design",
       "description": "Processo de design: designer, crítico de UI e a guarda que cobra a crítica do trabalho visual."
     }
   ],

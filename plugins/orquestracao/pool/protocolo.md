@@ -24,7 +24,7 @@ A dona é uma sessão só, mas troca de chapéu a cada etapa: **ao entrar numa e
 | Etapa | Fixas (carrega sempre) | Da lista, quando o trabalho pede |
 |---|---|---|
 | `planejamento` | `superpowers:writing-plans` | `superpowers:brainstorming` (cria algo novo), `processos:spec-driven` (ADR, spec, roadmap), `superpowers:systematic-debugging` (causa de defeito) |
-| `design` | `design:revisao-de-arquitetura-de-ui` (subagente) | `frontend-design`, `impeccable:impeccable`, `agent-browser` (abrir a tela) |
+| `design` | `kit-design:revisao-de-arquitetura-de-ui` (subagente) | `frontend-design`, `impeccable:impeccable`, `agent-browser` (abrir a tela) |
 | `execucao` | `superpowers:test-driven-development`, `superpowers:verification-before-completion` | `processos:auditoria-de-clique` (gesto que grava), `owasp-security`, `supabase`, `vercel-react-best-practices` |
 | `validacao` | `processos:revisar-diff` (no briefing do `orquestracao:validador`) | `differential-review`, `security-audit`, `claude-security:claude-security` (segurança), `agent-browser` (artefato visual) |
 
@@ -110,7 +110,7 @@ A limpeza apaga a lembrança, não as perguntas: elas ficam no painel com `sessa
 
 <a id="via-rapida"></a>
 ## Tela: revisão de design e via rápida
-- **Item com tela** passa pela etapa `design`: a dona lança o subagente `design:revisao-de-arquitetura-de-ui`, grava a revisão que ele devolve (na pasta de revisões do projeto) e, depois do código, lança o `design:critico-de-ui`. Nota de 24/30 para cima, sem ressalva alta, libera; no máximo 2 recríticas.
+- **Item com tela** passa pela etapa `design`: a dona lança o subagente `kit-design:revisao-de-arquitetura-de-ui`, grava a revisão que ele devolve (na pasta de revisões do projeto) e, depois do código, lança o `kit-design:critico-de-ui`. Nota de 24/30 para cima, sem ressalva alta, libera; no máximo 2 recríticas.
 - **Via rápida:** o item que reaproveita um componente ou padrão que o produto já tem **e** não muda nenhuma decisão registrada (ADR, spec ou revisão de design aprovada) pula a etapa `design` e tem uma crítica só, depois do código, sem recrítica. A dona escreve o motivo no plano. Nota abaixo de 24/30, ou a descoberta de que o item muda decisão, o devolve ao caminho normal.
 - **Escopo trancado (vale para todo item):** o plano lista o escopo. Achado da crítica ou da revisão fora dele vai para `depois` do item e nunca entra no PR, qualquer que seja o peso.
 

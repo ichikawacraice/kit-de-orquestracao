@@ -30,10 +30,21 @@ export function lerSettings(caminho) {
 /** A pasta de configuração da conta: `CLAUDE_CONFIG_DIR` quando o env o diz, senão `<home>/.claude`. */
 export const pastaDeConfig = (home = homedir(), env = process.env) => (env?.CLAUDE_CONFIG_DIR ? env.CLAUDE_CONFIG_DIR : join(home, ".claude"));
 
-/** As opções gravadas para o plugin do kit (`{}` sem nada gravado). */
+/**
+ * Os nomes que um plugin do kit já teve (F332: o `design` virou `kit-design`, porque o `design` da Anthropic o ofuscava). A conta
+ * e o projeto que ainda não migraram guardam opção e liga/desliga sob o nome velho: ele vale enquanto o novo não diz nada.
+ */
+export const NOMES_ANTIGOS = Object.freeze({ "kit-design": Object.freeze(["design"]) });
+const idsDe = (plugin) => [plugin, ...(NOMES_ANTIGOS[plugin] ?? [])].map((n) => `${n}@${MARKETPLACE_DO_KIT}`);
+
+/** As opções gravadas para o plugin do kit (`{}` sem nada gravado); as do nome velho valem quando o novo não tem nenhuma. */
 export function opcoesDoPlugin(plugin, home = homedir(), env = process.env) {
-  const opcoes = lerSettings(join(pastaDeConfig(home, env), "settings.json"))?.pluginConfigs?.[`${plugin}@${MARKETPLACE_DO_KIT}`]?.options;
-  return objeto(opcoes) ? opcoes : {};
+  const configs = lerSettings(join(pastaDeConfig(home, env), "settings.json"))?.pluginConfigs;
+  for (const id of idsDe(plugin)) {
+    const opcoes = configs?.[id]?.options;
+    if (objeto(opcoes) && Object.keys(opcoes).length) return opcoes;
+  }
+  return {};
 }
 
 /** Booleano da opção: `false`/"false" desliga; ausente ou outra coisa fica no padrão. */
@@ -44,14 +55,14 @@ export function booleanoDaOpcao(valor, padrao = true) {
 }
 
 /**
- * O que `enabledPlugins` diz do plugin: `true`, `false` ou `undefined` (ninguém diz). Vale a camada mais próxima:
+ * O que `enabledPlugins` diz do plugin (ou do nome velho dele): `true`, `false` ou `undefined` (ninguém diz). Vale a camada mais próxima:
  * `.claude/settings.local.json` > `.claude/settings.json` do projeto > `settings.json` da pasta de configuração da conta (`~/.claude`, ou `CLAUDE_CONFIG_DIR`).
  */
 export function pluginLigado(plugin, raiz, home = homedir(), env = process.env) {
-  const id = `${plugin}@${MARKETPLACE_DO_KIT}`;
   for (const caminho of [join(raiz, ".claude", "settings.local.json"), join(raiz, ".claude", "settings.json"), join(pastaDeConfig(home, env), "settings.json")]) {
-    const v = lerSettings(caminho)?.enabledPlugins?.[id];
-    if (typeof v === "boolean") return v;
+    const ligados = lerSettings(caminho)?.enabledPlugins;
+    // na mesma camada, o nome novo vence o velho
+    for (const id of idsDe(plugin)) if (typeof ligados?.[id] === "boolean") return ligados[id];
   }
   return undefined;
 }

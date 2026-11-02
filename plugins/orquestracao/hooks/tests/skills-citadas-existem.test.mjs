@@ -30,7 +30,7 @@ const doMapa = Object.values(MAPA.etapas).flat();
 
 test('o protocolo, a dona e o mapa citam só skills e agentes do kit que existem (insumos não vazios)', () => {
   const dados = entregues();
-  assert.ok(dados.has('processos:spec-driven') && dados.has('design:critico-de-ui') && dados.has('orquestracao:validador'), `plugins do kit não lidos: ${[...dados]}`);
+  assert.ok(dados.has('processos:spec-driven') && dados.has('kit-design:critico-de-ui') && dados.has('orquestracao:validador'), `plugins do kit não lidos: ${[...dados]}`);
   const textos = {
     protocolo: readFileSync(join(POOL, 'protocolo.md'), 'utf8'),
     dona: readFileSync(join(POOL, 'dona.md'), 'utf8'),
@@ -53,9 +53,9 @@ test('o protocolo, a dona e o mapa citam só skills e agentes do kit que existem
 });
 
 test('o detector pega citação inventada', () => {
-  const t = 'roda o `design:skill-no-meio` em subagente e depois `processos:spec-driven` e `superpowers:x`.';
-  assert.deepEqual(citacoes(t), ['design:skill-no-meio', 'processos:spec-driven'], 'só plugin do kit conta');
-  assert.equal(entregues().has('design:skill-no-meio'), false, 'a inventada tem de ser reprovada');
+  const t = 'roda o `kit-design:skill-no-meio` em subagente e depois `processos:spec-driven` e `superpowers:x`.';
+  assert.deepEqual(citacoes(t), ['kit-design:skill-no-meio', 'processos:spec-driven'], 'só plugin do kit conta');
+  assert.equal(entregues().has('kit-design:skill-no-meio'), false, 'a inventada tem de ser reprovada');
 });
 
 test('toda skill da tabela de skills por etapa do protocolo está no mapa da etapa', () => {

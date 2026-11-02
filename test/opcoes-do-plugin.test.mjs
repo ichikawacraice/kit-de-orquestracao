@@ -8,9 +8,9 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { OPCOES_DO_PROCESSOS, REGRAS_DE_DOCUMENTO, carregarConfig } from '../gate/config.mjs';
-import { OPCOES_DO_DESIGN, lerConfig } from '../plugins/design/hooks/guarda-de-design.mjs';
+import { OPCOES_DO_DESIGN, lerConfig } from '../plugins/kit-design/hooks/guarda-de-design.mjs';
 import { booleanoDaOpcao, opcoesDoPlugin, pluginLigado } from '../gate/opcoes-do-plugin.mjs';
-import { booleanoDaOpcao as booleanoDoHook, pluginLigado as pluginLigadoDoHook, opcoesDoPlugin as opcoesDoHook } from '../plugins/design/hooks/opcoes-do-plugin.mjs';
+import { booleanoDaOpcao as booleanoDoHook, pluginLigado as pluginLigadoDoHook, opcoesDoPlugin as opcoesDoHook } from '../plugins/kit-design/hooks/opcoes-do-plugin.mjs';
 
 const RAIZ_DO_KIT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const temporarios = [];
@@ -94,14 +94,14 @@ describe('design: precedência A7 na guarda (lerConfig)', () => {
   const kit = { design: { pasta: 'apps/web' } };
 
   it('o plugin desligado em enabledPlugins → a guarda não roda, mesmo com design.pasta no kit.json', () => {
-    assert.ok(lerDe(cenario({ kit, enabled: { 'design@kit-de-orquestracao': true } }))); // ligado: roda
+    assert.ok(lerDe(cenario({ kit, enabled: { 'kit-design@kit-de-orquestracao': true } }))); // ligado: roda
     assert.ok(lerDe(cenario({ kit }))); // ninguém diz (plugin carregado por --plugin-dir ou pela conta): roda
-    assert.equal(lerDe(cenario({ kit, enabled: { 'design@kit-de-orquestracao': false } })), null);
-    assert.equal(lerDe(cenario({ kit, enabled: { 'design@kit-de-orquestracao': true }, enabledLocal: { 'design@kit-de-orquestracao': false } })), null);
+    assert.equal(lerDe(cenario({ kit, enabled: { 'kit-design@kit-de-orquestracao': false } })), null);
+    assert.equal(lerDe(cenario({ kit, enabled: { 'kit-design@kit-de-orquestracao': true }, enabledLocal: { 'kit-design@kit-de-orquestracao': false } })), null);
   });
 
   it('opção guarda desligada → inerte; design.guarda no kit.json vence a opção', () => {
-    const ligado = { 'design@kit-de-orquestracao': true };
+    const ligado = { 'kit-design@kit-de-orquestracao': true };
     assert.ok(lerDe(cenario({ kit, enabled: ligado, opcoes: { design: { guarda: true } } })));
     assert.equal(lerDe(cenario({ kit, enabled: ligado, opcoes: { design: { guarda: false } } })), null);
     assert.ok(lerDe(cenario({ kit: { design: { pasta: 'apps/web', guarda: true } }, enabled: ligado, opcoes: { design: { guarda: false } } })));
@@ -109,13 +109,13 @@ describe('design: precedência A7 na guarda (lerConfig)', () => {
   });
 
   it('a variável de ambiente do hook (CLAUDE_PLUGIN_OPTION_GUARDA) vale quando o app a exporta', () => {
-    const c = cenario({ kit, enabled: { 'design@kit-de-orquestracao': true } });
+    const c = cenario({ kit, enabled: { 'kit-design@kit-de-orquestracao': true } });
     assert.ok(lerDe(c, {}));
     assert.equal(lerDe(c, { CLAUDE_PLUGIN_OPTION_GUARDA: 'false' }), null);
   });
 
   it('pasta_do_front: o kit.json com design.pasta vence; sem ele vale a opção', () => {
-    const ligado = { 'design@kit-de-orquestracao': true };
+    const ligado = { 'kit-design@kit-de-orquestracao': true };
     const semKit = cenario({ kit: { documentos: {} }, enabled: ligado, opcoes: { design: { pasta_do_front: 'web' } } });
     assert.equal(lerDe(cenario({ kit: { documentos: {} }, enabled: ligado })), null); // sem pasta em lugar nenhum: inerte
     assert.deepEqual(lerDe(semKit).visual[0], 'web/**/*.tsx');
@@ -124,7 +124,7 @@ describe('design: precedência A7 na guarda (lerConfig)', () => {
   });
 
   it('cobrar_critica desligada → config.cobrarCritica false; design.cobrarCritica no kit.json vence', () => {
-    const ligado = { 'design@kit-de-orquestracao': true };
+    const ligado = { 'kit-design@kit-de-orquestracao': true };
     assert.equal(lerDe(cenario({ kit, enabled: ligado })).cobrarCritica, true);
     assert.equal(lerDe(cenario({ kit, enabled: ligado, opcoes: { design: { cobrar_critica: false } } })).cobrarCritica, false);
     assert.equal(lerDe(cenario({ kit: { design: { pasta: 'apps/web', cobrarCritica: true } }, enabled: ligado, opcoes: { design: { cobrar_critica: false } } })).cobrarCritica, true);
@@ -143,7 +143,7 @@ describe('as opções dos plugin.json × as chaves que o código lê', () => {
   });
 
   it('design: guarda, cobrar_critica, pasta_do_front e largura, e nenhuma a mais', () => {
-    const declaradas = opcoesDe('design');
+    const declaradas = opcoesDe('kit-design');
     assert.ok(declaradas && Object.keys(declaradas).length > 0);
     assert.deepEqual(Object.keys(declaradas).sort(), [...OPCOES_DO_DESIGN].sort());
     assert.equal(declaradas.guarda.type, 'boolean');
@@ -153,13 +153,13 @@ describe('as opções dos plugin.json × as chaves que o código lê', () => {
   });
 
   it('o helper do gate e o do hook concordam nos mesmos cenários', () => {
-    const ligado = { 'design@kit-de-orquestracao': true, 'processos@kit-de-orquestracao': true };
-    for (const c of [cenario({ enabled: ligado }), cenario({ enabled: { 'design@kit-de-orquestracao': false } }), cenario({ enabledLocal: ligado, enabled: { 'design@kit-de-orquestracao': false } }), cenario({})]) {
-      for (const p of ['design', 'processos']) assert.equal(pluginLigadoDoHook(p, c.raiz, c.home), pluginLigado(p, c.raiz, c.home));
+    const ligado = { 'kit-design@kit-de-orquestracao': true, 'processos@kit-de-orquestracao': true };
+    for (const c of [cenario({ enabled: ligado }), cenario({ enabled: { 'kit-design@kit-de-orquestracao': false } }), cenario({ enabledLocal: ligado, enabled: { 'kit-design@kit-de-orquestracao': false } }), cenario({})]) {
+      for (const p of ['kit-design', 'processos']) assert.equal(pluginLigadoDoHook(p, c.raiz, c.home), pluginLigado(p, c.raiz, c.home));
     }
     const c = cenario({ opcoes: { design: { guarda: false, largura: 1440 } } });
-    assert.deepEqual(opcoesDoHook('design', c.home), opcoesDoPlugin('design', c.home));
-    assert.equal(opcoesDoPlugin('design', c.home).guarda, false); // o cenário tem opção de verdade
+    assert.deepEqual(opcoesDoHook('kit-design', c.home), opcoesDoPlugin('kit-design', c.home));
+    assert.equal(opcoesDoPlugin('kit-design', c.home).guarda, false); // o cenário tem opção de verdade
     for (const v of [true, false, 'false', 'true', '0', 'off', undefined, '', 'talvez']) for (const p of [true, false]) assert.equal(booleanoDoHook(v, p), booleanoDaOpcao(v, p));
   });
 });
@@ -185,8 +185,8 @@ describe('V2 B2 — CLAUDE_CONFIG_DIR: a casa das opções é a pasta de configu
     assert.equal(pluginLigado('processos', c.raiz, c.home, { CLAUDE_CONFIG_DIR: dir }), false);
   });
   it('a guarda de design lê da mesma pasta', () => {
-    const c = cenario({ kit: { design: { pasta: 'web' } }, enabled: { 'design@kit-de-orquestracao': true } });
-    const dir = NA_PASTA({ 'design@kit-de-orquestracao': { options: { guarda: false } } });
+    const c = cenario({ kit: { design: { pasta: 'web' } }, enabled: { 'kit-design@kit-de-orquestracao': true } });
+    const dir = NA_PASTA({ 'kit-design@kit-de-orquestracao': { options: { guarda: false } } });
     assert.ok(lerConfig(c.raiz, { home: c.home, env: {} }), 'controle: ligada');
     assert.equal(lerConfig(c.raiz, { home: c.home, env: { CLAUDE_CONFIG_DIR: dir } }), null);
   });
@@ -194,7 +194,7 @@ describe('V2 B2 — CLAUDE_CONFIG_DIR: a casa das opções é a pasta de configu
 
 describe('V2 B1 — o tronco padrão é o mesmo no gate e na guarda de design', () => {
   it('lerConfig da guarda parte de origin/main, igual ao guarda.tronco do gate', () => {
-    const c = cenario({ kit: { design: { pasta: 'web' } }, enabled: { 'design@kit-de-orquestracao': true } });
+    const c = cenario({ kit: { design: { pasta: 'web' } }, enabled: { 'kit-design@kit-de-orquestracao': true } });
     const bases = lerConfig(c.raiz, { home: c.home, env: {} }).bases;
     assert.ok(bases.length > 0);
     assert.equal(bases[0], carregarConfig(c.raiz, undefined, { home: c.home }).guarda.tronco);
@@ -208,17 +208,17 @@ describe('V2 B1 — o tronco padrão é o mesmo no gate e na guarda de design', 
 describe('V2 M2 — cada opção declarada tem um leitor no texto que a lê, não só na constante', () => {
   const texto = (rel) => readFileSync(join(RAIZ_DO_KIT, rel), 'utf8');
   const declaradas = (plugin) => Object.keys(JSON.parse(texto(`plugins/${plugin}/.claude-plugin/plugin.json`)).userConfig);
-  const textosDeDesign = ['plugins/design/agents/designer.md', 'plugins/design/agents/critico-de-ui.md', 'plugins/design/skills/revisao-de-arquitetura-de-ui/SKILL.md', 'plugins/design/skills/critica-de-ui/SKILL.md'].map(texto);
+  const textosDeDesign = ['plugins/kit-design/agents/designer.md', 'plugins/kit-design/agents/critico-de-ui.md', 'plugins/kit-design/skills/revisao-de-arquitetura-de-ui/SKILL.md', 'plugins/kit-design/skills/critica-de-ui/SKILL.md'].map(texto);
 
   it('design: guarda, cobrar_critica e pasta_do_front são lidas pela guarda (opcao("<chave>")); largura e pasta_do_front, pelo texto das skills e dos agents', () => {
-    const guarda = texto('plugins/design/hooks/guarda-de-design.mjs');
-    assert.ok(declaradas('design').length === 4);
+    const guarda = texto('plugins/kit-design/hooks/guarda-de-design.mjs');
+    assert.ok(declaradas('kit-design').length === 4);
     for (const chave of ['guarda', 'cobrar_critica', 'pasta_do_front']) assert.ok(guarda.includes(`opcao("${chave}"`), `a guarda não lê a opção ${chave}`);
     for (const chave of ['largura', 'pasta_do_front']) assert.ok(textosDeDesign.some((t) => t.includes(`\${user_config.${chave}}`)), `nenhuma skill ou agent lê \${user_config.${chave}}`);
     // todo ${user_config.X} que o texto usa é uma opção declarada
     const usadas = new Set(textosDeDesign.flatMap((t) => [...t.matchAll(/\$\{user_config\.([a-z_]+)\}/g)].map((m) => m[1])));
     assert.ok(usadas.size > 0);
-    for (const u of usadas) assert.ok(declaradas('design').includes(u), `${u} não é opção declarada`);
+    for (const u of usadas) assert.ok(declaradas('kit-design').includes(u), `${u} não é opção declarada`);
   });
 
   it('processos: o gate lê cada opção pelo nome que a regra gera (conferir_<regra>), e o nome está no config', () => {

@@ -2,7 +2,7 @@
 /**
  * **A demanda de design passa pelo designer e pelo crítico — e quem esquece é cobrado.**
  *
- * Hook do plugin `design`, registrado em `hooks/hooks.json`. O `hook_event_name`
+ * Hook do plugin `kit-design`, registrado em `hooks/hooks.json`. O `hook_event_name`
  * do JSON no stdin decide o que roda; o papel vem do `agent_type` do payload
  * (agent de plugin não carrega `hooks` no frontmatter), ou de `--papel` quando
  * a linha de comando o passa.
@@ -108,7 +108,7 @@ const lista = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string" &
 function opcao(chave, { home, env }) {
   const doEnv = env[`CLAUDE_PLUGIN_OPTION_${chave.toUpperCase()}`];
   if (doEnv !== undefined && doEnv !== "") return doEnv;
-  return opcoesDoPlugin("design", home, env)[chave];
+  return opcoesDoPlugin("kit-design", home, env)[chave];
 }
 
 /**
@@ -119,7 +119,7 @@ function opcao(chave, { home, env }) {
  */
 export function lerConfig(raiz, ambiente = {}) {
   const amb = { home: ambiente.home ?? homedir(), env: ambiente.env ?? process.env };
-  if (pluginLigado("design", raiz, amb.home, amb.env) === false) return null;
+  if (pluginLigado("kit-design", raiz, amb.home, amb.env) === false) return null;
   const caminho = join(raiz, ".claude", "kit.json");
   let kit = {};
   if (existsSync(caminho)) {

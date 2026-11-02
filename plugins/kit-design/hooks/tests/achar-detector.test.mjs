@@ -1,4 +1,4 @@
-// F66: o crítico acha o detector do Impeccable instalado. Rodar: node --test plugins/design/hooks/tests/
+// F66: o crítico acha o detector do Impeccable instalado. Rodar: node --test plugins/kit-design/hooks/tests/
 // Nada aqui toca ~/.claude: HOME e o projeto ficam em pasta temporária.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

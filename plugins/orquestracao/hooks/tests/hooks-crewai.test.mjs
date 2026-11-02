@@ -507,46 +507,47 @@ caso('K2 subagente-nao-edita: a lista casa `orquestracao:designer` com `designer
 const REV = 'docs/design/revisoes';
 const comRepo = (fn) => { mkdirSync(join(REPO, '.git'), { recursive: true }); try { fn(); } finally { rmSync(REPO, { recursive: true, force: true }); } };
 const LISTA = () => join(base, 'subagente-pode-escrever.txt');
-caso('F60.1 design:designer sem lista grava na pasta de revisões padrão', () => comRepo(() => {
+caso('F60.1 kit-design:designer sem lista grava na pasta de revisões padrão', () => comRepo(() => {
   igual(existsSync(LISTA()), false, 'precondição: sem lista');
   igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('executor')))), 'deny', 'precondição: executor é negado no mesmo caminho');
-  igual(rodar(SN, editar(`${REPO}/${REV}/2026-10-26-a.md`, sub('design:designer'))), null, 'Edit');
-  igual(rodar(SN, pre('Write', { file_path: `${REPO}/${REV}/README.md`, content: 'x' }, sub('design:designer'))), null, 'Write');
+  igual(rodar(SN, editar(`${REPO}/${REV}/2026-10-26-a.md`, sub('kit-design:designer'))), null, 'Edit');
+  igual(rodar(SN, pre('Write', { file_path: `${REPO}/${REV}/README.md`, content: 'x' }, sub('kit-design:designer'))), null, 'Write');
+  igual(rodar(SN, editar(`${REPO}/${REV}/2026-10-26-b.md`, sub('design:designer'))), null, 'o nome velho do plugin (F332) ainda vale');
   igual(log().some((l) => l[3] === 'liberado-por-papel'), true, 'log');
 }));
 caso('F60.2 o designer fora da pasta de revisões continua recusado', () => comRepo(() => {
   for (const p of [`${REPO}/web/index.html`, `${REPO}/CLAUDE.md`, `${REPO}/${REV}/../../src/a.ts`]) {
-    igual(decisao(rodar(SN, editar(p, sub('design:designer')))), 'deny', p);
+    igual(decisao(rodar(SN, editar(p, sub('kit-design:designer')))), 'deny', p);
   }
 }));
 caso('F60.3 design.revisoes do kit.json manda', () => comRepo(() => {
   mkdirSync(join(REPO, '.claude'), { recursive: true });
   const kit = (v) => writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: v } }));
   kit('docs/ux');
-  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design:designer'))), null, 'docs/ux');
-  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design:designer')))), 'deny', 'o padrão deixa de valer');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('kit-design:designer'))), null, 'docs/ux');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('kit-design:designer')))), 'deny', 'o padrão deixa de valer');
   kit('');
-  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design:designer'))), null, 'vazio volta ao padrão');
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('kit-design:designer'))), null, 'vazio volta ao padrão');
 }));
 caso('F60.4 a pasta de revisões é a do projeto mais próximo', () => {
   const solto = join(homedir(), 'solto');
   mkdirSync(join(solto, REV), { recursive: true });
   try {
     igual(existsSync(join(solto, '.git')) || existsSync(join(solto, '.claude', 'kit.json')), false, 'precondição: solto não é raiz');
-    igual(decisao(rodar(SN, editar(join(solto, REV, 'a.md'), sub('design:designer')))), 'deny', 'solto');
+    igual(decisao(rodar(SN, editar(join(solto, REV, 'a.md'), sub('kit-design:designer')))), 'deny', 'solto');
   } finally { rmSync(solto, { recursive: true, force: true }); }
 });
 caso('F60.5 a lista casa o prefixo de qualquer plugin do kit', () => {
   writeFileSync(LISTA(), 'designer\n');
-  igual(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('design:designer'))), null, 'design:designer');
+  igual(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('kit-design:designer'))), null, 'kit-design:designer');
   igual(decisao(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('outro:designer')))), 'deny', 'outro:designer');
   writeFileSync(LISTA(), 'executor\n');
-  igual(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('design:executor'))), null, 'design:executor');
+  igual(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('kit-design:executor'))), null, 'kit-design:executor');
   igual(decisao(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('outro:executor')))), 'deny', 'outro:executor');
 });
 caso('F60.6 os outros tipos não ganham a pasta de revisões', () => comRepo(() => {
   igual(existsSync(LISTA()), false, 'precondição: sem lista');
-  for (const t of ['designerX', 'design:critico-de-ui', 'executor']) {
+  for (const t of ['designerX', 'kit-design:critico-de-ui', 'executor']) {
     igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', t);
   }
 }));
@@ -555,32 +556,32 @@ caso('F61.1 valor inválido de design.revisoes vale o padrão', () => comRepo(()
   mkdirSync(join(REPO, '.claude'), { recursive: true });
   const kit = (v) => writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: v } }));
   kit('docs/ux');
-  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design:designer'))), null, 'precondição: docs/ux libera a.md');
-  igual(decisao(rodar(SN, editar(`${REPO}/src/a.ts`, sub('design:designer')))), 'deny', 'precondição: docs/ux nega src');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('kit-design:designer'))), null, 'precondição: docs/ux libera a.md');
+  igual(decisao(rodar(SN, editar(`${REPO}/src/a.ts`, sub('kit-design:designer')))), 'deny', 'precondição: docs/ux nega src');
   for (const v of ['.', './', '..', 'docs/..', 'docs/../..', REPO, homedir(), '/']) {
     kit(v);
-    igual(decisao(rodar(SN, editar(`${REPO}/src/a.ts`, sub('design:designer')))), 'deny', `src/a.ts com revisoes=${v}`);
-    igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design:designer'))), null, `o padrão vale com revisoes=${v}`);
+    igual(decisao(rodar(SN, editar(`${REPO}/src/a.ts`, sub('kit-design:designer')))), 'deny', `src/a.ts com revisoes=${v}`);
+    igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('kit-design:designer'))), null, `o padrão vale com revisoes=${v}`);
   }
 }));
 caso('F61.2 symlink não tira o designer da pasta de revisões', () => comRepo(() => {
   mkdirSync(join(REPO, 'src'), { recursive: true });
   mkdirSync(join(REPO, REV), { recursive: true });
-  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design:designer'))), null, 'precondição: arquivo comum em pasta real');
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('kit-design:designer'))), null, 'precondição: arquivo comum em pasta real');
   symlinkSync(join(REPO, 'src'), join(REPO, REV, 'link'));
-  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/link/a.ts`, sub('design:designer')))), 'deny', 'symlink de pasta');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/link/a.ts`, sub('kit-design:designer')))), 'deny', 'symlink de pasta');
   symlinkSync(join(REPO, 'src', 'novo.ts'), join(REPO, REV, 'novo.ts'));
-  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/novo.ts`, sub('design:designer')))), 'deny', 'symlink quebrado');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/novo.ts`, sub('kit-design:designer')))), 'deny', 'symlink quebrado');
   rmSync(join(REPO, REV), { recursive: true, force: true });
   symlinkSync(join(REPO, 'src'), join(REPO, REV));
-  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.ts`, sub('design:designer')))), 'deny', 'a pasta é symlink');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.ts`, sub('kit-design:designer')))), 'deny', 'a pasta é symlink');
 }));
 caso('F61.3 o projeto aberto por um caminho com symlink continua liberado', () => comRepo(() => {
   const alias = join(homedir(), 'alias');
   symlinkSync(REPO, alias);
   try {
-    igual(rodar(SN, editar(`${alias}/${REV}/a.md`, sub('design:designer'))), null, 'revisão pelo alias');
-    igual(decisao(rodar(SN, editar(`${alias}/src/a.ts`, sub('design:designer')))), 'deny', 'src pelo alias');
+    igual(rodar(SN, editar(`${alias}/${REV}/a.md`, sub('kit-design:designer'))), null, 'revisão pelo alias');
+    igual(decisao(rodar(SN, editar(`${alias}/src/a.ts`, sub('kit-design:designer')))), 'deny', 'src pelo alias');
   } finally { unlinkSync(alias); }
 }));
 // F66: a recusa por symlink diz o motivo e grava `recusou-symlink`; a recusa comum não muda.
@@ -588,7 +589,7 @@ caso('F66.1 symlink que leva para fora da pasta de revisões recusa com o motivo
   const MOTIVO_SYMLINK = /link simb[oó]lico/i;
   const ultimo = () => log().at(-1)[3];
   const recusa = (p) => {
-    const r = rodar(SN, editar(p, sub('design:designer')));
+    const r = rodar(SN, editar(p, sub('kit-design:designer')));
     igual(decisao(r), 'deny', `deny de ${p}`);
     return r.hookSpecificOutput.permissionDecisionReason;
   };
@@ -800,8 +801,8 @@ caso('F322.7 projeto aninhado fora da revisão segue com a própria raiz e a pr�
   const b = join(REPO, 'packages', 'b');
   mkdirSync(join(b, '.git'), { recursive: true });
   igual(decisao(rodar(SN, editar(join(b, REV, 'a.md'), sub('acme:designer')))), 'deny', 'a declaração de fora não vale em b');
-  igual(rodar(SN, editar(join(b, REV, 'a.md'), sub('design:designer'))), null, 'o designer do kit grava nas revisões de b');
-  igual(decisao(rodar(SN, editar(join(b, 'src', 'a.ts'), sub('design:designer')))), 'deny', 'e não no código de b');
+  igual(rodar(SN, editar(join(b, REV, 'a.md'), sub('kit-design:designer'))), null, 'o designer do kit grava nas revisões de b');
+  igual(decisao(rodar(SN, editar(join(b, 'src', 'a.ts'), sub('kit-design:designer')))), 'deny', 'e não no código de b');
 }));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
   const f = transcript([...trabalho(), fala('Pronto, editei.')]);
