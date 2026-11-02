@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { avisoDeLaco, carregarConfig, opcaoDaRegra, REGRAS_DE_DOCUMENTO } from '../gate/config.mjs';
 import { booleanoDaOpcao, opcoesDoPlugin, pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
+import { conferirPerformance, lerPraticas } from './performance.mjs';
 import { conferirSkillsDeFora } from './skills-de-fora.mjs';
 import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
@@ -48,6 +49,7 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   try { const cfg = carregarConfig(destino); ok('.claude/kit.json válido'); const laco = avisoDeLaco(cfg.gate?.comandoCompleto); if (laco) linhas.push(`aviso: ${laco}`); } catch (e) { falha(`.claude/kit.json: ${e.message}`); }
 
   processos(destino, home, configs, linhas);
+  linhas.push(...conferirPerformance(lerJson(join(destino, '.claude', 'kit.json')) ?? {}, ligadoEm(`kit-performance@${MARKETPLACE}`, configs), lerPraticas()));
 
   // skills de fora (ADR 0014): a dependência que falta reprova; o plugin com skill barrada só avisa
   const fora = conferirSkillsDeFora({ home, destino, configs });

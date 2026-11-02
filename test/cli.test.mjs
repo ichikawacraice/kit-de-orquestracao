@@ -43,7 +43,7 @@ test('package.json: bin, engines, test e type module', () => {
 test('marketplace.json lista os plugins do kit, cada um com versão semver no plugin.json', () => {
   const m = json('.claude-plugin', 'marketplace.json');
   const nomes = m.plugins.map((p) => p.name).sort();
-  assert.deepEqual(nomes, ['kit-design', 'orquestracao', 'painel-sessoes', 'processos']);
+  assert.deepEqual(nomes, ['kit-design', 'kit-performance', 'orquestracao', 'painel-sessoes', 'processos']);
   for (const pl of m.plugins) {
     const pj = json(pl.source, '.claude-plugin', 'plugin.json');
     assert.equal(pj.name, pl.name);

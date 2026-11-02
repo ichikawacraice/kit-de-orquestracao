@@ -26,6 +26,11 @@
       "name": "kit-design",
       "source": "./plugins/kit-design",
       "description": "Processo de design: designer, crítico de UI e a guarda que cobra a crítica do trabalho visual."
+    },
+    {
+      "name": "kit-performance",
+      "source": "./plugins/kit-performance",
+      "description": "Práticas de performance por camada (front, dados, entrega, medir) e o revisor de performance. Opcional: o kit iniciar não o liga."
     }
   ],
   "description": "Kit de orquestração de sessões do Claude Code (marketplace privado)."

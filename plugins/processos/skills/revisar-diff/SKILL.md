@@ -25,6 +25,11 @@ Workflow({ name: "processos:revisao-do-diff", args: { base: "origin/main", head:
 Se o nome não resolver (sessão aberta antes do plugin existir, ou o plugin não entrega workflow por nome), use o caminho do plugin:
 `Workflow({ scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/revisao-do-diff.js", args: { … } })`.
 
+<a id="performance"></a>
+### Com o plugin de performance
+
+Se o agente `kit-performance:revisor-de-performance` está disponível na sessão (o plugin opcional `kit-performance` ligado) e o diff toca código de aplicação (tela, consulta, rota, job, deploy, `package.json`), lance-o em paralelo ao workflow com a mesma `base` e `head`. Os achados dele entram no relato como uma seção à parte, **Performance**, e não mudam o `veredito`: são avisos, salvo o de peso Alto, que se relata junto dos bloqueantes. Sem o plugin, nada muda.
+
 ## 3. Relatar
 
 O resultado volta com `veredito` (`APROVADO`, `MUDANCAS_PEDIDAS` ou `NADA_A_REVISAR`), `bloqueantes`, `avisos`, `refutados`, `dimensoesQueFalharam` e `numeros`.

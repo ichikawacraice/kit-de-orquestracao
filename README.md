@@ -12,6 +12,7 @@ Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perd
 | Plugin `painel-sessoes` | O pane `/painel`, a barra de status acima do prompt e a batida que confere a fila a cada 10 min |
 | Plugin `processos` | Skills de processo (`spec-driven`, `revisar-diff`, `auditoria-de-clique`) e a conferência das docs no gate |
 | Plugin `kit-design` | Para projeto com tela: revisão de arquitetura de UI antes, crítico de UI depois, e a guarda que cobra a crítica |
+| Plugin `kit-performance` | Opcional, não vem ligado: as práticas de performance por camada (front, dados, entrega, medir), cada uma com quando vale e quando não vale, e o agente `revisor-de-performance` |
 | CLI `kit` | Põe o kit num projeto: gate de testes, guarda de operação, `CLAUDE.md` com as regras e `.claude/kit.json` |
 
 ## Requisitos
