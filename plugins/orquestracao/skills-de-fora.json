@@ -18,7 +18,7 @@
       "plugin": "design",
       "origem": "Anthropic (anthropics/knowledge-work-plugins), costuma chegar pela conta do app",
       "saida": "livre",
-      "motivo": "Pesquisa com usuário, design system, handoff e texto de interface não têm par no kit. O nome repetido com o plugin de design do kit é o F332."
+      "motivo": "Pesquisa com usuário, design system, handoff e texto de interface não têm par no kit. O plugin de design do kit chama-se kit-design e não colide com este."
     },
     {
       "plugin": "data",
@@ -55,7 +55,7 @@
     {
       "skill": "design:design-critique",
       "saida": "barrar",
-      "use": "o subagente critico-de-ui do plugin de design do kit",
+      "use": "o subagente kit-design:critico-de-ui",
       "motivo": "Quebra a regra do fluxo de design: a crítica que conta é a do subagente critico-de-ui, em contexto separado, com nota de 0 a 30 e teto de recríticas; a crítica na mesma sessão de quem desenhou não conta."
     },
     {

@@ -15,7 +15,7 @@ Só as skills que quebram uma regra do kit, não as que apenas repetem. Em proje
 | `engineering:architecture` | `processos:spec-driven` | ADR com número reservado, na pasta do projeto e com "Alternativas consideradas" |
 | `engineering:code-review` | `orquestracao:validador` | a revisão antes do PR é por subagente de contexto limpo, só com o que afeta correção |
 | `superpowers:requesting-code-review` | `orquestracao:validador` | idem |
-| `design:design-critique` | o crítico de UI do plugin de design do kit | a crítica que conta é a do subagente crítico, com nota de 0 a 30 e teto de recríticas |
+| `design:design-critique` | `kit-design:critico-de-ui` | a crítica que conta é a do subagente crítico, com nota de 0 a 30 e teto de recríticas |
 
 Para liberar uma delas num projeto, ponha o nome em `skillsDeFora.liberar` do `.claude/kit.json`. Fora de projeto com o kit, nada é barrado.
 

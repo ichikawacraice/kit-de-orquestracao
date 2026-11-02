@@ -11,7 +11,7 @@ const lerJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8').replace
 /**
  * Os plugins da máquina, por nome: os do CLI (`installed_plugins.json`) e os que a conta do app baixa (o manifesto `rpm`
  * mais recente em `local-agent-mode-sessions`, caminho não documentado do app). → Map nome → [{ origem: 'cli'|'app', id }].
- * Os do marketplace do kit ficam de fora: o `design` do kit não é o `design` da Anthropic (o nome repetido é o F332).
+ * Os do marketplace do kit ficam de fora: mesmo com nome parecido, plugin do kit nunca é de fora.
  */
 export function pluginsPresentes(home) {
   const presentes = new Map();
