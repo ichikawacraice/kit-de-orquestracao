@@ -4,6 +4,23 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.10.0 · 01/11/2026
+
+Camadas: base, tokens, registro
+
+### O que muda
+- **A tabela guia a leitura da linha larga** (SUP-03). A `Table` desenha um filete-guia de 1px (`border`) entre linhas vizinhas do mesmo corpo, no meio do ar que a linha já guarda: do x do texto da primeira célula (no grupo, o recuo) até 12px antes do fim. Nenhum depois da última linha, nenhum entre o topo do grupo e a primeira linha, e o filete some na linha acesa (hover e foco) e na de cima. Numa lista de 11 colunas o olho atravessava 850 a 1140px de vazio sem guia.
+- `table`: o cabeçalho passa a 40px e fecha numa régua de 1px `border` de ponta a ponta, que gruda com ele; continua sem fundo.
+- `linha-do-grupo`: o primeiro grupo guarda 8px (12 no site) da régua do cabeçalho.
+- `table`: com coluna `esconderNoCelular`, a tabela passa sozinha a layout fixo abaixo de 640px — no automático a coluna escondida não chegava a largura zero e a tabela transbordava o painel. A célula `medida` não quebra linha.
+- Tokens: catraca nova no teste — `border` × `card` entre 1,15 e 1,30:1 nos dois temas (hoje 1,207 e 1,226). Nenhum token muda.
+- A SUP-03 troca "nunca filete entre linhas" pela regra estreita: o filete e a régua são da peça; zebra, filete entre grupos, contorno de coluna, fundo no cabeçalho e borda em volta da tabela continuam fora. PECA-01 e o bloco `lista` da DESIGN dizem isso.
+
+### Migração
+- `npx shadcn add @wicomm/table @wicomm/linha-do-grupo`. Nada a mudar nas telas: o filete e a régua são da peça.
+- Linha escrita à mão na tela (`divide-y` no `tbody`, `border-b` no `tr`, fundo `bg-muted` no `TableHeader`) sai: duplicaria o filete ou a régua.
+- Tabela com `esconderNoCelular` sem `table-fixed` muda de distribuição no celular: as colunas sem largura dividem por igual o que sobra. A coluna com conteúdo que não quebra (`Estado`, `Pessoa`, `Prazo`) leva `max-sm:w-*` no `TableHead`.
+
 ## 0.9.1 · 01/11/2026
 
 Camadas: base, registro

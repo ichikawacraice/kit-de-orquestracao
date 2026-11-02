@@ -18,8 +18,9 @@ const ALTURA: Record<Densidade, string> = { instrumento: "min-h-12", site: "min-
  * continuar um índice compacto.
  */
 const AR: Record<Densidade, string> = {
-  instrumento: "[tbody:not(:first-of-type)_&]:pt-1.5 [tbody[data-aberto=true]+tbody_&]:pt-4 [tbody[data-aberto=true]_&]:pb-1",
-  site: "[tbody:not(:first-of-type)_&]:pt-2 [tbody[data-aberto=true]+tbody_&]:pt-6 [tbody[data-aberto=true]_&]:pb-1.5",
+  // `thead+tbody`: o primeiro grupo guarda ar da régua do cabeçalho, para o raio do degrau não deixar cunha sob ela.
+  instrumento: "[thead+tbody_&]:pt-2 [tbody:not(:first-of-type)_&]:pt-1.5 [tbody[data-aberto=true]+tbody_&]:pt-4 [tbody[data-aberto=true]_&]:pb-1",
+  site: "[thead+tbody_&]:pt-3 [tbody:not(:first-of-type)_&]:pt-2 [tbody[data-aberto=true]+tbody_&]:pt-6 [tbody[data-aberto=true]_&]:pb-1.5",
 }
 /** Uma célula sob uma coluna; `esconderNoCelular` quando a coluna some abaixo de 640px. */
 type CelulaDoGrupo = { conteudo: React.ReactNode; esconderNoCelular?: boolean }
@@ -46,8 +47,10 @@ const NOME: Record<Densidade, string> = { instrumento: "text-sm font-[600]", sit
  *   depois do topo (4px; 6) só quando o grupo de cima está aberto (16px; 24 no
  *   site); entre grupos fechados fica o espaço curto (6px; 8) e o ar depois do
  *   topo não existe: o topo pertence às linhas de baixo, que só há aberto. As linhas recuam até o nome do grupo (com a identidade, até depois do ponto: quando algum grupo da tabela a
- *   tem, todo grupo reserva o lugar dela, 14px), e a linha acesa (o hover e o
- *   anel de foco) começa no recuo: mais estreita que o degrau, ela não se lê
+ *   tem, todo grupo reserva o lugar dela, 14px), o filete-guia da `Table` também
+ *   (nenhum entre o topo e a primeira linha nem depois da última), o primeiro
+ *   grupo guarda 8px (12 no site) da régua do cabeçalho, e a linha acesa (o
+ *   hover e o anel de foco) começa no recuo: mais estreita que o degrau, ela não se lê
  *   como outro grupo. Vão, ar e recuo são da peça: a tela não os escreve. A
  *   densidade vem da `Table`.
  * - **Partes.** O alternador (o botão com o chevron de 14px, `aria-expanded`),

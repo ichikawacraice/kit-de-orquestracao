@@ -245,3 +245,19 @@ describe('SUP-03 · o degrau de tinta se vê contra o cartão nos dois temas', (
     assert.ok(razao('#11141B', token('--card', 'escuro')) < PISO_DEGRAU)
   })
 })
+
+describe('SUP-03 · o filete da tabela guia sem virar grade', () => {
+  // Abaixo, a guia some; acima, o filete disputa com o degrau e a lista vira planilha.
+  const FAIXA = [1.15, 1.3]
+
+  for (const tema of ['claro', 'escuro']) {
+    it(`no ${tema}, \`border\` × \`card\` fica entre ${FAIXA[0]} e ${FAIXA[1]}:1`, () => {
+      const r = razao(token('--border', tema), token('--card', tema))
+      assert.ok(r >= FAIXA[0] && r <= FAIXA[1], `${tema}: ${r.toFixed(3)}:1`)
+    })
+  }
+
+  it('a conta enxerga: um border tão claro quanto o degrau (#F1F3F8) reprova', () => {
+    assert.ok(razao('#F1F3F8', token('--card', 'claro')) < FAIXA[0])
+  })
+})

@@ -250,7 +250,7 @@ export const PECAS = [
   peca({
     name: 'table',
     title: 'Tabela',
-    description: 'table — a tabela em densidade instrumento: linha de 40px, cabeçalho grudado na voz de coluna, sem filete entre linhas, e a linha inteira que abre o objeto.',
+    description: 'table — a tabela em densidade instrumento: linha de 40px, cabeçalho grudado na voz de coluna com a régua embaixo, o filete-guia recuado entre linhas, e a linha inteira que abre o objeto.',
     pecas: ['link-do-app'],
     files: [ui('table')],
   }),

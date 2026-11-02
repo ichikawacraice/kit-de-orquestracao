@@ -124,7 +124,7 @@ describe('LinhaDoGrupo', () => {
     expect(screen.getByText('24 jul')).toBeTruthy()
   })
 
-  it('SUP-03: a célula guarda o ar e cresce com o conteúdo; o hover acende as células com o raio do foco, sem filete nem zebra', () => {
+  it('SUP-03: a célula guarda o ar e cresce com o conteúdo; o hover acende as células com o raio do foco, sem zebra', () => {
     render(
       <Table>
         <tbody>
@@ -144,6 +144,42 @@ describe('LinhaDoGrupo', () => {
     expect(linha.className).toContain('[tbody_&]:hover:[&>td]:bg-accent')
     expect(linha.className).not.toMatch(/(^|\s)border|odd:|even:/)
     expect(linha.closest('table')!.className).toContain('border-separate')
+  })
+
+  it('SUP-03: o filete entre linhas é fundo de 1px no pé da célula, do x do texto a 12px do fim, e some na última, na acesa e na de cima', () => {
+    render(
+      <Table>
+        <thead>
+          <TableRow>
+            <TableHead>Tarefa</TableHead>
+          </TableRow>
+        </thead>
+        <tbody>
+          <TableRow>
+            <TableCell>Briefing</TableCell>
+            <TableCell>Ana</TableCell>
+          </TableRow>
+        </tbody>
+      </Table>
+    )
+    const primeira = screen.getByText('Briefing')
+    expect(primeira.className).toContain('[tbody_&]:bg-[linear-gradient(var(--border),var(--border))]')
+    expect(primeira.className).toContain('[tbody_&]:bg-[length:100%_1px]')
+    expect(primeira.className).toContain('[tbody_&]:first:bg-[length:calc(100%-12px)_1px]')
+    expect(primeira.className).toContain('[tbody_&]:last:bg-[length:calc(100%-12px)_1px]')
+    for (const sem of ['[tbody_tr:last-child>&]:bg-none', '[@media(hover:hover)]:[tbody_tr:hover>&]:bg-none', '[@media(hover:hover)]:[tbody_tr:has(+tr:hover)>&]:bg-none']) {
+      expect(primeira.className).toContain(sem)
+    }
+    // Filete é fundo, não borda: não soma à altura nem se emenda com o recuo do grupo.
+    expect(primeira.className).not.toMatch(/(^|\s)border-b/)
+    for (const foco of ['[tbody_tr:has([data-slot=link-da-linha]:focus-visible)>&]:bg-none', '[tbody_tr:has(+tr_[data-slot=link-da-linha]:focus-visible)>&]:bg-none']) {
+      expect(primeira.className).toContain(foco)
+    }
+    // O cabeçalho fecha com a régua de 1px de ponta a ponta, sem fundo além do cartão.
+    const cabeca = screen.getByText('Tarefa')
+    expect(cabeca.className).toContain('h-10')
+    expect(cabeca.className).toContain('border-b border-border')
+    expect(cabeca.closest('thead')!.className).not.toContain('bg-muted')
   })
 
   it('a coluna que some no celular é prop da Table: largura zero, não hidden', () => {
@@ -169,6 +205,9 @@ describe('LinhaDoGrupo', () => {
       expect(el.className).not.toMatch(/max-sm:hidden/)
     }
     expect(screen.getByText('Briefing').className).not.toContain('max-sm:w-0')
+    // No automático a coluna escondida não chega a zero e a tabela transborda: a peça fixa o layout no celular.
+    expect(screen.getByText('Responsável').dataset.someNoCelular).toBe('true')
+    expect(screen.getByText('Briefing').closest('table')!.className).toContain('max-sm:[&:has([data-some-no-celular])]:table-fixed')
     // A última que fica no celular leva o raio do hover; a escondida, não.
     expect(screen.getByText('Ana').dataset.someNoCelular).toBe('true')
     expect(screen.getByText('Briefing').matches(':not(:has(~td:not([data-some-no-celular])))')).toBe(true)
