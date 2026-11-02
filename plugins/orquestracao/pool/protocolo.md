@@ -57,7 +57,7 @@ Ideia do plugin [ponytail](https://github.com/dietrichgebert/ponytail) (MIT, Die
 Desde o F348 (Q851). O validador de contexto limpo custa um subagente inteiro (piso de ~33 mil tokens mais o que ele lê); no item pequeno ele custa mais que o trabalho. A via rápida troca o subagente por um roteiro fixo, **só dentro de um corte que se mede**.
 - **O corte, medido pelo script** `node "${CLAUDE_PLUGIN_ROOT}/pool/via-rapida.mjs" [--base origin/<base>]` (sai com `cabe: true` ou com os motivos de fora). Cabe quando **tudo** vale:
   - até **60 linhas** mudadas (adições mais remoções) em até **4 arquivos**;
-  - nenhum arquivo de contrato ou de trava: ADR, spec, migration, schema, SQL, `package.json` e lockfiles, `.claude/kit.json`, `settings.json`, manifesto de plugin, hook (`hooks/`), gate, o protocolo e os agentes do kit, o catálogo de skills de fora; mais os padrões que o projeto puser em `viaRapida.fora` do `.claude/kit.json`;
+  - nenhum arquivo de contrato ou de trava: ADR, spec, migration, schema, SQL, `package.json` e lockfiles, `.claude/kit.json`, `settings.json`, manifesto de plugin, hook (`hooks/`), gate, CI (`.github/`), os `CLAUDE.md`, o protocolo, a skill `papeis-e-modelos` e os agentes do kit, o catálogo de skills de fora; mais os padrões que o projeto puser em `viaRapida.fora` do `.claude/kit.json`;
   - nenhum arquivo removido ou renomeado.
 - **O que o script não vê, a dona declara** no laudo, e qualquer "sim" tira o item da via rápida: o item grava estado (banco, arquivo de estado, painel), toca segurança, dinheiro ou produção, muda texto de regra, já voltou da fila, ou é item de risco pela classificação da orquestradora ([modelo e esforço](#modelo-e-esforco)). Quem abriu a dona em Opus por risco não autoriza via rápida.
 - **O roteiro da autorrevisão**, depois dos testes afetados verdes e antes do PR, com o diff (`git diff origin/<base>...HEAD`) relido do disco, não de memória:
@@ -73,7 +73,7 @@ Desde o F348 (Q851). O validador de contexto limpo custa um subagente inteiro (p
 ## Custo por item
 - Ao fechar o item, `painel mergear` (e a fila de merge, que passa por ele) soma o gasto das sessões que trabalharam nele, lido dos transcripts (o fio principal e os subagentes), e grava `custo` no item: `{ relativo, chamadas, entrada, escrita5m, escrita1h, leitura, saida, sessoes, medidoEm }`. As sessões são as do `com` e a dona no momento do merge, mais as que entraram no `com` antes (`painel com add` as anota em `sessoes` do item).
 - **`relativo`** é o custo em milhões de tokens-equivalentes de entrada, com os pesos do preço relativo do Opus 5.5: entrada 1, escrita de cache de 5 min 1,25, escrita de 1 h 2, leitura de cache 0,1, saída 5. Serve para comparar item com item (a absorção do ponytail baixou o custo?), não é fatura.
-- O pane mostra `custo N M` na linha do item feito. Transcript que não está na máquina conta zero e o `sessoes` diz quantas foram lidas. `painel custo F<n>` mede de novo um item já fechado.
+- O pane mostra `custo N M` na linha do item feito. Transcript que não está na máquina conta zero e o `sessoes` diz quantas foram lidas; sem nenhuma lida, o item fecha sem `custo` (zero não medido não vira número). Ao fechar, a dona e o `com` entram em `sessoes`, e `painel custo F<n>` mede de novo um item já fechado.
 
 <a id="testes-afetados"></a>
 ## Testes: os afetados no trabalho, o gate uma vez na fila

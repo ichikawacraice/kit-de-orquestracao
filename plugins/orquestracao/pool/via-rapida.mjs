@@ -20,10 +20,11 @@ export const FORA_PADRAO = [
   'package.json', 'package-lock.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'yarn.lock',
   '.claude/kit.json', 'settings.json', 'settings.local.json', 'plugin.json', 'marketplace.json',
   '**/hooks/**', 'hooks.json', 'gate/**', '**/pool/protocolo.md', '**/pool/dona.md', '**/pool/via-rapida.mjs',
-  '**/agents/**', 'skills-de-fora.json',
+  '**/agents/**', 'skills-de-fora.json', '**/skills/papeis-e-modelos/**', 'CLAUDE.md', '.github/**',
 ];
 
-const git = (args, cwd) => execFileSync(process.env.GIT_BIN || 'git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000, killSignal: 'SIGKILL', maxBuffer: 64 << 20 });
+// core.quotePath=false: o caminho com acento sai cru, e não entre aspas com escapes (que nenhum padrão casaria)
+const git = (args, cwd) => execFileSync(process.env.GIT_BIN || 'git', ['-c', 'core.quotePath=false', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000, killSignal: 'SIGKILL', maxBuffer: 64 << 20 });
 const linhas = (t) => t.split('\n').filter(Boolean);
 
 function foraDoProjeto(raiz) {

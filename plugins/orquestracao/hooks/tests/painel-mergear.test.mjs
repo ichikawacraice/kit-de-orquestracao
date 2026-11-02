@@ -337,11 +337,11 @@ test('mergear que fecha grava o custo do item: dona, com, quem já saiu e subage
     // o `painel custo` mede de novo, e o --seco não grava
     const seco = painel('custo', 'F7', '--seco');
     assert.equal(seco.exit, 0, seco.err);
-    assert.equal(JSON.parse(seco.out).custo.relativo, 15.4);
+    assert.equal(JSON.parse(seco.out).custo.relativo, 15.4, 'depois do merge, pelas sessões que ficaram anotadas');
   } finally { limpar(c); }
 });
 
-test('mergear sem transcript na máquina: fecha igual, custo zero com as sessões não lidas', () => {
+test('mergear sem transcript na máquina: fecha igual, sem custo, e as sessões ficam anotadas', () => {
   const c = montar();
   try {
     c.item('F8');
@@ -349,7 +349,10 @@ test('mergear sem transcript na máquina: fecha igual, custo zero com as sessõe
     assert.equal(r.exit, 0, r.err + r.out);
     const d = c.dado('F8');
     assert.equal(d.etapa, 'feito');
-    assert.equal(d.custo.relativo, 0);
-    assert.deepEqual(d.custo.sessoes, { lidas: 0, de: 2 });
+    assert.ok(!('custo' in d), 'zero não medido não vira número');
+    assert.deepEqual([...d.sessoes].sort(), [LA, LB].sort(), 'a dona e o com ficam em sessoes');
+    const r2 = c.painel('custo', 'F8', '--seco');
+    assert.equal(r2.exit, 1);
+    assert.match(r2.err, /não achei transcript/);
   } finally { limpar(c); }
 });

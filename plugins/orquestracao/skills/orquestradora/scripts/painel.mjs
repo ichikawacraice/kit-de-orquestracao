@@ -847,7 +847,10 @@ const itensVivos = () => new Map([...itensDaFila()].filter(([, d]) => !ETAPAS_FI
 
 function medirCusto(d) {
   if (!d) return null;
-  try { return custoDoItem(sessoesDoItem(d), { registro: (id) => regras?.registroDaSessao?.(id, { fresco: true }) ?? null }); } catch { return null; }
+  try {
+    const c = custoDoItem(sessoesDoItem(d), { registro: (id) => regras?.registroDaSessao?.(id, { fresco: true }) ?? null });
+    return c.sessoes.lidas > 0 ? c : null; // nenhum transcript lido: zero não medido não vira número
+  } catch { return null; }
 }
 
 // `custo <F> [--seco]` (F348): mede de novo o custo de um item (o `mergear` mede ao fechar). Mede fora da trava, grava dentro.
@@ -858,7 +861,7 @@ function comandoCusto(args) {
   const atual = ler('fila', F);
   if (!atual) throw new Error(`fila/${F} não existe`);
   const custo = medirCusto(atual.data);
-  if (!custo) throw new Error(`custo: não consegui medir ${F}`);
+  if (!custo) throw new Error(`custo: não achei transcript de nenhuma sessão de ${F} nesta máquina`);
   if (seco) return { item: F, seco: true, custo };
   comTrava(() => efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { custo }, [VIA_COM]: true }, undefined, new Map())));
   return { item: F, custo };
@@ -891,7 +894,8 @@ function comandoMergear(args) {
     const atual = ler('fila', F);
     if (!atual || ETAPAS_FINAIS.has(atual.data?.etapa)) return { item: F, fechado: false, agora: null };
     let data;
-    if (fecha) data = { etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], agora: `mergeado, ponta ${curto}`, ...(custos.get(F) ? { custo: custos.get(F) } : {}) };
+    // F348: a dona e o `com` saem do item, mas ficam em `sessoes` (o `painel custo` mede de novo pelas mesmas sessões)
+    if (fecha) data = { etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], sessoes: [...new Set(sessoesDoItem(atual.data).filter((s) => LOCAL_ID.test(s)))], agora: `mergeado, ponta ${curto}`, ...(custos.get(F) ? { custo: custos.get(F) } : {}) };
     else if (fatia) data = { etapa: 'execucao', agora: `fatia mergeada (PR ${pr}, ponta ${curto}); a dona segue com a próxima` };
     else data = { com: [], agora: 'um PR entrou; falta outro' };
     efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));

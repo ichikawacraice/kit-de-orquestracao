@@ -61,7 +61,7 @@ test('passa do teto de linhas ou de arquivos: não cabe, com o número no motivo
 });
 
 test('arquivo de contrato ou de trava tira do corte, mesmo com uma linha', (t) => {
-  for (const f of ['docs/adr/0099-x.md', 'db/migrations/001.sql', 'plugins/p/hooks/trava.mjs', 'package.json', '.claude/kit.json', 'plugins/p/agents/validador.md', 'plugins/p/pool/protocolo.md']) {
+  for (const f of ['docs/adr/0002-decisão.md', 'src/ação.sql', 'CLAUDE.md', 'plugins/p/skills/papeis-e-modelos/SKILL.md', '.github/workflows/ci.yml', 'docs/adr/0099-x.md', 'db/migrations/001.sql', 'plugins/p/hooks/trava.mjs', 'package.json', '.claude/kit.json', 'plugins/p/agents/validador.md', 'plugins/p/pool/protocolo.md']) {
     const raiz = repo(t);
     gravar(raiz, { [f]: 'x\n' });
     const r = corte(raiz, 'main');
@@ -80,6 +80,17 @@ test('o projeto soma padrões em viaRapida.fora do kit.json', (t) => {
   const r = corte(raiz, 'item');
   assert.deepEqual(r.arquivos, ['src/pagamento/x.mjs']);
   assert.match(r.motivos.join('\n'), /src\/pagamento\/x\.mjs: contrato ou trava \(src\/pagamento\/\*\*\)/);
+});
+
+test('caminho com acento commitado é lido cru (sem as aspas do git) e casa o padrão', (t) => {
+  const raiz = repo(t);
+  gravar(raiz, { 'docs/adr/0002-decisão.md': 'x\n', 'src/ação.mjs': 'y\n' });
+  git(raiz, 'add', '-A');
+  git(raiz, 'commit', '-qm', 'acento');
+  const r = corte(raiz, 'main');
+  assert.deepEqual(r.arquivos.sort(), ['docs/adr/0002-decisão.md', 'src/ação.mjs']);
+  assert.match(r.motivos.join('\n'), /docs\/adr\/0002-decisão\.md: contrato ou trava/);
+  assert.ok(!r.motivos.some((m) => /binário/.test(m)), r.motivos.join('\n'));
 });
 
 test('removido ou renomeado tira do corte; diff vazio também', (t) => {
