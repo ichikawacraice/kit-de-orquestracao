@@ -34,7 +34,7 @@ export function destinoDoLink(href: string): string {
   if (/^https?:/.test(href)) return href
   const [caminho = "", ancora] = href.split("#")
   const doRepo = posix.normalize(posix.join(posix.dirname(ARQUIVO), caminho))
-  if (doRepo.startsWith("plugins/wicomm/base")) return "/regras/"
+  if (doRepo.startsWith("plugins/design-system/base") || doRepo.startsWith("plugins/wicomm/base")) return "/regras/"
   const tipo = doRepo.endsWith("/") ? "tree" : "blob"
   return `${REPOSITORIO}/${tipo}/main/${doRepo.replace(/\/$/, "")}${ancora ? `#${ancora}` : ""}`
 }

@@ -7,7 +7,7 @@
     "apps/*"
   ],
   "scripts": {
-    "test": "node --test scripts/*.test.mjs plugins/wicomm/hooks/tests/*.test.mjs plugins/wicomm/scripts/tests/*.test.mjs && npm test --workspaces --if-present"
+    "test": "node --test scripts/*.test.mjs plugins/design-system/hooks/tests/*.test.mjs plugins/design-system/scripts/tests/*.test.mjs && npm test --workspaces --if-present"
   },
   "engines": {
     "node": ">=22"

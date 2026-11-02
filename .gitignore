@@ -1,6 +1,7 @@
 .DS_Store
 node_modules/
 plugins/wicomm/evals/results/
+plugins/design-system/evals/results/
 
 # O build do registro (packages/registro): sai de `npm run build -w @wicomm/registro`.
 packages/registro/public/

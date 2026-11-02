@@ -37,7 +37,7 @@ if (esperados.size < 100) faltam.push(`tokens.json com só ${esperados.size} tok
 for (const t of esperados) if (!vistos.has(t)) faltam.push(`token sem página na vitrine: ${t}`)
 for (const t of vistos) if (!esperados.has(t)) faltam.push(`a vitrine mostra um token que o pacote não tem: ${t}`)
 
-const BASE = join(import.meta.dirname, '..', '..', '..', 'plugins', 'wicomm', 'base')
+const BASE = join(import.meta.dirname, '..', '..', '..', 'plugins', 'design-system', 'base')
 const indice = existsSync(join(OUT, 'regras/index.html')) ? readFileSync(join(OUT, 'regras/index.html'), 'utf8') : ''
 let regras = 0
 for (const [id, arquivo] of [['design', 'DESIGN.md'], ['anatomia', 'ANATOMIA.md'], ['convencoes', 'CONVENCOES.md']]) {

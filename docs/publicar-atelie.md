@@ -45,7 +45,7 @@ Senha vazia ou ausente **fecha** o site (`503`), nunca o abre. Gere a senha com 
 | Root Directory | `apps/atelie` |
 | Install / Build / Saída | do `vercel.json`: `cd ../.. && npm ci`, `npm run build`, `out/` |
 | Node | 22 ou mais (o `engines` da raiz) |
-| "Include files outside the root directory" | **ligado** (é o padrão): o build lê `packages/`, `plugins/wicomm/base/`, o `CHANGELOG.md` e o `docs/comecar.md` (a página Começar) |
+| "Include files outside the root directory" | **ligado** (é o padrão): o build lê `packages/`, `plugins/design-system/base/`, o `CHANGELOG.md` e o `docs/comecar.md` (a página Começar) |
 | Variáveis de ambiente | `ATELIE_SENHA` (a senha). O segredo do registro, `VERCEL_AUTOMATION_BYPASS_SECRET`, a Vercel põe sozinha, com *Automatically expose System Environment Variables* ligado (o padrão) |
 
 O build já confere a saída (`scripts/conferir-saida.mjs`): falta de item do registro, de token na vitrine ou de regra com âncora reprova o deploy.

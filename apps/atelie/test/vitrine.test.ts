@@ -17,7 +17,7 @@ const RAIZ = join(process.cwd(), "..", "..")
 // TODA regra com as páginas geradas mora em scripts/conferir-saida.mjs (depois do build).
 describe("a vitrine lê a base inteira", () => {
   const codigosNosArquivos = ARQUIVOS_DA_BASE.flatMap((a) =>
-    [...readFileSync(join(RAIZ, "plugins", "wicomm", "base", a.arquivo), "utf8").matchAll(/^### ([A-Z]+-\d{2}) · /gm)].map((m) => m[1])
+    [...readFileSync(join(RAIZ, "plugins", "design-system", "base", a.arquivo), "utf8").matchAll(/^### ([A-Z]+-\d{2}) · /gm)].map((m) => m[1])
   )
 
   it("toda regra dos três arquivos vira uma regra da vitrine, com os três campos", () => {

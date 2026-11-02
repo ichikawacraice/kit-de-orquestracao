@@ -1,4 +1,4 @@
-// A base (plugins/wicomm/base) lida no build: cada regra com o código, o título,
+// A base (plugins/design-system/base) lida no build: cada regra com o código, o título,
 // o capítulo e os três campos. A vitrine mostra a norma como ela está escrita —
 // nada é copiado à mão, então regra nova aparece sozinha (test/vitrine.test.ts
 // cobra que toda regra tem página e âncora).
@@ -44,7 +44,7 @@ export const ARQUIVOS_DA_BASE: { id: IdDoArquivo; arquivo: string; titulo: strin
 ]
 
 /** A pasta da base, a partir do app (o build e o teste rodam em apps/atelie). */
-const PASTA = join(process.cwd(), "..", "..", "plugins", "wicomm", "base")
+const PASTA = join(process.cwd(), "..", "..", "plugins", "design-system", "base")
 
 const CODIGO = /^### ([A-Z]+-\d{2}) · (.+)$/m
 

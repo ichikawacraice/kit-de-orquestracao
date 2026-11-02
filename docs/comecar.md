@@ -84,12 +84,12 @@ A nota de cada tela fica gravada no fim da revisão, e o `/wicomm:estado` mostra
 | O aviso de valor solto | ligado | `"valorSolto": false` no `design/wicomm.json`, ou `{ "ignorar": ["<glob>"] }` para uma exceção com motivo. |
 | Uma guarda do CI | todas ligadas | Na chave `guardas` do `design/wicomm.json`, desligada **com o motivo** (ex.: o app ainda não tem formulário). Volta quando o assunto chegar. |
 
-O `design/wicomm.json` do projeto vence a opção da sua conta: o que o time decidiu vale para todos. A tabela completa das chaves está no [README do plugin](../plugins/wicomm/README.md#a-configuração-do-projeto-designwicommjson). Opção mudada vale depois de reiniciar o Claude Code.
+O `design/wicomm.json` do projeto vence a opção da sua conta: o que o time decidiu vale para todos. A tabela completa das chaves está no [README do plugin](../plugins/design-system/README.md#a-configuração-do-projeto-designdesign-systemjson). Opção mudada vale depois de reiniciar o Claude Code.
 
 <a id="plugins-que-conflitam"></a>
 ### Outros plugins
 
-**Os plugins da Anthropic** (`design`, `engineering`, `data`, `cowork-plugin-management`) chegam pela organização, em *Personalizar → Plugins* no app. O `wicomm` não depende de nenhum e funciona com eles ligados. Num app da Wicomm, use a peça do `wicomm` no lugar da do plugin `design` da Anthropic: ela segue a base e fala PT-BR. A troca, peça por peça, está no [README do plugin](../plugins/wicomm/README.md#com-o-plugin-design-da-anthropic-ligado). Com o kit de orquestração instalado e o `wicomm` instalado pelo CLI e ligado (o plugin que só a conta do app traz não entra), a troca é automática: as skills `design:accessibility-review`, `design:ux-copy` e `design:design-system` são recusadas e a recusa aponta a do `wicomm` (o plugin declara isso no `substitutas.json`). Sem o kit, nada as recusa: desligue o plugin `design` da Anthropic à mão (*Personalizar → Plugins*). A crítica que a guarda aceita é a de um subagente `critico-de-ui`, e a skill `design:design-critique` não conta.
+**Os plugins da Anthropic** (`design`, `engineering`, `data`, `cowork-plugin-management`) chegam pela organização, em *Personalizar → Plugins* no app. O `wicomm` não depende de nenhum e funciona com eles ligados. Num app da Wicomm, use a peça do `wicomm` no lugar da do plugin `design` da Anthropic: ela segue a base e fala PT-BR. A troca, peça por peça, está no [README do plugin](../plugins/design-system/README.md#com-o-plugin-design-da-anthropic-ligado). Com o kit de orquestração instalado e o `wicomm` instalado pelo CLI e ligado (o plugin que só a conta do app traz não entra), a troca é automática: as skills `design:accessibility-review`, `design:ux-copy` e `design:design-system` são recusadas e a recusa aponta a do `wicomm` (o plugin declara isso no `substitutas.json`). Sem o kit, nada as recusa: desligue o plugin `design` da Anthropic à mão (*Personalizar → Plugins*). A crítica que a guarda aceita é a de um subagente `critico-de-ui`, e a skill `design:design-critique` não conta.
 
 **O kit de orquestração** é opcional: serve para tocar várias sessões do Claude Code no mesmo projeto, e o `wicomm` não precisa dele. Quem usa o kit:
 - O plugin de design do kit chama `kit-design`. Na versão antiga ele se chamava `design` e colidia de nome com o da Anthropic: com os dois ligados, um deles sumia. O que desligar e onde está no [guia de conflitos do kit](https://github.com/ichikawacraice/kit-de-orquestracao/blob/main/docs/guia/conflitos.md).
@@ -127,7 +127,7 @@ No [ateliê](https://wicomm-atelie.vercel.app) (com a senha): fundamentos, peça
 
 ## Para ir além
 
-- [README do plugin](../plugins/wicomm/README.md): o que vem dentro, a configuração por projeto, os testes.
-- [A base](../plugins/wicomm/base/): `DESIGN.md`, `ANATOMIA.md` e `CONVENCOES.md`, a norma que o designer, o crítico e as guardas citam pelo código (`COR-03`, `ARQ-01`).
+- [README do plugin](../plugins/design-system/README.md): o que vem dentro, a configuração por projeto, os testes.
+- [A base](../plugins/design-system/base/): `DESIGN.md`, `ANATOMIA.md` e `CONVENCOES.md`, a norma que o designer, o crítico e as guardas citam pelo código (`COR-03`, `ARQ-01`).
 - [Instalar os pacotes](instalar-pacotes.md) e [o ateliê publicado](publicar-atelie.md).
 - [Kit de orquestração](https://github.com/ichikawacraice/kit-de-orquestracao#readme): para trabalhar com várias sessões do Claude Code no mesmo projeto (fila de itens, sessão dona, painel). Opcional: o `wicomm` funciona sem ele.

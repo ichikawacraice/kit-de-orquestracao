@@ -8,7 +8,7 @@ O design system dos apps React da Wicomm: a base de regras, os tokens, o registr
 - Commit em *conventional commits* (`docs(base): …`, `feat(tokens): …`), com o ID do item quando houver (`F262 · …`).
 
 ## A base é norma
-- [`plugins/wicomm/base/`](plugins/wicomm/base/) tem a direção de design (`DESIGN.md`), a anatomia (`ANATOMIA.md`) e as convenções (`CONVENCOES.md`). É a fonte de verdade das outras camadas: tokens, peças, guardas e o plugin citam as regras pelo **código** (`COR-03`, `ARQ-01`).
+- [`plugins/design-system/base/`](plugins/design-system/base/) tem a direção de design (`DESIGN.md`), a anatomia (`ANATOMIA.md`) e as convenções (`CONVENCOES.md`). É a fonte de verdade das outras camadas: tokens, peças, guardas e o plugin citam as regras pelo **código** (`COR-03`, `ARQ-01`).
 - Toda regra tem **Regra · Por quê · Confere**. Regra sem como conferir é opinião. A origem de cada regra fica fora da base, em [`docs/rastreio/origens-da-base.md`](docs/rastreio/origens-da-base.md): regra sem linha de rastreio é palpite.
 - Código de regra **não se renumera** nem se reaproveita: regra que sai fica com o código marcado *revogada* e o motivo.
 - A base fala só da Wicomm: não cita domínio de produto nenhum nem o produto de origem, e não traz exemplo tirado dele.

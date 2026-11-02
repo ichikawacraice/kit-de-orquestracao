@@ -1,6 +1,6 @@
 {
   "name": "@wicomm/guardas",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "As guardas de design da Wicomm: testes que leem o projeto e reprovam tela fora da base, com catraca para projeto existente.",
   "license": "UNLICENSED",
   "repository": {

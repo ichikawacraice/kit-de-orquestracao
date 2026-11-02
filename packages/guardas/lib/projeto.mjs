@@ -1,11 +1,13 @@
-// O projeto que as guardas examinam: a configuração (`design/wicomm.json`,
-// chave `guardas`), a lista de arquivos de fonte e a leitura do disco. Toda
+// O projeto que as guardas examinam: a configuração (`design/design-system.json`,
+// ou o nome antigo `design/wicomm.json`; chave `guardas`), a lista de arquivos de fonte e a leitura do disco. Toda
 // guarda vê o projeto por aqui, e nunca por caminho fixo: os caminhos de cada
 // app são configuráveis.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, posix, relative, resolve, sep } from 'node:path'
 
-export const ARQUIVO_DE_CONFIG = 'design/wicomm.json'
+export const ARQUIVO_DE_CONFIG = 'design/design-system.json'
+/** O nome antigo: vale no projeto que já o tem (sem `--config`, procura-se o novo e depois este). */
+export const ARQUIVO_ANTIGO_DE_CONFIG = 'design/wicomm.json'
 
 /** Os caminhos de um app Next com `src/` — o padrão do registro Wicomm. */
 export const PADRAO = Object.freeze({
@@ -60,7 +62,9 @@ const paraPosix = (p) => p.split(sep).join('/')
  * erro, nunca padrão calado.
  */
 export function lerConfig(raiz, caminhoDaConfig) {
-  const arquivo = caminhoDaConfig ? resolve(raiz, caminhoDaConfig) : join(raiz, ARQUIVO_DE_CONFIG)
+  const arquivo = caminhoDaConfig
+    ? resolve(raiz, caminhoDaConfig)
+    : [ARQUIVO_DE_CONFIG, ARQUIVO_ANTIGO_DE_CONFIG].map((a) => join(raiz, a)).find((a) => existsSync(a)) ?? join(raiz, ARQUIVO_DE_CONFIG)
   if (!existsSync(arquivo)) {
     if (caminhoDaConfig) throw new Error(`a configuração ${caminhoDaConfig} não existe`)
     return { ...padraoDe(raiz), origem: null }

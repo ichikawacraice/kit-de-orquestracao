@@ -285,7 +285,7 @@ function excluidoDoConfig(caminho) {
 }
 
 describe('a base (DESIGN.md) concorda com o pacote', () => {
-  const DESIGN = readFileSync(join(AQUI, '..', '..', '..', 'plugins', 'wicomm', 'base', 'DESIGN.md'), 'utf8')
+  const DESIGN = readFileSync(join(AQUI, '..', '..', '..', 'plugins', 'design-system', 'base', 'DESIGN.md'), 'utf8')
   const frontmatter = DESIGN.split('---')[1]
   /** As linhas `chave: "valor"` de um grupo do frontmatter (ex. `colors.claro`). */
   function grupo(caminho) {

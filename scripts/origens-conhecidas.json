@@ -1,5 +1,5 @@
 {
-  "_comentario": "Origens citadas pela base e conferidas no repositório de origem (main @ 7b1267cce, 30/10/2026). Citar origem nova pede acrescentar aqui depois de conferir que ela existe e trata do assunto. Terceiros: o commit do repositório público de onde se adaptou texto (licença e atribuição em plugins/wicomm/TERCEIROS.md).",
+  "_comentario": "Origens citadas pela base e conferidas no repositório de origem (main @ 7b1267cce, 30/10/2026). Citar origem nova pede acrescentar aqui depois de conferir que ela existe e trata do assunto. Terceiros: o commit do repositório público de onde se adaptou texto (licença e atribuição em plugins/design-system/TERCEIROS.md).",
   "adr": [
     "0014",
     "0055",

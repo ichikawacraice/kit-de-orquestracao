@@ -42,7 +42,8 @@ describe("o guia Começar vem de docs/comecar.md", () => {
 
   it("o link é resolvido a partir de docs/", () => {
     expect(destinoDoLink("instalar-pacotes.md")).toBe("https://github.com/wicomm-projects/wicomm-design-system/blob/main/docs/instalar-pacotes.md")
-    expect(destinoDoLink("../plugins/wicomm/README.md#x")).toBe("https://github.com/wicomm-projects/wicomm-design-system/blob/main/plugins/wicomm/README.md#x")
+    expect(destinoDoLink("../plugins/design-system/README.md#x")).toBe("https://github.com/wicomm-projects/wicomm-design-system/blob/main/plugins/design-system/README.md#x")
+    expect(destinoDoLink("../plugins/design-system/base/")).toBe("/regras/")
     expect(destinoDoLink("../plugins/wicomm/base/")).toBe("/regras/")
     expect(destinoDoLink("https://wicomm-atelie.vercel.app")).toBe("/")
     expect(destinoDoLink("#perguntas-comuns")).toBe("#perguntas-comuns")

@@ -1,6 +1,6 @@
 # @wicomm/registro
 
-O registro shadcn da Wicomm: o **estilo** (os tokens de [`@wicomm/tokens`](../tokens/README.md) no `globals.css` do projeto, mais o `cn`) e as **peças básicas** dos apps React, já adaptadas à base ([`plugins/wicomm/base/`](../../plugins/wicomm/base/)). O código entra no projeto pelo `shadcn add` e fica editável lá.
+O registro shadcn da Wicomm: o **estilo** (os tokens de [`@wicomm/tokens`](../tokens/README.md) no `globals.css` do projeto, mais o `cn`) e as **peças básicas** dos apps React, já adaptadas à base ([`plugins/design-system/base/`](../../plugins/design-system/base/)). O código entra no projeto pelo `shadcn add` e fica editável lá.
 
 > **Ainda não publicado.** O ateliê ([`apps/atelie`](../../apps/atelie/README.md)) serve o registro em `/r/v{versao}/` (local, `npm run dev -w @wicomm/atelie`); a publicação é outra fatia. `npm run num-next-vazio` também serve o build localmente.
 

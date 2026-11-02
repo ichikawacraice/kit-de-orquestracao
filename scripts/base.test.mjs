@@ -1,4 +1,4 @@
-// Guardas da base Wicomm (plugins/wicomm/base): o critério de pronto da F261.1
+// Guardas da base Wicomm (plugins/design-system/base): o critério de pronto da F261.1
 // e a forma de toda regra (Regra · Por quê · Confere), para que o designer, o
 // crítico e as guardas possam citar cada regra pelo código. A base fala só da
 // Wicomm (Q639): a origem de cada regra mora fora do plugin, em
@@ -9,7 +9,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { GUARDAS } from '../packages/guardas/lib/index.mjs'
 
-const PASTA = join(import.meta.dirname, '..', 'plugins', 'wicomm', 'base')
+const PASTA = join(import.meta.dirname, '..', 'plugins', 'design-system', 'base')
 const ARQUIVOS = ['DESIGN.md', 'ANATOMIA.md', 'CONVENCOES.md']
 const MARCADOR = 'exemplo-izanagi'
 const RASTREIO = join(import.meta.dirname, '..', 'docs', 'rastreio', 'origens-da-base.md')

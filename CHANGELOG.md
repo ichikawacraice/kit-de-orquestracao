@@ -1,6 +1,6 @@
 # Mudanças do design system Wicomm
 
-Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base/*.md`), da mais nova para a mais velha. Cada entrada diz **o que muda** para quem usa o sistema e **o que migrar** num projeto que já o usa. A vitrine (`/mudancas/`) lê este arquivo no build, e o teste do ateliê reprova versão da base sem entrada aqui.
+Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-system/base/*.md`), da mais nova para a mais velha. Cada entrada diz **o que muda** para quem usa o sistema e **o que migrar** num projeto que já o usa. A vitrine (`/mudancas/`) lê este arquivo no build, e o teste do ateliê reprova versão da base sem entrada aqui.
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 

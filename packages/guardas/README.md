@@ -1,6 +1,6 @@
 # @wicomm/guardas
 
-As guardas de design da Wicomm: testes que leem os arquivos do projeto e reprovam tela fora da base ([`plugins/wicomm/base/`](../../plugins/wicomm/base/)). Rodam no CI, com ou sem Claude, e ligam no dia 1 de um projeto que já existe pela **catraca**. Cada guarda cita pelo código a regra que confere (`SUP-02`, `CTRL-07`).
+As guardas de design da Wicomm: testes que leem os arquivos do projeto e reprovam tela fora da base ([`plugins/design-system/base/`](../../plugins/design-system/base/)). Rodam no CI, com ou sem Claude, e ligam no dia 1 de um projeto que já existe pela **catraca**. Cada guarda cita pelo código a regra que confere (`SUP-02`, `CTRL-07`).
 
 > **Privado, no GitHub Packages da org `wicomm-projects`.** Como instalar (o `.npmrc` e o token): [`docs/instalar-pacotes.md`](../../docs/instalar-pacotes.md).
 
@@ -37,7 +37,7 @@ A conferência **nunca** escreve a base: no CI o arquivo reescrito se perderia, 
 
 ## Configuração
 
-Na chave `guardas` de `design/wicomm.json`. Sem ela, vale o padrão de um app Next com `src/`; num app sem `src/` e com `app/` na raiz (o `create-next-app` sem `--src-dir`), o mesmo padrão na raiz (`fontes`: toda pasta de código da raiz, fora `public`, `design`, `docs`, `scripts` e as de teste; `kit: "components/ui"`, `paginas: "app"`, `css: ["app/globals.css"]`, `aliases: { "@/": "" }`). O arquivo do idioma de cor (`o-carimbo-tem-forma`, opção `idioma`) sai do alias `@/`: `src/lib/idioma-de-cor.ts` ou `lib/idioma-de-cor.ts`, onde o registro o instala.
+Na chave `guardas` de `design/design-system.json` (ou de `design/wicomm.json`, o nome antigo, no projeto que já o tem; com os dois, vale o novo; `--config` aponta outro caminho). Sem ela, vale o padrão de um app Next com `src/`; num app sem `src/` e com `app/` na raiz (o `create-next-app` sem `--src-dir`), o mesmo padrão na raiz (`fontes`: toda pasta de código da raiz, fora `public`, `design`, `docs`, `scripts` e as de teste; `kit: "components/ui"`, `paginas: "app"`, `css: ["app/globals.css"]`, `aliases: { "@/": "" }`). O arquivo do idioma de cor (`o-carimbo-tem-forma`, opção `idioma`) sai do alias `@/`: `src/lib/idioma-de-cor.ts` ou `lib/idioma-de-cor.ts`, onde o registro o instala.
 
 ```json
 {

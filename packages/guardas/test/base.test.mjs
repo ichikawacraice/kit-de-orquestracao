@@ -9,7 +9,7 @@ import { test } from 'node:test'
 
 import { GUARDAS } from '../lib/index.mjs'
 
-const BASE = join(import.meta.dirname, '..', '..', '..', 'plugins', 'wicomm', 'base')
+const BASE = join(import.meta.dirname, '..', '..', '..', 'plugins', 'design-system', 'base')
 const texto = ['DESIGN.md', 'ANATOMIA.md', 'CONVENCOES.md'].map((f) => readFileSync(join(BASE, f), 'utf8')).join('\n')
 const README = readFileSync(join(import.meta.dirname, '..', 'README.md'), 'utf8')
 
