@@ -160,12 +160,15 @@ function main(argv) {
     if (u.status !== 0) { falhou = true; plugins.push({ id, antes: user.version, publicado, depois: user.version, acao: 'falhou', mensagem: u.err || `exit ${u.status}` }); continue; }
     plugins.push({ id, antes: user.version, publicado, depois: user.version, acao: 'conferir' });
   }
+  // as instalações de qualquer escopo (o guia manda ligar estes por projeto), cada uma com o comando que a atualiza
   for (const nome of remotos) {
     const id = `${nome}@${MARKETPLACE}`;
-    const user = antes.find((p) => p.id === id && p.scope === 'user');
-    plugins.push(user
-      ? { id, antes: user.version, publicado: null, depois: user.version, acao: `origem remota, não conferido aqui (claude plugin update ${id} -s user)` }
-      : { id, antes: null, publicado: null, depois: null, acao: 'não instalado' });
+    const todas = antes.filter((p) => p.id === id);
+    if (!todas.length) { plugins.push({ id, antes: null, publicado: null, depois: null, acao: 'não instalado' }); continue; }
+    for (const c of todas) {
+      const onde = c.scope === 'user' ? '' : `projeto ${c.projectPath ?? '?'}; de dentro dele, `;
+      plugins.push({ id, antes: c.version, publicado: null, depois: c.version, acao: `origem remota, não conferido aqui (${onde}claude plugin update ${id} -s ${c.scope ?? 'user'})` });
+    }
   }
   if (plugins.some((p) => p.acao === 'conferir')) {
     const relidos = instalados();

@@ -190,9 +190,9 @@ test('cópia scope project: "não mexido (projeto …)", sem plugin update para 
 });
 
 test('plugin de origem remota (git-subdir): não lê versão do clone, não chama plugin update e diz como atualizar', () => {
-  const c = montar({ orquestracao: '0.1.2' }, [inst('orquestracao', '0.1.2'), inst('design-system', '0.1.13')]);
+  const c = montar({ orquestracao: '0.1.2' }, [inst('orquestracao', '0.1.2'), inst('design-system', '0.1.13'), inst('tema-x', '0.1.0', { scope: 'project', projectPath: '/p/interno' })]);
   try {
-    c.publicar({ orquestracao: '0.1.2' }, ['design-system', 'tema-x']);
+    c.publicar({ orquestracao: '0.1.2' }, ['design-system', 'tema-x', 'sem-inst']);
     const r = c.rodar();
     assert.equal(r.exit, 0, r.err + r.out);
     const s = JSON.parse(r.out);
@@ -201,7 +201,9 @@ test('plugin de origem remota (git-subdir): não lê versão do clone, não cham
     assert.ok(ds, JSON.stringify(s.plugins));
     assert.match(ds.acao, /^origem remota/);
     assert.match(ds.acao, /claude plugin update design-system@/);
-    assert.equal(achar(s, 'tema-x').acao, 'não instalado');
+    assert.match(achar(s, 'tema-x').acao, /^origem remota.*projeto \/p\/interno.*-s project\)$/, 'a instalação de projeto aparece');
+    assert.match(ds.acao, /-s user\)$/);
+    assert.equal(achar(s, 'sem-inst').acao, 'não instalado');
     assert.equal(c.updates().length, 0);
   } finally { limpar(c); }
 });

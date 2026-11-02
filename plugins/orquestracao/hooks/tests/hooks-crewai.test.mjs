@@ -563,6 +563,22 @@ caso('F350.1 design-system:designer sem lista grava só na pasta de revisões', 
   }
   igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design-system:critico-de-ui')))), 'deny', 'o crítico não ganha a pasta');
 }));
+caso('F350.2 a pasta do design-system:designer vem do design/design-system.json, que vence o kit.json', () => comRepo(() => {
+  mkdirSync(join(REPO, 'design'), { recursive: true });
+  mkdirSync(join(REPO, '.claude'), { recursive: true });
+  writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'docs/ux' } }));
+  const ds = (v) => writeFileSync(join(REPO, 'design', 'design-system.json'), JSON.stringify({ revisoes: v }));
+  ds('design/revisoes');
+  igual(rodar(SN, editar(`${REPO}/design/revisoes/a.md`, sub('design-system:designer'))), null, 'a pasta do design-system.json');
+  igual(decisao(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design-system:designer')))), 'deny', 'o kit.json perde para ele');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('kit-design:designer'))), null, 'o kit-design segue no kit.json');
+  igual(decisao(rodar(SN, editar(`${REPO}/design/revisoes/a.md`, sub('kit-design:designer')))), 'deny', 'e não ganha a do design-system.json');
+  ds('design');
+  igual(decisao(rodar(SN, editar(`${REPO}/design/design-system.json`, sub('design-system:designer')))), 'deny', 'o arquivo dentro da própria pasta não vale');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design-system:designer'))), null, 'e cai no kit.json');
+  ds('../fora');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design-system:designer'))), null, 'inválido cai no kit.json');
+}));
 // F61: a pasta de revisões é cercada: valor inválido vale o padrão e symlink não leva a escrita para fora.
 caso('F61.1 valor inválido de design.revisoes vale o padrão', () => comRepo(() => {
   mkdirSync(join(REPO, '.claude'), { recursive: true });
