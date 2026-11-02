@@ -22,7 +22,7 @@ Para liberar uma delas num projeto, ponha o nome em `skillsDeFora.liberar` do `.
 <a id="absorvidas"></a>
 ## O que é absorvido
 A ideia boa de uma skill de fora é reescrita no formato da casa, com crédito à fonte, em vez de copiada. Enquanto a versão da casa não sai, a original segue livre.
-- `design:accessibility-review` e `design:ux-copy` vão para o plugin wicomm (acessibilidade presa aos tokens da base, texto de interface em PT-BR com as regras de mensagem).
+- `design:accessibility-review` e `design:ux-copy` vão para o plugin de design system do projeto, quando houver (acessibilidade presa aos tokens da base, texto de interface em PT-BR com as regras de mensagem).
 
 <a id="desligar"></a>
 ## O que desligar, se não usa

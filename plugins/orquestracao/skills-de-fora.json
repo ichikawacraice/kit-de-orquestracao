@@ -1,5 +1,5 @@
 {
-  "doc": "O que o kit faz com cada plugin e skill de fora (ADR 0014). saida: depender (o kit chama; vem em dependencies do plugin.json) · barrar (quebra uma regra do kit, não só repete: a trava skills-de-fora recusa e diz qual usar) · absorver (a ideia entra numa peça do kit ou do plugin wicomm; barrada só quando feito: true) · livre (fora do escopo do kit). Skill sem linha herda a saída do plugin; plugin fora daqui é livre. O projeto libera uma skill em skillsDeFora.liberar do .claude/kit.json.",
+  "doc": "O que o kit faz com cada plugin e skill de fora (ADR 0014). saida: depender (o kit chama; vem em dependencies do plugin.json) · barrar (quebra uma regra do kit, não só repete: a trava skills-de-fora recusa e diz qual usar) · absorver (a ideia entra numa peça do kit ou do plugin de design system do projeto; barrada só quando feito: true) · livre (fora do escopo do kit). Skill sem linha herda a saída do plugin; plugin fora daqui é livre. O projeto libera uma skill em skillsDeFora.liberar do .claude/kit.json.",
   "plugins": [
     {
       "plugin": "superpowers",
@@ -61,20 +61,20 @@
     {
       "skill": "design:accessibility-review",
       "saida": "absorver",
-      "em": "plugin wicomm (F334 do wicomm-design-system): etapa de acessibilidade do crítico, presa aos tokens da base",
+      "em": "plugin de design system do projeto: etapa de acessibilidade do crítico, presa aos tokens da base",
       "feito": false,
-      "use": "a skill de acessibilidade do plugin wicomm, quando o projeto o tem",
-      "motivo": "O crítico não olha acessibilidade (contraste AA, teclado e foco, alvo de toque, rótulo, nome/papel). Combinado entre as orquestradoras: entra no wicomm, não no kit.",
+      "use": "a skill de acessibilidade do plugin de design system do projeto, quando houver",
+      "motivo": "O crítico não olha acessibilidade (contraste AA, teclado e foco, alvo de toque, rótulo, nome/papel). Entra no plugin de design system, não no kit: acessibilidade depende dos tokens de cada base.",
       "licenca": "Apache-2.0 no repositório anthropics/knowledge-work-plugins (a cópia local não traz o LICENSE: conferir antes de reescrever)"
     },
     {
       "skill": "design:ux-copy",
       "saida": "absorver",
-      "em": "plugin wicomm (F334 do wicomm-design-system), junto das regras de mensagem da base",
+      "em": "plugin de design system do projeto, junto das regras de mensagem da base",
       "feito": false,
-      "use": "a skill de texto de interface do plugin wicomm, quando o projeto o tem",
+      "use": "a skill de texto de interface do plugin de design system do projeto, quando houver",
       "licenca": "Apache-2.0 no repositório anthropics/knowledge-work-plugins (conferir antes de reescrever)",
-      "motivo": "Texto de interface em PT-BR com as regras de mensagem da base Wicomm; a skill da Anthropic é genérica e em inglês."
+      "motivo": "Texto de interface em PT-BR com as regras de mensagem da base; a skill da Anthropic é genérica e em inglês."
     }
   ]
 }
