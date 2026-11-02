@@ -2,6 +2,8 @@
 
 F281 · fatia F261.8 do estudo ([seções 3.1 e 4](../../estudo/F261-plugin-design-system.md)). Primeiro uso real do fluxo de projeto novo, em 30/10/2026, das 22:48 às 23:20 (SP). Plugin `wicomm` 0.1.0 e base 0.4.0, tirados da `main` em `744765f`.
 
+**O segundo piloto** (F319, 01/11), com o comando rodado de verdade e o plugin carregado, está em [relatorio-F319.md](relatorio-F319.md).
+
 **O app do piloto** fica fora deste repositório, em `/Users/ichikawacraice/Developer/Projects/wicomm-piloto-novo`, com git local e sem remoto (*assumido, a confirmar*). É um app interno fictício, **Solicitações**: operações pede e acompanha compras de equipamento, o financeiro aprova.
 
 ## Resultado
