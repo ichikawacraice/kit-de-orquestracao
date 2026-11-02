@@ -45,7 +45,7 @@ A ideia boa de uma skill de fora é reescrita no formato da casa, com crédito �
   { "substitutas": { "design:accessibility-review": "acme:acessibilidade" } }
   ```
   Para não deixar um plugin barrar o que não é dele, o kit só aceita a linha em que:
-  - a chave é o nome completo de uma skill que o catálogo marca como absorvida (`absorver`): o plugin não mexe no que o kit barra, deixa livre ou tem como dependência;
+  - a chave é o nome completo de uma skill que o catálogo marca como absorvida (`absorver`) e que o kit ainda não absorveu numa peça dele: o plugin não mexe no que o kit barra, deixa livre ou tem como dependência;
   - o valor é uma peça do próprio plugin, `<nome do plugin>:<nome>`. Pode ser skill ou agente; prefira a skill, que a sessão chama direto (o agente ela tem de lançar).
   - o nome curto da peça não é o de outra skill do catálogo (a peça pelo nome curto passa livre, e com o nome de uma barrada a liberaria), e o plugin não é o dono da original.
 

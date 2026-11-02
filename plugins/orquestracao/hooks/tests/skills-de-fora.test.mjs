@@ -280,6 +280,8 @@ test('substitutasValidas: a substituta não pode ter o nome curto de outra skill
     assert.deepEqual(substitutasValidas('acme', { [abs.skill]: `acme:${curto(barr.skill)}` }, catalogo), {}, `acme:${curto(barr.skill)} liberaria ${barr.skill}`);
   }
   assert.deepEqual(substitutasValidas('acme', { [abs.skill]: `acme:${curto(abs.skill)}` }, catalogo), { [abs.skill]: `acme:${curto(abs.skill)}` }, 'o curto da própria original é o caso comum e vale');
+  const feito = { ...catalogo, skills: catalogo.skills.map((s) => (s === abs ? { ...s, feito: true } : s)) };
+  assert.deepEqual(substitutasValidas('acme', { [abs.skill]: `acme:${curto(abs.skill)}` }, feito), {}, 'absorção que o kit já fez: o plugin não troca a peça do kit nem libera o curto');
   const dono = abs.skill.slice(0, abs.skill.indexOf(':'));
   assert.deepEqual(substitutasValidas(dono, { [abs.skill]: `${dono}:outra` }, catalogo), {}, 'o plugin dono da original não se declara substituto dela');
 });

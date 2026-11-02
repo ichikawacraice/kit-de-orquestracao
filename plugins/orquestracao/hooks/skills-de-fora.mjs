@@ -112,7 +112,7 @@ const lerJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8').replace
 const objeto = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 
 /**
- * As substitutas que o plugin `plugin` pode declarar: a chave é o nome completo de uma skill `absorver` do catálogo (o
+ * As substitutas que o plugin `plugin` pode declarar: a chave é o nome completo de uma skill `absorver` ainda não feita (o
  * plugin não mexe no que o kit barra, deixa livre ou tem como dependência), e o valor, o nome de uma skill ou agente do
  * próprio plugin (`<plugin>:<nome>`): um plugin não aponta para peça de outro. O nome curto da substituta passa como peça
  * da casa (`decidir`), então ele não pode ser o de outra skill do catálogo (liberaria uma barrada), e o plugin dono da
@@ -123,7 +123,7 @@ export function substitutasValidas(plugin, declaradas, catalogo) {
   const nomeDaPeca = new RegExp(`^${plugin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:[A-Za-z0-9._-]+$`);
   return Object.fromEntries(Object.entries(declaradas).filter(([skill, v]) => typeof v === 'string'
     && nomeDaPeca.test(v.trim())
-    && catalogo.skills?.some((s) => s.skill === skill && s.saida === 'absorver')
+    && catalogo.skills?.some((s) => s.skill === skill && s.saida === 'absorver' && s.feito !== true)
     && skill.slice(0, skill.indexOf(':')) !== plugin
     && !catalogo.skills.some((s) => s.skill !== skill && curto(s.skill) === curto(v.trim()))).map(([skill, v]) => [skill, v.trim()]));
 }
