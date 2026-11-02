@@ -149,11 +149,12 @@ test('catálogo × plugin.json × marketplace.json: cada `depender` é dependên
   for (const p of catalogo.plugins.filter((x) => x.saida === 'depender')) assert.ok((mk.allowCrossMarketplaceDependenciesOn ?? []).includes(p.marketplace), `marketplace.json sem ${p.marketplace} em allowCrossMarketplaceDependenciesOn`);
 });
 
-test('catálogo × README: o README cita cada dependência e cada skill barrada', () => {
-  const readme = readFileSync(join(RAIZ, 'README.md'), 'utf8');
+test('catálogo × guia de conflitos: o guia cita cada dependência e cada skill barrada, e o README aponta para ele', () => {
+  assert.match(readFileSync(join(RAIZ, 'README.md'), 'utf8'), /docs\/guia\/conflitos\.md/);
+  const readme = readFileSync(join(RAIZ, 'docs', 'guia', 'conflitos.md'), 'utf8');
   const citadas = [...catalogo.plugins.filter((p) => p.saida === 'depender').map((p) => p.plugin), ...catalogo.skills.filter((s) => s.saida === 'barrar').map((s) => s.skill)];
   assert.ok(citadas.length > 0);
-  for (const c of citadas) assert.ok(readme.includes(`\`${c}\``), `README não cita \`${c}\``);
+  for (const c of citadas) assert.ok(readme.includes(`\`${c}\``), `o guia de conflitos não cita \`${c}\``);
 });
 
 test('o caminho do catálogo é o do plugin', () => {

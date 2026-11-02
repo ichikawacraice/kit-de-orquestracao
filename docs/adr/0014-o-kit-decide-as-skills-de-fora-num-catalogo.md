@@ -20,23 +20,25 @@
 ## Decisão
 1. **Um catálogo versionado no plugin `orquestracao`** (`skills-de-fora.json`) dá a cada plugin e skill de fora conhecida uma de quatro saídas, com o motivo:
    - `depender` — o kit chama a skill num passo dele; o plugin a declara em `dependencies` e ela chega junto na instalação.
-   - `barrar` — duplica uma peça do kit; o kit recusa a chamada e diz qual peça usar.
-   - `absorver` — a ideia completa uma peça do kit; ela é reescrita no formato do kit (com crédito à fonte e licença conferida, sem copiar o texto). Enquanto não foi absorvida (`feito: false`) a skill fica livre; absorvida, é barrada como duplicata.
+   - `barrar` — quebra uma regra do kit (não basta repetir uma peça dele); o kit recusa a chamada e diz qual peça usar. Repetir sem quebrar regra fica `livre`: a trava é leve de propósito.
+   - `absorver` — a ideia completa uma peça do kit ou do plugin wicomm (o design system da casa); ela é reescrita no formato de lá (com crédito à fonte e licença conferida, sem copiar o texto). Enquanto não foi absorvida (`feito: false`) a skill fica livre; absorvida, é barrada como duplicata.
    - `livre` — fora do escopo do kit; ele não opina.
    Skill sem linha própria herda a saída do plugin dela; plugin fora do catálogo é livre.
 2. **`superpowers@claude-plugins-official` é dependência declarada** do plugin `orquestracao` (`dependencies` + `allowCrossMarketplaceDependenciesOn: ["claude-plugins-official"]`). É o "instalar automaticamente" com consentimento: a pessoa aceita ao instalar o kit, e a saída do `claude plugin install` lista o que veio junto.
-3. **A trava `skills-de-fora.mjs`** (`PreToolUse` em `Skill` e `UserPromptExpansion`) recusa a skill `barrar` (e a `absorver` já feita) com "use <peça do kit>", **só em projeto que usa o kit** (`.claude/kit.json` ou bloco `<!-- kit:` no `CLAUDE.md`, da pasta da sessão até a raiz do git). O projeto libera uma skill pela lista `skillsDeFora.liberar` do `.claude/kit.json`. Erro da trava deixa passar.
+3. **A trava `skills-de-fora.mjs`** (`PreToolUse` em `Skill` e `UserPromptExpansion`) recusa a skill `barrar` (e a `absorver` já feita) com "use <peça>", **só em projeto que usa o kit** (`.claude/kit.json` ou bloco `<!-- kit:` no `CLAUDE.md`, da pasta da sessão até a raiz do git). O projeto libera uma skill pela lista `skillsDeFora.liberar` do `.claude/kit.json`. Erro da trava deixa passar.
 4. **O `kit doutor` diz o que ter e o que desligar**, em PT-BR: dependência faltando é falha, com o comando de instalar; plugin de fora presente com skill barrada é aviso, com a lista do que o kit barra, o que fica livre e como desligar o plugin inteiro (no app, para o que veio pela conta; `claude plugin disable … --scope project`, para o do CLI) quando a pessoa não usa as livres. O doutor não instala nem desliga nada: quem decide é a pessoa.
-5. **O README ganha "Primeiros passos"** com o mesmo conteúdo: o que vem junto, o que o kit barra e por quê, e o que desligar para não pagar descrição à toa.
-6. **Absorção em fatia própria, depois do F332:** o que se absorve no crítico de UI (checklist de acessibilidade, critérios de texto de interface) mexe no plugin `design`, que o F332 está renomeando.
+5. **O guia de conflitos (`docs/guia/conflitos.md`) diz o mesmo para quem chega:** o que vem junto, o que o kit barra e por quê, o que é absorvido e o que desligar para não pagar descrição à toa. O README só aponta para ele.
+6. **A absorção de design vai para o plugin wicomm** (combinado entre as orquestradoras do kit e do wicomm-design-system): `design:accessibility-review` e `design:ux-copy` viram peças do wicomm, presas aos tokens e às regras de mensagem da base. O catálogo as marca `feito: true` quando o wicomm as tiver, numa fatia seguinte deste item.
 
 <a id="alternativas"></a>
 ## Alternativas consideradas
 - **Copiar as skills boas para dentro do kit.** Rejeitada: a cópia envelhece e duplica para quem tem a original; o crédito e a licença viram dívida a cada atualização.
 - **`skillOverrides: "off"` no `settings.json` do projeto.** Rejeitada: a doc diz que não vale para skill de plugin; teria sido o melhor (some até a descrição), e o catálogo passa a usá-lo se o Claude Code mudar.
+- **Nenhuma dependência de terceiro, só absorção** (proposta do wicomm-design-system). Rejeitada para o `superpowers`: o kit já não funciona sem ele (são as fixas da dona); declarar a dependência só torna explícito o que já era exigido calado. Para o resto, vale: nada mais vira dependência.
 - **O CLI desligar ou instalar plugins sozinho.** Rejeitada: mexe na máquina da pessoa sem ela ver, e os plugins da conta não têm comando de CLI que os desligue. A dependência declarada cobre o instalar com o consentimento da instalação do kit; o doutor cobre o resto com o comando pronto.
 - **Barrar em toda sessão em que o plugin `orquestracao` está ligado.** Rejeitada: o plugin costuma ficar ligado na conta inteira, e num projeto sem o kit as regras de ADR e de revisão do kit não valem; lá a skill de fora é a melhor que a pessoa tem.
 - **Só texto no README e no `CLAUDE.md`, sem trava.** Rejeitada: a descrição da skill de fora puxa o modelo para ela em todo pedido que casa ("write an ADR"), e o texto do kit não ganha sempre; o conflito já aconteceu.
+- **Barrar toda skill que repete o kit (`engineering:debug`, `engineering:documentation`).** Rejeitada: repetir não quebra regra, e trava demais vira atrito sem ganho; a descrição da original continua no contexto de qualquer jeito.
 - **Barrar o plugin inteiro (`engineering`, `design`).** Rejeitada: a maior parte das skills deles não tem par no kit (`incident-response`, `deploy-checklist`, `standup`, `ux-copy`, `design-system`); o kit barra só a duplicata e o doutor sugere desligar o resto quando a pessoa não usa.
 
 <a id="consequencias"></a>

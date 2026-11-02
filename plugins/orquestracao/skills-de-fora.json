@@ -1,5 +1,5 @@
 {
-  "doc": "O que o kit faz com cada plugin e skill de fora (ADR 0014). saida: depender (o kit chama; vem em dependencies do plugin.json) · barrar (duplica uma peça do kit: a trava skills-de-fora recusa e diz qual usar) · absorver (a ideia entra numa peça do kit; barrada só quando feito: true) · livre (fora do escopo do kit). Skill sem linha herda a saída do plugin; plugin fora daqui é livre. O projeto libera uma skill em skillsDeFora.liberar do .claude/kit.json.",
+  "doc": "O que o kit faz com cada plugin e skill de fora (ADR 0014). saida: depender (o kit chama; vem em dependencies do plugin.json) · barrar (quebra uma regra do kit, não só repete: a trava skills-de-fora recusa e diz qual usar) · absorver (a ideia entra numa peça do kit ou do plugin wicomm; barrada só quando feito: true) · livre (fora do escopo do kit). Skill sem linha herda a saída do plugin; plugin fora daqui é livre. O projeto libera uma skill em skillsDeFora.liberar do .claude/kit.json.",
   "plugins": [
     {
       "plugin": "superpowers",
@@ -46,12 +46,6 @@
       "motivo": "A revisão do kit é por subagente de contexto limpo, só com achados que afetam correção; a revisão na mesma sessão de quem escreveu não conta."
     },
     {
-      "skill": "engineering:debug",
-      "saida": "barrar",
-      "use": "superpowers:systematic-debugging",
-      "motivo": "Duplica a skill de causa de defeito que o kit já carrega no planejamento e na execução."
-    },
-    {
       "skill": "superpowers:requesting-code-review",
       "saida": "barrar",
       "use": "orquestracao:validador (com processos:revisar-diff no briefing)",
@@ -61,16 +55,25 @@
       "skill": "design:design-critique",
       "saida": "barrar",
       "use": "o subagente critico-de-ui do plugin de design do kit",
-      "motivo": "Duplica o crítico de UI do kit, que julga por seis eixos com nota de 0 a 30 e o teto de recríticas."
+      "motivo": "Quebra a regra do fluxo de design: a crítica que conta é a do subagente critico-de-ui, em contexto separado, com nota de 0 a 30 e teto de recríticas; a crítica na mesma sessão de quem desenhou não conta."
     },
     {
       "skill": "design:accessibility-review",
       "saida": "absorver",
-      "em": "critica-de-ui (plugin de design do kit)",
+      "em": "plugin wicomm (F334 do wicomm-design-system): etapa de acessibilidade do crítico, presa aos tokens da base",
       "feito": false,
-      "use": "o subagente critico-de-ui do plugin de design do kit",
-      "licenca": "Apache-2.0 no repositório anthropics/knowledge-work-plugins (a cópia local não traz o LICENSE: conferir na fatia da absorção)",
-      "motivo": "O crítico do kit não olha acessibilidade: contraste AA, teclado e foco visível, alvo de toque, rótulo de campo e nome/papel de componente entram como eixo dele. Fatia depois do F332."
+      "use": "a skill de acessibilidade do plugin wicomm, quando o projeto o tem",
+      "motivo": "O crítico não olha acessibilidade (contraste AA, teclado e foco, alvo de toque, rótulo, nome/papel). Combinado entre as orquestradoras: entra no wicomm, não no kit.",
+      "licenca": "Apache-2.0 no repositório anthropics/knowledge-work-plugins (a cópia local não traz o LICENSE: conferir antes de reescrever)"
+    },
+    {
+      "skill": "design:ux-copy",
+      "saida": "absorver",
+      "em": "plugin wicomm (F334 do wicomm-design-system), junto das regras de mensagem da base",
+      "feito": false,
+      "use": "a skill de texto de interface do plugin wicomm, quando o projeto o tem",
+      "licenca": "Apache-2.0 no repositório anthropics/knowledge-work-plugins (conferir antes de reescrever)",
+      "motivo": "Texto de interface em PT-BR com as regras de mensagem da base Wicomm; a skill da Anthropic é genérica e em inglês."
     }
   ]
 }
