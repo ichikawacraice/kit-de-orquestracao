@@ -18,14 +18,19 @@ function lerPerfil(kj) {
   return { ids, avisos };
 }
 
-/** Aplica o perfil no settings `s` (mutado). `desligados`: os ids que o kit pôs agora; o `true` que o projeto já tem é conflito. */
-export function aplicarDesligados(s, kj) {
+/**
+ * Aplica o perfil no settings `s` (mutado). `desligados`: os ids que ficam como `false` por conta do kit. O `true` que o projeto
+ * pôs é conflito; o que o próprio kit pôs (`doKit`, os plugins do kit que o lock registra) vira `false`. Na retomada de uma
+ * adoção interrompida (`recuperando`), o `false` já gravado é do kit.
+ */
+export function aplicarDesligados(s, kj, { doKit = [], recuperando = false } = {}) {
   const { ids, avisos } = lerPerfil(kj);
   const desligados = []; const conflitos = [];
   for (const id of ids) {
     const atual = s.enabledPlugins?.[id];
-    if (atual === undefined) { s.enabledPlugins = { ...(s.enabledPlugins ?? {}), [id]: false }; desligados.push(id); }
-    else if (atual !== false) conflitos.push(`enabledPlugins.${id} já é ${JSON.stringify(atual)} no .claude/settings.json e o kit.json pede desligar — não troquei`);
+    if (atual === undefined || (atual === true && doKit.includes(id))) { s.enabledPlugins = { ...(s.enabledPlugins ?? {}), [id]: false }; desligados.push(id); }
+    else if (atual === false) { if (recuperando) desligados.push(id); }
+    else conflitos.push(`enabledPlugins.${id} já é ${JSON.stringify(atual)} no .claude/settings.json e o kit.json pede desligar — não troquei`);
   }
   return { desligados, conflitos, avisos };
 }

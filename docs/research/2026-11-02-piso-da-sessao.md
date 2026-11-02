@@ -13,6 +13,13 @@ Data: 2026-11-02 (F347). Snapshot: não se edita; para medir de novo, `node scri
 
 Os transcripts do Claude Code (`~/.claude/projects/**/*.jsonl`) gravam a forma da 1ª requisição (`api-request-shape`: system prompt e esquema de cada ferramenta) e as mensagens dela (`api-request-blob`). O medidor (`scripts/piso-da-sessao.mjs`) separa esse texto por fonte (marcadores como `Contents of …CLAUDE.md`, `The following skills are available…`) e dá a cada fonte a parte dos tokens que a 1ª chamada pagou na proporção do tamanho dela: a soma bate com o piso medido no `usage`, e a fração de cada fonte é estimativa por tamanho (o tokenizador não é linear entre português, JSON e inglês). 223 de 227 transcripts principais desde 30/10 têm a forma gravada.
 
+Três números não saem do medidor e vieram de scripts avulsos, descritos onde aparecem: a parte do piso na releitura, a tabela por projeto e a simulação da janela. A parte do piso na releitura: em cada chamada, o mínimo entre o piso da sessão e o que ela releu, somado e dividido pela releitura total (sessões desde 26/10):
+
+```
+main chamadas 68082 releitura 14.81 bi tokens; parte do piso 46%
+sub chamadas 29111 releitura 2.69 bi tokens; parte do piso 32%
+```
+
 Para o antes/depois, sessões de teste do CLI (`claude -p "/context"`) numa pasta vazia com `.claude/settings.json` diferente em cada uma; o `/context` do CLI não traz as ferramentas do app desktop, então o total dele (~36 mil) é menor que o do app.
 
 ## Composição do piso (sessões desde 30/10)
@@ -63,7 +70,7 @@ Agrupado:
 | Hooks de início (superpowers + kit) | 2,3 mil | plugins ligados |
 | Nomes de ferramentas adiadas, MCP | ~2,8 mil | plugins e conectores |
 
-Por projeto (mediana da sessão principal; o projeto de produto anonimizado):
+Por projeto (mediana da sessão principal; o projeto de produto anonimizado; `pisoDoTranscript` do medidor agrupado pela pasta do transcript):
 
 ```
 projeto                 sessões  piso  projeto memoria global skills
@@ -108,15 +115,17 @@ Releitura e escrita são ~87% do custo; 400 mil ≈ **−5,7% do custo total**, 
 
 ## O que o kit muda (F347)
 
-- **Resumo do início sem o que o `CLAUDE.md` já traz.** A regra do resumo coberta por um bloco `kit:` sai quando o `CLAUDE.md` do projeto tem o bloco: 3.474 → 1.951 caracteres no projeto que adotou o kit (≈ −0,45 mil tokens por sessão principal), inteiro onde não adotou. Fica no `CLAUDE.md`, e não no hook, porque o `CLAUDE.md` chega também aos subagentes e o hook não.
+- **Resumo do início sem o que o `CLAUDE.md` já traz.** A regra do resumo coberta por um bloco `kit:` sai quando o `CLAUDE.md` do projeto tem o bloco na versão que a traz (ou depois): 3.474 → 2.008 caracteres no projeto com os blocos do modelo atual (≈ −0,4 mil tokens por sessão principal); inteiro onde o kit não foi adotado ou onde o bloco é de versão velha (o próprio repositório do kit tem os blocos em v1: o ganho chega aqui depois de pôr os blocos em dia). Fica no `CLAUDE.md`, e não no hook, porque o `CLAUDE.md` chega também aos subagentes e o hook não.
 - **Perfil de plugins no `.claude/kit.json`** (`plugins.desligar`), aplicado pelo `kit adotar`/`kit atualizar` no `.claude/settings.json` do projeto: cada projeto desliga o que não usa sem mexer na conta ([guia](../guia/ligar-e-desligar.md#perfil-de-plugins)).
 - **O medidor** (`scripts/piso-da-sessao.mjs`), para medir de novo depois das mudanças na conta.
 
 Antes/depois do hook, medido rodando as duas versões com o mesmo `cwd`:
 
 ```
-f347-piso antes: 3474 chars
-f347-piso depois: 1951 chars
+projeto com os blocos do modelo antes: 3474 chars
+projeto com os blocos do modelo depois: 2008 chars
+este repo (blocos v1) antes: 3474 chars
+este repo (blocos v1) depois: 3474 chars
 <projeto sem o kit> antes: 3474 chars
 <projeto sem o kit> depois: 3474 chars
 ```

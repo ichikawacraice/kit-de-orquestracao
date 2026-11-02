@@ -39,6 +39,16 @@ describe('aplicarDesligados', () => {
     assert.deepEqual(vazio, {});
   });
 
+  it('o true que o próprio kit pôs vira false; na retomada da adoção, o false já gravado é do kit', () => {
+    const s = { enabledPlugins: { 'kit-design@ichikawa-kit': true } };
+    const r = aplicarDesligados(s, { plugins: { desligar: ['kit-design@ichikawa-kit'] } }, { doKit: ['kit-design@ichikawa-kit'] });
+    assert.equal(s.enabledPlugins['kit-design@ichikawa-kit'], false);
+    assert.deepEqual([r.desligados, r.conflitos], [['kit-design@ichikawa-kit'], []]);
+    const kj = { plugins: { desligar: [FORA] } };
+    assert.deepEqual(aplicarDesligados({ enabledPlugins: { [FORA]: false } }, kj).desligados, [], 'false do projeto não é do kit');
+    assert.deepEqual(aplicarDesligados({ enabledPlugins: { [FORA]: false } }, kj, { recuperando: true }).desligados, [FORA]);
+  });
+
   it('plugins.desligar que não é lista é aviso', () => {
     assert.match(aplicarDesligados({}, { plugins: { desligar: 'figma@x' } }).avisos[0], /precisa ser uma lista/);
   });
@@ -94,5 +104,32 @@ describe('ponta a ponta: atualizar aplica, doutor confere, remover tira', () => 
     assert.match(r.stdout, /desliga figma@claude-plugins-official/);
     assert.equal(ler(d, '.claude', 'settings.json').enabledPlugins[FORA], false);
     assert.deepEqual(ler(d, '.claude', 'kit.lock.json').chaves.settings.desligados, [FORA]);
+  });
+
+  it('o perfil desliga um plugin do próprio kit: no adotar sem conflito, e no atualizar depois de o kit tê-lo ligado', (t) => {
+    const KD = 'kit-design@ichikawa-kit';
+    const casa = realpathSync(mkdtempSync(join(tmpdir(), 'kit-f347-casa-')));
+    const a = realpathSync(mkdtempSync(join(tmpdir(), 'kit-f347-kd-')));
+    const b = realpathSync(mkdtempSync(join(tmpdir(), 'kit-f347-kd2-')));
+    t.after(() => { for (const x of [casa, a, b]) rmSync(x, { recursive: true, force: true }); });
+    const env = { ...process.env, HOME: casa, HOOKS_CREWAI_BASE: casa, CI: '' };
+    const kit = (d, ...args) => spawnSync('node', [KIT, ...args], { cwd: d, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env });
+    for (const d of [a, b]) { execFileSync('git', ['init', '-q', d], { timeout: 10000, killSignal: 'SIGKILL' }); writeFileSync(join(d, 'CLAUDE.md'), '# projeto\n'); }
+    mkdirSync(join(a, '.claude'));
+    writeFileSync(join(a, '.claude', 'kit.json'), JSON.stringify({ plugins: { desligar: [KD] } }));
+    const ra = kit(a, 'adotar');
+    assert.equal(ra.status, 0, ra.stdout + ra.stderr);
+    assert.equal(ler(a, '.claude', 'settings.json').enabledPlugins[KD], false);
+    // b: adotado sem perfil (o kit liga o kit-design), depois o perfil pede desligar
+    assert.equal(kit(b, 'adotar').status, 0);
+    assert.equal(ler(b, '.claude', 'settings.json').enabledPlugins[KD], true, 'precondição: o kit ligou o kit-design');
+    const kj = ler(b, '.claude', 'kit.json'); kj.plugins = { desligar: [KD] };
+    writeFileSync(join(b, '.claude', 'kit.json'), JSON.stringify(kj));
+    const rb = kit(b, 'atualizar');
+    assert.equal(rb.status, 0, rb.stdout + rb.stderr);
+    assert.equal(ler(b, '.claude', 'settings.json').enabledPlugins[KD], false);
+    const cs = ler(b, '.claude', 'kit.lock.json').chaves.settings;
+    assert.ok(cs.desligados.includes(KD) && !cs.plugins.includes(KD), JSON.stringify(cs));
+    assert.equal(kit(b, 'atualizar').status, 0, 'o segundo atualizar não pode virar conflito');
   });
 });

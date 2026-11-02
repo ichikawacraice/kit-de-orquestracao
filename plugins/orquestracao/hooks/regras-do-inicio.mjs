@@ -1,15 +1,16 @@
 // O resumo das regras (regras-globais.md) sem o que o CLAUDE.md do projeto já traz (F347). Cada regra que um bloco `kit:` do
-// modelo de CLAUDE.md cobre leva no fim `<!-- coberta-por: kit:<bloco> -->`; se o CLAUDE.md do projeto tem esse bloco, a regra
-// sai do resumo (o CLAUDE.md entra em toda chamada, inclusive nos subagentes, que não recebem o resumo; repetir é pagar duas
-// vezes). Os comentários nunca chegam à sessão.
+// modelo de CLAUDE.md cobre leva no fim `<!-- coberta-por: kit:<bloco> v<n> -->` (a 1ª versão do bloco que traz a regra); se o
+// CLAUDE.md do projeto tem o bloco nessa versão ou depois, a regra sai do resumo; bloco mais velho não a traz, e ela fica. O
+// CLAUDE.md entra em toda chamada, inclusive nos subagentes, que não recebem o resumo: repetir é pagar duas vezes. Os
+// comentários nunca chegam à sessão.
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-const MARCA = /\s*<!--\s*coberta-por:\s*kit:([\w-]+)\s*-->/;
+const MARCA = /\s*<!--\s*coberta-por:\s*kit:([\w-]+)\s+v(\d+)\s*-->/;
 
-/** Os blocos `kit:` que o resumo diz cobrir. */
+/** As marcas do resumo: [{ bloco, versao }] de cada regra coberta. */
 export function blocosQueCobrem(regras) {
-  return [...new Set(regras.split('\n').map((l) => MARCA.exec(l)?.[1]).filter(Boolean))];
+  return regras.split('\n').flatMap((l) => { const m = MARCA.exec(l); return m ? [{ bloco: m[1], versao: Number(m[2]) }] : []; });
 }
 
 /** O CLAUDE.md da raiz do projeto: sobe de `cwd` até a pasta com `.git` (ou a raiz do disco). */
@@ -28,13 +29,13 @@ function claudeDoProjeto(cwd) {
 export function resumoParaOProjeto(regras, cwd) {
   let claude = '';
   try { if (cwd) claude = claudeDoProjeto(cwd); } catch { /* sem CLAUDE.md legível: resumo inteiro */ }
-  const tem = (bloco) => new RegExp(`<!-- kit:${bloco} v\\d+ -->`).test(claude);
-  let tirou = false;
+  const versao = (bloco) => Number(new RegExp(`<!-- kit:${bloco} v(\\d+) -->`).exec(claude)?.[1] ?? 0);
+  const tiradas = [];
   const linhas = regras.split('\n').flatMap((l) => {
-    const bloco = MARCA.exec(l)?.[1];
-    if (bloco && tem(bloco)) { tirou = true; return []; }
+    const m = MARCA.exec(l);
+    if (m && versao(m[1]) >= Number(m[2])) { tiradas.push(/^- \*\*([^*]+?):?\*\*/.exec(l)?.[1] ?? m[1]); return []; }
     return [l.replace(MARCA, '')];
   });
-  if (tirou) linhas.push('- As outras regras do kit (análise do pedido, dona por item, revisão, testes) estão nos blocos `kit:` do CLAUDE.md deste projeto.');
+  if (tiradas.length) linhas.push(`- Estas regras do kit estão nos blocos \`kit:\` do CLAUDE.md deste projeto: ${tiradas.join('; ')}.`);
   return linhas.join('\n').trim();
 }

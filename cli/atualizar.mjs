@@ -124,14 +124,15 @@ function desligarDoPerfil({ destino, lock, mudancas, linhas, conflito, kitJson }
   const base = mudancas.find((m) => m.arquivo === '.claude/settings.json');
   const texto = base ? base.novo : lerTexto(destino, '.claude/settings.json');
   let s = {}; try { s = texto === null ? {} : JSON.parse(semBom(texto)); } catch { return; } // ilegível: o doutor acusa
-  const r = aplicarDesligados(s, kitJson);
+  const cs = (lock.chaves ??= {}).settings ??= {};
+  const r = aplicarDesligados(s, kitJson, { doKit: cs.plugins ?? [] });
   for (const a of r.avisos) linhas.push(`aviso: ${a}`);
   for (const c of r.conflitos) conflito(c);
   if (!r.desligados.length) return;
   for (const id of r.desligados) linhas.push(`desligado: ${id} (.claude/settings.json, pelo perfil do kit.json)`);
   const novo = serializar(s, texto);
   if (base) base.novo = novo; else mudancas.push({ arquivo: '.claude/settings.json', antigo: texto, novo });
-  const cs = (lock.chaves ??= {}).settings ??= {};
+  if (Array.isArray(cs.plugins)) cs.plugins = cs.plugins.filter((n) => !r.desligados.includes(n)); // o remover não apaga o false como se fosse o true do kit
   cs.desligados = [...new Set([...(cs.desligados ?? []), ...r.desligados])];
 }
 

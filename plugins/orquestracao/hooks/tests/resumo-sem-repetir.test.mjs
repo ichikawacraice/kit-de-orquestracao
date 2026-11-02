@@ -33,10 +33,24 @@ function projeto(claude) {
   return dir;
 }
 
-test('cada bloco que o resumo diz cobrir existe no modelo de CLAUDE.md', () => {
+test('cada bloco que o resumo diz cobrir existe no modelo de CLAUDE.md, numa versão igual ou maior que a da marca', () => {
   const cobertos = blocosQueCobrem(REGRAS);
   assert.ok(cobertos.length >= 2, 'o resumo não marca nenhuma regra como coberta');
-  for (const b of cobertos) assert.match(MODELO, new RegExp(`<!-- kit:${b} v\\d+ -->`), `o modelo não tem o bloco ${b}`);
+  for (const { bloco, versao } of cobertos) {
+    const v = Number(new RegExp(`<!-- kit:${bloco} v(\\d+) -->`).exec(MODELO)?.[1] ?? 0);
+    assert.ok(v >= versao, `o modelo tem ${bloco} v${v} e a marca pede v${versao}`);
+  }
+});
+
+test('bloco de versão mais velha que a da marca não tira a regra (o CLAUDE.md desatualizado não a traz)', () => {
+  const velho = MODELO.replace(/<!-- kit:(regras-de-trabalho|regras-de-operacao) v\d+ -->/g, '<!-- kit:$1 v1 -->');
+  assert.notEqual(velho, MODELO, 'precondição: troquei a versão dos blocos');
+  const dir = projeto(velho);
+  try {
+    const r = resumoParaOProjeto(REGRAS, dir);
+    for (const frase of ['ponto de partida, não ordem', '**Revisão por subagente:**', 'testes-afetados']) assert.ok(r.includes(frase), `saiu com bloco velho: ${frase}`);
+    assert.doesNotMatch(r, /blocos `kit:` do CLAUDE\.md/, 'a linha final diz que estão no CLAUDE.md, e não estão');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('projeto com os blocos kit: recebe o resumo sem as regras que eles já trazem, e mais curto', () => {
@@ -46,8 +60,8 @@ test('projeto com os blocos kit: recebe o resumo sem as regras que eles já traz
     const curto = inicio(join(comBlocos, 'sub', 'pasta'));
     const inteiro = inicio(semBlocos);
     // a presença seria detectada: sem os blocos, a regra coberta está lá
-    assert.ok(inteiro.includes('ponto de partida, não ordem'), 'precondição: o resumo inteiro traz a regra coberta');
-    assert.ok(!curto.includes('ponto de partida, não ordem'), 'a regra coberta pelo CLAUDE.md continuou no resumo');
+    assert.ok(inteiro.includes('- **O pedido é ponto de partida'), 'precondição: o resumo inteiro traz a regra coberta');
+    assert.ok(!curto.includes('- **O pedido é ponto de partida'), 'a regra coberta pelo CLAUDE.md continuou no resumo');
     assert.ok(!curto.includes('**Revisão por subagente:**'), 'a revisão por subagente continuou no resumo');
     // o que o CLAUDE.md não traz continua
     for (const frase of ['Q-ID', 'Achar a orquestradora', 'Não pare à toa', 'papeis-e-modelos']) assert.ok(curto.includes(frase), `sumiu do resumo: ${frase}`);
@@ -72,7 +86,8 @@ test('só o bloco que existe tira a regra: CLAUDE.md com um dos blocos tira só 
   const dir = projeto(`# p\n\n${trabalho}\n`);
   try {
     const r = resumoParaOProjeto(REGRAS, dir);
-    assert.ok(!r.includes('ponto de partida, não ordem'));
+    assert.ok(!r.includes('- **O pedido é ponto de partida'));
     assert.ok(r.includes('**Revisão por subagente:**'), 'tirou regra de bloco que o projeto não tem');
+    assert.match(r, /CLAUDE\.md deste projeto: O pedido é ponto de partida, não ordem\.$/m, 'a linha final cita o que não saiu');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

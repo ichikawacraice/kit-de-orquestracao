@@ -12,7 +12,7 @@ Cada trava do kit existe porque a regra só no texto já foi esquecida. Desligar
 | **Opção do plugin, na conta** | Você | `/plugin` no terminal do Claude Code, ou `pluginConfigs` do `~/.claude/settings.json`. O app desktop não mostra essas opções |
 
 <a id="perfil-de-plugins"></a>
-**Plugins de fora que não servem ao projeto** (o perfil de plugins): liste-os em `plugins.desligar` do `.claude/kit.json` (`"plugins": { "desligar": ["figma@claude-plugins-official"] }`, sempre `nome@marketplace`). O `kit adotar` e o `kit atualizar` os põem como `false` no `enabledPlugins` do `.claude/settings.json` do projeto; a conta não muda. O `kit doutor` avisa o que o kit.json pede e o settings ainda não diz, e o `settings.local.json` que religa; o `kit remover` tira o `false` que o kit pôs. O `true` que o projeto já tem fica (vira conflito), e o `orquestracao` não se desliga por aqui. Plugin desligado não põe agente, hook nem servidor MCP no contexto de cada sessão do projeto; a lista de skills tem teto fixo e não encolhe ([laudo](../research/2026-11-02-piso-da-sessao.md)).
+**Plugins de fora que não servem ao projeto** (o perfil de plugins): liste-os em `plugins.desligar` do `.claude/kit.json` (`"plugins": { "desligar": ["figma@claude-plugins-official"] }`, sempre `nome@marketplace`). O `kit adotar` e o `kit atualizar` os põem como `false` no `enabledPlugins` do `.claude/settings.json` do projeto; a conta não muda. O `kit doutor` avisa o que o kit.json pede e o settings ainda não diz, e o `settings.local.json` que religa; o `kit remover` tira o `false` que o kit pôs. Vale também para os plugins do kit (o `kit-design` num projeto sem front, por exemplo): o `true` que o próprio kit pôs vira `false`. O `true` que o projeto pôs fica (vira conflito), e o `orquestracao` não se desliga por aqui. Plugin desligado não põe agente, hook nem servidor MCP no contexto de cada sessão do projeto; a lista de skills tem teto fixo e não encolhe ([laudo](../research/2026-11-02-piso-da-sessao.md)).
 
 Quando o `kit.json` e a opção da conta dizem coisas diferentes, vence o `kit.json`; sem nenhum dos dois, vale o padrão (ligado). Decisão: [ADR 0003](../adr/0003-opcao-do-plugin-vale-por-conta-e-o-kit-json-e-o-caminho-do-time.md).
 
@@ -25,7 +25,7 @@ O `claude plugin install` liga o plugin na conta, para todo projeto. Quase todas
 
 | Trava | O que você nota num projeto sem o kit |
 |---|---|
-| `sessao-inicio` | Toda sessão começa com o resumo das regras do kit no contexto (Q-ID, sessão dona, análise do pedido). No projeto que tem os blocos `kit:` no `CLAUDE.md`, o resumo leva só o que eles não trazem |
+| `sessao-inicio` | Toda sessão começa com o resumo das regras do kit no contexto (Q-ID, sessão dona, análise do pedido). No projeto com os blocos `kit:` do `CLAUDE.md` em dia, o resumo leva só o que eles não trazem; bloco de versão velha não tira regra nenhuma |
 | `subagente-nao-edita` | Subagente não edita arquivo do projeto. Fluxos que mandam subagentes escreverem código param |
 | `segredo-sai` | Mensagem a outra sessão com cara de segredo é recusada |
 | `injecao-entre-sessoes` | Mensagem de outra sessão com cara de injeção ganha uma linha de aviso |
