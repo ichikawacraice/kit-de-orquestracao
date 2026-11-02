@@ -15,7 +15,7 @@
 // rm, writeFile…): nome vindo de variável, `claude plugin` e afins passam — é cerca contra deslize, não cofre.
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
 // fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam; e o
-// designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista, como
+// designer do kit (`kit-design:` ou o sucessor `design-system:`) grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista, como
 // os designers de outro plugin que o projeto declara em `design.designers` (tipo exato, sem curinga:
 // `*:designer` daria escrita a todo plugin instalado); a pasta é
 // cercada: valor inválido (absoluto, `..`, a própria raiz) vale o padrão e symlink não libera
@@ -109,7 +109,7 @@ function tipoLiberado(tipo) {
 // A raiz do projeto: a pasta mais próxima do arquivo com `.claude/kit.json` ou `.git` (arquivo ou pasta),
 // salvo a que é ou mora dentro da pasta de revisões de um projeto acima: o designer grava ali e um kit.json
 // aninhado declararia designers novos (ou outra pasta). Essa vale como pasta comum do projeto de fora.
-function raizDoProjeto(p) {
+function raizDoProjeto(p, tipo) {
   const candidatas = [];
   for (let d = dirname(p); ; d = dirname(d)) {
     if (existsSync(join(d, '.claude', 'kit.json')) || existsSync(join(d, '.git'))) candidatas.push(d);
@@ -120,7 +120,7 @@ function raizDoProjeto(p) {
   let raiz = null;
   for (const d of candidatas.reverse()) {
     if (raiz) {
-      const rev = realNativo(resolve(raiz, designDoProjeto(raiz).rel));
+      const rev = realNativo(resolve(raiz, designDoProjeto(raiz, tipo).rel));
       const real = realNativo(d);
       if (rev && real && (real === rev || real.startsWith(rev + '/'))) continue;
     }
@@ -133,16 +133,32 @@ function realNativo(p) {
   try { return realpathSync.native(p); } catch { return null; }
 }
 
+// Pasta de revisões inválida (absoluta, com `..` ou a própria raiz) não vale.
+const revisoesValida = (raiz, v) => {
+  const rel = typeof v === 'string' ? v.trim().replace(/\/+$/, '') : '';
+  return rel && !isAbsolute(rel) && !rel.split(/[\\/]+/).includes('..') && resolve(raiz, rel) !== raiz ? rel : '';
+};
+
+// O designer do `design-system` (F350) lê a pasta de revisões do `design/design-system.json`, que vence o kit.json; a trava
+// lê o mesmo, salvo o arquivo que mora dentro da pasta que ele mesmo declara (o designer o regravaria e se mudaria de pasta).
+function revisoesDoDesignSystem(raiz) {
+  const arq = join(raiz, 'design', 'design-system.json');
+  let v;
+  try { v = JSON.parse(readFileSync(arq, 'utf8').replace(/^\uFEFF/, ''))?.revisoes; } catch { return ''; }
+  const rel = revisoesValida(raiz, v);
+  return rel && !arq.startsWith(resolve(raiz, rel) + '/') ? rel : '';
+}
+
 // A seção `design` do kit.json do projeto: a pasta de revisões (inválida vale o padrão) e os designers
 // de plugin declarados (só texto exato; o que não é lista ou tem `*` não libera ninguém).
-function designDoProjeto(raiz) {
+function designDoProjeto(raiz, tipo) {
   let design;
   try {
     design = JSON.parse(readFileSync(join(raiz, '.claude', 'kit.json'), 'utf8').replace(/^\uFEFF/, ''))?.design;
   } catch { /* sem kit.json legível: vale o padrão */ }
-  let rel = typeof design?.revisoes === 'string' ? design.revisoes.trim().replace(/\/+$/, '') : '';
-  // Inválido (absoluto, com `..` ou a própria raiz) vale o padrão: o designer segue com uma pasta que funciona.
-  if (!rel || isAbsolute(rel) || rel.split(/[\\/]+/).includes('..') || resolve(raiz, rel) === raiz) rel = 'docs/design/revisoes';
+  // Inválido vale o padrão: o designer segue com uma pasta que funciona.
+  const rel = (String(tipo ?? '').startsWith('design-system:') && revisoesDoDesignSystem(raiz))
+    || revisoesValida(raiz, design?.revisoes) || 'docs/design/revisoes';
   const designers = Array.isArray(design?.designers)
     ? design.designers.filter((t) => typeof t === 'string').map((t) => t.trim()).filter((t) => t && !t.includes('*'))
     : [];
@@ -167,10 +183,17 @@ function designerNaRevisao(tipo, p) {
   if (!tipo) return false;
   let lido;
   try {
-    const raiz = raizDoProjeto(p);
+    const raiz = raizDoProjeto(p, tipo);
     if (!raiz) return false;
-    const { rel, designers } = designDoProjeto(raiz);
+    const { rel, designers } = designDoProjeto(raiz, tipo);
     if (semPrefixoDoKit(tipo) !== 'designer' && !designers.includes(tipo)) return false;
+    // Os arquivos de onde a trava lê a pasta nenhum designer grava, venha a pasta de onde vier: ele se mudaria de pasta.
+    // Comparados pelo caminho real na forma do disco (caixa e Unicode do APFS) e pelo próprio arquivo (dev:ino).
+    const leitos = [join(raiz, 'design', 'design-system.json'), join(raiz, '.claude', 'kit.json')];
+    let fp = null; try { fp = forma(caminhoReal(p)); } catch { /* symlink quebrado: a cerca abaixo recusa */ }
+    const ip = idDoArquivo(p);
+    const real = (a) => { try { return forma(caminhoReal(a)); } catch { return null; } };
+    if (leitos.some((a) => (fp && real(a) === fp) || (ip && idDoArquivo(a) === ip))) return false;
     lido = { rel, dentro: p.startsWith(resolve(raiz, rel) + '/') };
     const esperada = resolve(realpathSync(raiz), rel);
     if (caminhoReal(resolve(raiz, rel)) === esperada && caminhoReal(p).startsWith(esperada + '/')) return 'liberado';

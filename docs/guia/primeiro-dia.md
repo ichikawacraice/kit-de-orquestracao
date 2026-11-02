@@ -17,7 +17,7 @@ claude plugin marketplace add ichikawacraice/kit-de-orquestracao
 claude plugin install orquestracao@ichikawa-kit
 ```
 
-O `orquestracao` é o núcleo. Repita o `install` para `painel-sessoes`, `processos` e `kit-design`. O `kit-performance` é opcional: instale-o só se quiser as práticas de performance e o revisor ([o que ele traz](ligar-e-desligar.md#kit-performance)). Reinicie o app: plugin novo só vale depois do reinício.
+O `orquestracao` é o núcleo. Repita o `install` para `painel-sessoes`, `processos` e `kit-design`. O `kit-performance` é opcional: instale-o só se quiser as práticas de performance e o revisor ([o que ele traz](ligar-e-desligar.md#kit-performance)). Projeto com tela pode trocar o `kit-design` pelo `design-system`, e o projeto interno da empresa liga também o `tema-wicomm` ([como](ligar-e-desligar.md#design-system)). Reinicie o app: plugin novo só vale depois do reinício.
 
 **Atenção:** o `install` liga o plugin na sua conta, para **todo** projeto, não só para o que tem o kit. A maior parte das travas só age onde há orquestradora ou item na fila, mas algumas valem em qualquer sessão: a lista e como desligá-las num projeto estão em [O que ligar e desligar](ligar-e-desligar.md#valem-em-todo-projeto).
 

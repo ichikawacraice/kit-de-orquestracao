@@ -44,6 +44,15 @@ function subir(args = [], cwd = repo) {
   return { exit: r.status, out: r.stdout, err: r.stderr, json };
 }
 
+test('entrada de origem remota (git-subdir) não é subida nem vira pulado: a versão dela mora no outro repositório', () => {
+  escrever('.claude-plugin/marketplace.json', JSON.stringify({ name: 'm', plugins: [{ name: 'a', source: './plugins/a' }, { name: 'ds', source: { source: 'git-subdir', url: 'acme/ds', path: 'plugins/ds', sha: 'a'.repeat(40) } }] }));
+  escrever('plugins/a/x.mjs', 'dois\n'); commitar('feat: muda a e lista o ds');
+  const r = subir();
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.deepEqual(r.json.subiu.map((s) => s.nome), ['a'], 'precondição: o local sobe');
+  assert.equal(r.json.pulados, undefined, JSON.stringify(r.json.pulados));
+});
+
 test('nada mudou desde a última subida → subiu vazio e nenhum commit novo', () => {
   const antes = contagem();
   const r = subir();

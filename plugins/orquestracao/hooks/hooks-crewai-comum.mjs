@@ -9,8 +9,9 @@ export const LOG = join(BASE, 'hooks-crewai.log');
 
 // Os plugins do kit nomeiam os seus agents e skills com prefixo (`orquestracao:validador`, `kit-design:designer`): a trava de
 // escrita casa o tipo com e sem o prefixo de qualquer um deles. Outro prefixo (`impeccable:x`) fica como chega. O `design:` é o
-// nome velho do `kit-design` (F332), lido enquanto houver projeto com ele; o `design` da Anthropic não traz agente.
-export const semPrefixoDoKit = (nome) => String(nome ?? '').replace(/^\/?(?:orquestracao|kit-design|design|processos|painel-sessoes):/, '');
+// nome velho do `kit-design` (F332), lido enquanto houver projeto com ele; o `design` da Anthropic não traz agente. O
+// `design-system:` é o sucessor do `kit-design` (F350), listado no marketplace do kit e vindo do repositório da empresa.
+export const semPrefixoDoKit = (nome) => String(nome ?? '').replace(/^\/?(?:orquestracao|kit-design|design-system|design|processos|painel-sessoes):/, '');
 
 // Uma linha por evento: data, sessão, hook, desfecho, detalhe (TSV).
 export function registrar(sessao, hook, desfecho, detalhe = '') {

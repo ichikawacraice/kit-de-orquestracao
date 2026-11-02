@@ -16,6 +16,8 @@
     ],
     "design": [
       "agent-browser",
+      "design-system:critica-de-ui",
+      "design-system:revisao-de-arquitetura-de-ui",
       "kit-design:critica-de-ui",
       "kit-design:revisao-de-arquitetura-de-ui",
       "frontend-design",

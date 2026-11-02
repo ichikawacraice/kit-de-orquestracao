@@ -551,6 +551,47 @@ caso('F60.6 os outros tipos não ganham a pasta de revisões', () => comRepo(() 
     igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', t);
   }
 }));
+// F350: o designer do plugin design-system (o sucessor do kit-design) é liberado pelo papel, com a mesma cerca.
+caso('F350.1 design-system:designer sem lista grava só na pasta de revisões', () => comRepo(() => {
+  igual(existsSync(LISTA()), false, 'precondição: sem lista');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('outro:designer')))), 'deny', 'precondição: designer de plugin de fora é negado');
+  igual(rodar(SN, editar(`${REPO}/${REV}/2026-11-02-a.md`, sub('design-system:designer'))), null, 'Edit');
+  igual(rodar(SN, pre('Write', { file_path: `${REPO}/${REV}/README.md`, content: 'x' }, sub('design-system:designer'))), null, 'Write');
+  igual(log().some((l) => l[3] === 'liberado-por-papel' && l[4].includes('design-system:designer')), true, 'log');
+  for (const p of [`${REPO}/web/index.html`, `${REPO}/CLAUDE.md`, `${REPO}/${REV}/../../src/a.ts`]) {
+    igual(decisao(rodar(SN, editar(p, sub('design-system:designer')))), 'deny', p);
+  }
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('design-system:critico-de-ui')))), 'deny', 'o crítico não ganha a pasta');
+}));
+caso('F350.2 a pasta do design-system:designer vem do design/design-system.json, que vence o kit.json', () => comRepo(() => {
+  mkdirSync(join(REPO, 'design'), { recursive: true });
+  mkdirSync(join(REPO, '.claude'), { recursive: true });
+  writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'docs/ux' } }));
+  const ds = (v) => writeFileSync(join(REPO, 'design', 'design-system.json'), JSON.stringify({ revisoes: v }));
+  ds('design/revisoes');
+  igual(rodar(SN, editar(`${REPO}/design/revisoes/a.md`, sub('design-system:designer'))), null, 'a pasta do design-system.json');
+  igual(decisao(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design-system:designer')))), 'deny', 'o kit.json perde para ele');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('kit-design:designer'))), null, 'o kit-design segue no kit.json');
+  igual(decisao(rodar(SN, editar(`${REPO}/design/revisoes/a.md`, sub('kit-design:designer')))), 'deny', 'e não ganha a do design-system.json');
+  ds('design');
+  igual(decisao(rodar(SN, editar(`${REPO}/design/design-system.json`, sub('design-system:designer')))), 'deny', 'o arquivo dentro da própria pasta não vale');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design-system:designer'))), null, 'e cai no kit.json');
+  ds('../fora');
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design-system:designer'))), null, 'inválido cai no kit.json');
+}));
+caso('F350.3 nenhum designer grava os arquivos de onde a trava lê a pasta', () => comRepo(() => {
+  mkdirSync(join(REPO, 'design'), { recursive: true });
+  mkdirSync(join(REPO, '.claude'), { recursive: true });
+  writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'design' } }));
+  writeFileSync(join(REPO, 'design', 'design-system.json'), '{}');
+  igual(rodar(SN, editar(`${REPO}/design/b.md`, sub('design-system:designer'))), null, 'precondição: a pasta do kit.json vale');
+  for (const t of ['design-system:designer', 'kit-design:designer']) {
+    igual(decisao(rodar(SN, editar(`${REPO}/design/design-system.json`, sub(t)))), 'deny', `${t}: design-system.json na pasta do kit.json`);
+    igual(decisao(rodar(SN, editar(`${REPO}/Design/design-system.json`, sub(t)))), 'deny', `${t}: grafia de caixa`);
+  }
+  writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: '.claude' } }));
+  igual(decisao(rodar(SN, editar(`${REPO}/.claude/kit.json`, sub('kit-design:designer')))), 'deny', 'o kit.json na pasta declarada');
+}));
 // F61: a pasta de revisões é cercada: valor inválido vale o padrão e symlink não leva a escrita para fora.
 caso('F61.1 valor inválido de design.revisoes vale o padrão', () => comRepo(() => {
   mkdirSync(join(REPO, '.claude'), { recursive: true });
