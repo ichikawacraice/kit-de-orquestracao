@@ -836,10 +836,12 @@
       "name": "topo-da-pagina",
       "type": "registry:ui",
       "title": "Topo da página",
-      "description": "page header — a página dentro do casco (largura e respiro) e o topo dela: trilha, o h1 único, o estado, o primário, o ⋯, o desfecho e os filtros (CASCO-01).",
+      "description": "page header — a página dentro do casco (largura e respiro) e o topo dela: trilha, o h1 único, o estado, o primário, o ⋯, a linha dos valores, o desfecho e os filtros (CASCO-01, CASCO-04).",
       "registryDependencies": [
         "@wicomm/estilo",
-        "@wicomm/idioma-de-cor"
+        "@wicomm/idioma-de-cor",
+        "@wicomm/chip-de-estado",
+        "@wicomm/skeleton"
       ],
       "files": [
         {

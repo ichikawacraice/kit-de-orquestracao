@@ -2,6 +2,8 @@ import * as React from "react"
 
 import { COR_DO_TOM_DENSO, type Tom } from "@/registry/wicomm/lib/idioma-de-cor"
 import { cn } from "@/registry/wicomm/lib/utils"
+import { CASCO_DO_CARIMBO } from "@/registry/wicomm/ui/chip-de-estado"
+import { Skeleton } from "@/registry/wicomm/ui/skeleton"
 
 /**
  * A PÁGINA dentro do casco (DESIGN LAY-01, LAY-02, LAY-03): o contêiner de
@@ -35,6 +37,9 @@ function PaginaDoApp({
   )
 }
 
+/** As três esperas da linha de valores: larguras diferentes, para não ler como um valor repetido. */
+const LARGURAS_DA_ESPERA = ["w-16", "w-20", "w-14"] as const
+
 type Desfecho = {
   tom: Extract<Tom, "ok" | "ruim" | "neutro">
   texto: string
@@ -46,17 +51,26 @@ type Desfecho = {
  * O TOPO da página (ANATOMIA CASCO-01): o que muda quando a tela muda. De cima
  * para baixo — a trilha (só em tela de detalhe, CASCO-03), a linha do título
  * (o `h1`, um só, na voz `t-display` — TIPO-04; o estado do objeto; à direita
- * as secundárias, o primário e o `⋯`), o desfecho do último gesto do topo, e os
- * filtros que valem para a tela inteira (a Lista).
+ * as secundárias, o primário e o `⋯`), a linha dos valores que classificam o
+ * objeto (CASCO-04), o desfecho do último gesto do topo, e os filtros que valem
+ * para a tela inteira (a Lista).
  *
  * É a ÚNICA peça que escreve o `h1` da página. O primário é um só (PESO-01) e
  * vem em `lg`; a ação rara mora no `menu` (PRIN-03). O que vale igual em todas
  * as telas não mora aqui: é do cabeçalho do casco.
+ *
+ * `valores`: os `Badge` que classificam o objeto, na linha própria abaixo do
+ * título (CASCO-04) — o estado tem voz e fica na linha do título; o valor não
+ * tem, e não espreme o título. A linha quebra no estreito. Sem `valores`, a
+ * linha não existe (nem quando todos os `Badge` saem vazios); `valores=
+ * "carregando"` desenha três esqueletos com o casco do carimbo, na altura final
+ * de uma linha de valores que cabe numa linha.
  */
 function TopoDaPagina({
   trilha,
   titulo,
   estado,
+  valores,
   secundarias,
   primario,
   menu,
@@ -67,6 +81,7 @@ function TopoDaPagina({
   trilha?: React.ReactNode
   titulo: string
   estado?: React.ReactNode
+  valores?: React.ReactNode | "carregando"
   secundarias?: React.ReactNode
   primario?: React.ReactNode
   menu?: React.ReactNode
@@ -89,6 +104,19 @@ function TopoDaPagina({
           </div>
         ) : null}
       </div>
+      {valores === "carregando" ? (
+        <div data-slot="valores-do-topo" aria-hidden="true" className="flex flex-wrap items-center gap-2">
+          {LARGURAS_DA_ESPERA.map((largura) => (
+            <Skeleton key={largura} className={cn(CASCO_DO_CARIMBO, largura)}>
+              {"\u00a0"}
+            </Skeleton>
+          ))}
+        </div>
+      ) : valores ? (
+        <div data-slot="valores-do-topo" className="flex flex-wrap items-center gap-2 empty:hidden">
+          {valores}
+        </div>
+      ) : null}
       {desfecho ? (
         <p
           role={desfecho.tom === "ruim" ? "alert" : "status"}

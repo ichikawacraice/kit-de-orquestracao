@@ -19,6 +19,7 @@ import { RolagemDoPainel } from "@/registry/wicomm/ui/painel"
 import { BarraDeModos } from "@/registry/wicomm/ui/seletor-de-vista"
 import { LinkDaLinha, Table, TableBody, TableCell, TableRow } from "@/registry/wicomm/ui/table"
 import { TelaDeErro } from "@/registry/wicomm/ui/tela-de-erro"
+import { Badge } from "@/registry/wicomm/ui/badge"
 import { PaginaDoApp, TopoDaPagina } from "@/registry/wicomm/ui/topo-da-pagina"
 import { Trilha } from "@/registry/wicomm/ui/trilha"
 import { TrilhoDoPercurso } from "@/registry/wicomm/ui/trilho-do-percurso"
@@ -172,6 +173,44 @@ describe("o topo da página (CASCO-01, TIPO-04, PESO-01)", () => {
     expect(screen.getByRole("alert").textContent).toContain("Tentar de novo")
     rerender(<TopoDaPagina titulo="X" desfecho={{ tom: "ok", texto: "Feito." }} />)
     expect(screen.getByRole("status").textContent).toBe("Feito.")
+  })
+
+  it("os valores moram na linha de baixo, entre o título e o desfecho, e quebram no estreito (CASCO-04)", () => {
+    const { container } = render(
+      <TopoDaPagina
+        titulo="Pedido 1042"
+        estado={<span data-slot="chip-de-estado">Aguarda você</span>}
+        valores={
+          <>
+            <span data-slot="badge">Crítico</span>
+            <span data-slot="badge">Prioridade 1</span>
+          </>
+        }
+        desfecho={{ tom: "ok", texto: "Feito." }}
+      />
+    )
+    const linha = container.querySelector('[data-slot="valores-do-topo"]')!
+    expect(classes(linha)).toEqual(expect.arrayContaining(["flex", "flex-wrap", "gap-2"]))
+    expect(linha.querySelectorAll('[data-slot="badge"]')).toHaveLength(2)
+    expect(screen.getByRole("heading", { level: 1 }).parentElement!.contains(linha)).toBe(false)
+    const ordem = Array.from(container.querySelector("header")!.children).map((el) => el.getAttribute("data-slot") ?? "titulo")
+    expect(ordem).toEqual(["titulo", "valores-do-topo", "desfecho-do-topo"])
+  })
+
+  it("sem valores a linha não existe; carregando, três esperas com o casco do carimbo, escondidas do leitor", () => {
+    const { container, rerender } = render(<TopoDaPagina titulo="X" />)
+    expect(container.querySelector('[data-slot="valores-do-topo"]')).toBeNull()
+    rerender(<TopoDaPagina titulo="X" valores={null} />)
+    expect(container.querySelector('[data-slot="valores-do-topo"]')).toBeNull()
+    rerender(<TopoDaPagina titulo="X" valores={<Badge>{undefined}</Badge>} />)
+    expect(classes(container.querySelector('[data-slot="valores-do-topo"]')!)).toContain("empty:hidden")
+    expect(container.querySelector('[data-slot="valores-do-topo"]')!.childElementCount).toBe(0)
+    rerender(<TopoDaPagina titulo="X" valores="carregando" />)
+    const linha = container.querySelector('[data-slot="valores-do-topo"]')!
+    expect(linha.getAttribute("aria-hidden")).toBe("true")
+    const esperas = linha.querySelectorAll('[data-slot="skeleton"]')
+    expect(esperas).toHaveLength(3)
+    for (const espera of esperas) expect(classes(espera)).toEqual(expect.arrayContaining(["inline-flex", "py-[3px]", "text-[11px]", "leading-[1.4]"]))
   })
 
   it("a página é o contêiner de largura da LAY-02", () => {

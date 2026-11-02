@@ -66,7 +66,7 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `trilha` | breadcrumb | a trilha de volta da tela de detalhe |
 | `vazio` | empty | a região sem itens diz a causa |
 | `tela-de-erro` | — | a rota ou o bloco que não deu para mostrar |
-| `topo-da-pagina` | — | `PaginaDoApp` e `TopoDaPagina`: o `h1` único, o estado, o primário, o ⋯, o desfecho, os filtros |
+| `topo-da-pagina` | — | `PaginaDoApp` e `TopoDaPagina`: o `h1` único, o estado, o primário, o ⋯, a linha dos valores (CASCO-04), o desfecho, os filtros |
 | `seletor-de-vista` | tabs/toggle-group | `BarraDeModos`: abas e modos, a pílula que desliza |
 | `table` | table | a tabela com o filete-guia e a régua do cabeçalho, a linha inteira que abre |
 | `linha-do-grupo` | table/collapsible | o grupo de linhas: o `tbody` com a linha do grupo no degrau de tinta, a contagem e as células alinhadas |

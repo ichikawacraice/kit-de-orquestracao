@@ -4,6 +4,19 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.11.0 · 01/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **O topo da página ganha a linha dos valores** (CASCO-04, regra nova). O `TopoDaPagina` aceita `valores`: os `Badge` que classificam o objeto (categoria, nível, origem), numa linha própria entre a linha do título e o desfecho, que quebra no estreito. O estado continua na linha do título, com voz; o valor não tem voz e não espreme mais o título — quatro valores no `estado` zeravam o título a 1280px.
+- `valores="carregando"`: três esperas com o casco do carimbo, na altura de uma linha de valores (sem salto quando os valores cabem numa linha; no estreito, se eles quebram, a linha cresce ao chegar). Sem `valores`, ou com todos os `Badge` vazios, a linha não existe.
+- CASCO-01 e PECA-01 citam a linha nova; a coluna "Não use" da PECA-01 ganha `Badge` no `estado` ou ao lado do título.
+
+### Migração
+- `npx shadcn add @wicomm/topo-da-pagina`. Tela sem valores não muda.
+- Tela que punha `Badge` no `estado` (ou ao lado do `h1`) passa os valores para `valores`; o `estado` fica só com o `ChipDeEstado`.
+
 ## 0.10.0 · 01/11/2026
 
 Camadas: base, tokens, registro

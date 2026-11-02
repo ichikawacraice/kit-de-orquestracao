@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.10.0
+versao: 0.11.0
 description: A anatomia dos apps React da Wicomm — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -59,7 +59,7 @@ O casco é o que faz dois apps da Wicomm parecerem um só: é a primeira coisa q
   | região | o que mora | o que NÃO mora |
   |---|---|---|
   | **Barra lateral** (esquerda, recolhível) | o logotipo Wicomm, os destinos do app (item com ícone **e** rótulo), a conta e o tema ao pé | ação de tela, aviso, filtro |
-  | **Topo da página** | a trilha (em tela de detalhe), o título (`h1`, um só), o estado do objeto quando a tela é de um objeto, o primário da tela | ação rara (vai ao `⋯`) |
+  | **Topo da página** | a trilha (em tela de detalhe), o título (`h1`, um só), o estado do objeto quando a tela é de um objeto, os valores que o classificam (na linha de baixo, CASCO-04), o primário da tela | ação rara (vai ao `⋯`) |
   | **Conteúdo** | o arquétipo da tela, em superfície | conteúdo solto no fundo |
   O **cabeçalho**, grudado acima do topo, é opcional e só leva o que vale **igual em todas as telas** e muda o app inteiro: a troca de contexto, a busca global, a conexão com um serviço de fora — nunca título, primário, conta ou tema. O **topo da página** leva o que muda quando a tela muda. Para um caso novo, o teste é: *a coisa continua valendo depois de trocar de destino?* Se sim, é do cabeçalho; se não, é do topo. O topo não rola (LAY-01). Os arquétipos **Entrada e Editor ficam fora do casco**; no Editor, a barra (ARQ-03) faz o papel dele e leva a volta, o nome do objeto e a conta.
 - **Por quê.** Navegação, título e primário no mesmo lugar em todo app é o que o cliente reconhece como "a mesma empresa".
@@ -74,6 +74,11 @@ O casco é o que faz dois apps da Wicomm parecerem um só: é a primeira coisa q
 - **Regra.** Toda tela de um objeto (detalhe, edição) abre com a trilha até a lista de onde veio. No Editor, fora do casco, a volta e o nome da `BarraDoEditor` cumprem a trilha: a volta é obrigatória na peça. A lista das telas que existem e a das que montam a trilha são forçadas a concordar por teste.
 - **Por quê.** A tela onde mais se passava tempo não tinha volta nenhuma, e a peça de trilha já existia.
 - **Confere.** `guarda:toda-tela-de-detalhe-tem-trilha`.
+
+### CASCO-04 · Estado na linha do título, valor na linha de baixo
+- **Regra.** Na tela de um objeto, o topo leva o **estado** do objeto na linha do título (`estado`, um `ChipDeEstado` com voz) e os **valores que o classificam** — a categoria, o nível, a origem — numa linha própria logo abaixo (`valores` do `TopoDaPagina`, só `Badge` neutro — o de marca não entra no topo, onde disputaria a voz com o estado —, numa linha que quebra no estreito). Sem valores, a linha não existe; enquanto carregam, a peça desenha a espera já na altura final (`valores="carregando"`). Valor na linha do título, valor no `estado` e linha de valores montada à mão na tela são defeito.
+- **Por quê.** O título é a única coisa da linha que encolhe: cada valor posto ao lado dele tira largura do nome, e com quatro valores e as ações o título some em tela larga e corta na comum. Estado tem voz e decide o que a pessoa faz; valor só situa, e não deve disputar o lugar do estado.
+- **Confere.** Peça `TopoDaPagina` (registro, slot `valores`) · `crítica:consistência` · `crítica:hierarquia`.
 
 ---
 
@@ -194,7 +199,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | Prazo numa linha | `Prazo`: a data ou o intervalo em `t-medida` (o intervalo de um dia escreve o dia uma vez) e a legenda relativa embaixo (*em 12 dias*), ou ao lado (`emLinha`); só a data (`relativo={false}`) onde quem lê não deve ver a contagem; a voz só com o `tom` que quem chama declara (o limiar é do projeto); `forma="chip"` quando o prazo é o estado do objeto da linha; *Sem data* quando não há | data crua sem legenda, prazo que se pinta sozinho, uma célula de prazo diferente por tela |
   | Trocar um valor na própria célula | `EscolhaNaCelula`: a leitura no peso dela e o chevron de 14px sempre à vista; o menu (a escolha é a ação) ou o popover com o formulário (*Salvar* e Enter gravam, *Cancelar* fecha; o que impede salvar fica escrito no formulário, ligado ao *Salvar*); sem valor, a leitura vazia da peça com o chevron; gravando inerte com o valor novo na hora, a recusa desfaz e diz *Não mudou*; quem não pode trocar vê só a leitura | `Select` com contorno na célula, controle que só aparece no hover, gatilho que esconde o valor, chevron sozinho na célula vazia, *Salvar* que fecha o que o formulário recusou |
   | Coluna que rola | `RolagemDoPainel`, numa das densidades da LAY-06 | `ScrollArea`, `overflow-y-auto` com respiro à mão |
-  | O topo da tela dentro do casco | `PaginaDoApp` + `TopoDaPagina` (o único que escreve o `h1`) | `h1` e linha de ações à mão em cada tela |
+  | O topo da tela dentro do casco | `PaginaDoApp` + `TopoDaPagina` (o único que escreve o `h1`; os valores que classificam o objeto no slot `valores`, CASCO-04) | `h1` e linha de ações à mão em cada tela, `Badge` no `estado` ou ao lado do título |
   | A marca no casco e na Entrada | `Logotipo` | imagem ou texto da marca à mão |
   | Conta e tema | `MenuDaConta`, `MenuDoTema` (no pé da barra lateral) | conta ou tema no cabeçalho, `Select` de tema |
   | De quem é o menu, quando o gatilho só tem ícone | `TopoDoMenu`, primeiro filho do menu | repetir o que o gatilho já mostra; rótulo de menu em caixa alta |
@@ -320,6 +325,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 | CASCO-01 | Regiões do casco | registro, guarda, crítica |
 | CASCO-02 | Um menu só, o do kit | guarda |
 | CASCO-03 | Tela de detalhe tem trilha | guarda |
+| CASCO-04 | Estado no título, valor embaixo | registro, crítica |
 | ARQ-01 | Cinco arquétipos | revisão, auditoria, crítica |
 | ARQ-02 | Análise é Lista com medidores | crítica |
 | ARQ-03 | O Editor, região por região | registro, crítica |
