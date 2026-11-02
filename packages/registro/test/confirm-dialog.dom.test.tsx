@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useConfirm } from '@/registry/wicomm/ui/confirm-dialog'
+import { useConfirm } from '@/registry/design-system/ui/confirm-dialog'
 
 let resposta: Promise<boolean> | null = null
 

@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 
-import { Badge } from '@/registry/wicomm/ui/badge'
-import { CarregandoPorCima } from '@/registry/wicomm/ui/carregando-por-cima'
-import { Checkbox, OpcaoDeMarcar } from '@/registry/wicomm/ui/checkbox'
-import { Faixa } from '@/registry/wicomm/ui/faixa'
-import { Medidor } from '@/registry/wicomm/ui/medidor'
-import { Progress } from '@/registry/wicomm/ui/progress'
+import { Badge } from '@/registry/design-system/ui/badge'
+import { CarregandoPorCima } from '@/registry/design-system/ui/carregando-por-cima'
+import { Checkbox, OpcaoDeMarcar } from '@/registry/design-system/ui/checkbox'
+import { Faixa } from '@/registry/design-system/ui/faixa'
+import { Medidor } from '@/registry/design-system/ui/medidor'
+import { Progress } from '@/registry/design-system/ui/progress'
 
 describe('Checkbox', () => {
   it('marca no clique, no raio de marcação, e o indeterminado é mixed', () => {

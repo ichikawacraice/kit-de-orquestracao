@@ -3,13 +3,13 @@
 import { describe, expect, it } from "vitest"
 import { fireEvent, render, screen } from "@testing-library/react"
 
-import { TINTA_DO_TOM, TONS } from "@/registry/wicomm/lib/idioma-de-cor"
-import { Bloco } from "@/registry/wicomm/ui/bloco"
-import { BlocoDeTinta, GrupoDeTinta } from "@/registry/wicomm/ui/bloco-de-tinta"
-import { Card, CardContent, CardHeader, CardTitle } from "@/registry/wicomm/ui/card"
-import { Painel, PainelDeSecao, RolagemDoPainel } from "@/registry/wicomm/ui/painel"
-import { Secao, TopoDoPainel } from "@/registry/wicomm/ui/secao"
-import { EsperaDaLista, Skeleton } from "@/registry/wicomm/ui/skeleton"
+import { TINTA_DO_TOM, TONS } from "@/registry/design-system/lib/idioma-de-cor"
+import { Bloco } from "@/registry/design-system/ui/bloco"
+import { BlocoDeTinta, GrupoDeTinta } from "@/registry/design-system/ui/bloco-de-tinta"
+import { Card, CardContent, CardHeader, CardTitle } from "@/registry/design-system/ui/card"
+import { Painel, PainelDeSecao, RolagemDoPainel } from "@/registry/design-system/ui/painel"
+import { Secao, TopoDoPainel } from "@/registry/design-system/ui/secao"
+import { EsperaDaLista, Skeleton } from "@/registry/design-system/ui/skeleton"
 
 const classes = (el: Element) => el.className.split(/\s+/)
 

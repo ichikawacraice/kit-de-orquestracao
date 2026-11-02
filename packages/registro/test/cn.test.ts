@@ -1,7 +1,7 @@
 // O `cn` do estilo: o tailwind-merge sabe os nomes do tema Wicomm.
 import { describe, expect, it } from "vitest"
 
-import { cn } from "@/registry/wicomm/lib/utils"
+import { cn } from "@/registry/design-system/lib/utils"
 
 describe("cn", () => {
   it("text-legenda é TAMANHO: uma cor depois não o apaga", () => {

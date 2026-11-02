@@ -123,11 +123,13 @@ npx shadcn@latest add @wicomm/casco @wicomm/lista @wicomm/mesa @wicomm/entrada
 npm run gerar -w @wicomm/registro        # reescreve o registry.json (estilo e lista de peças)
 npm test -w @wicomm/registro             # o gate do pacote
 npm run build -w @wicomm/registro        # shadcn build em public/r/v{versao}/
+node scripts/build.mjs --tema <pasta>    # o mesmo build com outro tema (temas/<id>/)
 npm run num-next-vazio -w @wicomm/registro  # o critério de pronto inteiro num Next vazio (rede, minutos)
 ```
 
-- **A fonte:** `registry/wicomm/ui/*.tsx` e `registry/wicomm/lib/*.ts` (importações entre peças por `@/registry/wicomm/…`, que o `add` reescreve para os aliases do projeto). A lista das peças, o que cada uma pede do npm e de quem depende está em [`lib/itens.mjs`](lib/itens.mjs).
+- **A fonte:** `registry/design-system/ui/*.tsx` e `registry/design-system/lib/*.ts` (importações entre peças por `@/registry/design-system/…`, que o `add` reescreve para os aliases do projeto). A lista das peças, o que cada uma pede do npm e de quem depende está em [`lib/itens.mjs`](lib/itens.mjs).
 - **O estilo é gerado** de `@wicomm/tokens/tailwind-v4.css` ([`lib/css.mjs`](lib/css.mjs)): cor e `--radius` vão ao `cssVars`; sombra, degradê e raio nomeado vão ao `css` no mesmo seletor (o CLI daria a cada variável de `cssVars` um `--x: var(--x)` no `@theme`). O tema ganha os raios `xl`–`4xl` do próprio Tailwind, porque o CLI, ao ver `--radius`, injetaria uma escala em que `rounded-xl` vira 14px e `rounded-2xl` 18px (FORMA-01 pede 12 e 16).
+- **O tema** ([`lib/tema.mjs`](lib/tema.mjs)): o que é da marca sai de `temas/<id>/` — o prefixo do registro, o título e os tokens do estilo, e o logotipo e o rótulo da marca no código. O código das peças traz a marca do tema padrão (`temas/wicomm/`) por extenso; com outro tema, o build troca esses trechos no arquivo do item, então o projeto recebe um arquivo só, sem dependência nova. Trecho da marca que sumir do código é erro do build.
 - **`registry.json` vai no git e é gerado:** o teste começa com `gerar --conferir`. `public/` não vai: é saída do build.
 
 Os testes:
@@ -140,5 +142,7 @@ Os testes:
 | `test/cn.test.ts` | O `cn` conhece os nomes do tema (`text-legenda`, `rounded-ctrl`, `h-ctrl`, `duration-*`, superfícies e vozes). |
 | `test/as-pecas-dos-blocos.dom.test.tsx`, `test/os-blocos.dom.test.tsx` | As peças que os blocos pedem, e cada bloco nos estados da revisão de arquitetura. |
 | `test/guardas-nos-blocos.test.mjs` | As guardas de `@wicomm/guardas` sobre o que o registro instala, no lugar em que o `add` o põe, com base zero; e a prova de que a varredura morde. |
+| `test/o-que-o-add-grava.test.mjs` | O `shadcn add` de cada item, num projeto descartável e sem rede, grava os mesmos arquivos, com o mesmo conteúdo, que a fixture (o que o `add` gravava antes da pasta virar `registry/design-system/` e do tema virar dado). Lento: uns 40 s. |
+| `test/o-tema-no-registro.test.mjs` | Com o tema padrão, o código não muda; com outro tema, o prefixo, o estilo, o logotipo e o rótulo são os dele, e o `add` pelo registro dele funciona. |
 | `tsc --noEmit` | As peças e os blocos compilam em modo estrito (a cola do Next fica com o `next build`). |
 | `scripts/num-next-vazio.mjs` | (fora do gate) `init` + `add` de cada peça e cada bloco, um a um, num Next vazio, o `next build`, e cada página de exemplo servida com o título dela. |

@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { userEvent as eventos } from '@testing-library/user-event'
-import { DicaDeAjuda, rotuloSobre } from '@/registry/wicomm/ui/dica-de-ajuda'
+import { DicaDeAjuda, rotuloSobre } from '@/registry/design-system/ui/dica-de-ajuda'
 
 // Sem a espera de relógio entre teclas: o caso mede o gesto, não o tempo.
 const userEvent = { setup: () => eventos.setup({ delay: null }) }

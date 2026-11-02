@@ -1,7 +1,7 @@
 "use client"
 
-import { CascoDoEditor, EditorDeDocumento } from "@/registry/wicomm/blocks/editor/editor-de-documento"
-import { cargaDoEditor } from "@/registry/wicomm/blocks/editor/dados-do-editor"
+import { CascoDoEditor, EditorDeDocumento } from "@/registry/design-system/blocks/editor/editor-de-documento"
+import { cargaDoEditor } from "@/registry/design-system/blocks/editor/dados-do-editor"
 
 import { CONTA, LinkDoPalco, Tela } from "./_tela"
 

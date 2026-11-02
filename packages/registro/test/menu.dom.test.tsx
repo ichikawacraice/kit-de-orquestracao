@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 import { Pencil, Trash2 } from 'lucide-react'
-import { Button } from '@/registry/wicomm/ui/button'
+import { Button } from '@/registry/design-system/ui/button'
 import {
   AncoraDoMenu,
   ConteudoDoMenu,
@@ -16,7 +16,7 @@ import {
   Menu,
   RotuloDoMenu,
   SubmenuDoMenu,
-} from '@/registry/wicomm/ui/menu'
+} from '@/registry/design-system/ui/menu'
 
 // O Radix mede o gatilho com `ResizeObserver`, que o jsdom não tem.
 globalThis.ResizeObserver ??= class {

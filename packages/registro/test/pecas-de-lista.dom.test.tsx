@@ -2,13 +2,13 @@ import * as React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 
-import { EscolhaNaCelula } from '@/registry/wicomm/ui/escolha-na-celula'
-import { LinhaDoGrupo } from '@/registry/wicomm/ui/linha-do-grupo'
-import { GrupoDeEscolhaDoMenu, ItemDeEscolhaDoMenu } from '@/registry/wicomm/ui/menu'
-import { Monograma, MonogramaAusente, iniciais } from '@/registry/wicomm/ui/monograma'
-import { Pessoa, PilhaDePessoas } from '@/registry/wicomm/ui/pessoa'
-import { Prazo } from '@/registry/wicomm/ui/prazo'
-import { LinkDaLinha, Table, TableCell, TableHead, TableRow } from '@/registry/wicomm/ui/table'
+import { EscolhaNaCelula } from '@/registry/design-system/ui/escolha-na-celula'
+import { LinhaDoGrupo } from '@/registry/design-system/ui/linha-do-grupo'
+import { GrupoDeEscolhaDoMenu, ItemDeEscolhaDoMenu } from '@/registry/design-system/ui/menu'
+import { Monograma, MonogramaAusente, iniciais } from '@/registry/design-system/ui/monograma'
+import { Pessoa, PilhaDePessoas } from '@/registry/design-system/ui/pessoa'
+import { Prazo } from '@/registry/design-system/ui/prazo'
+import { LinkDaLinha, Table, TableCell, TableHead, TableRow } from '@/registry/design-system/ui/table'
 
 function Grupo(props: Partial<React.ComponentProps<typeof LinhaDoGrupo>> & { linhas?: string[] }) {
   const { linhas = ['Briefing', 'Wireframes'], ...resto } = props
@@ -348,7 +348,7 @@ describe('Monograma', () => {
   })
 
   it('segue exportado pelo menu da conta', async () => {
-    const conta = await import('@/registry/wicomm/ui/menu-da-conta')
+    const conta = await import('@/registry/design-system/ui/menu-da-conta')
     expect(conta.Monograma).toBe(Monograma)
   })
 })

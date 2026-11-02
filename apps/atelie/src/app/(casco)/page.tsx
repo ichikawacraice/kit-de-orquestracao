@@ -8,6 +8,7 @@ import { Secao } from "@/components/ui/secao"
 import { Comando } from "@/components/casco/comando"
 import { PaginaDaVitrine } from "@/components/vitrine/pagina"
 import { HOST, VERSAO, itensDaSecao } from "@/catalogo/registro"
+import { TEMA } from "@/catalogo/tema"
 import { todasAsRegras, tabelaDaRegra } from "@/vitrine/base"
 import { GRUPOS_DE_COR } from "@/vitrine/cores"
 import { NOMES_DOS_ICONES } from "@/vitrine/icones"
@@ -44,8 +45,8 @@ export default function Inicio() {
   const destaques = atual ? [...atual.muda.matchAll(/<li>([\s\S]*?)<\/li>/g)].slice(0, 1).map((m) => m[1]!) : []
   return (
     <PaginaDaVitrine
-      titulo="Ateliê Wicomm"
-      abertura="O design system da Wicomm: os valores, as peças, as telas e as regras, vivos nos dois temas."
+      titulo={`Ateliê ${TEMA.nome}`}
+      abertura={`O design system da ${TEMA.nome}: os valores, as peças, as telas e as regras, vivos nos dois temas.`}
     >
       <Link href="/comecar/" className="block rounded-cartao focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
         <Card className="transition-shadow duration-cor hover:superficie-alta motion-reduce:transition-none">

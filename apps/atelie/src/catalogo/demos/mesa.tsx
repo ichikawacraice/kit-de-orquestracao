@@ -1,9 +1,9 @@
 "use client"
 
-import { CascoDoApp } from "@/registry/wicomm/blocks/casco/casco-do-app"
-import { navegacaoDoExemplo } from "@/registry/wicomm/blocks/casco/navegacao"
-import { cargaDaMesa } from "@/registry/wicomm/blocks/mesa/dados-da-mesa"
-import { MesaDoPedido } from "@/registry/wicomm/blocks/mesa/mesa-do-pedido"
+import { CascoDoApp } from "@/registry/design-system/blocks/casco/casco-do-app"
+import { navegacaoDoExemplo } from "@/registry/design-system/blocks/casco/navegacao"
+import { cargaDaMesa } from "@/registry/design-system/blocks/mesa/dados-da-mesa"
+import { MesaDoPedido } from "@/registry/design-system/blocks/mesa/mesa-do-pedido"
 
 import { CONTA, LinkDoPalco, Tela } from "./_tela"
 

@@ -8,7 +8,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { GUARDAS } from '@wicomm/guardas'
 
-const UI = join(import.meta.dirname, '..', 'registry', 'wicomm', 'ui')
+const UI = join(import.meta.dirname, '..', 'registry', 'design-system', 'ui')
 const PECAS = readdirSync(UI)
   .filter((f) => f.endsWith('.tsx'))
   .map((f) => ({ arquivo: f, texto: readFileSync(join(UI, f), 'utf8') }))

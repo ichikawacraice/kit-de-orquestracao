@@ -6,10 +6,10 @@ import * as React from "react"
 import { describe, expect, it } from "vitest"
 import { fireEvent, render, screen } from "@testing-library/react"
 
-import { Button } from "@/registry/wicomm/ui/button"
-import { ConteudoDoMenu, GatilhoDoMenu, GrupoDoMenu, ItemDoMenu, Menu } from "@/registry/wicomm/ui/menu"
-import { Popover, PopoverContent, PopoverTrigger } from "@/registry/wicomm/ui/popover"
-import { Ajuda } from "@/registry/wicomm/ui/tooltip"
+import { Button } from "@/registry/design-system/ui/button"
+import { ConteudoDoMenu, GatilhoDoMenu, GrupoDoMenu, ItemDoMenu, Menu } from "@/registry/design-system/ui/menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/registry/design-system/ui/popover"
+import { Ajuda } from "@/registry/design-system/ui/tooltip"
 
 const classes = (el: Element) => el.className.split(/\s+/)
 

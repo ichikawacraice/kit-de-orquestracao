@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import { FileTextIcon } from "lucide-react"
 
-import { BarraDoEditor, GrupoDaPessoa } from "@/registry/wicomm/ui/barra-do-editor"
+import { BarraDoEditor, GrupoDaPessoa } from "@/registry/design-system/ui/barra-do-editor"
 import {
   ColunasDoEditor,
   ItemDaEstrutura,
@@ -19,11 +19,11 @@ import {
   PISO_DO_CANVAS,
   VAO_DAS_COLUNAS,
   estruturaCabe,
-} from "@/registry/wicomm/ui/colunas-do-editor"
-import { Dobra } from "@/registry/wicomm/ui/dobra"
-import { Popover, PopoverContent, PopoverTrigger } from "@/registry/wicomm/ui/popover"
-import { CascoDoEditor, EditorDeDocumento } from "@/registry/wicomm/blocks/editor/editor-de-documento"
-import { cargaDoEditor, pendenciasDe } from "@/registry/wicomm/blocks/editor/dados-do-editor"
+} from "@/registry/design-system/ui/colunas-do-editor"
+import { Dobra } from "@/registry/design-system/ui/dobra"
+import { Popover, PopoverContent, PopoverTrigger } from "@/registry/design-system/ui/popover"
+import { CascoDoEditor, EditorDeDocumento } from "@/registry/design-system/blocks/editor/editor-de-documento"
+import { cargaDoEditor, pendenciasDe } from "@/registry/design-system/blocks/editor/dados-do-editor"
 
 const conta = { nome: "Ana Souza", email: "ana@exemplo.com.br", onSair: () => {} }
 const editor = (estado?: string) => (
@@ -125,7 +125,7 @@ describe("as colunas do editor (ARQ-03: o canvas nunca abaixo de 60%)", () => {
   })
 
   it("as constantes são as classes da peça", () => {
-    const fonte = readFileSync(resolve(process.cwd(), "registry/wicomm/ui/colunas-do-editor.tsx"), "utf8")
+    const fonte = readFileSync(resolve(process.cwd(), "registry/design-system/ui/colunas-do-editor.tsx"), "utf8")
     expect(LARGURA_DA_ESTRUTURA).toBe(72 * 4)
     expect(LARGURA_DO_TRILHO).toBe(12 * 4)
     expect(LARGURA_DA_COLUNA).toBe(85 * 4)

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
-import { CascoDoApp } from "@/registry/wicomm/blocks/casco/casco-do-app"
+import { CascoDoApp } from "@/registry/design-system/blocks/casco/casco-do-app"
 import { DESTINOS, caminhoDaBarra } from "@/vitrine/navegacao"
 
 function useNavegacao() {

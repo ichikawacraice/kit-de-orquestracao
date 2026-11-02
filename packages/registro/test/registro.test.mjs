@@ -15,7 +15,7 @@ const REG = registro()
 const ITENS = Object.fromEntries(REG.items.map((i) => [i.name, i]))
 const PECAS = REG.items.filter((i) => i.type !== 'registry:style')
 const ler = (p) => readFileSync(join(RAIZ, p), 'utf8')
-const arquivosDoRegistro = (pasta = 'registry/wicomm') =>
+const arquivosDoRegistro = (pasta = 'registry/design-system') =>
   readdirSync(join(RAIZ, pasta), { withFileTypes: true }).flatMap((d) =>
     d.isDirectory() ? arquivosDoRegistro(`${pasta}/${d.name}`) : [`${pasta}/${d.name}`],
   )
@@ -62,7 +62,7 @@ test('cada arquivo do registro está em exatamente uma peça, e cada peça apont
 })
 
 /** A cola de exemplo do Next: as páginas (`registry:page`) e os componentes `*-no-next` que elas usam — lista fechada. */
-const COLA_DO_NEXT = ['registry/wicomm/blocks/casco/casco-no-next.tsx', 'registry/wicomm/blocks/editor/editor-no-next.tsx']
+const COLA_DO_NEXT = ['registry/design-system/blocks/casco/casco-no-next.tsx', 'registry/design-system/blocks/editor/editor-no-next.tsx']
 const ehDoNext = (item, caminho) =>
   item.files.some((f) => f.path === caminho && f.type === 'registry:page') || COLA_DO_NEXT.includes(caminho)
 
@@ -80,10 +80,10 @@ test('toda importação de uma peça está declarada: npm em dependencies, peça
         assert.ok(ehDoNext(item, caminho), `${caminho}: importa "${de}" fora da cola do Next`)
         continue
       }
-      const interna = de.match(/^@\/registry\/wicomm\/(ui|lib|blocks)\/(.+)$/)
+      const interna = de.match(/^@\/registry\/design-system\/(ui|lib|blocks)\/(.+)$/)
       if (interna) {
-        const alvo = PECAS.find((p) => p.files.some((f) => f.path.startsWith(`registry/wicomm/${interna[1]}/${interna[2]}.`)))
-        if (de === '@/registry/wicomm/lib/utils') assert.ok(regs.has('estilo'), `${caminho}: o cn vem do estilo`)
+        const alvo = PECAS.find((p) => p.files.some((f) => f.path.startsWith(`registry/design-system/${interna[1]}/${interna[2]}.`)))
+        if (de === '@/registry/design-system/lib/utils') assert.ok(regs.has('estilo'), `${caminho}: o cn vem do estilo`)
         else assert.ok(alvo && (alvo === item || regs.has(alvo.name)), `${caminho}: importa ${de} sem a dependência de registro`)
       } else assert.ok(npm.has(de), `${caminho}: importa "${de}" sem declarar no item ${item.name}`)
     }

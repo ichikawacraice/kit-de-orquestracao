@@ -31,8 +31,8 @@ const app = mkdtempSync(join(tmpdir(), 'wicomm-guardas-'))
 after(() => rmSync(app, { recursive: true, force: true }))
 
 for (const f of ARQUIVOS) {
-  // A mesma reescrita do `add`: `@/registry/wicomm/<caminho>` vira o alias do lugar instalado.
-  const fonte = readFileSync(join(RAIZ, f.path), 'utf8').replace(/"@\/(registry\/wicomm\/[^"]+)"/g, (m, de) =>
+  // A mesma reescrita do `add`: `@/registry/design-system/<caminho>` vira o alias do lugar instalado.
+  const fonte = readFileSync(join(RAIZ, f.path), 'utf8').replace(/"@\/(registry\/design-system\/[^"]+)"/g, (m, de) =>
     DESTINOS.has(de) ? `"@/${DESTINOS.get(de)}"` : m
   )
   const alvo = join(app, destino(f))

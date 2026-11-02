@@ -12,7 +12,7 @@ import {
   TypeIcon,
 } from "lucide-react"
 
-import type { GrupoDeDestinos } from "@/registry/wicomm/blocks/casco/barra-lateral"
+import type { GrupoDeDestinos } from "@/registry/design-system/blocks/casco/barra-lateral"
 import { itemPeloNome, secaoDoItem } from "@/catalogo/registro"
 
 /**

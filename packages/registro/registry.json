@@ -16,7 +16,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/lib/utils.ts",
+          "path": "registry/design-system/lib/utils.ts",
           "type": "registry:lib"
         }
       ],
@@ -388,7 +388,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/lib/idioma-de-cor.ts",
+          "path": "registry/design-system/lib/idioma-de-cor.ts",
           "type": "registry:lib"
         }
       ]
@@ -407,7 +407,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/button.tsx",
+          "path": "registry/design-system/ui/button.tsx",
           "type": "registry:ui"
         }
       ]
@@ -422,7 +422,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/input.tsx",
+          "path": "registry/design-system/ui/input.tsx",
           "type": "registry:ui"
         }
       ]
@@ -441,7 +441,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/label.tsx",
+          "path": "registry/design-system/ui/label.tsx",
           "type": "registry:ui"
         }
       ]
@@ -460,7 +460,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/select.tsx",
+          "path": "registry/design-system/ui/select.tsx",
           "type": "registry:ui"
         }
       ]
@@ -475,7 +475,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/card.tsx",
+          "path": "registry/design-system/ui/card.tsx",
           "type": "registry:ui"
         }
       ]
@@ -490,7 +490,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/secao.tsx",
+          "path": "registry/design-system/ui/secao.tsx",
           "type": "registry:ui"
         }
       ]
@@ -506,7 +506,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/painel.tsx",
+          "path": "registry/design-system/ui/painel.tsx",
           "type": "registry:ui"
         }
       ]
@@ -524,7 +524,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/bloco.tsx",
+          "path": "registry/design-system/ui/bloco.tsx",
           "type": "registry:ui"
         }
       ]
@@ -540,7 +540,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/bloco-de-tinta.tsx",
+          "path": "registry/design-system/ui/bloco-de-tinta.tsx",
           "type": "registry:ui"
         }
       ]
@@ -559,7 +559,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/dialog.tsx",
+          "path": "registry/design-system/ui/dialog.tsx",
           "type": "registry:ui"
         }
       ]
@@ -580,7 +580,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/confirm-dialog.tsx",
+          "path": "registry/design-system/ui/confirm-dialog.tsx",
           "type": "registry:ui"
         }
       ]
@@ -598,7 +598,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/tooltip.tsx",
+          "path": "registry/design-system/ui/tooltip.tsx",
           "type": "registry:ui"
         }
       ]
@@ -618,7 +618,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/dica-de-ajuda.tsx",
+          "path": "registry/design-system/ui/dica-de-ajuda.tsx",
           "type": "registry:ui"
         }
       ]
@@ -634,7 +634,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/com-motivo.tsx",
+          "path": "registry/design-system/ui/com-motivo.tsx",
           "type": "registry:ui"
         }
       ]
@@ -653,7 +653,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/toast.tsx",
+          "path": "registry/design-system/ui/toast.tsx",
           "type": "registry:ui"
         }
       ]
@@ -668,7 +668,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/skeleton.tsx",
+          "path": "registry/design-system/ui/skeleton.tsx",
           "type": "registry:ui"
         }
       ]
@@ -690,7 +690,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/menu.tsx",
+          "path": "registry/design-system/ui/menu.tsx",
           "type": "registry:ui"
         }
       ]
@@ -705,7 +705,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/lib/antes-do-desenho.tsx",
+          "path": "registry/design-system/lib/antes-do-desenho.tsx",
           "type": "registry:lib"
         }
       ]
@@ -720,7 +720,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/lib/link-do-app.tsx",
+          "path": "registry/design-system/lib/link-do-app.tsx",
           "type": "registry:lib"
         }
       ]
@@ -739,7 +739,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/chip-de-estado.tsx",
+          "path": "registry/design-system/ui/chip-de-estado.tsx",
           "type": "registry:ui"
         }
       ]
@@ -755,7 +755,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/estado.tsx",
+          "path": "registry/design-system/ui/estado.tsx",
           "type": "registry:ui"
         }
       ]
@@ -771,7 +771,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/medalhao-do-icone.tsx",
+          "path": "registry/design-system/ui/medalhao-do-icone.tsx",
           "type": "registry:ui"
         }
       ]
@@ -790,7 +790,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/trilha.tsx",
+          "path": "registry/design-system/ui/trilha.tsx",
           "type": "registry:ui"
         }
       ]
@@ -806,7 +806,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/vazio.tsx",
+          "path": "registry/design-system/ui/vazio.tsx",
           "type": "registry:ui"
         }
       ]
@@ -827,7 +827,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/tela-de-erro.tsx",
+          "path": "registry/design-system/ui/tela-de-erro.tsx",
           "type": "registry:ui"
         }
       ]
@@ -845,7 +845,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/topo-da-pagina.tsx",
+          "path": "registry/design-system/ui/topo-da-pagina.tsx",
           "type": "registry:ui"
         }
       ]
@@ -861,7 +861,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/seletor-de-vista.tsx",
+          "path": "registry/design-system/ui/seletor-de-vista.tsx",
           "type": "registry:ui"
         }
       ]
@@ -877,7 +877,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/table.tsx",
+          "path": "registry/design-system/ui/table.tsx",
           "type": "registry:ui"
         }
       ]
@@ -892,7 +892,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/ficha.tsx",
+          "path": "registry/design-system/ui/ficha.tsx",
           "type": "registry:ui"
         }
       ]
@@ -913,7 +913,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/trilho-do-percurso.tsx",
+          "path": "registry/design-system/ui/trilho-do-percurso.tsx",
           "type": "registry:ui"
         }
       ]
@@ -928,7 +928,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/logotipo.tsx",
+          "path": "registry/design-system/ui/logotipo.tsx",
           "type": "registry:ui"
         }
       ]
@@ -948,7 +948,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/menu-do-tema.tsx",
+          "path": "registry/design-system/ui/menu-do-tema.tsx",
           "type": "registry:ui"
         }
       ]
@@ -968,7 +968,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/menu-da-conta.tsx",
+          "path": "registry/design-system/ui/menu-da-conta.tsx",
           "type": "registry:ui"
         }
       ]
@@ -988,7 +988,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/checkbox.tsx",
+          "path": "registry/design-system/ui/checkbox.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1006,7 +1006,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/progress.tsx",
+          "path": "registry/design-system/ui/progress.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1023,7 +1023,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/medidor.tsx",
+          "path": "registry/design-system/ui/medidor.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1040,7 +1040,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/badge.tsx",
+          "path": "registry/design-system/ui/badge.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1058,7 +1058,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/carregando-por-cima.tsx",
+          "path": "registry/design-system/ui/carregando-por-cima.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1077,7 +1077,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/faixa.tsx",
+          "path": "registry/design-system/ui/faixa.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1096,7 +1096,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/dobra.tsx",
+          "path": "registry/design-system/ui/dobra.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1114,7 +1114,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/popover.tsx",
+          "path": "registry/design-system/ui/popover.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1129,7 +1129,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/monograma.tsx",
+          "path": "registry/design-system/ui/monograma.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1148,7 +1148,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/pessoa.tsx",
+          "path": "registry/design-system/ui/pessoa.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1169,7 +1169,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/linha-do-grupo.tsx",
+          "path": "registry/design-system/ui/linha-do-grupo.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1189,7 +1189,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/prazo.tsx",
+          "path": "registry/design-system/ui/prazo.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1212,7 +1212,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/escolha-na-celula.tsx",
+          "path": "registry/design-system/ui/escolha-na-celula.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1236,7 +1236,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/barra-do-editor.tsx",
+          "path": "registry/design-system/ui/barra-do-editor.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1261,7 +1261,7 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/ui/colunas-do-editor.tsx",
+          "path": "registry/design-system/ui/colunas-do-editor.tsx",
           "type": "registry:ui"
         }
       ]
@@ -1290,31 +1290,31 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/blocks/casco/barra-lateral.tsx",
+          "path": "registry/design-system/blocks/casco/barra-lateral.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/casco/cabecalho-do-app.tsx",
+          "path": "registry/design-system/blocks/casco/cabecalho-do-app.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/casco/casco-do-app.tsx",
+          "path": "registry/design-system/blocks/casco/casco-do-app.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/casco/menu-do-contexto.tsx",
+          "path": "registry/design-system/blocks/casco/menu-do-contexto.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/casco/casco-no-next.tsx",
+          "path": "registry/design-system/blocks/casco/casco-no-next.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/casco/navegacao.ts",
+          "path": "registry/design-system/blocks/casco/navegacao.ts",
           "type": "registry:lib"
         },
         {
-          "path": "registry/wicomm/blocks/casco/layout.tsx",
+          "path": "registry/design-system/blocks/casco/layout.tsx",
           "type": "registry:page",
           "target": "app/(casco)/layout.tsx"
         }
@@ -1347,15 +1347,15 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/blocks/lista/lista-de-pedidos.tsx",
+          "path": "registry/design-system/blocks/lista/lista-de-pedidos.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/lista/dados-da-lista.ts",
+          "path": "registry/design-system/blocks/lista/dados-da-lista.ts",
           "type": "registry:lib"
         },
         {
-          "path": "registry/wicomm/blocks/lista/page.tsx",
+          "path": "registry/design-system/blocks/lista/page.tsx",
           "type": "registry:page",
           "target": "app/(casco)/pedidos/page.tsx"
         }
@@ -1394,15 +1394,15 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/blocks/mesa/mesa-do-pedido.tsx",
+          "path": "registry/design-system/blocks/mesa/mesa-do-pedido.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/mesa/dados-da-mesa.ts",
+          "path": "registry/design-system/blocks/mesa/dados-da-mesa.ts",
           "type": "registry:lib"
         },
         {
-          "path": "registry/wicomm/blocks/mesa/page.tsx",
+          "path": "registry/design-system/blocks/mesa/page.tsx",
           "type": "registry:page",
           "target": "app/(casco)/pedidos/[id]/page.tsx"
         }
@@ -1425,11 +1425,11 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/blocks/entrada/tela-de-entrada.tsx",
+          "path": "registry/design-system/blocks/entrada/tela-de-entrada.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/entrada/page.tsx",
+          "path": "registry/design-system/blocks/entrada/page.tsx",
           "type": "registry:page",
           "target": "app/(tela-inteira)/entrar/page.tsx"
         }
@@ -1467,19 +1467,19 @@
       ],
       "files": [
         {
-          "path": "registry/wicomm/blocks/editor/editor-de-documento.tsx",
+          "path": "registry/design-system/blocks/editor/editor-de-documento.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/editor/editor-no-next.tsx",
+          "path": "registry/design-system/blocks/editor/editor-no-next.tsx",
           "type": "registry:component"
         },
         {
-          "path": "registry/wicomm/blocks/editor/dados-do-editor.ts",
+          "path": "registry/design-system/blocks/editor/dados-do-editor.ts",
           "type": "registry:lib"
         },
         {
-          "path": "registry/wicomm/blocks/editor/page.tsx",
+          "path": "registry/design-system/blocks/editor/page.tsx",
           "type": "registry:page",
           "target": "app/(tela-inteira)/documentos/[id]/editar/page.tsx"
         }

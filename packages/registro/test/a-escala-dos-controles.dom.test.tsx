@@ -3,10 +3,10 @@
 import { describe, expect, it } from "vitest"
 import { render, screen } from "@testing-library/react"
 
-import { Button } from "@/registry/wicomm/ui/button"
-import { Input, classeDoCampo } from "@/registry/wicomm/ui/input"
-import { Label } from "@/registry/wicomm/ui/label"
-import { Select, SelectTrigger } from "@/registry/wicomm/ui/select"
+import { Button } from "@/registry/design-system/ui/button"
+import { Input, classeDoCampo } from "@/registry/design-system/ui/input"
+import { Label } from "@/registry/design-system/ui/label"
+import { Select, SelectTrigger } from "@/registry/design-system/ui/select"
 
 /**
  * O jsdom não calcula CSS: a altura se confere pela classe que a produz

@@ -3,8 +3,8 @@ import * as React from "react"
 import { describe, expect, it, vi } from "vitest"
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 
-import { Button } from "@/registry/wicomm/ui/button"
-import { ComMotivo } from "@/registry/wicomm/ui/com-motivo"
+import { Button } from "@/registry/design-system/ui/button"
+import { ComMotivo } from "@/registry/design-system/ui/com-motivo"
 import {
   Dialog,
   DialogContent,
@@ -12,9 +12,9 @@ import {
   DialogLateral,
   DialogTitle,
   DialogTrigger,
-} from "@/registry/wicomm/ui/dialog"
-import { ToastProvider, useToast, useToastSeHouver, type ToastInput } from "@/registry/wicomm/ui/toast"
-import { Ajuda } from "@/registry/wicomm/ui/tooltip"
+} from "@/registry/design-system/ui/dialog"
+import { ToastProvider, useToast, useToastSeHouver, type ToastInput } from "@/registry/design-system/ui/toast"
+import { Ajuda } from "@/registry/design-system/ui/tooltip"
 
 const classes = (el: Element) => el.className.split(/\s+/)
 

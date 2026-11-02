@@ -1,2 +1,2 @@
 // O kit do ateliê é o próprio registro: a peça vem da fonte, sem cópia.
-export * from "@/registry/wicomm/ui/barra-do-editor"
+export * from "@/registry/design-system/ui/barra-do-editor"

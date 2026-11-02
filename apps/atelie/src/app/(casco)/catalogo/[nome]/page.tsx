@@ -58,7 +58,7 @@ export default async function PaginaDoItem({ params }: { params: Promise<{ nome:
             </a>
           </ParDaFicha>
           <ParDaFicha rotulo="Arquivos" mono>
-            {item.files.map((f) => f.path.replace(/^registry\/wicomm\//, "")).join(", ")}
+            {item.files.map((f) => f.path.replace(/^registry\/design-system\//, "")).join(", ")}
           </ParDaFicha>
           {doRegistro.length > 0 ? (
             <ParDaFicha rotulo="Traz junto">

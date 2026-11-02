@@ -1,7 +1,7 @@
 // O diálogo que bloqueia (DialogLongo `bloqueia`) e a conta de véus.
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { Dialog, DialogLateral, DialogLongo } from '@/registry/wicomm/ui/dialog'
+import { Dialog, DialogLateral, DialogLongo } from '@/registry/design-system/ui/dialog'
 
 /** O diálogo preso: sem saída por Esc, clique fora nem X, e a saída declarada no rodapé. */
 function Preso({ aoMudar = () => {} }: { aoMudar?: (aberto: boolean) => void }) {

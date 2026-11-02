@@ -2,12 +2,13 @@ import type { Metadata } from "next"
 import type { ReactNode } from "react"
 
 import { CODIGO_ANTES_DO_DESENHO } from "@/lib/antes-do-desenho"
+import { TEMA } from "@/catalogo/tema"
 
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: { default: "Ateliê Wicomm", template: "%s · Ateliê Wicomm" },
-  description: "O catálogo vivo do design system da Wicomm.",
+  title: { default: `Ateliê ${TEMA.nome}`, template: `%s · Ateliê ${TEMA.nome}` },
+  description: `O catálogo vivo do design system da ${TEMA.nome}.`,
 }
 
 /**

@@ -14,10 +14,10 @@ export const NPM = {
   animar: 'tw-animate-css@1.4.0',
 }
 
-const ui = (nome) => ({ path: `registry/wicomm/ui/${nome}.tsx`, type: 'registry:ui' })
-const lib = (nome, ext = 'ts') => ({ path: `registry/wicomm/lib/${nome}.${ext}`, type: 'registry:lib' })
+const ui = (nome) => ({ path: `registry/design-system/ui/${nome}.tsx`, type: 'registry:ui' })
+const lib = (nome, ext = 'ts') => ({ path: `registry/design-system/lib/${nome}.${ext}`, type: 'registry:lib' })
 
-const doBloco = (bloco, nome, type, ext = 'tsx') => ({ path: `registry/wicomm/blocks/${bloco}/${nome}.${ext}`, type })
+const doBloco = (bloco, nome, type, ext = 'tsx') => ({ path: `registry/design-system/blocks/${bloco}/${nome}.${ext}`, type })
 const comp = (bloco, nome) => doBloco(bloco, nome, 'registry:component')
 const dados = (bloco, nome) => doBloco(bloco, nome, 'registry:lib', 'ts')
 /** A página de exemplo, no lugar dela no App Router (`target`). Só ela conhece o Next. */
