@@ -150,6 +150,36 @@ describe('kit iniciar e kit atualizar', () => {
     assert.ok(!(VELHO in s.enabledPlugins));
   });
 
+  it('kit doutor com kit-design desligado manda religar pelo nome novo; com o velho no settings, manda rodar o kit atualizar', () => {
+    const d = projeto();
+    assert.equal(kit(d, 'iniciar').status, 0);
+    const s = json(d, '.claude/settings.json'); s.enabledPlugins[NOVO] = false;
+    escrever(d, '.claude/settings.json', JSON.stringify(s, null, 2));
+    const out = kit(d, 'doutor').stdout;
+    assert.match(out, /plugin kit-design desligado/);
+    assert.match(out, /enabledPlugins "kit-design@kit-de-orquestracao": true/);
+    assert.doesNotMatch(out, /"design@kit-de-orquestracao": true/);
+    const v = projetoVelho(false);
+    assert.match(kit(v, 'doutor').stdout, /settings\.json ainda liga design@kit-de-orquestracao.*kit atualizar/);
+  });
+
+  it('chave nova posta pela pessoa (fora do lock) não entra no lock: o remover não a apaga', () => {
+    const d = projetoVelho(true);
+    const s0 = json(d, '.claude/settings.json'); s0.enabledPlugins[NOVO] = true;
+    escrever(d, '.claude/settings.json', JSON.stringify(s0, null, 2));
+    assert.equal(kit(d, 'atualizar').status, 0);
+    const plugins = json(d, '.claude/kit.lock.json').chaves.settings.plugins;
+    assert.ok(!plugins.includes(NOVO) && !plugins.includes(VELHO), plugins.join());
+  });
+
+  it('settings.json ilegível não vira conflito do atualizar (ele não é do atualizar)', () => {
+    const d = projeto();
+    assert.equal(kit(d, 'iniciar').status, 0);
+    escrever(d, '.claude/settings.json', '{ quebrado');
+    const r = kit(d, 'atualizar');
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  });
+
   it('o nome velho no settings.local.json (do usuário) não se mexe: vira aviso', () => {
     const d = projeto();
     assert.equal(kit(d, 'iniciar').status, 0);

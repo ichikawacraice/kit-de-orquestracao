@@ -76,7 +76,8 @@ function montar(publicadas, instalados) {
     writeFileSync(join(work, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: MP, plugins: Object.keys(versoes).map((n) => ({ name: n, source: `./plugins/${n}` })) }));
     for (const [n, v] of Object.entries(versoes)) {
       mkdirSync(join(work, 'plugins', n, '.claude-plugin'), { recursive: true });
-      writeFileSync(join(work, 'plugins', n, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: n, version: v }));
+      const userConfig = n === 'kit-design' ? { guarda: {}, cobrar_critica: {}, pasta_do_front: {}, largura: {} } : undefined;
+      writeFileSync(join(work, 'plugins', n, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: n, version: v, userConfig }));
     }
     git(work, 'add', '-A'); git(work, 'commit', '-qm', 'publica'); git(work, 'push', '-q', 'origin', 'main');
   };
@@ -249,7 +250,7 @@ const RENOMEADO = { orquestracao: '0.1.2', 'kit-design': '0.3.0' };
 test('F332: design@ instalado e só kit-design@ publicado: instala o novo com as opções do velho e desinstala o velho', () => {
   const c = montar(RENOMEADO, [inst('orquestracao', '0.1.2'), inst('design', '0.0.7')]);
   try {
-    c.settings({ pluginConfigs: { [`design@${MP}`]: { options: { guarda: false, pasta_do_front: 'web', largura: 1024 } } } });
+    c.settings({ pluginConfigs: { [`design@${MP}`]: { options: { guarda: false, pasta_do_front: 'web', largura: 1024, saiu_do_manifesto: true } } } });
     const r = c.rodar();
     assert.equal(r.exit, 0, r.err + r.out);
     const ch = c.chamadas().filter((x) => ['install', 'uninstall', 'disable'].includes(x[1]));
@@ -270,14 +271,25 @@ test('F332: design@ instalado e só kit-design@ publicado: instala o novo com as
   } finally { limpar(c); }
 });
 
-test('F332: velho desligado: o novo entra desligado', () => {
-  const c = montar(RENOMEADO, [inst('design', '0.0.7', { enabled: false })]);
+test('F332: velho desligado no settings da conta: o novo entra desligado (o enabled da lista, que pode vir do projeto, não conta)', () => {
+  const c = montar(RENOMEADO, [inst('design', '0.0.7', { enabled: true })]);
   try {
+    c.settings({ enabledPlugins: { [`design@${MP}`]: false } });
     const r = c.rodar();
     assert.equal(r.exit, 0, r.err + r.out);
     const ch = c.chamadas().filter((x) => ['install', 'uninstall', 'disable'].includes(x[1]));
     assert.deepEqual(ch.map((x) => `${x[1]} ${x[2]}`), [`install kit-design@${MP}`, `disable kit-design@${MP}`, `uninstall design@${MP}`]);
     assert.equal(c.estado().find((x) => x.id === `kit-design@${MP}`).enabled, false);
+  } finally { limpar(c); }
+});
+
+test('F332: velho desligado só na lista (projeto), ligado na conta: o novo não é desligado', () => {
+  const c = montar(RENOMEADO, [inst('design', '0.0.7', { enabled: false })]);
+  try {
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.ok(c.chamadas().some((x) => x[1] === 'install'), 'precondição: instalou');
+    assert.ok(!c.chamadas().some((x) => x[1] === 'disable'));
   } finally { limpar(c); }
 });
 

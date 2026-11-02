@@ -86,7 +86,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
 function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
   const texto = lerTexto(destino, '.claude/settings.json');
   if (texto !== null) {
-    let s; try { s = JSON.parse(semBom(texto)); } catch (e) { conflito(`.claude/settings.json ilegível: ${e.message}`); s = null; }
+    let s = null; try { s = JSON.parse(semBom(texto)); } catch { /* ilegível: o doutor acusa; o atualizar não o lê para mais nada */ }
     const ligados = s?.enabledPlugins;
     if (ligados && typeof ligados === 'object' && Object.keys(PLUGINS_RENOMEADOS).some((v) => v in ligados)) {
       const novos = {};
@@ -100,7 +100,8 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
       const base = mudancas.find((m) => m.arquivo === '.claude/settings.json');
       if (base) base.novo = serializar(s, texto); else mudancas.push({ arquivo: '.claude/settings.json', antigo: texto, novo: serializar(s, texto) });
       const cs = lock.chaves?.settings;
-      if (Array.isArray(cs?.plugins)) cs.plugins = [...new Set(cs.plugins.map((n) => PLUGINS_RENOMEADOS[n] ?? n))];
+      // a chave nova que já estava não foi o kit que pôs: o lock larga a velha e não a toma (o remover não apaga o que é da pessoa)
+      if (Array.isArray(cs?.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => (!PLUGINS_RENOMEADOS[n] ? [n] : PLUGINS_RENOMEADOS[n] in ligados ? [] : [PLUGINS_RENOMEADOS[n]])))];
     }
   }
   const local = lerTexto(destino, '.claude/settings.local.json');

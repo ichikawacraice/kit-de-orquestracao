@@ -3,7 +3,7 @@
 // Sequência: lista os instalados → `marketplace update` → confere que o clone está no commit do GitHub (uma nova tentativa) →
 // `plugin update <nome>@kit-de-orquestracao -s user` onde a versão difere → lista de novo e confere que a instalada é a publicada (senão `não pegou`, exit 1). Cópia `project` não se mexe; plugin
 // que falta não se instala. Plugin renomeado (F332: `design` → `kit-design`): o velho no escopo user dá lugar ao novo, instalado com as
-// opções do velho (`--config`) e desligado se o velho estava; só com o novo dentro o velho sai. Ambiente: CLAUDE_BIN, GIT_BIN (trocam os executáveis), KIT_MARKETPLACE_DIR (o clone, senão
+// opções do velho (`--config`, só as que o manifesto novo declara) e desligado se a conta desligava o velho; só com o novo dentro o velho sai. Ambiente: CLAUDE_BIN, GIT_BIN (trocam os executáveis), KIT_MARKETPLACE_DIR (o clone, senão
 // ~/.claude/plugins/marketplaces/kit-de-orquestracao), KIT_UPDATE_TIMEOUT_MS (marketplace e update; padrão 180 s).
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -70,14 +70,19 @@ function atualizarClone() {
  * desligado e só então desinstala o velho. `{ erro }` no primeiro passo que falha; até o novo entrar, o velho fica.
  */
 function trocarDeNome(velho, idNovo) {
-  let opcoes = {};
-  try { opcoes = lerJson(join(pastaDeConfig(), 'settings.json'))?.pluginConfigs?.[velho.id]?.options ?? {}; } catch { /* sem settings: sem opção */ }
+  let conta = null;
+  try { conta = lerJson(join(pastaDeConfig(), 'settings.json')); } catch { /* sem settings: sem opção, ligado */ }
+  const opcoes = conta?.pluginConfigs?.[velho.id]?.options ?? {};
+  // só a opção que o manifesto novo declara: a que saiu dele faria o install recusar sempre
+  let declaradas = [];
+  try { declaradas = Object.keys(lerJson(join(CLONE, 'plugins', idNovo.split('@')[0], '.claude-plugin', 'plugin.json')).userConfig ?? {}); } catch { /* sem manifesto: nenhuma */ }
   const configs = Object.entries(opcoes && typeof opcoes === 'object' ? opcoes : {})
-    .filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v) && v !== '')
+    .filter(([k, v]) => declaradas.includes(k) && ['string', 'number', 'boolean'].includes(typeof v) && v !== '')
     .flatMap(([k, v]) => ['--config', `${k}=${v}`]);
   const i = claude(['plugin', 'install', idNovo, '--json', '-s', 'user', ...configs], LONGO_MS);
   if (i.status !== 0) return { erro: i.err || `install: exit ${i.status}` };
-  if (velho.enabled === false) {
+  // desligado é o que a conta diz (o `enabled` da lista pode vir do projeto de onde o comando roda)
+  if (conta?.enabledPlugins?.[velho.id] === false) {
     const d = claude(['plugin', 'disable', idNovo, '--json', '-s', 'user']);
     if (d.status !== 0) return { erro: `o novo entrou ligado e o ${velho.id} estava desligado: ${d.err || `exit ${d.status}`}` };
   }

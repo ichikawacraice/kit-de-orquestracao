@@ -108,10 +108,11 @@ function processos(destino, home, configs, linhas) {
   }
   const ligado = { processos: ligadoEm(`processos@${MARKETPLACE}`, configs), design: ligadoEm(`kit-design@${MARKETPLACE}`, configs) };
   const secao = { processos: 'documentos', design: 'design' };
+  const plugin = { processos: 'processos', design: 'kit-design' };
   for (const nome of ['processos', 'design']) {
-    if (ligado[nome] === false && kj[secao[nome]] !== undefined) linhas.push(`aviso: plugin ${nome} desligado, mas o .claude/kit.json tem a seção ${secao[nome]}: o kit.json não o religa (plugin desligado não roda, diga o arquivo o que disser); para religar, enabledPlugins "${nome}@${MARKETPLACE}": true`);
-    else if (ligado[nome] === false) linhas.push(`info: plugin ${nome} desligado neste projeto`);
-    else if (ligado[nome] === true && kj[secao[nome]] === undefined) linhas.push(`aviso: plugin ${nome} ligado, mas o .claude/kit.json está sem a seção ${secao[nome]}: valem os caminhos e os padrões do plugin; o \`kit atualizar\` não a acrescenta, copie-a do modelo do kit`);
+    if (ligado[nome] === false && kj[secao[nome]] !== undefined) linhas.push(`aviso: plugin ${plugin[nome]} desligado, mas o .claude/kit.json tem a seção ${secao[nome]}: o kit.json não o religa (plugin desligado não roda, diga o arquivo o que disser); para religar, enabledPlugins "${plugin[nome]}@${MARKETPLACE}": true`);
+    else if (ligado[nome] === false) linhas.push(`info: plugin ${plugin[nome]} desligado neste projeto`);
+    else if (ligado[nome] === true && kj[secao[nome]] === undefined) linhas.push(`aviso: plugin ${plugin[nome]} ligado, mas o .claude/kit.json está sem a seção ${secao[nome]}: valem os caminhos e os padrões do plugin; o \`kit atualizar\` não a acrescenta, copie-a do modelo do kit`);
   }
   // plugin fora do enabledPlugins (projeto instalado antes dos processos): o gate confere as docs mesmo assim, pelo padrão
   const docsDoProj = docsDoProjeto(destino);
