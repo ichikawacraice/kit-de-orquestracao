@@ -150,7 +150,7 @@ describe('M3 — doutor diz o bloco, ignora o que é do projeto e confere só as
   const lar = () => {
     const h = realpathSync(mkdtempSync(join(tmpdir(), 'kit-c4b-home-')));
     mkdirSync(join(h, '.claude', 'plugins'), { recursive: true });
-    writeFileSync(join(h, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { [NOME]: [{ scope: 'user' }] } }));
+    writeFileSync(join(h, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { [NOME]: [{ scope: 'user' }], 'superpowers@claude-plugins-official': [{ scope: 'user' }] } }));
     return h;
   };
   // o aviso do placeholder do bloco projeto (c17.4) é esperado num CLAUDE.md recém-adotado; os testes abaixo medem outra coisa

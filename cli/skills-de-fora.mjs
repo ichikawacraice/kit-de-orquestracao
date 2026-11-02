@@ -61,9 +61,9 @@ export function conferirSkillsDeFora({ home, catalogo = lerJson(CATALOGO) }) {
     const lista = skills.map((s) => `${s.skill} → ${s.use}`).join('; ');
     const dependencia = (catalogo.plugins ?? []).some((p) => p.plugin === plugin && p.saida === 'depender');
     const como = onde.map((o) => (o.origem === 'app' ? 'no app (lista de plugins da conta)' : `só para você neste projeto com \`claude plugin disable ${o.id} --scope local\``));
-    const desligar = dependencia ? 'o plugin fica: o kit usa outras skills dele'
-      : `se não usa as outras skills dele, desligue-o ${como.join(' e ')}: cada sessão deixa de carregar as descrições`;
-    linhas.push(`aviso: plugin ${plugin} instalado; o kit barra neste projeto ${lista} (as outras skills dele seguem livres); ${desligar}`);
+    // da dependência não há o que fazer (o plugin fica): só informa o que o kit barra nela
+    if (dependencia) { linhas.push(`info: o kit barra neste projeto ${lista}, do plugin ${plugin} (dependência do kit: o plugin fica)`); continue; }
+    linhas.push(`aviso: plugin ${plugin} instalado; o kit barra neste projeto ${lista} (as outras skills dele seguem livres); se não usa as outras, desligue-o ${como.join(' e ')}: cada sessão deixa de carregar as descrições`);
   }
   return { linhas, falhas };
 }

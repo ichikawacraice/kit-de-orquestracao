@@ -97,6 +97,16 @@ describe('conferirSkillsDeFora', () => {
     } finally { rmSync(h, { recursive: true, force: true }); }
   });
 
+  it('skill barrada de uma dependência é info, não aviso: não há o que desligar', () => {
+    const h = casa({ cli: ['superpowers@claude-plugins-official'] });
+    try {
+      const cat = { ...catalogo, skills: [...catalogo.skills, { skill: 'superpowers:requesting-code-review', saida: 'barrar', use: 'orquestracao:validador', motivo: 'revisão do kit' }] };
+      const r = conferirSkillsDeFora({ home: h, catalogo: cat });
+      assert.ok(r.linhas.some((l) => l.startsWith('info:') && l.includes('superpowers:requesting-code-review')), r.linhas.join('\n'));
+      assert.ok(!r.linhas.some((l) => l.startsWith('aviso:')), r.linhas.join('\n'));
+    } finally { rmSync(h, { recursive: true, force: true }); }
+  });
+
   it('plugin de fora sem skill barrada não gera aviso (o kit não opina sobre o livre)', () => {
     const h = casa({ cli: ['superpowers@claude-plugins-official'], app: ['data'] });
     try {
