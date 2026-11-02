@@ -100,7 +100,7 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       assert.deepEqual(Object.keys(lock.blocos), ['projeto', 'comandos', 'regras-de-operacao', 'regras-de-trabalho', 'documentos', 'design', 'convencoes-de-teste', 'orquestradora']);
       const claude = ler(d, 'CLAUDE.md');
       for (const [nome, b] of Object.entries(lock.blocos)) {
-        assert.equal(b.versao, { 'regras-de-trabalho': 3, comandos: 3, documentos: 2, 'regras-de-operacao': 3, orquestradora: 2 }[nome] ?? 1); // c18 subiu para v2; K10 para v3; o teste isolado (ADR 0005) subiu `comandos` para v2; o diário por entrada (ADR 0006) subiu `documentos` para v2; o modelo da dona (F179) subiu `comandos` para v3 e `regras-de-operacao` e `orquestradora` para v2; o CI só no PR para a main (F298) subiu `regras-de-operacao` para v3
+        assert.equal(b.versao, { 'regras-de-trabalho': 4, comandos: 3, documentos: 2, 'regras-de-operacao': 3, orquestradora: 2 }[nome] ?? 1); // c18 subiu para v2; K10 para v3; o teste isolado (ADR 0005) subiu `comandos` para v2; o diário por entrada (ADR 0006) subiu `documentos` para v2; o modelo da dona (F179) subiu `comandos` para v3 e `regras-de-operacao` e `orquestradora` para v2; o CI só no PR para a main (F298) subiu `regras-de-operacao` para v3; a análise do pedido (F318) subiu `regras-de-trabalho` para v4
         const m = new RegExp(`<!-- kit:${nome} v${b.versao} -->([\\s\\S]*?)<!-- /kit:${nome} -->`).exec(claude);
         assert.ok(m, `bloco ${nome} sumiu`);
         assert.equal(b.sha256, sha(m[1]), `hash do bloco ${nome}`);

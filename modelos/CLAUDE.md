@@ -28,8 +28,9 @@ Lidos de `.claude/kit.json`:
 - **CI só no PR para a produção:** o CI (GitHub Actions ou similar) dispara só no `pull_request` contra a `main` (`on: pull_request: branches: [main]`); o PR para a branch de integração roda só os testes afetados, com o comando e a saída (`exit=0`) colados no PR, e o gate da fila protege a integração (CI em todo PR é espera e minuto para repetir o que a fila já mede).
 <!-- /kit:regras-de-operacao -->
 
-<!-- kit:regras-de-trabalho v3 -->
+<!-- kit:regras-de-trabalho v4 -->
 ## Regras de trabalho
+- **O pedido é ponto de partida, não ordem:** antes de agir, confira a premissa contra o código, o banco e os docs, aponte o que está errado ou arriscado, faça contraproposta e recomende o melhor formato. Proporcional ao risco: o trivial executa direto; o que muda desenho, contrato, estado ou produção ganha a análise completa. Discorde uma vez e siga com o reversível; se quem pediu mantém o pedido, faça o que ele pediu. Regra inteira: protocolo do plugin `orquestracao`, âncora `analise-do-pedido`.
 - Decisão que muda desenho vira ADR em `docs/adr/` (número pedido à orquestradora quando há uma). Onde mora cada documento e as regras de cada um: bloco `kit:documentos`, abaixo.
 - Se o projeto exige spec ou roadmap antes do código, ele declara isso nas regras dele (acima ou abaixo deste bloco); o kit não exige nem dispensa.
 - Teste antes do código quando o comportamento muda.

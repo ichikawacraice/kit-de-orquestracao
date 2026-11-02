@@ -121,6 +121,21 @@ A limpeza apaga a lembrança, não as perguntas: elas ficam no painel com `sessa
 - **Três caminhos para rodar teste, e só eles:** `npm test` (o gate, que toma as fichas da suíte depois de ganhar a vez), `npm test <pacote>` (o gate pela fila do conserto) e `node scripts/kit/com-fichas.mjs -- <comando>` (teste isolado: toma as fichas, troca `{fichas}` nos argumentos e passa `KIT_FICHAS_TOMADAS` ao filho, que não toma de novo). A guarda de operação **recusa** (`deny`, também em bypass) `vitest`, `node --test` e `jest` chamados direto fora do CI.
 - **Máquina cheia** (nenhuma ficha da faixa normal livre e nenhuma emprestável da faixa do gate, ou carga de 1 min ≥ núcleos; um gate rodando sozinho não conta como cheia): o teto de donas cai para 3 ([quantas donas](#teto-de-donas)). No modo ausente nada afrouxa, e ninguém pergunta nada ao operador sobre o teto.
 
+<a id="analise-do-pedido"></a>
+## O pedido é ponto de partida, não ordem
+Quem pede (o operador, a orquestradora no briefing, outra sessão) descreve um problema, uma hipótese e a solução que imagina; nada disso é verdade nem premissa por padrão. Antes de agir, a sessão confere o pedido contra o código, o banco, os docs e o estado real, diz onde ele está errado e propõe o melhor formato, inclusive um diferente do pedido.
+- **Proporcional ao risco.** Pedido trivial e claro (corrigir um texto, rodar um comando, renomear) executa direto; se algo estiver errado, uma linha diz o quê. Pedido que muda desenho, contrato, estado gravado, segurança, produção ou dinheiro, ou que sai caro refazer, ganha a análise completa antes da primeira edição. Na dúvida, a completa.
+- **A análise completa é curta e tem quatro partes,** no plano do item ou no começo da resposta:
+  1. **Premissa conferida:** o que o pedido afirma e o que a medição mostrou (arquivo:linha, saída de comando); o que não deu para conferir, dito como tal.
+  2. **O que está errado ou arriscado:** no pedido, na hipótese e na solução proposta (caso de borda, custo, o que quebra junto, regra do projeto contrariada).
+  3. **Contraproposta:** o formato melhor quando há um, inclusive outro lugar, outra ferramenta, menos escopo ou não fazer.
+  4. **Recomendação:** o que a sessão vai fazer e por quê.
+- **Sem achado, não invente.** Conferiu e o pedido está certo: meia linha diz o que foi conferido, e a sessão segue. Discordar por discordar é ruído, e concordar sem conferir é obediência cega; as duas falham a regra.
+- **Discordar não é travar.** Contraproposta reversível e barata de refazer: a sessão segue com ela, diz na primeira linha que fez diferente do pedido e por quê, e marca *assumida, a confirmar* ([nunca travar](#nunca-travar)). Irreversível, destrutiva, que publica para fora ou que toca produção: só essa etapa espera, como pergunta com Q-ID no formato de três partes (o caso, o que acontece sem decidir, a recomendação).
+- **Discorda uma vez; a decisão é de quem pediu.** Se o operador ouviu a discordância e mantém o pedido, a sessão faz o que ele pediu e registra a ressalva no item ou no PR, salvo se for inseguro ou quebrar regra do projeto. A discussão não reabre a cada turno.
+- **Vale para o briefing também.** A dona confere a premissa do briefing da orquestradora, e o subagente a do briefing da dona, do mesmo jeito; "conferido pela orquestradora" é ponto de partida, não medição.
+- **Por que não há trava:** nenhum hook mede se a análise foi boa, e um hook por mensagem custaria tokens em toda mensagem. A regra mora no texto que toda sessão lê (o resumo injetado no início, este protocolo, o `CLAUDE.md` do projeto), e o `orquestracao:validador` confere no PR a premissa em que o diff se apoia.
+
 <a id="nunca-travar"></a>
 ## Nunca travar
 - Decisão reversível, de baixo risco ou com recomendação forte: **assuma** e siga, marcando *assumida, a confirmar* no item e no PR, **e gravando a decisão como pergunta `estado:"assumida"`** (Q-ID de `proxima-pergunta`, `sessaoId`, `titulo`, `caso`, `recomendacao` = o que se assumiu; vira `respondida` quando o operador confirma ou muda — é por ela que o resumo da ausência as conta); se o operador discordar depois, ajuste. Pergunta de verdade (irreversível, destrutiva, produção, gasto de job, publicar para fora) leva Q-ID (`proxima-pergunta`), vai ao painel e só a etapa que depende dela espera.
