@@ -44,7 +44,8 @@ export default function Mensagens() {
         </Table>
         <p className="t-denso text-foreground-2">
           As outras regras das mensagens: <LinkDaRegra codigo="MSG-02" /> · <LinkDaRegra codigo="MSG-03" /> · <LinkDaRegra codigo="MSG-04" /> ·{" "}
-          <LinkDaRegra codigo="MSG-05" /> · <LinkDaRegra codigo="MSG-06" />
+          <LinkDaRegra codigo="MSG-05" /> · <LinkDaRegra codigo="MSG-06" /> ·{" "}
+          <LinkDaRegra codigo="MSG-07" /> · <LinkDaRegra codigo="MSG-08" /> · <LinkDaRegra codigo="MSG-09" />
         </p>
       </Bloco>
     </PaginaDaVitrine>

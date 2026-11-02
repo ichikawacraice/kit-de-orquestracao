@@ -79,6 +79,7 @@ const LEMBRETE =
   "Demanda de design no front: antes de desenhar, o agente `designer` faz a revisão de arquitetura " +
   "(skill `revisao-de-arquitetura-de-ui`: tarefa, inventário, hierarquia, onde mora cada mensagem, componentes do kit); " +
   "depois de mexer no visual, o `critico-de-ui` julga em contexto separado (no máximo 5 problemas). " +
+  "Só o texto da tela (botão, erro, confirmação, vazio): skill `textos-de-interface`. Acessibilidade (contraste, teclado, leitor de tela): skill `acessibilidade`. " +
   "Fontes: as de `fontes` do `design/wicomm.json` (o que vai onde e como parece); sem elas, a base Wicomm do plugin (DESIGN, ANATOMIA, CONVENCOES).";
 
 function git(cwd, args) {

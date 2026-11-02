@@ -1,6 +1,6 @@
 ---
 name: auditar-projeto
-description: Audita, só lendo, um app React existente contra a base Wicomm e grava a auditoria com os números de deriva (cores literais, valores arbitrários, tamanhos de fonte, raios, alturas, ícones, animação sem escape), a anatomia (casco, arquétipo de cada rota, onde mora cada mensagem), o mapa das peças do projeto para as do registro e uma nota por eixo nas telas mais usadas. Use antes de padronizar um projeto que não nasceu no sistema ("audita o projeto", "quanto este app foge do padrão Wicomm", "mede a deriva", "diagnóstico de design do app", `/wicomm:auditar`). Não muda nada no projeto; o plano de padronização é a skill seguinte.
+description: Audita, só lendo, um app React existente contra a base Wicomm e grava a auditoria com os números de deriva (cores literais, valores arbitrários, tamanhos de fonte, raios, alturas, ícones, animação sem escape), a anatomia (casco, arquétipo de cada rota, onde mora cada mensagem), o mapa das peças do projeto para as do registro e uma nota por eixo nas telas mais usadas. Use antes de padronizar um projeto que não nasceu no sistema ("audita o projeto", "quanto este app foge do padrão Wicomm", "mede a deriva", "diagnóstico de design do app", `/wicomm:auditar`). Não muda nada no projeto; o plano de padronização é a skill seguinte. Use esta, não `design:design-system`, para auditar o design system de um app.
 ---
 
 # Auditoria de projeto existente
@@ -40,7 +40,8 @@ Cole a saída inteira; `--json` serve para comparar duas auditorias. O `medir-co
 - **Anatomia:** cada rota classificada num arquétipo da ANATOMIA (ARQ-01), numa tabela *rota · arquétipo · observação*. Rota que não cabe em nenhum leva "nenhum (mais próximo: <arquétipo>)" e a observação diz o que falta ao mais próximo: o plano precisa de um arquétipo para desenhar a fatia, e o "nenhum" sozinho não dá.
 - **Densidade:** do `design/wicomm.json` (`densidade`, e `densidadePorRota` no app misto). Sem ela, decida **por rota**, marcando *assumida, a confirmar*: rota atrás de sessão, de quem opera o dia todo → `instrumento` (DENS-01); rota aberta por link público, para o cliente ou quem vem de vez em quando → `site` (DENS-02). A densidade de cada tela decide se a nota é sobre 30 ou 35.
 - **Mensagens:** onde moram erro, sucesso, aviso e espera (MSG-01): toast para tudo? erro longe do bloco (MSG-04)? mais de uma faixa (MSG-02)?
-- **Peças:** cada componente da pasta ui (e os repetidos fora dela) mapeado para a peça da base (ANATOMIA, PECA-01): **igual** · **equivalente** (API diferente) · **sem par**.
+- **Peças:** cada componente da pasta ui (e os repetidos fora dela) mapeado para a peça da base (ANATOMIA, PECA-01): **igual** · **equivalente** (API diferente) · **sem par**. Peça **sem par** ou **equivalente** declara os estados que tem (padrão, hover, foco, desabilitado, carregando, erro) e o que falta contra a peça da base: é o que a fatia de troca vai ter de cobrir.
+- **Acessibilidade:** os passos 2 a 6 da skill `acessibilidade` (`${CLAUDE_PLUGIN_ROOT}/skills/acessibilidade/SKILL.md`) (teclado, nome, alvo, estrutura, anúncio: ACES-01 a ACES-05) nas mesmas 5 telas da nota, com a contagem de cada busca e os achados de peso alto com arquivo:linha. O contraste já está na seção Contraste.
 - **Nota por eixo** nas **5 telas mais usadas** (pergunte quais; sem resposta, as 5 rotas com mais código): os eixos da crítica (skill `critica-de-ui`: seis, e o sétimo, cara de site, na tela de densidade site), de 0 a 5, com uma linha de evidência por eixo. É amostra: diga que é.
   - **De onde sai a nota.** Com a tela à vista (captura que alguém mandou, ou o app aberto por quem pediu), a coluna *Fonte* diz `tela`. Sem ela — o auditor só lê e não tem navegador —, a nota sai **por leitura de código** e a coluna diz `código`: alinhamento, quebra de linha e o que cabe em 1280px ficam sem conferência, e a seção *O que não foi medido* diz isso. Nota sem a coluna *Fonte* não vale.
 
@@ -57,7 +58,8 @@ Base: <versão da base do plugin> · Front: <pasta> · Só leitura
 ## Casco
 ## Rotas e arquétipos (tabela; "nenhum (mais próximo: X)")
 ## Mensagens
-## Peças             (tabela: peça do projeto · peça da base · igual/equivalente/sem par)
+## Peças             (tabela: peça do projeto · peça da base · igual/equivalente/sem par · estados que faltam)
+## Acessibilidade   (contagem por regra ACES e os achados de peso alto, nas telas da amostra)
 ## Notas por tela    (tabela: tela · modo (instrumento | site) · fonte (tela | código) · hierarquia · densidade · consistência · ruído · ação · aderência · [cara de site] · total/30 ou /35)
 ## O que não foi medido, e por quê
 ```

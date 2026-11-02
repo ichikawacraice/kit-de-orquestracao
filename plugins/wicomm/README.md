@@ -26,12 +26,27 @@ Ou, na mão: `/plugin marketplace add wicomm-projects/wicomm-design-system` e `/
 | Agente `critico-de-ui` | Julga em contexto separado: seis eixos (sete na densidade site), no máximo 5 problemas com *Onde* e *Correção*, teto 24/30 (28/35) — skill `critica-de-ui`. |
 | Agente `auditor-de-padrao` | Mede, só lendo, um projeto existente contra a base (skill `auditar-projeto`). |
 | Skills `novo-projeto`, `auditar-projeto`, `plano-de-padronizacao`, `peca-do-kit`, `atualizar-sistema` | Bootstrap, auditoria, plano em fatias, a peça certa do registro, a subida de versão. |
+| Skill `acessibilidade` | Auditoria de acessibilidade nível AA presa à base: contraste pelos tokens nos dois temas, teclado e foco, nome de controle, alvo de 24px, estrutura, anúncio (ACES-01 a ACES-05). |
+| Skill `textos-de-interface` | Escreve e revisa o texto da tela em PT-BR: botão, confirmação, erro, vazio, espera (MSG-01 a MSG-09). |
 | Comandos `/wicomm:novo`, `/wicomm:auditar`, `/wicomm:padronizar`, `/wicomm:atualizar`, `/wicomm:estado` | Atalhos das skills; o `estado` mostra versão, deriva e a nota média. |
 | Hook `guarda-de-design.mjs` | Lembra o designer no pedido de design, nega tela ao designer, cobra a crítica uma vez no turno que mudou o visual, devolve crítica sem forma (CONV-19, CONV-20). |
 | Hook `valor-solto.mjs` | Avisa (não nega) na escrita de tela com `#hex` ou `rgba(` (inclusive dentro de `shadow-[…]`), `text-[15px]`, `duration-200`, paleta usada direto fora do idioma de cor (`text-zinc-700`) ou ícone que não é `lucide-react` (CONV-04, PRIN-06, MOV-01, COR-05, CTRL-09). Quem reprova é a guarda no CI. |
 | Scripts `medir-deriva.mjs`, `medir-contraste.mjs` | Os números da auditoria, só lendo: deriva por categoria (pasta ui × telas), paleta direto, alfa que não gera CSS no v3, raios em px, alturas de controle, ícones, MOV-02 por ocorrência, tokens contra os da Wicomm, tema escuro, config do Tailwind e uso das peças; e a matriz de contraste da COR-12/COR-11. Carregam cópias de `@wicomm/tokens` e `@wicomm/guardas` (o plugin se instala sozinho); `scripts/tests/medidas.test.mjs` reprova se uma cópia andar sem a outra. |
 | `.mcp.json` | O MCP oficial do shadcn, para a skill `peca-do-kit` consultar o registro `@wicomm`. |
-| [`evals/`](evals/) | 140 casos de disparo (10 positivos e 10 negativos por skill), gerados por `evals/casos.mjs`. |
+| [`evals/`](evals/) | 180 casos de disparo (10 positivos e 10 negativos por skill), gerados por `evals/casos.mjs`. |
+
+## Com o plugin `design` da Anthropic ligado
+
+O app pode trazer o plugin `design` da Anthropic (pela organização, em Personalizar → Plugins). O `wicomm` não depende dele: o que serve foi absorvido, em PT-BR e preso à base ([`TERCEIROS.md`](TERCEIROS.md)). Num app React da Wicomm, use a coluna da direita:
+
+| Em vez de | Use |
+|---|---|
+| `design:accessibility-review` | skill `wicomm:acessibilidade` |
+| `design:ux-copy` | skill `wicomm:textos-de-interface` |
+| `design:design-system` (auditoria) | skill `wicomm:auditar-projeto` (subagente `wicomm:auditor-de-padrao`); a peça nova é a `wicomm:peca-do-kit` |
+| `design:design-critique` | subagente `wicomm:critico-de-ui` |
+
+`design-handoff`, `research-synthesis` e `user-research` não têm par aqui e não atrapalham. O plugin de design do kit de orquestração chama-se `kit-design` (`kit-design:designer`, `kit-design:critico-de-ui`) e não colide com o da Anthropic; num app React da Wicomm, o `wicomm` não usa nenhum dos dois.
 
 ## A configuração do projeto: `design/wicomm.json`
 

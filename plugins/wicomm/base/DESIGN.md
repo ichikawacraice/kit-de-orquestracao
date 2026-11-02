@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.13.0
+versao: 0.14.0
 description: A direção de design dos apps React da Wicomm — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   claro:

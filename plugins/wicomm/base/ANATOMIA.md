@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.13.0
+versao: 0.14.0
 description: A anatomia dos apps React da Wicomm — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -173,6 +173,21 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Por quê.** A mensagem sem saída manda a pessoa caçar o gesto; duas cópias da mesma ação divergem.
 - **Confere.** `crítica:clareza da ação`.
 
+### MSG-07 · O botão diz o que acontece
+- **Regra.** Rótulo de botão e de item de menu **que faz algo** é verbo no infinitivo, com o objeto quando o verbo sozinho não diz qual (*Salvar alterações*, *Publicar página*, *Excluir 3 arquivos*); nunca *OK*, *Sim*, *Enviar* ou *Confirmar* sozinhos. O botão que confirma um diálogo repete o verbo do título dele (`confirmar` passado ao `useConfirm`, nunca o padrão). O que só fecha sem fazer nada é *Cancelar*; a alternativa que também faz algo nomeia o que faz. O item que **leva a um lugar** ou **escolhe uma opção** (destino de navegação, tema, vista, filtro) diz o nome do lugar ou da opção (*Minha conta*, *Escuro*). Sem reticências (CTRL-07).
+- **Por quê.** *OK* obriga a reler a pergunta para saber o que se aceita; o verbo no botão é a última chance de a pessoa ver o que vai acontecer antes de acontecer.
+- **Confere.** `crítica:clareza da ação` · skill `textos-de-interface` (busca por `>OK<`, `"Confirmar"` e `pedir(` sem `confirmar`).
+
+### MSG-08 · A confirmação pergunta a ação e diz o que não volta
+- **Regra.** O título do diálogo de confirmação é a **ação como pergunta**, com o objeto e a quantidade (*Excluir 3 arquivos?*, *Publicar agora?*), nunca *Tem certeza?*. O corpo diz, numa frase, a consequência que a pessoa não vê na tela: o que some, quem é avisado, o que não dá para desfazer. Sem consequência a dizer, não há corpo.
+- **Por quê.** *Tem certeza?* pede atenção sem dizer a quê: a pessoa clica por hábito e a confirmação vira um clique a mais, que não protege nada.
+- **Confere.** `crítica:aderência` · skill `textos-de-interface` (busca por *Tem certeza*).
+
+### MSG-09 · O erro diz o que não aconteceu e o que fazer agora
+- **Regra.** Mensagem de erro tem duas partes, nas palavras de quem usa: **o que não aconteceu** e **o que a pessoa pode fazer agora** (*Não deu para salvar: já existe uma página com este nome. Escolha outro nome.*). Sem culpar quem usa, sem código, sem *Erro:* no começo e sem *Ocorreu um erro* sozinho. Quando a saída é um gesto, ele vem junto (MSG-06); quando não há o que fazer, a mensagem diz quando tentar de novo ou a quem recorrer.
+- **Por quê.** *Ocorreu um erro* diz que falhou e não diz o que fazer: a pessoa repete o mesmo gesto, falha de novo e desiste.
+- **Confere.** `crítica:aderência` · skill `textos-de-interface` (busca por *Ocorreu um erro*, *Erro:* e mensagem crua do servidor repassada à tela).
+
 ---
 
 <a id="pecas"></a>
@@ -336,6 +351,9 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 | MSG-04 | Erro no bloco que disparou | guarda |
 | MSG-05 | Texto de interface não cita documento | guarda |
 | MSG-06 | A mensagem traz a saída | crítica |
+| MSG-07 | O botão diz o que acontece | crítica, skill |
+| MSG-08 | A confirmação pergunta a ação | crítica, skill |
+| MSG-09 | O erro diz o que fazer agora | crítica, skill |
 | PECA-01 | A peça de cada função | crítica, guarda |
 | PECA-02 | De onde a peça nova parte | revisão, crítica |
 | PESO-01 | Um primário | crítica |

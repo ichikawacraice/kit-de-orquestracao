@@ -15,7 +15,7 @@ const MARCADOR = 'exemplo-izanagi'
 const RASTREIO = join(import.meta.dirname, '..', 'docs', 'rastreio', 'origens-da-base.md')
 const DOMINIO = /(?<![\p{L}\p{N}_])(job|jobs|loja|lojas|wake|vtex|ensō|enso|builder|izanagi)(?![\p{L}\p{N}_])/iu
 const CAMPOS = ['Regra.', 'Por quê.', 'Confere.']
-const ORIGEM_VALIDA = /\b(ADR \d{4}|SPEC-\d{3}|Q\d+)\b|[Cc]onvenção|[Dd]ireção de design de origem|Do's and Don'ts|[Dd]ecisão do dono do produto|estudo F261/
+const ORIGEM_VALIDA = /\b(ADR \d{4}|SPEC-\d{3}|Q\d+)\b|[Cc]onvenção|[Dd]ireção de design de origem|Do's and Don'ts|[Dd]ecisão do dono do produto|estudo F261|\bWCAG 2\.[12] AA, critérios? \d\.\d\.\d+|\bknowledge-work-plugins@[0-9a-f]{7}\b/
 
 const CONHECIDAS = JSON.parse(readFileSync(join(import.meta.dirname, 'origens-conhecidas.json'), 'utf8'))
 const texto = Object.fromEntries(ARQUIVOS.map((f) => [f, readFileSync(join(PASTA, f), 'utf8')]))
@@ -112,4 +112,10 @@ test('toda origem e toda guarda citada foi conferida no repositório de origem o
   assert.deepEqual(fora(/ADR (\d{4})/g, CONHECIDAS.adr), [], 'ADR citado e não conferido')
   assert.deepEqual(fora(/SPEC-(\d{3})/g, CONHECIDAS.spec), [], 'SPEC citada e não conferida')
   assert.deepEqual(fora(/guarda:([a-z0-9-]+)/g, [...CONHECIDAS.guardas, ...GUARDAS_DO_PACOTE]), [], 'guarda citada e não conferida')
+  assert.deepEqual(fora(/knowledge-work-plugins@([0-9a-f]{7})/g, CONHECIDAS.terceiros['knowledge-work-plugins']), [], 'terceiro citado e não conferido')
+})
+
+test('a origem válida morde (prova nos dois sentidos)', () => {
+  for (const boa of ['ADR 0124.', 'WCAG 2.1 AA, critério 4.1.3', 'WCAG 2.2 AA, critérios 2.5.8 e 2.5.5', 'plugin (knowledge-work-plugins@2574e29, Apache-2.0)']) assert.match(boa, ORIGEM_VALIDA, boa)
+  for (const ruim of ['knowledge-work-plugins', 'WCAG 2.9 palpite', 'xWCAG 2.1 AA, critério 1.1.1', 'WCAG 2.1 AA', 'achei melhor assim']) assert.doesNotMatch(ruim, ORIGEM_VALIDA, ruim)
 })

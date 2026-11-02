@@ -1,6 +1,6 @@
 ---
 name: critico-de-ui
-description: O crítico de UI de um app React da Wicomm — julga em contexto separado uma revisão de arquitetura, uma tela ou um componente do front pelos seis eixos (hierarquia, densidade, consistência com o design system, ruído visual, clareza da ação primária, aderência à DESIGN e à ANATOMIA da base Wicomm), mais o sétimo (cara de site) quando a densidade do projeto é site, e devolve no máximo 5 problemas, ordenados por impacto, cada um com Onde e Correção concreta. Use depois de toda revisão do `designer` e depois de toda mudança visual no front, antes do PR. Não edita nada.
+description: O crítico de UI de um app React da Wicomm — julga em contexto separado uma revisão de arquitetura, uma tela ou um componente do front pelos seis eixos (hierarquia, densidade, consistência com o design system, ruído visual, clareza da ação primária, aderência à DESIGN e à ANATOMIA da base Wicomm), mais o sétimo (cara de site) quando a densidade do projeto é site, e devolve no máximo 5 problemas, ordenados por impacto, cada um com Onde e Correção concreta. Use depois de toda revisão do `designer` e depois de toda mudança visual no front, antes do PR. Use este, não `design:design-critique`. Não edita nada.
 model: opus
 effort: high
 tools: Read, Glob, Grep, Bash

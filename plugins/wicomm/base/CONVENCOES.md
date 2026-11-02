@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.13.0
+versao: 0.14.0
 description: As convenções de engenharia do front dos apps React da Wicomm — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
 ---
 
@@ -160,6 +160,39 @@ As guardas do pacote Wicomm e as de cada projeto seguem estas regras. Elas valem
 - **Confere.** Revisão: `vercel.json` e as variáveis de ambiente da Vercel sem `NPM_RC`, `NPM_TOKEN` nem `NODE_AUTH_TOKEN`, e `docs/deploy.md` com o comando do build local.
 - *Assumida, a confirmar:* o Confere é por revisão; uma guarda sobre o `vercel.json` entra se o desvio aparecer.
 
+
+<a id="acessibilidade"></a>
+## 8. Acessibilidade
+
+O contraste, o anel de foco e o escape do movimento já são regra da DESIGN (COR-11, COR-12, COR-13, SUP-06, MOV-02) e se medem com o alfa composto (CONV-18). Esta seção cobre o que o código decide: teclado, nome, alvo, estrutura e anúncio. A régua é o nível AA; a skill `acessibilidade` audita uma tela por estas regras e pelas da DESIGN.
+
+### ACES-01 · Tudo o que se clica se alcança e se aciona pelo teclado
+- **Regra.** Todo gesto da tela funciona só com o teclado: Tab chega a ele na ordem em que se lê a tela, Enter ou Espaço aciona, Esc fecha o que flutua e **devolve o foco** a quem o abriu. Gesto mora em `button`, `a` ou peça do kit — nunca em `div` ou `span` com `onClick`. O que flutua (diálogo, menu, gaveta) prende o foco enquanto está aberto, e nenhum outro lugar o prende. `tabIndex` positivo é defeito. Todo elemento que o Tab alcança mostra o foco: o anel da SUP-06, ou, no item de menu e de select, o fundo do item ativo. `outline-none` ou `outline-hidden` sem um dos dois é defeito; o elemento que só recebe foco por programa (`tabIndex={-1}`, o título que a navegação foca) é isento.
+- **Por quê.** Quem não usa mouse — por escolha, lesão ou leitor de tela — para na primeira `div` clicável; e o foco que se perde ao fechar um diálogo devolve a pessoa ao topo da página.
+- **Confere.** skill `acessibilidade` (busca por `onClick` em `div`/`span`, `tabIndex` positivo, `outline-none`/`outline-hidden` sem `focus-visible:ring`, `focus-visible:after:ring`, `focus:bg-` nem `data-[highlighted]:bg-`) · navegador (percorrer a tela só com Tab, Enter e Esc).
+
+### ACES-02 · Todo controle tem nome, e nada se diz só com cor
+- **Regra.** Botão só de ícone leva `aria-label` com o verbo (MSG-07) e a dica do kit com o mesmo texto (CTRL-09); campo tem `<label>` ligado por `htmlFor` — placeholder não é rótulo; imagem que informa tem `alt` com o que ela mostra, e a que enfeita tem `alt=""` (o ícone de enfeite, `aria-hidden`, COR-13). Estado, voz e etapa nunca dependem só da cor: o carimbo tem a palavra, o ponto da etapa tem o nome ao lado (COR-08), o campo com erro tem a frase (MSG-04).
+- **Por quê.** O leitor de tela anuncia "botão" sem nome e a pessoa não sabe o que ele faz; o placeholder some ao digitar e leva o rótulo junto; quem não distingue o vermelho do verde não lê um estado que só a cor diz.
+- **Confere.** skill `acessibilidade` (busca por `<img` sem `alt`, botão de ícone sem `aria-label`, campo sem `label`) · navegador (a árvore de acessibilidade).
+
+### ACES-03 · O alvo de clique mede 24×24px, ou tem folga até o vizinho
+- **Regra.** A área que recebe o clique de todo controle mede pelo menos **24×24px**. O alvo menor só passa se o círculo de 24px centrado nele não toca outro alvo nem o círculo de outro alvo menor; o texto corrido e o link dentro da frase são isentos. Ícone clicável sozinho (14 ou 16px, CTRL-09) mora no botão `icon` do kit (30px); onde a caixa não cabe, vale a folga acima — o que nunca vale é o clique só no próprio ícone, colado no vizinho. A barra de modos (CTRL-06) mede 24px e cumpre; a tela de Entrada usa o alvo grande (CTRL-02).
+- **Por quê.** O ícone de 14px solto é o alvo que a pessoa erra no touchpad e no celular. 24px, ou a folga equivalente, é o mínimo do nível AA (WCAG 2.2, critério 2.5.8); o alvo de 44px é do nível AAA e a base só o pede na Entrada.
+- **Confere.** skill `acessibilidade` (ícone com `onClick` fora do botão do kit; botão com `className` que encolhe a caixa abaixo de `size-6`; alvos pequenos lado a lado) · navegador (a caixa do alvo e a distância até o vizinho).
+- *Assumida, a confirmar:* o kit ainda não cumpre em dois lugares — o fechar do `toast` é um botão cru de 14px e o carimbo que abre (`ChipQueAbre`) mede cerca de 21px; os dois pedem a folga medida ou a caixa de 24px.
+
+### ACES-04 · A página diz a língua, as regiões e os títulos
+- **Regra.** `<html lang="pt-BR">`. O casco marca as regiões com o elemento delas — `nav` na barra lateral, `header` no topo, `main` na região do arquétipo (CASCO-01) —, e os títulos descem a partir do `h1` único (TIPO-04) sem pular nível.
+- **Por quê.** Quem usa leitor de tela anda pelas regiões e pelos títulos, não pela rolagem; sem `lang`, a voz sintetizada lê o português com a pronúncia de outra língua.
+- **Confere.** skill `acessibilidade` (busca por `lang=`, `<main`, `<nav` no casco) · `guarda:o-titulo-da-pagina-e-um-so` · navegador.
+
+### ACES-05 · O que aparece sem mover o foco é anunciado
+- **Regra.** O desfecho que surge sem a pessoa mover o foco — o texto no bloco (MSG-01), o toast, o resumo dos erros de submissão (CONV-09), o fim de uma espera (EST-03) — é anunciado. Desfecho e espera vão numa região `role="status"` que **já existe vazia** quando o texto chega. O erro que interrompe a tarefa vai em `role="alert"`, que pode nascer junto com o texto — e renascer, para anunciar de novo a mesma falha.
+- **Por quê.** Sem o anúncio, quem não vê a tela aperta o botão e não sabe se deu certo. A região `status` criada junto com o texto não é anunciada pela maioria dos leitores de tela; o `alert` é anunciado ao entrar.
+- **Confere.** skill `acessibilidade` (busca por `role="status"`, `role="alert"` e `aria-live` nas peças de desfecho, e onde a região monta) · navegador com leitor de tela.
+- *Assumida, a confirmar:* o kit ainda não cumpre em dois lugares — a `Faixa` só monta quando tem linha, e a área dos toasts não é região viva antes do primeiro toast; o desfecho `status` nas duas pede a região montada antes.
+
 ---
 
 ## Índice das regras
@@ -191,3 +224,8 @@ As guardas do pacote Wicomm e as de cada projeto seguem estas regras. Elas valem
 | CONV-22 | Terceiros sem rede por padrão | config |
 | CONV-23 | Conferir no ateliê | guarda, crítica |
 | CONV-25 | Build de produção na máquina, sem token na Vercel | revisão |
+| ACES-01 | Tudo se alcança e se aciona pelo teclado | skill, navegador |
+| ACES-02 | Todo controle tem nome; nada só com cor | skill, navegador |
+| ACES-03 | Alvo de clique de 24×24px | skill, navegador |
+| ACES-04 | Língua, regiões e títulos | skill, guarda, navegador |
+| ACES-05 | O que aparece sem foco é anunciado | skill, navegador |

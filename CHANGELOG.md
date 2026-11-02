@@ -4,6 +4,20 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.14.0 · 02/11/2026
+
+Camadas: base, plugin
+
+### O que muda
+- **Acessibilidade vira regra** (CONVENCOES §8): tudo pelo teclado, com o foco que volta a quem abriu (ACES-01); todo controle com nome e nada dito só com cor (ACES-02); alvo de clique de 24×24px ou com folga até o vizinho, o mínimo do nível AA (ACES-03); língua, regiões e títulos (ACES-04); o desfecho que aparece sem mover o foco é anunciado (ACES-05). O contraste, o anel de foco e o escape do movimento continuam na DESIGN.
+- **Como o texto da tela se escreve** (ANATOMIA §4): o botão diz o que acontece, com verbo (MSG-07); a confirmação pergunta a ação e diz o que não volta, nunca *Tem certeza?* (MSG-08); o erro diz o que não aconteceu e o que fazer agora (MSG-09).
+- O plugin ganha as skills `acessibilidade` (auditoria nível AA presa aos tokens) e `textos-de-interface` (escreve e revisa o texto da tela em PT-BR). O crítico passa a cobrar as regras novas no eixo *aderência*, e a auditoria de projeto, os estados de cada peça sem par e uma seção de acessibilidade. Elas substituem `design:accessibility-review`, `design:ux-copy` e a auditoria do `design:design-system` da Anthropic, que não precisam ficar ligadas.
+
+### Migração
+- Nada quebra. Rode `/wicomm:atualizar` para trazer a base nova; na próxima tela, o crítico já cobra as regras novas.
+- Projeto com `pedir()` do `useConfirm` sem `confirmar` mostra o botão *Confirmar*: passe o verbo do título (MSG-07).
+- O próprio kit tem três pontos a conferir contra as regras novas, marcados nelas: o fechar do `toast` e o `ChipQueAbre` abaixo de 24px (ACES-03), e a `Faixa` e a área dos toasts sem região viva antes do texto (ACES-05). Ficam para uma versão do registro.
+
 ## 0.13.0 · 01/11/2026
 
 Camadas: base, registro
