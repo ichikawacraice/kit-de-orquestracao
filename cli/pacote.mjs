@@ -6,6 +6,7 @@ import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { LOCK, blocosDe, sha256 } from './lock.mjs';
+import { aplicarDesligados } from './plugins-do-projeto.mjs';
 
 export const RAIZ_DO_KIT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MARKETPLACE = 'ichikawa-kit';
@@ -490,6 +491,12 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
       else if (s.enabledPlugins[nome] !== true) conflitos.push(`enabledPlugins.${nome} já é ${JSON.stringify(s.enabledPlugins[nome])} — não troquei`);
       else if (recuperando) cs.plugins.push(nome);
     }
+    // o perfil de plugins do kit.json que o projeto já tem (F347): o que ele desliga entra como false
+    let kjDoProjeto = {}; try { kjDoProjeto = JSON.parse(semBom(lerTexto(destino, '.claude/kit.json') ?? '{}')) ?? {}; } catch { /* ilegível: o kit.json acusa abaixo */ }
+    const perfil = aplicarDesligados(s, kjDoProjeto);
+    if (perfil.desligados.length) cs.desligados = perfil.desligados;
+    conflitos.push(...perfil.conflitos);
+    avisosDoProjeto.push(...perfil.avisos, ...perfil.desligados.map((id) => `o perfil do .claude/kit.json desliga ${id} neste projeto (enabledPlugins false)`));
     if (design) {
       // o Impeccable é recomendação: o que o projeto já declara fica como está (e fora do lock, logo o remover não o toca)
       s.extraKnownMarketplaces = { ...s.extraKnownMarketplaces };

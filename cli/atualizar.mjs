@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { pastaDeConfig, pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { diffTexto } from './diff.mjs';
+import { aplicarDesligados } from './plugins-do-projeto.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, RAIZ_DO_KIT, REPO_DO_KIT, idNovoDe, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
@@ -65,6 +66,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
   if (!Array.isArray(kitJson.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: ${avisoDasRegras(docsDoProj, pluginLigado('processos', destino, process.env.HOME || homedir(), process.env))}`);
 
   renomearPlugins({ destino, lock, mudancas, linhas, conflito });
+  desligarDoPerfil({ destino, lock, mudancas, linhas, conflito, kitJson });
   if (trocarTest) trocarOTest({ destino, lock, mudancas, linhas, conflito });
 
   if (!conflitos) lock.versao = versao;
@@ -115,6 +117,22 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
     }
     if (l?.extraKnownMarketplaces && MARKETPLACE_ANTIGO in l.extraKnownMarketplaces) linhas.push(`aviso: o .claude/settings.local.json ainda declara o marketplace ${MARKETPLACE_ANTIGO}; o nome agora é ${MARKETPLACE} — troque a chave à mão (o kit não mexe no seu settings.local.json)`);
   }
+}
+
+/** O perfil de plugins do kit.json (F347): o que `plugins.desligar` pede e o settings do projeto ainda não diz entra como false. */
+function desligarDoPerfil({ destino, lock, mudancas, linhas, conflito, kitJson }) {
+  const base = mudancas.find((m) => m.arquivo === '.claude/settings.json');
+  const texto = base ? base.novo : lerTexto(destino, '.claude/settings.json');
+  let s = {}; try { s = texto === null ? {} : JSON.parse(semBom(texto)); } catch { return; } // ilegível: o doutor acusa
+  const r = aplicarDesligados(s, kitJson);
+  for (const a of r.avisos) linhas.push(`aviso: ${a}`);
+  for (const c of r.conflitos) conflito(c);
+  if (!r.desligados.length) return;
+  for (const id of r.desligados) linhas.push(`desligado: ${id} (.claude/settings.json, pelo perfil do kit.json)`);
+  const novo = serializar(s, texto);
+  if (base) base.novo = novo; else mudancas.push({ arquivo: '.claude/settings.json', antigo: texto, novo });
+  const cs = (lock.chaves ??= {}).settings ??= {};
+  cs.desligados = [...new Set([...(cs.desligados ?? []), ...r.desligados])];
 }
 
 /** `--trocar-test`: o `npm test` passa a ser o gate e o `test` do projeto vai para `test:projeto` (o que a adoção deixou pendente). */

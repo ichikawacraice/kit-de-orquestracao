@@ -100,6 +100,9 @@ export function remover({ destino, simular = false }) {
     for (const [nome, valor] of Object.entries(cs.env ?? {})) {
       if (s.env?.[nome] === valor) { delete s.env[nome]; tirou(`env ${nome} (settings.json)`); } else if (s.env && nome in s.env) deixou(`env ${nome} (settings.json)`);
     }
+    for (const nome of cs.desligados ?? []) {
+      if (s.enabledPlugins?.[nome] === false) { delete s.enabledPlugins[nome]; tirou(`plugin desligado ${nome} (settings.json)`); } else if (s.enabledPlugins && nome in s.enabledPlugins) deixou(`plugin ${nome} (settings.json)`);
+    }
     for (const nome of cs.plugins ?? []) {
       if (s.enabledPlugins?.[nome] === true) { delete s.enabledPlugins[nome]; tirou(`plugin ${nome} (settings.json)`); } else if (s.enabledPlugins && nome in s.enabledPlugins) deixou(`plugin ${nome} (settings.json)`);
     }
