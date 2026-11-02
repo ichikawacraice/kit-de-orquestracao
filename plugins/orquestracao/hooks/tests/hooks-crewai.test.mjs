@@ -684,6 +684,28 @@ caso('F322.5 kit.json aninhado na pasta de revisões não declara designer', () 
   mkdirSync(join(aninhado, '.git'), { recursive: true });
   igual(decisao(rodar(SN, editar(join(aninhado, 'y', 'a.ts'), sub('general-purpose')))), 'deny', 'nem com .git aninhado');
 }));
+caso('F322.6 kit.json na raiz da pasta de revisões e caminho com outra caixa também não declaram', () => comRepo(() => {
+  kitDesign({ designers: ['wicomm:designer'] });
+  const rev = join(REPO, REV);
+  mkdirSync(join(rev, '.claude'), { recursive: true });
+  writeFileSync(join(rev, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'y', designers: ['general-purpose'] } }));
+  igual(decisao(rodar(SN, editar(join(rev, 'y', 'a.ts'), sub('general-purpose')))), 'deny', 'kit.json na raiz da revisão');
+  igual(rodar(SN, editar(join(rev, 'y', 'a.ts'), sub('wicomm:designer'))), null, 'o declarado de fora segue na revisão');
+  rmSync(join(rev, '.claude'), { recursive: true, force: true });
+  mkdirSync(join(rev, 'x', '.claude'), { recursive: true });
+  writeFileSync(join(rev, 'x', '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'y', designers: ['general-purpose'] } }));
+  const outraCaixa = join(REPO, 'DOCS', 'Design', 'revisoes', 'x', 'y', 'a.ts');
+  if (!existsSync(join(REPO, 'DOCS'))) return; // disco que distingue maiúsculas: não há outro caminho para o mesmo arquivo
+  igual(decisao(rodar(SN, editar(outraCaixa, sub('general-purpose')))), 'deny', 'caminho com outra caixa');
+}));
+caso('F322.7 projeto aninhado fora da revisão segue com a própria raiz e a própria declaração', () => comRepo(() => {
+  kitDesign({ designers: ['wicomm:designer'] });
+  const b = join(REPO, 'packages', 'b');
+  mkdirSync(join(b, '.git'), { recursive: true });
+  igual(decisao(rodar(SN, editar(join(b, REV, 'a.md'), sub('wicomm:designer')))), 'deny', 'a declaração de fora não vale em b');
+  igual(rodar(SN, editar(join(b, REV, 'a.md'), sub('design:designer'))), null, 'o designer do kit grava nas revisões de b');
+  igual(decisao(rodar(SN, editar(join(b, 'src', 'a.ts'), sub('design:designer')))), 'deny', 'e não no código de b');
+}));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
   const f = transcript([...trabalho(), fala('Pronto, editei.')]);
   const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');

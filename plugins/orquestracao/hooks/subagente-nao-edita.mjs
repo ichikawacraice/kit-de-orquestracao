@@ -42,7 +42,7 @@ function tipoLiberado(tipo) {
 }
 
 // A raiz do projeto: a pasta mais próxima do arquivo com `.claude/kit.json` ou `.git` (arquivo ou pasta),
-// salvo a que mora dentro da pasta de revisões de um projeto acima: o designer grava ali e um kit.json
+// salvo a que é ou mora dentro da pasta de revisões de um projeto acima: o designer grava ali e um kit.json
 // aninhado declararia designers novos (ou outra pasta). Essa vale como pasta comum do projeto de fora.
 function raizDoProjeto(p) {
   const candidatas = [];
@@ -50,12 +50,22 @@ function raizDoProjeto(p) {
     if (existsSync(join(d, '.claude', 'kit.json')) || existsSync(join(d, '.git'))) candidatas.push(d);
     if (dirname(d) === d) break;
   }
+  // Comparado pelo caminho real nativo: no disco que não distingue caixa (APFS), `DOCS/…` acha o mesmo
+  // kit.json que `docs/…`, e só o `.native` devolve a grafia do disco dos dois lados.
   let raiz = null;
   for (const d of candidatas.reverse()) {
-    if (raiz && d.startsWith(resolve(raiz, designDoProjeto(raiz).rel) + '/')) continue;
+    if (raiz) {
+      const rev = realNativo(resolve(raiz, designDoProjeto(raiz).rel));
+      const real = realNativo(d);
+      if (rev && real && (real === rev || real.startsWith(rev + '/'))) continue;
+    }
     raiz = d;
   }
   return raiz;
+}
+
+function realNativo(p) {
+  try { return realpathSync.native(p); } catch { return null; }
 }
 
 // A seção `design` do kit.json do projeto: a pasta de revisões (inválida vale o padrão) e os designers
