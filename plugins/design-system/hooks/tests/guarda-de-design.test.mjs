@@ -299,9 +299,9 @@ describe('decidir — o turno que mexe no visual chama o crítico', () => {
     const { ctx } = ctxDuble();
     const com = { ...ctx, config: () => ({ ...CONFIG, temArquivo: true }) };
     const texto = (c) => decidir(prompt('redesenha a barra'), null, c).hookSpecificOutput.additionalContext;
-    assert.match(texto(com), /sem elas, a base Wicomm do plugin/);
+    assert.match(texto(com), /sem elas, a base do plugin/);
     assert.match(texto(com), /design\/wicomm\.json/);
-    assert.doesNotMatch(texto(ctx), /sem elas, a base Wicomm do plugin/);
+    assert.doesNotMatch(texto(ctx), /sem elas, a base do plugin/);
     assert.match(texto(ctx), /não é a norma dele até ele entrar no sistema/);
   });
   it('o pedido grava a foto do começo do turno', () => {

@@ -3,7 +3,7 @@
  * **O aviso barato na hora da escrita: valor solto e ícone de outra biblioteca.**
  *
  * Hook `PreToolUse` (`Edit|Write|MultiEdit`) do plugin `design-system`. Quando o texto novo de um arquivo de tela traz o que
- * a base Wicomm proíbe — cor literal (`#hex`, `rgb(…)`), valor arbitrário do Tailwind (`text-[15px]`, `h-[34px]`,
+ * a base proíbe — cor literal (`#hex`, `rgb(…)`), valor arbitrário do Tailwind (`text-[15px]`, `h-[34px]`,
  * `z-[60]`), duração ou curva solta (`duration-200`, `ease-in-out`), classe da paleta usada direto fora do idioma de cor
  * (`text-zinc-700`, COR-05) ou ícone que não é `lucide-react` —, devolve um `additionalContext` com o achado e a regra
  * (CONV-04, PRIN-06, MOV-01, COR-05, CTRL-09). **Avisa e não nega:** a escrita segue o fluxo normal de permissão; quem reprova é a guarda no CI (`@wicomm/guardas`, com catraca).
@@ -105,7 +105,7 @@ export function decidir(evento, ctx) {
       hookEventName: "PreToolUse",
       additionalContext:
         `Valor solto na tela que está sendo escrita (${caminho.split("/").pop()}): ${mostrados}${resto}. ` +
-        "A base Wicomm pede token: cor, espaço, tipo, raio, sombra e duração saem da escala da DESIGN, a cor de voz sai do idioma de cor (COR-05), e ícone só de `lucide-react`. " +
+        "A base pede token: cor, espaço, tipo, raio, sombra e duração saem da escala da DESIGN, a cor de voz sai do idioma de cor (COR-05), e ícone só de `lucide-react`. " +
         "Troque pelo token; se a escala não tem o valor, ele entra no token com motivo (ou na exceção local `valorSolto.ignorar` do design/design-system.json). " +
         "Isto é aviso: a guarda do CI é quem reprova.",
     },

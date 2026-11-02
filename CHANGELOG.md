@@ -1,8 +1,21 @@
-# Mudanças do design system Wicomm
+# Mudanças do design system
 
 Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-system/base/*.md`), da mais nova para a mais velha. Cada entrada diz **o que muda** para quem usa o sistema e **o que migrar** num projeto que já o usa. A vitrine (`/mudancas/`) lê este arquivo no build, e o teste do ateliê reprova versão da base sem entrada aqui.
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
+
+## 0.15.0 · 02/11/2026
+
+Camadas: base
+
+### O que muda
+- **A base não fala de marca nenhuma** (Q846). As regras não mudam de sentido; o que era da Wicomm passa a ser "do tema" (`temas/<id>/`): a cor da marca, o hover e o gradiente (MARCA-01, MARCA-03), a razão aceita da tinta sobre a marca (`contrasteAceitoSobreAMarca`), a família da fonte (TIPO-01: "a família do tema") e o logotipo da barra lateral. O tema Wicomm continua com os mesmos valores.
+- O frontmatter da DESIGN deixa de escrever as cores da marca (`marca`, `primary`, `primary-hover`, `primary-foreground`, `gradiente`, `marca-tinta`, `ring`) e a família da fonte: aponta para o tema. `name` passa a `design-system` nos três arquivos.
+- A guarda nova do gate reprova o nome de um tema na base, e o `id` fora do escopo de pacote (`@wicomm/…` fica).
+
+### Migração
+- Nada quebra: os tokens, as peças e as guardas são os mesmos. Rode `/design-system:atualizar` para trazer a base nova. Projeto que acrescentou texto às regras de marca ou de tipo resolve o merge de três vias nesses trechos.
+- Quem lia as cores da marca no frontmatter da DESIGN lê agora do tema (`design/tema/` no projeto, ou `temas/wicomm/` no repositório do sistema).
 
 ## 0.14.1 · 02/11/2026
 

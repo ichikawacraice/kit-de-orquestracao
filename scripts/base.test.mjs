@@ -1,8 +1,9 @@
-// Guardas da base Wicomm (plugins/design-system/base): o critério de pronto da F261.1
+// Guardas da base (plugins/design-system/base): o critério de pronto da F261.1
 // e a forma de toda regra (Regra · Por quê · Confere), para que o designer, o
-// crítico e as guardas possam citar cada regra pelo código. A base fala só da
-// Wicomm (Q639): a origem de cada regra mora fora do plugin, em
-// docs/rastreio/origens-da-base.md, e o teste cobra que as duas concordam.
+// crítico e as guardas possam citar cada regra pelo código. A base não fala de
+// marca nenhuma (Q846) nem do produto de origem (Q639): o que é da marca mora no
+// tema (temas/<id>/), e a origem de cada regra, fora do plugin, em
+// docs/rastreio/origens-da-base.md (o teste cobra que as duas concordam).
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -47,6 +48,53 @@ test('nenhuma linha cita o domínio de origem, e não há mais exemplo marcado (
     })
   }
   assert.deepEqual(achados, [])
+})
+
+/**
+ * A marca de cada tema do repositório, como a base não pode citá-la (Q846: "saem os valores"): o `nome` (e o plural)
+ * em lugar nenhum; o `id` só como escopo de pacote ou de registro, em minúscula (`@wicomm/tokens`, `@wicomm/<peça>`),
+ * que fica enquanto o pacote tiver esse nome; a família da fonte em lugar nenhum (TIPO-01 diz "a família do tema");
+ * e os valores que só o tema tem: as cores dele que o sistema não usa e a razão aceita sobre a marca.
+ */
+const TEMAS = join(import.meta.dirname, '..', 'temas')
+const hexes = (texto) => new Set([...texto.matchAll(/#[0-9a-f]{6}\b/gi)].map((m) => m[0].toUpperCase()))
+const DO_SISTEMA = hexes(readFileSync(join(import.meta.dirname, '..', 'packages', 'tokens', 'fonte', 'sistema.tokens.json'), 'utf8'))
+const MARCAS = readdirSync(TEMAS, { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => {
+    const meta = JSON.parse(readFileSync(join(TEMAS, d.name, 'tema.json'), 'utf8'))
+    const cores = [...hexes(readFileSync(join(TEMAS, d.name, 'tema.tokens.json'), 'utf8'))].filter((h) => !DO_SISTEMA.has(h))
+    return { ...meta, valores: [...cores, String(meta.contrasteAceitoSobreAMarca).replace('.', ',')] }
+  })
+const escapar = (p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const palavra = (p, plural = true) => new RegExp(`(?<![\\p{L}\\p{N}_])${escapar(p)}${plural ? 's?' : ''}(?![\\p{L}\\p{N}_])`, 'iu')
+export function marcaNaLinha(linha, tema) {
+  // Só o escopo do pacote, em minúscula e seguido de `/` ou do fim do nome: `@Wicomm` é a marca.
+  const semEscopo = linha.replace(new RegExp(`@${escapar(tema.id)}(?=/|\`|\\s|$)`, 'g'), '')
+  return [
+    ...[tema.nome, tema.id, tema.fonte.familia].filter((p) => palavra(p).test(semEscopo)),
+    ...(tema.valores ?? []).filter((v) => palavra(v, false).test(linha)),
+  ]
+}
+
+test('a base não cita marca nenhuma: nem o nome, nem o id fora do escopo do pacote, nem a família do tema (Q846)', () => {
+  assert.ok(MARCAS.length >= 1, 'achou os temas')
+  const achados = []
+  for (const [f, c] of Object.entries(texto)) {
+    c.split('\n').forEach((linha, i) => {
+      for (const tema of MARCAS) for (const p of marcaNaLinha(linha, tema)) achados.push(`${f}:${i + 1}: "${p}" em ${linha.trim().slice(0, 100)}`)
+    })
+  }
+  assert.deepEqual(achados, [])
+})
+
+test('a busca de marca morde (prova nos dois sentidos)', () => {
+  const tema = MARCAS.find((t) => t.id === 'wicomm')
+  assert.ok(tema.valores.includes('#F30B42') && tema.valores.includes('4,25') && !tema.valores.includes('#FFFFFF'), `os valores da marca: ${tema.valores}`)
+  for (const ruim of ['a marca Wicomm', 'os apps Wicomms', 'a marca @Wicomm', 'design/wicomm.json', '/wicomm:estado', 'fonte Archivo', 'a cor `#F30B42`', 'mede 4,25:1', 'WICOMM'])
+    assert.notDeepEqual(marcaNaLinha(ruim, tema), [], ruim)
+  for (const bom of ['`@wicomm/tokens`', 'shadcn add @wicomm/<peça>', 'pacote privado `@wicomm`', 'arquivo', 'card `#FFFFFF`', 'mede 4,5:1'])
+    assert.deepEqual(marcaNaLinha(bom, tema), [], bom)
 })
 
 test('a base não carrega a origem: nem o campo, nem o commit de origem no frontmatter', () => {

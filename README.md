@@ -1,8 +1,8 @@
 # Design system Wicomm
 
-O design system dos apps React próprios da Wicomm: a norma de design, os tokens, as peças, as guardas e o plugin do Claude Code que leva tudo isso a cada projeto.
+O design system dos apps React, com o tema Wicomm como o tema dos apps da empresa: a norma de design (sem marca), os tokens, as peças, as guardas e o plugin do Claude Code que leva tudo isso a cada projeto. O que é da marca (a cor, a fonte, o logotipo, o prefixo do registro) mora no tema, em [`temas/`](temas/).
 
-**Para:** apps React da Wicomm (Next ou Vite, Tailwind v4), sempre com a marca Wicomm.
+**Para:** apps React da Wicomm (Next ou Vite, Tailwind v4), com o tema Wicomm.
 **Fora:** lojas FastStore e Wake (marca do cliente, outro kit) e projeto sem React.
 
 ## Por onde começar

@@ -1,13 +1,13 @@
 ---
 name: textos-de-interface
-description: Escreve ou revisa, em PT-BR, o texto de interface de um app React da Wicomm — rótulo de botão e de menu, título e corpo de diálogo de confirmação, mensagem de erro, vazio, espera, desfecho, dica, faixa, rótulo de campo — pelas regras de como o texto se escreve na base Wicomm (MSG-07 a MSG-09, MSG-03, EST-02, CTRL-07, CONV-11, CONV-12). Use quando pedirem "o que este botão deve dizer?", "escreve a mensagem de erro", "revisa os textos desta tela", "texto do vazio", "copy da confirmação", "microcopy", "UX writing", ou ao nomear uma ação nova. Use esta, não `design:ux-copy`: esta segue o glossário do projeto e a matriz de mensagens Wicomm. Não traduz para outra língua.
+description: Escreve ou revisa, em PT-BR, o texto de interface de um app React da Wicomm — rótulo de botão e de menu, título e corpo de diálogo de confirmação, mensagem de erro, vazio, espera, desfecho, dica, faixa, rótulo de campo — pelas regras de como o texto se escreve na base (MSG-07 a MSG-09, MSG-03, EST-02, CTRL-07, CONV-11, CONV-12). Use quando pedirem "o que este botão deve dizer?", "escreve a mensagem de erro", "revisa os textos desta tela", "texto do vazio", "copy da confirmação", "microcopy", "UX writing", ou ao nomear uma ação nova. Use esta, não `design:ux-copy`: esta segue o glossário do projeto e a matriz de mensagens Wicomm. Não traduz para outra língua.
 ---
 
 > **O arquivo do projeto** é o `design/design-system.json`; no projeto que já tem o `design/wicomm.json` (o nome antigo) e não o novo, é o `design/wicomm.json`. Abaixo, `design/design-system.json` quer dizer esse arquivo: leia e grave nele, e nunca crie o outro nome ao lado (`node "${CLAUDE_PLUGIN_ROOT}/scripts/estado.mjs" <raiz>` diz qual vale).
 
 # Textos de interface
 
-Escreve ou revisa o texto que aparece na tela, nas palavras de quem usa. A régua é a base Wicomm (`${CLAUDE_PLUGIN_ROOT}/base/`; com `fontes` no `design/design-system.json`, as cópias do projeto vencem; no projeto sem esse arquivo, a base é referência citada, e a norma é a do projeto): **como** o texto se escreve são as regras abaixo; **onde** a mensagem mora (MSG-01) já vem decidido pela revisão do `designer` — a linha *Mora em* só o repete. Se a pergunta é onde pôr a mensagem, é com o `designer`, não com esta skill. Todo achado ou proposta cita a regra pelo código.
+Escreve ou revisa o texto que aparece na tela, nas palavras de quem usa. A régua é a base (`${CLAUDE_PLUGIN_ROOT}/base/`; com `fontes` no `design/design-system.json`, as cópias do projeto vencem; no projeto sem esse arquivo, a base é referência citada, e a norma é a do projeto): **como** o texto se escreve são as regras abaixo; **onde** a mensagem mora (MSG-01) já vem decidido pela revisão do `designer` — a linha *Mora em* só o repete. Se a pergunta é onde pôr a mensagem, é com o `designer`, não com esta skill. Todo achado ou proposta cita a regra pelo código.
 
 ## Antes de escrever
 
@@ -67,4 +67,4 @@ Busca de partida (abra cada ocorrência antes de chamá-la de achado): `>OK<`, `
 Fora daqui: tradução para outra língua; texto de e-mail e de marketing; nome do produto. Termine dizendo quantos textos foram lidos e quantos ferem regra.
 
 ---
-Adaptada de `ux-copy`, do plugin `design` de [anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) (Apache-2.0): reescrita em PT-BR e presa à matriz de mensagens e ao glossário da base Wicomm. Atribuição em [`TERCEIROS.md`](../../TERCEIROS.md).
+Adaptada de `ux-copy`, do plugin `design` de [anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) (Apache-2.0): reescrita em PT-BR e presa à matriz de mensagens e ao glossário da base. Atribuição em [`TERCEIROS.md`](../../TERCEIROS.md).

@@ -1,13 +1,13 @@
 ---
 name: acessibilidade
-description: Audita, só lendo, a acessibilidade (nível AA) de uma tela, componente ou app React da Wicomm contra a base Wicomm — contraste medido com os tokens nos dois temas e o alfa composto, teclado e foco visível, nome de cada controle, alvo de clique de 24px, língua, regiões e títulos, o que o leitor de tela anuncia — e devolve os achados com a regra (`ACES-02`, `COR-12`), o critério WCAG, arquivo:linha e a correção feita de peça e token do kit. Use quando pedirem "audita a acessibilidade", "checa a11y", "isto é acessível?", "o contraste passa?", "funciona no teclado?", "leitor de tela", "WCAG". Use esta, não `design:accessibility-review`: esta mede contra os tokens e as regras Wicomm, em PT-BR. Não edita nada.
+description: Audita, só lendo, a acessibilidade (nível AA) de uma tela, componente ou app React da Wicomm contra a base — contraste medido com os tokens nos dois temas e o alfa composto, teclado e foco visível, nome de cada controle, alvo de clique de 24px, língua, regiões e títulos, o que o leitor de tela anuncia — e devolve os achados com a regra (`ACES-02`, `COR-12`), o critério WCAG, arquivo:linha e a correção feita de peça e token do kit. Use quando pedirem "audita a acessibilidade", "checa a11y", "isto é acessível?", "o contraste passa?", "funciona no teclado?", "leitor de tela", "WCAG". Use esta, não `design:accessibility-review`: esta mede contra os tokens e as regras Wicomm, em PT-BR. Não edita nada.
 ---
 
 > **O arquivo do projeto** é o `design/design-system.json`; no projeto que já tem o `design/wicomm.json` (o nome antigo) e não o novo, é o `design/wicomm.json`. Abaixo, `design/design-system.json` quer dizer esse arquivo: leia e grave nele, e nunca crie o outro nome ao lado (`node "${CLAUDE_PLUGIN_ROOT}/scripts/estado.mjs" <raiz>` diz qual vale).
 
 # Auditoria de acessibilidade
 
-Mede uma tela, um componente ou um app React da Wicomm contra o nível **AA** e devolve o que bloqueia alguém de usar a tela, com número e arquivo:linha. A régua é a base Wicomm (`${CLAUDE_PLUGIN_ROOT}/base/`; com `fontes` no `design/design-system.json`, as cópias do projeto vencem; no projeto sem esse arquivo, a base é referência citada, e a norma é a do projeto): o contraste, o foco e o movimento moram na DESIGN; o teclado, o nome, o alvo, a estrutura e o anúncio, na seção 8 das CONVENCOES (`ACES-01` a `ACES-05`).
+Mede uma tela, um componente ou um app React da Wicomm contra o nível **AA** e devolve o que bloqueia alguém de usar a tela, com número e arquivo:linha. A régua é a base (`${CLAUDE_PLUGIN_ROOT}/base/`; com `fontes` no `design/design-system.json`, as cópias do projeto vencem; no projeto sem esse arquivo, a base é referência citada, e a norma é a do projeto): o contraste, o foco e o movimento moram na DESIGN; o teclado, o nome, o alvo, a estrutura e o anúncio, na seção 8 das CONVENCOES (`ACES-01` a `ACES-05`).
 
 **Só lê.** Nada de editar, instalar ou rodar build. A correção é instrução, não patch: quem conserta é quem pediu. Loja FastStore, VTEX ou Wake está fora do escopo: diga e pare.
 
@@ -86,4 +86,4 @@ Achados: <N> (alta <a> · média <m> · baixa <b>). <Uma frase: o que bloqueia m
 Termine com as três correções que destravam mais gente, na ordem. Ao chamar este trabalho a partir de uma crítica, o `critico-de-ui` usa as mesmas regras no eixo *aderência*; esta skill é a auditoria completa.
 
 ---
-Adaptada de `accessibility-review`, do plugin `design` de [anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) (Apache-2.0): reescrita em PT-BR, presa à base Wicomm, com o alvo corrigido para o critério AA (2.5.8) e a medida de contraste pelos tokens. Atribuição em [`TERCEIROS.md`](../../TERCEIROS.md).
+Adaptada de `accessibility-review`, do plugin `design` de [anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) (Apache-2.0): reescrita em PT-BR, presa à base, com o alvo corrigido para o critério AA (2.5.8) e a medida de contraste pelos tokens. Atribuição em [`TERCEIROS.md`](../../TERCEIROS.md).

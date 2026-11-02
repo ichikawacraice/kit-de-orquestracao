@@ -1,15 +1,10 @@
 ---
-name: Wicomm
-versao: 0.14.1
-description: A direção de design dos apps React da Wicomm — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
+name: design-system
+versao: 0.15.0
+description: A direção de design dos apps React do sistema — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
+  marca: "do tema (temas/<id>/tema.tokens.json, slot marca): cor, hover, sobre, tinta e gradiente, nos dois temas"
   claro:
-    marca: "#F30B42"
-    primary: "#F30B42"
-    primary-hover: "#DB0A3B"
-    primary-foreground: "#FFFFFF"
-    gradiente: "118deg, #C4002A 0%, #FF0041 46%, #FF5C96 100%"
-    marca-tinta: "#FFE9EE"
     background: "#F9FAFC"
     card: "#FFFFFF"
     muted: "#F1F3F8"
@@ -26,15 +21,8 @@ colors:
     terminal-foreground: "#F4F4F5"
     border: "#E6EAF1"
     input: "#7F8697"
-    ring: "#F30B42"
     anel: "rgba(19, 23, 34, .10)"
   escuro:
-    marca: "#F30B42"
-    primary: "#F30B42"
-    primary-hover: "#F63663"
-    primary-foreground: "#FFFFFF"
-    gradiente: "118deg, #D6002E 0%, #FF0041 46%, #FF7AAB 100%"
-    marca-tinta: "#331320"
     background: "#0D1017"
     card: "#161A22"
     muted: "#0B0E14"
@@ -51,7 +39,6 @@ colors:
     terminal-foreground: "#F4F4F5"
     border: "#252B36"
     input: "#737A8A"
-    ring: "#F30B42"
     anel: "rgba(255, 255, 255, .10)"
   vozes:
     ok: emerald
@@ -60,7 +47,7 @@ colors:
     alheio: violet
     neutro: "token muted-foreground"
 typography:
-  familia: "Archivo, ui-sans-serif, system-ui, sans-serif"
+  familia: "a do tema (tema.json, fonte.familia), com a reserva ui-sans-serif, system-ui, sans-serif"
   eixo-wdth: "62% 125% (declarado no carregamento da fonte)"
   familia-medida: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
   vozes:
@@ -130,9 +117,9 @@ motion:
   ease-fecha: "cubic-bezier(0.4, 0, 1, 1)"
 ---
 
-# Direção de design Wicomm
+# Direção de design
 
-> **O que é este arquivo.** A regra de **como a tela parece** em todo app React da Wicomm: cor, tipo, espaço, superfície, forma, controle, movimento e densidade. **O que vai onde** — tipos de tela, regiões, o lugar de cada mensagem, a peça de cada função — mora na [`ANATOMIA.md`](ANATOMIA.md); as regras de engenharia do front, na [`CONVENCOES.md`](CONVENCOES.md). Os três não se repetem.
+> **O que é este arquivo.** A regra de **como a tela parece** em todo app React do sistema: cor, tipo, espaço, superfície, forma, controle, movimento e densidade. **O que vai onde** — tipos de tela, regiões, o lugar de cada mensagem, a peça de cada função — mora na [`ANATOMIA.md`](ANATOMIA.md); as regras de engenharia do front, na [`CONVENCOES.md`](CONVENCOES.md). Os três não se repetem.
 >
 > **É norma, não descrição.** Cada regra tem um código (`COR-03`), o texto que obriga, o porquê em uma ou duas frases, **como se confere** e **de onde veio**. O designer e o crítico citam o código; as guardas em teste levam o código no nome do caso.
 >
@@ -165,18 +152,18 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 ## 1. Marca
 
 ### MARCA-01 · A cor da marca é declarada e não cede a contraste
-- **Regra.** A cor da marca é `#F30B42`, uma só, igual nos dois temas, nos papéis `marca` (desenha) e `primary` (preenche). Nenhum piso de contraste move esse valor; quando o piso e a marca discordam, a marca vence e a razão fica registrada no teste. Hover muda só a luz, na mesma matiz (345,9°): `#DB0A3B` no claro, `#F63663` no escuro.
-- **Por quê.** Branco sobre a marca mede **4,25:1** — acima dos 3:1 de objeto gráfico, abaixo dos 4,5 de texto normal, e isso é aceito. Escurecer a marca para pagar 4,5 produziu um segundo vermelho que o dono do produto não reconheceu como a marca.
-- **Confere.** `tokens` (fixa o valor e a matiz do hover; não cobra razão do branco sobre a marca).
+- **Regra.** A cor da marca é a que o tema declara (`marca.cor` em `temas/<id>/tema.tokens.json`), uma só, igual nos dois temas, nos papéis `marca` (desenha) e `primary` (preenche). Nenhum piso de contraste move esse valor; quando o piso e a marca discordam, a marca vence e a razão aceita fica declarada no tema (`contrasteAceitoSobreAMarca`) e registrada no teste. Hover muda só a luz, na mesma matiz da cor (`marca.hover`, com a variante do escuro).
+- **Por quê.** A tinta sobre a marca pode medir abaixo dos 4,5 de texto normal (acima dos 3:1 de objeto gráfico), e isso é aceito. Escurecer a marca para pagar 4,5 produziu uma segunda cor que o dono do produto não reconheceu como a marca.
+- **Confere.** `tokens` (o tema é validado: a matiz do hover; não cobra razão da tinta sobre a marca).
 
 ### MARCA-02 · A marca não escreve
 - **Regra.** A cor da marca nunca é cor de texto: nada de `text-primary`, nem de texto em `--marca`. Link é **tinta com sublinhado**; item ativo de menu é fundo `bg-primary/10` com letra em **tinta**; sobre tinta da marca, escreve-se tinta.
-- **Por quê.** Medido como texto, o vermelho da marca e o vermelho de erro (`rose`) ficam a **1,17:1** um do outro — indistinguíveis. A separação entre os dois só sobrevive se for de **forma**, não de matiz.
+- **Por quê.** Medida como texto, a cor da marca pode ficar indistinguível de uma voz (o vermelho de erro, `rose`, chegou a **1,17:1** de uma marca vermelha). A separação entre as duas só sobrevive se for de **forma**, não de matiz.
 - **Confere.** `guarda:a-marca-nao-carrega-texto`.
 
 ### MARCA-03 · O gradiente é a assinatura, e vive em desenho
-- **Regra.** O gradiente da marca (claro `#C4002A → #FF0041 → #FF5C96`, escuro `#D6002E → #FF0041 → #FF7AAB`, 118°) só aparece em **desenho e preenchimento** — indicador de progresso, filete, símbolo, preenchimento de destaque —, nunca em texto. As pontas pagam pelo menos **2:1** de luminância entre si.
-- **Por quê.** As duas cores cruas da marca estão a 1,04:1 de luminância: sem a viagem de luz, não há degradê, há uma cor chapada.
+- **Regra.** O gradiente da marca (as três paradas do tema, `marca.gradiente`, a 118°) só aparece em **desenho e preenchimento** — indicador de progresso, filete, símbolo, preenchimento de destaque —, nunca em texto. As pontas pagam pelo menos **2:1** de luminância entre si.
+- **Por quê.** Duas cores cruas de marca podem estar quase na mesma luminância (já mediram 1,04:1): sem a viagem de luz, não há degradê, há uma cor chapada.
 - **Confere.** `tokens` (razão entre as pontas) · `guarda:a-marca-nao-carrega-texto`.
 
 ### MARCA-04 · Raster com a cor da marca nasce de script
@@ -185,8 +172,8 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 - **Confere.** `guarda:o-raster-da-marca-sai-do-token`.
 
 ### MARCA-05 · Destrutivo é contorno; preenchido é primário
-- **Regra.** O botão destrutivo **nunca é preenchido**: é contorno com a tinta do token `destructive` (a voz `ruim` como token de tema: `#B8113A` no claro, `#FF8095` no escuro) e anel a 38% dela. Preenchimento vermelho é sempre o primário.
-- **Por quê.** Com a marca vermelha, confirmar e excluir preenchidos mediram **1,32:1** entre si. A forma é o que separa, e nenhum ajuste de matiz desfaz isso.
+- **Regra.** O botão destrutivo **nunca é preenchido**: é contorno com a tinta do token `destructive` (a voz `ruim` como token de tema: `#B8113A` no claro, `#FF8095` no escuro) e anel a 38% dela. Preenchimento na cor da marca é sempre o primário.
+- **Por quê.** Quando a marca e o destrutivo têm matiz próxima, confirmar e excluir preenchidos se confundem (com uma marca vermelha, mediram **1,32:1** entre si). A forma é o que separa, e nenhum ajuste de matiz desfaz isso.
 - **Confere.** `guarda:a-marca-nao-carrega-texto` (varredura de destrutivo preenchido).
 
 ---
@@ -201,7 +188,7 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 
 ### COR-02 · Neutros frios
 - **Regra.** Toda a rampa neutra puxa para o azul (valores no frontmatter). O chão (`background`) não é branco puro; a superfície (`card`) é.
-- **Por quê.** Ao lado do vermelho, cinza morno vira rosado. O chão a 1,04 do branco dá ao cartão o degrau para se levantar sem virar painel cinza.
+- **Por quê.** Ao lado de uma marca quente, cinza morno vira tingido. O chão a 1,04 do branco dá ao cartão o degrau para se levantar sem virar painel cinza.
 - **Confere.** `tokens` (valores).
 
 ### COR-03 · O matiz responde uma pergunta só: *o que isto pede de você?*
@@ -295,10 +282,10 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 ## 3. Tipografia
 
 ### TIPO-01 · Uma família, mono para medida
-- **Regra.** Fonte do produto: **Archivo** (variável, eixo `wdth`), reserva `ui-sans-serif, system-ui, sans-serif`. Fonte de medida: a mono do sistema. Nenhuma segunda família.
-- **Por quê.** Grotesca de altura-x generosa, legível em corpo pequeno, com personalidade para o título; o eixo de largura dá uma terceira voz (rótulo condensado) sem fonte nova.
+- **Regra.** Fonte do produto: **a família do tema** (`fonte.familia` no `tema.json`), de preferência variável com eixo `wdth`, reserva `ui-sans-serif, system-ui, sans-serif`. Fonte de medida: a mono do sistema. Nenhuma segunda família.
+- **Por quê.** Uma família só, de altura-x generosa e legível em corpo pequeno, segura a hierarquia sem ruído; o eixo de largura dá uma terceira voz (rótulo condensado) sem fonte nova. Família sem o eixo gera com aviso, e o rótulo cai no peso.
 - **Confere.** `guarda` de fonte (a família computada no `<html>`) · `navegador`.
-- *Assumida, a confirmar:* Archivo como fonte Wicomm.
+- *Assumida, a confirmar:* a família de cada tema (o tema a declara; o sistema não escolhe).
 
 ### TIPO-02 · As vozes da família, e quem escolhe é o papel
 - **Regra.** Todo texto usa uma voz do frontmatter (classes `t-*`, na camada `components`), escolhida pelo **papel**:
@@ -330,7 +317,7 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 <a id="densidade"></a>
 ## 4. Densidade
 
-Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrumento" | "site"`). Uma área de um app pode declarar a outra densidade — e então tudo o que se abre dali (diálogo, gaveta, aviso) herda a densidade dela.
+Cada app declara a sua densidade no arquivo do projeto, `design/design-system.json` (`"densidade": "instrumento" | "site"`). Uma área de um app pode declarar a outra densidade — e então tudo o que se abre dali (diálogo, gaveta, aviso) herda a densidade dela.
 
 ### DENS-01 · Instrumento: o corpo é o `t-denso`
 - **Regra.** Em densidade **instrumento**, o corpo real é `t-denso` (12px); o ritmo é `flex` + `gap` em passos de 6 e 8px; `t-rotulo` e `t-coluna` organizam seções e colunas.
@@ -477,8 +464,8 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 - **Confere.** Revisão · `navegador` (a guarda de submissão cobre a chave de erro e o desfecho, não o `id`/`htmlFor`; guarda própria a escrever na fatia de guardas).
 
 ### CTRL-05 · O carimbo tem uma forma só
-- **Regra.** Um casco só para todo carimbo: `inline-flex items-center gap-[5px] rounded-md px-2 py-[3px] text-[11px] font-[650] leading-[1.4] [font-stretch:96%]`, tinta chapada da voz, **sem contorno, sem desfoque, sem bisel**. `ChipDeEstado` diz um **estado** e declara `tom`; `Badge` diz um **valor**, sempre na tinta neutra, e é neutro ou de marca (`variant="marca"`, explícito; o padrão é neutro). O carimbo de estado `neutro` — o `ChipDeEstado` e o `ChipQueAbre` — abre com o **ponto de 6px na tinta do próprio texto**; o em curso tem o giro no lugar dele, e as vozes com matiz não levam ponto. O `Badge` nunca tem ponto; o `Badge` de marca abre com o **filete da marca** (2×10px, no gradiente da marca, MARCA-03) e escreve em `foreground`; o neutro não tem marcador. Tinta rosa de marca em carimbo é defeito: a tinta do carimbo é voz (COR-08). Numa coluna de estados, o alinhamento é o do casco, não o da palavra (o ponto e o giro empurram a palavra). Monograma (iniciais) é quadrado de 16px ou círculo de 20px. Raio, padding, tamanho e tinta **não são escolha de quem usa**.
-- **Por quê.** 40 pílulas em 22 construções, com o mesmo estado em `text-[10px]` numa tela e `text-[11px]` na outra. O estado neutro e o valor neutro têm a mesma tinta no mesmo casco: lado a lado (o estado no topo, os valores logo abaixo), o estado se lia como mais um valor. As vozes com matiz já se separam do `Badge` neutro pela tinta, e ponto nelas seria marcador repetido. Já o `Badge` de marca e o carimbo `ruim` são o mesmo rosa (matiz 356° × 350–356°): medidos com a tinta composta, ficam a ΔE2000 0,75–2,7 no escuro e 4–6 no claro, e só a letra os separava: o selo de marca falava com a tinta do erro. Como o vermelho da marca e o de erro (MARCA-02), a separação é de forma — o selo sai do rosa, e o que o separa do estado é o traço da marca dentro do carimbo — forma e lugar: a 2px o gradiente se lê como traço vermelho, e o ponto do estado neutro é redondo e na cor do texto. A barra da voz (`FILETE_DO_TOM`) nunca entra num carimbo, para o traço ser só da marca. Na tinta neutra, as duas tintas ficam a ΔE76 13–18 nos dois temas, e o texto do de marca paga 13,2:1 no pior fundo; o filete, decorativo (a palavra carrega o sentido), fica entre 2,3 e 5,4:1 conforme a ponta.
+- **Regra.** Um casco só para todo carimbo: `inline-flex items-center gap-[5px] rounded-md px-2 py-[3px] text-[11px] font-[650] leading-[1.4] [font-stretch:96%]`, tinta chapada da voz, **sem contorno, sem desfoque, sem bisel**. `ChipDeEstado` diz um **estado** e declara `tom`; `Badge` diz um **valor**, sempre na tinta neutra, e é neutro ou de marca (`variant="marca"`, explícito; o padrão é neutro). O carimbo de estado `neutro` — o `ChipDeEstado` e o `ChipQueAbre` — abre com o **ponto de 6px na tinta do próprio texto**; o em curso tem o giro no lugar dele, e as vozes com matiz não levam ponto. O `Badge` nunca tem ponto; o `Badge` de marca abre com o **filete da marca** (2×10px, no gradiente da marca, MARCA-03) e escreve em `foreground`; o neutro não tem marcador. Tinta da cor da marca em carimbo é defeito: a tinta do carimbo é voz (COR-08). Numa coluna de estados, o alinhamento é o do casco, não o da palavra (o ponto e o giro empurram a palavra). Monograma (iniciais) é quadrado de 16px ou círculo de 20px. Raio, padding, tamanho e tinta **não são escolha de quem usa**.
+- **Por quê.** 40 pílulas em 22 construções, com o mesmo estado em `text-[10px]` numa tela e `text-[11px]` na outra. O estado neutro e o valor neutro têm a mesma tinta no mesmo casco: lado a lado (o estado no topo, os valores logo abaixo), o estado se lia como mais um valor. As vozes com matiz já se separam do `Badge` neutro pela tinta, e ponto nelas seria marcador repetido. Já o `Badge` na tinta da marca e o carimbo de uma voz de matiz próxima se confundem (com uma marca vermelha, o de marca e o `ruim` mediram ΔE2000 0,75–2,7 no escuro e 4–6 no claro com a tinta composta), e só a letra os separava: o selo de marca falava com a tinta do erro. Como a marca e a voz (MARCA-02), a separação é de forma — o selo sai da tinta da marca, e o que o separa do estado é o traço da marca dentro do carimbo — forma e lugar: a 2px o gradiente se lê como traço da marca, e o ponto do estado neutro é redondo e na cor do texto. A barra da voz (`FILETE_DO_TOM`) nunca entra num carimbo, para o traço ser só da marca. Na tinta neutra, as duas tintas ficam a ΔE76 13–18 nos dois temas, e o texto do de marca paga 13,2:1 no pior fundo; o filete, decorativo (a palavra carrega o sentido), fica entre 2,3 e 5,4:1 conforme a ponta.
 - **Confere.** `guarda:o-carimbo-tem-forma` · registro (o ponto do neutro, o `Badge` sem ponto e o filete só no de marca, em teste) · `navegador` (no ateliê: o de marca ao lado do `ruim` e do estado neutro, nos três fundos) · `crítica:consistência`.
 
 ### CTRL-06 · Troca de vista tem uma forma

@@ -1,11 +1,11 @@
 ---
 name: novo-projeto
-description: Começa um app React novo da Wicomm já dentro do sistema de design — detecta o tipo de projeto, faz a entrevista curta que vira o PRODUCT e define a densidade, estampa a base Wicomm (DESIGN, ANATOMIA, CONVENCOES) em design/, escreve o design/design-system.json, liga o plugin e o registro no projeto e leva a primeira tela pelo designer e pelo crítico. Use quando a pessoa for criar ou iniciar um app, painel ou sistema React novo da Wicomm ("projeto novo", "começar um app do zero", "bootstrap", "monta a base de um sistema novo", `/design-system:novo`). Não serve para projeto que já existe (esse é o `auditar-projeto`) nem para loja FastStore ou Wake.
+description: Começa um app React novo da Wicomm já dentro do sistema de design — detecta o tipo de projeto, faz a entrevista curta que vira o PRODUCT e define a densidade, estampa a base (DESIGN, ANATOMIA, CONVENCOES) em design/, escreve o design/design-system.json, liga o plugin e o registro no projeto e leva a primeira tela pelo designer e pelo crítico. Use quando a pessoa for criar ou iniciar um app, painel ou sistema React novo da Wicomm ("projeto novo", "começar um app do zero", "bootstrap", "monta a base de um sistema novo", `/design-system:novo`). Não serve para projeto que já existe (esse é o `auditar-projeto`) nem para loja FastStore ou Wake.
 ---
 
 # Projeto novo no sistema Wicomm
 
-O projeto nasce com a base Wicomm copiada e estampada, com o processo ligado e com a primeira tela decidida pelo designer e julgada pelo crítico. O que vale aqui é a base do plugin: `${CLAUDE_PLUGIN_ROOT}/base/` (DESIGN = como parece, ANATOMIA = o que vai onde, CONVENCOES = como o código sustenta as duas).
+O projeto nasce com a base copiada e estampada, com o processo ligado e com a primeira tela decidida pelo designer e julgada pelo crítico. O que vale aqui é a base do plugin: `${CLAUDE_PLUGIN_ROOT}/base/` (DESIGN = como parece, ANATOMIA = o que vai onde, CONVENCOES = como o código sustenta as duas).
 
 ## 1. Detectar o tipo (pare se não for app React)
 

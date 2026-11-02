@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * **A base Wicomm no projeto: copiada com a versão estampada, e atualizada por merge de três vias.**
+ * **A base no projeto: copiada com a versão estampada, e atualizada por merge de três vias.**
  *
  *   node base-do-projeto.mjs estampar  <raiz> [--densidade instrumento|site] [--pasta <front>]
  *   node base-do-projeto.mjs atualizar <raiz> [--resolvido]

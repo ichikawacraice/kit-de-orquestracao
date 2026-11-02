@@ -1,16 +1,16 @@
 ---
-name: Wicomm
-versao: 0.14.1
-description: A anatomia dos apps React da Wicomm — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
+name: design-system
+versao: 0.15.0
+description: A anatomia dos apps React do sistema — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
-# Anatomia Wicomm — o que vai onde
+# Anatomia — o que vai onde
 
 > A [`DESIGN.md`](DESIGN.md) diz **como** a tela parece: token, cor, tipo, raio, sombra, movimento. Este arquivo diz **o que** vai **onde**: os tipos de tela, as regiões de cada um, o lugar de cada mensagem e a peça do kit para cada função. Valor de token aqui é defeito (está na DESIGN); regra de aparência aqui também.
 >
 > Quem desenha lê os dois antes de qualquer interface: o agente `designer` (revisão de arquitetura) e o `critico-de-ui` (crítica), que julga pelos dois. O formato de cada regra — **Regra · Por quê · Confere** — está explicado na [DESIGN](DESIGN.md#como-ler-uma-regra).
 >
-> Os nomes de peça são os do registro Wicomm (em português, com o nome shadcn equivalente na descrição da peça). Enquanto o registro não existe, a peça que falta no projeto se cria no kit do projeto, com o mesmo nome e a mesma função.
+> Os nomes de peça são os do registro do sistema (em português, com o nome shadcn equivalente na descrição da peça). Enquanto o registro não existe, a peça que falta no projeto se cria no kit do projeto, com o mesmo nome e a mesma função.
 
 <a id="principios"></a>
 ## 1. Os seis princípios
@@ -38,7 +38,7 @@ Cada princípio é um critério da revisão de arquitetura e da crítica.
 - **Confere.** `crítica:ruído` · revisão de arquitetura (o inventário diz a decisão que cada dado gera).
 
 ### PRIN-05 · Componente antes de layout
-- **Regra.** Toda região é montada com peças do kit (o registro Wicomm). Se falta peça, a peça nova entra **no kit** — com partes, estados e variantes, e no ateliê — antes de entrar na tela. Arranjo à mão na tela é defeito.
+- **Regra.** Toda região é montada com peças do kit (o registro do sistema). Se falta peça, a peça nova entra **no kit** — com partes, estados e variantes, e no ateliê — antes de entrar na tela. Arranjo à mão na tela é defeito.
 - **Por quê.** O arranjo à mão vira a próxima variante que diverge, e é assim que dois apps deixam de parecer da mesma empresa.
 - **Confere.** `guarda:componente-que-ninguem-monta` · `crítica:consistência`.
 
@@ -52,13 +52,13 @@ Cada princípio é um critério da revisão de arquitetura e da crítica.
 <a id="casco"></a>
 ## 2. O casco
 
-O casco é o que faz dois apps da Wicomm parecerem um só: é a primeira coisa que o cliente vê e a que ele mais repete.
+O casco é o que faz dois apps da mesma empresa parecerem um só: é a primeira coisa que o cliente vê e a que ele mais repete.
 
 ### CASCO-01 · Regiões do casco
 - **Regra.** Todo app autenticado tem o mesmo casco:
   | região | o que mora | o que NÃO mora |
   |---|---|---|
-  | **Barra lateral** (esquerda, recolhível) | o logotipo Wicomm, os destinos do app (item com ícone **e** rótulo), a conta e o tema ao pé | ação de tela, aviso, filtro |
+  | **Barra lateral** (esquerda, recolhível) | o logotipo do tema, os destinos do app (item com ícone **e** rótulo), a conta e o tema ao pé | ação de tela, aviso, filtro |
   | **Topo da página** | a trilha (em tela de detalhe), o título (`h1`, um só), o estado do objeto quando a tela é de um objeto, os valores que o classificam (na linha de baixo, CASCO-04), o primário da tela | ação rara (vai ao `⋯`) |
   | **Conteúdo** | o arquétipo da tela, em superfície | conteúdo solto no fundo |
   O **cabeçalho**, grudado acima do topo, é opcional e só leva o que vale **igual em todas as telas** e muda o app inteiro: a troca de contexto, a busca global, a conexão com um serviço de fora — nunca título, primário, conta ou tema. O **topo da página** leva o que muda quando a tela muda. Para um caso novo, o teste é: *a coisa continua valendo depois de trocar de destino?* Se sim, é do cabeçalho; se não, é do topo. O topo não rola (LAY-01). Os arquétipos **Entrada e Editor ficam fora do casco**; no Editor, a barra (ARQ-03) faz o papel dele e leva a volta, o nome do objeto e a conta.
@@ -86,7 +86,7 @@ O casco é o que faz dois apps da Wicomm parecerem um só: é a primeira coisa q
 ## 3. Os arquétipos de tela
 
 ### ARQ-01 · Toda tela é um de cinco
-- **Regra.** Toda tela é um destes arquétipos. A que não cabe em nenhum vira **arquétipo novo, aqui, antes do código** (proposta à base Wicomm, não exceção local).
+- **Regra.** Toda tela é um destes arquétipos. A que não cabe em nenhum vira **arquétipo novo, aqui, antes do código** (proposta à base, não exceção local).
   | Arquétipo | Pergunta | Exemplos | Regiões |
   |---|---|---|---|
   | **Lista** | *o que pede a minha atenção?* | a fila de pedidos, os clientes, as novidades | topo (título + filtro global + primário) · lista ou quadro · vazio |
@@ -155,7 +155,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 
 ### MSG-03 · Mensagem para quem opera não aparece para quem usa
 - **Regra.** Detalhe de máquina — fila, processo, credencial de integração, erro técnico cru, identificador interno — é de quem opera. Para quem usa o app (inclusive o cliente), o mesmo fato vira **o que ele pode fazer** ("não deu para publicar agora; tente em alguns minutos"). Exceção é declarada no projeto, com motivo, e lista exatamente o que passa.
-- **Por quê.** Termo técnico na tela do cliente é ruído para ele e exposição para a Wicomm.
+- **Por quê.** Termo técnico na tela do cliente é ruído para ele e exposição para a empresa.
 - **Confere.** `crítica:aderência` · revisão de texto.
 
 ### MSG-04 · Erro mora no bloco que o disparou
@@ -251,8 +251,8 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Confere.** `crítica:consistência` · `guarda:componente-que-ninguem-monta` · `guarda:o-irreversivel-pede-confirmacao`.
 
 ### PECA-02 · De onde a peça nova parte
-- **Regra.** Peça nova parte do componente equivalente do **shadcn oficial** quando existe (menu ← `DropdownMenu`, botão dividido ← `ButtonGroup`, faixa ← `Alert`, colunas ← `Resizable`; as colunas do Editor são a exceção: `ColunasDoEditor` mede a regra da ARQ-03 e não se redimensiona à mão até um projeto pedir), adaptada aos tokens e à escala da DESIGN e à forma do kit (nome em português, `tom`, motivo no desabilitado). Entra pelo **registro Wicomm**; o projeto a instala com `shadcn add @wicomm/<peça>`. As peças que o kit já tem não são trocadas pelas do catálogo oficial: já são shadcn por baixo e estão ajustadas à escala. Catálogo de terceiros serve só de referência visual: não se copia nem se instala. O crítico julga a peça antes de ela chegar a uma tela.
-- **Por quê.** O shadcn já resolveu acessibilidade e comportamento; o que é da Wicomm é a forma. Peça de catálogo de terceiros traz outra marca, outra fonte e padrão de landing page.
+- **Regra.** Peça nova parte do componente equivalente do **shadcn oficial** quando existe (menu ← `DropdownMenu`, botão dividido ← `ButtonGroup`, faixa ← `Alert`, colunas ← `Resizable`; as colunas do Editor são a exceção: `ColunasDoEditor` mede a regra da ARQ-03 e não se redimensiona à mão até um projeto pedir), adaptada aos tokens e à escala da DESIGN e à forma do kit (nome em português, `tom`, motivo no desabilitado). Entra pelo **registro do sistema**; o projeto a instala com `shadcn add @wicomm/<peça>` (o prefixo é o do tema). As peças que o kit já tem não são trocadas pelas do catálogo oficial: já são shadcn por baixo e estão ajustadas à escala. Catálogo de terceiros serve só de referência visual: não se copia nem se instala. O crítico julga a peça antes de ela chegar a uma tela.
+- **Por quê.** O shadcn já resolveu acessibilidade e comportamento; o que é do sistema é a forma. Peça de catálogo de terceiros traz outra marca, outra fonte e padrão de landing page.
 - **Confere.** Revisão de arquitetura · `crítica:consistência`.
 
 ---

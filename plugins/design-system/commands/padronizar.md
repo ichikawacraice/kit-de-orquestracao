@@ -1,5 +1,5 @@
 ---
-description: Monta, a partir da auditoria, o plano de padronização para a base Wicomm em fatias (entrada no sistema, Tailwind v4, tokens com ponte, primitivas, casco, telas, remover a ponte).
+description: Monta, a partir da auditoria, o plano de padronização para a base em fatias (entrada no sistema, Tailwind v4, tokens com ponte, primitivas, casco, telas, remover a ponte).
 argument-hint: "[caminho da auditoria]"
 ---
 

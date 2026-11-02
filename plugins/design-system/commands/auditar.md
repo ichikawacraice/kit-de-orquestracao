@@ -1,5 +1,5 @@
 ---
-description: Audita, só lendo, um app React existente contra a base Wicomm e grava os números de deriva, a anatomia, o mapa das peças e as notas por tela.
+description: Audita, só lendo, um app React existente contra a base e grava os números de deriva, a anatomia, o mapa das peças e as notas por tela.
 argument-hint: "[raiz do projeto] [pasta do front]"
 ---
 

@@ -2,7 +2,7 @@
 /**
  * **A demanda de design passa pelo designer e pelo crítico — e quem esquece é cobrado.**
  *
- * Hook do plugin `design-system`, registrado em `hooks/hooks.json`. É a trava do processo da base Wicomm
+ * Hook do plugin `design-system`, registrado em `hooks/hooks.json`. É a trava do processo da base
  * (`base/CONVENCOES.md`, CONV-19 e CONV-20). O `hook_event_name` do JSON no stdin decide o que roda; o papel vem do
  * `agent_type` do payload (agent de plugin não carrega `hooks` no frontmatter), ou de `--papel` quando a linha de
  * comando o passa.
@@ -85,8 +85,8 @@ export const textoDoLembrete = (temArquivo) =>
   "depois de mexer no visual, o `critico-de-ui` julga em contexto separado (no máximo 5 problemas). " +
   "Só o texto da tela (botão, erro, confirmação, vazio): skill `textos-de-interface`. Acessibilidade (contraste, teclado, leitor de tela): skill `acessibilidade`. " +
   (temArquivo
-    ? "Fontes: as de `fontes` do arquivo do projeto (`design/design-system.json`, ou `design/wicomm.json` no projeto que só tem esse; leia e grave nele); sem elas, a base Wicomm do plugin (DESIGN, ANATOMIA, CONVENCOES)."
-    : "Fontes: as do próprio projeto (o `CLAUDE.md`, os documentos de design dele, o código de hoje). Este projeto não tem `design/design-system.json`: a base Wicomm do plugin não é a norma dele até ele entrar no sistema (`/design-system:novo` ou `/design-system:auditar`).");
+    ? "Fontes: as de `fontes` do arquivo do projeto (`design/design-system.json`, ou `design/wicomm.json` no projeto que só tem esse; leia e grave nele); sem elas, a base do plugin (DESIGN, ANATOMIA, CONVENCOES)."
+    : "Fontes: as do próprio projeto (o `CLAUDE.md`, os documentos de design dele, o código de hoje). Este projeto não tem `design/design-system.json`: a base do plugin não é a norma dele até ele entrar no sistema (`/design-system:novo` ou `/design-system:auditar`).");
 
 function git(cwd, args) {
   return execFileSync("git", ["-C", cwd, ...args], {

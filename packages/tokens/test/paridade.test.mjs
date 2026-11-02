@@ -301,17 +301,30 @@ describe('a base (DESIGN.md) concorda com o pacote', () => {
     return Object.fromEntries(linhas.map((l) => /^\s+([\w-]+):\s*"([^"]*)"/.exec(l)).filter(Boolean).map((m) => [m[1], m[2]]))
   }
 
+  /**
+   * As cores que vêm do slot da marca não estão no frontmatter desde a base sem marca (F345, Q846): elas são do tema.
+   * Os nomes saem do sistema (todo token que aponta para `{marca.…}`), mais `marca` e `gradiente`, os atalhos de antes.
+   */
+  const SISTEMA = readFileSync(join(AQUI, '..', 'fonte', 'sistema.tokens.json'), 'utf8')
+  const DA_MARCA = new Set(['marca', 'gradiente', 'marca-viva', 'primary-gradient'])
+  for (const [, nome] of SISTEMA.matchAll(/"([\w-]+)":\s*\{\s*"\$value":\s*"\{marca\./g)) DA_MARCA.add(nome)
+
+  it('o frontmatter manda as cores da marca ao tema, e não as escreve', () => {
+    assert.ok(DA_MARCA.has('primary') && DA_MARCA.has('ring') && DA_MARCA.size >= 13, `achou as cores da marca: ${[...DA_MARCA]}`)
+    assert.match(frontmatter, /^ {2}marca: "do tema/m)
+    for (const tema of ['claro', 'escuro']) {
+      const fora = Object.keys(grupo(`colors.${tema}`)).filter((k) => DA_MARCA.has(k))
+      assert.deepEqual(fora, [], `colors.${tema}`)
+    }
+  })
+
   for (const tema of ['claro', 'escuro']) {
     it(`as cores do tema ${tema} no frontmatter são as do pacote`, () => {
       const fm = grupo(`colors.${tema}`)
-      assert.ok(Object.keys(fm).length > 20, 'a leitura achou as cores')
+      assert.ok(Object.keys(fm).length > 15, 'a leitura achou as cores')
       const v = VARS[tema]
-      const esperado = {
-        marca: v['--marca-viva'],
-        gradiente: `118deg, ${v['--primary-gradient-start']} 0%, ${v['--primary-gradient-mid']} 46%, ${v['--primary-gradient-end']} 100%`,
-      }
       const diferentes = Object.entries(fm)
-        .map(([k, valor]) => [k, valor, esperado[k] ?? v[`--${k}`]])
+        .map(([k, valor]) => [k, valor, v[`--${k}`]])
         .filter(([, valor, nosso]) => norma(valor) !== norma(nosso ?? '(ausente no pacote)'))
         .map(([k, valor, nosso]) => `${k}: base ${valor} · pacote ${nosso}`)
       assert.deepEqual(diferentes, [])

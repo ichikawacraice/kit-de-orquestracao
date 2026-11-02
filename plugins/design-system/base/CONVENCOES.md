@@ -1,14 +1,14 @@
 ---
-name: Wicomm
-versao: 0.14.1
-description: As convenções de engenharia do front dos apps React da Wicomm — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
+name: design-system
+versao: 0.15.0
+description: As convenções de engenharia do front dos apps React do sistema — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
 ---
 
-# Convenções do front Wicomm
+# Convenções do front
 
 > A [`DESIGN.md`](DESIGN.md) diz como a tela parece e a [`ANATOMIA.md`](ANATOMIA.md) diz o que vai onde. Este arquivo diz **como o código sustenta as duas**: Tailwind e CSS, estado de tela, formulário, texto de interface, como se escreve uma guarda e como uma tela passa pelo processo de design. Mesmo formato de regra: **Regra · Por quê · Confere** ([como ler](DESIGN.md#como-ler-uma-regra)).
 >
-> Estas convenções valem para todo app React da Wicomm (Next ou Vite) com **Tailwind v4**. O sistema é só v4: projeto em v3 migra antes de receber tokens e peças (fatia 0 do plano de padronização).
+> Estas convenções valem para todo app React do sistema (Next ou Vite) com **Tailwind v4**. O sistema é só v4: projeto em v3 migra antes de receber tokens e peças (fatia 0 do plano de padronização).
 
 <a id="css"></a>
 ## 1. Tailwind e CSS
@@ -19,7 +19,7 @@ description: As convenções de engenharia do front dos apps React da Wicomm —
 - **Confere.** `guarda` de tema (lê o CSS e reprova cor de tema fora do `@theme inline`) · `navegador`.
 
 ### CONV-02 · A fonte do produto é a chave `sans`, e a var mora onde a regra a lê
-- **Regra.** A fonte da marca substitui a família `sans` (`--font-sans` no `@theme inline`, apontando para a var da fonte) — nunca uma chave nova no `@theme` (`--font-archivo` ali só cria o utilitário `font-archivo`); o certo é `--font-sans: var(--font-archivo)`. A variável CSS da fonte é declarada no **`<html>`**, não no `<body>`.
+- **Regra.** A fonte da marca substitui a família `sans` (`--font-sans` no `@theme inline`, apontando para a var da fonte) — nunca uma chave nova no `@theme` (a variável do tema, como `--font-<família>`, ali só cria o utilitário `font-<família>`); o certo é `--font-sans: var(--font-<família>)`, com a variável que o tema declara (`fonte.variavel`). A variável CSS da fonte é declarada no **`<html>`**, não no `<body>`.
 - **Por quê.** Chave nova só cria um utilitário, e o preflight segue escrevendo a fonte do sistema no `<html>`. `var(--x)` ausente no elemento onde a declaração é resolvida invalida a declaração inteira, e a página vira serifada. Nenhum dos dois aparece em build ou jsdom.
 - **Confere.** `guarda` de fonte · `navegador` (família computada no `<html>`).
 
@@ -90,7 +90,7 @@ description: As convenções de engenharia do front dos apps React da Wicomm —
 <a id="guardas"></a>
 ## 5. Como se escreve uma guarda
 
-As guardas do pacote Wicomm e as de cada projeto seguem estas regras. Elas valem para qualquer teste que afirma uma regra de design.
+As guardas do pacote (`@wicomm/guardas`) e as de cada projeto seguem estas regras. Elas valem para qualquer teste que afirma uma regra de design.
 
 ### CONV-14 · Guarda prova que achou o que examinar
 - **Regra.** Todo teste que inspeciona um valor ou uma lista de arquivos afirma antes que o insumo **existe e não é vazio** — e o piso fica perto do total real medido, não em "maior que zero".
@@ -133,7 +133,7 @@ As guardas do pacote Wicomm e as de cada projeto seguem estas regras. Elas valem
 ### CONV-20 · A nota é a porta
 - **Regra.** A crítica dá nota em seis eixos de 0 a 5 — hierarquia, densidade, consistência com o design system, ruído visual, clareza da ação primária, aderência à DESIGN e à ANATOMIA. **24/30 sem ressalva alta** libera o PR da tela; no máximo duas recríticas. Em densidade site, entra o sétimo eixo, *cara de site*, e o teto vira 28/35 (80%).
 - **Por quê.** Um número dá ao dono do produto como comparar telas e projetos; a escala fixa evita a nota que muda de régua por tela.
-- **Confere.** Skill de crítica (forma da entrega) · `/wicomm:estado` (média das últimas críticas).
+- **Confere.** Skill de crítica (forma da entrega) · `/design-system:estado` (média das últimas críticas).
 
 ### CONV-21 · O protótipo aprovado é o contrato
 - **Regra.** Tela com protótipo ou revisão aprovada é implementada **como aprovada**. Mudança de desenho durante a implementação volta à revisão; não se decide no código.
@@ -147,7 +147,7 @@ As guardas do pacote Wicomm e as de cada projeto seguem estas regras. Elas valem
 - *Assumida, a confirmar:* só o detector local.
 
 ### CONV-23 · Conferir no ateliê antes de afirmar
-- **Regra.** Todo app Wicomm tem a rota `/atelie` com as peças reais, dados de exemplo, os dois temas lado a lado e `data-vitrine="<nome>"` em cada peça. Mudança de cor, tipo ou peça se confere ali antes do PR (DESIGN, MED-01). A lista de peças do kit e a do ateliê concordam por teste (CONV-15).
+- **Regra.** Todo app do sistema tem a rota `/atelie` com as peças reais, dados de exemplo, os dois temas lado a lado e `data-vitrine="<nome>"` em cada peça. Mudança de cor, tipo ou peça se confere ali antes do PR (DESIGN, MED-01). A lista de peças do kit e a do ateliê concordam por teste (CONV-15).
 - **Por quê.** Os piores defeitos visuais não aparecem em build nem em jsdom.
 - **Confere.** `guarda` ateliê × kit · crítica.
 
