@@ -1,6 +1,6 @@
 {
   "name": "orquestracao",
-  "version": "0.1.80",
+  "version": "0.1.81",
   "description": "Uma sessão dona por item e a orquestradora: hooks e travas, skills, agents e scripts do painel.",
   "author": {
     "name": "ichikawacraice"
