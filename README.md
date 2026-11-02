@@ -22,7 +22,7 @@ Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perd
 
 ## Instalar em 3 passos
 
-1. Os plugins, uma vez por máquina, e reinicie o app:
+1. Os plugins, uma vez por máquina, e reinicie o app. O `orquestracao` traz junto o `superpowers` do marketplace oficial ([por quê](docs/guia/conflitos.md#precisa-ter)); se o marketplace oficial ainda não estiver adicionado, antes: `claude plugin marketplace add anthropics/claude-plugins-official`.
    ```bash
    claude plugin marketplace add ichikawacraice/kit-de-orquestracao
    ```

@@ -19,7 +19,7 @@ Todo trabalho do projeto é um **item** (`F<n>`) na fila do painel. Uma **sessã
 
 <a id="skills-da-etapa"></a>
 ## Skills por etapa
-A dona é uma sessão só, mas troca de chapéu a cada etapa: **ao entrar numa etapa**, roda `node "${CLAUDE_PLUGIN_ROOT}/pool/skills-da-etapa.mjs" <etapa>` (a lista das skills que valem nela, tirada de `skills-por-etapa.json`) e carrega com `Skill` as **fixas** da etapa e as da lista que o trabalho pede. Skill da lista que não está instalada fica de fora sem prejuízo.
+A dona é uma sessão só, mas troca de chapéu a cada etapa: **ao entrar numa etapa**, roda `node "${CLAUDE_PLUGIN_ROOT}/pool/skills-da-etapa.mjs" <etapa>` (a lista das skills que valem nela, tirada de `skills-por-etapa.json`) e carrega com `Skill` as **fixas** da etapa e as da lista que o trabalho pede. Skill da lista que não está instalada fica de fora sem prejuízo. Skill de fora que repete uma peça do kit (`engineering:architecture`, `engineering:code-review` e as outras do catálogo `skills-de-fora.json`, [ADR 0014](../../../docs/adr/0014-o-kit-decide-as-skills-de-fora-num-catalogo.md)) a trava `skills-de-fora` recusa em projeto com o kit, dizendo qual usar.
 
 | Etapa | Fixas (carrega sempre) | Da lista, quando o trabalho pede |
 |---|---|---|

@@ -24,7 +24,7 @@ uso:
                                              com conflito não grava nada (--parcial grava o resto)
                                              --design <pasta>: modelos de front na pasta e o Impeccable (recomendado) no settings
   kit atualizar [--simular] [--trocar-test]  troca pela versão nova o que você não editou; o resto vira conflito
-  kit doutor                                 confere plugin, hooks, kit.json, versões e o disco com o lock
+  kit doutor                                 confere plugin, hooks, kit.json, skills de fora, versões e o disco com o lock
   kit remover [--simular]                    tira o que o kit pôs (blocos, chaves e arquivos cujo hash bate)
 `;
 

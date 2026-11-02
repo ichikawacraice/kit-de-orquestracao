@@ -144,7 +144,8 @@ describe('c17.4 doutor e o placeholder do bloco projeto', () => {
   it('placeholder presente: linha `aviso:` e exit 0; preenchido: sem o aviso', (t) => {
     const raiz = realpathSync(mkdtempSync(join(tmpdir(), 'kit-c17q-'))); t.after(() => rmSync(raiz, { recursive: true, force: true }));
     const home = join(raiz, 'home'); mkdirSync(join(home, '.claude', 'plugins'), { recursive: true });
-    writeFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user', installPath: '/x', version: '0.1.0' }] } }));
+    writeFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user', installPath: '/x', version: '0.1.0' }], 'superpowers@claude-plugins-official': [{ scope: 'user' }] } }));
+    writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'superpowers@claude-plugins-official': true } }));
     const proj = join(raiz, 'p'); mkdirSync(proj); git(proj, 'init', '-q');
     assert.equal(kit(proj, home, 'iniciar').status, 0);
     const antes = kit(proj, home, 'doutor');

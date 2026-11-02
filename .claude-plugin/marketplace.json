@@ -3,6 +3,9 @@
   "owner": {
     "name": "ichikawacraice"
   },
+  "allowCrossMarketplaceDependenciesOn": [
+    "claude-plugins-official"
+  ],
   "plugins": [
     {
       "name": "orquestracao",

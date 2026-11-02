@@ -17,7 +17,8 @@ function ambiente(t) {
   const raiz = realpathSync(mkdtempSync(join(tmpdir(), 'kit-c18-')));
   t.after(() => rmSync(raiz, { recursive: true, force: true }));
   const home = join(raiz, 'home'); const base = join(home, '.claude', 'orquestracao'); mkdirSync(join(home, '.claude', 'plugins'), { recursive: true });
-  writeFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user', installPath: '/x', version: '0.1.0' }] } }));
+  writeFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user', installPath: '/x', version: '0.1.0' }], 'superpowers@claude-plugins-official': [{ scope: 'user' }] } }));
+  writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'superpowers@claude-plugins-official': true } }));
   const env = { ...process.env, HOME: home, HOOKS_CREWAI_BASE: base, PAINEL_DIR: join(base, 'painel') }; delete env.NODE_TEST_CONTEXT;
   const projeto = (nome, arquivos = {}) => {
     const d = join(raiz, nome); mkdirSync(d, { recursive: true }); git(d, 'init', '-q');

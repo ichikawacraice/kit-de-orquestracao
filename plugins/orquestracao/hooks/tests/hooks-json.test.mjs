@@ -26,10 +26,12 @@ const ESPERADO = [
   ['PreToolUse', `Bash|${PRE_EDICAO}|mcp__ccd_session__start_session|mcp__ccd_session_mgmt__clear_session`, 'travas-da-sessao.mjs'],
   ['PreToolUse', 'SendMessage|mcp__ccd_session_mgmt__send_message|mcp__ccd_session__start_session|Write|Edit|MultiEdit|Bash', 'segredo-sai.mjs'],
   ['PreToolUse', 'mcp__ccd_session__start_session', 'titulo-da-dona.mjs'],
+  ['PreToolUse', 'Skill', 'skills-de-fora.mjs'],
   ['PostToolUse', null, 'laco-de-comandos.mjs'],
   ['PostToolUseFailure', null, 'laco-de-comandos.mjs'],
   ['UserPromptSubmit', null, 'operador-ausente.mjs'],
   ['UserPromptSubmit', null, 'injecao-entre-sessoes.mjs'],
+  ['UserPromptExpansion', null, 'skills-de-fora.mjs'],
   ['SessionStart', null, 'sessao-inicio.mjs'],
 ];
 const lerHooks = () => JSON.parse(readFileSync(join(HOOKS, 'hooks.json'), 'utf8')).hooks;

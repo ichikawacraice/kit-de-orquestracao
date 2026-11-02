@@ -344,11 +344,16 @@ describe('kit remover', () => {
 
 describe('kit doutor (completo)', () => {
   const NOME = 'orquestracao@kit-de-orquestracao';
-  function lar({ instalado = true, settings } = {}) {
+  // superpowers é dependência do kit (ADR 0014): a casa em dia o tem; `superpowers: false` mede a falta
+  function lar({ instalado = true, superpowers = true, settings } = {}) {
     const h = realpathSync(mkdtempSync(join(tmpdir(), 'kit-k7-home-')));
     mkdirSync(join(h, '.claude', 'plugins'), { recursive: true });
-    writeFileSync(join(h, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: instalado ? { [NOME]: [{ scope: 'user', installPath: '/x', version: '0.1.0' }] } : {} }));
-    if (settings) writeFileSync(join(h, '.claude', 'settings.json'), JSON.stringify(settings));
+    const plugins = {};
+    if (instalado) plugins[NOME] = [{ scope: 'user', installPath: '/x', version: '0.1.0' }];
+    if (superpowers) plugins['superpowers@claude-plugins-official'] = [{ scope: 'user', installPath: '/y', version: '5.0.0' }];
+    writeFileSync(join(h, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins }));
+    const ligado = superpowers ? { 'superpowers@claude-plugins-official': true } : {};
+    writeFileSync(join(h, '.claude', 'settings.json'), JSON.stringify({ ...settings, enabledPlugins: { ...ligado, ...settings?.enabledPlugins } }));
     return h;
   }
   const hooksDoKit = () => [...JSON.stringify(json(RAIZ, 'plugins', 'orquestracao', 'hooks', 'hooks.json')).matchAll(/\/hooks\/([\w-]+\.mjs)/g)].map((m) => m[1]);
@@ -360,8 +365,19 @@ describe('kit doutor (completo)', () => {
       assert.equal(kit(d, ['adotar'], { home: h }).status, 0);
       const r = kit(d, ['doutor'], { home: h });
       assert.equal(r.status, 0, saida(r));
-      for (const re of [/ok:.*plugin instalado na máquina: sim/, /ok:.*plugin habilitado no projeto: sim/, /ok:.*nenhum hook do kit/, /ok:.*kit\.json/, /ok:.*versão/, /ok:.*node/i, /ok:.*git/]) assert.match(r.stdout, re);
+      for (const re of [/ok:.*plugin instalado na máquina: sim/, /ok:.*plugin habilitado no projeto: sim/, /ok:.*nenhum hook do kit/, /ok:.*kit\.json/, /ok:.*versão/, /ok:.*node/i, /ok:.*git/, /ok: superpowers instalado/]) assert.match(r.stdout, re);
       assert.doesNotMatch(r.stdout, /falha:/);
+    } finally { limpar(d, h); }
+  });
+
+  it('sem o superpowers (dependência do kit): exit 1 com o comando de instalar', () => {
+    const d = rascunho();
+    const h = lar({ superpowers: false });
+    try {
+      assert.equal(kit(d, ['adotar'], { home: h }).status, 0);
+      const r = kit(d, ['doutor'], { home: h });
+      assert.equal(r.status, 1, saida(r));
+      assert.match(r.stdout, /falha: superpowers@claude-plugins-official não instalado.*claude plugin install superpowers@claude-plugins-official/);
     } finally { limpar(d, h); }
   });
 
