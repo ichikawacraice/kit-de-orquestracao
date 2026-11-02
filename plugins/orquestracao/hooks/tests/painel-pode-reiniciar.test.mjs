@@ -315,8 +315,8 @@ test('F209: compara por número (0.1.9 < 0.1.10); plugin não instalado ou só d
 
 test('F332: o plugin velho (design) instalado e só o novo (kit-design) publicado entra em paraBaixar com o nome novo', () => {
   const m = marketplace({ orquestracao: '0.1.9', 'kit-design': '0.3.0' });
-  instalados([{ id: kit('orquestracao'), version: '0.1.9' }, { id: kit('design'), version: '0.2.4' }]);
-  assert.deepEqual(conferir().json().paraBaixar, [{ nome: 'kit-design', instalada: '0.2.4', publicada: '0.3.0' }]);
+  instalados([{ id: kit('orquestracao'), version: '0.1.9' }, { id: kit('design'), version: '0.0.7' }]);
+  assert.deepEqual(conferir().json().paraBaixar, [{ nome: 'kit-design', instalada: '0.0.7', publicada: '0.3.0' }]);
   assert.ok(m);
 });
 

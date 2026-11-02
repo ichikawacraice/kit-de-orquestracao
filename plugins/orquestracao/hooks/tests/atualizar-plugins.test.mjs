@@ -247,7 +247,7 @@ test('plugin update sai 0 e o plugin some da lista: "não pegou", depois null, e
 const RENOMEADO = { orquestracao: '0.1.2', 'kit-design': '0.3.0' };
 
 test('F332: design@ instalado e só kit-design@ publicado: instala o novo com as opções do velho e desinstala o velho', () => {
-  const c = montar(RENOMEADO, [inst('orquestracao', '0.1.2'), inst('design', '0.2.4')]);
+  const c = montar(RENOMEADO, [inst('orquestracao', '0.1.2'), inst('design', '0.0.7')]);
   try {
     c.settings({ pluginConfigs: { [`design@${MP}`]: { options: { guarda: false, pasta_do_front: 'web', largura: 1024 } } } });
     const r = c.rodar();
@@ -261,7 +261,7 @@ test('F332: design@ instalado e só kit-design@ publicado: instala o novo com as
     const s = JSON.parse(r.out);
     const p = achar(s, 'kit-design');
     assert.ok(p, r.out);
-    assert.deepEqual([p.antes, p.publicado, p.depois], ['0.2.4', '0.3.0', '0.3.0']);
+    assert.deepEqual([p.antes, p.publicado, p.depois], ['0.0.7', '0.3.0', '0.3.0']);
     assert.match(p.acao, /^renomeado \(era design@kit-de-orquestracao\)/);
     assert.equal(s.reiniciar, true);
     assert.ok(!c.estado().some((x) => x.id === `design@${MP}` && x.scope === 'user'), 'o velho ficou');
@@ -271,7 +271,7 @@ test('F332: design@ instalado e só kit-design@ publicado: instala o novo com as
 });
 
 test('F332: velho desligado: o novo entra desligado', () => {
-  const c = montar(RENOMEADO, [inst('design', '0.2.4', { enabled: false })]);
+  const c = montar(RENOMEADO, [inst('design', '0.0.7', { enabled: false })]);
   try {
     const r = c.rodar();
     assert.equal(r.exit, 0, r.err + r.out);
@@ -282,20 +282,20 @@ test('F332: velho desligado: o novo entra desligado', () => {
 });
 
 test('F332: --seco diz que renomearia e não chama install nem uninstall', () => {
-  const c = montar(RENOMEADO, [inst('design', '0.2.4')]);
+  const c = montar(RENOMEADO, [inst('design', '0.0.7')]);
   try {
     const r = c.rodar(['--seco', '--json']);
     assert.equal(r.exit, 0, r.err + r.out);
     assert.equal(achar(JSON.parse(r.out), 'kit-design').acao, 'renomearia (era design@kit-de-orquestracao)');
     assert.ok(!c.chamadas().some((x) => ['install', 'uninstall'].includes(x[1])));
     const txt = c.rodar(['--seco']).out;
-    assert.match(txt, /kit-design\s+0\.2\.4 → 0\.3\.0 \(renomearia: era design@kit-de-orquestracao\)/);
+    assert.match(txt, /kit-design\s+0\.0\.7 → 0\.3\.0 \(renomearia: era design@kit-de-orquestracao\)/);
     assert.match(txt, /Rode sem --seco para atualizar\./);
   } finally { limpar(c); }
 });
 
 test('F332: install do novo falha: o velho fica, falhou, exit 1', () => {
-  const c = montar(RENOMEADO, [inst('design', '0.2.4')]);
+  const c = montar(RENOMEADO, [inst('design', '0.0.7')]);
   try {
     const r = c.rodar(['--json'], { FAKE_FALHA: `kit-design@${MP}` });
     assert.equal(r.exit, 1, r.err + r.out);
@@ -307,7 +307,7 @@ test('F332: install do novo falha: o velho fica, falhou, exit 1', () => {
 });
 
 test('F332: o novo já instalado: só desinstala o velho; cópia project do velho não se mexe e pede o kit atualizar', () => {
-  const c = montar(RENOMEADO, [inst('kit-design', '0.3.0'), inst('design', '0.2.4'), inst('design', '0.2.1', { scope: 'project', projectPath: '/x/loja' })]);
+  const c = montar(RENOMEADO, [inst('kit-design', '0.3.0'), inst('design', '0.0.7'), inst('design', '0.0.6', { scope: 'project', projectPath: '/x/loja' })]);
   try {
     const r = c.rodar();
     assert.equal(r.exit, 0, r.err + r.out);
