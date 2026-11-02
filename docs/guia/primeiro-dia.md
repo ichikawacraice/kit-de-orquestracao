@@ -14,7 +14,7 @@ Do zero ao primeiro item entregue. Leva uns 15 minutos, quase todos esperando o 
 claude plugin marketplace add ichikawacraice/kit-de-orquestracao
 ```
 ```bash
-claude plugin install orquestracao@kit-de-orquestracao
+claude plugin install orquestracao@ichikawa-kit
 ```
 
 O `orquestracao` é o núcleo. Repita o `install` para `painel-sessoes`, `processos` e `kit-design`. O `kit-performance` é opcional: instale-o só se quiser as práticas de performance e o revisor ([o que ele traz](ligar-e-desligar.md#kit-performance)). Reinicie o app: plugin novo só vale depois do reinício.

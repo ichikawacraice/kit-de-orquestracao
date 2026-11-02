@@ -146,7 +146,7 @@ describe('M1 — pnpm-workspace: test e typecheck antigos não somem calados', (
 });
 
 describe('M3 — doutor diz o bloco, ignora o que é do projeto e confere só as chaves do kit', () => {
-  const NOME = 'orquestracao@kit-de-orquestracao';
+  const NOME = 'orquestracao@ichikawa-kit';
   const lar = () => {
     const h = realpathSync(mkdtempSync(join(tmpdir(), 'kit-c4b-home-')));
     mkdirSync(join(h, '.claude', 'plugins'), { recursive: true });

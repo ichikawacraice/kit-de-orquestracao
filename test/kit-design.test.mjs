@@ -14,13 +14,17 @@ import { opcoesDoPlugin as opcoesDoHook, pluginLigado as pluginLigadoDoHook } fr
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const KIT = join(RAIZ, 'cli', 'kit.mjs');
-const MKT = 'kit-de-orquestracao';
+const MKT = 'ichikawa-kit';
 const NOVO = `kit-design@${MKT}`;
-const VELHO = `design@${MKT}`;
+// o projeto de antes do F332 tinha o `design` no marketplace com o nome antigo (F344)
+const VELHO = 'design@kit-de-orquestracao';
 
 const nova = (prefixo) => realpathSync(mkdtempSync(join(tmpdir(), prefixo)));
 function projeto() { const d = nova('kit-f332-'); execFileSync('git', ['init', '-q', d], { timeout: 10000, killSignal: 'SIGKILL' }); return d; }
 const casa = nova('kit-f332-casa-');
+// a conta já migrou para o ichikawa-kit (F344): sem isso o kit atualizar não troca o nome do projeto
+mkdirSync(join(casa, '.claude', 'plugins'), { recursive: true });
+writeFileSync(join(casa, '.claude', 'plugins', 'known_marketplaces.json'), JSON.stringify({ 'ichikawa-kit': {} }));
 const base = nova('kit-f332-base-');
 const kit = (cwd, ...args) => spawnSync('node', [KIT, ...args], { cwd, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, HOME: casa, HOOKS_CREWAI_BASE: base, CI: '' } });
 const ler = (d, ...p) => readFileSync(join(d, ...p), 'utf8');
@@ -106,7 +110,7 @@ describe('kit iniciar e kit atualizar', () => {
     const d = projetoVelho();
     const r = kit(d, 'atualizar');
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /design@kit-de-orquestracao → kit-design@kit-de-orquestracao/);
+    assert.match(r.stdout, /design@kit-de-orquestracao → kit-design@ichikawa-kit/);
     const s = json(d, '.claude/settings.json');
     assert.equal(s.enabledPlugins[NOVO], true);
     assert.ok(!(VELHO in s.enabledPlugins), 'o nome velho ficou');
@@ -136,7 +140,7 @@ describe('kit iniciar e kit atualizar', () => {
     const antes = ler(d, '.claude/settings.json');
     const r = kit(d, 'atualizar', '--simular');
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /design@kit-de-orquestracao → kit-design@kit-de-orquestracao/);
+    assert.match(r.stdout, /design@kit-de-orquestracao → kit-design@ichikawa-kit/);
     assert.equal(ler(d, '.claude/settings.json'), antes);
   });
 
@@ -157,7 +161,7 @@ describe('kit iniciar e kit atualizar', () => {
     escrever(d, '.claude/settings.json', JSON.stringify(s, null, 2));
     const out = kit(d, 'doutor').stdout;
     assert.match(out, /plugin kit-design desligado/);
-    assert.match(out, /enabledPlugins "kit-design@kit-de-orquestracao": true/);
+    assert.match(out, /enabledPlugins "kit-design@ichikawa-kit": true/);
     assert.doesNotMatch(out, /"design@kit-de-orquestracao": true/);
     const v = projetoVelho(false);
     assert.match(kit(v, 'doutor').stdout, /settings\.json ainda liga design@kit-de-orquestracao.*kit atualizar/);

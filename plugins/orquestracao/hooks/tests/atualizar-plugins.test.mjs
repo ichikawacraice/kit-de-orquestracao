@@ -10,7 +10,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts', 'atualizar-plugins.mjs');
-const MP = 'kit-de-orquestracao';
+const MP = 'ichikawa-kit';
+const MP_ANTIGO = 'kit-de-orquestracao'; // o nome até o F344: a conta que não migrou ainda o tem
 
 const CLAUDE_FALSO = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -64,16 +65,16 @@ function git(cwd, ...args) {
 }
 
 // Publica no "GitHub" as versões dadas ({nome: versão}) e devolve o contexto.
-function montar(publicadas, instalados) {
+function montar(publicadas, instalados, mp = MP) {
   const raiz = mkdtempSync(join(tmpdir(), 'atualizar-plugins-'));
   const origin = join(raiz, 'origin.git'); const work = join(raiz, 'work'); const home = join(raiz, 'home');
-  const clone = join(home, '.claude', 'plugins', 'marketplaces', MP);
+  const clone = join(home, '.claude', 'plugins', 'marketplaces', mp);
   git(raiz, 'init', '-q', '--bare', '-b', 'main', origin);
   git(raiz, 'clone', '-q', origin, work);
   git(work, 'checkout', '-q', '-b', 'main');
   const publicar = (versoes) => {
     mkdirSync(join(work, '.claude-plugin'), { recursive: true });
-    writeFileSync(join(work, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: MP, plugins: Object.keys(versoes).map((n) => ({ name: n, source: `./plugins/${n}` })) }));
+    writeFileSync(join(work, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: mp, plugins: Object.keys(versoes).map((n) => ({ name: n, source: `./plugins/${n}` })) }));
     for (const [n, v] of Object.entries(versoes)) {
       mkdirSync(join(work, 'plugins', n, '.claude-plugin'), { recursive: true });
       const userConfig = n === 'kit-design' ? { guarda: {}, cobrar_critica: {}, pasta_do_front: {}, largura: {} } : undefined;
@@ -263,7 +264,7 @@ test('F332: design@ instalado e só kit-design@ publicado: instala o novo com as
     const p = achar(s, 'kit-design');
     assert.ok(p, r.out);
     assert.deepEqual([p.antes, p.publicado, p.depois], ['0.0.7', '0.3.0', '0.3.0']);
-    assert.match(p.acao, /^renomeado \(era design@kit-de-orquestracao\)/);
+    assert.match(p.acao, /^renomeado \(era design@ichikawa-kit\)/);
     assert.equal(s.reiniciar, true);
     assert.ok(!c.estado().some((x) => x.id === `design@${MP}` && x.scope === 'user'), 'o velho ficou');
     assert.ok(!achar(s, 'design'), 'o velho não aparece como linha própria');
@@ -298,10 +299,10 @@ test('F332: --seco diz que renomearia e não chama install nem uninstall', () =>
   try {
     const r = c.rodar(['--seco', '--json']);
     assert.equal(r.exit, 0, r.err + r.out);
-    assert.equal(achar(JSON.parse(r.out), 'kit-design').acao, 'renomearia (era design@kit-de-orquestracao)');
+    assert.equal(achar(JSON.parse(r.out), 'kit-design').acao, 'renomearia (era design@ichikawa-kit)');
     assert.ok(!c.chamadas().some((x) => ['install', 'uninstall'].includes(x[1])));
     const txt = c.rodar(['--seco']).out;
-    assert.match(txt, /kit-design\s+0\.0\.7 → 0\.3\.0 \(renomearia: era design@kit-de-orquestracao\)/);
+    assert.match(txt, /kit-design\s+0\.0\.7 → 0\.3\.0 \(renomearia: era design@ichikawa-kit\)/);
     assert.match(txt, /Rode sem --seco para atualizar\./);
   } finally { limpar(c); }
 });
@@ -330,5 +331,30 @@ test('F332: o novo já instalado: só desinstala o velho; cópia project do velh
     assert.ok(proj, r.out);
     assert.match(proj.acao, /kit atualizar/);
     assert.ok(c.estado().some((x) => x.id === `design@${MP}` && x.scope === 'project'));
+  } finally { limpar(c); }
+});
+
+test('conta com o nome antigo do marketplace (F344): atualiza pelo id antigo, no clone antigo, e avisa da migração', () => {
+  const antigo = (nome, version) => ({ id: `${nome}@${MP_ANTIGO}`, version, scope: 'user', enabled: true });
+  const c = montar({ orquestracao: '0.1.2' }, [antigo('orquestracao', '0.1.1')], MP_ANTIGO);
+  try {
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.deepEqual(c.updates()[0].slice(1), ['update', `orquestracao@${MP_ANTIGO}`, '--json', '-s', 'user']);
+    assert.ok(c.chamadas().some((x) => x[1] === 'marketplace' && x[2] === 'update' && x[3] === MP_ANTIGO));
+    const s = JSON.parse(r.out);
+    assert.equal(s.plugins.find((p) => p.id === `orquestracao@${MP_ANTIGO}`)?.acao, 'atualizado');
+    assert.match(s.aviso, /nome antigo do marketplace.*migrar-marketplace/);
+    const t = c.rodar([]);
+    assert.match(t.out, /aviso: .*migrar-marketplace/);
+  } finally { limpar(c); }
+});
+
+test('conta já com o nome novo: sem aviso de migração', () => {
+  const c = montar({ orquestracao: '0.1.2' }, [inst('orquestracao', '0.1.2')]);
+  try {
+    const s = JSON.parse(c.rodar().out);
+    assert.equal(s.plugins.find((p) => p.id === `orquestracao@${MP}`)?.acao, 'em dia');
+    assert.equal(s.aviso, undefined);
   } finally { limpar(c); }
 });

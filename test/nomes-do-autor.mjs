@@ -15,5 +15,12 @@ const sha = (p) => createHash('sha256').update(p).digest('hex');
 /** As palavras do texto (letras e dígitos, em minúsculas) que são nome do autor; vazio quando não há nenhuma. */
 export const nomesDoAutorEm = (texto) => [...new Set(texto.toLowerCase().match(/[a-z0-9]+/g) ?? [])].filter((p) => HASHES.has(sha(p)));
 
-/** O dono do repositório no endereço publicado (`<dono>/kit-de-orquestracao`) é a exceção: é por onde se instala. */
-export const semOEnderecoPublicado = (texto) => texto.replace(/[\w.-]+\/kit-de-orquestracao\b/g, 'DONO/kit-de-orquestracao');
+/**
+ * As exceções: o dono do repositório no endereço publicado (`<dono>/kit-de-orquestracao`), por onde se instala, e o nome do kit
+ * (F344: o id `ichikawa-kit` do marketplace e o nome de exibição "Ichikawa's Kit"), que o operador escolheu como marca. O nome
+ * fora dessas duas formas continua barrado.
+ */
+export const semOEnderecoPublicado = (texto) => texto
+  .replace(/[\w.-]+\/kit-de-orquestracao\b/g, 'DONO/kit-de-orquestracao')
+  .replace(/\bichikawa-kit\b/g, 'NOME-DO-KIT')
+  .replace(/\bIchikawa['’]s Kit\b/g, 'NOME DO KIT');

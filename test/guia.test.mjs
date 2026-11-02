@@ -36,7 +36,7 @@ describe('o guia concorda com o código', () => {
     assert.deepEqual(faltando(naoVazia('plugins', PLUGINS).map((p) => `\`${p}\``), pagina('primeiro-dia.md')), []);
     assert.deepEqual(faltando(PLUGINS.map((p) => `## Plugin \`${p}\``), pagina('ligar-e-desligar.md')), []);
     const textos = [ler(RAIZ, 'README.md'), ...paginas().map(pagina)].join('\n');
-    const citados = [...textos.matchAll(/Plugin `([\w-]+)`|([\w-]+)@kit-de-orquestracao/g)].map((m) => m[1] ?? m[2]).filter((n) => n !== '<plugin>');
+    const citados = [...textos.matchAll(/Plugin `([\w-]+)`|([\w-]+)@(?:ichikawa-kit|kit-de-orquestracao)/g)].map((m) => m[1] ?? m[2]).filter((n) => n !== '<plugin>');
     naoVazia('plugins citados', citados);
     // o README guarda, de propósito, o nome antigo no aviso de migração
     const legado = new Set(['design']);

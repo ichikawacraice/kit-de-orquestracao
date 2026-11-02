@@ -6,8 +6,8 @@ Cada trava do kit existe porque a regra só no texto já foi esquecida. Desligar
 
 | Jeito | Vale para | Como |
 |---|---|---|
-| **Plugin inteiro, num projeto** | Você ou o time | `"enabledPlugins": { "<plugin>@kit-de-orquestracao": false }` em `.claude/settings.local.json` (só você, não vai para o git) ou em `.claude/settings.json` (o time). A camada mais próxima vence: `settings.local.json` > `settings.json` do projeto > `~/.claude/settings.json` |
-| **Plugin inteiro, na conta** | Você, em todo projeto | `claude plugin disable <plugin>@kit-de-orquestracao` (volta com `enable`) |
+| **Plugin inteiro, num projeto** | Você ou o time | `"enabledPlugins": { "<plugin>@ichikawa-kit": false }` em `.claude/settings.local.json` (só você, não vai para o git) ou em `.claude/settings.json` (o time). A camada mais próxima vence: `settings.local.json` > `settings.json` do projeto > `~/.claude/settings.json` |
+| **Plugin inteiro, na conta** | Você, em todo projeto | `claude plugin disable <plugin>@ichikawa-kit` (volta com `enable`) |
 | **Regra ou opção, no projeto** | O time | `.claude/kit.json` do projeto (seções `guarda`, `documentos`, `design`). É o caminho principal: fica no git e vale para todos |
 | **Opção do plugin, na conta** | Você | `/plugin` no terminal do Claude Code, ou `pluginConfigs` do `~/.claude/settings.json`. O app desktop não mostra essas opções |
 
@@ -110,7 +110,7 @@ Não tem trava nem opção: é o pane `/painel`, a barra acima do prompt e a bat
 <a id="kit-performance"></a>
 ## Plugin `kit-performance`
 
-Opcional: o `kit iniciar` e o `kit adotar` não o ligam. Para ligar só num projeto, instale-o no escopo do projeto, de dentro dele: `claude plugin install kit-performance@kit-de-orquestracao --scope project` (grava `"kit-performance@kit-de-orquestracao": true` no `enabledPlugins` do `.claude/settings.json` dele). O `install` sem `--scope` liga na conta, para todo projeto. Não tem trava nem opção de conta; funciona sem os outros plugins do kit.
+Opcional: o `kit iniciar` e o `kit adotar` não o ligam. Para ligar só num projeto, instale-o no escopo do projeto, de dentro dele: `claude plugin install kit-performance@ichikawa-kit --scope project` (grava `"kit-performance@ichikawa-kit": true` no `enabledPlugins` do `.claude/settings.json` dele). O `install` sem `--scope` liga na conta, para todo projeto. Não tem trava nem opção de conta; funciona sem os outros plugins do kit.
 
 O que traz:
 - **Quatro skills por camada** (`performance-front`, `performance-dados`, `performance-entrega`, `medir-performance`) com as 31 práticas do catálogo `praticas.json`, cada uma com quando vale, quando não vale e o sinal no código. As de infra (cache de dados, região do servidor, balanceamento) são decisão, não regra: ninguém as cobra por ausência.

@@ -19,7 +19,7 @@ const falha = (m) => { falhas++; console.log(`falha: ${m}`); };
 const rodar = (cmd, a, extra = {}) => spawnSync(cmd, a, { encoding: 'utf8', env: ENV, timeout: 300000, killSignal: 'SIGKILL', ...extra });
 
 const inst = JSON.parse(readFileSync(join(C, 'plugins', 'installed_plugins.json'), 'utf8')).plugins;
-const caminho = (p) => inst[`${p}@kit-de-orquestracao`]?.[0]?.installPath;
+const caminho = (p) => (inst[`${p}@ichikawa-kit`] ?? inst[`${p}@kit-de-orquestracao`])?.[0]?.installPath; // o nome novo do marketplace, ou o antigo (F344)
 for (const p of ['orquestracao', 'painel-sessoes']) caminho(p) && existsSync(caminho(p)) ? ok(`plugin ${p} instalado em ${caminho(p)}`) : falha(`plugin ${p} não instalado`);
 const raiz = caminho('orquestracao');
 if (!raiz) { console.log('sem o plugin orquestracao: nada mais a conferir'); process.exit(1); }
@@ -29,7 +29,7 @@ const s = JSON.parse(readFileSync(join(C, 'settings.json'), 'utf8'));
 const doKit = new Set(readdirSync(join(raiz, 'hooks')).filter((n) => n.endsWith('.mjs')));
 const sobras = Object.values(s.hooks ?? {}).flat().flatMap((g) => g.hooks ?? []).map((h) => h.command).filter((c) => /\.claude\/hooks\//.test(c ?? '') && doKit.has(String(c).match(/([\w.-]+\.mjs)/)?.[1]));
 sobras.length ? falha(`hooks do kit ainda no settings.json: ${sobras.join(' | ')}`) : ok('nenhum hook do kit no settings.json (só o do plugin dispara)');
-s.enabledPlugins?.['orquestracao@kit-de-orquestracao'] === true ? ok('orquestracao habilitado no settings.json') : falha('orquestracao não habilitado no settings.json');
+(s.enabledPlugins?.['orquestracao@ichikawa-kit'] ?? s.enabledPlugins?.['orquestracao@kit-de-orquestracao']) === true ? ok('orquestracao habilitado no settings.json') : falha('orquestracao não habilitado no settings.json');
 
 // kit doutor num projeto adotado
 const projeto = valor('--projeto');

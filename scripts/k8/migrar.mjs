@@ -10,14 +10,13 @@ import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, re
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { serializar } from '../../cli/pacote.mjs';
+import { MARKETPLACE, REPASSES as REPASSES_DO_KIT, repasse, serializar } from '../../cli/pacote.mjs';
 
 const KIT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const MARKETPLACE = 'kit-de-orquestracao';
 const PLUGINS = ['orquestracao', 'painel-sessoes'];
 const SKILLS = ['ausente', 'handoff-de-sessao', 'notas-de-release', 'orquestradora', 'orquestrar-com-subagentes', 'papeis-e-modelos'];
 const AGENTS = ['executor.md', 'explorador.md', 'planejador.md', 'validador.md'];
-const REPASSES = ['painel.mjs', 'proxima-pergunta.sh', 'proximo-item.sh'];
+const REPASSES = Object.keys(REPASSES_DO_KIT);
 // o que o backup guarda (relativo a ~/.claude): tudo o que a K8 mexe ou move
 const DO_BACKUP = ['settings.json', 'CLAUDE.md', 'hooks', 'agents', 'mods/painel-sessoes', 'orquestracao/pool', ...SKILLS.map((s) => `skills/${s}`), 'plugins/installed_plugins.json', 'plugins/known_marketplaces.json'];
 
@@ -58,7 +57,7 @@ function backup(dir) {
     '# Restaurar a K8',
     `1. \`node ${join(KIT, 'scripts/k8/migrar.mjs')} --home ${HOME_} --restaurar ${dir}\` desfaz tudo (plugins, settings.json, skills, agents, mod, CLAUDE.md).`,
     '2. Sem o script: apague os itens de `itens.json` em `~/.claude` e rode `tar -xf links.tar -C ~/.claude` (links voltam como links).',
-    '3. `claude plugin uninstall orquestracao@kit-de-orquestracao && claude plugin uninstall painel-sessoes@kit-de-orquestracao && claude plugin marketplace remove kit-de-orquestracao`.',
+    `3. \`claude plugin uninstall orquestracao@${MARKETPLACE} && claude plugin uninstall painel-sessoes@${MARKETPLACE} && claude plugin marketplace remove ${MARKETPLACE}\`.`,
     '4. Skills vindas do skills-manager: `skills-manager-cli skills deploy --agent claude_code orquestradora handoff-de-sessao notas-de-release orquestrar-com-subagentes`.',
     '5. `copia/` tem o conteúdo de cada item (cp -RL); `links.tar` tem os links como links. O estado do operador (`orquestracao/painel`, fila…) nunca foi movido.',
     '',
@@ -105,14 +104,6 @@ function tirarHooksDoSettings() {
   }
   writeFileSync(caminho, serializar(s, texto));
   return tiradas;
-}
-
-function repasse(rel) {
-  const bin = { 'painel.mjs': 'painel', 'proxima-pergunta.sh': 'proxima-pergunta', 'proximo-item.sh': 'proximo-item' }[rel];
-  if (rel.endsWith('.mjs')) {
-    return `import{spawnSync as s}from'node:child_process';import{readFileSync as r}from'node:fs';import{homedir as h}from'node:os';const i=JSON.parse(r(\`\${process.env.CLAUDE_CONFIG_DIR||(process.env.HOME||h())+'/.claude'}/plugins/installed_plugins.json\`,'utf8')).plugins['orquestracao@${MARKETPLACE}'][0].installPath;process.exitCode=s('bash',[i+'/bin/${bin}',...process.argv.slice(2)],{stdio:'inherit'}).status??1;\n`;
-  }
-  return `#!/bin/bash\nexec "$(node -p "require((process.env.CLAUDE_CONFIG_DIR||process.env.HOME+'/.claude')+'/plugins/installed_plugins.json').plugins['orquestracao@${MARKETPLACE}'][0].installPath")/bin/${bin}" "$@"\n`;
 }
 
 function skillsDoKit() {

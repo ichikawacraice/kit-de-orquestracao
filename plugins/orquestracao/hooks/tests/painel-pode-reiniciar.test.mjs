@@ -253,15 +253,15 @@ const manifesto = (dir, nome, versao) => {
   writeFileSync(join(dir, 'plugins', nome, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: nome, version: versao }));
 };
 /** Um "GitHub" local (`origem`) e o clone do marketplace no HOME, os dois com as versões dadas. */
-function marketplace(versoes) {
+function marketplace(versoes, mp = 'ichikawa-kit') {
   const origem = join(base, 'origem');
   mkdirSync(join(origem, '.claude-plugin'), { recursive: true });
   git(base, 'init', '-q', '-b', 'main', origem);
-  writeFileSync(join(origem, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: 'kit-de-orquestracao', plugins: Object.keys(versoes).map((name) => ({ name, source: `./plugins/${name}` })) }));
+  writeFileSync(join(origem, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: mp, plugins: Object.keys(versoes).map((name) => ({ name, source: `./plugins/${name}` })) }));
   for (const [nome, v] of Object.entries(versoes)) manifesto(origem, nome, v);
   git(origem, 'add', '-A');
   git(origem, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'v1');
-  const clone = join(base, 'home', '.claude', 'plugins', 'marketplaces', 'kit-de-orquestracao');
+  const clone = join(base, 'home', '.claude', 'plugins', 'marketplaces', mp);
   mkdirSync(dirname(clone), { recursive: true });
   git(base, 'clone', '-q', origem, clone);
   return {
@@ -277,7 +277,7 @@ function instalados(lista) {
   writeFileSync(f, JSON.stringify({ version: 2, plugins }));
 }
 const inicioDoApp = (lstart) => psCom([`${lstart} /Applications/Claude.app/Contents/MacOS/Claude`, 'Mon Oct 27 09:00:00 2026 /Applications/Claude.app/Contents/MacOS/Claude --type=renderer']);
-const kit = (nome) => `${nome}@kit-de-orquestracao`;
+const kit = (nome, mp = 'ichikawa-kit') => `${nome}@${mp}`;
 const conferir = (env = {}) => painel(['pode-reiniciar', '--sessoes', sessoes(sessao(1, 'E1 · livre')), '--json'], env);
 
 test('F209: kit em dia não traz paraBaixar (prova de ausência: o próximo teste mostra que se detecta)', () => {
@@ -318,6 +318,13 @@ test('F332: o plugin velho (design) instalado e só o novo (kit-design) publicad
   instalados([{ id: kit('orquestracao'), version: '0.1.9' }, { id: kit('design'), version: '0.0.7' }]);
   assert.deepEqual(conferir().json().paraBaixar, [{ nome: 'kit-design', instalada: '0.0.7', publicada: '0.3.0' }]);
   assert.ok(m);
+});
+
+test('F344: conta com o nome antigo do marketplace acha os plugins e o clone antigos', () => {
+  const m = marketplace({ orquestracao: '0.1.40' }, 'kit-de-orquestracao');
+  instalados([{ id: kit('orquestracao', 'kit-de-orquestracao'), version: '0.1.40' }]);
+  m.publicar('orquestracao', '0.1.41');
+  assert.deepEqual(conferir().json().paraBaixar, [{ nome: 'orquestracao', instalada: '0.1.40', publicada: '0.1.41' }]);
 });
 
 test('F209: o cache de 30 min evita a rede; vencido, confere de novo', () => {

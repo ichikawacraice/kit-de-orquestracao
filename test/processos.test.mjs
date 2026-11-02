@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const KIT = join(RAIZ, 'cli', 'kit.mjs');
 const sha = (s) => createHash('sha256').update(s).digest('hex');
-const MKT = 'kit-de-orquestracao';
+const MKT = 'ichikawa-kit';
 
 const temporarios = [];
 const nova = (prefixo) => { const d = realpathSync(mkdtempSync(join(tmpdir(), prefixo))); temporarios.push(d); return d; };

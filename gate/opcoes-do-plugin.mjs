@@ -2,7 +2,7 @@
  * **As opções dos plugins do kit e o liga/desliga deles, lidos do disco.**
  *
  * O gate não é hook de plugin: não recebe `CLAUDE_PLUGIN_OPTION_*`. O valor que o app grava para a opção de um plugin
- * está em `pluginConfigs["<plugin>@kit-de-orquestracao"].options` do `~/.claude/settings.json` (só o escopo de usuário
+ * está em `pluginConfigs["<plugin>@ichikawa-kit"].options` do `~/.claude/settings.json` (só o escopo de usuário
  * vale; o projeto não injeta opção). Arquivo ausente ou ilegível = nenhuma opção = o padrão de quem lê (ligado).
  * Precedência (A7): `kit.json` do projeto com a chave > opção do plugin > padrão; plugin desligado em `enabledPlugins` não roda.
  */
@@ -10,7 +10,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const MARKETPLACE_DO_KIT = "kit-de-orquestracao";
+export const MARKETPLACE_DO_KIT = "ichikawa-kit";
+/** O nome do marketplace até o F344: quem não migrou guarda opção e liga/desliga sob ele, e ele vale enquanto o novo não diz nada. */
+export const MARKETPLACE_ANTIGO_DO_KIT = "kit-de-orquestracao";
 
 const objeto = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
@@ -33,7 +35,7 @@ export const pastaDeConfig = (home = homedir(), env = process.env) => (env?.CLAU
  * e o projeto que ainda não migraram guardam opção e liga/desliga sob o nome velho: ele vale enquanto o novo não diz nada.
  */
 export const NOMES_ANTIGOS = Object.freeze({ "kit-design": Object.freeze(["design"]) });
-const idsDe = (plugin) => [plugin, ...(NOMES_ANTIGOS[plugin] ?? [])].map((n) => `${n}@${MARKETPLACE_DO_KIT}`);
+const idsDe = (plugin) => [MARKETPLACE_DO_KIT, MARKETPLACE_ANTIGO_DO_KIT].flatMap((m) => [plugin, ...(NOMES_ANTIGOS[plugin] ?? [])].map((n) => `${n}@${m}`));
 
 /** As opções gravadas para o plugin do kit (`{}` sem nada gravado); as do nome velho valem quando o novo não tem nenhuma. */
 export function opcoesDoPlugin(plugin, home = homedir(), env = process.env) {

@@ -8,15 +8,68 @@ import { isDeepStrictEqual } from 'node:util';
 import { LOCK, blocosDe, sha256 } from './lock.mjs';
 
 export const RAIZ_DO_KIT = join(dirname(fileURLToPath(import.meta.url)), '..');
-export const MARKETPLACE = 'kit-de-orquestracao';
+export const MARKETPLACE = 'ichikawa-kit';
+/**
+ * O nome do marketplace até o F344. Quem não rodou o `kit migrar-marketplace` segue com os plugins nele (o `marketplace update`
+ * não renomeia o registro): o kit o lê e o troca, nunca o grava.
+ */
+export const MARKETPLACE_ANTIGO = 'kit-de-orquestracao';
+/** O id é de um plugin do kit, com o nome novo ou o antigo do marketplace. */
+export const ehDoKit = (id) => [MARKETPLACE, MARKETPLACE_ANTIGO].some((m) => String(id).endsWith(`@${m}`));
 export const PLUGIN = `orquestracao@${MARKETPLACE}`;
 /** Os plugins do kit que o projeto liga em `enabledPlugins`, na ordem em que entram. */
 export const PLUGINS_DO_KIT = [PLUGIN, `painel-sessoes@${MARKETPLACE}`, `processos@${MARKETPLACE}`, `kit-design@${MARKETPLACE}`];
-/** Plugin do kit que mudou de nome: velho → novo (F332: o `design` da Anthropic ofuscava o do kit). O `kit atualizar` troca a chave. */
-export const PLUGINS_RENOMEADOS = { [`design@${MARKETPLACE}`]: `kit-design@${MARKETPLACE}` };
+/**
+ * Id do kit que mudou: velho → novo. O `design` virou `kit-design` (F332: o `design` da Anthropic ofuscava o do kit) e o
+ * marketplace virou `ichikawa-kit` (F344). O `kit atualizar` troca a chave.
+ */
+export const PLUGINS_RENOMEADOS = {
+  [`design@${MARKETPLACE_ANTIGO}`]: `kit-design@${MARKETPLACE}`,
+  ...Object.fromEntries(PLUGINS_DO_KIT.map((id) => [id.replace(`@${MARKETPLACE}`, `@${MARKETPLACE_ANTIGO}`), id])),
+};
 /** O Impeccable: só entra com `--design` (recomendação, não dependência), com as envs que cortam telemetria e checagem de versão. */
 export const IMPECCABLE = { marketplace: 'impeccable', plugin: 'impeccable@impeccable', origem: { source: { source: 'github', repo: 'pbakaus/impeccable' } }, env: { IMPECCABLE_NO_TELEMETRY: '1', IMPECCABLE_NO_UPDATE_CHECK: '1' } };
-const REPO_DO_KIT = 'ichikawacraice/kit-de-orquestracao';
+/**
+ * Troca no settings `s` (mutado) os ids antigos do kit pelos novos: no `extraKnownMarketplaces` e no `enabledPlugins`, a chave
+ * velha vira a nova no mesmo lugar e com o mesmo valor (o `false` de quem desligou fica); se a nova já está, ela fica e a velha
+ * sai. `design@` e `kit-design@` do nome antigo caem no mesmo id novo: vale o valor do que já tinha o nome do plugin novo.
+ * → as trocas feitas, em texto (vazio: nada a trocar).
+ */
+/** O id novo de um id antigo do kit (qualquer plugin do marketplace antigo, inclusive os que nasceram depois do F344), ou `undefined`. */
+export const idNovoDe = (id) => PLUGINS_RENOMEADOS[id] ?? (String(id).endsWith(`@${MARKETPLACE_ANTIGO}`) ? `${String(id).slice(0, -MARKETPLACE_ANTIGO.length - 1)}@${MARKETPLACE}` : undefined);
+
+export function trocarNomesDoKit(s) {
+  const trocas = [];
+  const trocar = (campo, mapa, rotulo) => {
+    const atual = s?.[campo];
+    if (!atual || typeof atual !== 'object' || Array.isArray(atual) || !Object.keys(atual).some((k) => mapa(k))) return;
+    const novos = {};
+    for (const [k, v] of Object.entries(atual)) {
+      const novo = mapa(k);
+      if (!novo) { if (!(k in novos)) novos[k] = v; continue; }
+      if (novo in atual) trocas.push(`${k} saiu do ${campo} (${novo} já estava lá)`);
+      else if (novo in novos && k.split('@')[0] !== novo.split('@')[0]) trocas.push(`${k} saiu do ${campo} (${novo} vem do outro nome)`);
+      else { novos[novo] = v; trocas.push(`${rotulo} ${k} → ${novo} no ${campo}`); }
+    }
+    s[campo] = novos;
+  };
+  trocar('extraKnownMarketplaces', (k) => (k === MARKETPLACE_ANTIGO ? MARKETPLACE : undefined), 'marketplace');
+  trocar('enabledPlugins', idNovoDe, 'plugin');
+  return trocas;
+}
+/** Os repasses em `~/.claude/skills/orquestradora/scripts/` (K8): o caminho que a CLAUDE.md do operador cita, levado ao bin do plugin instalado. */
+export const REPASSES = Object.freeze({ 'painel.mjs': 'painel', 'proxima-pergunta.sh': 'proxima-pergunta', 'proximo-item.sh': 'proximo-item' });
+/** O texto do repasse `rel`: acha o `orquestracao` instalado pelo nome novo do marketplace ou pelo antigo (F344), a instalação `user` primeiro. */
+export function repasse(rel) {
+  const bin = REPASSES[rel];
+  const achar = `const l=p['orquestracao@${MARKETPLACE}']||p['orquestracao@${MARKETPLACE_ANTIGO}'];const i=(l.find((e)=>e.scope==='user')||l[0]).installPath;`;
+  if (rel.endsWith('.mjs')) {
+    return `import{spawnSync as s}from'node:child_process';import{readFileSync as r}from'node:fs';import{homedir as h}from'node:os';const p=JSON.parse(r(\`\${process.env.CLAUDE_CONFIG_DIR||(process.env.HOME||h())+'/.claude'}/plugins/installed_plugins.json\`,'utf8')).plugins;${achar}process.exitCode=s('bash',[i+'/bin/${bin}',...process.argv.slice(2)],{stdio:'inherit'}).status??1;\n`;
+  }
+  return `#!/bin/bash\nexec "$(node -e "const p=require((process.env.CLAUDE_CONFIG_DIR||process.env.HOME+'/.claude')+'/plugins/installed_plugins.json').plugins;${achar}process.stdout.write(i)")/bin/${bin}" "$@"\n`;
+}
+
+export const REPO_DO_KIT = 'ichikawacraice/kit-de-orquestracao';
 export const HOOK_GUARDA = 'node "$CLAUDE_PROJECT_DIR/scripts/kit/guarda-de-operacao.mjs"';
 const TESTE_PADRAO_DO_NPM = /no test specified/;
 /** Arquivos que o projeto também edita: nunca saem inteiros; o kit mexe só nos blocos/chaves que registrou. */
@@ -159,7 +212,7 @@ function soDoKit(v) {
   const pre = v?.hooks?.PreToolUse;
   return chaves(v).every((k) => ['hooks', 'extraKnownMarketplaces', 'enabledPlugins', 'env'].includes(k))
     && (v.hooks === undefined || (chaves(v.hooks).join() === 'PreToolUse' && pre.length === 1 && pre[0].hooks?.length === 1 && pre[0].hooks[0].command === HOOK_GUARDA))
-    && chaves(v.extraKnownMarketplaces).every((n) => [MARKETPLACE, IMPECCABLE.marketplace].includes(n))
+    && chaves(v.extraKnownMarketplaces).every((n) => [MARKETPLACE, MARKETPLACE_ANTIGO, IMPECCABLE.marketplace].includes(n))
     && chaves(v.env).every((n) => n in IMPECCABLE.env)
     && chaves(v.enabledPlugins).every((n) => [...PLUGINS_DO_KIT, ...Object.keys(PLUGINS_RENOMEADOS), IMPECCABLE.plugin].includes(n));
 }

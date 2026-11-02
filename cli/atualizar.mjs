@@ -2,10 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { pluginLigado } from '../gate/opcoes-do-plugin.mjs';
+import { pastaDeConfig, pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { diffTexto } from './diff.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { PLUGINS_RENOMEADOS, RAIZ_DO_KIT, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
+import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, RAIZ_DO_KIT, REPO_DO_KIT, idNovoDe, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -79,7 +79,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
 }
 
 /**
- * Plugin do kit que mudou de nome (F332): no `enabledPlugins` do `.claude/settings.json` a chave velha vira a nova, no mesmo lugar e com
+ * Plugin do kit que mudou de nome (F332, F344): no `enabledPlugins` do `.claude/settings.json` a chave velha vira a nova, no mesmo lugar e com
  * o mesmo valor (o `false` de quem desligou fica); se a nova já está lá, ela fica e a velha sai. O lock acompanha, para o remover tirar
  * a nova. O `settings.local.json` é da pessoa: só aviso.
  */
@@ -88,20 +88,23 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
   if (texto !== null) {
     let s = null; try { s = JSON.parse(semBom(texto)); } catch { /* ilegível: o doutor acusa; o atualizar não o lê para mais nada */ }
     const ligados = s?.enabledPlugins;
-    if (ligados && typeof ligados === 'object' && Object.keys(PLUGINS_RENOMEADOS).some((v) => v in ligados)) {
-      const novos = {};
-      for (const [id, valor] of Object.entries(ligados)) {
-        const novo = PLUGINS_RENOMEADOS[id];
-        if (!novo) { if (!(id in novos)) novos[id] = valor; continue; }
-        if (novo in ligados) linhas.push(`trocado: ${id} saiu do enabledPlugins (${novo} já estava lá)`);
-        else { novos[novo] = valor; linhas.push(`trocado: plugin ${id} → ${novo} no enabledPlugins (.claude/settings.json)`); }
-      }
-      s.enabledPlugins = novos;
+    // o app desta máquina só conhece os ids do marketplace que a conta registrou: trocar a chave antes de a conta migrar faria o app
+    // ignorar o `false` do projeto (o id novo ele não conhece; o velho segue ligado na conta)
+    let contaMigrada = false;
+    try { contaMigrada = MARKETPLACE in JSON.parse(readFileSync(join(pastaDeConfig(homedir()), 'plugins', 'known_marketplaces.json'), 'utf8')); } catch { /* sem o arquivo: não migrou */ }
+    const copia = s ? structuredClone(s) : null;
+    const pendentes = copia ? trocarNomesDoKit(copia) : [];
+    if (pendentes.length && !contaMigrada) linhas.push(`aviso: o .claude/settings.json usa o nome antigo do marketplace (${MARKETPLACE_ANTIGO}), e esta máquina ainda não migrou: rode \`npx -y github:${REPO_DO_KIT} migrar-marketplace\` (ele troca também este projeto) e depois o kit atualizar`);
+    const trocas = s && contaMigrada ? trocarNomesDoKit(s) : [];
+    if (trocas.length) {
+      for (const t of trocas) linhas.push(`trocado: ${t} (.claude/settings.json)`);
       const base = mudancas.find((m) => m.arquivo === '.claude/settings.json');
       if (base) base.novo = serializar(s, texto); else mudancas.push({ arquivo: '.claude/settings.json', antigo: texto, novo: serializar(s, texto) });
+    }
+    if (contaMigrada && ligados && typeof ligados === 'object') {
       const cs = lock.chaves?.settings;
       // a chave nova que já estava não foi o kit que pôs: o lock larga a velha e não a toma (o remover não apaga o que é da pessoa)
-      if (Array.isArray(cs?.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => (!PLUGINS_RENOMEADOS[n] ? [n] : PLUGINS_RENOMEADOS[n] in ligados ? [] : [PLUGINS_RENOMEADOS[n]])))];
+      if (Array.isArray(cs?.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => (!idNovoDe(n) ? [n] : idNovoDe(n) in ligados ? [] : [idNovoDe(n)])))];
     }
   }
   const local = lerTexto(destino, '.claude/settings.local.json');
@@ -110,6 +113,7 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
     for (const [velho, novo] of Object.entries(PLUGINS_RENOMEADOS)) {
       if (l?.enabledPlugins && velho in l.enabledPlugins) linhas.push(`aviso: o .claude/settings.local.json ainda tem ${velho}; o plugin agora se chama ${novo} — troque a chave à mão (o kit não mexe no seu settings.local.json)`);
     }
+    if (l?.extraKnownMarketplaces && MARKETPLACE_ANTIGO in l.extraKnownMarketplaces) linhas.push(`aviso: o .claude/settings.local.json ainda declara o marketplace ${MARKETPLACE_ANTIGO}; o nome agora é ${MARKETPLACE} — troque a chave à mão (o kit não mexe no seu settings.local.json)`);
   }
 }
 

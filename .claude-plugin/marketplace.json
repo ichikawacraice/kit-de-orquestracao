@@ -1,5 +1,5 @@
 {
-  "name": "kit-de-orquestracao",
+  "name": "ichikawa-kit",
   "owner": {
     "name": "ichikawacraice"
   },
@@ -33,5 +33,5 @@
       "description": "Práticas de performance por camada (front, dados, entrega, medir) e o revisor de performance. Opcional: o kit iniciar não o liga."
     }
   ],
-  "description": "Kit de orquestração de sessões do Claude Code (marketplace privado)."
+  "description": "Ichikawa's Kit: plugins opcionais para orquestrar sessões do Claude Code — escolha os que for usar (marketplace privado)."
 }

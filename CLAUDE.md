@@ -1,10 +1,10 @@
-# kit-de-orquestracao
+# kit-de-orquestracao (Ichikawa's Kit)
 
 As seções marcadas `kit:` são do kit de orquestração: o `kit atualizar` troca o conteúdo entre as marcas quando você não o editou à mão. Escreva o resto do arquivo fora delas.
 
 <!-- kit:projeto v1 -->
 ## O projeto
-Kit de orquestração de sessões do Claude Code (uma sessão dona por item, travas por hook, painel, fila de merge, teto de testes), instalável em qualquer projeto. Dois plugins em `plugins/` (`orquestracao`, `painel-sessoes`) e um CLI em `cli/` (`npx -y github:ichikawacraice/kit-de-orquestracao`). Decisão: `docs/adr/0001-*`; planos em `docs/planos/`.
+Kit de orquestração de sessões do Claude Code (uma sessão dona por item, travas por hook, painel, fila de merge, teto de testes), instalável em qualquer projeto. Marketplace `ichikawa-kit` (nome de exibição "Ichikawa's Kit"; até o F344, `kit-de-orquestracao`: o código lê os dois nomes e grava só o novo) no repositório `kit-de-orquestracao`. Dois plugins em `plugins/` (`orquestracao`, `painel-sessoes`) e um CLI em `cli/` (`npx -y github:ichikawacraice/kit-de-orquestracao`). Decisão: `docs/adr/0001-*`; planos em `docs/planos/`.
 
 Regras do código (valem para toda fatia):
 - Node ≥ 20, ESM, só módulos nativos: o kit não traz dependência npm. Testes em `node:test` (`node --test`), nunca vitest.

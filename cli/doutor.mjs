@@ -8,7 +8,7 @@ import { booleanoDaOpcao, opcoesDoPlugin, pastaDeConfig } from '../gate/opcoes-d
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { conferirPerformance, lerPraticas } from './performance.mjs';
 import { conferirSkillsDeFora } from './skills-de-fora.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, MARKETPLACE_ANTIGO, PLUGIN, REPO_DO_KIT, idNovoDe, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
@@ -22,10 +22,14 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
 
   // plugin instalado e habilitado
   const instalados = lerJson(join(home, '.claude', 'plugins', 'installed_plugins.json'))?.plugins ?? {};
+  const antigo = `orquestracao@${MARKETPLACE_ANTIGO}`;
   if (instalados[PLUGIN]?.length) ok('plugin instalado na máquina: sim (orquestracao)');
-  else falha(`plugin instalado na máquina: não (orquestracao) — rode \`claude plugin install ${PLUGIN}\``);
+  else if (instalados[antigo]?.length) {
+    ok('plugin instalado na máquina: sim (orquestracao)');
+    linhas.push(`aviso: os plugins do kit estão com o nome antigo do marketplace (${MARKETPLACE_ANTIGO}); o nome agora é ${MARKETPLACE} — rode \`npx -y github:${REPO_DO_KIT} migrar-marketplace\` (seco; com --aplicar troca)`);
+  } else falha(`plugin instalado na máquina: não (orquestracao) — rode \`claude plugin install ${PLUGIN}\``);
   const configs = [join(pastaDeConfig(home), 'settings.json'), join(destino, '.claude', 'settings.json'), join(destino, '.claude', 'settings.local.json')].map(lerJson);
-  const flags = configs.map((s) => s?.enabledPlugins?.[PLUGIN]).filter((v) => v !== undefined);
+  const flags = configs.map((s) => s?.enabledPlugins?.[PLUGIN] ?? s?.enabledPlugins?.[antigo]).filter((v) => v !== undefined);
   if (flags.length && flags.every((v) => v === true) || (flags.includes(true) && !flags.includes(false))) ok('plugin habilitado no projeto: sim (orquestracao)');
   else falha('plugin habilitado no projeto: não (orquestracao) — `enabledPlugins` do settings.json precisa trazer true');
 
@@ -85,7 +89,8 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   const c = lock.chaves ?? {};
   const st = lerJson(join(destino, '.claude', 'settings.json'));
   if (c.settings?.hook && !(st?.hooks?.PreToolUse ?? []).some((g) => g.hooks?.some((h) => h.command === HOOK_GUARDA))) falha('hook da guarda sumiu do .claude/settings.json (foi o kit que o pôs)');
-  if (c.settings?.marketplace && !st?.extraKnownMarketplaces?.[MARKETPLACE]) linhas.push(`aviso: marketplace ${MARKETPLACE} sumiu do .claude/settings.json`);
+  if (c.settings?.marketplace && st?.extraKnownMarketplaces?.[MARKETPLACE_ANTIGO] && !st.extraKnownMarketplaces[MARKETPLACE]) linhas.push(`aviso: o .claude/settings.json declara o marketplace com o nome antigo (${MARKETPLACE_ANTIGO}) — rode \`kit atualizar\``);
+  else if (c.settings?.marketplace && !st?.extraKnownMarketplaces?.[MARKETPLACE]) linhas.push(`aviso: marketplace ${MARKETPLACE} sumiu do .claude/settings.json`);
   const pk = lerJson(join(destino, 'package.json'));
   for (const t of c.package?.trocados ?? []) if (pk?.scripts?.[t.nome] !== t.gate) linhas.push(`aviso: scripts.${t.nome} (package.json) não passa mais pelo gate`);
   for (const [nome, valor] of Object.entries(c.package?.scripts ?? {})) if (pk?.scripts?.[nome] !== valor) linhas.push(`aviso: scripts.${nome} (package.json) não está mais como o kit deixou`);
@@ -101,7 +106,8 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
 
 /** O que `enabledPlugins` diz do plugin: a camada mais próxima (local > projeto > conta), o nome velho valendo quando o novo não diz; `undefined` se ninguém diz. */
 function ligadoEm(id, configs) {
-  const ids = [id, ...Object.keys(PLUGINS_RENOMEADOS).filter((v) => PLUGINS_RENOMEADOS[v] === id)];
+  // o nome velho de qualquer plugin do kit (F332 e o marketplace antigo do F344): vale quando o novo não diz
+  const ids = [id, ...[...Object.keys(PLUGINS_RENOMEADOS), id.replace(`@${MARKETPLACE}`, `@${MARKETPLACE_ANTIGO}`)].filter((v, i, l) => l.indexOf(v) === i && v !== id && idNovoDe(v) === id)];
   for (const s of [configs[2], configs[1], configs[0]]) for (const i of ids) if (typeof s?.enabledPlugins?.[i] === 'boolean') return s.enabledPlugins[i];
   return undefined;
 }

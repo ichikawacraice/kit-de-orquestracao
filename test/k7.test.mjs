@@ -111,7 +111,7 @@ describe('kit adotar', () => {
       const s = JSON.parse(sRaw);
       assert.equal(s.hooks.PreToolUse.length, 2);
       assert.equal(s.hooks.PreToolUse[0].hooks[0].command, 'echo meu');
-      assert.equal(s.enabledPlugins['orquestracao@kit-de-orquestracao'], true);
+      assert.equal(s.enabledPlugins['orquestracao@ichikawa-kit'], true);
       assert.equal(s.enabledPlugins['outro@x'], true);
       // package.json: tudo do projeto continua, `test` ainda é o dele
       contido(JSON.parse(PACKAGE_PROPRIO), json(d, 'package.json'));
@@ -152,8 +152,8 @@ describe('kit adotar', () => {
 
   const comConflitos = (d) => {
     const settings = JSON.parse(SETTINGS_PROPRIO);
-    settings.enabledPlugins['orquestracao@kit-de-orquestracao'] = false;
-    settings.extraKnownMarketplaces = { 'kit-de-orquestracao': { source: { source: 'github', repo: 'outro/fork' } } };
+    settings.enabledPlugins['orquestracao@ichikawa-kit'] = false;
+    settings.extraKnownMarketplaces = { 'ichikawa-kit': { source: { source: 'github', repo: 'outro/fork' } } };
     writeFileSync(join(d, '.claude', 'settings.json'), `${JSON.stringify(settings, null, 4)}\n`);
     writeFileSync(join(d, '.claude', 'kit.json'), `${JSON.stringify({ gate: { comandoCompleto: 'make test' } }, null, 2)}\n`);
     const pkg = JSON.parse(PACKAGE_PROPRIO);
@@ -170,7 +170,7 @@ describe('kit adotar', () => {
       const hashes = (m) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, sha(v)]));
       const r = kit(d, ['adotar', '--perfil', 'pnpm-workspace']);
       assert.equal(r.status, 1, saida(r));
-      assert.match(r.stdout, /conflito.*orquestracao@kit-de-orquestracao/);
+      assert.match(r.stdout, /conflito.*orquestracao@ichikawa-kit/);
       assert.match(r.stdout, /conflito.*extraKnownMarketplaces/);
       assert.match(r.stdout, /conflito.*scripts\.typecheck/);
       assert.match(r.stdout, /nada foi gravado/);
@@ -197,8 +197,8 @@ describe('kit adotar', () => {
       assert.equal(r.status, 1, saida(r));
       assert.match(r.stdout, /conflito.*scripts\.typecheck/);
       const s = json(d, '.claude', 'settings.json');
-      assert.equal(s.enabledPlugins['orquestracao@kit-de-orquestracao'], false);
-      assert.equal(s.extraKnownMarketplaces['kit-de-orquestracao'].source.repo, 'outro/fork');
+      assert.equal(s.enabledPlugins['orquestracao@ichikawa-kit'], false);
+      assert.equal(s.extraKnownMarketplaces['ichikawa-kit'].source.repo, 'outro/fork');
       assert.equal(json(d, 'package.json').scripts.typecheck, 'tsc --noEmit -p .');
       assert.equal(json(d, '.claude', 'kit.json').gate.comandoCompleto, 'make test');
       assert.equal(json(d, '.claude', 'kit.json').gate.perfil, 'pnpm-workspace', 'a chave nova do perfil entra mesmo com conflito noutra');
@@ -343,7 +343,7 @@ describe('kit remover', () => {
 });
 
 describe('kit doutor (completo)', () => {
-  const NOME = 'orquestracao@kit-de-orquestracao';
+  const NOME = 'orquestracao@ichikawa-kit';
   // superpowers é dependência do kit (ADR 0014): a casa em dia o tem; `superpowers: false` mede a falta
   function lar({ instalado = true, superpowers = true, settings } = {}) {
     const h = realpathSync(mkdtempSync(join(tmpdir(), 'kit-k7-home-')));

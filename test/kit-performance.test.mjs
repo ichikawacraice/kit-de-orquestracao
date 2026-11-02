@@ -13,7 +13,7 @@ import { conferirPerformance, lerPraticas } from '../cli/performance.mjs';
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PLUGIN = join(RAIZ, 'plugins', 'kit-performance');
 const KIT = join(RAIZ, 'cli', 'kit.mjs');
-const ID = 'kit-performance@kit-de-orquestracao';
+const ID = 'kit-performance@ichikawa-kit';
 const ler = (...p) => readFileSync(join(...p), 'utf8');
 const catalogo = JSON.parse(ler(PLUGIN, 'praticas.json'));
 const frente = (texto) => (texto.match(/^---\n([\s\S]*?)\n---\n/) ?? [])[1] ?? '';
@@ -94,7 +94,7 @@ describe('o plugin no marketplace e no kit', () => {
     const r = spawnSync('node', [KIT, 'iniciar'], { cwd: d, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, HOME: casa, HOOKS_CREWAI_BASE: casa, CI: '' } });
     assert.equal(r.status, 0, r.stdout + r.stderr);
     const s = JSON.parse(ler(d, '.claude', 'settings.json'));
-    assert.equal(s.enabledPlugins['processos@kit-de-orquestracao'], true, 'precondição: o iniciar liga plugins');
+    assert.equal(s.enabledPlugins['processos@ichikawa-kit'], true, 'precondição: o iniciar liga plugins');
     assert.ok(!(ID in s.enabledPlugins));
   });
 });
