@@ -1,6 +1,6 @@
 {
   "name": "processos",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Processos de desenvolvimento: spec-driven (SPEC, ADR, roadmap, diário), revisar-diff com cético e auditoria de clique.",
   "author": {
     "name": "ichikawacraice"
