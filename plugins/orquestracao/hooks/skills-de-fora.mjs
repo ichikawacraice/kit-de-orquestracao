@@ -114,20 +114,25 @@ const objeto = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 /**
  * As substitutas que o plugin `plugin` pode declarar: a chave é o nome completo de uma skill `absorver` do catálogo (o
  * plugin não mexe no que o kit barra, deixa livre ou tem como dependência), e o valor, o nome de uma skill ou agente do
- * próprio plugin (`<plugin>:<nome>`): um plugin não aponta para peça de outro.
+ * próprio plugin (`<plugin>:<nome>`): um plugin não aponta para peça de outro. O nome curto da substituta passa como peça
+ * da casa (`decidir`), então ele não pode ser o de outra skill do catálogo (liberaria uma barrada), e o plugin dono da
+ * original não se declara substituto dela.
  */
 export function substitutasValidas(plugin, declaradas, catalogo) {
   if (!objeto(declaradas) || !plugin) return {};
   const nomeDaPeca = new RegExp(`^${plugin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:[A-Za-z0-9._-]+$`);
   return Object.fromEntries(Object.entries(declaradas).filter(([skill, v]) => typeof v === 'string'
     && nomeDaPeca.test(v.trim())
-    && catalogo.skills?.some((s) => s.skill === skill && s.saida === 'absorver')).map(([skill, v]) => [skill, v.trim()]));
+    && catalogo.skills?.some((s) => s.skill === skill && s.saida === 'absorver')
+    && skill.slice(0, skill.indexOf(':')) !== plugin
+    && !catalogo.skills.some((s) => s.skill !== skill && curto(s.skill) === curto(v.trim()))).map(([skill, v]) => [skill, v.trim()]));
 }
 
 /**
  * Os plugins ligados neste projeto e a pasta de cada um: ligado é o `enabledPlugins` mais próximo (o `settings.local.json`
  * e o `settings.json` do projeto, da pasta da sessão até a raiz do git, e depois o da conta) dizendo `true`; a pasta é a
- * do `installed_plugins.json` cujo escopo vale aqui (`user`, ou `project`/`local` de uma pasta que contém a sessão).
+ * do `installed_plugins.json` cujo escopo vale aqui (`user`, ou `project`/`local` de uma pasta que contém a sessão; com
+ * várias, a do `projectPath` mais específico).
  * Plugin que só a conta do app traz (fora do CLI) não aparece: o caminho dele não é documentado. → [{ id, nome, pasta }].
  */
 export function pluginsLigados(cwd, pastaConfig) {
@@ -144,7 +149,8 @@ export function pluginsLigados(cwd, pastaConfig) {
   for (const [id, v] of [...decidido].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     if (v !== true || !Array.isArray(instalados[id])) continue;
     const entradas = instalados[id].filter((e) => typeof e?.installPath === 'string' && (e.scope === 'user' || contem(e.projectPath)));
-    const entrada = entradas.find((e) => e.scope !== 'user') ?? entradas[0];
+    const deProjeto = entradas.filter((e) => e.scope !== 'user').sort((a, b) => resolve(b.projectPath).length - resolve(a.projectPath).length);
+    const entrada = deProjeto[0] ?? entradas[0];
     if (entrada && existsSync(entrada.installPath)) ligados.push({ id, nome: id.split('@')[0], pasta: entrada.installPath });
   }
   return ligados;

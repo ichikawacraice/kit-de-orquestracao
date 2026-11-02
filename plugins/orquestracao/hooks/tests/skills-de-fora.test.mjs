@@ -272,6 +272,45 @@ test('substitutasValidas: só skill `absorver` do catálogo, e a substituta tem 
   assert.deepEqual(substitutasValidas('acme', ['x'], catalogo), {});
 });
 
+test('substitutasValidas: a substituta não pode ter o nome curto de outra skill do catálogo, nem ser do dono da original', () => {
+  const abs = catalogo.skills.find((s) => s.saida === 'absorver');
+  const curto = (n) => n.slice(n.indexOf(':') + 1);
+  // o nome curto da substituta vira "da casa" e passa: com o de uma barrada, o plugin liberaria a barrada
+  for (const barr of catalogo.skills.filter((s) => s.saida === 'barrar' && s.skill !== abs.skill)) {
+    assert.deepEqual(substitutasValidas('acme', { [abs.skill]: `acme:${curto(barr.skill)}` }, catalogo), {}, `acme:${curto(barr.skill)} liberaria ${barr.skill}`);
+  }
+  assert.deepEqual(substitutasValidas('acme', { [abs.skill]: `acme:${curto(abs.skill)}` }, catalogo), { [abs.skill]: `acme:${curto(abs.skill)}` }, 'o curto da própria original é o caso comum e vale');
+  const dono = abs.skill.slice(0, abs.skill.indexOf(':'));
+  assert.deepEqual(substitutasValidas(dono, { [abs.skill]: `${dono}:outra` }, catalogo), {}, 'o plugin dono da original não se declara substituto dela');
+});
+
+test('hook: plugin que declara substituta com o nome curto de uma barrada não a libera', () => {
+  const abs = catalogo.skills.find((s) => s.saida === 'absorver');
+  const home = conta({ plugins: [{ id: 'acme@loja', substitutas: { substitutas: { [abs.skill]: 'acme:architecture' } } }], ligados: { 'acme@loja': true } });
+  const p = projeto({ kitJson: {} });
+  try {
+    const r = rodar({ session_id: 's', hook_event_name: 'PreToolUse', cwd: p, tool_name: 'Skill', tool_input: { skill: 'architecture' } }, { home });
+    assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, 'deny', r.stdout);
+  } finally { rmSync(p, { recursive: true, force: true }); rmSync(home, { recursive: true, force: true }); }
+});
+
+test('pluginsLigados: com várias instalações que valem aqui, a do projectPath mais específico', () => {
+  const p = projeto({ kitJson: {} });
+  const home = conta({ plugins: [
+    { id: 'acme@loja' },
+    { id: 'acme@loja', escopo: { scope: 'project', projectPath: p } },
+    { id: 'acme@loja', escopo: { scope: 'project', projectPath: join(p, 'apps') } },
+  ], ligados: { 'acme@loja': true } });
+  try {
+    const raiz = JSON.parse(readFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), 'utf8')).plugins['acme@loja'];
+    assert.equal(raiz.length, 3);
+    // as três apontam para a mesma pasta no cache do teste; diferencie-as
+    raiz.forEach((e, i) => { e.installPath = join(home, `v${i}`); mkdirSync(e.installPath); });
+    writeFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'acme@loja': raiz } }));
+    assert.equal(pluginsLigados(join(p, 'apps', 'web'), join(home, '.claude'))[0]?.pasta, join(home, 'v2'));
+  } finally { rmSync(p, { recursive: true, force: true }); rmSync(home, { recursive: true, force: true }); }
+});
+
 test('pluginsLigados: o enabledPlugins mais próximo vence (local > projeto > conta), e só o instalado com escopo que vale aqui', () => {
   const p = projeto({ kitJson: {} });
   const home = conta({

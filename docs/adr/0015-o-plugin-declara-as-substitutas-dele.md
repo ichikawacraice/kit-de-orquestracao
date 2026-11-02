@@ -15,7 +15,7 @@
 <a id="decisao"></a>
 ## Decisão
 1. **O plugin declara as substitutas dele em `substitutas.json`, na raiz do plugin:** `{ "substitutas": { "<skill de fora>": "<plugin>:<peça>" } }`. A trava as aplica em todo projeto com o kit onde o plugin está ligado.
-2. **Limite de confiança:** a linha do plugin só vale se a chave for o nome completo de uma skill `absorver` do catálogo do kit e o valor for uma peça do próprio plugin (`<nome do plugin>:<nome>`). Um plugin não barra o que o kit barra, deixa livre ou tem como dependência, nem aponta peça de outro. Linha fora disso é ignorada.
+2. **Limite de confiança:** a linha do plugin só vale se a chave for o nome completo de uma skill `absorver` do catálogo do kit e o valor for uma peça do próprio plugin (`<nome do plugin>:<nome>`). O nome curto da peça não pode ser o de outra skill do catálogo (a peça pelo nome curto passa como da casa, e com o nome de uma barrada a liberaria), e o plugin dono da original não se declara substituto dela. Um plugin não barra o que o kit barra, deixa livre ou tem como dependência, nem aponta peça de outro. Linha fora disso é ignorada.
 3. **Ligado** é o `enabledPlugins` mais próximo dizendo `true` (`settings.local.json` e `settings.json` do projeto, depois o da conta), com o plugin instalado pelo CLI num escopo que vale para a pasta da sessão (`user`, ou `project`/`local` de uma pasta que a contém). Plugin que só a conta do app traz não entra.
 4. **Precedência:** o `kit.json` do projeto vence o plugin, por skill; `skillsDeFora.liberar` vence os dois. Dois plugins ligados para a mesma skill: vale o primeiro em ordem de id.
 5. **A peça pode ser skill ou agente;** o guia recomenda a skill, que a sessão chama direto.
@@ -33,4 +33,5 @@
 - O app que liga o plugin do design system ganha a trava sem tocar no `kit.json`; o `kit.json` fica para a exceção.
 - O formato do `installed_plugins.json` e a ordem das camadas do `enabledPlugins` são do Claude Code: se mudarem, a declaração do plugin deixa de valer (a trava deixa passar, não recusa à toa).
 - O plugin da conta do app (fora do CLI) não declara substitutas por este caminho; o projeto ainda pode declará-las no `kit.json`.
+- O kit não confere se a peça existe no plugin: nome errado barra a original e aponta para o nada até o plugin corrigir.
 - O `kit doutor` não lista as substitutas dos plugins (fica para depois, se fizer falta).

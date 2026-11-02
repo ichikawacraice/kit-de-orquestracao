@@ -47,6 +47,9 @@ A ideia boa de uma skill de fora é reescrita no formato da casa, com crédito �
   Para não deixar um plugin barrar o que não é dele, o kit só aceita a linha em que:
   - a chave é o nome completo de uma skill que o catálogo marca como absorvida (`absorver`): o plugin não mexe no que o kit barra, deixa livre ou tem como dependência;
   - o valor é uma peça do próprio plugin, `<nome do plugin>:<nome>`. Pode ser skill ou agente; prefira a skill, que a sessão chama direto (o agente ela tem de lançar).
+  - o nome curto da peça não é o de outra skill do catálogo (a peça pelo nome curto passa livre, e com o nome de uma barrada a liberaria), e o plugin não é o dono da original.
+
+  O kit não confere se a peça existe no plugin: um nome digitado errado barra a original e aponta para o nada até o plugin corrigir (ou o projeto pôr a original em `liberar`).
 
   A linha que não cumpre é ignorada sem aviso. "Ligado" é o `enabledPlugins` mais próximo (o `settings.local.json` e o `settings.json` do projeto, depois o da conta) dizendo `true`, com o plugin instalado pelo CLI num escopo que vale para o projeto. O plugin que só a conta do app traz não entra: o caminho dele no disco não é documentado. Se dois plugins ligados declaram a mesma skill, vale o primeiro em ordem de id.
 - **O projeto fica para a exceção.** O `.claude/kit.json` declara a peça dele, que vence a do plugin:
