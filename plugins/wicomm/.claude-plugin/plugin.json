@@ -1,6 +1,6 @@
 {
   "name": "wicomm",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Design system da Wicomm para apps React: a base (direção de design, anatomia, convenções), o processo de decisão de tela (designer → crítico com nota → guarda que cobra a crítica) e as skills de projeto novo, auditoria, padronização, peça do kit e atualização.",
   "author": {
     "name": "Wicomm"
