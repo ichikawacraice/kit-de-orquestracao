@@ -99,9 +99,9 @@ describe('blocos do modelos/CLAUDE.md (K10)', () => {
     assert.match(dona, /protocolo\.md#ci-so-na-producao/);
   });
 
-  test('kit:regras-de-trabalho sobe para v3 e aponta para o bloco de documentos', () => {
+  test('kit:regras-de-trabalho sobe para v4 e aponta para o bloco de documentos', () => {
     const b = bloco(t, 'regras-de-trabalho');
-    assert.ok(b, 'bloco ausente'); assert.equal(b[1], '3');
+    assert.ok(b, 'bloco ausente'); assert.equal(b[1], '4');
     assert.match(b[2], /kit:documentos/);
   });
 });

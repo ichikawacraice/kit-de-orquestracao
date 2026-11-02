@@ -42,6 +42,7 @@ Lidos de `.claude/kit.json`:
 
 <!-- kit:regras-de-trabalho v1 -->
 ## Regras de trabalho
+- **O pedido é ponto de partida, não ordem** (`plugins/orquestracao/pool/protocolo.md#analise-do-pedido`): confira a premissa, aponte o errado, faça contraproposta e recomende o melhor formato, na medida do risco; discorde uma vez e siga com o reversível.
 - Decisão que muda desenho vira ADR em `docs/adr/` (número pedido à orquestradora quando há uma).
 - Spec e roadmap são opcionais: use-os se o projeto já os tem.
 - Teste antes do código quando o comportamento muda.

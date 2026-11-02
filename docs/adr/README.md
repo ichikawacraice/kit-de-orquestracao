@@ -36,3 +36,4 @@ O que muda para quem usa; o que fica mais difícil.
 | [0010](0010-o-gate-emprestado-comeca-com-dois-workers-por-pacote.md) | O gate que esperou a devolução começa com pelo menos 2 workers por pacote (4 de 6) no pnpm-workspace; substitui o "3 de 6" da decisão 6 do 0008 | Proposto |
 | [0011](0011-uma-sessao-dona-do-item-do-plano-ao-pr.md) | Uma sessão dona do item do plano ao PR; revisão por subagente validador; testes afetados no trabalho e gate só na fila de merge da orquestradora; até 4 donas | Aceito |
 | [0012](0012-o-kit-tem-um-modelo-so-a-dona.md) | O pool de papéis sai do código e do texto: um modelo só, a sessão dona; `KIT_MODELO` deixa de existir; as travas que valem sem pool ganham nome de agora | Proposto |
+| [0013](0013-o-pedido-e-ponto-de-partida-nao-ordem.md) | O pedido é ponto de partida: a sessão confere a premissa, aponta o errado e propõe o melhor formato, na medida do risco; discorda uma vez e segue com o reversível; sem hook | Proposto |
