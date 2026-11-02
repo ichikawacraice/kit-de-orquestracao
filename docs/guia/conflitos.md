@@ -40,10 +40,23 @@ Para liberar uma delas num projeto, ponha o nome em `skillsDeFora.liberar` do `.
 ### O que é absorvido
 A ideia boa de uma skill de fora é reescrita no formato da casa, com crédito à fonte, em vez de copiada. Enquanto a versão da casa não sai, a original segue livre.
 - `design:accessibility-review`, `design:ux-copy` e `design:design-system` vão para o design system do projeto, quando houver (acessibilidade presa aos tokens da base, texto de interface em PT-BR com as regras de mensagem, auditoria de valor solto).
-- O projeto que tem a versão da casa a declara no `.claude/kit.json`, e a original passa a ser recusada ali, apontando para a substituta:
+- **O plugin que absorveu declara as substitutas dele**, e elas valem em todo projeto com o kit onde o plugin está ligado, sem repetir nada em cada projeto. O arquivo é `substitutas.json`, na raiz do plugin (ao lado de `skills/`; o `plugin.json` não aceita campo novo: o `claude plugin validate --strict` o reprova):
   ```json
-  { "skillsDeFora": { "substitutas": { "design:accessibility-review": "<plugin do design system>:<skill de acessibilidade>" } } }
+  { "substitutas": { "design:accessibility-review": "acme:acessibilidade" } }
   ```
+  Para não deixar um plugin barrar o que não é dele, o kit só aceita a linha em que:
+  - a chave é o nome completo de uma skill que o catálogo marca como absorvida (`absorver`) e que o kit ainda não absorveu numa peça dele: o plugin não mexe no que o kit barra, deixa livre ou tem como dependência;
+  - o valor é uma peça do próprio plugin, `<nome do plugin>:<nome>`. Pode ser skill ou agente; prefira a skill, que a sessão chama direto (o agente ela tem de lançar).
+  - o nome curto da peça não é o de outra skill do catálogo (a peça pelo nome curto passa livre, e com o nome de uma barrada a liberaria), e o plugin não é o dono da original.
+
+  O kit não confere se a peça existe no plugin: um nome digitado errado barra a original e aponta para o nada até o plugin corrigir (ou o projeto pôr a original em `liberar`).
+
+  A linha que não cumpre é ignorada sem aviso. "Ligado" é o `enabledPlugins` mais próximo (o `settings.local.json` e o `settings.json` do projeto, depois o da conta) dizendo `true`, com o plugin instalado pelo CLI num escopo que vale para o projeto. O plugin que só a conta do app traz não entra: o caminho dele no disco não é documentado. Se dois plugins ligados declaram a mesma skill, vale o primeiro em ordem de id.
+- **O projeto fica para a exceção.** O `.claude/kit.json` declara a peça dele, que vence a do plugin:
+  ```json
+  { "skillsDeFora": { "substitutas": { "design:accessibility-review": "<plugin>:<skill de acessibilidade>" } } }
+  ```
+  E `skillsDeFora.liberar` vence os dois: a original volta a ser livre só naquele projeto.
 
 <a id="desligar"></a>
 ### O que desligar, se não usa
