@@ -187,6 +187,13 @@ function designerNaRevisao(tipo, p) {
     if (!raiz) return false;
     const { rel, designers } = designDoProjeto(raiz, tipo);
     if (semPrefixoDoKit(tipo) !== 'designer' && !designers.includes(tipo)) return false;
+    // Os arquivos de onde a trava lê a pasta nenhum designer grava, venha a pasta de onde vier: ele se mudaria de pasta.
+    // Comparados pelo caminho real na forma do disco (caixa e Unicode do APFS) e pelo próprio arquivo (dev:ino).
+    const leitos = [join(raiz, 'design', 'design-system.json'), join(raiz, '.claude', 'kit.json')];
+    let fp = null; try { fp = forma(caminhoReal(p)); } catch { /* symlink quebrado: a cerca abaixo recusa */ }
+    const ip = idDoArquivo(p);
+    const real = (a) => { try { return forma(caminhoReal(a)); } catch { return null; } };
+    if (leitos.some((a) => (fp && real(a) === fp) || (ip && idDoArquivo(a) === ip))) return false;
     lido = { rel, dentro: p.startsWith(resolve(raiz, rel) + '/') };
     const esperada = resolve(realpathSync(raiz), rel);
     if (caminhoReal(resolve(raiz, rel)) === esperada && caminhoReal(p).startsWith(esperada + '/')) return 'liberado';

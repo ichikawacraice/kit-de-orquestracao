@@ -579,6 +579,19 @@ caso('F350.2 a pasta do design-system:designer vem do design/design-system.json,
   ds('../fora');
   igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('design-system:designer'))), null, 'inválido cai no kit.json');
 }));
+caso('F350.3 nenhum designer grava os arquivos de onde a trava lê a pasta', () => comRepo(() => {
+  mkdirSync(join(REPO, 'design'), { recursive: true });
+  mkdirSync(join(REPO, '.claude'), { recursive: true });
+  writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'design' } }));
+  writeFileSync(join(REPO, 'design', 'design-system.json'), '{}');
+  igual(rodar(SN, editar(`${REPO}/design/b.md`, sub('design-system:designer'))), null, 'precondição: a pasta do kit.json vale');
+  for (const t of ['design-system:designer', 'kit-design:designer']) {
+    igual(decisao(rodar(SN, editar(`${REPO}/design/design-system.json`, sub(t)))), 'deny', `${t}: design-system.json na pasta do kit.json`);
+    igual(decisao(rodar(SN, editar(`${REPO}/Design/design-system.json`, sub(t)))), 'deny', `${t}: grafia de caixa`);
+  }
+  writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: '.claude' } }));
+  igual(decisao(rodar(SN, editar(`${REPO}/.claude/kit.json`, sub('kit-design:designer')))), 'deny', 'o kit.json na pasta declarada');
+}));
 // F61: a pasta de revisões é cercada: valor inválido vale o padrão e symlink não leva a escrita para fora.
 caso('F61.1 valor inválido de design.revisoes vale o padrão', () => comRepo(() => {
   mkdirSync(join(REPO, '.claude'), { recursive: true });
