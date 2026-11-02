@@ -37,6 +37,12 @@ try {
   }
 } catch { /* sem perguntas */ }
 
+// F347: sem as regras que o CLAUDE.md do projeto já traz (blocos `kit:`); sem o módulo, só tira os comentários de marcação.
+try {
+  const { resumoParaOProjeto } = await import('./regras-do-inicio.mjs');
+  regras = resumoParaOProjeto(regras, entrada.cwd);
+} catch { regras = regras.replace(/\s*<!--[\s\S]*?-->/g, ''); }
+
 try {
   const partes = [papel, regras && comAviso(regras), perguntas && comAviso(perguntas)].filter(Boolean);
   if (partes.length) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: partes.join('\n\n') } }));
