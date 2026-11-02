@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.11.0
+versao: 0.12.0
 description: A direção de design dos apps React da Wicomm — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   claro:
@@ -477,9 +477,9 @@ Cada app declara a sua densidade em `design/wicomm.json` (`"densidade": "instrum
 - **Confere.** Revisão · `navegador` (a guarda de submissão cobre a chave de erro e o desfecho, não o `id`/`htmlFor`; guarda própria a escrever na fatia de guardas).
 
 ### CTRL-05 · O carimbo tem uma forma só
-- **Regra.** Um casco só para todo carimbo: `inline-flex items-center gap-[5px] rounded-md px-2 py-[3px] text-[11px] font-[650] leading-[1.4] [font-stretch:96%]`, tinta chapada da voz, **sem contorno, sem desfoque, sem bisel**. `ChipDeEstado` diz um **estado** e declara `tom`; `Badge` diz um **valor** e escolhe tinta neutra ou de marca (`variant="marca"`, explícito; o padrão é neutro). Monograma (iniciais) é quadrado de 16px ou círculo de 20px. Raio, padding, tamanho e tinta **não são escolha de quem usa**.
-- **Por quê.** 40 pílulas em 22 construções, com o mesmo estado em `text-[10px]` numa tela e `text-[11px]` na outra.
-- **Confere.** `guarda:o-carimbo-tem-forma`.
+- **Regra.** Um casco só para todo carimbo: `inline-flex items-center gap-[5px] rounded-md px-2 py-[3px] text-[11px] font-[650] leading-[1.4] [font-stretch:96%]`, tinta chapada da voz, **sem contorno, sem desfoque, sem bisel**. `ChipDeEstado` diz um **estado** e declara `tom`; `Badge` diz um **valor** e escolhe tinta neutra ou de marca (`variant="marca"`, explícito; o padrão é neutro). O carimbo de estado `neutro` — o `ChipDeEstado` e o `ChipQueAbre` — abre com o **ponto de 6px na tinta do próprio texto**; o em curso tem o giro no lugar dele, e as vozes com matiz não levam ponto. O `Badge` nunca tem ponto. Numa coluna de estados, o alinhamento é o do casco, não o da palavra (o ponto e o giro empurram a palavra). Monograma (iniciais) é quadrado de 16px ou círculo de 20px. Raio, padding, tamanho e tinta **não são escolha de quem usa**.
+- **Por quê.** 40 pílulas em 22 construções, com o mesmo estado em `text-[10px]` numa tela e `text-[11px]` na outra. O estado neutro e o valor neutro têm a mesma tinta no mesmo casco: lado a lado (o estado no topo, os valores logo abaixo), o estado se lia como mais um valor. As vozes com matiz já se separam do `Badge` neutro pela tinta, e ponto nelas seria marcador repetido.
+- **Confere.** `guarda:o-carimbo-tem-forma` · registro (o ponto do neutro e o `Badge` sem ponto, em teste) · `crítica:consistência`.
 
 ### CTRL-06 · Troca de vista tem uma forma
 - **Regra.** Aba de tela e barra de modos são o mesmo controle (`seletor-de-vista`) em duas densidades (`abas` 30px, `modos` 24px): trilha de tinta (`bg-foreground/[0.08]`) e pílula levantada (`bg-card` + sombra baixa) que desliza; **o estado vai no TEXTO** (`foreground-2` → `foreground` + peso 650). Botões `secondary`/`ghost` alternados num grupo são defeito.

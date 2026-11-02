@@ -78,6 +78,14 @@ export const PONTO_DO_TOM: Record<Tom, string> = {
   alheio: "bg-violet-500",
 }
 
+/**
+ * O ponto de 6px DENTRO do carimbo (o estado neutro, CTRL-05): a tinta do
+ * próprio texto, não a do `PONTO_DO_TOM`. Sobre a tinta do carimbo, o texto já
+ * paga 4,5:1, então o ponto paga os 3:1 de objeto gráfico nos dois temas; e
+ * a forma não ganha matiz próprio (COR-08).
+ */
+export const PONTO_NO_CARIMBO = "bg-current"
+
 /** A barra vertical de 2px. */
 export const FILETE_DO_TOM: Record<Tom, string> = {
   ok: "border-emerald-500/70",

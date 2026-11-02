@@ -12,7 +12,7 @@ export default function DemoDoValorRotulado() {
         {/* De marca, no máximo um por vista: o valor que a Wicomm assina. */}
         <Badge variant="marca">Recomendado</Badge>
       </Amostra>
-      <Amostra titulo="Ao lado do estado: a mesma forma, outra função">
+      <Amostra titulo="Ao lado do estado: o mesmo casco, e o ponto só no estado">
         <Badge>Plano anual</Badge>
         <ChipDeEstado tom="neutro">Rascunho</ChipDeEstado>
       </Amostra>

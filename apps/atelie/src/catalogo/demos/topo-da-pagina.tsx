@@ -47,6 +47,18 @@ export default function DemoDoTopo() {
             />
           </PaginaDoApp>
         </Amostra>
+        <Amostra titulo="Estado neutro sobre os valores: o ponto diz que é estado">
+          <PaginaDoApp className="px-0 pt-0 pb-0">
+            <TopoDaPagina
+              trilha={TRILHA}
+              titulo="Pedido 1042"
+              estado={<ChipDeEstado tom="neutro">Entrega em 40 dias</ChipDeEstado>}
+              valores={VALORES}
+              primario={<Button size="lg">Conferir os itens</Button>}
+              menu={MENU}
+            />
+          </PaginaDoApp>
+        </Amostra>
         <Amostra titulo="Os valores carregando: a espera já na altura final">
           <PaginaDoApp className="px-0 pt-0 pb-0">
             <TopoDaPagina

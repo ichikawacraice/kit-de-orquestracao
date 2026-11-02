@@ -59,7 +59,7 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `menu` | dropdown-menu | grupos por ar, linha bloqueada com motivo, confirmação pela peça, escolha, submenu |
 | `antes-do-desenho` | — | o script que aplica o tema e a barra recolhida no `<html>` antes do primeiro desenho (layout raiz) |
 | `link-do-app` | — | o link das peças: `<a>` por padrão, o do framework pelo `ProvedorDeLink` |
-| `chip-de-estado` | — | o estado em uma palavra (`ChipDeEstado`, `ChipQueAbre`), com a forma única do carimbo |
+| `chip-de-estado` | — | o estado em uma palavra (`ChipDeEstado`, `ChipQueAbre`), com a forma única do carimbo; o neutro abre com o ponto |
 | `badge` | badge | o valor que classifica (não o estado), no mesmo casco do carimbo; neutro ou `marca` |
 | `estado` | — | o ponto de 6px e a palavra |
 | `medalhao-do-icone` | — | o disco com o ícone do assunto |

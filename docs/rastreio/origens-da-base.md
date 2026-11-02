@@ -56,7 +56,7 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | CTRL-02 | DESIGN.md | ADR 0262. |
 | CTRL-03 | DESIGN.md | ADR 0124 · ADR 0344. |
 | CTRL-04 | DESIGN.md | ADR 0126 · SPEC-062 · SPEC-066. |
-| CTRL-05 | DESIGN.md | ADR 0102 · SPEC-065. |
+| CTRL-05 | DESIGN.md | ADR 0102 · SPEC-065. O ponto do estado neutro · Q825 (crítica de UI do F324, no piloto WiControl: o estado neutro no topo igual aos valores logo abaixo), F328, 01/11/2026. |
 | CTRL-06 | DESIGN.md | ADR 0134 · SPEC-084. |
 | CTRL-07 | DESIGN.md | Decisão do dono do produto em 05/10/2026 (convenção do front). |
 | CTRL-08 | DESIGN.md | ADR 0124 · direção de design de origem, seção Navigation. |

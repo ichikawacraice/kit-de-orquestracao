@@ -50,6 +50,40 @@ describe("o carimbo de estado (CTRL-05, COR-05)", () => {
     expect(giro.getAttribute("aria-hidden")).toBe("true")
   })
 
+  it("o estado neutro abre com o ponto, na tinta do texto, e o selo de valor não (CTRL-05)", () => {
+    const { container } = render(
+      <>
+        <ChipDeEstado tom="neutro">Em 40 dias</ChipDeEstado>
+        <Badge>Alta</Badge>
+      </>
+    )
+    const chip = container.querySelector('[data-slot="chip-de-estado"]')!
+    const ponto = chip.querySelector('[data-slot="ponto-do-estado"]')!
+    expect(chip.firstElementChild).toBe(ponto)
+    expect(ponto.getAttribute("aria-hidden")).toBe("true")
+    expect(classes(ponto)).toEqual(expect.arrayContaining(["size-1.5", "rounded-full", "bg-current"]))
+    expect(chip.textContent).toBe("Em 40 dias")
+    expect(container.querySelector('[data-slot="badge"] [data-slot="ponto-do-estado"]')).toBeNull()
+  })
+
+  it("só o neutro ganha o ponto: a voz com matiz já se separa pela tinta, e o em curso tem o giro", () => {
+    const { container } = render(
+      <>
+        <ChipDeEstado tom="ok">Conferido</ChipDeEstado>
+        <ChipDeEstado tom="neutro" emCurso>
+          Processando
+        </ChipDeEstado>
+        <ChipQueAbre tom="neutro" onAbrir={() => {}}>
+          Rascunho
+        </ChipQueAbre>
+      </>
+    )
+    const [ok, emCurso] = container.querySelectorAll('[data-slot="chip-de-estado"]')
+    expect(ok!.querySelector('[data-slot="ponto-do-estado"]')).toBeNull()
+    expect(emCurso!.querySelector('[data-slot="ponto-do-estado"]')).toBeNull()
+    expect(container.querySelector('[data-slot="chip-que-abre"] [data-slot="ponto-do-estado"]')).not.toBeNull()
+  })
+
   it("o chip que abre é botão e chama quem abre", () => {
     const onAbrir = vi.fn()
     render(

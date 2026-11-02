@@ -729,7 +729,7 @@
       "name": "chip-de-estado",
       "type": "registry:ui",
       "title": "Chip de estado",
-      "description": "badge/status — o estado em uma palavra, com a forma única do carimbo e a voz declarada em tom (CTRL-05); o ChipQueAbre abre o detalhe.",
+      "description": "badge/status — o estado em uma palavra, com a forma única do carimbo e a voz declarada em tom; o neutro abre com o ponto que o Badge não tem (CTRL-05); o ChipQueAbre abre o detalhe.",
       "dependencies": [
         "lucide-react@1.57.0"
       ],

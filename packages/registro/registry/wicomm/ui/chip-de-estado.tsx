@@ -1,7 +1,7 @@
 import * as React from "react"
 import { LoaderCircleIcon } from "lucide-react"
 
-import { BADGE_DO_TOM, type Tom } from "@/registry/wicomm/lib/idioma-de-cor"
+import { BADGE_DO_TOM, PONTO_NO_CARIMBO, type Tom } from "@/registry/wicomm/lib/idioma-de-cor"
 import { cn } from "@/registry/wicomm/lib/utils"
 
 /**
@@ -13,8 +13,19 @@ const CASCO_DO_CARIMBO =
   "inline-flex shrink-0 items-center gap-[5px] whitespace-nowrap rounded-md px-2 py-[3px] text-[11px] leading-[1.4] font-[650] [font-stretch:96%]"
 
 /**
+ * O marcador do estado neutro (CTRL-05): o ponto de 6px, na tinta do texto
+ * (`PONTO_NO_CARIMBO`). Sem ele, o carimbo neutro e o
+ * `Badge` são a mesma tinta no mesmo casco, e o estado se lê como valor. A voz
+ * com matiz já se separa pela tinta; o em curso tem o giro no lugar.
+ */
+function PontoDoEstado() {
+  return <span aria-hidden="true" data-slot="ponto-do-estado" className={cn("size-1.5 shrink-0 rounded-full", PONTO_NO_CARIMBO)} />
+}
+
+/**
  * O ESTADO em uma palavra (ANATOMIA PECA-01). Declara `tom` — a voz responde
  * *o que isto pede de você?* (COR-03) — e nunca uma classe de cor (COR-05).
+ * O neutro abre com o ponto, que o `Badge` não tem (CTRL-05).
  *
  * `emCurso`: o estado está andando (COR-04: em curso é `neutro`). Ganha o
  * círculo que gira, parado para quem pediu menos movimento; a palavra no
@@ -29,7 +40,11 @@ function ChipDeEstado({
 }: React.ComponentProps<"span"> & { tom: Tom; emCurso?: boolean }) {
   return (
     <span data-slot="chip-de-estado" data-tom={tom} className={cn(CASCO_DO_CARIMBO, BADGE_DO_TOM[tom], className)} {...props}>
-      {emCurso ? <LoaderCircleIcon aria-hidden="true" className="size-3 animate-spin motion-reduce:animate-none" /> : null}
+      {emCurso ? (
+        <LoaderCircleIcon aria-hidden="true" className="size-3 animate-spin motion-reduce:animate-none" />
+      ) : tom === "neutro" ? (
+        <PontoDoEstado />
+      ) : null}
       {children}
     </span>
   )
@@ -38,7 +53,8 @@ function ChipDeEstado({
 /**
  * O estado que ABRE o detalhe (PECA-01): o mesmo carimbo, como botão. O clique
  * leva ao que o estado resume (a pendência, a lista). O sublinhado pontilhado
- * diz que ele abre; o foco tem o anel de sempre (SUP-06).
+ * diz que ele abre; o foco tem o anel de sempre (SUP-06). O neutro abre com o
+ * ponto, como o `ChipDeEstado`.
  */
 function ChipQueAbre({
   tom,
@@ -63,6 +79,7 @@ function ChipQueAbre({
       )}
       {...props}
     >
+      {tom === "neutro" ? <PontoDoEstado /> : null}
       {children}
     </button>
   )

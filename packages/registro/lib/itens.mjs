@@ -191,7 +191,7 @@ export const PECAS = [
   peca({
     name: 'chip-de-estado',
     title: 'Chip de estado',
-    description: 'badge/status — o estado em uma palavra, com a forma única do carimbo e a voz declarada em tom (CTRL-05); o ChipQueAbre abre o detalhe.',
+    description: 'badge/status — o estado em uma palavra, com a forma única do carimbo e a voz declarada em tom; o neutro abre com o ponto que o Badge não tem (CTRL-05); o ChipQueAbre abre o detalhe.',
     npm: [NPM.lucide],
     pecas: ['idioma-de-cor'],
     files: [ui('chip-de-estado')],

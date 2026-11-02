@@ -4,6 +4,19 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.12.0 · 01/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **O carimbo de estado neutro abre com um ponto** (CTRL-05). O `ChipDeEstado` e o `ChipQueAbre` com `tom="neutro"` ganham o ponto de 6px na tinta do próprio texto, antes da palavra; o `Badge` nunca tem ponto. Antes, o estado neutro e o valor neutro eram a mesma tinta no mesmo casco, e no topo da página (o estado na linha do título, os valores logo abaixo, CASCO-04) o estado se lia como mais um valor.
+- As vozes com matiz não mudam: já se separam pela tinta. O em curso (`emCurso`) também não: o giro ocupa o lugar do ponto.
+- O `Prazo` com `forma="chip"` sem voz herda o ponto, porque desenha o `ChipDeEstado` neutro.
+
+### Migração
+- `npx shadcn add @wicomm/chip-de-estado`. Nada muda no uso: a peça desenha o ponto sozinha.
+- Tela que punha um ícone próprio dentro de um carimbo neutro passa a mostrar ponto e ícone: tire o ícone, ou use a voz que o estado tem.
+
 ## 0.11.0 · 01/11/2026
 
 Camadas: base, registro
