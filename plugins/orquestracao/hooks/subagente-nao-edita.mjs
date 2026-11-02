@@ -15,7 +15,9 @@
 // rm, writeFile…): nome vindo de variável, `claude plugin` e afins passam — é cerca contra deslize, não cofre.
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
 // fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam; e o
-// designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista; a pasta é
+// designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista, como
+// os designers de outro plugin que o projeto declara em `design.designers` (tipo exato, sem curinga:
+// `*:designer` daria escrita a todo plugin instalado); a pasta é
 // cercada: valor inválido (absoluto, `..`, a própria raiz) vale o padrão e symlink não libera
 // (recusa com o motivo e o rótulo `recusou-symlink` no log).
 // Erro do hook vai para o log e a ferramenta segue.
@@ -104,25 +106,47 @@ function tipoLiberado(tipo) {
     .some((t) => [tipo, semPrefixoDoKit(tipo)].some((n) => (t.endsWith('*') ? n.startsWith(t.slice(0, -1)) : n === t)));
 }
 
-// A raiz do projeto: a pasta mais próxima do arquivo com `.claude/kit.json` ou `.git` (arquivo ou pasta).
+// A raiz do projeto: a pasta mais próxima do arquivo com `.claude/kit.json` ou `.git` (arquivo ou pasta),
+// salvo a que é ou mora dentro da pasta de revisões de um projeto acima: o designer grava ali e um kit.json
+// aninhado declararia designers novos (ou outra pasta). Essa vale como pasta comum do projeto de fora.
 function raizDoProjeto(p) {
+  const candidatas = [];
   for (let d = dirname(p); ; d = dirname(d)) {
-    if (existsSync(join(d, '.claude', 'kit.json')) || existsSync(join(d, '.git'))) return d;
-    if (dirname(d) === d) return null;
+    if (existsSync(join(d, '.claude', 'kit.json')) || existsSync(join(d, '.git'))) candidatas.push(d);
+    if (dirname(d) === d) break;
   }
+  // Comparado pelo caminho real nativo: no disco que não distingue caixa (APFS), `DOCS/…` acha o mesmo
+  // kit.json que `docs/…`, e só o `.native` devolve a grafia do disco dos dois lados.
+  let raiz = null;
+  for (const d of candidatas.reverse()) {
+    if (raiz) {
+      const rev = realNativo(resolve(raiz, designDoProjeto(raiz).rel));
+      const real = realNativo(d);
+      if (rev && real && (real === rev || real.startsWith(rev + '/'))) continue;
+    }
+    raiz = d;
+  }
+  return raiz;
 }
 
-function pastaDeRevisoes(raiz) {
-  let rel = '';
+function realNativo(p) {
+  try { return realpathSync.native(p); } catch { return null; }
+}
+
+// A seção `design` do kit.json do projeto: a pasta de revisões (inválida vale o padrão) e os designers
+// de plugin declarados (só texto exato; o que não é lista ou tem `*` não libera ninguém).
+function designDoProjeto(raiz) {
+  let design;
   try {
-    const kit = JSON.parse(readFileSync(join(raiz, '.claude', 'kit.json'), 'utf8').replace(/^\uFEFF/, ''));
-    rel = kit?.design?.revisoes;
+    design = JSON.parse(readFileSync(join(raiz, '.claude', 'kit.json'), 'utf8').replace(/^\uFEFF/, ''))?.design;
   } catch { /* sem kit.json legível: vale o padrão */ }
-  rel = typeof rel === 'string' ? rel.trim().replace(/\/+$/, '') : '';
-  const PADRAO = 'docs/design/revisoes';
+  let rel = typeof design?.revisoes === 'string' ? design.revisoes.trim().replace(/\/+$/, '') : '';
   // Inválido (absoluto, com `..` ou a própria raiz) vale o padrão: o designer segue com uma pasta que funciona.
-  if (!rel || isAbsolute(rel) || rel.split(/[\\/]+/).includes('..') || resolve(raiz, rel) === raiz) return PADRAO;
-  return rel;
+  if (!rel || isAbsolute(rel) || rel.split(/[\\/]+/).includes('..') || resolve(raiz, rel) === raiz) rel = 'docs/design/revisoes';
+  const designers = Array.isArray(design?.designers)
+    ? design.designers.filter((t) => typeof t === 'string').map((t) => t.trim()).filter((t) => t && !t.includes('*'))
+    : [];
+  return { rel, designers };
 }
 
 // Caminho real de `p` mesmo sem ele existir: resolve o primeiro ancestral que existe (symlink quebrado
@@ -140,12 +164,13 @@ function caminhoReal(p) {
 // `'liberado'`, `'symlink'` (o caminho, lido sem resolver links, está na pasta de revisões, mas o real
 // não: recusa com o motivo) ou `false`. Na dúvida, nega: erro antes de saber a pasta vale `false`.
 function designerNaRevisao(tipo, p) {
-  if (semPrefixoDoKit(tipo) !== 'designer') return false;
+  if (!tipo) return false;
   let lido;
   try {
     const raiz = raizDoProjeto(p);
     if (!raiz) return false;
-    const rel = pastaDeRevisoes(raiz);
+    const { rel, designers } = designDoProjeto(raiz);
+    if (semPrefixoDoKit(tipo) !== 'designer' && !designers.includes(tipo)) return false;
     lido = { rel, dentro: p.startsWith(resolve(raiz, rel) + '/') };
     const esperada = resolve(realpathSync(raiz), rel);
     if (caminhoReal(resolve(raiz, rel)) === esperada && caminhoReal(p).startsWith(esperada + '/')) return 'liberado';

@@ -717,6 +717,92 @@ caso('F323.7 Bash: painel/limpeza, 1>, &>, --in-place e mkdir recusam; ler o ins
   }
   igual(rodar(SN, pre('Bash', { command: 'cat ~/.claude/plugins/marketplaces/kit/install.sh' }, sub())), null, 'install.sh');
 });
+// F322: o projeto declara em `design.designers` do kit.json quais designers de plugin contam como o do
+// kit — só na pasta de revisões, com a mesma cerca; sem curinga e sem a chave nada muda.
+const kitDesign = (design) => { mkdirSync(join(REPO, '.claude'), { recursive: true }); writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design })); };
+caso('F322.1 designer de plugin declarado grava na pasta de revisões e só nela', () => comRepo(() => {
+  igual(existsSync(LISTA()), false, 'precondição: sem lista');
+  kitDesign({});
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('acme:designer')))), 'deny', 'precondição: sem a chave, acme:designer é negado');
+  kitDesign({ designers: ['acme:designer'] });
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('acme:designer'))), null, 'na pasta padrão');
+  igual(log().at(-1)[3], 'liberado-por-papel', 'log');
+  for (const p of [`${REPO}/src/a.ts`, `${REPO}/.claude/kit.json`, `${REPO}/${REV}/../../src/a.ts`]) {
+    igual(decisao(rodar(SN, editar(p, sub('acme:designer')))), 'deny', `fora: ${p}`);
+  }
+  kitDesign({ revisoes: 'docs/ux', designers: ['acme:designer'] });
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('acme:designer'))), null, 'design.revisoes manda');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('acme:designer')))), 'deny', 'o padrão deixa de valer');
+}));
+caso('F322.2 só o tipo declarado, exato: curinga e outro plugin seguem recusados', () => comRepo(() => {
+  kitDesign({ designers: ['acme:designer'] });
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('acme:designer'))), null, 'precondição: o declarado passa');
+  for (const t of ['outro:designer', 'acme:designerX', 'acme:executor', 'designer:acme']) {
+    igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', t);
+  }
+  kitDesign({ designers: ['*:designer', 'acme:*', '*'] });
+  for (const t of ['acme:designer', 'outro:designer']) {
+    igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', `curinga não casa: ${t}`);
+  }
+  for (const v of ['acme:designer', null, 7, { a: 'acme:designer' }]) {
+    kitDesign({ designers: v });
+    igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('acme:designer')))), 'deny', `designers=${JSON.stringify(v)} não é lista`);
+  }
+  kitDesign({ designers: ['  acme:designer  ', 3, null] });
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('acme:designer'))), null, 'item com espaço vale; o que não é texto é ignorado');
+}));
+caso('F322.3 o declarado tem a mesma cerca: valor inválido vale o padrão, symlink não libera', () => comRepo(() => {
+  kitDesign({ revisoes: '../fora', designers: ['acme:designer'] });
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('acme:designer'))), null, 'inválido vale o padrão');
+  mkdirSync(join(REPO, 'src'), { recursive: true });
+  mkdirSync(join(REPO, REV), { recursive: true });
+  symlinkSync(join(REPO, 'src'), join(REPO, REV, 'link'));
+  const r = rodar(SN, editar(`${REPO}/${REV}/link/a.ts`, sub('acme:designer')));
+  igual(decisao(r), 'deny', 'symlink');
+  igual(log().at(-1)[3], 'recusou-symlink', 'log do symlink');
+}));
+caso('F322.4 a declaração vale só para o projeto que a faz', () => comRepo(() => {
+  kitDesign({ designers: ['acme:designer'] });
+  const outro = join(homedir(), 'outro-projeto');
+  mkdirSync(join(outro, '.git'), { recursive: true });
+  try {
+    igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('acme:designer'))), null, 'precondição: no projeto que declara, passa');
+    igual(decisao(rodar(SN, editar(join(outro, REV, 'a.md'), sub('acme:designer')))), 'deny', 'outro projeto');
+  } finally { rmSync(outro, { recursive: true, force: true }); }
+}));
+caso('F322.5 kit.json aninhado na pasta de revisões não declara designer', () => comRepo(() => {
+  kitDesign({ designers: ['acme:designer'] });
+  const aninhado = join(REPO, REV, 'x');
+  mkdirSync(join(aninhado, '.claude'), { recursive: true });
+  igual(rodar(SN, pre('Write', { file_path: join(aninhado, '.claude', 'kit.json'), content: 'x' }, sub('acme:designer'))), null, 'precondição: o declarado grava dentro da revisão');
+  writeFileSync(join(aninhado, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'y', designers: ['general-purpose'] } }));
+  igual(decisao(rodar(SN, editar(join(aninhado, 'y', 'a.ts'), sub('general-purpose')))), 'deny', 'o tipo declarado pelo aninhado segue recusado');
+  igual(rodar(SN, editar(join(aninhado, 'y', 'a.ts'), sub('acme:designer'))), null, 'o declarado pelo projeto de fora segue na revisão');
+  mkdirSync(join(aninhado, '.git'), { recursive: true });
+  igual(decisao(rodar(SN, editar(join(aninhado, 'y', 'a.ts'), sub('general-purpose')))), 'deny', 'nem com .git aninhado');
+}));
+caso('F322.6 kit.json na raiz da pasta de revisões e caminho com outra caixa também não declaram', () => comRepo(() => {
+  kitDesign({ designers: ['acme:designer'] });
+  const rev = join(REPO, REV);
+  mkdirSync(join(rev, '.claude'), { recursive: true });
+  writeFileSync(join(rev, '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'y', designers: ['general-purpose'] } }));
+  igual(decisao(rodar(SN, editar(join(rev, 'y', 'a.ts'), sub('general-purpose')))), 'deny', 'kit.json na raiz da revisão');
+  igual(rodar(SN, editar(join(rev, 'y', 'a.ts'), sub('acme:designer'))), null, 'o declarado de fora segue na revisão');
+  rmSync(join(rev, '.claude'), { recursive: true, force: true });
+  mkdirSync(join(rev, 'x', '.claude'), { recursive: true });
+  writeFileSync(join(rev, 'x', '.claude', 'kit.json'), JSON.stringify({ design: { revisoes: 'y', designers: ['general-purpose'] } }));
+  const outraCaixa = join(REPO, 'DOCS', 'Design', 'revisoes', 'x', 'y', 'a.ts');
+  if (!existsSync(join(REPO, 'DOCS'))) return; // disco que distingue maiúsculas: não há outro caminho para o mesmo arquivo
+  igual(decisao(rodar(SN, editar(outraCaixa, sub('general-purpose')))), 'deny', 'caminho com outra caixa');
+}));
+caso('F322.7 projeto aninhado fora da revisão segue com a própria raiz e a própria declaração', () => comRepo(() => {
+  kitDesign({ designers: ['acme:designer'] });
+  const b = join(REPO, 'packages', 'b');
+  mkdirSync(join(b, '.git'), { recursive: true });
+  igual(decisao(rodar(SN, editar(join(b, REV, 'a.md'), sub('acme:designer')))), 'deny', 'a declaração de fora não vale em b');
+  igual(rodar(SN, editar(join(b, REV, 'a.md'), sub('design:designer'))), null, 'o designer do kit grava nas revisões de b');
+  igual(decisao(rodar(SN, editar(join(b, 'src', 'a.ts'), sub('design:designer')))), 'deny', 'e não no código de b');
+}));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
   const f = transcript([...trabalho(), fala('Pronto, editei.')]);
   const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');
