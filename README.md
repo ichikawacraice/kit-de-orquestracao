@@ -1,79 +1,46 @@
 # kit-de-orquestracao
 
-Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perder o fio: cada trabalho vira um **item** numa fila, uma **sessão dona** leva o item do plano ao PR, e uma **sessão orquestradora** abre as donas, mergeia e faz o release. Travas por hook garantem as regras que não podem depender de memória, um painel mostra o estado de tudo, e um teto de núcleos impede que os testes de todas as sessões derrubem a máquina.
+Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perder o fio. Cada trabalho vira um **item** (`F12`) numa fila; uma **sessão dona** leva o item do plano ao PR; uma **sessão orquestradora** abre as donas, junta os PRs, roda os testes uma vez e mergeia. Travas por hook garantem as regras que não podem depender de memória, o pane `/painel` mostra o estado de tudo e responde às perguntas das sessões, e um teto de núcleos impede que os testes de todas as sessões derrubem a máquina.
 
-## Como funciona
-
-- **Item e dona.** Todo trabalho é um item `F<n>`. A orquestradora abre uma sessão por item, com o título `F<n> · <tema>`. Essa sessão é a dona: mede, decide, escreve, testa e revisa o diff por um subagente de contexto limpo (`orquestracao:validador`). Depois abre o PR e manda à orquestradora `PR N pronto, HEAD <sha>`.
-- **Fila de merge.** A orquestradora junta os PRs prontos, roda o gate completo **uma vez** sobre a combinação e mergeia o que passou. O que conflitou ou ficou vermelho volta para a dona. Durante o trabalho, cada dona roda só os testes afetados pelo que tocou.
-- **Até 4 donas ao mesmo tempo** (3 com a máquina cheia).
-- **Painel.** O pane `/painel` mostra:
-  - o que espera você: perguntas com ID (`Q12`) e botões de resposta;
-  - o que está travado;
-  - o que está em execução;
-  - o que está na fila.
-
-  A barra acima do prompt diz o contexto da sessão, o item e se dá para reiniciar o app.
-- **Batida.** A cada 10 min, o pane confere a fila. Cutuca a dona do item parado, solta o item cuja dona sumiu e avisa a orquestradora do que está esperando merge ou sem dona.
-- **Modo ausente.** `/ausente on` antes de sair: depois daquele turno, nenhuma sessão abre sozinha, e as decisões de baixo risco seguem assumidas e marcadas para você confirmar.
-
-O manual completo está em [`plugins/orquestracao/pool/protocolo.md`](plugins/orquestracao/pool/protocolo.md) (a regra comum) e [`plugins/orquestracao/pool/dona.md`](plugins/orquestracao/pool/dona.md) (a sessão dona). As decisões de desenho estão nos [ADRs](docs/adr/README.md).
+**Guia de uso:** [`docs/guia/`](docs/guia/README.md) — o primeiro dia, o dia a dia, os comandos, o que ligar e desligar e os problemas comuns.
 
 ## O que vem no kit
 
 | Peça | O que é |
 |---|---|
-| Plugin `orquestracao` | Hooks e travas, skills (`orquestradora`, `papeis-e-modelos`, `handoff-de-sessao`, `ausente`, `notas-de-release`, `orquestrar-com-subagentes`), agentes `validador` e `explorador`, e os comandos do `bin/` (`painel`, `proximo-item`, `proxima-pergunta`, `testes-afetados`, `subir-versao`, `atualizar-plugins`) |
-| Plugin `painel-sessoes` | O pane `/painel`, a barra de status e a batida |
-| Plugin `processos` | Skills de processo: `spec-driven` (ADR, spec, roadmap), `revisar-diff`, `auditoria-de-clique` |
-| Plugin `kit-design` | Revisão de arquitetura de UI antes da tela, crítico de UI depois, e a guarda que cobra a crítica do trabalho visual |
-| CLI `kit` | Põe o kit num projeto: gate de testes, guarda de operação, `CLAUDE.md` com as regras, `.claude/kit.json` |
+| Plugin `orquestracao` | O núcleo: as travas (hooks), as skills da orquestradora e da dona, os agentes `validador` e `explorador`, e os comandos `painel`, `proximo-item`, `proxima-pergunta`, `testes-afetados`, `subir-versao` e `atualizar-plugins` |
+| Plugin `painel-sessoes` | O pane `/painel`, a barra de status acima do prompt e a batida que confere a fila a cada 10 min |
+| Plugin `processos` | Skills de processo (`spec-driven`, `revisar-diff`, `auditoria-de-clique`) e a conferência das docs no gate |
+| Plugin `kit-design` | Para projeto com tela: revisão de arquitetura de UI antes, crítico de UI depois, e a guarda que cobra a crítica |
+| CLI `kit` | Põe o kit num projeto: gate de testes, guarda de operação, `CLAUDE.md` com as regras e `.claude/kit.json` |
 
 ## Requisitos
 
-- Claude Code no app desktop (o pane e as sessões entre si usam as ferramentas do app).
+- Claude Code no **app desktop** (o pane e as sessões entre si usam ferramentas do app).
 - Node 20 ou mais novo, e git. O kit não traz dependência npm.
+- Acesso ao repositório: ele é privado. Peça o convite a quem mantém o kit e entre no GitHub com essa conta (`gh auth login`).
 
-## Instalar
+## Instalar em 3 passos
 
-O repositório é privado: peça acesso a quem mantém o kit e entre no GitHub com a conta que recebeu o convite (`gh auth login`) antes dos passos abaixo.
-
-1. Os plugins, uma vez por máquina:
+1. Os plugins, uma vez por máquina, e reinicie o app:
    ```bash
    claude plugin marketplace add ichikawacraice/kit-de-orquestracao
    ```
    ```bash
    claude plugin install orquestracao@kit-de-orquestracao
    ```
-   Repita o `install` para `painel-sessoes`, `processos` e `kit-design`. Reinicie o app.
-2. O kit no projeto, na raiz do repositório:
+   Repita o `install` para `painel-sessoes`, `processos` e `kit-design`: o passo 2 liga os quatro no projeto. Os dois últimos se desligam por projeto, sem desinstalar ([o que ligar e desligar](docs/guia/ligar-e-desligar.md)).
+2. O kit no projeto, na raiz do repositório (o `--simular` mostra o que faria; tire-o para gravar):
    ```bash
    npx -y github:ichikawacraice/kit-de-orquestracao adotar --simular
    ```
-   Sem `--simular`, grava. Projeto novo, sem `CLAUDE.md`: use `iniciar` no lugar de `adotar` (o `iniciar` não tem `--simular`). Com front: acrescente `--design <pasta do front>`.
-3. Confira:
-   ```bash
-   npx -y github:ichikawacraice/kit-de-orquestracao doutor
-   ```
-4. Numa sessão do projeto, declare a orquestradora: *"você é a orquestradora"*. Ela se renomeia `🎛 orquestradora — <projeto>` e passa a abrir as donas.
+   Projeto sem `CLAUDE.md`: `iniciar` no lugar de `adotar`. Depois confira com `doutor` no lugar de `adotar --simular`.
+3. Numa sessão do projeto, diga *"você é a orquestradora"*. Ela se renomeia `🎛 orquestradora — <projeto>` e passa a abrir as donas.
 
-Os outros comandos do CLI (`atualizar`, `remover`) estão em `npx -y github:ichikawacraice/kit-de-orquestracao ajuda`.
+O passo a passo completo, com o que cada comando grava, está em [O primeiro dia](docs/guia/primeiro-dia.md).
 
-## Atualizar os plugins na máquina
-
-`atualizar-plugins [--seco] [--json]` (no `bin/` do plugin `orquestracao`) atualiza o clone do marketplace e os plugins do kit instalados em `user`; o app precisa reiniciar para valer.
-
-**O plugin `design` virou `kit-design`.** O plugin `design` da Anthropic, instalado pela conta, tem o mesmo nome e escondia os agentes e as skills do kit. Quem já tem o kit: o `atualizar-plugins` instala o `kit-design` com as opções do `design` (e desligado, se ele estava) e só então desinstala o velho; em cada projeto, o `kit atualizar` troca `design@kit-de-orquestracao` por `kit-design@kit-de-orquestracao` no `enabledPlugins` do `.claude/settings.json` (o `settings.local.json` é seu: ele só avisa). Até lá, as travas e o gate leem os dois nomes. A seção `design` do `.claude/kit.json` não muda.
-
-## Comportamentos do CLI que surpreendem
-
-- **Bloco renomeado aparece duas vezes.** Quando uma versão nova do kit renomeia um bloco do `CLAUDE.md`, o `kit atualizar` não apaga o antigo (pode ter texto seu): avisa `o bloco X saiu do kit; deixei como está` e acrescenta o novo no fim (`novo: Y`). Os dois ficam até você apagar o antigo.
-- **Instalação interrompida.** Se o `kit iniciar`/`adotar` morrer no meio, o `kit adotar` reconhece (`.kit-tmp` órfão ou `test` que já é o gate), conclui e grava o lock. O `remover` depois declara que o texto original dos JSON não foi guardado.
-- **Laço no gate.** O gate põe `KIT_GATE_DENTRO` (a raiz do worktree) no ambiente da suíte; um gate do mesmo worktree que nasce com ela (o `comandoCompleto` chamou `npm test`, direta ou indiretamente) recusa com exit 2 em vez de esperar a própria vez. O `kit doutor` ainda avisa pelo texto do comando, que pode errar.
-- **Flag desconhecida** em qualquer subcomando: exit 2 com a lista das válidas, sem gravar nada.
-- **`test` do projeto.** Sem `--trocar-test` o `npm test` continua sendo o seu; o `kit doutor` lembra a pendência, e `kit atualizar --trocar-test` faz a troca depois.
-- **`gate.comandoCompleto`** não pode chamar `npm test`/`pnpm test`/`yarn test`: o `test` é o gate, e o gate chamando o `test` esperaria a própria vez para sempre. Aponte para o script da suíte (ex.: `npm run test:suite`).
+**Quem já tinha o kit: o plugin `design` virou `kit-design`.** O plugin `design` da Anthropic tem o mesmo nome e escondia os agentes e as skills do kit. O `atualizar-plugins` instala o `kit-design` com as opções do `design` (e desligado, se ele estava) e só então desinstala o velho; em cada projeto, o `kit atualizar` troca `design@kit-de-orquestracao` por `kit-design@kit-de-orquestracao` no `enabledPlugins` do `.claude/settings.json` (o `settings.local.json` é seu: ele só avisa). Até lá, as travas e o gate leem os dois nomes. A seção `design` do `.claude/kit.json` não muda.
 
 ## Para quem mexe no kit
 
-Regras do código e comandos em [`CLAUDE.md`](CLAUDE.md). Gate: `npm test`; teste isolado: `node gate/com-fichas.mjs -- node --test <arquivo>`; testes do pane: `claude plugin test plugins/painel-sessoes`. Estudos, planos e o diário em [`docs/`](docs/README.md).
+Regras do código e comandos em [`CLAUDE.md`](CLAUDE.md). O manual das sessões está em [`plugins/orquestracao/pool/protocolo.md`](plugins/orquestracao/pool/protocolo.md) e as decisões de desenho nos [ADRs](docs/adr/README.md). Estudos, planos e o diário em [`docs/`](docs/README.md).
