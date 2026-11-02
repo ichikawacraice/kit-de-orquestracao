@@ -14,9 +14,11 @@ npx -y github:ichikawacraice/kit-de-orquestracao doutor
 | O `/painel` não existe, ou nada do kit acontece | Plugin instalado depois que o app abriu | Reinicie o app |
 | `kit adotar` não grava nada e lista conflitos | Arquivo seu que difere do que o kit poria; o `adotar` não sobrescreve | Resolva cada conflito à mão, ou grave o resto com `--parcial` |
 | `kit adotar` recusa: não há `CLAUDE.md` | Projeto novo | Use `kit iniciar` |
-| `doutor`: plugin habilitado no projeto: não | `enabledPlugins` do projeto sem o `orquestracao`, ou com `false` | Ponha `"orquestracao@kit-de-orquestracao": true` no `.claude/settings.json` (e confira o `settings.local.json`, que vence) |
+| `doutor`: plugin habilitado no projeto: não | `enabledPlugins` do projeto sem o `orquestracao`, ou com `false` | Ponha `"orquestracao@ichikawa-kit": true` no `.claude/settings.json` (e confira o `settings.local.json`, que vence) |
 | `doutor`: versão do lock diferente da do CLI | O kit no projeto é de uma versão anterior | `kit atualizar --simular`, depois sem a flag |
 | `doutor` lembra o `test` | O `npm test` ainda é o seu, não o gate | `kit atualizar --trocar-test` quando quiser trocar |
+| <a id="nome-antigo"></a>`doutor` ou `atualizar-plugins`: plugins com o nome antigo do marketplace | O kit foi instalado quando o marketplace se chamava `kit-de-orquestracao`; o `marketplace update` não troca o nome | `kit migrar-marketplace` (sem flag mostra; `--aplicar` troca, com backup), depois reinicie o app. Para voltar: `--desfazer <pasta do backup>`, que ele mostra no fim |
+| `doutor`: o `.claude/settings.json` declara o marketplace com o nome antigo | Projeto adotado antes da troca de nome | `kit atualizar` troca as chaves, guardando o `false` de quem desligou |
 
 ## No trabalho
 
@@ -43,4 +45,4 @@ No projeto, veja o que sai e depois tire:
 npx -y github:ichikawacraice/kit-de-orquestracao remover --simular
 ```
 
-O `remover` tira só o que o kit pôs e você não editou. Os plugins saem da conta com `claude plugin uninstall <plugin>@kit-de-orquestracao`. O estado das sessões (painel, contadores) fica em `~/.claude/orquestracao/`; apague a pasta se não for usar mais o kit em projeto nenhum.
+O `remover` tira só o que o kit pôs e você não editou. Os plugins saem da conta com `claude plugin uninstall <plugin>@ichikawa-kit`. O estado das sessões (painel, contadores) fica em `~/.claude/orquestracao/`; apague a pasta se não for usar mais o kit em projeto nenhum.

@@ -58,6 +58,10 @@ describe('o kit sai sem nome pessoal', () => {
     assert.ok(CASA.test(['', 'Users', 'maria', 'Developer'].join('/')) && CASA.test(['', 'home', 'maria'].join('/')));
     assert.ok(!CASA.test('/Users/x/Developer') && !CASA.test("'/home/teste'"));
     assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`npx -y github:${amostra}/kit-de-orquestracao`)), []);
+    // o nome do kit passa nas duas formas; o sobrenome dele sozinho, não
+    const marca = Buffer.from('aWNoaWthd2E=', 'base64').toString();
+    assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`orquestracao@${marca}-kit e ${marca[0].toUpperCase()}${marca.slice(1)}'s Kit`)), []);
+    assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`o ${marca} disse`)), [marca]);
   });
 
   it('nenhum arquivo publicado cita nome do autor nem pasta pessoal', () => {

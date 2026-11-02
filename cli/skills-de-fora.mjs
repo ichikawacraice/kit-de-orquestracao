@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
-import { MARKETPLACE } from './pacote.mjs';
+import { ehDoKit } from './pacote.mjs';
 
 const CATALOGO = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins', 'orquestracao', 'skills-de-fora.json');
 const lerJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8').replace(/^﻿/, '')); } catch { return null; } };
@@ -18,7 +18,7 @@ export function pluginsPresentes(home) {
   const presentes = new Map();
   const por = (nome, entrada) => { if (!presentes.has(nome)) presentes.set(nome, []); presentes.get(nome).push(entrada); };
   for (const id of Object.keys(lerJson(join(home, '.claude', 'plugins', 'installed_plugins.json'))?.plugins ?? {})) {
-    if (!id.endsWith(`@${MARKETPLACE}`)) por(id.split('@')[0], { origem: 'cli', id });
+    if (!ehDoKit(id)) por(id.split('@')[0], { origem: 'cli', id });
   }
   const sessoes = join(home, 'Library', 'Application Support', 'Claude', 'local-agent-mode-sessions');
   let maisRecente = null;

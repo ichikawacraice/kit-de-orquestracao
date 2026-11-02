@@ -6,8 +6,8 @@ Cada trava do kit existe porque a regra só no texto já foi esquecida. Desligar
 
 | Jeito | Vale para | Como |
 |---|---|---|
-| **Plugin inteiro, num projeto** | Você ou o time | `"enabledPlugins": { "<plugin>@kit-de-orquestracao": false }` em `.claude/settings.local.json` (só você, não vai para o git) ou em `.claude/settings.json` (o time). A camada mais próxima vence: `settings.local.json` > `settings.json` do projeto > `~/.claude/settings.json` |
-| **Plugin inteiro, na conta** | Você, em todo projeto | `claude plugin disable <plugin>@kit-de-orquestracao` (volta com `enable`) |
+| **Plugin inteiro, num projeto** | Você ou o time | `"enabledPlugins": { "<plugin>@ichikawa-kit": false }` em `.claude/settings.local.json` (só você, não vai para o git) ou em `.claude/settings.json` (o time). A camada mais próxima vence: `settings.local.json` > `settings.json` do projeto > `~/.claude/settings.json` |
+| **Plugin inteiro, na conta** | Você, em todo projeto | `claude plugin disable <plugin>@ichikawa-kit` (volta com `enable`) |
 | **Regra ou opção, no projeto** | O time | `.claude/kit.json` do projeto (seções `guarda`, `documentos`, `design`). É o caminho principal: fica no git e vale para todos |
 | **Opção do plugin, na conta** | Você | `/plugin` no terminal do Claude Code, ou `pluginConfigs` do `~/.claude/settings.json`. O app desktop não mostra essas opções |
 

@@ -111,10 +111,10 @@ export function julgarReinicio({ sessoes, fichas, ps, euPid = new Set() }) {
 const RELEASE = /^(\d+)\.(\d+)\.(\d+)$/;
 const compararVersao = (a, b) => { const x = RELEASE.exec(a).slice(1).map(Number); const y = RELEASE.exec(b).slice(1).map(Number); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; };
 
-// F209: os plugins do kit (o marketplace `kit-de-orquestracao`, escopo user). O app carrega os plugins quando abre: plugin com
+// F209: os plugins do kit (o marketplace `ichikawa-kit`, ou `kit-de-orquestracao` na conta que não migrou — F344; escopo user). O app carrega os plugins quando abre: plugin com
 // `lastUpdated` depois do início do processo do app ainda não vale. "Para baixar" é a versão do `main` publicado mais nova que a
 // instalada, lida por `git fetch` no clone do marketplace (o FETCH_HEAD, ou o `origin/main` do clone se o fetch falhar; a árvore do clone não anda), com cache de 30 min.
-const MARKETPLACE = 'kit-de-orquestracao';
+const MARKETPLACES = ['ichikawa-kit', 'kit-de-orquestracao']; // o nome novo primeiro: com os dois instalados, vale o novo
 export const KIT_PUBLICADO_VALE_MS = 30 * 60_000;
 const GIT_TIMEOUT_MS = 20_000;
 
@@ -125,10 +125,12 @@ const RENOMEADOS = { design: 'kit-design' };
 export function lerInstaladosDoKit(home) {
   let reg = null;
   try { reg = JSON.parse(readFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), 'utf8')); } catch { return []; }
+  const ids = Object.keys(reg?.plugins ?? {});
+  const marketplace = MARKETPLACES.find((m) => ids.some((id) => id.endsWith(`@${m}`))) ?? MARKETPLACES[0];
   return Object.entries(reg?.plugins ?? {}).flatMap(([id, lista]) => {
-    if (!id.endsWith(`@${MARKETPLACE}`) || !Array.isArray(lista)) return [];
+    if (!id.endsWith(`@${marketplace}`) || !Array.isArray(lista)) return [];
     const user = lista.find((e) => e?.scope === 'user' && typeof e.version === 'string');
-    return user ? [{ nome: id.slice(0, -MARKETPLACE.length - 1), versao: user.version, lastUpdated: user.lastUpdated ?? null }] : [];
+    return user ? [{ nome: id.slice(0, -marketplace.length - 1), versao: user.version, lastUpdated: user.lastUpdated ?? null, marketplace }] : [];
   });
 }
 
@@ -180,7 +182,7 @@ function conferirPublicado({ clone, cache, agoraMs, env }) {
 export function lerParaBaixar({ home, cache, agoraMs = Date.now(), env = process.env }) {
   const instalados = lerInstaladosDoKit(home);
   if (!instalados.length) return [];
-  const clone = env.KIT_MARKETPLACE_DIR || join(home, '.claude', 'plugins', 'marketplaces', MARKETPLACE);
+  const clone = env.KIT_MARKETPLACE_DIR || join(home, '.claude', 'plugins', 'marketplaces', instalados[0].marketplace);
   let publicado;
   try {
     const c = JSON.parse(readFileSync(cache, 'utf8'));

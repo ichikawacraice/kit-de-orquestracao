@@ -21,6 +21,7 @@ Abaixo, `kit` abrevia essa linha.
 | `kit doutor` | Confere o plugin instalado e ligado no projeto, hooks duplicados, o `kit.json`, as versões do Node, do git e do lock, e os arquivos do kit contra o lock. Não grava nada |
 | `kit atualizar`<a id="kit-atualizar"></a> | Troca pela versão nova o que você não editou; o que você editou vira conflito para você decidir |
 | `kit remover` | Tira o que o kit pôs: blocos do `CLAUDE.md`, chaves dos JSON e arquivos cujo hash ainda bate com o lock. O que você editou fica |
+| `kit migrar-marketplace`<a id="kit-migrar-marketplace"></a> | Para quem instalou o kit antes de ele se chamar `ichikawa-kit`: troca as instalações do marketplace `kit-de-orquestracao` na conta e nos projetos, guardando o liga/desliga, as opções e os dados dos plugins. Roda de qualquer pasta. Sem `--aplicar` só mostra; com `--aplicar` faz backup antes, e falha no meio desfaz sozinha. Depois, reinicie o app ([Problemas comuns](problemas-comuns.md#nome-antigo)) |
 
 As flags:
 
@@ -31,6 +32,9 @@ As flags:
 | `--design <pasta do front>` | `iniciar`, `adotar` | Projeto com tela: modelos de design na pasta e o plugin Impeccable recomendado no `settings.json`, com a telemetria dele cortada |
 | `--trocar-test` | `adotar`, `atualizar` | O `npm test` passa a ser o gate; a sua suíte vai para `test:projeto`. Sem ela, o `test` continua o seu e o `doutor` lembra a pendência |
 | `--parcial` | `adotar` | Com conflito, grava o resto (sem ela, conflito não grava nada) |
+| `--aplicar` | `migrar-marketplace` | Grava a troca (sem ela, só mostra) |
+| `--projeto <pasta>` | `migrar-marketplace` | Inclui um projeto que ele não acharia sozinho (ele já olha os projetos que o Claude Code conhece). Repete-se |
+| `--desfazer <pasta do backup>` | `migrar-marketplace` | Volta ao estado de antes da troca; a pasta sai no fim do `--aplicar` |
 
 Flag desconhecida, em qualquer subcomando, sai com código 2 e a lista das válidas, sem gravar nada.
 

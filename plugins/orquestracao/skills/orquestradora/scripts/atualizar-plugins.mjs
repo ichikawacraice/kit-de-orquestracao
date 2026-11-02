@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 // `atualizar-plugins [--seco] [--json]` (F151): põe os plugins do kit (escopo user) na versão publicada no marketplace.
 // Sequência: lista os instalados → `marketplace update` → confere que o clone está no commit do GitHub (uma nova tentativa) →
-// `plugin update <nome>@kit-de-orquestracao -s user` onde a versão difere → lista de novo e confere que a instalada é a publicada (senão `não pegou`, exit 1). Cópia `project` não se mexe; plugin
+// `plugin update <nome>@ichikawa-kit -s user` onde a versão difere → lista de novo e confere que a instalada é a publicada (senão `não pegou`, exit 1). Cópia `project` não se mexe; plugin
 // que falta não se instala. Plugin renomeado (F332: `design` → `kit-design`): o velho no escopo user dá lugar ao novo, instalado com as
 // opções do velho (`--config`, só as que o manifesto novo declara) e desligado se a conta desligava o velho; só com o novo dentro o velho sai. Ambiente: CLAUDE_BIN, GIT_BIN (trocam os executáveis), KIT_MARKETPLACE_DIR (o clone, senão
-// ~/.claude/plugins/marketplaces/kit-de-orquestracao), KIT_UPDATE_TIMEOUT_MS (marketplace e update; padrão 180 s).
+// ~/.claude/plugins/marketplaces/<marketplace>), KIT_UPDATE_TIMEOUT_MS (marketplace e update; padrão 180 s). Conta que ainda tem os plugins com o
+// nome antigo do marketplace (`kit-de-orquestracao`, F344) é atualizada nele, com um aviso para rodar o `kit migrar-marketplace`.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const MARKETPLACE = 'kit-de-orquestracao';
+/** O nome do marketplace e o que ele teve até o F344 (o `marketplace update` não renomeia o registro de quem já o tinha). */
+const MARKETPLACE_NOVO = 'ichikawa-kit';
+const MARKETPLACE_ANTIGO = 'kit-de-orquestracao';
+let MARKETPLACE = MARKETPLACE_NOVO;
 const CLAUDE = process.env.CLAUDE_BIN || 'claude';
 const GIT = process.env.GIT_BIN || 'git';
-const CLONE = process.env.KIT_MARKETPLACE_DIR || join(homedir(), '.claude', 'plugins', 'marketplaces', MARKETPLACE);
+let CLONE = '';
+const cloneDe = (marketplace) => process.env.KIT_MARKETPLACE_DIR || join(homedir(), '.claude', 'plugins', 'marketplaces', marketplace);
 const LONGO_MS = Number(process.env.KIT_UPDATE_TIMEOUT_MS) || 180_000;
 const CURTO_MS = 30_000;
 /** Plugin do kit que mudou de nome: velho → novo (o `design` da Anthropic, instalado pela conta, ofuscava o do kit). */
@@ -32,12 +37,19 @@ function rodar(bin, args, limite) {
 const claude = (args, limite = CURTO_MS) => rodar(CLAUDE, args, limite);
 const git = (args) => rodar(GIT, args, CURTO_MS);
 
-function instalados() {
+function listar() {
   const r = claude(['plugin', 'list', '--json']);
   if (r.status !== 0) throw new Error(`claude plugin list falhou: ${r.err || `exit ${r.status}`}`);
   const lista = JSON.parse(r.out);
   if (!Array.isArray(lista)) throw new Error('claude plugin list --json não devolveu uma lista');
-  return lista.filter((p) => String(p?.id ?? '').endsWith(`@${MARKETPLACE}`));
+  return lista;
+}
+const instalados = (lista = listar()) => lista.filter((p) => String(p?.id ?? '').endsWith(`@${MARKETPLACE}`));
+/** O nome com que a conta tem os plugins do kit: o novo, ou o antigo enquanto ela não migrou (nenhum dos dois: o novo). */
+function escolherMarketplace(lista) {
+  const tem = (m) => lista.some((p) => String(p?.id ?? '').endsWith(`@${m}`));
+  MARKETPLACE = !tem(MARKETPLACE_NOVO) && tem(MARKETPLACE_ANTIGO) ? MARKETPLACE_ANTIGO : MARKETPLACE_NOVO;
+  CLONE = cloneDe(MARKETPLACE);
 }
 const lerJson = (arq) => JSON.parse(readFileSync(arq, 'utf8'));
 const headDoClone = () => {
@@ -96,7 +108,9 @@ function main(argv) {
   const json = argv.includes('--json');
   const desconhecida = argv.find((a) => a !== '--seco' && a !== '--json');
   if (desconhecida) throw new Error('uso: atualizar-plugins [--seco] [--json]');
-  const antes = instalados();
+  const lista = listar();
+  escolherMarketplace(lista);
+  const antes = instalados(lista);
   const clone = atualizarClone();
   const publicados = lerJson(join(CLONE, '.claude-plugin', 'marketplace.json')).plugins.map((p) => p.name);
   const versaoPublicada = (nome) => lerJson(join(CLONE, 'plugins', nome, '.claude-plugin', 'plugin.json')).version;
@@ -154,7 +168,8 @@ function main(argv) {
       p.mensagem = p.depois === null ? `instalada sumiu da lista, publicada ${p.publicado}` : `instalada ficou em ${p.depois}, publicada ${p.publicado}`;
     }
   }
-  const resultado = { clone, plugins, reiniciar: atualizou };
+  const aviso = MARKETPLACE === MARKETPLACE_ANTIGO ? `os plugins estão com o nome antigo do marketplace (${MARKETPLACE_ANTIGO}); o nome agora é ${MARKETPLACE_NOVO} — rode \`npx -y github:ichikawacraice/kit-de-orquestracao migrar-marketplace\`` : undefined;
+  const resultado = { clone, plugins, reiniciar: atualizou, ...(aviso ? { aviso } : {}) };
   if (json) process.stdout.write(`${JSON.stringify(resultado, null, 2)}\n`);
   else {
     const larg = Math.max(...plugins.map((p) => p.id.split('@')[0].length));
@@ -171,6 +186,7 @@ function main(argv) {
       process.stdout.write(`${nome}  ${quadro}\n`);
     }
     const faltaAtualizar = plugins.some((p) => /^(atualizaria|renomearia|desinstalaria)/.test(p.acao));
+    if (aviso) process.stdout.write(`aviso: ${aviso}\n`);
     process.stdout.write(atualizou ? 'Reinicie o app para valer.\n' : faltaAtualizar ? 'Rode sem --seco para atualizar.\n' : 'Nada a atualizar.\n');
   }
   return falhou ? 1 : 0;

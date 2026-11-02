@@ -4,7 +4,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { carregarConfig } from '../gate/config.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, desfazerOperador, esqueletoDe, foraDoProjeto, fraseDoKit, gitDirComum, lerTexto, semBom, semOsBlocos, serializar } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, MARKETPLACE, MARKETPLACE_ANTIGO, desfazerOperador, esqueletoDe, foraDoProjeto, fraseDoKit, gitDirComum, lerTexto, semBom, semOsBlocos, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ehObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -91,7 +91,9 @@ export function remover({ destino, simular = false }) {
       s.hooks.PreToolUse = s.hooks.PreToolUse.filter((g) => !(g.hooks && g.hooks.length === 0));
       tirou('hook da guarda (settings.json)');
     }
-    if (cs.marketplace && s.extraKnownMarketplaces?.[MARKETPLACE]) { delete s.extraKnownMarketplaces[MARKETPLACE]; tirou('marketplace do kit (settings.json)'); }
+    for (const nome of cs.marketplace ? [MARKETPLACE, MARKETPLACE_ANTIGO] : []) {
+      if (s.extraKnownMarketplaces?.[nome]) { delete s.extraKnownMarketplaces[nome]; tirou('marketplace do kit (settings.json)'); }
+    }
     for (const nome of cs.marketplaces ?? []) {
       if (s.extraKnownMarketplaces?.[nome] !== undefined) { delete s.extraKnownMarketplaces[nome]; tirou(`marketplace ${nome} (settings.json)`); }
     }

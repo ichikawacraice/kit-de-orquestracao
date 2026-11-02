@@ -61,8 +61,8 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       assert.equal(hooks.length, 1);
       assert.equal(hooks[0].matcher, 'Bash');
       assert.equal(hooks[0].hooks[0].command, 'node "$CLAUDE_PROJECT_DIR/scripts/kit/guarda-de-operacao.mjs"');
-      assert.equal(s.extraKnownMarketplaces['kit-de-orquestracao'].source.repo, 'ichikawacraice/kit-de-orquestracao');
-      assert.deepEqual(s.enabledPlugins, { 'orquestracao@kit-de-orquestracao': true, 'painel-sessoes@kit-de-orquestracao': true, 'processos@kit-de-orquestracao': true, 'kit-design@kit-de-orquestracao': true });
+      assert.equal(s.extraKnownMarketplaces['ichikawa-kit'].source.repo, 'ichikawacraice/kit-de-orquestracao');
+      assert.deepEqual(s.enabledPlugins, { 'orquestracao@ichikawa-kit': true, 'painel-sessoes@ichikawa-kit': true, 'processos@ichikawa-kit': true, 'kit-design@ichikawa-kit': true });
     } finally { limpar(d); }
   });
 
@@ -176,7 +176,7 @@ describe('kit iniciar — o que ele recusa e o que preserva', () => {
       assert.deepEqual(s.permissions, { allow: ['Bash(ls)'] });
       assert.equal(s.hooks.PreToolUse.length, 2);
       assert.equal(s.enabledPlugins['outro@m'], true);
-      assert.equal(s.enabledPlugins['orquestracao@kit-de-orquestracao'], true);
+      assert.equal(s.enabledPlugins['orquestracao@ichikawa-kit'], true);
     } finally { limpar(d); }
   });
 });
@@ -200,7 +200,7 @@ describe('kit doutor: lê o lock (o diagnóstico completo está em k7.test.mjs)'
       assert.ok(n >= 10, `poucos arquivos no lock: ${n}`);
       // o doutor completo exige o plugin instalado: planta o registro dele na casa temporária
       mkdirSync(join(casa, '.claude', 'plugins'), { recursive: true });
-      writeFileSync(join(casa, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user' }], 'superpowers@claude-plugins-official': [{ scope: 'user' }] } }));
+      writeFileSync(join(casa, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@ichikawa-kit': [{ scope: 'user' }], 'superpowers@claude-plugins-official': [{ scope: 'user' }] } }));
       writeFileSync(join(casa, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'superpowers@claude-plugins-official': true } }));
       const ok = kit(d, 'doutor');
       assert.equal(ok.status, 0, ok.stdout + ok.stderr);

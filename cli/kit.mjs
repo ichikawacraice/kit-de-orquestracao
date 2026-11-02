@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// CLI do kit: --version, ajuda, iniciar, adotar, atualizar, doutor e remover.
+// CLI do kit: --version, ajuda, iniciar, adotar, atualizar, doutor, remover e migrar-marketplace.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,12 +7,13 @@ import { adotar } from './adotar.mjs';
 import { atualizar } from './atualizar.mjs';
 import { doutor } from './doutor.mjs';
 import { iniciar } from './iniciar.mjs';
+import { migrarMarketplace } from './migrar-marketplace.mjs';
 import { remover } from './remover.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const versao = () => JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')).version;
 
-const AJUDA = `kit — orquestração de sessões do Claude Code
+const AJUDA = `kit — Ichikawa's Kit: orquestração de sessões do Claude Code
 
 uso:
   kit --version                              mostra a versão
@@ -26,16 +27,19 @@ uso:
   kit atualizar [--simular] [--trocar-test]  troca pela versão nova o que você não editou; o resto vira conflito
   kit doutor                                 confere plugin, hooks, kit.json, skills de fora, versões e o disco com o lock
   kit remover [--simular]                    tira o que o kit pôs (blocos, chaves e arquivos cujo hash bate)
+  kit migrar-marketplace [--aplicar] [--projeto <pasta>]… [--desfazer <backup>]
+                                             troca as instalações do marketplace kit-de-orquestracao pelo ichikawa-kit,
+                                             na conta e nos projetos (seco sem --aplicar; com backup; falha desfaz sozinha)
 `;
 
-const FLAGS = { iniciar: ['--perfil', '--design'], adotar: ['--simular', '--trocar-test', '--parcial', '--perfil', '--design'], atualizar: ['--simular', '--trocar-test'], remover: ['--simular'], doutor: [] };
+const FLAGS = { iniciar: ['--perfil', '--design'], adotar: ['--simular', '--trocar-test', '--parcial', '--perfil', '--design'], atualizar: ['--simular', '--trocar-test'], remover: ['--simular'], doutor: [], 'migrar-marketplace': ['--aplicar', '--projeto', '--desfazer'] };
 
 /** Flag que o subcomando não conhece → mensagem com a lista das válidas (uma flag errada não pode virar adoção calada). */
 function flagDesconhecida(cmd, argv) {
   const validas = FLAGS[cmd];
   if (!validas) return null;
   const rest = argv.slice(1);
-  const ruins = rest.filter((a, i) => a.startsWith('-') && !validas.includes(a) && !(['--perfil', '--design'].includes(rest[i - 1]) && validas.includes(rest[i - 1])));
+  const ruins = rest.filter((a, i) => a.startsWith('-') && !validas.includes(a) && !(['--perfil', '--design', '--projeto', '--desfazer'].includes(rest[i - 1]) && validas.includes(rest[i - 1])));
   if (!ruins.length) return null;
   return `kit ${cmd}: flag desconhecida ${ruins.join(', ')} — válidas: ${validas.length ? validas.join(', ') : '(nenhuma)'}\n`;
 }
@@ -69,6 +73,12 @@ function main(argv) {
   if (cmd === 'atualizar') return imprimir(atualizar({ destino, versao: versao(), simular: flag('--simular'), trocarTest: flag('--trocar-test') }));
   if (cmd === 'remover') return imprimir(remover({ destino, simular: flag('--simular') }));
   if (cmd === 'doutor') return imprimir(doutor({ destino, versao: versao() }));
+  if (cmd === 'migrar-marketplace') {
+    const valores = (n) => argv.flatMap((a, i) => (a === n ? [argv[i + 1]] : []));
+    const ruim = ['--projeto', '--desfazer'].find((n) => valores(n).some((v) => v === undefined || v.startsWith('-')));
+    if (ruim) { process.stderr.write(`kit migrar-marketplace: ${ruim} pede uma pasta\n`); return 2; }
+    return imprimir(migrarMarketplace({ aplicarMesmo: flag('--aplicar'), desfazerDe: valores('--desfazer')[0] ?? null, projetos: valores('--projeto') }));
+  }
   process.stderr.write(`kit: comando desconhecido: ${cmd}\n\n${AJUDA}`);
   return 2;
 }

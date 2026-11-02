@@ -1,4 +1,6 @@
-# kit-de-orquestracao
+# Ichikawa's Kit
+
+O marketplace de plugins `ichikawa-kit` (repositório `kit-de-orquestracao`). Cada plugin é opcional: instale só os que for usar.
 
 Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perder o fio. Cada trabalho vira um **item** (`F12`) numa fila; uma **sessão dona** leva o item do plano ao PR; uma **sessão orquestradora** abre as donas, junta os PRs, roda os testes uma vez e mergeia. Travas por hook garantem as regras que não podem depender de memória, o pane `/painel` mostra o estado de tudo e responde às perguntas das sessões, e um teto de núcleos impede que os testes de todas as sessões derrubem a máquina.
 
@@ -28,7 +30,7 @@ Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perd
    claude plugin marketplace add ichikawacraice/kit-de-orquestracao
    ```
    ```bash
-   claude plugin install orquestracao@kit-de-orquestracao
+   claude plugin install orquestracao@ichikawa-kit
    ```
    Repita o `install` para `painel-sessoes`, `processos` e `kit-design`: o passo 2 liga os quatro no projeto. Os dois últimos se desligam por projeto, sem desinstalar ([o que ligar e desligar](docs/guia/ligar-e-desligar.md)).
 2. O kit no projeto, na raiz do repositório (o `--simular` mostra o que faria; tire-o para gravar):
@@ -40,7 +42,13 @@ Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perd
 
 O passo a passo completo, com o que cada comando grava, está em [O primeiro dia](docs/guia/primeiro-dia.md).
 
-**Quem já tinha o kit: o plugin `design` virou `kit-design`.** O plugin `design` da Anthropic tem o mesmo nome e escondia os agentes e as skills do kit. O `atualizar-plugins` instala o `kit-design` com as opções do `design` (e desligado, se ele estava) e só então desinstala o velho; em cada projeto, o `kit atualizar` troca `design@kit-de-orquestracao` por `kit-design@kit-de-orquestracao` no `enabledPlugins` do `.claude/settings.json` (o `settings.local.json` é seu: ele só avisa). Até lá, as travas e o gate leem os dois nomes. A seção `design` do `.claude/kit.json` não muda.
+**Quem já tinha o kit: o marketplace agora se chama `ichikawa-kit`.** Antes era `kit-de-orquestracao`, e o `claude plugin marketplace update` não troca o nome de quem já o tinha: os plugins seguem funcionando com o nome antigo, mas fora do caminho dos novos. Troque uma vez por máquina (mostra o que faria; com `--aplicar` faz, com backup), e reinicie o app:
+```bash
+npx -y github:ichikawacraice/kit-de-orquestracao migrar-marketplace
+```
+Em cada projeto, o `kit atualizar` troca o nome no `.claude/settings.json`. Detalhes em [Comandos](docs/guia/comandos.md#kit-migrar-marketplace).
+
+**O plugin `design` virou `kit-design`.** O plugin `design` da Anthropic tem o mesmo nome e escondia os agentes e as skills do kit. O `atualizar-plugins` instala o `kit-design` com as opções do `design` (e desligado, se ele estava) e só então desinstala o velho; em cada projeto, o `kit atualizar` troca `design@kit-de-orquestracao` por `kit-design@ichikawa-kit` no `enabledPlugins` do `.claude/settings.json` (o `settings.local.json` é seu: ele só avisa). Até lá, as travas e o gate leem os dois nomes. A seção `design` do `.claude/kit.json` não muda.
 
 ## Para quem mexe no kit
 
