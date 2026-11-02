@@ -620,6 +620,59 @@ caso('F66.1 symlink que leva para fora da pasta de revisões recusa com o motivo
   igual(/não grava arquivo do projeto/.test(motivo), true, 'src/a.ts: motivo genérico');
   igual(ultimo(), 'recusou', 'src/a.ts: log');
 }));
+// F322: o projeto declara em `design.designers` do kit.json quais designers de plugin contam como o do
+// kit — só na pasta de revisões, com a mesma cerca; sem curinga e sem a chave nada muda.
+const kitDesign = (design) => { mkdirSync(join(REPO, '.claude'), { recursive: true }); writeFileSync(join(REPO, '.claude', 'kit.json'), JSON.stringify({ design })); };
+caso('F322.1 designer de plugin declarado grava na pasta de revisões e só nela', () => comRepo(() => {
+  igual(existsSync(LISTA()), false, 'precondição: sem lista');
+  kitDesign({});
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('wicomm:designer')))), 'deny', 'precondição: sem a chave, wicomm:designer é negado');
+  kitDesign({ designers: ['wicomm:designer'] });
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('wicomm:designer'))), null, 'na pasta padrão');
+  igual(log().at(-1)[3], 'liberado-por-papel', 'log');
+  for (const p of [`${REPO}/src/a.ts`, `${REPO}/.claude/kit.json`, `${REPO}/${REV}/../../src/a.ts`]) {
+    igual(decisao(rodar(SN, editar(p, sub('wicomm:designer')))), 'deny', `fora: ${p}`);
+  }
+  kitDesign({ revisoes: 'docs/ux', designers: ['wicomm:designer'] });
+  igual(rodar(SN, editar(`${REPO}/docs/ux/a.md`, sub('wicomm:designer'))), null, 'design.revisoes manda');
+  igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('wicomm:designer')))), 'deny', 'o padrão deixa de valer');
+}));
+caso('F322.2 só o tipo declarado, exato: curinga e outro plugin seguem recusados', () => comRepo(() => {
+  kitDesign({ designers: ['wicomm:designer'] });
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('wicomm:designer'))), null, 'precondição: o declarado passa');
+  for (const t of ['outro:designer', 'wicomm:designerX', 'wicomm:executor', 'designer:wicomm']) {
+    igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', t);
+  }
+  kitDesign({ designers: ['*:designer', 'wicomm:*', '*'] });
+  for (const t of ['wicomm:designer', 'outro:designer']) {
+    igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', `curinga não casa: ${t}`);
+  }
+  for (const v of ['wicomm:designer', null, 7, { a: 'wicomm:designer' }]) {
+    kitDesign({ designers: v });
+    igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('wicomm:designer')))), 'deny', `designers=${JSON.stringify(v)} não é lista`);
+  }
+  kitDesign({ designers: ['  wicomm:designer  ', 3, null] });
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('wicomm:designer'))), null, 'item com espaço vale; o que não é texto é ignorado');
+}));
+caso('F322.3 o declarado tem a mesma cerca: valor inválido vale o padrão, symlink não libera', () => comRepo(() => {
+  kitDesign({ revisoes: '../fora', designers: ['wicomm:designer'] });
+  igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('wicomm:designer'))), null, 'inválido vale o padrão');
+  mkdirSync(join(REPO, 'src'), { recursive: true });
+  mkdirSync(join(REPO, REV), { recursive: true });
+  symlinkSync(join(REPO, 'src'), join(REPO, REV, 'link'));
+  const r = rodar(SN, editar(`${REPO}/${REV}/link/a.ts`, sub('wicomm:designer')));
+  igual(decisao(r), 'deny', 'symlink');
+  igual(log().at(-1)[3], 'recusou-symlink', 'log do symlink');
+}));
+caso('F322.4 a declaração vale só para o projeto que a faz', () => comRepo(() => {
+  kitDesign({ designers: ['wicomm:designer'] });
+  const outro = join(homedir(), 'outro-projeto');
+  mkdirSync(join(outro, '.git'), { recursive: true });
+  try {
+    igual(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub('wicomm:designer'))), null, 'precondição: no projeto que declara, passa');
+    igual(decisao(rodar(SN, editar(join(outro, REV, 'a.md'), sub('wicomm:designer')))), 'deny', 'outro projeto');
+  } finally { rmSync(outro, { recursive: true, force: true }); }
+}));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
   const f = transcript([...trabalho(), fala('Pronto, editei.')]);
   const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');
