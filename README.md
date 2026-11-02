@@ -46,7 +46,7 @@ O passo a passo completo, com o que cada comando grava, está em [O primeiro dia
 ```bash
 npx -y github:ichikawacraice/kit-de-orquestracao migrar-marketplace
 ```
-Em cada projeto, o `kit atualizar` troca o nome no `.claude/settings.json`. Detalhes em [Comandos](docs/guia/comandos.md#kit-migrar-marketplace).
+O comando troca também os projetos que o Claude Code conhece. Num projeto que ele não achou, rode o `kit atualizar` depois da troca: ele troca o nome no `.claude/settings.json` (antes da troca da conta, só avisa, porque o app ainda não conheceria o nome novo). Detalhes em [Comandos](docs/guia/comandos.md#kit-migrar-marketplace).
 
 **O plugin `design` virou `kit-design`.** O plugin `design` da Anthropic tem o mesmo nome e escondia os agentes e as skills do kit. O `atualizar-plugins` instala o `kit-design` com as opções do `design` (e desligado, se ele estava) e só então desinstala o velho; em cada projeto, o `kit atualizar` troca `design@kit-de-orquestracao` por `kit-design@ichikawa-kit` no `enabledPlugins` do `.claude/settings.json` (o `settings.local.json` é seu: ele só avisa). Até lá, as travas e o gate leem os dois nomes. A seção `design` do `.claude/kit.json` não muda.
 

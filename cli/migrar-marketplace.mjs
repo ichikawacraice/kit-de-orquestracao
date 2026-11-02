@@ -4,8 +4,8 @@
 // isso antes, refaz pelo CLI e devolve. Seco por padrão; `--aplicar` grava, com backup; falha no meio desfaz sozinha;
 // `--desfazer <pasta>` volta ao backup. Ambiente: CLAUDE_BIN (o executável do `claude`), CLAUDE_CONFIG_DIR, HOME.
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
 import { MARKETPLACE, MARKETPLACE_ANTIGO, REPASSES, REPO_DO_KIT, idNovoDe, repasse, semBom, serializar, trocarNomesDoKit } from './pacote.mjs';
@@ -20,9 +20,15 @@ const nomeDe = (id) => id.split('@')[0];
 const pastaDeDados = (C, id) => join(C, 'plugins', 'data', id.replace(/[^A-Za-z0-9_-]/g, '-'));
 const vazia = (p) => { try { return readdirSync(p).length === 0; } catch { return true; } };
 
+/**
+ * O `claude` da migração. Sem `cwd`, roda numa pasta vazia: o CLI lê também o settings do projeto da pasta de onde roda, e um
+ * projeto que declara o marketplace antigo o manteria registrado depois do `remove --scope user` (medido: o `add` responderia
+ * "already on disk" com o nome antigo).
+ */
 function claudeDe(env) {
   const bin = env.CLAUDE_BIN || 'claude';
-  return (args, cwd) => {
+  const neutra = mkdtempSync(join(tmpdir(), 'kit-migrar-'));
+  return (args, cwd = neutra) => {
     const r = spawnSync(bin, args, { encoding: 'utf8', cwd, env, timeout: LONGO_MS, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'] });
     if (r.error?.code === 'ENOENT') throw new Error(`${bin} não encontrado no PATH`);
     if (r.signal === 'SIGKILL') throw new Error(`${bin} ${args.slice(0, 3).join(' ')} não respondeu em ${LONGO_MS / 1000} s`);
@@ -178,7 +184,8 @@ function aplicar(plano, { C, env, claude }) {
   if (plano.antigo) passo(claude(['plugin', 'marketplace', 'remove', MARKETPLACE_ANTIGO, '--scope', 'user']), `marketplace remove ${MARKETPLACE_ANTIGO}`);
   const conhecidos = () => lerJson(join(C, 'plugins', 'known_marketplaces.json')) ?? {};
   const reinstalar = plano.conta.some((p) => !p.jaInstalado) || plano.doProjeto.some((p) => !p.jaInstalado);
-  if (reinstalar && !conhecidos()[MARKETPLACE]) {
+  // o antigo registrado troca pelo novo mesmo sem plugin a reinstalar (a pessoa não fica sem o marketplace do kit)
+  if ((reinstalar || plano.antigo) && !conhecidos()[MARKETPLACE]) {
     if (!plano.origem) throw new Error(`sem o marketplace ${MARKETPLACE_ANTIGO} registrado, não sei de onde adicionar o ${MARKETPLACE}: rode claude plugin marketplace add ${REPO_DO_KIT}`);
     passo(claude(['plugin', 'marketplace', 'add', plano.origem]), `marketplace add ${plano.origem}`);
     if (!conhecidos()[MARKETPLACE]) throw new Error(`o marketplace add de ${plano.origem} não registrou ${MARKETPLACE} (o publicado ainda tem o nome antigo?)`);
@@ -196,7 +203,9 @@ function aplicar(plano, { C, env, claude }) {
   }
   // `design@` e `kit-design@` do nome antigo no mesmo projeto e escopo viram um install só
   const feitos = new Set();
-  for (const p of plano.doProjeto) {
+  // na cópia dos dados, o que já tinha o nome do plugin novo vem primeiro (como na conta)
+  const porNome = [...plano.doProjeto].sort((a, b) => Number(nomeDe(b.id) === nomeDe(b.idNovo)) - Number(nomeDe(a.id) === nomeDe(a.idNovo)));
+  for (const p of porNome) {
     const chave = `${p.idNovo} ${p.scope} ${p.projectPath}`;
     if (!p.jaInstalado && !feitos.has(chave)) passo(claude(['plugin', 'install', p.idNovo, '-s', p.scope], p.projectPath), `install ${p.idNovo} (${p.projectPath})`);
     feitos.add(chave);

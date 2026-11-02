@@ -37,12 +37,16 @@ if (a[1] === 'list') {
 } else if (a[1] === 'marketplace' && a[2] === 'update') {
   if (!km[a[3]]) { process.stderr.write('not found'); process.exit(1); }
 } else if (a[1] === 'marketplace' && a[2] === 'remove') {
-  const n = a[3]; delete km[n]; if (st.extraKnownMarketplaces) delete st.extraKnownMarketplaces[n];
+  const n = a[3]; if (st.extraKnownMarketplaces) delete st.extraKnownMarketplaces[n];
+  // como o CLI real: com --scope user, o projeto da pasta de onde roda que declara o marketplace o mantém registrado
+  if (a.includes('--scope') && ler(path.join(process.cwd(), '.claude', 'settings.json'), {})?.extraKnownMarketplaces?.[n]) { gravar(ST, st); process.exit(0); }
+  delete km[n];
   for (const id of Object.keys(ip.plugins)) if (id.endsWith('@' + n)) { delete ip.plugins[id]; delete st.enabledPlugins?.[id]; delete st.pluginConfigs?.[id]; fs.rmSync(dados(id), { recursive: true, force: true }); }
   gravar(KM, km); gravar(IP, ip); gravar(ST, st);
 } else if (a[1] === 'marketplace' && a[2] === 'add') {
   const src = a[3]; const nome = ler(path.join(src, '.claude-plugin', 'marketplace.json'), {}).name;
-  if (km[nome]) { process.stdout.write('already on disk'); process.exit(0); }
+  // como o CLI real: a mesma origem já registrada (com qualquer nome) responde "already on disk" e não registra outro
+  if (km[nome] || Object.values(km).some((m) => m.source?.path === src)) { process.stdout.write('already on disk'); process.exit(0); }
   const source = { source: 'directory', path: src };
   km[nome] = { source, installLocation: src }; (st.extraKnownMarketplaces ??= {})[nome] = { source };
   gravar(KM, km); gravar(ST, st);
@@ -113,7 +117,7 @@ function montar({ publicadoComNomeNovo = true, semPublicar = null } = {}) {
   // o "merge": o publicado passa a se chamar ichikawa-kit na mesma origem (`semPublicar`: um plugin instalado que ele não traz)
   const m = lerJ(join(mkVelho, '.claude-plugin', 'marketplace.json'));
   if (publicadoComNomeNovo) gravarJ(join(mkVelho, '.claude-plugin', 'marketplace.json'), { ...m, name: NOVO, plugins: m.plugins.filter((x) => x.name !== semPublicar) });
-  const kit = (...args) => spawnSync(process.execPath, [KIT, 'migrar-marketplace', ...args], { cwd: raiz, env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  const kit = (...args) => spawnSync(process.execPath, [KIT, 'migrar-marketplace', ...args], { cwd: proj, env, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
   return { raiz, home, C, proj, env, kit, log: () => readFileSync(env.FAKE_LOG, 'utf8') };
 }
 
@@ -281,4 +285,13 @@ test('plugin instalado que o publicado não traz: o seco avisa e o --aplicar rec
   assert.match(r.stderr, /processos@ichikawa-kit está instalado e não está no marketplace publicado.*nada foi mexido/);
   assert.deepEqual(retrato(t.home, t.proj), antes);
   assert.ok(!existsSync(join(t.C, 'orquestracao', 'backups')));
+});
+
+test('marketplace antigo registrado sem plugin instalado: troca pelo novo, não só remove', () => {
+  const t = montar();
+  for (const p of ['orquestracao', 'painel-sessoes', 'processos', 'kit-design']) spawnSync(t.env.CLAUDE_BIN, ['plugin', 'uninstall', `${p}@${VELHO}`, '-s', 'user'], { env: t.env, timeout: 20000, killSignal: 'SIGKILL' });
+  spawnSync(t.env.CLAUDE_BIN, ['plugin', 'uninstall', `painel-sessoes@${VELHO}`, '-s', 'project'], { cwd: t.proj, env: t.env, timeout: 20000, killSignal: 'SIGKILL' });
+  const r = t.kit('--aplicar', '--projeto', t.proj);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(Object.keys(lerJ(join(t.C, 'plugins', 'known_marketplaces.json'))), [NOVO]);
 });
