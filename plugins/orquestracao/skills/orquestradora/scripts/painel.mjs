@@ -20,6 +20,7 @@
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_|apelido>   tira a sessão do `com` (o apelido vale se for um só no item)
+//   painel.mjs custo <F> [--seco]   mede o custo do item nos transcripts das sessões dele e grava em `custo` (F348; o `mergear` grava ao fechar); --seco só mostra
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio, `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge; com `maisFatias: true` volta a `execucao` com a dona, F222); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); (F209) traz também `paraAplicar` (plugins do kit instalados depois que o app abriu) e `paraBaixar` (plugins do kit com versão publicada mais nova, por `git fetch` no clone do marketplace com cache de 30 min em batida/kit-publicado.json); exit 0 nos dois casos, 1 só em erro de leitura
@@ -61,6 +62,7 @@ import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, plugin
 import { GATE_PADRAO, montarLote, motivoDeConflito } from './fila-de-merge.mjs';
 import { donoDaFilaVivo, lerFilaOrfa } from './fila-orfa.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
+import { custoDoItem, sessoesDoItem } from './custo-do-item.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
 import * as arq from './perguntas-arquivo.mjs';
 
@@ -106,7 +108,7 @@ const pool = MEU_CLI
 const DA_BATIDA = process.argv[2] === 'batida';
 const DO_REINICIO = process.argv[2] === 'pode-reiniciar';
 const DA_MIGRACAO = process.argv[2] === 'perguntas' && process.argv[3] === 'migrar';
-const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || DA_MIGRACAO || process.argv[2] === 'com' || process.argv[2] === 'fila-de-merge';
+const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || DA_MIGRACAO || ['com', 'fila-de-merge', 'mergear', 'custo'].includes(process.argv[2]);
 const moduloSemDona = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
   ? await import(pathToFileURL(join(HOOKS_DIR, 'sem-dona.mjs')).href)
   : null;
@@ -352,6 +354,8 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     }
   };
   lista('com', ['localId', 'apelido', 'oQue']);
+  if (tem('sessoes') && (!Array.isArray(novo.sessoes) || novo.sessoes.some((s) => !LOCAL_ID.test(String(s))))) throw new Error(`${chave}: sessoes é uma lista de local_<uuid>`);
+  if (tem('custo') && (typeof novo.custo !== 'object' || Array.isArray(novo.custo) || !Number.isFinite(novo.custo.relativo))) throw new Error(`${chave}: custo é {relativo, chamadas, …} (o \`painel custo\` e o \`mergear\` gravam)`);
   lista('fez', ['localId', 'apelido', 'oQue', 'em'], (e) => {
     if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: fez.em "${e.em}" não é data ISO`);
   });
@@ -775,6 +779,9 @@ function comandoCom(args) {
       const [apelido, oQue] = resto;
       if (!textoNaoVazio(apelido) || !textoNaoVazio(oQue)) throw new Error('com add: faltam <apelido> e "<oQue>"');
       nova = com.some((c) => c.localId === localId) ? com.map((c) => (c.localId === localId ? { ...c, apelido, oQue } : c)) : [...com, { localId, apelido, oQue }];
+      // F348: quem passou pelo `com` conta no custo do item, mesmo que saia antes do merge
+      const sessoes = Array.isArray(atual.data.sessoes) ? atual.data.sessoes : [];
+      if (!sessoes.includes(localId)) data.sessoes = [...sessoes, localId];
     } else {
       if (!com.some((c) => c.localId === localId)) throw new Error(`com del: ${localId} não está em com de ${F}`);
       nova = com.filter((c) => c.localId !== localId);
@@ -838,6 +845,28 @@ function projetoDeUmaLinha() {
 }
 const itensVivos = () => new Map([...itensDaFila()].filter(([, d]) => !ETAPAS_FINAIS.has(d?.etapa)));
 
+function medirCusto(d) {
+  if (!d) return null;
+  try {
+    const c = custoDoItem(sessoesDoItem(d), { registro: (id) => regras?.registroDaSessao?.(id, { fresco: true }) ?? null });
+    return c.sessoes.lidas > 0 ? c : null; // nenhum transcript lido: zero não medido não vira número
+  } catch { return null; }
+}
+
+// `custo <F> [--seco]` (F348): mede de novo o custo de um item (o `mergear` mede ao fechar). Mede fora da trava, grava dentro.
+function comandoCusto(args) {
+  const seco = flag(args, '--seco', false);
+  const [F, ...sobra] = args;
+  if (!ID.test(String(F)) || sobra.length) throw new Error('uso: painel.mjs custo <F> [--seco]');
+  const atual = ler('fila', F);
+  if (!atual) throw new Error(`fila/${F} não existe`);
+  const custo = medirCusto(atual.data);
+  if (!custo) throw new Error(`custo: não achei transcript de nenhuma sessão de ${F} nesta máquina`);
+  if (seco) return { item: F, seco: true, custo };
+  comTrava(() => efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { custo }, [VIA_COM]: true }, undefined, new Map())));
+  return { item: F, custo };
+}
+
 // `mergear <PR> <sha> [--seco]`. O GitHub fica FORA da trava (é lento); a escrita no painel, dentro dela.
 function comandoMergear(args) {
   const seco = flag(args, '--seco', false);
@@ -859,16 +888,19 @@ function comandoMergear(args) {
   mergearNoGitHub(pr, c.sha, process.cwd());
   const decisoes = decidir();
   const curto = c.sha.slice(0, 7);
+  // F348: o custo se mede fora da trava (lê transcripts) e só no item que fecha; a falha não segura o merge
+  const custos = new Map(decisoes.filter((x) => x.fecha).map(({ F }) => [F, medirCusto(ler('fila', F)?.data)]));
   const itens = comTrava(() => decisoes.map(({ F, fecha, fatia }) => {
     const atual = ler('fila', F);
     if (!atual || ETAPAS_FINAIS.has(atual.data?.etapa)) return { item: F, fechado: false, agora: null };
     let data;
-    if (fecha) data = { etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], agora: `mergeado, ponta ${curto}` };
+    // F348: a dona e o `com` saem do item, mas ficam em `sessoes` (o `painel custo` mede de novo pelas mesmas sessões)
+    if (fecha) data = { etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], sessoes: [...new Set(sessoesDoItem(atual.data).filter((s) => LOCAL_ID.test(s)))], agora: `mergeado, ponta ${curto}`, ...(custos.get(F) ? { custo: custos.get(F) } : {}) };
     else if (fatia) data = { etapa: 'execucao', agora: `fatia mergeada (PR ${pr}, ponta ${curto}); a dona segue com a próxima` };
     else data = { com: [], agora: 'um PR entrou; falta outro' };
     efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
     // a fatia volta à dona, que parou ao abrir o PR: a orquestradora a avisa pelo `dona` da saída
-    return { item: F, fechado: fecha, ...(fatia ? { fatia, dona: atual.data.donoLocalId ?? null } : {}), agora: data.agora };
+    return { item: F, fechado: fecha, ...(fatia ? { fatia, dona: atual.data.donoLocalId ?? null } : {}), ...(data.custo ? { custo: data.custo.relativo } : {}), agora: data.agora };
   }));
   return { mergeado: true, pr, sha: c.sha, base: c.base, ...(c.aviso ? { aviso: c.aviso } : {}), itens };
 }
@@ -1498,6 +1530,9 @@ function main(argv) {
     case 'mergear':
       saida = comandoMergear(resto);
       break;
+    case 'custo':
+      saida = comandoCusto(resto);
+      break;
     case 'pode-reiniciar': {
       const { saida: r, comoJson } = comandoPodeReiniciar(resto);
       if (!comoJson) { process.stdout.write(textoDoReinicio(r)); return 0; }
@@ -1514,7 +1549,7 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|perguntas|com|soltar|batida|mergear|pode-reiniciar|fila-de-merge|handoffs … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|perguntas|com|soltar|batida|mergear|custo|pode-reiniciar|fila-de-merge|handoffs … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
   return cmd === 'mergear' && saida.recusado ? 1 : 0;

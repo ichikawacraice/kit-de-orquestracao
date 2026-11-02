@@ -32,6 +32,7 @@ Só as skills que quebram uma regra do kit, não as que apenas repetem. Em proje
 | `engineering:architecture` | `processos:spec-driven` | ADR com número reservado, na pasta do projeto e com "Alternativas consideradas" |
 | `engineering:code-review` | `orquestracao:validador` | a revisão antes do PR é por subagente de contexto limpo, só com o que afeta correção |
 | `superpowers:requesting-code-review` | `orquestracao:validador` | idem |
+| `ponytail:ponytail-review` | `orquestracao:validador`, ou a via rápida da revisão no item pequeno | revisa na sessão de quem escreveu, fora do corte e do roteiro do kit |
 | `design:design-critique` | `kit-design:critico-de-ui` | a crítica que conta é a do subagente crítico, com nota de 0 a 30 e teto de recríticas |
 
 Para liberar uma delas num projeto, ponha o nome em `skillsDeFora.liberar` do `.claude/kit.json`. Fora de projeto com o kit, nada é barrado.
@@ -40,6 +41,7 @@ Para liberar uma delas num projeto, ponha o nome em `skillsDeFora.liberar` do `.
 ### O que é absorvido
 A ideia boa de uma skill de fora é reescrita no formato da casa, com crédito à fonte, em vez de copiada. Enquanto a versão da casa não sai, a original segue livre.
 - `design:accessibility-review`, `design:ux-copy` e `design:design-system` vão para o design system do projeto, quando houver (acessibilidade presa aos tokens da base, texto de interface em PT-BR com as regras de mensagem, auditoria de valor solto).
+- `ponytail:ponytail` (do [ponytail](https://github.com/dietrichgebert/ponytail), MIT, Dietrich Gebert): a escada do menor diff já está no protocolo do kit (âncora `menor-diff`), e a skill fica barrada.
 - **O plugin que absorveu declara as substitutas dele**, e elas valem em todo projeto com o kit onde o plugin está ligado, sem repetir nada em cada projeto. O arquivo é `substitutas.json`, na raiz do plugin (ao lado de `skills/`; o `plugin.json` não aceita campo novo: o `claude plugin validate --strict` o reprova):
   ```json
   { "substitutas": { "design:accessibility-review": "acme:acessibilidade" } }
@@ -65,3 +67,5 @@ Os plugins da Anthropic `engineering`, `design`, `data` e `cowork-plugin-managem
 - os instalados pelo CLI: `claude plugin disable <plugin> --scope local` desliga só para você, neste projeto.
 
 A sessão fica mais leve e não sobra skill repetida.
+
+**O `ponytail` ligado num projeto com o kit** o `kit doutor` avisa à parte: os hooks dele (`SessionStart`, `UserPromptSubmit`, `SubagentStart`) injetam as regras em toda sessão, prompt e subagente, por fora da trava, que só pega a skill chamada. O que ele tem de bom o kit já absorveu; desligue-o neste projeto com `claude plugin disable ponytail@ponytail --scope local`.

@@ -3229,3 +3229,27 @@ test('lista longa: a lista encolhe com a última página aberta e Anteriores and
   expect((await ui.find({ key: 'pagina:assumidas' }))?.text).toMatch(/^1–10 de 20(?!\d)/)
   await ui.unmount()
 })
+
+test('F348: o item feito leva o custo gravado pelo mergear; o vivo e o sem custo não', () => {
+  const feitoEm = new Date(AGORA - 3600e3).toISOString()
+  const itens = montarItens(
+    [
+      docF('F1', { etapa: 'feito', feitoEm, custo: { relativo: 12.3, chamadas: 40 } }),
+      docF('F2', { etapa: 'feito', feitoEm }),
+      docF('F3', { etapa: 'execucao', custo: { relativo: 5 } }),
+    ],
+    TEMAS_T,
+    [] as never,
+    undefined,
+    [],
+    AGORA,
+  )
+  const por = Object.fromEntries(itens.map(i => [i.id, i]))
+  expect(itens.length, 'os três itens vieram').toBe(3)
+  expect([por.F1!.custo, por.F2!.custo, por.F3!.custo]).toEqual([12.3, undefined, undefined])
+  const com = cartaoSvg(360, por.F1!, AGORA, { situacao: situacaoDoTeste })
+  expect(com.source, 'o chip no cartão').toMatch(/custo 12,3 M/)
+  expect(com.alt).toMatch(/custo 12,3 M/)
+  expect(cartaoSvg(360, por.F2!, AGORA, { situacao: situacaoDoTeste }).source, 'sem custo gravado, sem chip').not.toMatch(/custo /)
+  expect(D.textoDoCusto(0.04)).toBe('custo 0,0 M')
+})

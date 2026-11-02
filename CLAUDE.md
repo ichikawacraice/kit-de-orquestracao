@@ -30,7 +30,7 @@ Lidos de `.claude/kit.json`:
 <!-- kit:regras-de-operacao v1 -->
 ## Regras de operação
 - **Uma sessão dona por item, do plano ao PR** (ADR 0011): ela planeja, escreve, testa e abre o PR; manual em `plugins/orquestracao/pool/dona.md`.
-- **Revisão por subagente** `orquestracao:validador` de contexto limpo antes do PR: só achados que afetam correção; o leve vai ao PR ou ao `depois` do item, nunca vira item.
+- **Revisão por subagente** `orquestracao:validador` de contexto limpo antes do PR: só achados que afetam correção; o leve vai ao PR ou ao `depois` do item, nunca vira item. Item pequeno dentro do corte do `via-rapida.mjs` se autorrevisa pelo roteiro, com o laudo no PR (`protocolo.md#via-rapida-da-revisao`).
 - **Durante o trabalho, só os testes afetados**; o gate completo (`npm test`) roda uma vez, na fila de merge da orquestradora (`painel fila-de-merge <N>:<sha>…`), sobre a combinação dos PRs. Um gate por vez; gate verde sobre a mesma árvore não se repete.
 - **Ninguém rebaseia por merge alheio:** a fila devolve à dona só o conflito real ou o gate vermelho. Rebase em vez de merge commit quando rebasear; a exceção é o `sync_with_base_branch` do app na devolução por conflito (o merge commit fica só na branch: a fila mergeia por squash).
 - **No máximo 4 donas trabalhando ao mesmo tempo** (3 com a máquina cheia); a orquestradora abre a dona quando o item nasce ou outra termina.

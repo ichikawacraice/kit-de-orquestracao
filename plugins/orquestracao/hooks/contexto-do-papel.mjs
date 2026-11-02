@@ -2,7 +2,7 @@
 // Stop hook: cobra a regra de contexto por papel da skill `papeis-e-modelos` ("Contexto"), que só valeria se a sessão
 // lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain) e não grava estado nenhum.
 //   orquestradora: com o operador presente o Stop não a bloqueia: a limpeza é dele, pelo botão `↺ Limpar` da barra (destacado
-//     a partir de 250 mil: a sessão já recomeça com ~90 mil, F219); o hook só registra (`contexto-alto`, ou `limpou`). Com o modo ausente ligado o papel é
+//     a partir de 250 mil: a sessão já recomeça com ~105 mil, F219); o hook só registra (`contexto-alto`, ou `limpou`). Com o modo ausente ligado o papel é
 //     `orquestradora-ausente` e segue a régua da dona; o aviso diz que a régua vem da bandeira e como desligá-la, porque a
 //     bandeira ligada pelo botão do painel fica ligada até alguém a desligar, mesmo com o operador de volta.
 //   dona (a sessão é `donoLocalId` de item vivo da fila): ≥ 500 mil cobra limpar (só `clear_session` "self" satisfaz);
@@ -95,7 +95,7 @@ function main() {
   } else if (t >= ALTO) {
     cobranca = { desfecho: 'cobrou-200', sigoVale: true, reason: `Contexto em ${mil(t)} mil, acima de ${mil(ALTO)} mil. Se a unidade de trabalho acabou, escreva o estado e chame clear_session "self"; se não acabou, diga numa linha \`Contexto: sigo — <o que falta na unidade>\`.` };
   } else if (t >= ESPERA) {
-    cobranca = { desfecho: 'cobrou-150-espera', sigoVale: true, esperando: true, reason: `Contexto em ${mil(t)} mil e o turno termina esperando resposta: limpe antes (retomar custa ~90 mil, reler ${mil(t)} mil a cada turno custa mais).` };
+    cobranca = { desfecho: 'cobrou-150-espera', sigoVale: true, esperando: true, reason: `Contexto em ${mil(t)} mil e o turno termina esperando resposta: limpe antes (retomar custa ~105 mil, reler ${mil(t)} mil a cada turno custa mais).` };
   }
   if (!cobranca) return;
   if (papel === 'orquestradora-ausente') cobranca.reason += ` Vale porque o modo ausente está ligado${desdeDoModo()}; se o operador está aqui, quem desliga é ele (\`/ausente off\` ou o botão do painel), e aí a limpeza volta a ser dele.`;

@@ -295,3 +295,64 @@ test('F173: PR sem bump → mergeia sem `aviso` (a fixture tem plugin.json, ent�
     assert.equal(JSON.parse(r.out).aviso, undefined);
   } finally { rmSync(c.raiz, { recursive: true, force: true }); }
 });
+
+// F348: ao fechar, o item ganha o custo das sessões que trabalharam nele, lido dos transcripts (registro do app falso em
+// POOL_APP_SESSOES_DIR, transcripts em KIT_PROJETOS_DIR). Inclui quem saiu do `com` antes, o subagente e a mensagem repetida.
+test('mergear que fecha grava o custo do item: dona, com, quem já saiu e subagentes, com os pesos', () => {
+  const c = montar();
+  const LC = 'local_00000000-0000-4000-8000-0000000000c3';
+  try {
+    const reg = join(c.raiz, 'registro', 'conta');
+    const proj = join(c.raiz, 'projetos');
+    mkdirSync(reg, { recursive: true });
+    for (const [l, cli] of [[LA, 'cli-a'], [LB, 'cli-b'], [LC, 'cli-c']]) writeFileSync(join(reg, `${l}.json`), JSON.stringify({ sessionId: l, cliSessionId: cli, title: 'x', cwd: c.clone }));
+    const msg = (id, usage) => JSON.stringify({ type: 'assistant', requestId: `r-${id}`, message: { id, usage } });
+    const M = 1e6;
+    const a = msg('m1', { input_tokens: M, output_tokens: 0.1 * M, cache_read_input_tokens: 10 * M, cache_creation_input_tokens: 2 * M, cache_creation: { ephemeral_5m_input_tokens: 1.5 * M, ephemeral_1h_input_tokens: 0.5 * M } });
+    mkdirSync(join(proj, '-um', 'cli-a', 'subagents'), { recursive: true });
+    mkdirSync(join(proj, '-outro'), { recursive: true });
+    writeFileSync(join(proj, '-um', 'cli-a.jsonl'), `${a}\n${a}\n{"type":"user"}\n`);
+    writeFileSync(join(proj, '-um', 'cli-a', 'subagents', 's.jsonl'), `${msg('m2', { output_tokens: 0.2 * M })}\n`);
+    writeFileSync(join(proj, '-outro', 'cli-b.jsonl'), `${msg('m3', { output_tokens: M })}\n`);
+    writeFileSync(join(proj, '-um', 'cli-c.jsonl'), `${msg('m4', { input_tokens: 4 * M })}\n`);
+    const env = { POOL_APP_SESSOES_DIR: join(c.raiz, 'registro'), KIT_PROJETOS_DIR: proj };
+    const painel = (...args) => {
+      const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], { cwd: c.clone, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: { ...process.env, PAINEL_DIR: join(c.raiz, 'painel'), HOME: join(c.raiz, 'home'), CLAUDE_CODE_SESSION_ID: '', GH_BIN: c.gh, GH_ESTADO: c.estado, GH_LOG: c.log, ...env } });
+      return { exit: r.status, out: r.stdout, err: r.stderr };
+    };
+    c.item('F7');
+    assert.equal(painel('com', 'add', 'F7', LC, 'E2', 'um pedaço').exit, 0);
+    assert.equal(painel('com', 'del', 'F7', LC).exit, 0);
+    assert.deepEqual(c.dado('F7').sessoes, [LA, LB, LC], 'o com add anota quem passou');
+    const r = painel('mergear', '12', c.sha);
+    assert.equal(r.exit, 0, r.err + r.out);
+    const d = c.dado('F7');
+    assert.equal(d.etapa, 'feito');
+    assert.ok(d.custo && typeof d.custo === 'object', 'o custo foi gravado');
+    // m1: 1 + 1,5×1,25 + 0,5×2 + 10×0,1 + 0,1×5 = 5,375; m2: 0,2×5 = 1; m3: 5; m4: 4 → 15,375
+    assert.equal(d.custo.relativo, 15.4);
+    assert.equal(d.custo.chamadas, 4, 'a mensagem repetida do streaming conta uma vez');
+    assert.deepEqual(d.custo.sessoes, { lidas: 3, de: 3 });
+    assert.equal(JSON.parse(r.out).itens[0].custo, 15.4);
+    // o `painel custo` mede de novo, e o --seco não grava
+    const seco = painel('custo', 'F7', '--seco');
+    assert.equal(seco.exit, 0, seco.err);
+    assert.equal(JSON.parse(seco.out).custo.relativo, 15.4, 'depois do merge, pelas sessões que ficaram anotadas');
+  } finally { limpar(c); }
+});
+
+test('mergear sem transcript na máquina: fecha igual, sem custo, e as sessões ficam anotadas', () => {
+  const c = montar();
+  try {
+    c.item('F8');
+    const r = c.painel('mergear', '12', c.sha);
+    assert.equal(r.exit, 0, r.err + r.out);
+    const d = c.dado('F8');
+    assert.equal(d.etapa, 'feito');
+    assert.ok(!('custo' in d), 'zero não medido não vira número');
+    assert.deepEqual([...d.sessoes].sort(), [LA, LB].sort(), 'a dona e o com ficam em sessoes');
+    const r2 = c.painel('custo', 'F8', '--seco');
+    assert.equal(r2.exit, 1);
+    assert.match(r2.err, /não achei transcript/);
+  } finally { limpar(c); }
+});

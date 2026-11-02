@@ -42,6 +42,8 @@ export type LinhaItem = {
   /** Desde quando está sem dono: a última entrada do histórico, ou a última gravação. */
   paradoDesde?: string
   feitoEm?: string
+  /** F348: o custo relativo do item fechado (milhões de tokens-equivalentes de entrada), gravado pelo `painel mergear`. */
+  custo?: number
   foraDoContrato?: string
 }
 

@@ -326,6 +326,7 @@ function montarTodos(
       atualizadoEm: texto(d.data.atualizadoEm),
       paradoDesde: texto(historico[historico.length - 1]?.em) ?? texto(d.data.atualizadoEm),
       feitoEm,
+      custo: final && typeof (d.data.custo as Record<string, unknown> | null | undefined)?.relativo === 'number' ? ((d.data.custo as Record<string, unknown>).relativo as number) : undefined,
       foraDoContrato: motivos.length > 0 ? motivos.join('; ') : undefined,
     } })
   }

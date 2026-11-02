@@ -54,7 +54,7 @@ export const PALAVRA_LIMPAR = ' · limpar'
 /**
  * As réguas de contexto por papel, as mesmas do hook `contexto-do-papel` (um teste da raiz compara): `aviso` marca `· alto`,
  * `teto` marca `· limpar`; nenhum dos dois é o denominador (esse é a janela de compactação). Sem faixa intermediária
- * (orquestradora com o operador presente), aviso e teto coincidem, em 250 mil: a sessão já recomeça com ~90 mil (F219).
+ * (orquestradora com o operador presente), aviso e teto coincidem, em 250 mil: a sessão já recomeça com ~105 mil (F219; medido em 02/11).
  */
 export const REGUAS = {
   dona: { aviso: 350_000, teto: 500_000 },

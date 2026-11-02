@@ -78,6 +78,7 @@ O critério de pronto não depende do relato. O hook `${CLAUDE_PLUGIN_ROOT}/hook
 ## A revisão
 
 - **Nunca é quem escreveu.** A dona lança o `orquestracao:validador` de contexto limpo: quem fez o trabalho já acredita nele.
+- **A exceção medida: a via rápida.** O item pequeno cujo diff cabe no corte do `${CLAUDE_PLUGIN_ROOT}/pool/via-rapida.mjs` (até 60 linhas em até 4 arquivos, nenhum contrato, trava, hook, migration ou removido) e que não grava estado, não toca segurança nem muda regra se autorrevisa pelo roteiro fixo do protocolo (âncora `via-rapida-da-revisao`), com o laudo no PR. Item de risco nunca vai por ela, nem o que muda regra de revisão.
 - **O briefing traz** o plano, o diff (`git diff origin/<base>...HEAD`), o que a dona afirma ter feito, o critério de pronto e a frase *"só achados que afetam correção; skip style; não grave arquivo"*.
 - **Modelo:** Opus (o padrão do agente) para item de risco e para o delta de conserto; `model: "sonnet"` para item mecânico.
 - **A revisão do conserto mede o DELTA**, não o PR de novo: o segundo validador recebe os achados anteriores e `git diff <HEAD revisado>..<HEAD novo>`, confere que cada achado foi resolvido e que o conserto não quebrou o vizinho. Contexto novo continua obrigatório.
@@ -86,7 +87,7 @@ O critério de pronto não depende do relato. O hook `${CLAUDE_PLUGIN_ROOT}/hook
 - **Crítica de tela:** o `kit-design:critico-de-ui` dá nota de 0 a 30. **De 24/30 para cima, sem ressalva alta, a tela está liberada**; ressalva alta volta para conserto mesmo com nota boa; média ou baixa vai para `depois`. **No máximo 2 recríticas**; na terceira, o que ainda estiver abaixo de 24 vai ao operador pela orquestradora. Achado fora do escopo do plano nunca entra no mesmo PR; na via rápida a crítica é uma só, sem recrítica.
 - **Não confia no relato.** O validador abre o arquivo, roda o teste, olha o artefato final (a tela, o PDF, a imagem publicada) — não o mecanismo que o produziu.
 
-**Tarefa pequena não se divide.** Uma pergunta, uma leitura, uma edição de poucas linhas ficam com quem está — abrir sessão custa ~90 mil tokens de piso, e o briefing custa mais que o trabalho. Sessão dona é para item com plano de mais de um passo.
+**Tarefa pequena não se divide.** Uma pergunta, uma leitura, uma edição de poucas linhas ficam com quem está — abrir sessão custa ~105 mil tokens de piso (subagente, ~33 mil), e o briefing custa mais que o trabalho. Sessão dona é para item com plano de mais de um passo.
 
 ## Ao abrir
 
@@ -97,7 +98,7 @@ O critério de pronto não depende do relato. O hook `${CLAUDE_PLUGIN_ROOT}/hook
 <a id="contexto"></a>
 ## Contexto: quando limpar, quando compactar
 
-**Vale a pena, pelos dois lados.** Custo: cada turno relê a conversa inteira, e depois de 1 hora parada o cache expira e ela é reescrita a preço dobrado; numa medição real, ~90% do custo de um projeto foi leitura e escrita de cache, não resposta. Qualidade: contexto longo dilui a atenção, e o que foi lido há 200 mil tokens pode já ter mudado no disco. O que limpar custa: ~90 mil tokens de piso para recomeçar, e o que não estava escrito em lugar nenhum. Por isso a regra é **limpar no fim de uma unidade de trabalho, com o estado escrito**, e nunca no meio de um raciocínio.
+**Vale a pena, pelos dois lados.** Custo: cada turno relê a conversa inteira, e depois de 1 hora parada o cache expira e ela é reescrita a preço dobrado; na medição de 02/11 (semana de 26/10, a conta inteira), ~87% do custo foi leitura e escrita de cache, não resposta. Qualidade: contexto longo dilui a atenção, e o que foi lido há 200 mil tokens pode já ter mudado no disco. O que limpar custa: ~105 mil tokens de piso para recomeçar, e o que não estava escrito em lugar nenhum. Por isso a regra é **limpar no fim de uma unidade de trabalho, com o estado escrito**, e nunca no meio de um raciocínio.
 
 **Limpar > compactar.** Limpar (`clear_session` com `"self"`, ou `/clear`) recomeça do arquivo de estado, que você controla. Compactar (`/compact`) troca a conversa por um resumo que você não controla e que perde exatamente o detalhe que fazia diferença (o erro exato, o porquê de uma escolha). Compactar só quando o trabalho está no meio, o estado não cabe num arquivo e falta pouco — e aí `/compact <o que preservar>`. A compactação automática é **rede de segurança**, não plano.
 
@@ -107,8 +108,8 @@ O critério de pronto não depende do relato. O hook `${CLAUDE_PLUGIN_ROOT}/hook
 
 | Papel | Regra |
 |---|---|
-| **Dona** e **orquestradora no modo ausente** | Lê `get_usage` (`"self"`, `context.tokensUsed`) a cada unidade concluída. **≥ 350 mil:** grava o handoff do item e limpa no próximo momento oportuno. **≥ 250 mil e o turno vai terminar esperando o operador:** limpa antes de encerrar — retomar custa ~90 mil, reescrever 250+ mil custa mais. **≥ 500 mil:** não pega trabalho novo até limpar. A dona continua dona depois da limpeza (o `local_…` não muda). |
-| **Orquestradora com o operador presente** | Não limpa sozinha: a partir de 250 mil o botão `↺ Limpar` da barra fica destacado (a sessão já recomeça com ~90 mil), e a limpeza é do operador (skill `orquestradora`, "Orçamento de contexto"). Com o cache frio (1 h sem turno) o botão vira `↺ Limpar já` e limpa direto, sem turno da sessão: o arquivo de estado tem de estar em dia. Na volta de toda limpeza, o painel reabre e a skill `orquestradora` é carregada sem esperar o operador. |
+| **Dona** e **orquestradora no modo ausente** | Lê `get_usage` (`"self"`, `context.tokensUsed`) a cada unidade concluída. **≥ 350 mil:** grava o handoff do item e limpa no próximo momento oportuno. **≥ 250 mil e o turno vai terminar esperando o operador:** limpa antes de encerrar — retomar custa ~105 mil, reescrever 250+ mil custa mais. **≥ 500 mil:** não pega trabalho novo até limpar. A dona continua dona depois da limpeza (o `local_…` não muda). |
+| **Orquestradora com o operador presente** | Não limpa sozinha: a partir de 250 mil o botão `↺ Limpar` da barra fica destacado (a sessão já recomeça com ~105 mil), e a limpeza é do operador (skill `orquestradora`, "Orçamento de contexto"). Com o cache frio (1 h sem turno) o botão vira `↺ Limpar já` e limpa direto, sem turno da sessão: o arquivo de estado tem de estar em dia. Na volta de toda limpeza, o painel reabre e a skill `orquestradora` é carregada sem esperar o operador. |
 | **Validador** (subagente) | **Sempre contexto novo**, inclusive para revisar o conserto do mesmo trabalho. Revisão que não cabe vira duas, por faixa de arquivo. |
 | **Explorador** (subagente) | Uma pergunta, uma resposta, fim. |
 
