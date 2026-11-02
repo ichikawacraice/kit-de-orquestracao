@@ -19,7 +19,7 @@ Abaixo, `kit` abrevia essa linha.
 | `kit iniciar` | Prepara um projeto **sem** `CLAUDE.md`: cria o `CLAUDE.md`, o gate, a guarda, o `.claude/kit.json` e o lock, e troca o `npm test` pelo gate. Recusa se já há `CLAUDE.md` |
 | `kit adotar` | Põe o kit num projeto **em andamento** sem sobrescrever nada. Recusa se não há `CLAUDE.md` |
 | `kit doutor` | Confere o plugin instalado e ligado no projeto, hooks duplicados, o `kit.json`, as versões do Node, do git e do lock, e os arquivos do kit contra o lock. Não grava nada |
-| <a id="kit-atualizar"></a>`kit atualizar` | Troca pela versão nova o que você não editou; o que você editou vira conflito para você decidir |
+| `kit atualizar`<a id="kit-atualizar"></a> | Troca pela versão nova o que você não editou; o que você editou vira conflito para você decidir |
 | `kit remover` | Tira o que o kit pôs: blocos do `CLAUDE.md`, chaves dos JSON e arquivos cujo hash ainda bate com o lock. O que você editou fica |
 
 As flags:
@@ -27,7 +27,7 @@ As flags:
 | Flag | Em | Efeito |
 |---|---|---|
 | `--simular` | `adotar`, `atualizar`, `remover` | Mostra o que faria, sem gravar. Use sempre antes da primeira vez |
-| `--perfil simples\|pnpm-workspace` | `iniciar`, `adotar` | O formato do gate: `simples` (um pacote, `npm run test:suite`) ou `pnpm-workspace` (monorepo pnpm, pacotes lidos do `pnpm-workspace.yaml`) |
+| `--perfil simples\|pnpm-workspace` | `iniciar`, `adotar` | O formato do gate: `simples` (um pacote: o gate roda a suíte do projeto) ou `pnpm-workspace` (monorepo pnpm, pacotes lidos do `pnpm-workspace.yaml`) |
 | `--design <pasta do front>` | `iniciar`, `adotar` | Projeto com tela: modelos de design na pasta e o plugin Impeccable recomendado no `settings.json`, com a telemetria dele cortada |
 | `--trocar-test` | `adotar`, `atualizar` | O `npm test` passa a ser o gate; a sua suíte vai para `test:projeto`. Sem ela, o `test` continua o seu e o `doutor` lembra a pendência |
 | `--parcial` | `adotar` | Com conflito, grava o resto (sem ela, conflito não grava nada) |

@@ -17,7 +17,7 @@ claude plugin marketplace add ichikawacraice/kit-de-orquestracao
 claude plugin install orquestracao@kit-de-orquestracao
 ```
 
-Repita o `install` para `painel-sessoes`, `processos` e `kit-design`. Reinicie o app: plugin novo só vale depois do reinício.
+O `orquestracao` é o núcleo. Repita o `install` para `painel-sessoes`, `processos` e `kit-design`. Reinicie o app: plugin novo só vale depois do reinício.
 
 **Atenção:** o `install` liga o plugin na sua conta, para **todo** projeto, não só para o que tem o kit. A maior parte das travas só age onde há orquestradora ou item na fila, mas algumas valem em qualquer sessão: a lista e como desligá-las num projeto estão em [O que ligar e desligar](ligar-e-desligar.md#valem-em-todo-projeto).
 
@@ -31,7 +31,7 @@ npx -y github:ichikawacraice/kit-de-orquestracao adotar --simular
 
 Se a lista estiver boa, rode de novo sem `--simular`. Projeto novo, sem `CLAUDE.md`: use `iniciar` (não tem `--simular`; não há o que sobrescrever). Projeto com front: acrescente `--design <pasta do front>`.
 
-O que ele grava, e só isso:
+O que ele grava no projeto:
 
 | Arquivo | O quê |
 |---|---|
@@ -40,7 +40,11 @@ O que ele grava, e só isso:
 | `.claude/kit.json` | A configuração do kit neste projeto: o comando do gate, as regras da guarda, as pastas de documento |
 | `scripts/kit/` | O gate de testes e a guarda de operação |
 | `.claude/kit.lock.json` | O que o kit pôs, com hash: é por ele que o `kit atualizar` e o `kit remover` sabem o que é do kit e o que é seu |
-| `package.json` | Só com `--trocar-test` (ou no `iniciar`): o `npm test` passa a ser o gate. Sem a flag, o seu `test` fica como está |
+| `package.json` | O `npm test` passa a ser o gate no `iniciar`, com `--trocar-test`, quando o `test` é o de exemplo do npm (`no test specified`) ou quando não há `package.json` (ele cria um). Com um `test` seu e sem a flag, o seu fica como está |
+| `docs/` | Os modelos de documento que faltam: índices de ADR, specs, planos, pesquisa e diário, e o roadmap. Os que já existem ficam |
+| Pasta do front | Só com `--design`: os modelos `PRODUCT.md`, `ANATOMIA.md` e `DESIGN.md` |
+
+E fora do projeto, em `~/.claude/orquestracao/`: cria o `subagente-pode-escrever.txt` vazio (nenhum subagente liberado) e, se a lista `trava-edicao-repos.txt` já existe, acrescenta este repositório a ela ([o que são](ligar-e-desligar.md)).
 
 Nada é sobrescrito: o que já existe e difere vira conflito, e o `adotar` não grava nada até você resolver (ou grava o resto com `--parcial`).
 
@@ -52,7 +56,7 @@ npx -y github:ichikawacraice/kit-de-orquestracao doutor
 
 Tudo `ok` é o esperado. Cada `falha` traz o comando que a resolve.
 
-Commite o que o kit gravou: o `.claude/kit.json` e o `CLAUDE.md` valem para o time inteiro.
+Commite o que o kit gravou no projeto: o `.claude/kit.json` e o `CLAUDE.md` valem para o time inteiro.
 
 ## 4. Declarar a orquestradora
 

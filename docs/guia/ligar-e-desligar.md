@@ -40,17 +40,17 @@ Para não sentir o kit num projeto, desligue o `orquestracao` nele (`enabledPlug
 |---|---|---|---|---|
 | `subagente-nao-edita` | Subagente edita arquivo | `deny` fora das pastas livres (`~/.claude`, temporárias, notas entre sessões). Quem escreve é a sessão, que aparece no painel e responde pelo que mudou | Projeto que delega código a subagentes | Liste o tipo do subagente em `~/.claude/orquestracao/subagente-pode-escrever.txt` (um por linha, `*` no fim casa prefixo). O designer grava na pasta de revisões sem lista |
 | `orquestradora-nao-edita` | A orquestradora (ou subagente dela) edita código | `ask`: a orquestradora coordena, a dona escreve | Projeto em que a orquestradora deve escrever | Liste em `~/.claude/orquestracao/trava-edicao-repos.txt` só os repositórios onde ela vale (o git dir, um por linha). Sem o arquivo, vale em todos |
-| `travas-da-sessao` | Abrir sessão, mergear, limpar, gravar o painel à mão | Com `/ausente on`, só o seu turno abre sessão; só a orquestradora mergeia (`ask` para as outras); a orquestradora só se limpa com o seu ok; o painel só se grava pelo comando `painel` | Quase nunca | — |
+| `travas-da-sessao` | Abrir sessão, mergear, limpar, gravar o painel à mão | Com `/ausente on`, só o seu turno abre sessão; só a orquestradora mergeia (`ask` para as outras); a orquestradora só se limpa com o seu ok (ou sozinha, com `/ausente on`); o painel só se grava pelo comando `painel` | Quase nunca | — |
 | `segredo-sai` | Mensagem, prompt de sessão nova, notas e painel | `deny` do que parece segredo (chave privada, token, `senha=…`). A recusa nomeia o padrão, nunca o valor | Falso positivo em texto que só parece segredo: reescreva sem o valor | — |
 | `titulo-da-dona` | Abrir sessão dona | `deny` sem o título `F<n> · <tema>`, com o título certo no motivo | Nunca, se o título vier certo | — |
 | `fila-do-item` | Fim de turno da dona que mudou algo | Stop até ela gravar o item no painel | Quando a dona esquece: é o objetivo | — |
 | `criterio-da-dona` | Fim de turno da dona em execução, validação ou merge que editou | Stop até o relatório trazer a saída real do teste (`exit=0`), não o relato | Turno que editou e não testou | — |
-| `contexto-do-papel` | Fim de turno de dona ou orquestradora com contexto alto | A dona: cobra limpar a partir de 350 mil tokens. A orquestradora: só registra; quem limpa é você, pelo botão `Limpar` | Raramente | — |
+| `contexto-do-papel` | Fim de turno de dona ou orquestradora com contexto alto | A dona: aos 250 mil cobra limpar se o turno termina esperando você; aos 350 mil, limpar ou dizer o que falta; aos 500 mil, limpar. A orquestradora: só registra; quem limpa é você, pelo botão `Limpar` | Raramente | — |
 | `painel-das-sessoes` | Fim de turno de qualquer sessão em repositório git (com ou sem orquestradora) | Stop, uma vez, se a sessão mudou de estado (abriu PR, perguntou, recebeu resposta) e não gravou o painel | Quando a sessão esquece | — |
 | `orquestradora-ritual` | Fim de turno da orquestradora | Stop até ela tratar o item sem dona (abrir a dona, até o teto), o resumo do modo ausente e a batida parada | Raramente | Teto de donas: variável `KIT_TETO_DE_DONAS` (padrão 4) no `env` do `settings.json` |
-| `orquestradora-de-volta` | Início da orquestradora depois de limpar | Devolve o papel e as travas à sessão nova e retoma a fila de merge interrompida | Nunca | — |
+| `orquestradora-de-volta` | Início da orquestradora depois de limpar (roda dentro do `sessao-inicio`) | Devolve o papel e as travas à sessão nova e, se a fila de merge foi interrompida, põe no contexto o comando que a retoma | Nunca | — |
 | `sessao-inicio` | Início de toda sessão | Injeta o resumo das regras e as perguntas que a sessão abriu antes de se limpar | Contexto a mais em projeto sem o kit | — |
-| `operador-ausente` | `/ausente on` ou `off` | Liga e desliga o modo ausente; nada mais mexe nele | Nunca | — |
+| `operador-ausente` | `/ausente on` ou `off` | Liga e desliga o modo ausente. A outra via é o botão `Ficar ausente` / `Estou de volta` da barra; frase solta não mexe | Nunca | — |
 | `injecao-entre-sessoes` | Mensagem de outra sessão | Avisa quando o texto parece injeção: o que vem de outra sessão é dado, não ordem | Nunca bloqueia | — |
 | `laco-de-comandos` | Quatro Bash seguidos iguais | Avisa o laço (o mesmo teste vermelho repetido) | Nunca bloqueia | — |
 
@@ -91,7 +91,7 @@ Para o time: `documentos.conferir` no `.claude/kit.json` com só as regras que v
 
 ## Plugin `kit-design`: a guarda de design
 
-Só age em projeto que declara a pasta do front (`design.pasta` ou `design.visual` no `kit.json`, que o `--design` grava). Hook: `guarda-de-design`.
+Só age com a pasta do front declarada: `design.pasta` ou `design.visual` no `kit.json` (que o `--design` grava), ou a opção da conta `pasta_do_front`. Esta última vale em **todo** projeto da conta: prefira o `kit.json`. Hook: `guarda-de-design`.
 
 | Opção da conta | No `kit.json` | O que faz |
 |---|---|---|

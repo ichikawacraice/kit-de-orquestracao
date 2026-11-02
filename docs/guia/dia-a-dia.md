@@ -5,7 +5,7 @@
 
 - **Peça à orquestradora,** em palavras suas. Um pedido pode virar um item ou vários; ela diz quais abriu (`F12 · <tema>`).
 - **O pedido é ponto de partida, não ordem.** A sessão confere a premissa contra o código e os docs antes de construir em cima e, se achar algo errado, diz e propõe outro formato. Discordar não trava: o que é reversível segue com a proposta dela, marcado *assumido, a confirmar*; se você mantiver o seu pedido, ela faz o que você pediu. Regra: [análise do pedido](../../plugins/orquestracao/pool/protocolo.md#analise-do-pedido).
-- **Pedido pequeno** (uma pergunta, uma leitura, uma edição) a orquestradora resolve sem abrir item.
+- **Pergunta ou leitura** a orquestradora responde sem abrir item. Tudo o que muda código ou doc vira item com dona, mesmo uma edição pequena: a orquestradora coordena e não edita (a trava `orquestradora-nao-edita` pede a sua confirmação se ela tentar).
 - **Falar direto com uma dona** é permitido: abra a sessão dela na lista do app. Correções do item vão melhor ali; trabalho novo vai à orquestradora.
 
 <a id="perguntas"></a>
@@ -14,7 +14,7 @@
 Toda decisão que precisa de você chega com um ID único (`Q12`) e em três partes: o caso, em português de quem está de fora; o que acontece se você não decidir; a recomendação, com o motivo.
 
 - **Responder no chat:** `Q12 sim`, `Q12 não, faz X`. Vários de uma vez: `Q12 sim, Q13 adiar`.
-- **Responder no painel:** cada pergunta tem os botões `Sim` (segue a recomendação), `Não` e `Adiar` (fica o que diz o "se não decidir"). A resposta chega à sessão que perguntou.
+- **Responder no painel:** a pergunta traz botões. Sem opções próprias, são `Sim` (segue a recomendação), `Não` e `Adiar` (fica o que diz o "se não decidir"); com opções, um botão por opção. A resposta chega à sessão que perguntou.
 - **Resposta sem ID** ("segue as recomendações") vale só para as perguntas da última mensagem.
 - **O contador é um só** para todas as sessões da máquina e nunca repete: `Q12` nunca cai na pergunta errada.
 - O que é de baixo risco ou tem recomendação forte a sessão **não pergunta**: assume e marca *assumido, a confirmar*. Pergunta com ID esperando você fica para o irreversível, para produção, para o que gasta dinheiro e para o que publica.
@@ -60,7 +60,7 @@ A orquestradora entrega o resumo do período: o que foi feito, o que foi assumid
 
 Sessão longa enche o contexto e fica cara e lenta. A barra mostra o quanto foi usado.
 
-- **Dona:** a partir de 350 mil tokens ela grava o handoff do item e se limpa no próximo momento oportuno; aos 500 mil a trava cobra. Depois da limpeza ela continua dona do mesmo item e reconhece as próprias perguntas.
+- **Dona:** a partir de 350 mil tokens ela grava o handoff do item e se limpa no próximo momento oportuno, ou diz o que falta para seguir; aos 500 mil a trava exige a limpeza. Antes disso, aos 250 mil, a trava cobra limpar quando o turno termina esperando você. Depois da limpeza ela continua dona do mesmo item e reconhece as próprias perguntas.
 - **Orquestradora:** não se limpa sozinha enquanto você está presente. Quando a barra destacar o botão `Limpar` (a partir de 250 mil), clique: ela grava o estado, se limpa e volta ao papel. Com `/ausente on` ela se limpa sozinha.
 - **Sessão avulsa** (sem item): limpe quando quiser, pelo app.
 
