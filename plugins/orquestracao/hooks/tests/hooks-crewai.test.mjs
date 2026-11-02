@@ -3,7 +3,7 @@
 // transcripts sintéticos no formato real (.jsonl), log e estado num diretório temporário.
 // Rodar: node gate/com-fichas.mjs -- node plugins/orquestracao/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync, statSync, unlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync, statSync, unlinkSync, linkSync } from "node:fs";
 import { tmpdir, homedir, userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -490,7 +490,7 @@ caso('4.8 sem lista de tipos: todo subagente recusa, inclusive o designer', () =
   igual(existsSync(join(base, 'subagente-pode-escrever.txt')), false, 'precondição: sem lista');
   igual(decisao(rodar(SN, editar(`${REPO}/docs/design/revisoes/a.md`, sub('designer')))), 'deny', 'designer');
 });
-caso('4.9 Bash não é coberto; sem caminho passa; entrada quebrada sai 0 com erro no log', () => {
+caso('4.9 Bash fora da configuração das travas não é coberto; sem caminho passa; entrada quebrada sai 0 com erro no log', () => {
   igual(rodar(SN, pre('Bash', { command: 'echo x > a.ts' }, sub())), null, 'Bash');
   igual(rodar(SN, pre('Edit', {}, sub())), null, 'sem caminho');
   igual(rodar(SN, '{'), null, 'quebrada');
@@ -620,6 +620,103 @@ caso('F66.1 symlink que leva para fora da pasta de revisões recusa com o motivo
   igual(/não grava arquivo do projeto/.test(motivo), true, 'src/a.ts: motivo genérico');
   igual(ultimo(), 'recusou', 'src/a.ts: log');
 }));
+// F323: a configuração das travas fica numa pasta livre para subagente; nem o tipo liberado a grava (senão ele se libera).
+const PROTEGIDOS = () => [
+  join(base, 'subagente-pode-escrever.txt'), join(base, 'trava-edicao-repos.txt'), join(base, 'operador-ausente.json'),
+  join(base, 'hooks-crewai-estado.json'), join(base, 'ativas', SID),
+  join(homedir(), '.claude', 'settings.json'), join(homedir(), '.claude', 'settings.local.json'),
+  join(homedir(), '.claude', 'plugins', 'cache', 'kit', 'orquestracao', '9.9.9', 'hooks', 'subagente-nao-edita.mjs'),
+];
+caso('F323.1 subagente não grava a configuração das travas, nem o tipo liberado com `*`', () => {
+  writeFileSync(LISTA(), '*\n');
+  igual(rodar(SN, editar(`${REPO}/apps/web/a.ts`, sub('executor'))), null, 'precondição: com `*` o executor grava o produto');
+  igual(rodar(SN, editar(join(base, 'pool', 'handoffs', 'F1.md'), sub('executor'))), null, 'precondição: o resto do estado segue livre');
+  const ps = PROTEGIDOS();
+  igual(ps.length > 0, true, 'precondição: há arquivos protegidos');
+  for (const p of ps) {
+    for (const r of [rodar(SN, editar(p, sub('executor'))), rodar(SN, pre('Write', { file_path: p, content: '*\n' }, sub('impeccable:x')))]) {
+      igual(decisao(r), 'deny', p);
+      igual(/configura[cç][aã]o das travas/.test(r.hookSpecificOutput.permissionDecisionReason), true, `${p}: o motivo diz o que é`);
+    }
+  }
+  igual(log().at(-1)[3], 'recusou-trava', 'log');
+});
+caso('F323.2 caixa trocada, `..` e `~/` chegam ao mesmo arquivo e recusam', () => {
+  const H = homedir();
+  for (const p of [join(base, 'Subagente-Pode-Escrever.TXT'), join(base, 'pool', '..', 'subagente-pode-escrever.txt'),
+    '~/.claude/settings.json', join(H, '.claude', 'PLUGINS', 'x.mjs')]) {
+    igual(decisao(rodar(SN, editar(p, sub()))), 'deny', p);
+  }
+  igual(rodar(SN, editar(join(base, 'subagente-pode-escrever.txt.bak'), sub())), null, 'o vizinho de nome parecido segue livre');
+  igual(rodar(SN, editar(join(H, '.claude', 'settings.jsonc'), sub())), null, 'settings.jsonc segue livre');
+});
+caso('F323.3 symlink numa pasta livre que aponta para a lista recusa', () => {
+  const link = join(base, 'atalho.txt');
+  writeFileSync(LISTA(), 'designer\n');
+  symlinkSync(LISTA(), link);
+  igual(decisao(rodar(SN, editar(link, sub()))), 'deny', 'symlink para a lista');
+});
+caso('F323.4 a sessão (sem agent_id) grava a configuração das travas', () => {
+  for (const p of PROTEGIDOS()) igual(rodar(SN, editar(p)), null, p);
+});
+caso('F323.5 Bash de subagente que grava a configuração das travas recusa; ler e gravar o resto passa', () => {
+  const grava = [
+    "echo '*' >> ~/.claude/orquestracao/subagente-pode-escrever.txt",
+    'printf "x\\n" > "$HOME/.claude/orquestracao/trava-edicao-repos.txt"',
+    "sed -i '' 's/true/false/' ~/.claude/orquestracao/operador-ausente.json",
+    'echo {} | tee ~/.claude/orquestracao/hooks-crewai-estado.json',
+    'rm ~/.claude/orquestracao/ativas/abc',
+    'cp /tmp/x.json ~/.claude/settings.json',
+    'mv /tmp/h.mjs ~/.claude/plugins/cache/kit/orquestracao/9.9.9/hooks/subagente-nao-edita.mjs',
+    "node -e \"require('fs').writeFileSync(process.env.HOME+'/.claude/settings.local.json','{}')\"",
+  ];
+  for (const c of grava) {
+    const r = rodar(SN, pre('Bash', { command: c }, sub()));
+    igual(decisao(r), 'deny', c);
+  }
+  igual(log().at(-1)[3], 'recusou-trava', 'log');
+  for (const c of ['cat ~/.claude/orquestracao/subagente-pode-escrever.txt', 'grep -n hooks ~/.claude/settings.json 2>/dev/null',
+    'ls ~/.claude/plugins/cache', 'echo x > a.ts', "sed -i '' s/a/b/ ~/.claude/orquestracao/notas.md"]) {
+    igual(rodar(SN, pre('Bash', { command: c }, sub())), null, c);
+  }
+  igual(rodar(SN, pre('Bash', { command: grava[0] })), null, 'a sessão (sem agent_id) passa');
+});
+caso('F323.6 o que a validação achou: ſ, link físico, cache do registro, batida, settings do projeto, transcripts', () => {
+  writeFileSync(LISTA(), '*\n');
+  const H = homedir();
+  igual(rodar(SN, editar(join(H, '.claude', 'projects', '-x', 'memory', 'nota.md'), sub())), null, 'precondição: a memória segue livre');
+  igual(rodar(SN, editar(`${REPO}/.claude/kit.json`, sub())), null, 'precondição: com `*` o resto do .claude do projeto passa');
+  for (const p of [join(base, 'ſubagente-pode-escrever.txt'), join(H, '.claude', 'ſettings.json'), join(H, '.claude', 'pluginſ', 'x.mjs'),
+    join(base, 'pool-registro-cache.json'), join(base, 'batida', 'kit.json'), `${REPO}/.claude/settings.local.json`, `${REPO}/.claude/settings.json`,
+    join(H, '.claude', 'projects', '-x', 's1.jsonl')]) {
+    igual(decisao(rodar(SN, editar(p, sub()))), 'deny', p);
+  }
+  const fisico = join(base, 'copia.txt');
+  linkSync(LISTA(), fisico);
+  igual(decisao(rodar(SN, editar(fisico, sub()))), 'deny', 'link físico da lista');
+});
+caso('F323.8 painel/ e limpeza/ por caixa e symlink, symlink quebrado para a lista; plugins/data segue livre', () => {
+  const H = homedir();
+  mkdirSync(join(base, 'limpeza'), { recursive: true });
+  mkdirSync(join(H, '.claude', 'plugins', 'data', 'x'), { recursive: true });
+  igual(rodar(SN, editar(join(H, '.claude', 'plugins', 'data', 'x', 'config.md'), sub())), null, 'plugins/data');
+  const lnk = join(base, 'lnk-limpeza');
+  symlinkSync(join(base, 'limpeza'), lnk);
+  const quebrado = join(base, 'quebrado.txt');
+  symlinkSync(LISTA(), quebrado);
+  igual(existsSync(LISTA()), false, 'precondição: a lista não existe (o link está quebrado)');
+  for (const p of [join(base, 'Limpeza', 'local_x.json'), join(base, 'PAINEL', 'sessoes', 'a.json'), join(lnk, 'local_x.json'), quebrado]) {
+    igual(decisao(rodar(SN, editar(p, sub()))), 'deny', p);
+  }
+});
+caso('F323.7 Bash: painel/limpeza, 1>, &>, --in-place e mkdir recusam; ler o install.sh passa', () => {
+  for (const c of ["echo '{}' > ~/.claude/orquestracao/limpeza/local_x.json", 'echo x 1> ~/.claude/orquestracao/trava-edicao-repos.txt',
+    'echo x &> ~/.claude/orquestracao/operador-ausente.json', "sed --in-place 's/a/b/' ~/.claude/settings.json",
+    'mkdir -p ~/.claude/orquestracao/ativas/abc', 'echo {} > ~/.claude/orquestracao/batida/kit.json']) {
+    igual(decisao(rodar(SN, pre('Bash', { command: c }, sub()))), 'deny', c);
+  }
+  igual(rodar(SN, pre('Bash', { command: 'cat ~/.claude/plugins/marketplaces/kit/install.sh' }, sub())), null, 'install.sh');
+});
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
   const f = transcript([...trabalho(), fala('Pronto, editei.')]);
   const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');

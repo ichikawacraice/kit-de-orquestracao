@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 // PreToolUse: quem escreve é sessão, como TRAVA. Subagente (evento com `agent_id`) que chama
-// Edit/Write/MultiEdit/NotebookEdit fora das pastas livres → `deny`, com o motivo. O subagente não
+// Edit/Write/MultiEdit/NotebookEdit fora das pastas livres → `deny`, com o motivo.
+// A configuração das travas (F323) mora em pasta livre — a lista de tipos abaixo, a dos repos da trava da
+// orquestradora, os marcadores `ativas/` e a `batida/` que os recria, a bandeira do modo ausente, o estado do critério,
+// o cache do registro, os settings.json, os transcripts e os plugins (o código destes hooks): subagente nenhum a
+// grava, nem o tipo liberado, senão ele se libera. O subagente não
 // aparece na lista de sessões nem no painel e, quando morre, deixa mudança no disco sem dono; quem
 // grava é a sessão dona do item. Sessão aberta com `--agent <tipo>` chega com `agent_type` e SEM
 // `agent_id`: é sessão, e passa.
 // `deny`, não `ask`: a decisão já foi tomada e o subagente em background não teria a quem
 // perguntar. Vale em bypass. Bash fica de fora pelo mesmo motivo do orquestradora-nao-edita
-// (parsear shell deu 50 alertas falsos); o briefing do subagente diz que ele não grava.
+// (parsear shell deu 50 alertas falsos); o briefing do subagente diz que ele não grava. A exceção é o
+// Bash que cita um arquivo da configuração das travas pelo nome e grava (redireção, tee, sed -i, cp, mv,
+// rm, writeFile…): nome vindo de variável, `claude plugin` e afins passam — é cerca contra deslize, não cofre.
 // Exceção por papel: subagent_type listado em subagente-pode-escrever.txt (um por linha, `*` no
 // fim casa prefixo, `#` comenta) — o designer do projeto e os agentes de plugin que gravam; e o
 // designer do kit grava na pasta de revisões (`design.revisoes` do .claude/kit.json) sem lista; a pasta é
 // cercada: valor inválido (absoluto, `..`, a própria raiz) vale o padrão e symlink não libera
 // (recusa com o motivo e o rótulo `recusou-symlink` no log).
 // Erro do hook vai para o log e a ferramenta segue.
-import { existsSync, lstatSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { BASE, registrar, lerEntrada, semPrefixoDoKit } from './hooks-crewai-comum.mjs';
@@ -30,6 +36,65 @@ const LIVRES = [
   (p) => /^\/(private\/)?tmp\//.test(p) || p.startsWith('/var/folders/') || p.startsWith('/private/var/folders/'),
   (p) => p.startsWith(resolve(tmpdir()) + '/'),
 ];
+
+// A configuração das travas (F323). Arquivos e pastas da máquina, o settings.json de qualquer `.claude/` (o do projeto
+// também desliga plugin e hook) e os transcripts (a T3 e a T7 decidem pelo turno do operador gravado neles).
+const ARQUIVOS_DAS_TRAVAS = () => ['subagente-pode-escrever.txt', 'trava-edicao-repos.txt', 'operador-ausente.json',
+  'hooks-crewai-estado.json', 'pool-registro-cache.json'].map((n) => join(BASE, n));
+// `batida/` nomeia a orquestradora: o início de sessão recria o marcador de `ativas/` a partir dela. `painel/` e `limpeza/`
+// (respostas e clique do operador) a T5 da travas-da-sessao fecha só na grafia exata; aqui valem caixa, symlink e dev:ino.
+const PASTAS_DAS_TRAVAS = () => ['ativas', 'batida', 'painel', 'limpeza'].map((n) => join(BASE, n)).concat(join(H, '.claude', 'plugins'));
+// Os dados que os plugins guardam entre sessões (CLAUDE_PLUGIN_DATA) não são código nem configuração das travas.
+const LIVRES_NAS_PASTAS = () => [join(H, '.claude', 'plugins', 'data')];
+// Forma de comparar: o disco do macOS iguala caixa e compatibilidade Unicode (`Subagente-…`, `ſubagente-…` são a lista).
+const forma = (p) => p.normalize('NFKC').toLowerCase();
+const PADROES_DAS_TRAVAS = [/\/\.claude\/settings(\.local)?\.json$/];
+const ehTranscript = (f) => f.startsWith(forma(join(H, '.claude', 'projects')) + '/') && f.endsWith('.jsonl');
+const idDoArquivo = (p) => { try { const s = statSync(p); return `${s.dev}:${s.ino}`; } catch { return null; } };
+
+// Symlink quebrado: o Write segue o link e cria o alvo, então o alvo conta (até 8 saltos).
+function alvosDoLink(p) {
+  const alvos = [];
+  for (let a = p, i = 0; i < 8; i++) {
+    try { if (!lstatSync(a).isSymbolicLink()) break; a = resolve(dirname(a), readlinkSync(a)); alvos.push(a); } catch { break; }
+  }
+  return alvos;
+}
+
+function daConfiguracaoDasTravas(p) {
+  const candidatos = [p, ...alvosDoLink(p)];
+  try { candidatos.push(caminhoReal(p)); } catch { /* sem o real, vale o lido */ }
+  const arquivos = ARQUIVOS_DAS_TRAVAS();
+  const pastas = PASTAS_DAS_TRAVAS();
+  // O lado da configuração também pelo real: BASE ou ~/.claude por symlink (o /var → /private/var do macOS).
+  const reais = (l) => l.concat(l.map((x) => { try { return caminhoReal(x); } catch { return x; } }));
+  const fa = reais(arquivos).map(forma);
+  const fd = reais(pastas).map((d) => forma(d) + '/');
+  const livres = reais(LIVRES_NAS_PASTAS()).map((d) => forma(d) + '/');
+  const porNome = candidatos.map(forma).some((c) => fa.includes(c) || (fd.some((d) => c.startsWith(d)) && !livres.some((d) => c.startsWith(d)))
+    || PADROES_DAS_TRAVAS.some((r) => r.test(c)) || ehTranscript(c));
+  if (porNome) return true;
+  // Pelo próprio arquivo (dev:ino): link físico ou grafia que o disco iguala e a forma acima não pega.
+  const ids = new Set(arquivos.map(idDoArquivo).filter(Boolean));
+  const idsDePasta = new Set(pastas.map(idDoArquivo).filter(Boolean));
+  const idsLivres = new Set(LIVRES_NAS_PASTAS().map(idDoArquivo).filter(Boolean));
+  for (let a = p; ; a = dirname(a)) {
+    const id = idDoArquivo(a);
+    if (id && idsLivres.has(id)) return false;
+    if (id && ((a === p && ids.has(id)) || idsDePasta.has(id))) return true;
+    if (dirname(a) === a) return false;
+  }
+}
+
+// Bash: o nome de um arquivo da configuração das travas no comando, junto de algo que grava.
+const NOMES_DAS_TRAVAS = /subagente-pode-escrever\.txt|trava-edicao-repos\.txt|operador-ausente\.json|hooks-crewai-estado\.json|pool-registro-cache\.json|orquestracao\/(ativas|batida|painel|limpeza)\b|\.claude\/settings(\.local)?\.json|\.claude\/plugins\//i;
+const BASH_GRAVA = [
+  /\b(sed|perl)\s+((-[a-zA-Z]*|--[\w-]+)\s+)*(-[a-zA-Z]*i|--in-place)/,
+  /(^|[^<>=-])(\d|&)?>{1,2}\|?\s*(?!\/dev\/null\b|&)["']?[\w~./$-]/,
+  /\b(tee|cp|mv|rm|ln|mkdir|truncate|touch|dd|rsync|chmod|unlink)\b/,
+  /\b(writeFile|appendFile|rename|unlink|symlink|copyFile|rmSync|createWriteStream|write_text|write_bytes)\w*|\bopen\([^)]*['"][wa]/,
+];
+const bashGravaTrava = (c) => NOMES_DAS_TRAVAS.test(c.normalize('NFKC')) && BASH_GRAVA.some((r) => r.test(c));
 
 function tipoLiberado(tipo) {
   const lista = join(BASE, 'subagente-pode-escrever.txt');
@@ -98,12 +163,32 @@ function caminhoDe(entrada) {
   return resolve(entrada.cwd || process.cwd(), p);
 }
 
+function recusarTrava(e, quem, alvo) {
+  registrar(e.session_id || '-', HOOK, 'recusou-trava', `${quem} ${e.tool_name} ${alvo}`);
+  process.stdout.write(JSON.stringify({
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'deny',
+      permissionDecisionReason:
+        `Subagente não grava a configuração das travas (${alvo}): quem escreve nela é a sessão, ` +
+        'senão o subagente se libera. Pare e devolva no relatório o que gravaria: quem te lançou é quem grava. ' +
+        'Se o comando só lia, leia pelo Read ou pelo Grep.',
+    },
+  }));
+}
+
 function main() {
   const e = lerEntrada();
   if (!e.agent_id) return;
-  const p = caminhoDe(e);
-  if (!p || LIVRES.some((f) => f(p))) return;
   const quem = `subagente ${e.agent_type || e.agent_id}`;
+  if (e.tool_name === 'Bash') {
+    const c = String(e.tool_input?.command ?? '');
+    if (bashGravaTrava(c)) recusarTrava(e, quem, c.length > 200 ? `${c.slice(0, 200)}…` : c);
+    return;
+  }
+  const p = caminhoDe(e);
+  if (p && daConfiguracaoDasTravas(p)) return recusarTrava(e, quem, p);
+  if (!p || LIVRES.some((f) => f(p))) return;
   if (tipoLiberado(e.agent_type)) {
     registrar(e.session_id || '-', HOOK, 'liberado-por-tipo', `${quem} ${e.tool_name} ${p}`);
     return;
