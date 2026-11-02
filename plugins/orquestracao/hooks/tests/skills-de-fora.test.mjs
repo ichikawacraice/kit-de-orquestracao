@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATALOGO, decidir, lerCatalogo, liberadasDo, nomeCompleto, saidaDe, skillsProprias, substitutasDo, usaOKit } from '../skills-de-fora.mjs';
+import { CATALOGO, decidir, lerCatalogo, liberadasDo, nomeCompleto, pluginsLigados, saidaDe, skillsProprias, substitutasDo, substitutasDosPlugins, substitutasValidas, usaOKit } from '../skills-de-fora.mjs';
 
 const HOOKS = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PLUGIN = join(HOOKS, '..');
@@ -25,16 +25,41 @@ function projeto({ kitJson, claude } = {}) {
   return dir;
 }
 
-function rodar(entrada) {
-  const home = mkdtempSync(join(tmpdir(), 'skills-de-fora-home-'));
+// a pasta de config da conta vem do HOME do teste, nunca de um CLAUDE_CONFIG_DIR herdado
+const semConfigDir = (env) => { const { CLAUDE_CONFIG_DIR, ...resto } = env; return resto; };
+
+function rodar(entrada, { home: dado } = {}) {
+  const home = dado ?? mkdtempSync(join(tmpdir(), 'skills-de-fora-home-'));
   try {
     const r = spawnSync('node', [join(HOOKS, 'skills-de-fora.mjs')], {
       input: JSON.stringify(entrada), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
-      env: { ...process.env, HOME: home, HOOKS_CREWAI_BASE: home, PAINEL_DIR: home },
+      env: semConfigDir({ ...process.env, HOME: home, HOOKS_CREWAI_BASE: home, PAINEL_DIR: home }),
     });
     const log = existsSync(join(home, 'hooks-crewai.log')) ? readFileSync(join(home, 'hooks-crewai.log'), 'utf8') : '';
     return { ...r, log };
-  } finally { rmSync(home, { recursive: true, force: true }); }
+  } finally { if (!dado) rmSync(home, { recursive: true, force: true }); }
+}
+
+/**
+ * Uma conta com plugins instalados (`installed_plugins.json` + a pasta de cada um no cache) e o `enabledPlugins` dela.
+ * `plugins`: [{ id, substitutas?, escopo?: { scope, projectPath } }]; `ligados`: o enabledPlugins da conta.
+ */
+function conta({ plugins = [], ligados = {} } = {}) {
+  const home = mkdtempSync(join(tmpdir(), 'skills-de-fora-home-'));
+  const cfg = join(home, '.claude');
+  const instalados = {};
+  for (const { id, substitutas, escopo = { scope: 'user' } } of plugins) {
+    const [nome, mk] = id.split('@');
+    const pasta = join(cfg, 'plugins', 'cache', mk, nome, '0.1.0');
+    mkdirSync(join(pasta, '.claude-plugin'), { recursive: true });
+    writeFileSync(join(pasta, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: nome, version: '0.1.0' }));
+    if (substitutas !== undefined) writeFileSync(join(pasta, 'substitutas.json'), typeof substitutas === 'string' ? substitutas : JSON.stringify(substitutas));
+    (instalados[id] ??= []).push({ ...escopo, installPath: pasta, version: '0.1.0' });
+  }
+  mkdirSync(join(cfg, 'plugins'), { recursive: true });
+  writeFileSync(join(cfg, 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: instalados }));
+  writeFileSync(join(cfg, 'settings.json'), JSON.stringify({ enabledPlugins: ligados }));
+  return home;
 }
 
 test('o catálogo existe, tem plugins e skills, e toda saída é uma das quatro', () => {
@@ -224,6 +249,103 @@ test('catálogo × guia de conflitos: o guia cita cada dependência e cada skill
   const citadas = [...catalogo.plugins.filter((p) => p.saida === 'depender').map((p) => p.plugin), ...catalogo.skills.filter((s) => s.saida === 'barrar').map((s) => s.skill)];
   assert.ok(citadas.length > 0);
   for (const c of citadas) assert.ok(readme.includes(`\`${c}\``), `o guia de conflitos não cita \`${c}\``);
+});
+
+test('substitutasValidas: só skill `absorver` do catálogo, e a substituta tem de ser do próprio plugin', () => {
+  const abs = catalogo.skills.find((s) => s.saida === 'absorver');
+  const barr = catalogo.skills.find((s) => s.saida === 'barrar');
+  assert.ok(abs && barr, 'o catálogo tem absorver e barrar para o teste medir');
+  const declaradas = {
+    [abs.skill]: 'acme:acessibilidade',
+    [barr.skill]: 'acme:outra', // barrar já é do kit: o plugin não muda a peça que a recusa aponta
+    'engineering:standup': 'acme:standup', // livre: o plugin não barra o que o catálogo deixa livre
+    'superpowers:writing-plans': 'acme:planos', // depender: dependência do kit
+    'fulano:qualquer': 'acme:x', // fora do catálogo
+  };
+  assert.deepEqual(substitutasValidas('acme', declaradas, catalogo), { [abs.skill]: 'acme:acessibilidade' });
+  assert.deepEqual(substitutasValidas('acme', { [abs.skill]: 'outro:acessibilidade' }, catalogo), {}, 'substituta de outro plugin');
+  assert.deepEqual(substitutasValidas('acme', { [abs.skill]: 'acessibilidade' }, catalogo), {}, 'substituta sem o prefixo do plugin');
+  assert.deepEqual(substitutasValidas('acme', { [abs.skill]: 'acme:' }, catalogo), {}, 'substituta vazia');
+  assert.deepEqual(substitutasValidas('acme', { [abs.skill]: 'acme:a b' }, catalogo), {}, 'texto livre não é nome de skill');
+  assert.deepEqual(substitutasValidas('acme', { [abs.skill]: 3 }, catalogo), {});
+  assert.deepEqual(substitutasValidas('acme', { [abs.skill.slice(abs.skill.indexOf(':') + 1)]: 'acme:x' }, catalogo), {}, 'a chave é o nome completo da skill de fora');
+  assert.deepEqual(substitutasValidas('acme', ['x'], catalogo), {});
+});
+
+test('pluginsLigados: o enabledPlugins mais próximo vence (local > projeto > conta), e só o instalado com escopo que vale aqui', () => {
+  const p = projeto({ kitJson: {} });
+  const home = conta({
+    plugins: [
+      { id: 'acme@loja' },
+      { id: 'beta@loja' },
+      { id: 'gama@loja', escopo: { scope: 'project', projectPath: '/outro/projeto' } },
+      { id: 'delta@loja', escopo: { scope: 'project', projectPath: p } },
+    ],
+    ligados: { 'acme@loja': true, 'beta@loja': true, 'gama@loja': true, 'zeta@loja': true },
+  });
+  try {
+    writeFileSync(join(p, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'beta@loja': false, 'delta@loja': true } }));
+    writeFileSync(join(p, '.claude', 'settings.local.json'), JSON.stringify({ enabledPlugins: { 'beta@loja': true, 'acme@loja': false } }));
+    const ligados = pluginsLigados(join(p, 'apps', 'web'), join(home, '.claude'));
+    assert.ok(ligados.length > 0, 'nenhum plugin medido');
+    assert.deepEqual(ligados.map((x) => x.nome).sort(), ['beta', 'delta'], 'acme desligado no local; gama instalado só em outro projeto; zeta não instalado');
+    assert.ok(ligados.every((x) => existsSync(x.pasta)), 'a pasta de cada plugin ligado existe');
+  } finally { rmSync(p, { recursive: true, force: true }); rmSync(home, { recursive: true, force: true }); }
+});
+
+test('substitutasDosPlugins: junta as dos plugins ligados, filtradas; arquivo quebrado ou ausente não conta', () => {
+  const abs = catalogo.skills.filter((s) => s.saida === 'absorver');
+  assert.ok(abs.length >= 2, 'o catálogo tem duas absorções para o teste medir');
+  const p = projeto({ kitJson: {} });
+  const home = conta({
+    plugins: [
+      { id: 'acme@loja', substitutas: { substitutas: { [abs[0].skill]: 'acme:um', [abs[1].skill]: 'beta:dois' } } },
+      { id: 'beta@loja', substitutas: '{quebrado' },
+      { id: 'gama@loja' },
+      { id: 'desl@loja', substitutas: { substitutas: { [abs[1].skill]: 'desl:dois' } } },
+    ],
+    ligados: { 'acme@loja': true, 'beta@loja': true, 'gama@loja': true, 'desl@loja': false },
+  });
+  try {
+    assert.deepEqual(substitutasDosPlugins(p, join(home, '.claude'), catalogo), { [abs[0].skill]: 'acme:um' });
+  } finally { rmSync(p, { recursive: true, force: true }); rmSync(home, { recursive: true, force: true }); }
+});
+
+test('substitutasDosPlugins: dois plugins para a mesma skill, vence o primeiro em ordem de id (determinístico)', () => {
+  const abs = catalogo.skills.find((s) => s.saida === 'absorver');
+  const p = projeto({ kitJson: {} });
+  const home = conta({
+    plugins: [
+      { id: 'zz@loja', substitutas: { substitutas: { [abs.skill]: 'zz:a' } } },
+      { id: 'aa@loja', substitutas: { substitutas: { [abs.skill]: 'aa:a' } } },
+    ],
+    ligados: { 'zz@loja': true, 'aa@loja': true },
+  });
+  try {
+    assert.deepEqual(substitutasDosPlugins(p, join(home, '.claude'), catalogo), { [abs.skill]: 'aa:a' });
+  } finally { rmSync(p, { recursive: true, force: true }); rmSync(home, { recursive: true, force: true }); }
+});
+
+test('hook: a substituta declarada pelo plugin ligado barra a original sem nada no kit.json; o kit.json vence; liberar vence os dois', () => {
+  const abs = catalogo.skills.find((s) => s.saida === 'absorver' && s.feito !== true);
+  assert.ok(abs, 'o catálogo tem absorção não feita para o teste medir');
+  const curto = abs.skill.slice(abs.skill.indexOf(':') + 1);
+  const home = conta({ plugins: [{ id: 'acme@loja', substitutas: { substitutas: { [abs.skill]: `acme:${curto}` } } }], ligados: { 'acme@loja': true } });
+  const sem = projeto({ kitJson: {} });
+  const excecao = projeto({ kitJson: { skillsDeFora: { substitutas: { [abs.skill]: 'casa:acessibilidade' } } } });
+  const libera = projeto({ kitJson: { skillsDeFora: { liberar: [abs.skill] } } });
+  const semKit = projeto({ claude: '# sem kit\n' });
+  const chamar = (cwd) => rodar({ session_id: 's', hook_event_name: 'PreToolUse', cwd, tool_name: 'Skill', tool_input: { skill: abs.skill } }, { home });
+  try {
+    const r = chamar(join(sem, 'apps', 'web'));
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason.includes(`use acme:${curto}`), r.stdout);
+    assert.match(JSON.parse(chamar(excecao).stdout).hookSpecificOutput.permissionDecisionReason, /use casa:acessibilidade/);
+    assert.equal(chamar(libera).stdout, '', 'liberar no kit.json não valeu sobre a substituta do plugin');
+    assert.equal(chamar(semKit).stdout, '', 'projeto sem o kit não barra');
+    const curta = rodar({ session_id: 's', hook_event_name: 'PreToolUse', cwd: sem, tool_name: 'Skill', tool_input: { skill: curto } }, { home });
+    assert.equal(curta.stdout, '', 'o nome curto da substituta do plugin (igual ao da original) foi barrado');
+  } finally { for (const d of [home, sem, excecao, libera, semKit]) rmSync(d, { recursive: true, force: true }); }
 });
 
 test('o caminho do catálogo é o do plugin', () => {

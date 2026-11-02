@@ -3,6 +3,9 @@
 // catálogo, ou `absorver` já feita) é recusada com a peça certa, só em projeto que usa o kit (`.claude/kit.json` ou bloco
 // `<!-- kit:` no CLAUDE.md, da pasta da sessão até a raiz do git). O projeto libera uma skill em `skillsDeFora.liberar` e
 // declara em `skillsDeFora.substitutas` a peça dele que absorveu uma skill de fora (aí a absorção vale e a original é barrada).
+// Um plugin ligado no projeto (ex.: o do design system) declara as dele em `substitutas.json` na raiz do plugin (F340): valem
+// em todo projeto onde ele está ligado, só para skill `absorver` do catálogo e só com substituta do próprio plugin; o
+// kit.json do projeto vence o plugin, e `liberar` vence os dois.
 // O `/nome` digitado não passa pelo PreToolUse (doc do Claude Code): o UserPromptExpansion cobre esse caminho.
 // Erro do próprio hook vai para o log e DEIXA PASSAR: a trava não pode derrubar as sessões.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -105,6 +108,58 @@ export function substitutasDo(cwd) {
   return Object.fromEntries(Object.entries(m).filter(([, v]) => typeof v === 'string'));
 }
 
+const lerJson = (f) => { try { return JSON.parse(readFileSync(f, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
+const objeto = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
+
+/**
+ * As substitutas que o plugin `plugin` pode declarar: a chave é o nome completo de uma skill `absorver` do catálogo (o
+ * plugin não mexe no que o kit barra, deixa livre ou tem como dependência), e o valor, o nome de uma skill ou agente do
+ * próprio plugin (`<plugin>:<nome>`): um plugin não aponta para peça de outro.
+ */
+export function substitutasValidas(plugin, declaradas, catalogo) {
+  if (!objeto(declaradas) || !plugin) return {};
+  const nomeDaPeca = new RegExp(`^${plugin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:[A-Za-z0-9._-]+$`);
+  return Object.fromEntries(Object.entries(declaradas).filter(([skill, v]) => typeof v === 'string'
+    && nomeDaPeca.test(v.trim())
+    && catalogo.skills?.some((s) => s.skill === skill && s.saida === 'absorver')).map(([skill, v]) => [skill, v.trim()]));
+}
+
+/**
+ * Os plugins ligados neste projeto e a pasta de cada um: ligado é o `enabledPlugins` mais próximo (o `settings.local.json`
+ * e o `settings.json` do projeto, da pasta da sessão até a raiz do git, e depois o da conta) dizendo `true`; a pasta é a
+ * do `installed_plugins.json` cujo escopo vale aqui (`user`, ou `project`/`local` de uma pasta que contém a sessão).
+ * Plugin que só a conta do app traz (fora do CLI) não aparece: o caminho dele não é documentado. → [{ id, nome, pasta }].
+ */
+export function pluginsLigados(cwd, pastaConfig) {
+  if (!cwd || !pastaConfig) return [];
+  const camadas = [];
+  for (const d of pastasAteARaiz(cwd)) for (const n of ['settings.local.json', 'settings.json']) camadas.push(lerJson(join(d, '.claude', n))?.enabledPlugins);
+  camadas.push(lerJson(join(pastaConfig, 'settings.json'))?.enabledPlugins);
+  const decidido = new Map();
+  for (const c of camadas) if (objeto(c)) for (const [id, v] of Object.entries(c)) if (typeof v === 'boolean' && !decidido.has(id)) decidido.set(id, v);
+  const instalados = lerJson(join(pastaConfig, 'plugins', 'installed_plugins.json'))?.plugins ?? {};
+  const aqui = resolve(cwd);
+  const contem = (pasta) => typeof pasta === 'string' && (aqui === resolve(pasta) || aqui.startsWith(`${resolve(pasta)}/`));
+  const ligados = [];
+  for (const [id, v] of [...decidido].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    if (v !== true || !Array.isArray(instalados[id])) continue;
+    const entradas = instalados[id].filter((e) => typeof e?.installPath === 'string' && (e.scope === 'user' || contem(e.projectPath)));
+    const entrada = entradas.find((e) => e.scope !== 'user') ?? entradas[0];
+    if (entrada && existsSync(entrada.installPath)) ligados.push({ id, nome: id.split('@')[0], pasta: entrada.installPath });
+  }
+  return ligados;
+}
+
+/** As substitutas que os plugins ligados declaram em `substitutas.json`, filtradas; dois para a mesma skill, vence o primeiro id. */
+export function substitutasDosPlugins(cwd, pastaConfig, catalogo) {
+  const juntas = {};
+  for (const { nome, pasta } of pluginsLigados(cwd, pastaConfig)) {
+    const validas = substitutasValidas(nome, lerJson(join(pasta, 'substitutas.json'))?.substitutas, catalogo);
+    for (const [skill, v] of Object.entries(validas)) if (!(skill in juntas)) juntas[skill] = v;
+  }
+  return juntas;
+}
+
 /** Os nomes das skills do projeto (`.claude/skills/*` da pasta até a raiz do git) e da conta (`~/.claude/skills/*`). */
 export function skillsProprias(cwd, home) {
   const nomes = new Set();
@@ -121,7 +176,11 @@ function main() {
   if (!nome) return;
   const cwd = e.cwd || process.cwd();
   if (!usaOKit(cwd)) return;
-  const motivo = decidir(nome, { catalogo: lerCatalogo(), liberar: liberadasDo(cwd), substitutas: substitutasDo(cwd), proprias: skillsProprias(cwd, e.home || homedir()) });
+  const home = e.home || homedir();
+  const catalogo = lerCatalogo();
+  // o kit.json do projeto vence o plugin: é a exceção do projeto
+  const substitutas = { ...substitutasDosPlugins(cwd, process.env.CLAUDE_CONFIG_DIR || join(home, '.claude'), catalogo), ...substitutasDo(cwd) };
+  const motivo = decidir(nome, { catalogo, liberar: liberadasDo(cwd), substitutas, proprias: skillsProprias(cwd, home) });
   if (!motivo) return;
   registrar(e.session_id, HOOK, 'recusou', motivo);
   const saida = expansao
