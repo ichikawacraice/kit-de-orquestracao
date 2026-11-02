@@ -376,7 +376,7 @@ describe('kit doutor (completo)', () => {
       assert.equal(kit(d, ['adotar'], { home: h }).status, 0);
       const r = kit(d, ['doutor'], { home: h });
       assert.equal(r.status, 1, saida(r));
-      assert.match(r.stdout, /falha: superpowers não instalado.*claude plugin install superpowers@claude-plugins-official/);
+      assert.match(r.stdout, /falha: superpowers@claude-plugins-official não instalado.*claude plugin install superpowers@claude-plugins-official/);
     } finally { limpar(d, h); }
   });
 

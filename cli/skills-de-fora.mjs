@@ -38,15 +38,42 @@ export function pluginsPresentes(home) {
   return presentes;
 }
 
-/** As linhas do doutor (`ok:`, `falha:`, `aviso:`) e quantas falhas. */
-export function conferirSkillsDeFora({ home, catalogo = lerJson(CATALOGO) }) {
+/**
+ * A dependência `id` (nome@marketplace) vale para este projeto: instalada com esse id exato, em `user` ou no escopo de
+ * projeto/local deste projeto, e não desligada em `enabledPlugins` (a camada mais próxima vence). → { ok, motivo }.
+ */
+function dependenciaValida(id, home, destino, configs) {
+  const entradas = lerJson(join(home, '.claude', 'plugins', 'installed_plugins.json'))?.plugins?.[id];
+  const aqui = (e) => e?.scope === 'user' || (destino && typeof e?.projectPath === 'string' && (destino === e.projectPath || destino.startsWith(`${e.projectPath}/`)));
+  if (!Array.isArray(entradas) || !entradas.length) return { ok: false, motivo: 'não instalado' };
+  if (!entradas.some(aqui)) return { ok: false, motivo: 'instalado só no escopo de outro projeto' };
+  for (const c of [...configs].reverse()) {
+    const v = c?.enabledPlugins?.[id];
+    if (typeof v === 'boolean') return v ? { ok: true } : { ok: false, motivo: 'instalado mas desligado em enabledPlugins' };
+  }
+  return { ok: true };
+}
+
+/**
+ * As linhas do doutor (`ok:`, `falha:`, `aviso:`, `info:`) e quantas falhas. `configs`: os settings da conta, do projeto
+ * e o local, nessa ordem (o doutor já os lê); sem eles, lê de `home` e `destino`.
+ */
+export function conferirSkillsDeFora({ home, destino = '', configs, catalogo = lerJson(CATALOGO) }) {
+  configs ??= [join(home, '.claude', 'settings.json'), ...(destino ? [join(destino, '.claude', 'settings.json'), join(destino, '.claude', 'settings.local.json')] : [])].map(lerJson);
   const linhas = [];
   let falhas = 0;
   if (!catalogo) return { linhas: ['aviso: não consegui ler o catálogo de skills de fora do kit (plugins/orquestracao/skills-de-fora.json)'], falhas: 0 };
   const presentes = pluginsPresentes(home);
   for (const p of (catalogo.plugins ?? []).filter((x) => x.saida === 'depender')) {
-    if (presentes.has(p.plugin)) linhas.push(`ok: ${p.plugin} instalado (o kit usa: ${p.motivo})`);
-    else { falhas++; linhas.push(`falha: ${p.plugin} não instalado; o kit usa: ${p.motivo} Instale: \`claude plugin install ${p.plugin}@${p.marketplace}\`; sem ele o plugin orquestracao novo não carrega (é dependência dele). ${p.repositorioDoMarketplace ? `Se o marketplace ${p.marketplace} faltar, antes: \`claude plugin marketplace add ${p.repositorioDoMarketplace}\`` : ''}`); }
+    const id = `${p.plugin}@${p.marketplace}`;
+    const v = dependenciaValida(id, home, destino, configs);
+    if (v.ok) { linhas.push(`ok: ${p.plugin} instalado (o kit usa: ${p.motivo})`); continue; }
+    falhas++;
+    // outro superpowers (outro marketplace, ou o da conta do app) não satisfaz a dependência do plugin
+    const outro = (presentes.get(p.plugin) ?? []).filter((o) => o.id !== id).map((o) => (o.origem === 'app' ? 'o da conta do app' : o.id));
+    const comoConsertar = v.motivo === 'instalado mas desligado em enabledPlugins' ? `Ligue: \`claude plugin enable ${id}\``
+      : `Instale: \`claude plugin install ${id}\`${p.repositorioDoMarketplace ? ` (se o marketplace ${p.marketplace} faltar, antes: \`claude plugin marketplace add ${p.repositorioDoMarketplace}\`)` : ''}`;
+    linhas.push(`falha: ${id} ${v.motivo}${outro.length ? ` (${outro.join(', ')} não conta: a dependência é este id)` : ''}; o kit usa: ${p.motivo} Sem ele o plugin orquestracao não carrega. ${comoConsertar}`);
   }
   const barradas = (catalogo.skills ?? []).filter((s) => s.saida === 'barrar' || (s.saida === 'absorver' && s.feito === true));
   const porPlugin = new Map();

@@ -8,7 +8,7 @@ O kit decide num catálogo ([`plugins/orquestracao/skills-de-fora.json`](../../p
 
 <a id="barradas"></a>
 ## O que o kit barra
-Só as skills que quebram uma regra do kit, não as que apenas repetem. Em projeto com o kit (`.claude/kit.json` ou blocos `kit:` no `CLAUDE.md`), a sessão que tentar usá-las, pela ferramenta ou digitando `/nome`, recebe a recusa com a peça certa:
+Só as skills que quebram uma regra do kit, não as que apenas repetem. Em projeto com o kit (`.claude/kit.json` ou blocos `kit:` no `CLAUDE.md`), a sessão que tentar usá-las, pela ferramenta (com ou sem o prefixo do plugin) ou digitando `/nome`, recebe a recusa com a peça certa:
 
 | Skill barrada | Use no lugar | A regra que ela quebra |
 |---|---|---|
@@ -22,7 +22,11 @@ Para liberar uma delas num projeto, ponha o nome em `skillsDeFora.liberar` do `.
 <a id="absorvidas"></a>
 ## O que é absorvido
 A ideia boa de uma skill de fora é reescrita no formato da casa, com crédito à fonte, em vez de copiada. Enquanto a versão da casa não sai, a original segue livre.
-- `design:accessibility-review` e `design:ux-copy` vão para o plugin de design system do projeto, quando houver (acessibilidade presa aos tokens da base, texto de interface em PT-BR com as regras de mensagem).
+- `design:accessibility-review`, `design:ux-copy` e `design:design-system` vão para o design system do projeto, quando houver (acessibilidade presa aos tokens da base, texto de interface em PT-BR com as regras de mensagem, auditoria de valor solto).
+- O projeto que tem a versão da casa a declara no `.claude/kit.json`, e a original passa a ser recusada ali, apontando para a substituta:
+  ```json
+  { "skillsDeFora": { "substitutas": { "design:accessibility-review": "<plugin do design system>:<skill de acessibilidade>" } } }
+  ```
 
 <a id="desligar"></a>
 ## O que desligar, se não usa

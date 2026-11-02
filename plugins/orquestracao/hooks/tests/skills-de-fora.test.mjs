@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATALOGO, decidir, lerCatalogo, liberadasDo, saidaDe, usaOKit } from '../skills-de-fora.mjs';
+import { CATALOGO, decidir, lerCatalogo, liberadasDo, nomeCompleto, saidaDe, substitutasDo, usaOKit } from '../skills-de-fora.mjs';
 
 const HOOKS = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PLUGIN = join(HOOKS, '..');
@@ -68,9 +68,47 @@ test('decidir: barrar recusa com a peça do kit; absorver só recusa quando feit
   assert.ok(decidir(abs.skill, { catalogo: feito }), 'absorção feita é barrada como duplicata');
 });
 
+test('sem o prefixo do plugin: o nome curto único casa com a linha; o homônimo marcado semPrefixo: false não', () => {
+  assert.equal(nomeCompleto('architecture', catalogo), 'engineering:architecture');
+  assert.ok(decidir('architecture', { catalogo })?.includes('processos:spec-driven'), 'architecture sem prefixo escapou');
+  assert.ok(decidir('/design-critique', { catalogo }), 'design-critique sem prefixo escapou');
+  const cr = catalogo.skills.find((s) => s.skill === 'engineering:code-review');
+  assert.equal(cr?.semPrefixo, false, 'code-review tem homônimo no Claude Code');
+  assert.equal(decidir('code-review', { catalogo }), null, 'o /code-review do Claude Code não pode ser barrado');
+  assert.equal(decidir('standup', { catalogo }), null);
+  assert.equal(decidir('architecture', { catalogo, liberar: ['engineering:architecture'] }), null, 'liberar pelo nome completo vale para o curto');
+});
+
+test('hook: Skill sem o prefixo do plugin também é recusada', () => {
+  const p = projeto({ kitJson: {} });
+  try {
+    const r = rodar({ session_id: 's', hook_event_name: 'PreToolUse', cwd: p, tool_name: 'Skill', tool_input: { skill: 'architecture' } });
+    assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, 'deny');
+  } finally { rmSync(p, { recursive: true, force: true }); }
+});
+
 test('decidir: o projeto libera uma skill pela lista do kit.json', () => {
   assert.equal(decidir('engineering:architecture', { catalogo, liberar: ['engineering:architecture'] }), null);
   assert.ok(decidir('engineering:code-review', { catalogo, liberar: ['engineering:architecture'] }));
+});
+
+test('decidir: a absorção não feita vale no projeto que declara a substituta, e a recusa aponta a substituta', () => {
+  const abs = catalogo.skills.find((s) => s.saida === 'absorver' && s.feito !== true);
+  assert.ok(abs, 'o catálogo tem absorção não feita para o teste medir');
+  assert.equal(decidir(abs.skill, { catalogo, substitutas: {} }), null);
+  const motivo = decidir(abs.skill, { catalogo, substitutas: { [abs.skill]: 'ds:acessibilidade' } });
+  assert.ok(motivo && motivo.includes('use ds:acessibilidade'), `sem a substituta: ${motivo}`);
+  assert.equal(decidir(abs.skill, { catalogo, substitutas: { [abs.skill]: '  ' } }), null, 'substituta vazia não conta');
+  assert.equal(decidir('engineering:standup', { catalogo, substitutas: { 'engineering:standup': 'x:y' } }), null, 'substituta só vale para absorver');
+});
+
+test('substitutasDo: só os pares de texto; sem a seção, {}', () => {
+  const p = projeto({ kitJson: { skillsDeFora: { substitutas: { 'design:ux-copy': 'ds:textos', ruim: 3 } } } });
+  try {
+    assert.deepEqual(substitutasDo(join(p, 'apps', 'web')), { 'design:ux-copy': 'ds:textos' });
+    writeFileSync(join(p, '.claude', 'kit.json'), JSON.stringify({ skillsDeFora: { substitutas: ['x'] } }));
+    assert.deepEqual(substitutasDo(p), {});
+  } finally { rmSync(p, { recursive: true, force: true }); }
 });
 
 test('usaOKit: kit.json ou bloco kit: no CLAUDE.md, subindo da subpasta até a raiz do git; senão não', () => {
@@ -105,6 +143,15 @@ test('hook: Skill barrada em projeto com o kit sai com deny e o motivo, e regist
     assert.equal(out.hookSpecificOutput.permissionDecision, 'deny');
     assert.match(out.hookSpecificOutput.permissionDecisionReason, /processos:spec-driven/);
     assert.match(r.log, /skills-de-fora\trecusou/);
+  } finally { rmSync(p, { recursive: true, force: true }); }
+});
+
+test('hook: skill absorvida com substituta declarada no kit.json sai com deny apontando a substituta', () => {
+  const p = projeto({ kitJson: { skillsDeFora: { substitutas: { 'design:accessibility-review': 'ds:acessibilidade' } } } });
+  try {
+    const r = rodar({ session_id: 's', hook_event_name: 'PreToolUse', cwd: join(p, 'apps', 'web'), tool_name: 'Skill', tool_input: { skill: 'design:accessibility-review' } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason, /use ds:acessibilidade/);
   } finally { rmSync(p, { recursive: true, force: true }); }
 });
 

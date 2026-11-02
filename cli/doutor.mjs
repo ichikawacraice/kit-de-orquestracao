@@ -50,7 +50,7 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   processos(destino, home, configs, linhas);
 
   // skills de fora (ADR 0014): a dependência que falta reprova; o plugin com skill barrada só avisa
-  const fora = conferirSkillsDeFora({ home });
+  const fora = conferirSkillsDeFora({ home, destino, configs });
   falhas += fora.falhas;
   linhas.push(...fora.linhas);
 

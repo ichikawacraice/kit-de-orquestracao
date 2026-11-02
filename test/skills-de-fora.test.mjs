@@ -19,9 +19,10 @@ const catalogo = {
 };
 
 const escrever = (f, obj) => { mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, typeof obj === 'string' ? obj : JSON.stringify(obj)); };
-function casa({ cli = [], app = [], appAntigo = [] } = {}) {
+function casa({ cli = [], app = [], appAntigo = [], entradas = {}, settings } = {}) {
   const h = mkdtempSync(join(tmpdir(), 'kit-skills-de-fora-'));
-  escrever(join(h, '.claude', 'plugins', 'installed_plugins.json'), { version: 2, plugins: Object.fromEntries(cli.map((id) => [id, [{ scope: 'user' }]])) });
+  escrever(join(h, '.claude', 'plugins', 'installed_plugins.json'), { version: 2, plugins: { ...Object.fromEntries(cli.map((id) => [id, [{ scope: 'user' }]])), ...entradas } });
+  if (settings) escrever(join(h, '.claude', 'settings.json'), settings);
   const rpm = (sessao, nomes, quando) => {
     const r = join(h, 'Library', 'Application Support', 'Claude', 'local-agent-mode-sessions', sessao, 'conta', 'rpm');
     escrever(join(r, 'manifest.json'), { plugins: nomes.map((n, i) => ({ id: `plugin_${i}`, displayName: n })) });
@@ -72,6 +73,35 @@ describe('conferirSkillsDeFora', () => {
       assert.match(linha, /superpowers/);
       assert.match(linha, /claude plugin install superpowers@claude-plugins-official/);
       assert.match(linha, /claude plugin marketplace add anthropics\/claude-plugins-official/);
+    } finally { rmSync(h, { recursive: true, force: true }); }
+  });
+
+  it('superpowers de outro marketplace ou da conta do app não satisfaz a dependência: falha nomeando o id certo', () => {
+    const h = casa({ cli: ['superpowers@outro-mkt'], app: ['superpowers'] });
+    try {
+      const r = conferirSkillsDeFora({ home: h, catalogo });
+      assert.equal(r.falhas, 1, r.linhas.join('\n'));
+      const linha = r.linhas.find((l) => l.startsWith('falha:'));
+      assert.match(linha, /superpowers@claude-plugins-official não instalado/);
+      assert.match(linha, /superpowers@outro-mkt, o da conta do app não conta/);
+    } finally { rmSync(h, { recursive: true, force: true }); }
+  });
+
+  it('dependência desligada em enabledPlugins é falha com o comando de ligar', () => {
+    const h = casa({ cli: ['superpowers@claude-plugins-official'], settings: { enabledPlugins: { 'superpowers@claude-plugins-official': false } } });
+    try {
+      const r = conferirSkillsDeFora({ home: h, catalogo });
+      assert.equal(r.falhas, 1, r.linhas.join('\n'));
+      assert.match(r.linhas.find((l) => l.startsWith('falha:')), /desligado.*claude plugin enable superpowers@claude-plugins-official/);
+    } finally { rmSync(h, { recursive: true, force: true }); }
+  });
+
+  it('dependência instalada só no escopo de outro projeto é falha; no escopo deste projeto é ok', () => {
+    const h = casa({ entradas: { 'superpowers@claude-plugins-official': [{ scope: 'project', projectPath: '/outro/projeto' }] } });
+    try {
+      assert.equal(conferirSkillsDeFora({ home: h, catalogo, destino: '/este/projeto' }).falhas, 1);
+      assert.equal(conferirSkillsDeFora({ home: h, catalogo, destino: '/outro/projeto' }).falhas, 0);
+      assert.equal(conferirSkillsDeFora({ home: h, catalogo, destino: '/outro/projeto/apps/web' }).falhas, 0, 'subpasta do projeto conta');
     } finally { rmSync(h, { recursive: true, force: true }); }
   });
 

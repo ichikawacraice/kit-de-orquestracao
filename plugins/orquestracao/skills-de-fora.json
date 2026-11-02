@@ -1,5 +1,5 @@
 {
-  "doc": "O que o kit faz com cada plugin e skill de fora (ADR 0014). saida: depender (o kit chama; vem em dependencies do plugin.json) · barrar (quebra uma regra do kit, não só repete: a trava skills-de-fora recusa e diz qual usar) · absorver (a ideia entra numa peça do kit ou do plugin de design system do projeto; barrada só quando feito: true) · livre (fora do escopo do kit). Skill sem linha herda a saída do plugin; plugin fora daqui é livre. O projeto libera uma skill em skillsDeFora.liberar do .claude/kit.json.",
+  "doc": "O que o kit faz com cada plugin e skill de fora (ADR 0014). saida: depender (o kit chama; vem em dependencies do plugin.json) · barrar (quebra uma regra do kit, não só repete: a trava skills-de-fora recusa e diz qual usar) · absorver (a ideia entra numa peça do kit ou do design system do projeto; barrada quando feito: true, ou no projeto que declara a substituta em skillsDeFora.substitutas do .claude/kit.json) · livre (fora do escopo do kit). Skill sem linha herda a saída do plugin; plugin fora daqui é livre. O projeto libera uma skill em skillsDeFora.liberar do .claude/kit.json. A skill chamada sem o prefixo do plugin (o Claude Code aceita) casa com a linha cujo nome curto é único no catálogo, salvo semPrefixo: false (nome curto que outra skill também usa, como o /code-review do Claude Code).",
   "plugins": [
     {
       "plugin": "superpowers",
@@ -44,7 +44,8 @@
       "skill": "engineering:code-review",
       "saida": "barrar",
       "use": "orquestracao:validador (com processos:revisar-diff no briefing)",
-      "motivo": "A revisão do kit é por subagente de contexto limpo, só com achados que afetam correção; a revisão na mesma sessão de quem escreveu não conta."
+      "motivo": "A revisão do kit é por subagente de contexto limpo, só com achados que afetam correção; a revisão na mesma sessão de quem escreveu não conta.",
+      "semPrefixo": false
     },
     {
       "skill": "superpowers:requesting-code-review",
@@ -55,26 +56,36 @@
     {
       "skill": "design:design-critique",
       "saida": "barrar",
-      "use": "o subagente kit-design:critico-de-ui",
+      "use": "o crítico de UI do design system do projeto, ou kit-design:critico-de-ui fora dele",
       "motivo": "Quebra a regra do fluxo de design: a crítica que conta é a do subagente critico-de-ui, em contexto separado, com nota de 0 a 30 e teto de recríticas; a crítica na mesma sessão de quem desenhou não conta."
     },
     {
       "skill": "design:accessibility-review",
       "saida": "absorver",
-      "em": "plugin de design system do projeto: etapa de acessibilidade do crítico, presa aos tokens da base",
+      "em": "design system do projeto, quando houver: etapa de acessibilidade presa aos tokens da base",
       "feito": false,
-      "use": "a skill de acessibilidade do plugin de design system do projeto, quando houver",
-      "motivo": "O crítico não olha acessibilidade (contraste AA, teclado e foco, alvo de toque, rótulo, nome/papel). Entra no plugin de design system, não no kit: acessibilidade depende dos tokens de cada base.",
-      "licenca": "Apache-2.0 no repositório anthropics/knowledge-work-plugins (a cópia local não traz o LICENSE: conferir antes de reescrever)"
+      "use": "a skill de acessibilidade do design system do projeto (skillsDeFora.substitutas)",
+      "motivo": "O crítico do kit não olha acessibilidade (contraste AA, teclado e foco, alvo de toque, rótulo, nome/papel); ela depende dos tokens de cada base, por isso fica com o design system do projeto.",
+      "licenca": "Apache-2.0 (anthropics/knowledge-work-plugins); a atribuição fica no design system que a absorveu"
     },
     {
       "skill": "design:ux-copy",
       "saida": "absorver",
-      "em": "plugin de design system do projeto, junto das regras de mensagem da base",
+      "em": "design system do projeto, quando houver, junto das regras de mensagem da base",
       "feito": false,
-      "use": "a skill de texto de interface do plugin de design system do projeto, quando houver",
-      "licenca": "Apache-2.0 no repositório anthropics/knowledge-work-plugins (conferir antes de reescrever)",
+      "use": "a skill de texto de interface do design system do projeto (skillsDeFora.substitutas)",
+      "licenca": "Apache-2.0 (anthropics/knowledge-work-plugins); a atribuição fica no design system que a absorveu",
       "motivo": "Texto de interface em PT-BR com as regras de mensagem da base; a skill da Anthropic é genérica e em inglês."
+    },
+    {
+      "skill": "design:design-system",
+      "saida": "absorver",
+      "em": "design system do projeto, quando houver: auditoria de valor solto e de peça fora do kit de componentes",
+      "feito": false,
+      "use": "a auditoria do design system do projeto (skillsDeFora.substitutas)",
+      "licenca": "Apache-2.0 (anthropics/knowledge-work-plugins); a atribuição fica no design system que a absorveu",
+      "motivo": "Auditar e documentar o design system é do próprio design system, que conhece os tokens e os componentes; a skill da Anthropic é genérica.",
+      "semPrefixo": false
     }
   ]
 }
