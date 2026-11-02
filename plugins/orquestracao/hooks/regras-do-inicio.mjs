@@ -29,7 +29,8 @@ function claudeDoProjeto(cwd) {
 export function resumoParaOProjeto(regras, cwd) {
   let claude = '';
   try { if (cwd) claude = claudeDoProjeto(cwd); } catch { /* sem CLAUDE.md legível: resumo inteiro */ }
-  const versao = (bloco) => Number(new RegExp(`<!-- kit:${bloco} v(\\d+) -->`).exec(claude)?.[1] ?? 0);
+  // só o bloco aberto, com conteúdo e fechado conta (marca solta ou bloco vazio não traz a regra)
+  const versao = (bloco) => Number(new RegExp(`<!-- kit:${bloco} v(\\d+) -->\\s*\\S[\\s\\S]*?<!-- /kit:${bloco} -->`).exec(claude)?.[1] ?? 0);
   const tiradas = [];
   const linhas = regras.split('\n').flatMap((l) => {
     const m = MARCA.exec(l);

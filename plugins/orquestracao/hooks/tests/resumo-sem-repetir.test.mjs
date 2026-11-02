@@ -80,6 +80,13 @@ test('sem cwd ou sem CLAUDE.md, o resumo vai inteiro', () => {
   } finally { rmSync(nada, { recursive: true, force: true }); }
 });
 
+test('marca de abertura solta ou bloco vazio não tira a regra', () => {
+  for (const claude of ['# p\n<!-- kit:regras-de-trabalho v4 -->\nsem fechar\n', '# p\n<!-- kit:regras-de-trabalho v4 -->\n<!-- /kit:regras-de-trabalho -->\n']) {
+    const dir = projeto(claude);
+    try { assert.ok(resumoParaOProjeto(REGRAS, dir).includes('- **O pedido é ponto de partida'), claude); } finally { rmSync(dir, { recursive: true, force: true }); }
+  }
+});
+
 test('só o bloco que existe tira a regra: CLAUDE.md com um dos blocos tira só as regras dele', () => {
   const trabalho = MODELO.match(/<!-- kit:regras-de-trabalho v\d+ -->[\s\S]*?<!-- \/kit:regras-de-trabalho -->/)?.[0];
   assert.ok(trabalho, 'precondição: o modelo tem o bloco regras-de-trabalho');

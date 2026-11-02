@@ -126,7 +126,9 @@ function processos(destino, home, configs, linhas) {
   const secao = { processos: 'documentos', design: 'design' };
   const plugin = { processos: 'processos', design: 'kit-design' };
   for (const nome of ['processos', 'design']) {
-    if (ligado[nome] === false && kj[secao[nome]] !== undefined) linhas.push(`aviso: plugin ${plugin[nome]} desligado, mas o .claude/kit.json tem a seção ${secao[nome]}: o kit.json não o religa (plugin desligado não roda, diga o arquivo o que disser); para religar, enabledPlugins "${plugin[nome]}@${MARKETPLACE}": true`);
+    const peloPerfil = Array.isArray(kj.plugins?.desligar) && kj.plugins.desligar.includes(`${plugin[nome]}@${MARKETPLACE}`);
+    if (ligado[nome] === false && peloPerfil) linhas.push(`info: plugin ${plugin[nome]} desligado pelo perfil do .claude/kit.json (plugins.desligar); a seção ${secao[nome]} fica sem efeito enquanto ele estiver desligado`);
+    else if (ligado[nome] === false && kj[secao[nome]] !== undefined) linhas.push(`aviso: plugin ${plugin[nome]} desligado, mas o .claude/kit.json tem a seção ${secao[nome]}: o kit.json não o religa (plugin desligado não roda, diga o arquivo o que disser); para religar, enabledPlugins "${plugin[nome]}@${MARKETPLACE}": true`);
     else if (ligado[nome] === false) linhas.push(`info: plugin ${plugin[nome]} desligado neste projeto`);
     else if (ligado[nome] === true && kj[secao[nome]] === undefined) linhas.push(`aviso: plugin ${plugin[nome]} ligado, mas o .claude/kit.json está sem a seção ${secao[nome]}: valem os caminhos e os padrões do plugin; o \`kit atualizar\` não a acrescenta, copie-a do modelo do kit`);
   }

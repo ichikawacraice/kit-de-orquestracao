@@ -131,5 +131,8 @@ describe('ponta a ponta: atualizar aplica, doutor confere, remover tira', () => 
     const cs = ler(b, '.claude', 'kit.lock.json').chaves.settings;
     assert.ok(cs.desligados.includes(KD) && !cs.plugins.includes(KD), JSON.stringify(cs));
     assert.equal(kit(b, 'atualizar').status, 0, 'o segundo atualizar não pode virar conflito');
+    const doutor = kit(b, 'doutor').stdout;
+    assert.match(doutor, /info: plugin kit-design desligado pelo perfil/);
+    assert.doesNotMatch(doutor, /para religar, enabledPlugins "kit-design/, 'o doutor manda desfazer o que o perfil pede');
   });
 });
