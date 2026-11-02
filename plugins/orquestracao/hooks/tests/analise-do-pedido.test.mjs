@@ -24,8 +24,12 @@ test('o protocolo tem a seção da análise do pedido com as partes da regra', (
   for (const frase of [
     'ponto de partida', 'premissa', 'Proporcional ao risco', 'Premissa conferida', 'errado ou arriscado',
     'Contraproposta', 'Recomendação', 'não invente', 'Discordar não é travar', 'assumida, a confirmar',
-    'Discorda uma vez', 'briefing', 'Q-ID', '#nunca-travar', 'Por que não há trava',
+    'Discorda uma vez', 'salvo se for inseguro', 'briefing', 'Q-ID', '#nunca-travar', 'Por que não há trava',
   ]) assert.ok(secao.includes(frase), `a seção não diz "${frase}"`);
+  // O que espera o operador é a mesma lista do "nunca travar" e do resumo: nada de "só o irreversível" sozinho.
+  for (const frase of ['publica para fora', 'produção', 'gasta job']) assert.ok(secao.includes(frase), `a seção não diz "${frase}"`);
+  const resumo = ler(HOOKS, 'regras-globais.md');
+  assert.ok(resumo.includes('gasta job') && !/só o irreversível espera/.test(resumo), 'o resumo encurta a lista do que espera');
 });
 
 test('o resumo, a dona, o modelo de CLAUDE.md e o validador dizem a regra e apontam para a seção', () => {
@@ -41,7 +45,7 @@ test('o resumo, a dona, o modelo de CLAUDE.md e o validador dizem a regra e apon
     assert.match(t, /premissa/i, `${nome} não fala da premissa`);
   }
   for (const nome of ['resumo', 'modelo']) {
-    for (const frase of ['ponto de partida', 'proporcional ao risco', 'contraproposta', 'uma vez']) {
+    for (const frase of ['ponto de partida', 'proporcional ao risco', 'contraproposta', 'uma vez', 'salvo o inseguro', 'regra do projeto']) {
       assert.ok(textos[nome].toLowerCase().includes(frase), `${nome} não diz "${frase}"`);
     }
   }

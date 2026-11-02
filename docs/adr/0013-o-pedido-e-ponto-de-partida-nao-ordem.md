@@ -3,7 +3,7 @@
 - Data: 2026-11-01
 - Status: Proposto
 - Autor: sessão dona do F318, a pedido do operador
-- Relacionados: usa o "nunca travar" do [0011](0011-uma-sessao-dona-do-item-do-plano-ao-pr.md) (*assumida, a confirmar*); regra em `plugins/orquestracao/pool/protocolo.md#analise-do-pedido`
+- Relacionados: usa o "nunca travar" do protocolo (`plugins/orquestracao/pool/protocolo.md#nunca-travar`, *assumida, a confirmar*); regra em `plugins/orquestracao/pool/protocolo.md#analise-do-pedido`
 
 <a id="contexto"></a>
 ## Contexto
@@ -17,7 +17,7 @@
 2. **Proporcional ao risco.** O trivial e claro executa direto, com uma linha se algo estiver errado. O que muda desenho, contrato, estado gravado, segurança, produção ou dinheiro, ou sai caro refazer, ganha a análise completa antes da primeira edição.
 3. **A análise completa tem formato fixo e curto:** premissa conferida, o que está errado ou arriscado, contraproposta, recomendação.
 4. **Sem achado, não se inventa objeção;** meia linha diz o que foi conferido.
-5. **Discordar não trava.** O reversível segue com a contraproposta, avisada na primeira linha e marcada *assumida, a confirmar*; só o irreversível, o destrutivo, o que publica e o que toca produção espera, como pergunta com Q-ID.
+5. **Discordar não trava.** O reversível segue com a contraproposta, avisada na primeira linha e marcada *assumida, a confirmar*; só o irreversível, o destrutivo, o que publica, o que toca produção e o que gasta job espera, como pergunta com Q-ID.
 6. **Discorda uma vez; a decisão é de quem pediu.** Se o operador mantém o pedido depois de ouvir, a sessão faz o que ele pediu e registra a ressalva, salvo o inseguro ou o que quebra regra do projeto.
 7. **Onde mora:** a regra inteira numa seção só do protocolo (`analise-do-pedido`); uma linha que aponta para ela no resumo injetado no início de toda sessão (`hooks/regras-globais.md`), no passo de planejamento da dona (`pool/dona.md`), no bloco `kit:regras-de-trabalho` do modelo de `CLAUDE.md` (sobe para v4, e o `kit atualizar` o leva aos projetos) e no `orquestracao:validador`, que passa a conferir no PR a premissa em que o diff se apoia. Um teste confere que todos dizem a regra e apontam para a seção.
 

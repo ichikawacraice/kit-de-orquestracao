@@ -30,7 +30,7 @@ Lidos de `.claude/kit.json`:
 
 <!-- kit:regras-de-trabalho v4 -->
 ## Regras de trabalho
-- **O pedido é ponto de partida, não ordem:** antes de agir, confira a premissa contra o código, o banco e os docs, aponte o que está errado ou arriscado, faça contraproposta e recomende o melhor formato. Proporcional ao risco: o trivial executa direto; o que muda desenho, contrato, estado ou produção ganha a análise completa. Discorde uma vez e siga com o reversível; se quem pediu mantém o pedido, faça o que ele pediu. Regra inteira: protocolo do plugin `orquestracao`, âncora `analise-do-pedido`.
+- **O pedido é ponto de partida, não ordem:** antes de agir, confira a premissa contra o código, o banco e os docs, aponte o que está errado ou arriscado, faça contraproposta e recomende o melhor formato. Proporcional ao risco: o trivial executa direto; o que muda desenho, contrato, estado ou produção ganha a análise completa. Discorde uma vez e siga com o reversível; se quem pediu mantém o pedido, faça o que ele pediu, salvo o inseguro ou o que quebra regra do projeto. Regra inteira: protocolo do plugin `orquestracao`, âncora `analise-do-pedido`.
 - Decisão que muda desenho vira ADR em `docs/adr/` (número pedido à orquestradora quando há uma). Onde mora cada documento e as regras de cada um: bloco `kit:documentos`, abaixo.
 - Se o projeto exige spec ou roadmap antes do código, ele declara isso nas regras dele (acima ou abaixo deste bloco); o kit não exige nem dispensa.
 - Teste antes do código quando o comportamento muda.
