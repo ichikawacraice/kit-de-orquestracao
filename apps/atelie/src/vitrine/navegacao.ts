@@ -18,7 +18,8 @@ import { itemPeloNome, secaoDoItem } from "@/catalogo/registro"
 /**
  * Os destinos da vitrine, numa fonte só: a barra do casco e as portas do início
  * leem daqui. O início não é destino: o logotipo no topo da barra leva a ele, e
- * com os onze destinos a barra cabe inteira a 800px de altura.
+ * com os onze destinos a barra cabe inteira a 800px de altura. O guia "Começar"
+ * também não é destino (um décimo segundo não cabe): a porta dele abre o início.
  */
 export const DESTINOS: GrupoDeDestinos[] = [
   {

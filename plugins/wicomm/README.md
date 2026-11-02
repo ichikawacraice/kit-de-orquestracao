@@ -2,6 +2,8 @@
 
 O plugin do Claude Code de design system da Wicomm, para os apps React próprios da empresa (sempre com a marca Wicomm; lojas FastStore e Wake ficam fora). Leva a todo projeto a **base** (a norma), o **processo** que decide uma tela (designer → crítico com nota → guarda que cobra a crítica) e as skills de **projeto novo**, **auditoria** e **padronização**. Estudo e plano: [`docs/estudo/F261-plugin-design-system.md`](../../docs/estudo/F261-plugin-design-system.md).
 
+> **Vai só usar o sistema num app?** Comece pelo guia [Começar](../../docs/comecar.md): instalar, os comandos, como uma tela nasce e o que ligar ou desligar. Este README é para quem configura ou mexe no plugin.
+
 ## Instalar num projeto
 
 No `.claude/settings.json` do projeto (quem abrir o projeto no Claude Code recebe o convite para instalar):

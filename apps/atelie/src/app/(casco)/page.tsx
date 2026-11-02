@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { FlagIcon } from "lucide-react"
 
 import { Bloco } from "@/components/ui/bloco"
 import { Button } from "@/components/ui/button"
@@ -46,6 +47,18 @@ export default function Inicio() {
       titulo="Ateliê Wicomm"
       abertura="O design system da Wicomm: os valores, as peças, as telas e as regras, vivos nos dois temas."
     >
+      <Link href="/comecar/" className="block rounded-cartao focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+        <Card className="transition-shadow duration-cor hover:superficie-alta motion-reduce:transition-none">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FlagIcon aria-hidden="true" className="size-4.5 text-foreground-2" />
+              Primeira vez aqui? Comece pelo guia
+            </CardTitle>
+            <CardDescription>Instalar o plugin e os pacotes, os cinco comandos, como uma tela nasce e o que ligar ou desligar no Claude Code.</CardDescription>
+          </CardHeader>
+        </Card>
+      </Link>
+
       <div className="grid gap-6 xl:grid-cols-[1fr_16rem]">
         <div className="flex min-w-0 flex-col">
           {DESTINOS.filter((g) => g.rotulo).map((g, i) => (
