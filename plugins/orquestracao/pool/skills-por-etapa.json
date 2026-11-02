@@ -16,8 +16,8 @@
     ],
     "design": [
       "agent-browser",
-      "design:critica-de-ui",
-      "design:revisao-de-arquitetura-de-ui",
+      "kit-design:critica-de-ui",
+      "kit-design:revisao-de-arquitetura-de-ui",
       "frontend-design",
       "handoff-de-sessao",
       "impeccable:impeccable",

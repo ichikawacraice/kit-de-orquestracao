@@ -11,7 +11,9 @@ export const RAIZ_DO_KIT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MARKETPLACE = 'kit-de-orquestracao';
 export const PLUGIN = `orquestracao@${MARKETPLACE}`;
 /** Os plugins do kit que o projeto liga em `enabledPlugins`, na ordem em que entram. */
-export const PLUGINS_DO_KIT = [PLUGIN, `painel-sessoes@${MARKETPLACE}`, `processos@${MARKETPLACE}`, `design@${MARKETPLACE}`];
+export const PLUGINS_DO_KIT = [PLUGIN, `painel-sessoes@${MARKETPLACE}`, `processos@${MARKETPLACE}`, `kit-design@${MARKETPLACE}`];
+/** Plugin do kit que mudou de nome: velho → novo (F332: o `design` da Anthropic ofuscava o do kit). O `kit atualizar` troca a chave. */
+export const PLUGINS_RENOMEADOS = { [`design@${MARKETPLACE}`]: `kit-design@${MARKETPLACE}` };
 /** O Impeccable: só entra com `--design` (recomendação, não dependência), com as envs que cortam telemetria e checagem de versão. */
 export const IMPECCABLE = { marketplace: 'impeccable', plugin: 'impeccable@impeccable', origem: { source: { source: 'github', repo: 'pbakaus/impeccable' } }, env: { IMPECCABLE_NO_TELEMETRY: '1', IMPECCABLE_NO_UPDATE_CHECK: '1' } };
 const REPO_DO_KIT = 'ichikawacraice/kit-de-orquestracao';
@@ -159,7 +161,7 @@ function soDoKit(v) {
     && (v.hooks === undefined || (chaves(v.hooks).join() === 'PreToolUse' && pre.length === 1 && pre[0].hooks?.length === 1 && pre[0].hooks[0].command === HOOK_GUARDA))
     && chaves(v.extraKnownMarketplaces).every((n) => [MARKETPLACE, IMPECCABLE.marketplace].includes(n))
     && chaves(v.env).every((n) => n in IMPECCABLE.env)
-    && chaves(v.enabledPlugins).every((n) => [...PLUGINS_DO_KIT, IMPECCABLE.plugin].includes(n));
+    && chaves(v.enabledPlugins).every((n) => [...PLUGINS_DO_KIT, ...Object.keys(PLUGINS_RENOMEADOS), IMPECCABLE.plugin].includes(n));
 }
 
 

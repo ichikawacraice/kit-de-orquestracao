@@ -306,11 +306,18 @@ test('F209: versão publicada mais nova que a instalada vira paraBaixar, no arqu
 });
 
 test('F209: compara por número (0.1.9 < 0.1.10); plugin não instalado ou só de projeto não entra', () => {
-  const m = marketplace({ orquestracao: '0.1.9', 'painel-sessoes': '0.9.4', design: '0.1.8' });
-  instalados([{ id: kit('orquestracao'), version: '0.1.9' }, { id: kit('design'), version: '0.1.8', scope: 'project' }]);
+  const m = marketplace({ orquestracao: '0.1.9', 'painel-sessoes': '0.9.4', 'kit-design': '0.1.8' });
+  instalados([{ id: kit('orquestracao'), version: '0.1.9' }, { id: kit('kit-design'), version: '0.1.8', scope: 'project' }]);
   m.publicar('orquestracao', '0.1.10');
-  m.publicar('design', '0.1.9');
+  m.publicar('kit-design', '0.1.9');
   assert.deepEqual(conferir().json().paraBaixar, [{ nome: 'orquestracao', instalada: '0.1.9', publicada: '0.1.10' }]);
+});
+
+test('F332: o plugin velho (design) instalado e só o novo (kit-design) publicado entra em paraBaixar com o nome novo', () => {
+  const m = marketplace({ orquestracao: '0.1.9', 'kit-design': '0.3.0' });
+  instalados([{ id: kit('orquestracao'), version: '0.1.9' }, { id: kit('design'), version: '0.2.4' }]);
+  assert.deepEqual(conferir().json().paraBaixar, [{ nome: 'kit-design', instalada: '0.2.4', publicada: '0.3.0' }]);
+  assert.ok(m);
 });
 
 test('F209: o cache de 30 min evita a rede; vencido, confere de novo', () => {

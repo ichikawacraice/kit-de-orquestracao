@@ -1,4 +1,4 @@
-// K13: a guarda do plugin `design`, portada para node:test. Rodar: node --test plugins/design/hooks/tests/
+// K13: a guarda do plugin `design`, portada para node:test. Rodar: node --test plugins/kit-design/hooks/tests/
 // Nada aqui toca ~/.claude: o estado (KIT_DESIGN_ESTADO) e os repositórios ficam em pasta temporária.
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -61,13 +61,14 @@ describe('formaDaCritica', () => {
 describe('eCritica, eCodigoDeTela, globs e normalizarDiff', () => {
   it('só o subagente crítico conta (com ou sem prefixo do plugin); a skill não', () => {
     assert.equal(eCritica({ tool_name: 'Agent', tool_input: { subagent_type: 'critico-de-ui' } }), true);
-    assert.equal(eCritica({ tool_name: 'Task', tool_input: { subagent_type: 'design:critico-de-ui' } }), true);
+    assert.equal(eCritica({ tool_name: 'Task', tool_input: { subagent_type: 'kit-design:critico-de-ui' } }), true);
     assert.equal(eCritica({ tool_name: 'Agent', tool_input: { subagent_type: 'critico-de-ui', run_in_background: true }, tool_response: { status: 'async_launched' } }), true);
     assert.equal(eCritica({ tool_name: 'Agent', tool_input: { subagent_type: 'designer' } }), false);
     assert.equal(eCritica({ tool_name: 'Skill', tool_input: { skill: 'critica-de-ui' } }), false);
   });
   it('nomeCurto tira o prefixo do plugin', () => {
-    assert.equal(nomeCurto('design:designer'), 'designer');
+    assert.equal(nomeCurto('kit-design:designer'), 'designer');
+    assert.equal(nomeCurto('design:designer'), 'designer', 'o nome velho do plugin (F332)');
     assert.equal(nomeCurto('designer'), 'designer');
     assert.equal(nomeCurto(undefined), undefined);
   });
@@ -169,7 +170,7 @@ describe('decidir — sem a seção design, não age', () => {
 
 describe('decidir — o designer não implementa (papel pelo agent_type do payload)', () => {
   const { ctx } = ctxDuble();
-  const editar = (file_path, agent_type = 'design:designer') => ({ hook_event_name: 'PreToolUse', tool_name: 'Edit', agent_type, tool_input: { file_path } });
+  const editar = (file_path, agent_type = 'kit-design:designer') => ({ hook_event_name: 'PreToolUse', tool_name: 'Edit', agent_type, tool_input: { file_path } });
   it('nega Edit em código de tela, com o motivo', () => {
     const d = decidir(editar('/repo/web/src/components/ui/button.tsx'), null, ctx);
     assert.equal(d?.hookSpecificOutput?.permissionDecision, 'deny');
@@ -189,7 +190,7 @@ describe('decidir — o designer não implementa (papel pelo agent_type do paylo
 
 describe('decidir — a crítica tem forma', () => {
   const { ctx } = ctxDuble();
-  const parar = (texto, ativo = false) => ({ hook_event_name: 'SubagentStop', agent_type: 'design:critico-de-ui', last_assistant_message: texto, stop_hook_active: ativo });
+  const parar = (texto, ativo = false) => ({ hook_event_name: 'SubagentStop', agent_type: 'kit-design:critico-de-ui', last_assistant_message: texto, stop_hook_active: ativo });
   it('forma boa passa', () => assert.equal(decidir(parar(CRITICA_BOA), null, ctx), null));
   it('sem problema nenhum, devolve', () => {
     const d = decidir(parar('Está ótimo.'), null, ctx);
@@ -207,7 +208,7 @@ describe('decidir — a crítica tem forma', () => {
   it('o crítico não é cobrado como sessão principal: o Stop dele não grava estado', () => {
     const { ctx: c, estados } = ctxDuble('f1');
     estados.set('s1', { ...INICIO });
-    assert.equal(decidir({ hook_event_name: 'Stop', session_id: 's1', agent_type: 'design:critico-de-ui', last_assistant_message: CRITICA_BOA }, null, c), null);
+    assert.equal(decidir({ hook_event_name: 'Stop', session_id: 's1', agent_type: 'kit-design:critico-de-ui', last_assistant_message: CRITICA_BOA }, null, c), null);
     assert.equal(estados.get('s1').cobrado, false);
   });
 });
@@ -294,7 +295,7 @@ describe('decidir — o turno que mexe no visual chama o crítico', () => {
   it('o crítico em background livra: ele roda depois, em contexto separado', () => {
     const { ctx, estados } = ctxDuble('f1');
     estados.set('s1', { ...INICIO });
-    decidir(usar('Agent', { subagent_type: 'design:critico-de-ui', run_in_background: true }, { status: 'async_launched' }), null, ctx);
+    decidir(usar('Agent', { subagent_type: 'kit-design:critico-de-ui', run_in_background: true }, { status: 'async_launched' }), null, ctx);
     assert.equal(decidir(parar(), null, ctx), null);
   });
   it('visual mudou e o crítico rodou: passa, e a crítica guarda a foto que viu', () => {
@@ -542,7 +543,7 @@ describe('o hook de ponta a ponta: um projeto de rascunho com `design` no kit.js
     assert.equal(segundo, null);
   });
   it('o designer tem o Write em tela negado pelo script, e a revisão passa', () => {
-    const w = (file_path) => hook({ hook_event_name: 'PreToolUse', tool_name: 'Write', agent_type: 'design:designer', tool_input: { file_path } });
+    const w = (file_path) => hook({ hook_event_name: 'PreToolUse', tool_name: 'Write', agent_type: 'kit-design:designer', tool_input: { file_path } });
     assert.equal(w(join(proj, 'web', 'src', 'Tela.tsx'))?.hookSpecificOutput?.permissionDecision, 'deny');
     assert.equal(w(join(proj, 'docs', 'design', 'revisoes', 'x.md')), null);
   });
@@ -651,10 +652,10 @@ describe('os arquivos do plugin concordam entre si', () => {
   });
   it('o marketplace lista o plugin com a pasta que existe', () => {
     const m = JSON.parse(readFileSync(join(PLUGIN, '..', '..', '.claude-plugin', 'marketplace.json'), 'utf-8'));
-    const p = m.plugins.find((x) => x.name === 'design');
-    assert.ok(p, 'design ausente do marketplace');
-    assert.equal(p.source, './plugins/design');
-    assert.equal(JSON.parse(ler('.claude-plugin/plugin.json')).name, 'design');
+    const p = m.plugins.find((x) => x.name === 'kit-design');
+    assert.ok(p, 'kit-design ausente do marketplace');
+    assert.equal(p.source, './plugins/kit-design');
+    assert.equal(JSON.parse(ler('.claude-plugin/plugin.json')).name, 'kit-design');
   });
 });
 
