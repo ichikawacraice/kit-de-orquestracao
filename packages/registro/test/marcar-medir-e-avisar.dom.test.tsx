@@ -193,7 +193,8 @@ describe('Faixa', () => {
     const assuntos = [...document.querySelectorAll('[data-slot=linha-da-faixa]')].map((l) => l.getAttribute('data-assunto'))
     expect(assuntos).toEqual(['erro', 'versao', 'escopo'])
     expect(screen.getByRole('alert').textContent).toContain('Não deu para publicar.')
-    expect(screen.getAllByRole('status')).toHaveLength(2)
+    expect(screen.getAllByRole('status')).toHaveLength(1)
+    expect(document.querySelector('[data-assunto=versao]')!.hasAttribute('role')).toBe(false)
     expect(screen.getByRole('button', { name: 'Voltar à versão no ar' })).not.toBeNull()
   })
 
@@ -210,11 +211,19 @@ describe('Faixa', () => {
     expect(screen.getByRole('alert').textContent).toContain('A conexão caiu.')
   })
 
-  it('sem linhas não desenha; a linha mora na tinta do carimbo, sem contorno nem vidro', () => {
-    const { container, rerender } = render(<Faixa linhas={[]} />)
-    expect(container.innerHTML).toBe('')
+  // ACES-05: a região `status` já está montada, vazia, quando a primeira linha chega.
+  it('sem linhas a região de status fica montada e vazia; a linha entra nela, na tinta do carimbo, sem contorno nem vidro', () => {
+    const { rerender } = render(<Faixa linhas={[]} />)
+    const regiao = screen.getByRole('status')
+    expect(regiao.getAttribute('data-slot')).toBe('faixa')
+    expect(regiao.textContent).toBe('')
+    expect(regiao.getAttribute('aria-atomic')).toBe('false')
+    expect(regiao.className).toContain('sr-only')
     rerender(<Faixa linhas={[{ assunto: 'conexao', tom: 'alheio', frase: 'O serviço de pagamentos está fora; a equipe de finanças resolve.' }]} />)
+    expect(screen.getByRole('status')).toBe(regiao)
     const linha = document.querySelector('[data-slot=linha-da-faixa]') as HTMLElement
+    expect(regiao.contains(linha)).toBe(true)
+    expect(regiao.className).not.toContain('sr-only')
     expect(linha.className).toContain('bg-violet-500/15')
     expect(linha.className).not.toMatch(/border|backdrop-blur/)
   })

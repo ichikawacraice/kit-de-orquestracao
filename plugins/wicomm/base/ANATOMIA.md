@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.14.0
+versao: 0.14.1
 description: A anatomia dos apps React da Wicomm — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 

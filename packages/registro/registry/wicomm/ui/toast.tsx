@@ -81,8 +81,13 @@ function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       {/* `pointer-events-none` na pilha e `auto` no cartão: a pilha não rouba
           clique da tela atrás dela — o aviso é aviso, não bloqueio. */}
+      {/* A região `status` mora aqui desde o primeiro desenho, vazia (ACES-05):
+          os leitores só anunciam o que entra numa região que já existia.
+          `aria-atomic="false"` anuncia só o cartão novo, não a pilha toda. */}
       <div
         data-slot="toast-viewport"
+        role="status"
+        aria-atomic="false"
         className="pointer-events-none fixed right-4 bottom-4 z-50 flex w-full max-w-sm flex-col gap-2"
       >
         {avisos.map((t) => (
@@ -110,8 +115,9 @@ function CartaoDoAviso({ aviso, aoFechar }: { aviso: Aviso; aoFechar: (id: numbe
       data-slot="toast"
       data-superficie
       data-tom={tom}
-      // O erro interrompe (`alert`); o resto é notícia que espera a vez (`status`).
-      role={tom === "ruim" ? "alert" : "status"}
+      // O erro interrompe (`alert`); o resto é notícia que espera a vez e entra
+      // na região `status` da pilha, que já existia (ACES-05).
+      role={tom === "ruim" ? "alert" : undefined}
       className={cn(
         "superficie-flutuante pointer-events-auto flex items-start gap-2.5 rounded-xl px-4 py-3 text-sm animate-in fade-in-0 slide-in-from-bottom-2 duration-menu-abre ease-abre motion-reduce:animate-none",
         TINTA[tom]
@@ -126,7 +132,8 @@ function CartaoDoAviso({ aviso, aoFechar }: { aviso: Aviso; aoFechar: (id: numbe
         type="button"
         onClick={() => aoFechar(id)}
         aria-label="Fechar aviso"
-        className="shrink-0 rounded-md text-muted-foreground transition-colors duration-cor hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        // O desenho fica de 14px; o alvo de clique é de 24px, por um pseudo-elemento (ACES-03).
+        className="relative shrink-0 rounded-md text-muted-foreground after:absolute after:-inset-[5px] after:content-[''] transition-colors duration-cor hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <XIcon className="size-3.5" />
       </button>

@@ -4,6 +4,17 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/wicomm/base
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.14.1 · 02/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- O fechar do `toast` e o `ChipQueAbre` passam a ter alvo de clique de 24px (ACES-03), por um pseudo-elemento que estende o clique sem mudar o desenho; a regra passa a aceitar essa forma.
+- A `Faixa` e a pilha dos avisos montam a região `status` vazia desde o primeiro desenho (ACES-05), com `aria-atomic="false"`; a linha e o cartão `ok`/`neutro` entram nela sem `role` próprio, e o `ruim` segue em `alert`. A `Faixa` sem linhas deixa de devolver `null`: fica uma região vazia, fora do fluxo (`sr-only`), sem ocupar o `gap` do pai.
+
+### Migração
+- Monte a `Faixa` sempre, com `linhas={[]}` quando não há o que dizer: `{mente && <Faixa …/>}` recria a região no mesmo instante do texto e o leitor de tela não anuncia (ACES-05). Fora isso, nada quebra. Quem reinstala `faixa`, `toast` e `chip-de-estado` do registro recebe as peças novas. Teste de app que procura `role="status"` no cartão do aviso ou na linha da faixa passa a achar a região que os contém.
+
 ## 0.14.0 · 02/11/2026
 
 Camadas: base, plugin

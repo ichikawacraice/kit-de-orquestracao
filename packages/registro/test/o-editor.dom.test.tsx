@@ -339,7 +339,7 @@ describe("o bloco Editor (ARQ-01, ARQ-03, PESO-03, MSG-01, MSG-06)", () => {
   it("carregando: o título é o nome do tipo, a espera é declarada, e não há Publicar", () => {
     render(editor("carregando"))
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Documento")
-    expect(screen.getAllByRole("status").length).toBeGreaterThan(0)
+    expect(screen.getAllByRole("status").filter((el) => el.getAttribute("data-slot") !== "toast-viewport").length).toBeGreaterThan(0)
     expect(screen.queryByRole("button", { name: "Publicar" })).toBeNull()
     // A forma do pronto já na espera: o inspector aberto, em espera (P3 da crítica 4).
     expect(within(screen.getByRole("complementary", { name: "Seção" })).getByRole("status")).toBeTruthy()

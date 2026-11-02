@@ -203,9 +203,41 @@ describe("o aviso", () => {
       </ToastProvider>
     )
     act(() => avisar({ titulo: "Exportação começou" }))
-    const aviso = screen.getByRole("status")
+    const aviso = document.querySelector('[data-slot="toast"]') as HTMLElement
     expect(aviso.getAttribute("data-tom")).toBe("neutro")
     expect(classes(aviso)).toContain("text-foreground")
     expect(aviso.hasAttribute("data-superficie")).toBe(true)
+  })
+
+  // ACES-05: a região `status` existe vazia antes do texto; o leitor só anuncia o que entra numa região que já estava lá.
+  it("a região de status da pilha está montada, vazia, antes do primeiro aviso", () => {
+    render(
+      <ToastProvider>
+        <Pega />
+      </ToastProvider>
+    )
+    const regiao = screen.getByRole("status")
+    expect(regiao.getAttribute("data-slot")).toBe("toast-viewport")
+    expect(regiao.textContent).toBe("")
+    expect(regiao.getAttribute("aria-atomic")).toBe("false")
+    act(() => avisar({ titulo: "Salvo", tom: "ok" }))
+    expect(screen.getByRole("status")).toBe(regiao)
+    expect(regiao.textContent).toContain("Salvo")
+    // o cartão não cria uma segunda região de status; só o erro é `alert`
+    expect(document.querySelector('[data-slot="toast"]')!.hasAttribute("role")).toBe(false)
+  })
+
+  // ACES-03: o jsdom não mede; a caixa de clique sai das classes — o ícone de 14px (size-3.5) mais o pseudo-elemento que o estende.
+  it("o fechar mede 24px de alvo: ícone de 14px estendido em 5px por lado", () => {
+    render(
+      <ToastProvider>
+        <Pega />
+      </ToastProvider>
+    )
+    act(() => avisar({ titulo: "Salvo", tom: "ok" }))
+    const fechar = screen.getByRole("button", { name: "Fechar aviso" })
+    expect(classes(fechar)).toEqual(expect.arrayContaining(["relative", "after:absolute", "after:-inset-[5px]"]))
+    expect(fechar.querySelector("svg")!.getAttribute("class")).toContain("size-3.5")
+    expect(14 + 2 * 5).toBeGreaterThanOrEqual(24)
   })
 })

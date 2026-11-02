@@ -48,23 +48,34 @@ type LinhaDaFaixa = { assunto: AssuntoDaFaixa; frase: string } & (
  * - **Forma:** cada linha na tinta do carimbo da voz, já medida no chão e no
  *   cartão (COR-06, COR-07), em degrau de tinta (`rounded-xl`, FORMA-01), sem
  *   contorno e sem vidro; linhas separadas por 2px de ar (SUP-03).
- * - `role="alert"` na linha `ruim`; `status` nas outras.
- *
- * Sem linhas, não desenha nada.
+ * - `role="alert"` na linha `ruim`; as outras entram na região `status` da
+ *   faixa, que existe desde o primeiro desenho, vazia, para o leitor de tela
+ *   anunciar a linha que chega (ACES-05). Por isso o app monta a `Faixa` sempre,
+ *   com `linhas={[]}` quando não há o que dizer — `{mente && <Faixa/>}` recria o
+ *   defeito. Sem linhas, a região fica montada, fora do fluxo (`sr-only`).
  */
 function Faixa({ linhas, className }: { linhas: LinhaDaFaixa[]; className?: string }) {
-  if (linhas.length === 0) return null
   // Um assunto, uma linha (MSG-06): do repetido fica a voz mais grave, que traz a saída obrigatória.
   const unicas = [...new Map([...linhas].sort((a, b) => GRAVIDADE[a.tom] - GRAVIDADE[b.tom]).map((l) => [l.assunto, l])).values()]
   const ordenadas = [...unicas].sort((a, b) => ORDEM_DOS_ASSUNTOS.indexOf(a.assunto) - ORDEM_DOS_ASSUNTOS.indexOf(b.assunto))
   return (
-    <div data-slot="faixa" className={cn("flex shrink-0 flex-col gap-0.5 overflow-hidden rounded-xl animate-in fade-in-0 duration-revela ease-abre motion-reduce:animate-none", className)}>
+    <div
+      data-slot="faixa"
+      role="status"
+      aria-atomic="false"
+      className={cn(
+        "flex shrink-0 flex-col gap-0.5 overflow-hidden rounded-xl animate-in fade-in-0 duration-revela ease-abre motion-reduce:animate-none",
+        // Vazia, sai do fluxo (o `gap` do pai não a conta) mas segue na árvore de acessibilidade.
+        linhas.length === 0 && "sr-only",
+        className
+      )}
+    >
       {ordenadas.map((linha) => {
         const Icone = ICONE_DO_ASSUNTO[linha.assunto]
         return (
           <div
             key={linha.assunto}
-            role={linha.tom === "ruim" ? "alert" : "status"}
+            role={linha.tom === "ruim" ? "alert" : undefined}
             data-slot="linha-da-faixa"
             data-assunto={linha.assunto}
             data-tom={linha.tom}

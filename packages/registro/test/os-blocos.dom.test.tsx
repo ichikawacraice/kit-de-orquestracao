@@ -18,6 +18,8 @@ import { MesaDoPedido } from "@/registry/wicomm/blocks/mesa/mesa-do-pedido"
 import { ToastProvider } from "@/registry/wicomm/ui/toast"
 
 const conta = { nome: "Ana Souza", email: "ana@exemplo.com.br", onSair: () => {} }
+/** A pilha dos avisos é uma região `status` montada desde o início (ACES-05); aqui se procura a região da peça. */
+const statusDaPeca = () => screen.getAllByRole("status").find((el) => el.getAttribute("data-slot") !== "toast-viewport")!
 const comAviso = (no: React.ReactNode) => <ToastProvider>{no}</ToastProvider>
 
 beforeEach(() => localStorage.clear())
@@ -152,7 +154,7 @@ describe("a Lista (ARQ-01, EST-02, EST-04, PRIN-04)", () => {
 
   it("carregando: a cabeça de pé, a espera declarada, e os contadores não contados", () => {
     render(comAviso(<ListaDePedidos carga={{ tipo: "carregando" }} />))
-    expect(screen.getByRole("status").getAttribute("aria-busy")).toBe("true")
+    expect(statusDaPeca().getAttribute("aria-busy")).toBe("true")
     expect(screen.getAllByRole("tab")[0]!.getAttribute("aria-label")).toBe("Pedem você, sem contagem")
   })
 
@@ -228,7 +230,7 @@ describe("a Mesa (ARQ-01, CASCO-03, PESO-03, PESO-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Concluir conferência" }))
     expect((screen.getByRole("button", { name: "Concluindo" }) as HTMLButtonElement).disabled).toBe(true)
     act(() => vi.advanceTimersByTime(1000))
-    expect(screen.getByRole("status").textContent).toContain("Conferência concluída.")
+    expect(statusDaPeca().textContent).toContain("Conferência concluída.")
     expect(screen.getByRole("button", { name: /Pagamento/ }).getAttribute("aria-current")).toBe("step")
   })
 
@@ -257,7 +259,7 @@ describe("a Mesa (ARQ-01, CASCO-03, PESO-03, PESO-04)", () => {
 
   it("carregando desenha o lugar da coluna, e a de abas desenha abas", () => {
     const { unmount } = render(comAviso(<MesaDoPedido carga={cargaDaMesa("1042", "carregando")} />))
-    expect(screen.getAllByRole("status").length).toBeGreaterThan(0)
+    expect(statusDaPeca()).toBeTruthy()
     unmount()
     render(comAviso(<MesaDoPedido carga={cargaDaMesa("1042", "carregando-abas")} />))
     expect(screen.getByRole("tablist")).toBeTruthy()

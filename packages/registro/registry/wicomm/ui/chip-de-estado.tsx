@@ -74,7 +74,8 @@ function ChipQueAbre({
       className={cn(
         CASCO_DO_CARIMBO,
         BADGE_DO_TOM[tom],
-        "cursor-pointer underline decoration-current/40 decoration-dotted underline-offset-2 transition-colors duration-cor hover:decoration-current focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        // O desenho mede ~21px; o alvo de clique, 24px, por um pseudo-elemento (ACES-03).
+        "relative cursor-pointer after:absolute after:inset-x-0 after:-inset-y-[2px] after:content-[''] underline decoration-current/40 decoration-dotted underline-offset-2 transition-colors duration-cor hover:decoration-current focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className
       )}
       {...props}

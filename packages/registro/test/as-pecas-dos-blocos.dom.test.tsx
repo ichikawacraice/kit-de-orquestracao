@@ -98,6 +98,20 @@ describe("o carimbo de estado (CTRL-05, COR-05)", () => {
   })
 })
 
+describe("o alvo de clique do chip que abre (ACES-03)", () => {
+  // O jsdom não mede: o casco tem 11px × 1.4 de linha + 2×3px de padding (~21,4px); o pseudo-elemento estende 2px em cima e embaixo.
+  it("passa de 24px de altura, sem mudar o desenho", () => {
+    render(
+      <ChipQueAbre tom="espera" onAbrir={() => {}}>
+        1 pendência
+      </ChipQueAbre>
+    )
+    const botao = screen.getByRole("button", { name: "1 pendência" })
+    expect(classes(botao)).toEqual(expect.arrayContaining(["relative", "after:absolute", "after:inset-x-0", "after:-inset-y-[2px]", "py-[3px]"]))
+    expect(11 * 1.4 + 2 * 3 + 2 * 2).toBeGreaterThanOrEqual(24)
+  })
+})
+
 describe("o ponto de voz (COR-08)", () => {
   it("a palavra vem sempre — à vista, ou só para o leitor de tela", () => {
     const { rerender } = render(<Estado tom="ok">Conferido</Estado>)

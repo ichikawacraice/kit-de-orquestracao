@@ -1,6 +1,6 @@
 ---
 name: Wicomm
-versao: 0.14.0
+versao: 0.14.1
 description: As convenções de engenharia do front dos apps React da Wicomm — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
 ---
 
@@ -177,10 +177,9 @@ O contraste, o anel de foco e o escape do movimento já são regra da DESIGN (CO
 - **Confere.** skill `acessibilidade` (busca por `<img` sem `alt`, botão de ícone sem `aria-label`, campo sem `label`) · navegador (a árvore de acessibilidade).
 
 ### ACES-03 · O alvo de clique mede 24×24px, ou tem folga até o vizinho
-- **Regra.** A área que recebe o clique de todo controle mede pelo menos **24×24px**. O alvo menor só passa se o círculo de 24px centrado nele não toca outro alvo nem o círculo de outro alvo menor; o texto corrido e o link dentro da frase são isentos. Ícone clicável sozinho (14 ou 16px, CTRL-09) mora no botão `icon` do kit (30px); onde a caixa não cabe, vale a folga acima — o que nunca vale é o clique só no próprio ícone, colado no vizinho. A barra de modos (CTRL-06) mede 24px e cumpre; a tela de Entrada usa o alvo grande (CTRL-02).
+- **Regra.** A área que recebe o clique de todo controle mede pelo menos **24×24px**. O alvo menor só passa se o círculo de 24px centrado nele não toca outro alvo nem o círculo de outro alvo menor; o texto corrido e o link dentro da frase são isentos. Ícone clicável sozinho (14 ou 16px, CTRL-09) mora no botão `icon` do kit (30px); onde a caixa não cabe, vale a folga acima, ou um pseudo-elemento (`after:absolute after:-inset-*`) que estende o clique sem mexer no desenho (o fechar do aviso, o carimbo que abre) — o que nunca vale é o clique só no próprio ícone, colado no vizinho. A barra de modos (CTRL-06) mede 24px e cumpre; a tela de Entrada usa o alvo grande (CTRL-02).
 - **Por quê.** O ícone de 14px solto é o alvo que a pessoa erra no touchpad e no celular. 24px, ou a folga equivalente, é o mínimo do nível AA (WCAG 2.2, critério 2.5.8); o alvo de 44px é do nível AAA e a base só o pede na Entrada.
 - **Confere.** skill `acessibilidade` (ícone com `onClick` fora do botão do kit; botão com `className` que encolhe a caixa abaixo de `size-6`; alvos pequenos lado a lado) · navegador (a caixa do alvo e a distância até o vizinho).
-- *Assumida, a confirmar:* o kit ainda não cumpre em dois lugares — o fechar do `toast` é um botão cru de 14px e o carimbo que abre (`ChipQueAbre`) mede cerca de 21px; os dois pedem a folga medida ou a caixa de 24px.
 
 ### ACES-04 · A página diz a língua, as regiões e os títulos
 - **Regra.** `<html lang="pt-BR">`. O casco marca as regiões com o elemento delas — `nav` na barra lateral, `header` no topo, `main` na região do arquétipo (CASCO-01) —, e os títulos descem a partir do `h1` único (TIPO-04) sem pular nível.
@@ -188,10 +187,9 @@ O contraste, o anel de foco e o escape do movimento já são regra da DESIGN (CO
 - **Confere.** skill `acessibilidade` (busca por `lang=`, `<main`, `<nav` no casco) · `guarda:o-titulo-da-pagina-e-um-so` · navegador.
 
 ### ACES-05 · O que aparece sem mover o foco é anunciado
-- **Regra.** O desfecho que surge sem a pessoa mover o foco — o texto no bloco (MSG-01), o toast, o resumo dos erros de submissão (CONV-09), o fim de uma espera (EST-03) — é anunciado. Desfecho e espera vão numa região `role="status"` que **já existe vazia** quando o texto chega. O erro que interrompe a tarefa vai em `role="alert"`, que pode nascer junto com o texto — e renascer, para anunciar de novo a mesma falha.
+- **Regra.** O desfecho que surge sem a pessoa mover o foco — o texto no bloco (MSG-01), o toast, o resumo dos erros de submissão (CONV-09), o fim de uma espera (EST-03) — é anunciado. Desfecho e espera vão numa região `role="status"` que **já existe vazia** quando o texto chega (a `Faixa` e a pilha dos avisos montam a região no primeiro desenho; a linha e o cartão entram nela, e `aria-atomic="false"` anuncia só o que chegou). O erro que interrompe a tarefa vai em `role="alert"`, que pode nascer junto com o texto — e renascer, para anunciar de novo a mesma falha.
 - **Por quê.** Sem o anúncio, quem não vê a tela aperta o botão e não sabe se deu certo. A região `status` criada junto com o texto não é anunciada pela maioria dos leitores de tela; o `alert` é anunciado ao entrar.
 - **Confere.** skill `acessibilidade` (busca por `role="status"`, `role="alert"` e `aria-live` nas peças de desfecho, e onde a região monta) · navegador com leitor de tela.
-- *Assumida, a confirmar:* o kit ainda não cumpre em dois lugares — a `Faixa` só monta quando tem linha, e a área dos toasts não é região viva antes do primeiro toast; o desfecho `status` nas duas pede a região montada antes.
 
 ---
 
