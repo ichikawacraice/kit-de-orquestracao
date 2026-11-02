@@ -33,6 +33,6 @@
 
 <a id="consequencias"></a>
 ## Consequências
-- O projeto liga o plugin quando quer; o que não liga não sente nada.
+- O projeto liga o plugin quando quer (`--scope project` para ligar só nele); o projeto onde ele não está ligado, nem na conta, não sente nada.
 - Prática nova entra no `praticas.json` e na seção da skill da camada, ou o teste reprova.
 - Mais um plugin para versionar: a orquestradora sobe a versão dele no lote, como os outros.
