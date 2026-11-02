@@ -19,7 +19,8 @@ const catalogo = {
 };
 
 const escrever = (f, obj) => { mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, typeof obj === 'string' ? obj : JSON.stringify(obj)); };
-function casa({ cli = [], app = [], appAntigo = [], entradas = {}, settings } = {}) {
+// a dependência só vale ligada: a casa a liga em enabledPlugins, salvo `settings` próprio
+function casa({ cli = [], app = [], appAntigo = [], entradas = {}, settings = { enabledPlugins: { 'superpowers@claude-plugins-official': true } } } = {}) {
   const h = mkdtempSync(join(tmpdir(), 'kit-skills-de-fora-'));
   escrever(join(h, '.claude', 'plugins', 'installed_plugins.json'), { version: 2, plugins: { ...Object.fromEntries(cli.map((id) => [id, [{ scope: 'user' }]])), ...entradas } });
   if (settings) escrever(join(h, '.claude', 'settings.json'), settings);
@@ -84,6 +85,15 @@ describe('conferirSkillsDeFora', () => {
       const linha = r.linhas.find((l) => l.startsWith('falha:'));
       assert.match(linha, /superpowers@claude-plugins-official não instalado/);
       assert.match(linha, /superpowers@outro-mkt, o da conta do app não conta/);
+    } finally { rmSync(h, { recursive: true, force: true }); }
+  });
+
+  it('dependência instalada sem entrada em enabledPlugins conta como desligada (o Claude Code não a carrega)', () => {
+    const h = casa({ cli: ['superpowers@claude-plugins-official'], settings: {} });
+    try {
+      const r = conferirSkillsDeFora({ home: h, catalogo });
+      assert.equal(r.falhas, 1, r.linhas.join('\n'));
+      assert.match(r.linhas.find((l) => l.startsWith('falha:')), /claude plugin enable superpowers@claude-plugins-official/);
     } finally { rmSync(h, { recursive: true, force: true }); }
   });
 

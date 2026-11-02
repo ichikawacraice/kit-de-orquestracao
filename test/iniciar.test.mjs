@@ -201,6 +201,7 @@ describe('kit doutor: lê o lock (o diagnóstico completo está em k7.test.mjs)'
       // o doutor completo exige o plugin instalado: planta o registro dele na casa temporária
       mkdirSync(join(casa, '.claude', 'plugins'), { recursive: true });
       writeFileSync(join(casa, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@kit-de-orquestracao': [{ scope: 'user' }], 'superpowers@claude-plugins-official': [{ scope: 'user' }] } }));
+      writeFileSync(join(casa, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'superpowers@claude-plugins-official': true } }));
       const ok = kit(d, 'doutor');
       assert.equal(ok.status, 0, ok.stdout + ok.stderr);
       assert.ok(ok.stdout.includes(lock.versao) && ok.stdout.includes('simples') && ok.stdout.includes(String(n)), ok.stdout);

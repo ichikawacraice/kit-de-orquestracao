@@ -352,7 +352,8 @@ describe('kit doutor (completo)', () => {
     if (instalado) plugins[NOME] = [{ scope: 'user', installPath: '/x', version: '0.1.0' }];
     if (superpowers) plugins['superpowers@claude-plugins-official'] = [{ scope: 'user', installPath: '/y', version: '5.0.0' }];
     writeFileSync(join(h, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins }));
-    if (settings) writeFileSync(join(h, '.claude', 'settings.json'), JSON.stringify(settings));
+    const ligado = superpowers ? { 'superpowers@claude-plugins-official': true } : {};
+    writeFileSync(join(h, '.claude', 'settings.json'), JSON.stringify({ ...settings, enabledPlugins: { ...ligado, ...settings?.enabledPlugins } }));
     return h;
   }
   const hooksDoKit = () => [...JSON.stringify(json(RAIZ, 'plugins', 'orquestracao', 'hooks', 'hooks.json')).matchAll(/\/hooks\/([\w-]+\.mjs)/g)].map((m) => m[1]);

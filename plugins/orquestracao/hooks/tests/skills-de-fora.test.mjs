@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATALOGO, decidir, lerCatalogo, liberadasDo, nomeCompleto, saidaDe, substitutasDo, usaOKit } from '../skills-de-fora.mjs';
+import { CATALOGO, decidir, lerCatalogo, liberadasDo, nomeCompleto, saidaDe, skillsProprias, substitutasDo, usaOKit } from '../skills-de-fora.mjs';
 
 const HOOKS = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PLUGIN = join(HOOKS, '..');
@@ -77,6 +77,27 @@ test('sem o prefixo do plugin: o nome curto único casa com a linha; o homônimo
   assert.equal(decidir('code-review', { catalogo }), null, 'o /code-review do Claude Code não pode ser barrado');
   assert.equal(decidir('standup', { catalogo }), null);
   assert.equal(decidir('architecture', { catalogo, liberar: ['engineering:architecture'] }), null, 'liberar pelo nome completo vale para o curto');
+});
+
+test('o nome curto que é a substituta declarada, o curto dela ou uma skill própria não é barrado; o completo da original segue barrado', () => {
+  const subs = { 'design:ux-copy': 'ds:ux-copy', 'design:accessibility-review': 'accessibility-review' };
+  assert.equal(decidir('ux-copy', { catalogo, substitutas: subs }), null, 'a substituta pelo nome curto foi recusada');
+  assert.equal(decidir('accessibility-review', { catalogo, substitutas: subs }), null, 'substituta sem prefixo virou beco sem saída');
+  assert.ok(decidir('design:ux-copy', { catalogo, substitutas: subs }), 'a original pelo nome completo devia seguir barrada');
+  assert.equal(decidir('architecture', { catalogo, proprias: ['architecture'] }), null, 'skill própria do projeto foi barrada');
+  assert.ok(decidir('engineering:architecture', { catalogo, proprias: ['architecture'] }));
+  assert.equal(decidir('engineering:architecture', { catalogo, liberar: ['architecture'] }), null, 'liberar pelo nome curto vale para o completo');
+});
+
+test('skillsProprias: as pastas de .claude/skills do projeto (até a raiz do git) e da conta', () => {
+  const p = projeto({ kitJson: {} });
+  const home = mkdtempSync(join(tmpdir(), 'skills-de-fora-home-'));
+  try {
+    mkdirSync(join(p, '.claude', 'skills', 'architecture'), { recursive: true });
+    mkdirSync(join(home, '.claude', 'skills', 'minha'), { recursive: true });
+    assert.deepEqual(skillsProprias(join(p, 'apps', 'web'), home).sort(), ['architecture', 'minha']);
+    assert.deepEqual(skillsProprias('', ''), []);
+  } finally { rmSync(p, { recursive: true, force: true }); rmSync(home, { recursive: true, force: true }); }
 });
 
 test('hook: Skill sem o prefixo do plugin também é recusada', () => {

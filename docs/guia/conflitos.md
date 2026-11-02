@@ -8,7 +8,7 @@ O kit decide num catálogo ([`plugins/orquestracao/skills-de-fora.json`](../../p
 
 <a id="barradas"></a>
 ## O que o kit barra
-Só as skills que quebram uma regra do kit, não as que apenas repetem. Em projeto com o kit (`.claude/kit.json` ou blocos `kit:` no `CLAUDE.md`), a sessão que tentar usá-las, pela ferramenta (com ou sem o prefixo do plugin) ou digitando `/nome`, recebe a recusa com a peça certa:
+Só as skills que quebram uma regra do kit, não as que apenas repetem. Em projeto com o kit (`.claude/kit.json` ou blocos `kit:` no `CLAUDE.md`), a sessão que tentar usá-las, pela ferramenta (com ou sem o prefixo do plugin, salvo o `code-review`, que só com ele: o `/code-review` do Claude Code tem o mesmo nome) ou digitando `/nome`, recebe a recusa com a peça certa:
 
 | Skill barrada | Use no lugar | A regra que ela quebra |
 |---|---|---|

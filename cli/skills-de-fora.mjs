@@ -3,6 +3,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
 import { MARKETPLACE } from './pacote.mjs';
 
 const CATALOGO = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugins', 'orquestracao', 'skills-de-fora.json');
@@ -51,7 +52,8 @@ function dependenciaValida(id, home, destino, configs) {
     const v = c?.enabledPlugins?.[id];
     if (typeof v === 'boolean') return v ? { ok: true } : { ok: false, motivo: 'instalado mas desligado em enabledPlugins' };
   }
-  return { ok: true };
+  // sem camada que o ligue, o Claude Code o trata como desligado (medido: `claude plugin list` mostra ✘ disabled)
+  return { ok: false, motivo: 'instalado mas desligado em enabledPlugins' };
 }
 
 /**
@@ -59,7 +61,7 @@ function dependenciaValida(id, home, destino, configs) {
  * e o local, nessa ordem (o doutor já os lê); sem eles, lê de `home` e `destino`.
  */
 export function conferirSkillsDeFora({ home, destino = '', configs, catalogo = lerJson(CATALOGO) }) {
-  configs ??= [join(home, '.claude', 'settings.json'), ...(destino ? [join(destino, '.claude', 'settings.json'), join(destino, '.claude', 'settings.local.json')] : [])].map(lerJson);
+  configs ??= [join(pastaDeConfig(home), 'settings.json'), ...(destino ? [join(destino, '.claude', 'settings.json'), join(destino, '.claude', 'settings.local.json')] : [])].map(lerJson);
   const linhas = [];
   let falhas = 0;
   if (!catalogo) return { linhas: ['aviso: não consegui ler o catálogo de skills de fora do kit (plugins/orquestracao/skills-de-fora.json)'], falhas: 0 };

@@ -5,7 +5,8 @@
 // declara em `skillsDeFora.substitutas` a peça dele que absorveu uma skill de fora (aí a absorção vale e a original é barrada).
 // O `/nome` digitado não passa pelo PreToolUse (doc do Claude Code): o UserPromptExpansion cobre esse caminho.
 // Erro do próprio hook vai para o log e DEIXA PASSAR: a trava não pode derrubar as sessões.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registrar, lerEntrada } from './hooks-crewai-comum.mjs';
@@ -37,11 +38,19 @@ export function saidaDe(nome, catalogo) {
   return catalogo.plugins?.find((p) => p.plugin === plugin) ?? { saida: 'livre' };
 }
 
+const curto = (nome) => nomeLimpo(nome).slice(nomeLimpo(nome).indexOf(':') + 1);
+
 /** O motivo da recusa, ou null quando passa. */
 // `substitutas` (do kit.json): skill absorvida → a peça que o projeto tem no lugar dela; com ela, a absorção vale aqui.
-export function decidir(nome, { catalogo, liberar = [], substitutas = {} }) {
-  const skill = nomeCompleto(nome, catalogo);
-  if (!skill || liberar.includes(skill) || liberar.includes(nomeLimpo(nome))) return null;
+// `proprias`: nomes de skill do próprio projeto ou da conta (`.claude/skills/<nome>`); o nome curto delas não se expande.
+export function decidir(nome, { catalogo, liberar = [], substitutas = {}, proprias = [] }) {
+  const limpo = nomeLimpo(nome);
+  if (!limpo) return null;
+  // o nome curto que é uma substituta declarada (ou o curto dela) ou uma skill própria é ela mesma, não a de fora
+  const deCasa = !limpo.includes(':') && (proprias.includes(limpo) || Object.values(substitutas).some((v) => typeof v === 'string' && (v.trim() === limpo || curto(v.trim()) === limpo)));
+  if (deCasa) return null;
+  const skill = nomeCompleto(limpo, catalogo);
+  if (liberar.some((l) => nomeCompleto(l, catalogo) === skill)) return null;
   const linha = saidaDe(skill, catalogo);
   const substituta = linha.saida === 'absorver' && typeof substitutas[skill] === 'string' && substitutas[skill].trim() ? substitutas[skill].trim() : null;
   const barrada = linha.saida === 'barrar' || (linha.saida === 'absorver' && (linha.feito === true || substituta));
@@ -96,6 +105,15 @@ export function substitutasDo(cwd) {
   return Object.fromEntries(Object.entries(m).filter(([, v]) => typeof v === 'string'));
 }
 
+/** Os nomes das skills do projeto (`.claude/skills/*` da pasta até a raiz do git) e da conta (`~/.claude/skills/*`). */
+export function skillsProprias(cwd, home) {
+  const nomes = new Set();
+  for (const d of [...(cwd ? pastasAteARaiz(cwd) : []), ...(home ? [home] : [])]) {
+    try { for (const n of readdirSync(join(d, '.claude', 'skills'))) nomes.add(n); } catch { /* sem a pasta */ }
+  }
+  return [...nomes];
+}
+
 function main() {
   const e = lerEntrada();
   const expansao = e.hook_event_name === 'UserPromptExpansion';
@@ -103,7 +121,7 @@ function main() {
   if (!nome) return;
   const cwd = e.cwd || process.cwd();
   if (!usaOKit(cwd)) return;
-  const motivo = decidir(nome, { catalogo: lerCatalogo(), liberar: liberadasDo(cwd), substitutas: substitutasDo(cwd) });
+  const motivo = decidir(nome, { catalogo: lerCatalogo(), liberar: liberadasDo(cwd), substitutas: substitutasDo(cwd), proprias: skillsProprias(cwd, e.home || homedir()) });
   if (!motivo) return;
   registrar(e.session_id, HOOK, 'recusou', motivo);
   const saida = expansao
