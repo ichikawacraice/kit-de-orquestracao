@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { avisoDeLaco, carregarConfig, opcaoDaRegra, REGRAS_DE_DOCUMENTO } from '../gate/config.mjs';
 import { booleanoDaOpcao, opcoesDoPlugin, pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, PLUGIN, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
@@ -91,33 +91,40 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   return { codigo: falhas ? 1 : 0, saida: `${linhas.join('\n')}\n`, erro: '' };
 }
 
-/** O que `enabledPlugins` diz do plugin: a camada mais próxima (local > projeto > conta); `undefined` se ninguém diz. */
+/** O que `enabledPlugins` diz do plugin: a camada mais próxima (local > projeto > conta), o nome velho valendo quando o novo não diz; `undefined` se ninguém diz. */
 function ligadoEm(id, configs) {
-  for (const s of [configs[2], configs[1], configs[0]]) if (typeof s?.enabledPlugins?.[id] === 'boolean') return s.enabledPlugins[id];
+  const ids = [id, ...Object.keys(PLUGINS_RENOMEADOS).filter((v) => PLUGINS_RENOMEADOS[v] === id)];
+  for (const s of [configs[2], configs[1], configs[0]]) for (const i of ids) if (typeof s?.enabledPlugins?.[i] === 'boolean') return s.enabledPlugins[i];
   return undefined;
 }
 
-/** Os processos do kit (plugins `processos` e `design`): o que o kit.json e o settings dizem, e onde um sobrepõe o outro. Só aviso e info: nada aqui reprova. */
+/** Os processos do kit (plugins `processos` e `kit-design`): o que o kit.json e o settings dizem, e onde um sobrepõe o outro. Só aviso e info: nada aqui reprova. */
 function processos(destino, home, configs, linhas) {
   const kj = lerJson(join(destino, '.claude', 'kit.json')) ?? {};
-  const ligado = { processos: ligadoEm(`processos@${MARKETPLACE}`, configs), design: ligadoEm(`design@${MARKETPLACE}`, configs) };
+  for (const [velho, novo] of Object.entries(PLUGINS_RENOMEADOS)) {
+    for (const [i, onde] of [[1, '.claude/settings.json'], [2, '.claude/settings.local.json']]) {
+      if (configs[i]?.enabledPlugins && velho in configs[i].enabledPlugins) linhas.push(`aviso: ${onde} ainda liga ${velho}; o plugin agora se chama ${novo}${i === 1 ? ' — rode `kit atualizar`' : ' — troque a chave à mão'}`);
+    }
+  }
+  const ligado = { processos: ligadoEm(`processos@${MARKETPLACE}`, configs), design: ligadoEm(`kit-design@${MARKETPLACE}`, configs) };
   const secao = { processos: 'documentos', design: 'design' };
+  const plugin = { processos: 'processos', design: 'kit-design' };
   for (const nome of ['processos', 'design']) {
-    if (ligado[nome] === false && kj[secao[nome]] !== undefined) linhas.push(`aviso: plugin ${nome} desligado, mas o .claude/kit.json tem a seção ${secao[nome]}: o kit.json não o religa (plugin desligado não roda, diga o arquivo o que disser); para religar, enabledPlugins "${nome}@${MARKETPLACE}": true`);
-    else if (ligado[nome] === false) linhas.push(`info: plugin ${nome} desligado neste projeto`);
-    else if (ligado[nome] === true && kj[secao[nome]] === undefined) linhas.push(`aviso: plugin ${nome} ligado, mas o .claude/kit.json está sem a seção ${secao[nome]}: valem os caminhos e os padrões do plugin; o \`kit atualizar\` não a acrescenta, copie-a do modelo do kit`);
+    if (ligado[nome] === false && kj[secao[nome]] !== undefined) linhas.push(`aviso: plugin ${plugin[nome]} desligado, mas o .claude/kit.json tem a seção ${secao[nome]}: o kit.json não o religa (plugin desligado não roda, diga o arquivo o que disser); para religar, enabledPlugins "${plugin[nome]}@${MARKETPLACE}": true`);
+    else if (ligado[nome] === false) linhas.push(`info: plugin ${plugin[nome]} desligado neste projeto`);
+    else if (ligado[nome] === true && kj[secao[nome]] === undefined) linhas.push(`aviso: plugin ${plugin[nome]} ligado, mas o .claude/kit.json está sem a seção ${secao[nome]}: valem os caminhos e os padrões do plugin; o \`kit atualizar\` não a acrescenta, copie-a do modelo do kit`);
   }
   // plugin fora do enabledPlugins (projeto instalado antes dos processos): o gate confere as docs mesmo assim, pelo padrão
   const docsDoProj = docsDoProjeto(destino);
   if (ligado.processos === undefined && !Array.isArray(kj.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: plugin processos fora do enabledPlugins deste projeto, mas o gate confere as docs mesmo assim (documentos.conferir ausente = as cinco regras): ${avisoDasRegras(docsDoProj, ligado.processos)}`);
   // design: a guarda só age com pasta do front (design.pasta, design.visual ou a opção pasta_do_front do plugin)
-  const opDesign = opcoesDoPlugin('design', home);
+  const opDesign = opcoesDoPlugin('kit-design', home);
   const pasta = typeof kj.design?.pasta === 'string' ? kj.design.pasta.replace(/\/+$/, '') : '';
   const pastaDaOpcao = typeof opDesign.pasta_do_front === 'string' ? opDesign.pasta_do_front.replace(/\/+$/, '') : '';
   const front = pasta || pastaDaOpcao;
   const temDesign = ligado.design !== false && (kj.design !== undefined || ligado.design === true);
   if (temDesign && !front && !(Array.isArray(kj.design?.visual) && kj.design.visual.length)) {
-    linhas.push('info: design: sem design.pasta (nem design.visual) a guarda de design fica inerte e o crítico não é cobrado; para ligá-la, ponha design.pasta no .claude/kit.json (ou a opção pasta_do_front do plugin design)');
+    linhas.push('info: design: sem design.pasta (nem design.visual) a guarda de design fica inerte e o crítico não é cobrado; para ligá-la, ponha design.pasta no .claude/kit.json (ou a opção pasta_do_front do plugin kit-design)');
   }
   if (temDesign && front) {
     for (const f of ['PRODUCT.md', 'DESIGN.md']) if (!existsSync(join(destino, front, f))) linhas.push(`aviso: design: ${front}/${f} não existe; o designer e o crítico leem dele o que o produto é e como a tela parece (modelo em modelos/front do kit)`);
@@ -137,7 +144,7 @@ function processos(destino, home, configs, linhas) {
     if (typeof kj.design?.cobrarCritica === 'boolean' && kj.design.cobrarCritica !== booleanoDaOpcao(opDesign.cobrar_critica)) sobrepostas.push('cobrar_critica');
     if (pasta && pastaDaOpcao && pasta !== pastaDaOpcao) sobrepostas.push('pasta_do_front');
     if (kj.design?.largura !== undefined && kj.design.largura !== (opDesign.largura ?? 1280)) sobrepostas.push('largura');
-    if (sobrepostas.length) linhas.push(`info: o kit.json sobrepõe a opção do plugin design (${sobrepostas.join(', ')}): a chave do kit.json vale para o time e vence a opção de cada conta`);
+    if (sobrepostas.length) linhas.push(`info: o kit.json sobrepõe a opção do plugin kit-design (${sobrepostas.join(', ')}): a chave do kit.json vale para o time e vence a opção de cada conta`);
   }
 }
 const ok_ = (linhas, m) => linhas.push(`ok: ${m}`);

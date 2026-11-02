@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { diffTexto } from './diff.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { RAIZ_DO_KIT, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
+import { PLUGINS_RENOMEADOS, RAIZ_DO_KIT, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -64,6 +64,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
   const docsDoProj = docsDoProjeto(destino);
   if (!Array.isArray(kitJson.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: ${avisoDasRegras(docsDoProj, pluginLigado('processos', destino, process.env.HOME || homedir(), process.env))}`);
 
+  renomearPlugins({ destino, lock, mudancas, linhas, conflito });
   if (trocarTest) trocarOTest({ destino, lock, mudancas, linhas, conflito });
 
   if (!conflitos) lock.versao = versao;
@@ -75,6 +76,41 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
     ? `kit atualizar: ${conflitos} conflito(s); a versão do lock continua ${lock.versao}.`
     : `kit atualizar${simular ? ' --simular' : ''}: em dia com o kit ${versao} (${mudancas.length} arquivo(s) ${simular ? 'mudariam' : 'trocados'}).`);
   return { codigo: conflitos ? 1 : 0, saida: `${linhas.join('\n')}\n`, erro: '' };
+}
+
+/**
+ * Plugin do kit que mudou de nome (F332): no `enabledPlugins` do `.claude/settings.json` a chave velha vira a nova, no mesmo lugar e com
+ * o mesmo valor (o `false` de quem desligou fica); se a nova já está lá, ela fica e a velha sai. O lock acompanha, para o remover tirar
+ * a nova. O `settings.local.json` é da pessoa: só aviso.
+ */
+function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
+  const texto = lerTexto(destino, '.claude/settings.json');
+  if (texto !== null) {
+    let s = null; try { s = JSON.parse(semBom(texto)); } catch { /* ilegível: o doutor acusa; o atualizar não o lê para mais nada */ }
+    const ligados = s?.enabledPlugins;
+    if (ligados && typeof ligados === 'object' && Object.keys(PLUGINS_RENOMEADOS).some((v) => v in ligados)) {
+      const novos = {};
+      for (const [id, valor] of Object.entries(ligados)) {
+        const novo = PLUGINS_RENOMEADOS[id];
+        if (!novo) { if (!(id in novos)) novos[id] = valor; continue; }
+        if (novo in ligados) linhas.push(`trocado: ${id} saiu do enabledPlugins (${novo} já estava lá)`);
+        else { novos[novo] = valor; linhas.push(`trocado: plugin ${id} → ${novo} no enabledPlugins (.claude/settings.json)`); }
+      }
+      s.enabledPlugins = novos;
+      const base = mudancas.find((m) => m.arquivo === '.claude/settings.json');
+      if (base) base.novo = serializar(s, texto); else mudancas.push({ arquivo: '.claude/settings.json', antigo: texto, novo: serializar(s, texto) });
+      const cs = lock.chaves?.settings;
+      // a chave nova que já estava não foi o kit que pôs: o lock larga a velha e não a toma (o remover não apaga o que é da pessoa)
+      if (Array.isArray(cs?.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => (!PLUGINS_RENOMEADOS[n] ? [n] : PLUGINS_RENOMEADOS[n] in ligados ? [] : [PLUGINS_RENOMEADOS[n]])))];
+    }
+  }
+  const local = lerTexto(destino, '.claude/settings.local.json');
+  if (local !== null) {
+    let l = null; try { l = JSON.parse(semBom(local)); } catch { /* ilegível: não é do kit */ }
+    for (const [velho, novo] of Object.entries(PLUGINS_RENOMEADOS)) {
+      if (l?.enabledPlugins && velho in l.enabledPlugins) linhas.push(`aviso: o .claude/settings.local.json ainda tem ${velho}; o plugin agora se chama ${novo} — troque a chave à mão (o kit não mexe no seu settings.local.json)`);
+    }
+  }
 }
 
 /** `--trocar-test`: o `npm test` passa a ser o gate e o `test` do projeto vai para `test:projeto` (o que a adoção deixou pendente). */

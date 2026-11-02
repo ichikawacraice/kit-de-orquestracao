@@ -26,7 +26,7 @@ O manual completo está em [`plugins/orquestracao/pool/protocolo.md`](plugins/or
 | Plugin `orquestracao` | Hooks e travas, skills (`orquestradora`, `papeis-e-modelos`, `handoff-de-sessao`, `ausente`, `notas-de-release`, `orquestrar-com-subagentes`), agentes `validador` e `explorador`, e os comandos do `bin/` (`painel`, `proximo-item`, `proxima-pergunta`, `testes-afetados`, `subir-versao`, `atualizar-plugins`) |
 | Plugin `painel-sessoes` | O pane `/painel`, a barra de status e a batida |
 | Plugin `processos` | Skills de processo: `spec-driven` (ADR, spec, roadmap), `revisar-diff`, `auditoria-de-clique` |
-| Plugin `design` | Revisão de arquitetura de UI antes da tela, crítico de UI depois, e a guarda que cobra a crítica do trabalho visual |
+| Plugin `kit-design` | Revisão de arquitetura de UI antes da tela, crítico de UI depois, e a guarda que cobra a crítica do trabalho visual |
 | CLI `kit` | Põe o kit num projeto: gate de testes, guarda de operação, `CLAUDE.md` com as regras, `.claude/kit.json` |
 
 ## Requisitos
@@ -45,7 +45,7 @@ O repositório é privado: peça acesso a quem mantém o kit e entre no GitHub c
    ```bash
    claude plugin install orquestracao@kit-de-orquestracao
    ```
-   Repita o `install` para `painel-sessoes`, `processos` e `design`. Reinicie o app.
+   Repita o `install` para `painel-sessoes`, `processos` e `kit-design`. Reinicie o app.
 2. O kit no projeto, na raiz do repositório:
    ```bash
    npx -y github:ichikawacraice/kit-de-orquestracao adotar --simular
@@ -62,6 +62,8 @@ Os outros comandos do CLI (`atualizar`, `remover`) estão em `npx -y github:ichi
 ## Atualizar os plugins na máquina
 
 `atualizar-plugins [--seco] [--json]` (no `bin/` do plugin `orquestracao`) atualiza o clone do marketplace e os plugins do kit instalados em `user`; o app precisa reiniciar para valer.
+
+**O plugin `design` virou `kit-design`.** O plugin `design` da Anthropic, instalado pela conta, tem o mesmo nome e escondia os agentes e as skills do kit. Quem já tem o kit: o `atualizar-plugins` instala o `kit-design` com as opções do `design` (e desligado, se ele estava) e só então desinstala o velho; em cada projeto, o `kit atualizar` troca `design@kit-de-orquestracao` por `kit-design@kit-de-orquestracao` no `enabledPlugins` do `.claude/settings.json` (o `settings.local.json` é seu: ele só avisa). Até lá, as travas e o gate leem os dois nomes. A seção `design` do `.claude/kit.json` não muda.
 
 ## Comportamentos do CLI que surpreendem
 

@@ -37,6 +37,23 @@ else if (a[1] === 'marketplace' && a[2] === 'update') {
   for (const p of e.installed) if (p.id === id && p.scope === 'user') p.version = pub;
   fs.writeFileSync(process.env.FAKE_ESTADO, JSON.stringify(e));
   process.stdout.write(JSON.stringify({ outcome: 'ok' }) + '\\n');
+} else if (a[1] === 'install') {
+  const id = a[2];
+  if (process.env.FAKE_FALHA === id) { process.stderr.write('boom ' + id + '\\n'); process.exit(1); }
+  const nome = id.split('@')[0];
+  const pub = JSON.parse(fs.readFileSync(process.env.FAKE_CLONE + '/plugins/' + nome + '/.claude-plugin/plugin.json', 'utf8')).version;
+  const e = est();
+  e.installed.push({ id, version: pub, scope: a[a.indexOf('-s') + 1], enabled: true });
+  fs.writeFileSync(process.env.FAKE_ESTADO, JSON.stringify(e));
+  process.stdout.write(JSON.stringify({ outcome: 'ok' }) + '\\n');
+} else if (a[1] === 'uninstall' || a[1] === 'disable') {
+  const id = a[2]; const scope = a[a.indexOf('-s') + 1];
+  if (process.env.FAKE_FALHA === a[1] + ' ' + id) { process.stderr.write('boom ' + a[1] + '\\n'); process.exit(1); }
+  const e = est();
+  if (a[1] === 'uninstall') e.installed = e.installed.filter((p) => !(p.id === id && p.scope === scope));
+  else for (const p of e.installed) if (p.id === id && p.scope === scope) p.enabled = false;
+  fs.writeFileSync(process.env.FAKE_ESTADO, JSON.stringify(e));
+  process.stdout.write(JSON.stringify({ outcome: 'ok' }) + '\\n');
 } else process.exit(2);
 `;
 
@@ -59,7 +76,8 @@ function montar(publicadas, instalados) {
     writeFileSync(join(work, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: MP, plugins: Object.keys(versoes).map((n) => ({ name: n, source: `./plugins/${n}` })) }));
     for (const [n, v] of Object.entries(versoes)) {
       mkdirSync(join(work, 'plugins', n, '.claude-plugin'), { recursive: true });
-      writeFileSync(join(work, 'plugins', n, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: n, version: v }));
+      const userConfig = n === 'kit-design' ? { guarda: {}, cobrar_critica: {}, pasta_do_front: {}, largura: {} } : undefined;
+      writeFileSync(join(work, 'plugins', n, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: n, version: v, userConfig }));
     }
     git(work, 'add', '-A'); git(work, 'commit', '-qm', 'publica'); git(work, 'push', '-q', 'origin', 'main');
   };
@@ -78,7 +96,10 @@ function montar(publicadas, instalados) {
     assert.ok(!r.error, String(r.error));
     return { exit: r.status, out: r.stdout, err: r.stderr };
   };
-  c.updates = () => readFileSync(log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((x) => x[1] === 'update');
+  c.chamadas = () => readFileSync(log, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  c.updates = () => c.chamadas().filter((x) => x[1] === 'update');
+  c.estado = () => JSON.parse(readFileSync(estado, 'utf8')).installed;
+  c.settings = (v) => { mkdirSync(join(home, '.claude'), { recursive: true }); writeFileSync(join(home, '.claude', 'settings.json'), JSON.stringify(v)); };
   return c;
 }
 const inst = (nome, version, extra = {}) => ({ id: `${nome}@${MP}`, version, scope: 'user', enabled: true, ...extra });
@@ -219,5 +240,95 @@ test('plugin update sai 0 e o plugin some da lista: "não pegou", depois null, e
     assert.equal(p.depois, null);
     assert.match(p.mensagem, /instalada sumiu da lista/);
     assert.equal(s.reiniciar, false);
+  } finally { limpar(c); }
+});
+
+// F332: o plugin `design` do kit virou `kit-design` (o `design` da Anthropic o ofuscava). Quem tem o velho no escopo user ganha o
+// novo instalado com as mesmas opções e o mesmo liga/desliga, e só depois o velho sai.
+const RENOMEADO = { orquestracao: '0.1.2', 'kit-design': '0.3.0' };
+
+test('F332: design@ instalado e só kit-design@ publicado: instala o novo com as opções do velho e desinstala o velho', () => {
+  const c = montar(RENOMEADO, [inst('orquestracao', '0.1.2'), inst('design', '0.0.7')]);
+  try {
+    c.settings({ pluginConfigs: { [`design@${MP}`]: { options: { guarda: false, pasta_do_front: 'web', largura: 1024, saiu_do_manifesto: true } } } });
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const ch = c.chamadas().filter((x) => ['install', 'uninstall', 'disable'].includes(x[1]));
+    assert.deepEqual(ch.map((x) => `${x[1]} ${x[2]}`), [`install kit-design@${MP}`, `uninstall design@${MP}`], 'o novo entra antes de o velho sair');
+    const install = ch[0];
+    assert.equal(install[install.indexOf('-s') + 1], 'user');
+    const configs = install.flatMap((x, i) => (x === '--config' ? [install[i + 1]] : [])).sort();
+    assert.deepEqual(configs, ['guarda=false', 'largura=1024', 'pasta_do_front=web']);
+    const s = JSON.parse(r.out);
+    const p = achar(s, 'kit-design');
+    assert.ok(p, r.out);
+    assert.deepEqual([p.antes, p.publicado, p.depois], ['0.0.7', '0.3.0', '0.3.0']);
+    assert.match(p.acao, /^renomeado \(era design@kit-de-orquestracao\)/);
+    assert.equal(s.reiniciar, true);
+    assert.ok(!c.estado().some((x) => x.id === `design@${MP}` && x.scope === 'user'), 'o velho ficou');
+    assert.ok(!achar(s, 'design'), 'o velho não aparece como linha própria');
+    assert.match(c.rodar([]).out, /kit-design\s+\(em dia\)|kit-design\s+0\.3\.0 \(em dia\)/);
+  } finally { limpar(c); }
+});
+
+test('F332: velho desligado no settings da conta: o novo entra desligado (o enabled da lista, que pode vir do projeto, não conta)', () => {
+  const c = montar(RENOMEADO, [inst('design', '0.0.7', { enabled: true })]);
+  try {
+    c.settings({ enabledPlugins: { [`design@${MP}`]: false } });
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const ch = c.chamadas().filter((x) => ['install', 'uninstall', 'disable'].includes(x[1]));
+    assert.deepEqual(ch.map((x) => `${x[1]} ${x[2]}`), [`install kit-design@${MP}`, `disable kit-design@${MP}`, `uninstall design@${MP}`]);
+    assert.equal(c.estado().find((x) => x.id === `kit-design@${MP}`).enabled, false);
+  } finally { limpar(c); }
+});
+
+test('F332: velho desligado só na lista (projeto), ligado na conta: o novo não é desligado', () => {
+  const c = montar(RENOMEADO, [inst('design', '0.0.7', { enabled: false })]);
+  try {
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.ok(c.chamadas().some((x) => x[1] === 'install'), 'precondição: instalou');
+    assert.ok(!c.chamadas().some((x) => x[1] === 'disable'));
+  } finally { limpar(c); }
+});
+
+test('F332: --seco diz que renomearia e não chama install nem uninstall', () => {
+  const c = montar(RENOMEADO, [inst('design', '0.0.7')]);
+  try {
+    const r = c.rodar(['--seco', '--json']);
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.equal(achar(JSON.parse(r.out), 'kit-design').acao, 'renomearia (era design@kit-de-orquestracao)');
+    assert.ok(!c.chamadas().some((x) => ['install', 'uninstall'].includes(x[1])));
+    const txt = c.rodar(['--seco']).out;
+    assert.match(txt, /kit-design\s+0\.0\.7 → 0\.3\.0 \(renomearia: era design@kit-de-orquestracao\)/);
+    assert.match(txt, /Rode sem --seco para atualizar\./);
+  } finally { limpar(c); }
+});
+
+test('F332: install do novo falha: o velho fica, falhou, exit 1', () => {
+  const c = montar(RENOMEADO, [inst('design', '0.0.7')]);
+  try {
+    const r = c.rodar(['--json'], { FAKE_FALHA: `kit-design@${MP}` });
+    assert.equal(r.exit, 1, r.err + r.out);
+    const p = achar(JSON.parse(r.out), 'kit-design');
+    assert.equal(p.acao, 'falhou'); assert.match(p.mensagem, /boom/);
+    assert.ok(!c.chamadas().some((x) => x[1] === 'uninstall'), 'desinstalou o velho sem ter o novo');
+    assert.ok(c.estado().some((x) => x.id === `design@${MP}`));
+  } finally { limpar(c); }
+});
+
+test('F332: o novo já instalado: só desinstala o velho; cópia project do velho não se mexe e pede o kit atualizar', () => {
+  const c = montar(RENOMEADO, [inst('kit-design', '0.3.0'), inst('design', '0.0.7'), inst('design', '0.0.6', { scope: 'project', projectPath: '/x/loja' })]);
+  try {
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const ch = c.chamadas().filter((x) => ['install', 'uninstall', 'disable'].includes(x[1]));
+    assert.deepEqual(ch.map((x) => `${x[1]} ${x[2]} ${x[x.indexOf('-s') + 1]}`), [`uninstall design@${MP} user`]);
+    const s = JSON.parse(r.out);
+    const proj = s.plugins.find((p) => p.id === `design@${MP}` && p.acao.startsWith('não mexido'));
+    assert.ok(proj, r.out);
+    assert.match(proj.acao, /kit atualizar/);
+    assert.ok(c.estado().some((x) => x.id === `design@${MP}` && x.scope === 'project'));
   } finally { limpar(c); }
 });
