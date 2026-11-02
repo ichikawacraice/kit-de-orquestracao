@@ -26,7 +26,20 @@ A fonte da família (`TIPO-01`, Archivo) é carregada pelo app, que declara `--f
 ## A fonte
 
 - [`fonte/sistema.tokens.json`](fonte/sistema.tokens.json) — os tokens de sistema, em DTCG (`$value`, `$type`, `$description`, aliases `{grupo.token}`). Nos grupos `cor`, `composto`, `sombra` e `raio`, a chave é o nome da variável CSS. O valor do tema escuro, quando difere, vai em `$extensions["com.wicomm"].escuro`.
-- [`fonte/marca.tokens.json`](fonte/marca.tokens.json) — **o slot da marca**: o único lugar com a cor da marca. O sistema aponta para ela por alias (`primary`, `ring`, `marca-viva`, `chart-1`…). Trocar a marca é trocar este arquivo. A marca dos apps é sempre a Wicomm (Q628) e o teste de contraste fixa `#F30B42` (MARCA-01): `npm run gerar -- --marca <arquivo>` gera com outra marca para experimentar, mas o gate reprova esse `dist/` — mudar a marca de verdade é mudar o arquivo, o valor fixado no teste e a base, juntos.
+- [`fonte/marca.tokens.json`](fonte/marca.tokens.json) — **o slot da marca**: o único lugar da fonte com a cor da marca. O sistema aponta para ela por alias (`primary`, `ring`, `marca-viva`, `chart-1`…). É cópia das cores do tema padrão ([`temas/wicomm/tema.tokens.json`](../../temas/wicomm/tema.tokens.json)), conferida byte a byte pelo teste: quem edita a marca edita o tema e copia.
+
+## O tema
+
+O que é da marca e não do sistema mora numa pasta de tema, fora do pacote: [`temas/<id>/`](../../temas/) na raiz do repositório, com dois arquivos.
+
+- `tema.tokens.json` — as cores da marca (o slot `marca`, em DTCG).
+- `tema.json` — o nome, o logotipo, a fonte do texto (família, a variável que o app declara, o nome da utilitária, se tem o eixo de largura), a razão aceita da tinta sobre a marca e o prefixo do registro. Formato em [`tema.schema.json`](tema.schema.json).
+
+```bash
+npm run gerar -w @wicomm/tokens -- --tema <pasta do tema> --saida <pasta>
+```
+
+Gera as três saídas com outro tema, em outra pasta; o `dist/` publicado é sempre o do tema Wicomm. O tema é conferido antes de gerar pelas regras que a base já manda — o hover na mesma matiz e a cor igual nos dois temas (MARCA-01), as pontas do gradiente a 2:1 (MARCA-03) — e o que as quebra sai com erro, com a regra. `--marca <arquivo>` continua valendo para trocar só as cores. A guarda de contraste deste pacote ainda fixa `#F30B42` (MARCA-01): o `dist/` de outro tema não passa por ela.
 
 Os valores ficam em string CSS (hex, `220ms`, `14px`); os objetos compostos do DTCG 2025 (cor em `components`, dimensão em `{value, unit}`) entram quando houver quem os consuma (a fatia do Figma).
 

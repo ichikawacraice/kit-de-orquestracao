@@ -3,6 +3,7 @@
 // projeto em v3 migra antes de receber os tokens.
 // O mesmo valor nunca é escrito duas vezes: cada saída lê o modelo.
 import { alvo, cru, folhas, lerFonte, resolver, TEMAS, variaveis } from './ler.mjs'
+import { FONTE_PADRAO, lerTema } from './tema.mjs'
 
 const CABECALHO = (arquivo) =>
   `/* @wicomm/tokens — ${arquivo}. GERADO de fonte/*.tokens.json por \`npm run gerar\`: não edite à mão. */`
@@ -69,9 +70,27 @@ function voz(arvore, valorCru) {
 const valores = (arvore, grupo, fn = (x) => x) =>
   Object.fromEntries(folhas(grupo ?? {}).map((f) => [f.chave, fn(resolver(arvore, cru(f.no, 'claro'), 'claro'))]))
 
-/** O modelo de onde todas as saídas saem. */
-export function modelo(opcoes) {
-  const a = lerFonte(opcoes)
+/**
+ * A família do texto é do tema: o sistema escreve a variável do tema Wicomm, e
+ * outro tema troca a variável em toda família que a usa (a pilha de reserva fica).
+ */
+function comAFonteDoTema(arvore, fonte) {
+  if (fonte.variavel === FONTE_PADRAO.variavel) return arvore
+  const troca = (v) => (Array.isArray(v) ? v.map((x) => (x === `var(${FONTE_PADRAO.variavel})` ? `var(${fonte.variavel})` : x)) : v)
+  const familia = Object.fromEntries(
+    Object.entries(arvore.tipo.familia).map(([k, no]) => [k, no && typeof no === 'object' && '$value' in no ? { ...no, $value: troca(no.$value) } : no]),
+  )
+  return { ...arvore, tipo: { ...arvore.tipo, familia } }
+}
+
+/**
+ * O modelo de onde todas as saídas saem. Opções: `tema` (a pasta de um tema:
+ * cores e fonte), ou só `marca` (o arquivo do slot, como antes do tema).
+ */
+export function modelo(opcoes = {}) {
+  const tema = opcoes.tema ? lerTema(opcoes.tema) : undefined
+  const fonte = tema?.meta.fonte ?? FONTE_PADRAO
+  const a = comAFonteDoTema(lerFonte(tema ? { marca: tema.marca } : opcoes), fonte)
   const vars = variaveis(a)
   const t = a.tipo
   const m = a.movimento
@@ -100,6 +119,7 @@ export function modelo(opcoes) {
     sombras: valores(a, a['sombra-de-classe']),
     alturas: valores(a, a.medida.altura),
     larguras: valores(a, a.medida.largura),
+    utilitariaDaFonte: fonte.utilitaria,
   }
 }
 
@@ -150,7 +170,7 @@ export function tailwindV4(md) {
     // Como o `delay-*` da origem (v3 com `tailwindcss-animate`): escreve as duas propriedades, e a
     // variável que o `tw-animate-css` lê — sem ela, `data-[state=open]:animate-in` zera o atraso.
     ...Object.entries(md.atrasos).map(([k, v]) => util(`delay-${k}`, { 'transition-delay': v, '--tw-animation-delay': v, 'animation-delay': v })),
-    util('font-archivo', { 'font-family': pilha(md.familias.archivo) }),
+    util(md.utilitariaDaFonte, { 'font-family': pilha(md.familias.archivo) }),
     ...Object.entries(md.alturas).flatMap(([k, v]) => [util(`h-${k}`, { height: v }), util(`size-${k}`, { width: v, height: v })]),
     ...Object.entries(UTILIDADES).map(([k, d]) => util(k, d)),
   ]
@@ -176,7 +196,7 @@ export function pecas(md) {
 
 /** O JSON resolvido: as variáveis por tema e o tema do Tailwind. Para o ateliê, o Figma e os testes. */
 export function json(md) {
-  const { vars, ...resto } = md
+  const { vars, utilitariaDaFonte, ...resto } = md
   return JSON.stringify({ temas: TEMAS, variaveis: vars, ...resto }, null, 2) + '\n'
 }
 

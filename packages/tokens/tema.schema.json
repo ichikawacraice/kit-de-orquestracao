@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tema.json",
+  "description": "O que é da marca e não do sistema: nome, logotipo, fonte e prefixo do registro. As cores ficam em tema.tokens.json, na mesma pasta. Quem confere de verdade é lib/tema.mjs (validarTema), que também mede as cores pelas regras MARCA-01 e MARCA-03.",
+  "type": "object",
+  "required": ["id", "nome", "logotipo", "fonte", "contrasteAceitoSobreAMarca", "registro"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "$description": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "O nome da pasta do tema; vira o sufixo do plugin (tema-<id>)." },
+    "nome": { "type": "string", "description": "O nome da marca, como o leitor de tela o lê." },
+    "logotipo": {
+      "type": "object",
+      "required": ["horizontal", "monograma"],
+      "properties": {
+        "horizontal": { "type": "string", "description": "O logotipo por extenso, na barra aberta." },
+        "monograma": { "type": "string", "description": "O logotipo curto, na barra recolhida." }
+      }
+    },
+    "fonte": {
+      "type": "object",
+      "required": ["familia", "variavel", "utilitaria", "eixoDeLargura"],
+      "properties": {
+        "familia": { "type": "string", "description": "A família do texto (TIPO-01). A de medida é a mono do sistema e não é do tema." },
+        "variavel": { "type": "string", "pattern": "^--", "description": "A variável CSS que o app declara ao carregar a fonte (no Next, a `variable` do next/font)." },
+        "utilitaria": { "type": "string", "description": "O nome da utilitária que aplica só a família do tema." },
+        "eixoDeLargura": { "type": "boolean", "description": "Se a família tem o eixo wdth: as vozes que estreitam a letra (t-rotulo) contam com ele." }
+      }
+    },
+    "contrasteAceitoSobreAMarca": { "type": "number", "description": "A razão da tinta `sobre` na cor da marca que o tema aceita (MARCA-01: nenhum piso move a cor da marca; a razão fica registrada aqui)." },
+    "registro": {
+      "type": "object",
+      "required": ["prefixo"],
+      "properties": {
+        "prefixo": { "type": "string", "pattern": "^@", "description": "O prefixo do registro shadcn no components.json do projeto." }
+      }
+    }
+  }
+}

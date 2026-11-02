@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import { apontamParaMarca, FONTE, lerFonte, MARCA_PADRAO, variaveis } from '../lib/ler.mjs'
 import { saidas } from '../lib/saidas.mjs'
 
-const OUTRA = join(import.meta.dirname, 'fixtures', 'marca-outra.tokens.json')
+const OUTRA = join(import.meta.dirname, 'fixtures', 'temas', 'outro', 'tema.tokens.json')
 const padrao = variaveis(lerFonte())
 const trocada = variaveis(lerFonte({ marca: OUTRA }))
 const hexes = (caminho) => [...readFileSync(caminho, 'utf8').matchAll(/#[0-9A-Fa-f]{6}\b/g)].map((m) => m[0].toUpperCase())
