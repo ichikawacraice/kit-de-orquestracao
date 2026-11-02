@@ -43,7 +43,8 @@
 
 <a id="consequencias"></a>
 ## Consequências
-- Quem instala o `orquestracao` recebe o `superpowers` junto; quem já tinha o kit vê a falta no `kit doutor`.
+- Quem instala o `orquestracao` recebe o `superpowers` junto, se o marketplace oficial estiver adicionado (medido com `CLAUDE_CONFIG_DIR` temporário no Claude Code 2.1.316: com ele, vem junto, e adicionar o marketplace depois instala a dependência pendente; sem ele, o `install` avisa "will not load without it"). Por isso o README adiciona o marketplace oficial antes do kit.
+- **Risco:** máquina com o kit e sem o `superpowers` (ou com o marketplace oficial bloqueado pela organização) perde o plugin `orquestracao` inteiro, travas inclusive, ao atualizar para a versão com a dependência. O `kit doutor` reprova esse caso com os dois comandos; quem atualiza os plugins confere antes.
 - A descrição das skills barradas continua no contexto até a pessoa desligar o plugin: a trava evita o uso errado, não o custo. O doutor e o README dizem como cortar o custo.
 - Skill nova de fora que duplique o kit só é barrada depois de entrar no catálogo; o catálogo cresce por PR, com o motivo.
 - O detector de plugins da conta lê o manifesto do app (`local-agent-mode-sessions/*/*/rpm/manifest.json`), caminho não documentado: se o app mudar, o doutor deixa de ver esses plugins e só diz o que vê pelo CLI.

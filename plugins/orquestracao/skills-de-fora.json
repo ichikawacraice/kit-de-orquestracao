@@ -4,6 +4,7 @@
     {
       "plugin": "superpowers",
       "marketplace": "claude-plugins-official",
+      "repositorioDoMarketplace": "anthropics/claude-plugins-official",
       "saida": "depender",
       "motivo": "As fixas da dona são dele: writing-plans (planejamento), test-driven-development e verification-before-completion (execução), systematic-debugging (causa de defeito)."
     },

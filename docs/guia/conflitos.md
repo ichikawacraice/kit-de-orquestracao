@@ -4,7 +4,7 @@ O kit decide num catálogo ([`plugins/orquestracao/skills-de-fora.json`](../../p
 
 <a id="precisa-ter"></a>
 ## Precisa ter
-- `superpowers` (marketplace oficial `claude-plugins-official`): as skills de planejar, testar antes e conferir antes de dizer pronto, que a sessão dona carrega em toda etapa, são dele. Vem junto ao instalar o plugin `orquestracao`; quem instalou o kit antes vê a falta no `kit doutor`.
+- `superpowers` (marketplace oficial `claude-plugins-official`): as skills de planejar, testar antes e conferir antes de dizer pronto, que a sessão dona carrega em toda etapa, são dele. Vem junto ao instalar o plugin `orquestracao`, desde que o marketplace oficial esteja adicionado (`claude plugin marketplace add anthropics/claude-plugins-official`); sem ele o `install` avisa e o `orquestracao` não carrega. Quem instalou o kit antes vê a falta no `kit doutor`.
 
 <a id="barradas"></a>
 ## O que o kit barra

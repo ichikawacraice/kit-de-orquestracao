@@ -38,14 +38,17 @@ O manual completo está em [`plugins/orquestracao/pool/protocolo.md`](plugins/or
 
 O repositório é privado: peça acesso a quem mantém o kit e entre no GitHub com a conta que recebeu o convite (`gh auth login`) antes dos passos abaixo.
 
-1. Os plugins, uma vez por máquina:
+1. Os plugins, uma vez por máquina. Primeiro os dois marketplaces (o oficial costuma já estar; repetir não faz mal):
+   ```bash
+   claude plugin marketplace add anthropics/claude-plugins-official
+   ```
    ```bash
    claude plugin marketplace add ichikawacraice/kit-de-orquestracao
    ```
    ```bash
    claude plugin install orquestracao@kit-de-orquestracao
    ```
-   Repita o `install` para `painel-sessoes`, `processos` e `design`. O `orquestracao` traz junto o plugin `superpowers` (do marketplace oficial `claude-plugins-official`): as skills de planejar, testar antes e conferir antes de dizer pronto são dele. Reinicie o app.
+   Repita o `install` para `painel-sessoes`, `processos` e `design`. O `orquestracao` traz junto o plugin `superpowers` (do marketplace oficial): as skills de planejar, testar antes e conferir antes de dizer pronto são dele. Sem o marketplace oficial o `install` avisa que o `superpowers` não veio e o `orquestracao` não carrega. Reinicie o app.
 2. O kit no projeto, na raiz do repositório:
    ```bash
    npx -y github:ichikawacraice/kit-de-orquestracao adotar --simular

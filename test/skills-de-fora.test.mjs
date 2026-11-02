@@ -9,7 +9,7 @@ import { conferirSkillsDeFora, pluginsPresentes } from '../cli/skills-de-fora.mj
 
 const catalogo = {
   plugins: [
-    { plugin: 'superpowers', marketplace: 'claude-plugins-official', saida: 'depender', motivo: 'as fixas da dona' },
+    { plugin: 'superpowers', marketplace: 'claude-plugins-official', repositorioDoMarketplace: 'anthropics/claude-plugins-official', saida: 'depender', motivo: 'as fixas da dona' },
     { plugin: 'engineering', saida: 'livre', motivo: 'o resto não tem par' },
   ],
   skills: [
@@ -71,6 +71,7 @@ describe('conferirSkillsDeFora', () => {
       assert.ok(linha, r.linhas.join('\n'));
       assert.match(linha, /superpowers/);
       assert.match(linha, /claude plugin install superpowers@claude-plugins-official/);
+      assert.match(linha, /claude plugin marketplace add anthropics\/claude-plugins-official/);
     } finally { rmSync(h, { recursive: true, force: true }); }
   });
 

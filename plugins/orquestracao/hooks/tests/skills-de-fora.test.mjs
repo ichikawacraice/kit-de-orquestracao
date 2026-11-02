@@ -44,6 +44,7 @@ test('o catálogo existe, tem plugins e skills, e toda saída é uma das quatro'
     assert.ok(typeof x.motivo === 'string' && x.motivo.length > 10, `sem motivo: ${x.plugin ?? x.skill}`);
   }
   for (const s of catalogo.skills.filter((x) => ['barrar', 'absorver'].includes(x.saida))) assert.ok(s.use, `${s.skill} sem "use"`);
+  for (const p of catalogo.plugins.filter((x) => x.saida === 'depender')) assert.ok(p.marketplace && p.repositorioDoMarketplace, `${p.plugin} sem marketplace ou repositorioDoMarketplace`);
 });
 
 test('saidaDe: a skill com linha própria vence, a sem linha herda do plugin, a de plugin desconhecido é livre', () => {

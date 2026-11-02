@@ -46,7 +46,7 @@ export function conferirSkillsDeFora({ home, catalogo = lerJson(CATALOGO) }) {
   const presentes = pluginsPresentes(home);
   for (const p of (catalogo.plugins ?? []).filter((x) => x.saida === 'depender')) {
     if (presentes.has(p.plugin)) linhas.push(`ok: ${p.plugin} instalado (o kit usa: ${p.motivo})`);
-    else { falhas++; linhas.push(`falha: ${p.plugin} não instalado; o kit usa: ${p.motivo} Instale: \`claude plugin install ${p.plugin}@${p.marketplace}\` (o plugin orquestracao novo já o traz como dependência)`); }
+    else { falhas++; linhas.push(`falha: ${p.plugin} não instalado; o kit usa: ${p.motivo} Instale: \`claude plugin install ${p.plugin}@${p.marketplace}\`; sem ele o plugin orquestracao novo não carrega (é dependência dele). ${p.repositorioDoMarketplace ? `Se o marketplace ${p.marketplace} faltar, antes: \`claude plugin marketplace add ${p.repositorioDoMarketplace}\`` : ''}`); }
   }
   const barradas = (catalogo.skills ?? []).filter((s) => s.saida === 'barrar' || (s.saida === 'absorver' && s.feito === true));
   const porPlugin = new Map();
