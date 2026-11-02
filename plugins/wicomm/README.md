@@ -35,6 +35,7 @@ Ou, na mão: `/plugin marketplace add wicomm-projects/wicomm-design-system` e `/
 | Hook `valor-solto.mjs` | Avisa (não nega) na escrita de tela com `#hex` ou `rgba(` (inclusive dentro de `shadow-[…]`), `text-[15px]`, `duration-200`, paleta usada direto fora do idioma de cor (`text-zinc-700`) ou ícone que não é `lucide-react` (CONV-04, PRIN-06, MOV-01, COR-05, CTRL-09). Quem reprova é a guarda no CI. |
 | Scripts `medir-deriva.mjs`, `medir-contraste.mjs` | Os números da auditoria, só lendo: deriva por categoria (pasta ui × telas), paleta direto, alfa que não gera CSS no v3, raios em px, alturas de controle, ícones, MOV-02 por ocorrência, tokens contra os da Wicomm, tema escuro, config do Tailwind e uso das peças; e a matriz de contraste da COR-12/COR-11. Carregam cópias de `@wicomm/tokens` e `@wicomm/guardas` (o plugin se instala sozinho); `scripts/tests/medidas.test.mjs` reprova se uma cópia andar sem a outra. |
 | `.mcp.json` | O MCP oficial do shadcn, para a skill `peca-do-kit` consultar o registro `@wicomm`. |
+| `substitutas.json` | Declara ao kit de orquestração quais skills da Anthropic o plugin substitui (`design:accessibility-review`, `design:ux-copy`, `design:design-system`). Com o kit instalado, a original é recusada e aponta a do `wicomm`; sem ele, não faz nada. Veja [Com o plugin `design` da Anthropic ligado](#com-o-plugin-design-da-anthropic-ligado). |
 | [`evals/`](evals/) | 180 casos de disparo (10 positivos e 10 negativos por skill), gerados por `evals/casos.mjs`. |
 
 ## Com o plugin `design` da Anthropic ligado
@@ -47,6 +48,8 @@ O app pode trazer o plugin `design` da Anthropic (pela organização, em Persona
 | `design:ux-copy` | skill `wicomm:textos-de-interface` |
 | `design:design-system` (auditoria) | skill `wicomm:auditar-projeto` (subagente `wicomm:auditor-de-padrao`); a peça nova é a `wicomm:peca-do-kit` |
 | `design:design-critique` | subagente `wicomm:critico-de-ui` |
+
+**Com o kit de orquestração instalado**, as três primeiras linhas da tabela são automáticas: o `substitutas.json` na raiz do plugin faz o kit recusar a skill original e apontar a do `wicomm`, em todo projeto com o kit onde o `wicomm` está ligado (`enabledPlugins`, instalado pelo CLI; o plugin que só a conta do app traz não entra). **Sem o kit**, nada recusa: desligue o plugin `design` da Anthropic à mão (ou não use as três). A `design:design-critique` não está no arquivo: o kit já a barra por conta própria.
 
 `design-handoff`, `research-synthesis` e `user-research` não têm par aqui e não atrapalham. O plugin de design do kit de orquestração chama-se `kit-design` (`kit-design:designer`, `kit-design:critico-de-ui`) e não colide com o da Anthropic; num app React da Wicomm, o `wicomm` não usa nenhum dos dois.
 
