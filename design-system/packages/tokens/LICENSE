@@ -19,3 +19,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+Exceção: a marca Wicomm não é licenciada pelo MIT. A cor da marca no slot
+`marca` (fonte/marca.tokens.json e o que se gera dela em dist/) pertence à
+empresa e só se usa nos projetos dela. Para outra marca, troque o slot.
+Detalhe no NOTICE do repositório ichikawacraice/kit-de-orquestracao.

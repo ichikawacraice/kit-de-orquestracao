@@ -23,9 +23,9 @@ A publicação confiável só vale para pacote que já existe no npm. Por isso, 
    npm publish -w packages/guardas --access public
    ```
 
-4. **Ligar o publicador confiável** em cada pacote: npmjs.com → o pacote → *Settings* → *Trusted publishing* → *GitHub Actions*, com o dono e o repositório deste kit (o `<dono>/kit-de-orquestracao` do endereço de instalação) e o workflow `publicar-pacotes.yml`. Na mesma página, *Publishing access* em "Require two-factor authentication and disallow tokens" fecha o envio por token.
+4. **Ligar o publicador confiável** em cada pacote, só no dia em que for mergear a primeira versão nova (a configuração nova expira se não publicar nada em 2 dias, e aí é preciso apagá-la e criá-la de novo): npmjs.com → o pacote → *Settings* → *Trusted publishing* → *GitHub Actions*, com o dono e o repositório deste kit (o `<dono>/kit-de-orquestracao` do endereço de instalação) e o workflow `publicar-pacotes.yml`, e marque **npm publish** em *Allowed actions* (sem isso a configuração aceita só a publicação em etapas, que espera aprovação com 2FA a cada versão, e o workflow falha com um E404 ou ENEEDAUTH enganoso). Na mesma página, *Publishing access* em "Require two-factor authentication and disallow tokens" fecha o envio por token.
 
 <a id="versao-nova"></a>
 ## Versão nova
 
-Suba o `version` do pacote no PR que muda o que ele publica (o gate da pasta reprova se o `dist` dos tokens ou a `lib` das guardas mudar sem versão nova). Depois do merge na `main`, o workflow roda o gate da pasta e publica a versão que o npm ainda não tem, com proveniência. Versão publicada não se sobrescreve nem se apaga depois de 72 horas.
+Suba o `version` do pacote no PR que muda o que ele publica (o gate da pasta reprova se o `dist` dos tokens ou a `lib` das guardas mudar sem versão nova). Depois do merge na `main`, o workflow roda o gate da pasta e publica a versão que o npm ainda não tem, com proveniência. Versão publicada não se sobrescreve; depois de 72 horas, só sai do npm em casos restritos (sem dependentes e com poucos downloads).

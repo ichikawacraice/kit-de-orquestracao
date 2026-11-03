@@ -29,6 +29,6 @@ export const semOEnderecoPublicado = (texto) => texto
   .replace(/[\w.-]+\/kit-de-orquestracao\b/g, 'DONO/kit-de-orquestracao')
   .replace(new RegExp(`\\b${EMPRESA}-projects/${EMPRESA}-design-system\\b`, 'g'), 'EMPRESA/design-system')
   .replace(new RegExp(`\\btema-${EMPRESA}\\b`, 'g'), 'tema-EMPRESA')
-  .replace(new RegExp(`@${EMPRESA}/(tokens|guardas)\\b`, 'g'), '@EMPRESA/$1')
+  .replace(new RegExp(`@${EMPRESA}/(tokens|guardas)(?![\\w.-])`, 'g'), '@EMPRESA/$1')
   .replace(/\bichikawa-kit\b/g, 'NOME-DO-KIT')
   .replace(/\bIchikawa['’]s Kit\b/g, 'NOME DO KIT');

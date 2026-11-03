@@ -2,7 +2,7 @@
   "name": "@wicomm/tokens",
   "version": "0.1.1",
   "description": "Os tokens de design da Wicomm: uma fonte DTCG gerada para o tema do Tailwind v4 e variáveis CSS.",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ichikawacraice/kit-de-orquestracao.git",
