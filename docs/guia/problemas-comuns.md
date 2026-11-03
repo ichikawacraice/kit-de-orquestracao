@@ -10,7 +10,8 @@ npx -y github:ichikawacraice/kit-de-orquestracao doutor
 
 | Sintoma | Causa | Saída |
 |---|---|---|
-| `marketplace add` ou `npx` não acha o repositório | O repositório é privado e o GitHub da máquina não tem acesso | Aceite o convite e entre com essa conta: `gh auth login` |
+| `marketplace add` ou `npx` não acha o repositório | Endereço digitado errado, ou rede sem acesso ao GitHub (o repositório do kit é público) | Confira o endereço `ichikawacraice/kit-de-orquestracao` e o acesso a `github.com` |
+| `claude plugin install design-system@ichikawa-kit` falha ao clonar | O `design-system` vem do repositório da empresa, que é privado, e a conta do GitHub da máquina não tem acesso de leitura | Peça acesso a quem administra o repositório da empresa e entre com essa conta: `gh auth login`. O resto do kit não depende dele |
 | O `/painel` não existe, ou nada do kit acontece | Plugin instalado depois que o app abriu | Reinicie o app |
 | `kit adotar` não grava nada e lista conflitos | Arquivo seu que difere do que o kit poria; o `adotar` não sobrescreve | Resolva cada conflito à mão, ou grave o resto com `--parcial` |
 | `kit adotar` recusa: não há `CLAUDE.md` | Projeto novo | Use `kit iniciar` |

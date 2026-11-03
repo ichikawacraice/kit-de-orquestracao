@@ -55,5 +55,5 @@
       "description": "O tema Wicomm para o design-system: a cor da marca, a fonte, o logotipo e o registro. Desligado por padrão: liga só nos projetos internos da Wicomm, pelo design.tema do .claude/kit.json; em app externo, melhor não ativar."
     }
   ],
-  "description": "Ichikawa's Kit: plugins opcionais para orquestrar sessões do Claude Code — escolha os que for usar (marketplace privado)."
+  "description": "Ichikawa's Kit: plugins opcionais para orquestrar sessões do Claude Code — escolha os que for usar."
 }
