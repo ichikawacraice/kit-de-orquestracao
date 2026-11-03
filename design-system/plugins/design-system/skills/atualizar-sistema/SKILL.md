@@ -31,7 +31,7 @@ Para cada documento, mescla a cópia do projeto, o ancestral (`design/.base/`, a
 
 ## 3. A nota de migração
 
-Leia as notas de release do sistema entre a versão antiga e a nova (no repositório `wicomm-design-system`, `docs/releases/`). MAJOR traz passos de migração de tela: liste-os como trabalho, não os aplique calado.
+Leia as notas de release do sistema entre a versão antiga e a nova (na pasta `design-system/` do repositório `ichikawacraice/kit-de-orquestracao`, `docs/releases/`). MAJOR traz passos de migração de tela: liste-os como trabalho, não os aplique calado.
 
 ## 4. Tokens e guardas
 
