@@ -17,7 +17,7 @@
 1. **A dona anota o PR na fila:** `painel fila-de-merge N:<sha> --anotar` confere que a ponta é o sha que ela testou, põe o PR nos pendentes do projeto e grava a pasta do repositório. Não roda gate nem mergeia; por isso a trava T6 o deixa passar. O recado `PR N pronto` fica para quando o `--anotar` não serve.
 2. **A batida lança a fila:** a fila com PR anotado e sem processo vivo sobe destacada (`--sem-turno`), com o gate e o preparo que a última rodada da orquestradora gravou em `config`. Só sobe com o sha da dona em todo PR; sem `config`, sem sha, ou com `KIT_FILA_SEM_TURNO=off`, segue no relatório como fila parada. Um lançamento a cada 5 min, até 3 sem a fila se gravar dona.
 3. **A batida entrega o desfecho:** a rodada sem turno grava o resultado no estado da fila; a batida seguinte avisa a dona do PR devolvido e da fatia, e manda à orquestradora um resumo só com o que é dela (subir a versão, atualizar os plugins, arquivar, fechar o lote). Sem orquestradora viva, o desfecho espera por ela, e a dona não é avisada duas vezes.
-4. **O estado gira:** no início de sessão da orquestradora, o hook leva ao arquivo morto do mês (`arquivo-morto/<repo>/<AAAA-MM>.md`) as seções datadas, menos a mais recente, e as entregas além das 15 últimas. As seções fixas e as sem data ficam. O morto se busca com grep e não se lê inteiro.
+4. **O estado gira:** no início de sessão da orquestradora, o hook leva ao arquivo morto do mês (`arquivo-morto/<repo>/<AAAA-MM>.md`) as seções datadas, menos as do dia mais recente (pela data do título, não pela posição), e as entregas além das 15 últimas. As seções fixas e as sem data ficam. O morto se busca com grep e não se lê inteiro.
 5. **O fim de lote é o momento de limpar:** depois do desfecho com merge, a orquestradora põe o estado em dia e gira o arquivo. Com o operador presente, isso basta para o botão limpar sem perda. Com o modo ausente ligado, ela se limpa a partir de 200 mil tokens em vez de 350 mil.
 
 <a id="alternativas"></a>
@@ -32,4 +32,4 @@
 ## Consequências
 - O PR entra na fila sem turno da orquestradora, e ela recebe um turno por lote, não dois por PR. O aviso de fim de turno do app, que chega à sessão que abriu a dona, continua abrindo um turno dela; isso é do app e fica fora deste ADR.
 - O projeto cuja fila nunca rodou pela orquestradora não tem `config`: o primeiro PR vai pelo recado, como antes.
-- O arquivo de estado deste repo cai de 38 KB para ~13 KB no primeiro giro, e o de outro projeto de 74 KB para ~21 KB (medido com `--seco` em 02/11).
+- O arquivo de estado deste repo cai de 38 KB para ~16 KB no primeiro giro, e o de outro projeto de 74 KB para ~28 KB (medido com `--seco` em 02/11).

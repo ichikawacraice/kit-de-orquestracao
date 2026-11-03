@@ -434,6 +434,10 @@ caso('T6 (F351): a dona anota o PR na fila (--anotar) → passa; o --anotar não
   passa(merge('DONA', repo, 'git push && painel fila-de-merge 12:abc1234 --anotar; echo "exit=$?"'), 'anotar depois do push');
   const junto = merge('DONA', repo, 'painel fila-de-merge 12:abc1234 --anotar && painel mergear 12 abc1234');
   ok(junto?.permissionDecision === 'ask', `esperava ask: ${JSON.stringify(junto)}`);
+  for (const disfarce of ['painel fila-de-merge 12:abc1234 --gate true # --anotar', "painel fila-de-merge 12:abc1234 --gate 'true --anotar'", 'painel fila-de-merge 12:abc1234 --gate "x --anotar"']) {
+    const r = merge('DONA', repo, disfarce);
+    ok(r?.permissionDecision === 'ask', `--anotar em comentário ou aspas não libera: ${disfarce} → ${JSON.stringify(r)}`);
+  }
   const semAnotar = merge('DONA', repo, 'painel fila-de-merge 12:abc1234 && echo --anotar');
   ok(semAnotar?.permissionDecision === 'ask', `esperava ask: ${JSON.stringify(semAnotar)}`);
 });

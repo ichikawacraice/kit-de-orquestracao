@@ -68,7 +68,9 @@ function main() {
     // F351: `fila-de-merge … --anotar` é a entrega da dona (só põe o PR na fila; quem roda o gate é a batida): passa. O pedaço
     // de comando é cortado nos separadores, para o `--anotar` de um não liberar o `mergear` de outro.
     const doPainel = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:mergear|fila-de-merge)\b`);
-    const soAnota = (pedaco) => /\sfila-de-merge\b/.test(pedaco) && /\s--anotar\b/.test(pedaco);
+    // o `--anotar` vale só como palavra solta do comando: fora de aspas e antes de um comentário (o painel lê o argumento exato)
+    const palavras = (pedaco) => pedaco.replace(/'[^']*'|"[^"]*"/g, ' ').replace(/(^|\s)#.*$/, '$1');
+    const soAnota = (pedaco) => /\sfila-de-merge\b/.test(pedaco) && /\s--anotar(?=\s|$)/.test(palavras(pedaco));
     const mergearDoPainel = normal.split(/[;&|\n`(]+/).some((p) => doPainel.test(p) && !soAnota(p));
     if (!mergearDoPainel && !/\bgh\b[^\n|;&]*\bpr\s+merge\b/.test(ti.command || '')) return;
     const reg = registroDaSessao(e.session_id);

@@ -22,7 +22,7 @@ const ESTADO = [
 ].join('\n');
 
 test('girar: as datadas antigas saem, a mais nova e as fixas (mesmo com data no título) ficam, a sem data fica', () => {
-  const g = girar(ESTADO);
+  const g = girar(ESTADO, { agora: new Date('2026-11-03T01:00:00Z') });
   assert.deepEqual(g.movidas, ['Retomar daqui (limpeza, 27/10 ~11:15 SP)', 'Estado em 2026-10-29']);
   for (const fica of ['## PRs abertos', '## Itens vivos e donas (abertas 30/10)', '## Próximo passo exato', '## Números reservados', 'passo novo', '# projx — estado']) assert.ok(g.vivo.includes(fica), `${fica} sumiu do vivo`);
   for (const sai of ['passo velho A', 'passo velho B', '## não é seção']) {
@@ -33,8 +33,9 @@ test('girar: as datadas antigas saem, a mais nova e as fixas (mesmo com data no 
 });
 
 test('girar: sem nada a mover devolve o texto igual e morto vazio', () => {
-  const g1 = girar(ESTADO);
-  const g2 = girar(g1.vivo);
+  const agora = new Date('2026-11-03T01:00:00Z');
+  const g1 = girar(ESTADO, { agora });
+  const g2 = girar(g1.vivo, { agora });
   assert.equal(g2.vivo, g1.vivo);
   assert.equal(g2.morto, '');
   assert.deepEqual(g2.movidas, []);
@@ -72,4 +73,25 @@ test('CLI: grava o vivo e acrescenta ao morto do mês (SP); --seco não grava', 
 
 test('caminhoDoMorto: o mês é o de São Paulo (02:00 UTC de 01/12 ainda é novembro em SP)', () => {
   assert.equal(caminhoDoMorto('/b/projx.md', new Date('2026-12-01T02:00:00Z')), '/b/arquivo-morto/projx/2026-11.md');
+});
+
+test('girar: a mais recente é pela data, não pela posição (handoff no topo), e ficam todas as do dia mais recente', () => {
+  const agora = new Date('2026-11-03T01:00:00Z');
+  const texto = [
+    '# x', '',
+    '## Próximo passo (handoff 02/11, botão)', 'topo novo', '',
+    '## PRs abertos', '- #1', '',
+    '## Estado em 02/11 (limpeza pelo botão)', 'produção #1545', '',
+    '## Retomar daqui (31/10)', 'velho', '',
+  ].join('\n');
+  const g = girar(texto, { agora });
+  assert.deepEqual(g.movidas, ['Retomar daqui (31/10)']);
+  for (const fica of ['topo novo', 'produção #1545', '## PRs abertos']) assert.ok(g.vivo.includes(fica), `${fica} sumiu`);
+  assert.ok(!g.vivo.includes('velho') && g.morto.includes('velho'));
+});
+
+test('girar: dd/mm sem ano que cairia no futuro é do ano anterior (28/12 é mais velho que 02/01)', () => {
+  const g = girar('# x\n\n## Retomar daqui (28/12)\nde dezembro\n\n## Retomar daqui (02/01)\nde janeiro\n', { agora: new Date('2027-01-02T15:00:00Z') });
+  assert.deepEqual(g.movidas, ['Retomar daqui (28/12)']);
+  assert.ok(g.vivo.includes('de janeiro'));
 });

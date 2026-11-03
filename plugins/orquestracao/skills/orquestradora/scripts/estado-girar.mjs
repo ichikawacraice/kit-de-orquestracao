@@ -4,6 +4,8 @@
 // "Entregas arquivadas" às últimas MANTER_ENTREGAS linhas e leva o resto ao arquivo morto `<BASE>/arquivo-morto/<repo>/<AAAA-MM>.md`,
 // que se busca com grep quando precisa. Seção fixa = título que começa por um dos FIXOS (mesmo com data no título); seção
 // datada = qualquer outra com data no título; seção sem data e fora da lista fica onde está (na dúvida, não se move).
+// "A mais recente" é pela data do título, não pela posição (há quem escreva o handoff no topo), e ficam todas as do dia mais
+// recente: o mesmo handoff às vezes vem em duas seções.
 // Uso: node estado-girar.mjs <arquivo .md> [--seco] → JSON {movidas, entregasMovidas, antes, depois, morto}.
 import { readFileSync, writeFileSync, renameSync, mkdirSync, appendFileSync } from 'node:fs';
 import { join, basename, dirname } from 'node:path';
@@ -12,6 +14,19 @@ import { fileURLToPath } from 'node:url';
 export const MANTER_ENTREGAS = 15;
 const FIXOS = ['prs abertos', 'fila de merge', 'itens vivos', 'sessões', 'produção', 'decisões', 'números reservados', 'adiados', 'próximo release', 'entregas arquivadas'];
 const DATA = /\b\d{1,2}\/\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b/;
+const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/;
+const DM = /\b(\d{1,2})\/(\d{1,2})\b/;
+// o dia do título (AAAAMMDD); dd/mm sem ano é do ano de `agora`, ou do anterior quando cairia mais de um dia no futuro
+function dia(s, agora) {
+  const iso = ISO.exec(s.titulo);
+  if (iso) return Number(`${iso[1]}${iso[2]}${iso[3]}`);
+  const dm = DM.exec(s.titulo);
+  if (!dm) return 0;
+  const [d, m] = [Number(dm[1]), Number(dm[2])];
+  let ano = agora.getUTCFullYear();
+  if (Date.UTC(ano, m - 1, d) > agora.getTime() + 86_400_000) ano -= 1;
+  return ano * 10_000 + m * 100 + d;
+}
 const ENTREGAS = 'entregas arquivadas';
 
 const titulo = (s) => s.titulo.replace(/^##\s+/, '').trim().toLowerCase();
@@ -33,11 +48,11 @@ function secoes(texto) {
 const juntar = (linhas) => linhas.join('\n');
 
 // texto → { vivo, morto (texto a acrescentar no arquivo morto, '' quando nada sai), movidas: [títulos], entregasMovidas }
-export function girar(texto, { manterEntregas = MANTER_ENTREGAS } = {}) {
+export function girar(texto, { manterEntregas = MANTER_ENTREGAS, agora = new Date() } = {}) {
   const { cabeca, secoes: todas } = secoes(texto);
   const datadas = todas.filter(datada);
-  const ultima = datadas.at(-1);
-  const vao = new Set(datadas.filter((s) => s !== ultima));
+  const recente = Math.max(0, ...datadas.map((s) => dia(s, agora)));
+  const vao = new Set(datadas.filter((s) => dia(s, agora) < recente));
   const morto = [];
   let entregasMovidas = 0;
   const ficam = [];
@@ -70,7 +85,7 @@ export function caminhoDoMorto(arquivo, agora = new Date()) {
 // Gira o arquivo no disco: o morto recebe primeiro (append), o vivo troca por rename (atômico). → resumo
 export function girarArquivo(arquivo, { seco = false, agora = new Date() } = {}) {
   const texto = readFileSync(arquivo, 'utf8');
-  const g = girar(texto);
+  const g = girar(texto, { agora });
   const morto = caminhoDoMorto(arquivo, agora);
   const resumo = { arquivo, movidas: g.movidas, entregasMovidas: g.entregasMovidas, antes: Buffer.byteLength(texto), depois: Buffer.byteLength(g.vivo), morto, ...(seco ? { seco: true } : {}) };
   if (seco || !g.morto) return resumo;
