@@ -65,7 +65,13 @@ function main() {
 
   if (tool === 'Bash') {
     const normal = separadoresDeAspasNeutros(semHeredoc(ti.command || ''));
-    const mergearDoPainel = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:mergear|fila-de-merge)\b`).test(normal);
+    // F351: `fila-de-merge … --anotar` é a entrega da dona (só põe o PR na fila; quem roda o gate é a batida): passa. O pedaço
+    // de comando é cortado nos separadores, para o `--anotar` de um não liberar o `mergear` de outro.
+    const doPainel = new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:mergear|fila-de-merge)\b`);
+    // o `--anotar` vale só como palavra solta num pedaço sem aspas, escape nem comentário: a entrega da dona não precisa deles,
+    // e com eles a trava não saberia se o painel recebe o `--anotar` como argumento próprio
+    const soAnota = (pedaco) => /\sfila-de-merge\b/.test(pedaco) && !/['"\\#]/.test(pedaco) && /\s--anotar(?=[\s)]|$)/.test(pedaco);
+    const mergearDoPainel = normal.split(/[;&|\n`(]+/).some((p) => doPainel.test(p) && !soAnota(p));
     if (!mergearDoPainel && !/\bgh\b[^\n|;&]*\bpr\s+merge\b/.test(ti.command || '')) return;
     const reg = registroDaSessao(e.session_id);
     if (ehOrquestradora(e.session_id, reg?.titulo)) return;

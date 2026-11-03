@@ -353,3 +353,84 @@ test('batida F241: dois projetos, cada relatório vai à orquestradora do própr
   assert.deepEqual(cut.map((m) => m.para), [lid(3)], r.out);
   for (const m of [...rel, ...cut]) assert.match(m.texto, /aviso automático da batida: o remetente é só a sessão que rodou a batida desta vez, de qualquer projeto; não responda a ela/, m.texto);
 });
+
+// ---- F351: a fila de merge sem turno ----
+const lerFila = () => JSON.parse(readFileSync(estadoDaFila(), 'utf8'));
+async function esperar(cond, ms = 20000) {
+  const fim = Date.now() + ms;
+  while (Date.now() < fim) { if (cond()) return true; await new Promise((r) => setTimeout(r, 100)); }
+  return false;
+}
+
+test('fila sem turno: a batida lança a fila anotada; o desfecho chega à orquestradora na batida seguinte e sai do estado', async () => {
+  item('F1', { etapa: 'merge', prs: [77], atualizadoEm: iso(T - 40 * MIN) });
+  const arq = sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit'));
+  // o gh inexistente derruba a rodada logo na leitura do PR: o desfecho é um erro, e é o que se mede aqui
+  fila({ ocupada: null, emVoo: [], pendentes: [{ pr: 77, sha: SHA }], config: { cwd: repo, gate: 'true', preparar: null } });
+  const a = painel(['batida', '--sessoes', arq, '--agora', iso(T)], { env: { GH_BIN: join(base, 'gh-que-nao-existe') } });
+  assert.equal(a.exit, 0, a.err);
+  assert.deepEqual(a.json().filasLancadas, { kit: [77] }, a.out);
+  assert.deepEqual(a.json().projetos.kit.merge, [], 'o item cujo PR a fila leva não é merge parado');
+  assert.equal(lerFila().lancada.tentativas, 1);
+  assert.ok(await esperar(() => (lerFila().desfechos ?? []).length > 0), `sem desfecho: ${readFileSync(estadoDaFila().replace(/\.json$/, '.sem-turno.log'), 'utf8')}`);
+  assert.ok(lerFila().desfechos[0].erro, JSON.stringify(lerFila()));
+  const b = batida(arq, T + 11 * MIN);
+  const d = msgs(b, 'desfecho');
+  assert.equal(d.length, 1, b.out);
+  assert.equal(d[0].para, lid(30));
+  assert.match(d[0].texto, /Fila de merge sem turno .*erro:/);
+  assert.deepEqual(lerFila().desfechos, [], 'o desfecho entregue sai do estado');
+});
+
+test('fila sem turno: sem o sha da dona, sem gate gravado ou desligada, não lança e a fila parada vai à orquestradora', () => {
+  item('F1', { etapa: 'merge', prs: [77] });
+  const arq = sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit'));
+  const casos = [
+    [{ pendentes: [{ pr: 77 }], config: { cwd: repo, gate: 'true' } }, {}],
+    [{ pendentes: [{ pr: 77, sha: SHA }] }, {}],
+    [{ pendentes: [{ pr: 77, sha: SHA }], config: { cwd: repo, gate: 'true' } }, { KIT_FILA_SEM_TURNO: 'off' }],
+  ];
+  for (const [estado, env] of casos) {
+    rmSync(join(pastaOrq(), 'batida'), { recursive: true, force: true });
+    fila({ ocupada: null, emVoo: [], ...estado });
+    const r = painel(['batida', '--sessoes', arq, '--agora', iso(T)], { env });
+    assert.equal(r.exit, 0, r.err);
+    assert.equal(r.json().filasLancadas, undefined, JSON.stringify(estado));
+    assert.deepEqual(r.json().projetos.kit.filaParada?.prs, [77], r.out);
+    assert.equal(lerFila().lancada, undefined);
+  }
+});
+
+test('fila sem turno: lançada há menos de 5 min não relança; depois de 3 lançamentos sem dona, volta ao relatório', () => {
+  item('F1', { etapa: 'merge', prs: [77] });
+  const arq = sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit'));
+  const base0 = { ocupada: null, emVoo: [], pendentes: [{ pr: 77, sha: SHA }], config: { cwd: repo, gate: 'true' } };
+  fila({ ...base0, lancada: { em: iso(T - 2 * MIN), tentativas: 1 } });
+  const r = batida(arq, T, ['--seco']);
+  assert.equal(r.json().filasLancadas, undefined, 'recente: não relança');
+  assert.equal(r.json().projetos.kit.filaParada, undefined, 'e também não é fila parada');
+  fila({ ...base0, lancada: { em: iso(T - 10 * MIN), tentativas: 1 } });
+  assert.deepEqual(batida(arq, T, ['--seco']).json().filasLancadas, { kit: [77] }, 'passou o prazo: relança');
+  fila({ ...base0, lancada: { em: iso(T - 10 * MIN), tentativas: 3 } });
+  const s = batida(arq, T, ['--seco']);
+  assert.equal(s.json().filasLancadas, undefined);
+  assert.deepEqual(s.json().projetos.kit.filaParada?.prs, [77], s.out);
+});
+
+test('fila sem turno: desfecho sem orquestradora avisa só a dona uma vez e fica até haver orquestradora', () => {
+  item('F1', { etapa: 'execucao', atualizadoEm: iso(T) });
+  const devolvido = { pr: 77, motivo: 'gate vermelho (exit 1)', log: '/tmp/x.log', itens: [{ item: 'F1', dona: lid(1) }] };
+  fila({ ocupada: null, emVoo: [], pendentes: [], desfechos: [{ em: iso(T - MIN), mergeados: [], devolvidos: [devolvido] }] });
+  const so = sessoes(sessao(1, 'F1 · a'));
+  const a = batida(so);
+  assert.equal(msgs(a, 'devolucao').length, 1, a.out);
+  assert.equal(msgs(a, 'devolucao')[0].para, lid(1));
+  assert.match(msgs(a, 'devolucao')[0].texto, /PR 77 devolvido .*gate vermelho.*--anotar/);
+  assert.equal(msgs(a, 'desfecho').length, 0);
+  assert.equal(lerFila().desfechos[0].donasAvisadas, true);
+  const b = batida(sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit')), T + 11 * MIN);
+  assert.equal(msgs(b, 'devolucao').length, 0, 'a dona não é avisada duas vezes');
+  assert.equal(msgs(b, 'desfecho').length, 1);
+  assert.match(msgs(b, 'desfecho')[0].texto, /devolvidos #77 \(F1, dona avisada\)/);
+  assert.deepEqual(lerFila().desfechos, []);
+});

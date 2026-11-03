@@ -38,11 +38,16 @@ export function donoDaFilaVivo(ocupada, { vivo = pidVivo, inicio = inicioDoProce
 const lista = (v) => (Array.isArray(v) ? v.filter((p) => Number.isInteger(p?.pr)) : []);
 
 // → null | { prs: [{pr, sha?}], desde, pid, gate?, preparar? }: há PR anotado e ninguém vivo para levá-lo. A ordem é a que a
-// chamada seguinte usaria (o lote em voo, depois os pendentes).
+// chamada seguinte usaria (o lote em voo, depois os pendentes). O PR que está nos dois leva o sha do pendente, o mais novo
+// (F351: a dona que anotou de novo depois de uma rodada morta), como faz o `juntarPedidos` do painel.
 export function filaOrfa(estado, deps) {
   if (!estado || typeof estado !== 'object') return null;
   const prs = [];
-  for (const p of [...lista(estado.emVoo), ...lista(estado.pendentes)]) if (!prs.some((x) => x.pr === p.pr)) prs.push({ pr: p.pr, ...(p.sha ? { sha: p.sha } : {}) });
+  for (const p of [...lista(estado.emVoo), ...lista(estado.pendentes)]) {
+    const i = prs.findIndex((x) => x.pr === p.pr);
+    if (i < 0) prs.push({ pr: p.pr, ...(p.sha ? { sha: p.sha } : {}) });
+    else if (p.sha) prs[i] = { ...prs[i], sha: p.sha };
+  }
   if (!prs.length || donoDaFilaVivo(estado.ocupada, deps)) return null;
   const o = estado.ocupada ?? {};
   return {

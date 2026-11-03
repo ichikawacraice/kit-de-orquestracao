@@ -55,7 +55,12 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs, itens =
 
 // `filasOrfas`: { <projeto>: fila-orfa.mjs#filaOrfa } — a fila de merge com PR anotado e sem processo vivo (F220). O item em
 // merge com PR nela vai ao relatório na hora, sem esperar o prazo, e o relatório leva `filaParada` com o comando de relance.
-export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
+// F351: `filasVivas` { <projeto>: [pr] } são os PRs que uma fila com processo vivo (ou lançada agora pela batida) vai levar: o
+// item em merge com PR nela não está parado. `desfechos` { <projeto>: [desfecho] } são os resultados da fila que rodou sem turno
+// (`fila-de-merge --sem-turno`): a batida avisa a dona do PR devolvido e da fatia mergeada, e manda à orquestradora um resumo só
+// do que é dela. A saída `desfechos` diz, por projeto, quantos foram entregues à orquestradora (saem do arquivo) e quantos só às
+// donas (ficam, marcados, até haver orquestradora).
+export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, filasVivas = {}, desfechos = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
   const mensagens = []; const soltar = [];
@@ -85,6 +90,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     const minParado = t === null ? null : Math.floor((agoraMs - t) / 60_000);
 
     if (d.etapa === 'merge') {
+      if (Array.isArray(d.prs) && d.prs.some((p) => (filasVivas[nome] ?? []).includes(p))) continue;
       const naFilaOrfa = Array.isArray(d.prs) && (filasOrfas[nome]?.prs ?? []).some((p) => d.prs.includes(p.pr));
       if (parado || naFilaOrfa) proj.merge.push(F);
       continue;
@@ -121,6 +127,28 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     projeto(nome).filaParada = { prs: o.prs.map((p) => p.pr), desde: o.desde ?? null, relance: comandoDeRelance(o) };
   }
 
+  const entregas = {};
+  for (const [nome, lista] of Object.entries(desfechos)) {
+    if (!Array.isArray(lista) || !lista.length) continue;
+    const orq = projeto(nome).orquestradora;
+    for (const df of lista) {
+      if (!df.donasAvisadas) {
+        for (const dv of df.devolvidos ?? []) {
+          for (const it of dv.itens ?? []) {
+            if (texto(it.dona) && viva(it.dona)) nova(it.dona, `PR ${dv.pr} devolvido pela fila de merge (${it.item}): ${dv.motivo}${dv.log ? ` Log: ${dv.log}.` : ''} Conserte, rode os afetados e anote de novo: \`painel fila-de-merge ${dv.pr}:<sha> --anotar\`.`, it.item, 'devolucao');
+          }
+        }
+        for (const m of df.mergeados ?? []) {
+          for (const it of m.itens ?? []) {
+            if (it.fatia && texto(it.dona) && viva(it.dona)) nova(it.dona, `fatia PR ${m.pr} mergeada (${it.item}): siga com a próxima.`, it.item, 'fatia');
+          }
+        }
+      }
+      if (orq) nova(orq, resumoDoDesfecho(df), null, 'desfecho');
+    }
+    entregas[nome] = { orquestradora: orq ? lista.length : 0, soDonas: orq ? 0 : lista.length };
+  }
+
   // relatório à orquestradora de cada projeto, só quando algo mudou desde o último
   const relatorios = {};
   for (const [nome, proj] of [...projetos].sort(([a], [b]) => a.localeCompare(b))) {
@@ -137,5 +165,18 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
       nova(proj.orquestradora, `Batida ${hora}: ${partes.join('; ')}. Relatório: ${caminhoDoRelatorio(nome)}.`, null, 'relatorio');
     }
   }
-  return { mensagens, soltar, projetos: relatorios, estado: { cutucadas, ultima: new Date(agoraMs).toISOString() } };
+  return { mensagens, soltar, projetos: relatorios, desfechos: entregas, estado: { cutucadas, ultima: new Date(agoraMs).toISOString() } };
+}
+
+const hhmm = (iso) => { const t = ms(iso); return t === null ? '?' : new Date(t).toTimeString().slice(0, 5); };
+// O resumo à orquestradora: o que entrou, o que voltou (a dona já foi avisada pela batida) e o que é dela fazer.
+export function resumoDoDesfecho(df) {
+  const partes = [];
+  const itensDe = (m) => (m.itens ?? []).map((it) => `${it.item}${it.fechado ? ' fechou' : it.fatia ? ' fatia' : ''}`).join(', ');
+  if (df.mergeados?.length) partes.push(`mergeados ${df.mergeados.map((m) => `#${m.pr}${itensDe(m) ? ` (${itensDe(m)})` : ''}`).join(', ')}`);
+  if (df.devolvidos?.length) partes.push(`devolvidos ${df.devolvidos.map((d) => `#${d.pr}${(d.itens ?? []).length ? ` (${d.itens.map((i) => i.item).join(', ')}, dona avisada)` : ''}: ${String(d.motivo ?? '').slice(0, 160)}`).join('; ')}`);
+  if (df.suspeitaDeInstavel) partes.push(`suspeita de teste instável: ${df.suspeitaDeInstavel}`);
+  for (const e of [df.erro, ...(df.erros ?? [])].filter(Boolean)) partes.push(`erro: ${e}`);
+  const seu = df.mergeados?.length ? ' É seu: subir-versao --empurrar e atualizar-plugins; arquive as donas dos itens fechados; feche o lote (estado em dia, e o "Fim de lote" do Orçamento de contexto).' : df.erro || df.erros?.length ? ' É seu: leia o log, conserte e relance a fila com os PRs que seguem valendo.' : '';
+  return `Fila de merge sem turno (${hhmm(df.em)}): ${partes.join('; ') || 'nada mergeado nem devolvido'}.${seu}${df.logs ? ` Logs: ${[].concat(df.logs).join(', ')}.` : ''}`;
 }

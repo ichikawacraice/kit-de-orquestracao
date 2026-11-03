@@ -66,3 +66,9 @@ test('aspas simples no gate não quebram o comando de relance', () => {
   const o = filaOrfa({ ocupada: { pid: 10, gate: "echo 'oi'" }, emVoo: [{ pr: 3 }] }, { vivo: morto });
   assert.equal(comandoDeRelance(o), `painel fila-de-merge 3 --gate 'echo '\\''oi'\\'''`);
 });
+
+// F351: a dona anotou de novo (sha novo nos pendentes) depois de uma rodada morta (sha velho no emVoo): vale o novo.
+test('PR no emVoo e nos pendentes leva o sha do pendente, o mais novo', () => {
+  const o = filaOrfa({ ocupada: null, emVoo: [{ pr: 21, sha: 'aaaaaaa' }, { pr: 22, sha: 'ccccccc' }], pendentes: [{ pr: 21, sha: 'bbbbbbb' }, { pr: 22 }] });
+  assert.deepEqual(o.prs, [{ pr: 21, sha: 'bbbbbbb' }, { pr: 22, sha: 'ccccccc' }]);
+});
