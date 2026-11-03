@@ -6,7 +6,8 @@ Do zero ao primeiro item entregue. Leva uns 15 minutos, quase todos esperando o 
 
 - Claude Code no **app desktop**. O pane `/painel` e a troca de mensagens entre sessões são do app: no terminal puro o kit perde metade do que faz.
 - Node 20 ou mais novo, e git.
-- O repositório do kit é privado: peça o convite a quem o mantém e entre no GitHub com a conta convidada (`gh auth login`).
+- O repositório do kit é público: adicionar o marketplace e rodar o `npx` não pedem convite nem login.
+- Para o `design-system`, que vem do repositório da empresa (privado), a conta do GitHub da máquina precisa de acesso de leitura a ele: entre com ela (`gh auth login`). Sem esse acesso, só o `install` do `design-system` falha: o resto do kit não depende dele.
 
 ## 2. Os plugins, uma vez por máquina
 
@@ -17,7 +18,7 @@ claude plugin marketplace add ichikawacraice/kit-de-orquestracao
 claude plugin install orquestracao@ichikawa-kit
 ```
 
-O `orquestracao` é o núcleo. Repita o `install` para `painel-sessoes`, `processos` e `design-system` (este vem do repositório da empresa, que é privado: precisa de acesso de leitura). O `kit-performance` é opcional: instale-o só se quiser as práticas de performance e o revisor ([o que ele traz](ligar-e-desligar.md#kit-performance)). O projeto interno da empresa liga também o `tema-wicomm`, pelo `.claude/kit.json` ([como](ligar-e-desligar.md#tema-wicomm)). Quem já tinha o `kit-design` não o instala de novo: ele fica no marketplace só até a troca pelo `design-system` ([como trocar](ligar-e-desligar.md#kit-design)). Reinicie o app: plugin novo só vale depois do reinício.
+O `orquestracao` é o núcleo. Repita o `install` para `painel-sessoes`, `processos` e `design-system` (este vem do repositório da empresa, que é privado: precisa de acesso de leitura). O `kit-performance` é opcional: instale-o só se quiser as práticas de performance e o revisor ([o que ele traz](ligar-e-desligar.md#kit-performance)). O `tema-wicomm` vem **desligado**: só o projeto interno da empresa o liga, pelo `.claude/kit.json` ([como](ligar-e-desligar.md#tema-wicomm)); em app de cliente ou de fora da empresa, é melhor não ativá-lo. Quem já tinha o `kit-design` não o instala de novo: ele fica no marketplace só até a troca pelo `design-system` ([como trocar](ligar-e-desligar.md#kit-design)). Reinicie o app: plugin novo só vale depois do reinício.
 
 **Atenção:** o `install` liga o plugin na sua conta, para **todo** projeto, não só para o que tem o kit. A maior parte das travas só age onde há orquestradora ou item na fila, mas algumas valem em qualquer sessão: a lista e como desligá-las num projeto estão em [O que ligar e desligar](ligar-e-desligar.md#valem-em-todo-projeto).
 

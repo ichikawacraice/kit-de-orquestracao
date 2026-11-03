@@ -15,14 +15,14 @@ Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perd
 | Plugin `processos` | Skills de processo (`spec-driven`, `revisar-diff`, `auditoria-de-clique`) e a conferência das docs no gate |
 | Plugin `kit-performance` | Opcional, não vem ligado: as práticas de performance por camada (front, dados, entrega, medir), cada uma com quando vale e quando não vale, e o agente `revisor-de-performance` |
 | Plugin `design-system` | O processo de design, para projeto com tela: a base (direção, anatomia, convenções), a revisão de arquitetura de UI antes, o crítico com nota depois e a guarda que cobra a crítica. Vem do repositório da empresa (privado); sem marca, que vem de um plugin de tema ([como ligar](docs/guia/ligar-e-desligar.md#design-system)). Sucede o `kit-design` |
-| Plugin `tema-wicomm` | Só nos projetos internos da empresa, pelo `design.tema` do `.claude/kit.json`: o tema dela para o `design-system` (cor, fonte, logotipo, registro). Trocar as cores é trocar o plugin de tema |
+| Plugin `tema-wicomm` | Só nos projetos internos da empresa, pelo `design.tema` do `.claude/kit.json`: o tema dela para o `design-system` (cor, fonte, logotipo, registro). **Desligado por padrão:** o kit não o liga sem o `design.tema`, e em app de cliente ou de fora da empresa é melhor não ativá-lo, porque a marca é dela e não entra na licença ([NOTICE](NOTICE)). Trocar as cores é trocar o plugin de tema |
 | CLI `kit` | Põe o kit num projeto: gate de testes, guarda de operação, `CLAUDE.md` com as regras e `.claude/kit.json` |
 
 ## Requisitos
 
 - Claude Code no **app desktop** (o pane e as sessões entre si usam ferramentas do app).
 - Node 20 ou mais novo, e git. O kit não traz dependência npm.
-- Acesso ao repositório: ele é privado. Peça o convite a quem mantém o kit e entre no GitHub com essa conta (`gh auth login`).
+- O repositório do kit é público: o marketplace e o `npx` não pedem convite. Só o `design-system` (e o `tema-wicomm`) vêm do repositório da empresa, que é privado: para eles, a conta do GitHub da máquina (`gh auth login`) precisa de acesso de leitura a ele.
 
 ## Instalar em 3 passos
 
@@ -52,6 +52,10 @@ O comando troca também os projetos que o Claude Code conhece. Num projeto que e
 **O plugin `design` virou `kit-design`.** O plugin `design` da Anthropic tem o mesmo nome e escondia os agentes e as skills do kit. O `atualizar-plugins` instala o `kit-design` com as opções do `design` (e desligado, se ele estava) e só então desinstala o velho; em cada projeto, o `kit atualizar` troca `design@kit-de-orquestracao` por `kit-design@ichikawa-kit` no `enabledPlugins` do `.claude/settings.json` (o `settings.local.json` é seu: ele só avisa). Até lá, as travas e o gate leem os dois nomes. A seção `design` do `.claude/kit.json` não muda.
 
 **O `kit-design` deu lugar ao `design-system`.** Mesmo processo (designer, crítico com nota, guarda), agora com a base e sem marca. Na conta, o `atualizar-plugins` instala o `design-system` com as opções do `kit-design` (e desligado, se ele estava) e só então desinstala o velho (`--seco` mostra antes); em cada projeto, o `kit atualizar` passa o valor de `kit-design@ichikawa-kit` para `design-system@ichikawa-kit` e deixa o velho `false`. A seção `design` do `.claude/kit.json` segue valendo. O `kit-design` fica no marketplace só até a troca rodar.
+
+## Licença
+
+MIT ([LICENSE](LICENSE)), com duas exceções no [NOTICE](NOTICE): a marca da empresa (o `tema-wicomm`) não é licenciada, e os plugins que o marketplace lista vindos de outro repositório seguem a licença de lá.
 
 ## Para quem mexe no kit
 

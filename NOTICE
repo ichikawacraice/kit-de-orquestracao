@@ -1,0 +1,33 @@
+Ichikawa's Kit (ichikawa-kit)
+Copyright (c) 2026 Gabriel Ichikawa Craice
+
+O código e os textos deste repositório estão sob a licença MIT (arquivo LICENSE),
+com as exceções abaixo.
+
+1. A marca Wicomm não é licenciada pelo MIT.
+   O nome Wicomm, o logotipo, as cores, a fonte e o restante da identidade visual
+   da empresa pertencem a ela. O MIT deste repositório não dá direito de usá-los.
+   Isso vale para o plugin de tema `tema-wicomm`, hoje e quando o código dele vier
+   morar aqui (pasta plugins/tema-wicomm/): ele fica fora do MIT e só se usa nos
+   projetos da própria empresa. Em app de cliente ou de fora da empresa, não o
+   ative; para outra marca, faça outro plugin de tema.
+
+2. Plugins de origem remota seguem a licença do repositório de origem.
+   O marketplace lista `design-system` e `tema-wicomm` vindos do repositório
+   wicomm-projects/wicomm-design-system, que é privado e não tem licença pública: os direitos são da empresa.
+   Este repositório não traz o código deles; o MIT daqui não se estende a eles.
+   Se esse código passar a morar aqui, a licença dele é a que a empresa definir
+   e fica registrada neste arquivo.
+
+
+3. Código de terceiros, portado ou adaptado sob a licença MIT.
+   O aviso de copyright de cada origem fica aqui; o texto de permissão é o mesmo
+   do arquivo LICENSE.
+
+   - Expressões regulares de plugins/orquestracao/hooks/varredura-entre-sessoes.mjs
+     Origem: https://github.com/ruvnet/ruflo (commit 264b34647)
+     Copyright (c) 2024-2026 ruvnet
+
+   - Desenho do fluxo de plugins/processos/workflows/revisao-do-diff.js
+     Origem: https://github.com/affaan-m/ECC, workflows/orch-review.workflow.js (commit bf70150)
+     Copyright (c) 2026 Affaan Mustafa
