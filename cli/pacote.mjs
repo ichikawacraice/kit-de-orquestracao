@@ -534,17 +534,18 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     // o perfil de plugins do kit.json que o projeto já tem (F347): o que ele desliga entra como false
     let kjDoProjeto = {}; try { kjDoProjeto = JSON.parse(semBom(lerTexto(destino, '.claude/kit.json') ?? '{}')) ?? {}; } catch { /* ilegível: o kit.json acusa abaixo */ }
     // o projeto que já liga o kit-design passa ao design-system (F353), como no kit atualizar; o valor que ele tinha é da pessoa
-    const semSucessor = Object.entries(SUCESSORES).filter(([velho, novo]) => s.enabledPlugins[velho] === true && !(novo in s.enabledPlugins) && !sucessorInstalado(destino, novo));
+    const semSucessor = Object.entries(SUCESSORES).filter(([velho, novo]) => s.enabledPlugins[velho] === true && s.enabledPlugins[novo] !== false && !sucessorInstalado(destino, novo));
     for (const [velho, novo] of semSucessor) avisosDoProjeto.push(`${velho} tem sucessor, ${novo}, que esta máquina ainda não instalou: rode o atualizar-plugins na conta e depois o kit atualizar`);
     const suc = semSucessor.length ? { trocas: [], conflitos: [], pares: [] } : sucederPlugins(s);
     conflitos.push(...suc.conflitos);
     const perfil = aplicarDesligados(s, perfilComSucessores(kjDoProjeto), { recuperando });
-    cs.desligados = [...new Set([...perfil.desligados, ...suc.pares.map((p) => p.velho)])];
+    cs.desligados = [...new Set([...perfil.desligados, ...suc.pares.flatMap((p) => (!p.novoJaEstava && s.enabledPlugins[p.novo] === false ? [p.velho, p.novo] : [p.velho]))])];
     if (!cs.desligados.length) delete cs.desligados;
     conflitos.push(...perfil.conflitos);
     avisosDoProjeto.push(...perfil.avisos, ...perfil.desligados.map((id) => `o perfil do .claude/kit.json desliga ${id} neste projeto (enabledPlugins false)`));
     for (const nome of PLUGINS_DO_KIT) {
-      if (cs.desligados?.includes(nome) || suc.pares.some((p) => p.novo === nome)) continue; // o perfil do projeto o desliga, ou veio do sucedido
+      // o perfil do projeto o desliga, veio do sucedido, ou o sucedido segue ligado sem ele instalado (ligar os dois daria guarda em dobro depois)
+      if (cs.desligados?.includes(nome) || suc.pares.some((p) => p.novo === nome) || semSucessor.some(([, novo]) => novo === nome)) continue;
       if (!(nome in s.enabledPlugins)) { s.enabledPlugins[nome] = true; cs.plugins.push(nome); }
       else if (s.enabledPlugins[nome] !== true) conflitos.push(`enabledPlugins.${nome} já é ${JSON.stringify(s.enabledPlugins[nome])} — não troquei`);
       else if (recuperando) cs.plugins.push(nome);

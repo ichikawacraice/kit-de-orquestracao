@@ -137,6 +137,42 @@ describe('kit iniciar e kit atualizar', () => {
     assert.equal(json(d, '.claude/settings.json').enabledPlugins[DS], true);
   });
 
+  it('a chave do design-system já no settings, sem ele instalado: o kit atualizar também não desliga o kit-design', () => {
+    const d = projetoVelho();
+    mexer(d, '.claude/settings.json', (s) => { s.enabledPlugins[DS] = true; });
+    const outraCasa = nova('kit-f353-sem2-');
+    mkdirSync(join(outraCasa, '.claude', 'plugins'), { recursive: true });
+    writeFileSync(join(outraCasa, '.claude', 'plugins', 'known_marketplaces.json'), JSON.stringify({ 'ichikawa-kit': {} }));
+    const r = spawnSync('node', [KIT, 'atualizar'], { cwd: d, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, HOME: outraCasa, HOOKS_CREWAI_BASE: base, CI: '' } });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /aviso: kit-design@ichikawa-kit tem sucessor/);
+    assert.equal(json(d, '.claude/settings.json').enabledPlugins[KD], true);
+  });
+
+  it('kit adotar num projeto com kit-design ligado e sem o design-system instalado: não troca nem liga o design-system', () => {
+    const d = projeto();
+    escrever(d, 'CLAUDE.md', '# projeto\n');
+    escrever(d, '.claude/settings.json', `${JSON.stringify({ enabledPlugins: { [KD]: true } }, null, 2)}\n`);
+    const outraCasa = nova('kit-f353-sem3-');
+    const r = spawnSync('node', [KIT, 'adotar'], { cwd: d, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, HOME: outraCasa, HOOKS_CREWAI_BASE: base, CI: '' } });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /kit-design@ichikawa-kit tem sucessor/);
+    const s = json(d, '.claude/settings.json').enabledPlugins;
+    assert.equal(s[KD], true);
+    assert.ok(!(DS in s), JSON.stringify(s));
+  });
+
+  it('kit adotar com kit-design desligado e o design-system instalado: o remover tira os dois false', () => {
+    const d = projeto();
+    escrever(d, 'CLAUDE.md', '# projeto\n');
+    escrever(d, '.claude/settings.json', `${JSON.stringify({ enabledPlugins: { [KD]: false } }, null, 2)}\n`);
+    assert.equal(kit(d, 'adotar').status, 0);
+    assert.equal(json(d, '.claude/settings.json').enabledPlugins[DS], false);
+    assert.equal(kit(d, 'remover').status, 0);
+    const depois = (() => { try { return json(d, '.claude/settings.json').enabledPlugins ?? {}; } catch { return {}; } })();
+    assert.ok(!(DS in depois) && !(KD in depois), JSON.stringify(depois));
+  });
+
   it('kit atualizar guarda o false de quem desligou o plugin; o remover tira os dois false', () => {
     const d = projetoVelho(false);
     assert.equal(kit(d, 'atualizar').status, 0);

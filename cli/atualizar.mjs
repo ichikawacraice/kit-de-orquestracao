@@ -100,7 +100,7 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
     const trocas = s && contaMigrada ? trocarNomesDoKit(s) : [];
     // F353: o design-system sucede o kit-design (depois do nome do marketplace: o `kit-design@` antigo chega ao novo e daí ao sucessor)
     // só com o sucessor instalado para o projeto: antes disso, o velho desligado aqui deixaria o projeto sem guarda de design
-    const faltam = Object.entries(SUCESSORES).filter(([velho, novo]) => s?.enabledPlugins?.[velho] === true && !(novo in s.enabledPlugins) && !sucessorInstalado(destino, novo));
+    const faltam = Object.entries(SUCESSORES).filter(([velho, novo]) => s?.enabledPlugins?.[velho] === true && s.enabledPlugins[novo] !== false && !sucessorInstalado(destino, novo));
     for (const [velho, novo] of faltam) linhas.push(`aviso: ${velho} tem sucessor, ${novo}, que esta máquina ainda não instalou: rode o atualizar-plugins na conta (ou, só neste projeto, \`claude plugin install ${novo} --scope project\`) e depois o kit atualizar`);
     const suc = s && !faltam.length ? sucederPlugins(s) : { trocas: [], conflitos: [], pares: [] };
     for (const c of suc.conflitos) conflito(c);
