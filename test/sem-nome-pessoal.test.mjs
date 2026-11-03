@@ -78,6 +78,10 @@ describe('o kit sai sem nome pessoal', () => {
     assert.deepEqual(nomesDoAutorEm(`o ${Marca} decide`), [marca], 'precondição: a marca sozinha é pega');
     assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`tema-${marca}@ichikawa-kit e ${marca}-projects/${marca}-design-system`)), []);
     assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`${marca}-projects/outro e tema-${marca}x`)).length > 0, true, 'outra forma continua barrada');
+    // F357: os dois pacotes no npm passam; outro pacote do escopo, não
+    assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`npm i @${marca}/tokens @${marca}/guardas`)), []);
+    assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`npm i @${marca}/registro`)), [marca]);
+    assert.deepEqual(nomesDoAutorEm(semOEnderecoPublicado(`npm i @${marca}/tokens-x @${marca}/guardas.y`)), [marca], 'nome que só começa igual continua barrado');
     const mk = (desc) => JSON.stringify({ name: 'm', owner: { name: 'x' }, plugins: [{ name: 'design-system', description: desc('design-system') }, { name: `tema-${marca}`, description: desc(`tema-${marca}`) }] });
     const so = (nome) => (n) => (n === nome ? `o tema ${Marca}` : 'genérico');
     assert.deepEqual(nomesDoAutorEm(textoQueConta('x/marketplace.json', mk(so(`tema-${marca}`)))), [], 'na entrada do tema a marca passa');

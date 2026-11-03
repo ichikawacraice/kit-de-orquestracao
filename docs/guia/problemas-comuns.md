@@ -11,6 +11,7 @@ npx -y github:ichikawacraice/kit-de-orquestracao doutor
 | Sintoma | Causa | Saída |
 |---|---|---|
 | `marketplace add` ou `npx` não acha o repositório | Endereço digitado errado, ou rede sem acesso ao GitHub (o repositório do kit é público) | Confira o endereço `ichikawacraice/kit-de-orquestracao` e o acesso a `github.com` |
+| `atualizar-plugins` para com `ENOENT` em `…/marketplaces/ichikawa-kit/plugins/design-system/.claude-plugin/plugin.json` | O `orquestracao` da conta é 0.1.91 ou mais velho, e o `design-system` passou a morar em `design-system/plugins/` (F357) | O clone do marketplace já foi atualizado na tentativa: rode o script novo dele, `node ~/.claude/plugins/marketplaces/ichikawa-kit/plugins/orquestracao/skills/orquestradora/scripts/atualizar-plugins.mjs`. Depois disso a conta tem a versão que conhece a pasta nova |
 | O `/painel` não existe, ou nada do kit acontece | Plugin instalado depois que o app abriu | Reinicie o app |
 | `kit adotar` não grava nada e lista conflitos | Arquivo seu que difere do que o kit poria; o `adotar` não sobrescreve | Resolva cada conflito à mão, ou grave o resto com `--parcial` |
 | `kit adotar` recusa: não há `CLAUDE.md` | Projeto novo | Use `kit iniciar` |

@@ -118,3 +118,7 @@ npm test -w @wicomm/guardas
 - `insumo.test.mjs` — projeto vazio, exceção velha, desligamento sem motivo, guarda inventada na configuração;
 - `deteccao.test.mjs` — cada detector acusa o caso ruim e ignora o bom (CONV-16);
 - `base.test.mjs` — toda regra citada existe na base, e toda guarda que a base cita existe aqui.
+
+## Licença
+
+MIT (arquivo `LICENSE`).

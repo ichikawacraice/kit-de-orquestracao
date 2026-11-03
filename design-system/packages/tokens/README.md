@@ -64,3 +64,7 @@ Os testes:
 ## O que ficou de fora da origem
 
 Os tokens de domínio do produto de origem (etapas do percurso, plataformas, selo de origem, camada de desenho, o tema de campanha), a identidade de pessoa (`pessoa-*`, a decidir com o monograma no registro), `--spacing`/`--font-size`, que eram inertes no v3 da origem e no v4 alargariam todo o espaçamento, e as chaves só do v3 (`archivo`, `animationScale`). O motivo de cada um está no teste de paridade (`EXCLUIDOS` e o comentário do config).
+
+## Licença
+
+MIT (arquivo `LICENSE`). A cor da marca no slot `marca` (`fonte/marca.tokens.json` e o que se gera dela em `dist/`) é da Wicomm e não entra no MIT: use-a só nos projetos da empresa; para outra marca, troque o slot.
