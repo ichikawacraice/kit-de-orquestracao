@@ -1,0 +1,7 @@
+{
+  "substitutas": {
+    "design:accessibility-review": "design-system:acessibilidade",
+    "design:ux-copy": "design-system:textos-de-interface",
+    "design:design-system": "design-system:auditar-projeto"
+  }
+}

@@ -1,0 +1,6 @@
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+# O registro servido: sai do build de packages/registro (scripts/registro.mjs).
+public/r/

@@ -1,5 +1,5 @@
-// O repositório público (F355): a LICENSE é MIT e concorda com o package.json; o NOTICE tira a marca da empresa e os plugins de
-// origem remota do MIT; o README aponta para os dois; e o que se lê para instalar não diz mais que o repositório do kit é privado.
+// O repositório público (F355): a LICENSE é MIT e concorda com o package.json; o NOTICE tira a marca da empresa do MIT e diz a
+// licença do design system que veio do repositório dela (F357); o README aponta para os dois; e o que se lê para instalar não diz mais que o repositório do kit é privado.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ler = (...p) => readFileSync(join(RAIZ, ...p), 'utf8');
 const marketplace = () => JSON.parse(ler('.claude-plugin', 'marketplace.json'));
-const remotos = () => marketplace().plugins.filter((p) => typeof p.source !== 'string').map((p) => p.name);
 
 describe('o kit sai com licença MIT', () => {
   it('a LICENSE é o texto MIT e o package.json diz MIT', () => {
@@ -21,13 +20,16 @@ describe('o kit sai com licença MIT', () => {
     assert.equal(JSON.parse(ler('package.json')).license, 'MIT');
   });
 
-  it('o NOTICE tira do MIT a marca e cada plugin de origem remota do marketplace', () => {
-    const lista = remotos();
-    assert.ok(lista.includes('tema-wicomm') && lista.includes('design-system'), `precondição: remotos lidos: ${lista}`);
+  it('o NOTICE tira do MIT a marca e diz a licença da pasta design-system/', () => {
     const t = ler('NOTICE');
     assert.match(t, /MIT/);
-    assert.deepEqual(lista.filter((n) => !t.includes(`\`${n}\``)), [], 'todo plugin de origem remota é citado no NOTICE');
-    assert.match(t, /plugins\/tema-wicomm\//, 'a pasta do tema fica fora do MIT quando o código vier para cá');
+    // a marca sai do id do plugin de tema, a única forma dela que o detector de nome aceita aqui
+    const empresa = 'tema-wicomm'.replace('tema-', '');
+    const marca = ['plugins/tema-wicomm/', `temas/${empresa}/`, `plugins/${empresa}/`];
+    for (const p of marca) assert.ok(existsSync(join(RAIZ, 'design-system', p)), `precondição: design-system/${p} existe`);
+    assert.deepEqual(marca.filter((p) => !t.includes(p)), [], 'cada pasta da marca é citada no NOTICE');
+    assert.match(t, /design-system\//, 'o NOTICE diz de onde veio e sob que licença está a pasta design-system/');
+    assert.deepEqual(marketplace().plugins.filter((p) => typeof p.source !== 'string').map((p) => p.name), [], 'nenhum plugin vem mais de fora');
   });
 
   it('todo código que diz vir de projeto MIT de fora está no NOTICE, com o copyright', () => {

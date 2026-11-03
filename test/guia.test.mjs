@@ -38,15 +38,15 @@ describe('o guia concorda com o código', () => {
     const textos = [ler(RAIZ, 'README.md'), ...paginas().map(pagina)].join('\n');
     const citados = [...textos.matchAll(/Plugin `([\w-]+)`|([\w-]+)@(?:ichikawa-kit|kit-de-orquestracao)/g)].map((m) => m[1] ?? m[2]).filter((n) => n !== '<plugin>');
     naoVazia('plugins citados', citados);
-    // o README guarda, de propósito, o nome antigo no aviso de migração; os de origem remota (F350) estão no marketplace
+    // o README guarda, de propósito, o nome antigo no aviso de migração; os de design-system/ (F357) estão no marketplace
     const legado = new Set(['design']);
-    const remotos = JSON.parse(ler(RAIZ, '.claude-plugin', 'marketplace.json')).plugins.filter((p) => typeof p.source !== 'string').map((p) => p.name);
-    assert.deepEqual([...new Set(citados)].filter((n) => !PLUGINS.includes(n) && !remotos.includes(n) && !legado.has(n)), []);
+    const doMarketplace = JSON.parse(ler(RAIZ, '.claude-plugin', 'marketplace.json')).plugins.map((p) => p.name);
+    assert.deepEqual([...new Set(citados)].filter((n) => !PLUGINS.includes(n) && !doMarketplace.includes(n) && !legado.has(n)), []);
   });
 
-  it('todo plugin de origem remota do marketplace está no README e em ligar-e-desligar (F350)', () => {
-    const remotos = JSON.parse(ler(RAIZ, '.claude-plugin', 'marketplace.json')).plugins.filter((p) => typeof p.source !== 'string').map((p) => p.name);
-    assert.ok(remotos.includes('design-system'), `precondição: remotos lidos: ${remotos}`);
+  it('todo plugin do marketplace fora de plugins/ está no README e em ligar-e-desligar (F350, F357)', () => {
+    const remotos = JSON.parse(ler(RAIZ, '.claude-plugin', 'marketplace.json')).plugins.filter((p) => typeof p.source !== 'string' || !p.source.startsWith('./plugins/')).map((p) => p.name);
+    assert.ok(remotos.includes('design-system'), `precondição: lidos: ${remotos}`);
     assert.deepEqual(faltando(remotos.map((p) => `\`${p}\``), ler(RAIZ, 'README.md')), []);
     assert.deepEqual(faltando(remotos.map((p) => `Plugin \`${p}\``), pagina('ligar-e-desligar.md')), []);
   });

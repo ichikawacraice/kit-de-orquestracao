@@ -1,0 +1,10 @@
+{
+  "name": "tema-wicomm",
+  "version": "0.1.0",
+  "description": "O tema Wicomm para o plugin design-system: a cor da marca nos dois temas, o gradiente, a fonte (Archivo), o nome e o logotipo, e o prefixo do registro (@wicomm). A skill aplicar liga um projeto ao tema.",
+  "author": {
+    "name": "Wicomm"
+  },
+  "repository": "https://github.com/wicomm-projects/wicomm-design-system",
+  "keywords": ["design-system", "tema", "wicomm"]
+}

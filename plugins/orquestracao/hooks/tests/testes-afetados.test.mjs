@@ -127,6 +127,16 @@ test('CLI: --sha lê a seleção do commit, sem checkout; base não achada devol
     assert.equal(u.status, 0, u.stderr);
     assert.equal(u.stdout.trim(), '[]');
     assert.match(u.stderr, /todos/);
+    // com `--padrao`: o runner não conhece o padrão, então "todos" vai como a lista filtrada (F357: a raiz do kit sem design-system/)
+    const v = rodar('node', [SCRIPT, '--padrao', '^t/a\\.test\\.mjs$', '--', 'node', '-e', 'console.log(JSON.stringify(process.argv.slice(1)))'], c.r);
+    assert.equal(v.status, 0, v.stderr);
+    assert.equal(v.stdout.trim(), '["t/a.test.mjs"]');
+    assert.match(v.stderr, /todos/);
+    // o --padrao que não casa nada não vira "rodar sem lista" (o runner acharia todos)
+    const w = rodar('node', [SCRIPT, '--padrao', '^nada$', '--', 'node', '-e', 'console.log("rodou")'], c.r);
+    assert.equal(w.status, 2, w.stdout + w.stderr);
+    assert.doesNotMatch(w.stdout, /rodou/);
+    assert.match(w.stderr, /não casa nenhum teste/);
   } finally { rmSync(c.raiz, { recursive: true, force: true }); }
 });
 

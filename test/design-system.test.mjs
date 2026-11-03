@@ -1,9 +1,9 @@
-// F350: o design system da empresa entra no marketplace do kit como dois plugins opcionais, vindos do repositório dela por
-// git-subdir num commit fixo: o `design-system` (genérico, o sucessor do `kit-design`) e o `tema-wicomm` (a marca). O kit não
-// os traz para este repositório, o `kit iniciar` liga só o `design-system` (F353) e a trava lê o `design-system:` como prefixo do kit.
+// F350: o design system da empresa entra no marketplace do kit como dois plugins opcionais: o `design-system` (genérico, o sucessor
+// do `kit-design`) e o `tema-wicomm` (a marca). F357: o código mora neste repositório, em design-system/ (ADR 0020); o `kit iniciar`
+// liga só o `design-system` (F353) e a trava lê o `design-system:` como prefixo do kit.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PLUGINS_DO_KIT } from '../cli/pacote.mjs';
@@ -16,18 +16,15 @@ const NOMES = ['design-system', 'tema-wicomm'];
 const entrada = (nome) => m.plugins.find((p) => p.name === nome);
 
 describe('o marketplace lista o design system da empresa', () => {
-  it('as duas entradas existem, por git-subdir, do mesmo repositório e no mesmo commit fixo', () => {
+  it('as duas entradas existem e apontam a pasta do plugin em design-system/plugins/', () => {
     const [ds, tema] = NOMES.map(entrada);
     assert.ok(ds && tema, `fora do marketplace: ${m.plugins.map((p) => p.name)}`);
     for (const [nome, e] of [['design-system', ds], ['tema-wicomm', tema]]) {
-      assert.equal(e.source?.source, 'git-subdir', nome);
-      assert.equal(e.source.path, `plugins/${nome}`, `${nome}: a pasta tem o nome do plugin`);
-      assert.match(e.source.sha, /^[0-9a-f]{40}$/, `${nome}: sha completo, em minúsculas`);
-      assert.equal(e.source.ref, 'main', nome);
+      assert.equal(e.source, `./design-system/plugins/${nome}`, nome);
+      const manifesto = join(RAIZ, e.source, '.claude-plugin', 'plugin.json');
+      assert.ok(existsSync(manifesto), `${nome}: sem ${manifesto}`);
+      assert.equal(JSON.parse(readFileSync(manifesto, 'utf8')).name, nome, `${nome}: o plugin.json tem o nome da entrada`);
     }
-    assert.equal(ds.source.url, tema.source.url, 'o mesmo repositório');
-    assert.equal(ds.source.sha, tema.source.sha, 'o mesmo commit: o tema e a base andam juntos');
-    assert.match(ds.source.url, /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\.git$/);
   });
 
   it('a entrada do design-system é genérica; a marca só aparece na do tema', () => {
@@ -37,9 +34,8 @@ describe('o marketplace lista o design system da empresa', () => {
     assert.ok(nomesDoAutorEm(entrada('tema-wicomm').description).length > 0, 'precondição: o detector vê a marca na descrição do tema');
   });
 
-  it('nada do design system mora neste repositório', () => {
+  it('cada um aparece uma vez só no marketplace', () => {
     for (const nome of NOMES) assert.equal(m.plugins.filter((p) => p.name === nome).length, 1, `${nome} duplicado`);
-    assert.ok(m.plugins.filter((p) => typeof p.source === 'string').every((p) => !NOMES.includes(p.name)));
   });
 
   it('kit iniciar liga o design-system (F353: sucede o kit-design) e não o tema', () => {

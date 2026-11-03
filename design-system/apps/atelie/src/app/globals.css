@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@import "@wicomm/tokens/tailwind-v4.css";
+@import "tw-animate-css";
+/* Archivo com o eixo de largura (TIPO-01), servida pelo próprio app. */
+@import "@fontsource-variable/archivo/wdth.css";
+
+/* As peças vêm da fonte do registro: o Tailwind lê as classes de lá também. */
+@source "../../../../packages/registro/registry";
+
+:root {
+  --font-archivo: "Archivo Variable";
+}

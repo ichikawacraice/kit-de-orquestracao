@@ -34,24 +34,12 @@
     },
     {
       "name": "design-system",
-      "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/wicomm-projects/wicomm-design-system.git",
-        "path": "plugins/design-system",
-        "ref": "main",
-        "sha": "e8b0b175998242174a0fd0dcbe401ce92ea5b46e"
-      },
+      "source": "./design-system/plugins/design-system",
       "description": "Processo de design para apps React: a base (direção de design, anatomia, convenções), o designer, o crítico com nota e a guarda que cobra a crítica. Sucessor do kit-design; a marca vem de um plugin de tema."
     },
     {
       "name": "tema-wicomm",
-      "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/wicomm-projects/wicomm-design-system.git",
-        "path": "plugins/tema-wicomm",
-        "ref": "main",
-        "sha": "e8b0b175998242174a0fd0dcbe401ce92ea5b46e"
-      },
+      "source": "./design-system/plugins/tema-wicomm",
       "description": "O tema Wicomm para o design-system: a cor da marca, a fonte, o logotipo e o registro. Desligado por padrão: liga só nos projetos internos da Wicomm, pelo design.tema do .claude/kit.json; em app externo, melhor não ativar."
     }
   ],

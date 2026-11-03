@@ -1,0 +1,36 @@
+{
+  "name": "wicomm",
+  "version": "0.1.13",
+  "description": "Design system da Wicomm para apps React: a base (direção de design, anatomia, convenções), o processo de decisão de tela (designer → crítico com nota → guarda que cobra a crítica) e as skills de projeto novo, auditoria, padronização, peça do kit e atualização.",
+  "author": {
+    "name": "Wicomm"
+  },
+  "repository": "https://github.com/wicomm-projects/wicomm-design-system",
+  "keywords": ["design-system", "react", "shadcn", "wicomm"],
+  "userConfig": {
+    "guarda": {
+      "type": "boolean",
+      "title": "Guarda de design",
+      "description": "Liga a guarda: lembrete de design, designer sem escrever tela e a cobrança da crítica. Vale só para a sua conta; para o time, use `guarda` no design/wicomm.json do projeto.",
+      "default": true
+    },
+    "cobrar_critica": {
+      "type": "boolean",
+      "title": "Cobrar a crítica ao encerrar",
+      "description": "Quando o visual do front muda no turno, o Stop pede o crítico de UI uma vez. Para o time, use `cobrarCritica` no design/wicomm.json.",
+      "default": true
+    },
+    "pasta_do_front": {
+      "type": "string",
+      "title": "Pasta do front",
+      "description": "Pasta das telas (ex.: web). Vazio usa `pasta` do design/wicomm.json; se o projeto diz a pasta, ele vence.",
+      "default": ""
+    },
+    "largura": {
+      "type": "number",
+      "title": "Largura de referência (px)",
+      "description": "Largura em que o crítico olha a tela. `largura` do design/wicomm.json vence esta opção.",
+      "default": 1280
+    }
+  }
+}

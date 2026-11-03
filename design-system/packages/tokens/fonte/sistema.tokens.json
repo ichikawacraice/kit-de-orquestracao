@@ -1,0 +1,572 @@
+{
+  "$description": "Os tokens de sistema da Wicomm, no formato DTCG (estrutura $value/$type/$description e aliases {grupo.token}). A marca vem de marca.tokens.json, por alias. Gerado em dist/ por `npm run gerar`.",
+  "cor": {
+    "$type": "color",
+    "$description": "Os tokens de cor de tema. A chave é o nome da variável CSS (sem `--`). Valor em hex sRGB; `$extensions.com.wicomm.escuro` é o valor do tema escuro quando difere.",
+    "background": {
+      "$value": "#F9FAFC",
+      "$description": "O chão. COR-02: 1,04 do branco no claro, para o cartão se levantar sem virar painel cinza.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#0D1017"
+        }
+      }
+    },
+    "card": {
+      "$value": "#FFFFFF",
+      "$description": "A superfície (SUP-01).",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#161A22"
+        }
+      }
+    },
+    "popover": {
+      "$value": "{cor.card}"
+    },
+    "muted": {
+      "$value": "#F1F3F8",
+      "$description": "O degrau de tinta dentro da peça; um dos quatro fundos em que o texto pode cair.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#0B0E14"
+        }
+      }
+    },
+    "accent": {
+      "$value": "#EBEEF5",
+      "$description": "Realce de item de lista; um dos quatro fundos.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#1E232D"
+        }
+      }
+    },
+    "secondary": {
+      "$value": "#F1F3F8",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#1E232D"
+        }
+      }
+    },
+    "foreground": {
+      "$value": "#131722",
+      "$description": "COR-12: ≥ 14:1 no pior fundo.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#F2F4F8"
+        }
+      }
+    },
+    "card-foreground": {
+      "$value": "{cor.foreground}"
+    },
+    "popover-foreground": {
+      "$value": "{cor.foreground}"
+    },
+    "foreground-2": {
+      "$value": "#4B5163",
+      "$description": "COR-06/COR-12: o degrau do meio, ≥ 5,9:1 no pior fundo.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#98A0B0"
+        }
+      }
+    },
+    "muted-foreground": {
+      "$value": "#565D70",
+      "$description": "COR-12: o terceiro degrau, ≥ 4,6:1 no pior fundo.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#848C9D"
+        }
+      }
+    },
+    "secondary-foreground": {
+      "$value": "{cor.foreground-2}"
+    },
+    "accent-foreground": {
+      "$value": "{cor.foreground}"
+    },
+    "primary": {
+      "$value": "{marca.cor}",
+      "$description": "MARCA-01: o preenchimento primário É a marca."
+    },
+    "primary-hover": {
+      "$value": "{marca.hover}"
+    },
+    "primary-foreground": {
+      "$value": "{marca.sobre}"
+    },
+    "marca-viva": {
+      "$value": "{marca.cor}",
+      "$description": "MARCA-02: a marca que desenha (ponto, filete, barra), nunca escreve."
+    },
+    "primary-gradient-start": {
+      "$value": "{marca.gradiente.inicio}"
+    },
+    "primary-gradient-mid": {
+      "$value": "{marca.gradiente.meio}"
+    },
+    "primary-gradient-end": {
+      "$value": "{marca.gradiente.fim}"
+    },
+    "ia-violeta": {
+      "$value": "#5B3FD1",
+      "$description": "CTRL-09: a escrita e o ícone de IA, fora da marca e das vozes. Paga 4,5:1 em todo ponto do ciclo.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#A08BFF"
+        }
+      }
+    },
+    "ia-azul": {
+      "$value": "#2F5BD0",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#6FA0FF"
+        }
+      }
+    },
+    "terminal": {
+      "$value": "#09090B",
+      "$description": "COR-15: o terminal não segue o tema; usa-se a 95%."
+    },
+    "terminal-foreground": {
+      "$value": "#F4F4F5"
+    },
+    "destructive": {
+      "$value": "#B8113A",
+      "$description": "MARCA-05: a voz `ruim` como token de tema; escreve, então paga 4,5:1.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#FF8095"
+        }
+      }
+    },
+    "destructive-foreground": {
+      "$value": "#FFFFFF",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#16181D"
+        }
+      }
+    },
+    "border": {
+      "$value": "#E6EAF1",
+      "$description": "COR-11: separação decorativa, não deve contraste.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#252B36"
+        }
+      }
+    },
+    "input": {
+      "$value": "#7F8697",
+      "$description": "COR-11: contorno de CONTROLE, paga 3:1 nos quatro fundos.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#737A8A"
+        }
+      }
+    },
+    "input-background": {
+      "$value": "#FFFFFF",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#11141B"
+        }
+      }
+    },
+    "switch-background": {
+      "$value": "#CBD2DE",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#3A4150"
+        }
+      }
+    },
+    "ring": {
+      "$value": "{marca.cor}",
+      "$description": "SUP-06: o anel de foco é a marca."
+    },
+    "anel": {
+      "$value": "rgba(19, 23, 34, .10)",
+      "$description": "O anel decorativo da peça (não é contorno de controle).",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "rgba(255, 255, 255, .10)"
+        }
+      }
+    },
+    "marca-tinta": {
+      "$value": "{marca.tinta}"
+    },
+    "chart-1": {
+      "$value": "{marca.cor}",
+      "$description": "A série 1 é a marca, e não muda por tema."
+    },
+    "chart-2": {
+      "$value": "#6D28D9",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#C4B5FD"
+        }
+      }
+    },
+    "chart-3": {
+      "$value": "#036A4D",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#34D399"
+        }
+      }
+    },
+    "chart-4": {
+      "$value": "#9C430A",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#FBBF24"
+        }
+      }
+    },
+    "chart-5": {
+      "$value": "#0E7490",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#67E8F9"
+        }
+      }
+    },
+    "sidebar": {
+      "$value": "{cor.card}"
+    },
+    "sidebar-foreground": {
+      "$value": "{cor.foreground}"
+    },
+    "sidebar-primary": {
+      "$value": "{marca.cor}"
+    },
+    "sidebar-primary-foreground": {
+      "$value": "{marca.sobre}"
+    },
+    "sidebar-accent": {
+      "$value": "#F1F3F8",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "#1E232D"
+        }
+      }
+    },
+    "sidebar-accent-foreground": {
+      "$value": "{cor.foreground}"
+    },
+    "sidebar-border": {
+      "$value": "{cor.border}"
+    },
+    "sidebar-ring": {
+      "$value": "{marca.cor}"
+    }
+  },
+  "composto": {
+    "$description": "Valores CSS compostos que leem outras variáveis. Repetidos no tema escuro de propósito: var() dentro de custom property se resolve onde ela é declarada.",
+    "primary-gradient": {
+      "$value": "linear-gradient(118deg, var(--primary-gradient-start) 0%, var(--primary-gradient-mid) 46%, var(--primary-gradient-end) 100%)",
+      "$description": "MARCA-03."
+    },
+    "ia-gradient": {
+      "$value": "linear-gradient(110deg, var(--ia-violeta) 0%, var(--ia-azul) 50%, var(--ia-violeta) 100%)",
+      "$description": "CTRL-09: começa e termina na mesma cor, para o loop não ter emenda."
+    }
+  },
+  "sombra": {
+    "$type": "shadow",
+    "$description": "SUP-01: as alturas são sombra baixa sobre superfície opaca, nunca vidro. Valor em CSS literal (box-shadow).",
+    "sombra-painel": {
+      "$value": "0 0 0 1px rgba(19,23,34,.05), 0 1px 2px rgba(19,23,34,.04), 0 8px 26px -14px rgba(19,23,34,.10)",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "0 0 0 1px rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.55)"
+        }
+      }
+    },
+    "superficie-sombra": {
+      "$value": "0 0 0 1px rgba(19,23,34,.05), 0 1px 2px rgba(19,23,34,.05), 0 5px 14px -6px rgba(19,23,34,.09)",
+      "$description": "A peça.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "0 0 0 1px rgba(255,255,255,.055), 0 1px 2px rgba(0,0,0,.4), 0 5px 14px -6px rgba(0,0,0,.5)"
+        }
+      }
+    },
+    "superficie-sombra-alta": {
+      "$value": "0 0 0 1px rgba(19,23,34,.07), 0 2px 5px rgba(19,23,34,.07), 0 12px 26px -10px rgba(19,23,34,.15)",
+      "$description": "Só hover e seleção de peça.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "0 0 0 1px rgba(255,255,255,.09), 0 2px 6px rgba(0,0,0,.5), 0 12px 28px -10px rgba(0,0,0,.6)"
+        }
+      }
+    },
+    "superficie-sombra-flutuante": {
+      "$value": "0 0 0 1px rgba(19,23,34,.08), 0 24px 56px -16px rgba(19,23,34,.26), 0 4px 12px -4px rgba(19,23,34,.12)",
+      "$description": "Diálogo, menu, dica, aviso.",
+      "$extensions": {
+        "com.wicomm": {
+          "escuro": "0 0 0 1px rgba(255,255,255,.1), 0 26px 60px -16px rgba(0,0,0,.75), 0 4px 12px -4px rgba(0,0,0,.5)"
+        }
+      }
+    }
+  },
+  "sombra-de-classe": {
+    "$type": "shadow",
+    "$description": "Sombras que só existem como classe do Tailwind (`shadow-*`), sem variável de tema. Lêem as variáveis de cor por var().",
+    "linha-ativa": {
+      "$value": "inset 2px 0 0 var(--primary)",
+      "$description": "A marca da linha ativa de árvore e lista (MARCA-02: desenha, não escreve)."
+    }
+  },
+  "raio": {
+    "$type": "dimension",
+    "$description": "FORMA-01. Não mudam por tema. `radius` é a base dos degraus sm/md/lg do Tailwind (lg = radius, md = radius − 2px, sm = radius − 4px).",
+    "radius": {
+      "$value": ".625rem"
+    },
+    "raio-cartao": {
+      "$value": "14px"
+    },
+    "raio-painel": {
+      "$value": "16px"
+    },
+    "raio-ctrl": {
+      "$value": "7px",
+      "$description": "CTRL-01: botão default e lg, campo, select."
+    },
+    "raio-badge": {
+      "$value": "6px"
+    },
+    "raio-marcacao": {
+      "$value": "5px",
+      "$description": "FORMA-01: a caixa de marcação (checkbox)."
+    }
+  },
+  "tipo": {
+    "familia": {
+      "$type": "fontFamily",
+      "sans": {
+        "$value": [
+          "var(--font-archivo)",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+          "Apple Color Emoji",
+          "Segoe UI Emoji",
+          "Segoe UI Symbol",
+          "Noto Color Emoji"
+        ],
+        "$description": "TIPO-01: a família do produto (Archivo, variável no eixo wdth). `--font-archivo` é a variável que o app declara ao carregar a fonte."
+      },
+      "archivo": {
+        "$value": [
+          "var(--font-archivo)",
+          "sans-serif"
+        ],
+        "$description": "A saída explícita `font-archivo`, para subárvore que redefine `sans`. No v4 sai como @utility: no @theme a chave colidiria com a variável que o app declara ao carregar a fonte."
+      },
+      "mono": {
+        "$value": [
+          "ui-monospace",
+          "SFMono-Regular",
+          "SF Mono",
+          "Menlo",
+          "Consolas",
+          "monospace"
+        ],
+        "$description": "TIPO-03: a fonte de medida."
+      }
+    },
+    "tamanho": {
+      "$type": "dimension",
+      "legenda": {
+        "$value": "11px",
+        "$description": "Etiqueta, legenda, carimbo. Só font-size: a entrelinha é herdada."
+      },
+      "controle": {
+        "$value": "13px",
+        "$description": "O texto de controle."
+      }
+    },
+    "vozes": {
+      "$type": "typography",
+      "$description": "TIPO-02: as vozes da família, classes `t-*` na camada `components`. Além das chaves DTCG, `fontStretch`, `textTransform`, `fontVariantNumeric` e `color` (alias de cor vira var()).",
+      "t-display": {
+        "$value": {
+          "fontSize": "23px",
+          "fontWeight": 600,
+          "fontStretch": "106%",
+          "letterSpacing": "-.024em",
+          "lineHeight": 1.15
+        }
+      },
+      "t-titulo": {
+        "$value": {
+          "fontSize": "15px",
+          "fontWeight": 600,
+          "letterSpacing": "-.014em",
+          "lineHeight": 1.3
+        }
+      },
+      "t-denso": {
+        "$value": {
+          "fontSize": "12px",
+          "fontWeight": 400
+        }
+      },
+      "t-rotulo": {
+        "$value": {
+          "fontSize": "10.5px",
+          "fontWeight": 700,
+          "fontStretch": "80%",
+          "letterSpacing": ".13em",
+          "textTransform": "uppercase",
+          "color": "{cor.foreground-2}"
+        }
+      },
+      "t-coluna": {
+        "$value": {
+          "fontSize": "10.5px",
+          "fontWeight": 500,
+          "letterSpacing": ".08em",
+          "textTransform": "uppercase",
+          "color": "{cor.foreground-2}"
+        }
+      },
+      "t-campo": {
+        "$value": {
+          "fontSize": "13px",
+          "fontWeight": 500,
+          "lineHeight": 1.35,
+          "letterSpacing": "normal",
+          "textTransform": "none",
+          "fontStretch": "100%",
+          "color": "{cor.foreground}"
+        }
+      },
+      "t-medida": {
+        "$value": {
+          "fontFamily": "{tipo.familia.mono}",
+          "fontSize": "12px",
+          "fontVariantNumeric": "tabular-nums",
+          "letterSpacing": "-.02em"
+        }
+      }
+    }
+  },
+  "movimento": {
+    "duracao": {
+      "$type": "duration",
+      "$description": "MOV-01: abrir é mais longo que fechar; `painel` é a exceção escrita (abre e fecha em 200ms).",
+      "modal-abre": {
+        "$value": "220ms"
+      },
+      "modal-fecha": {
+        "$value": "140ms"
+      },
+      "menu-abre": {
+        "$value": "160ms"
+      },
+      "menu-fecha": {
+        "$value": "110ms"
+      },
+      "dica": {
+        "$value": "120ms"
+      },
+      "painel": {
+        "$value": "200ms"
+      },
+      "dobra-abre": {
+        "$value": "200ms"
+      },
+      "dobra-fecha": {
+        "$value": "150ms"
+      },
+      "cor": {
+        "$value": "150ms",
+        "$description": "MOV-03: mudança de estado só troca a cor."
+      },
+      "revela": {
+        "$value": "150ms",
+        "$description": "MOV-03: o que aparece no hover ou no foco."
+      }
+    },
+    "atraso": {
+      "$type": "duration",
+      "veu": {
+        "$value": "120ms",
+        "$description": "MOV-03: o véu de carregamento só aparece se a espera passar disto."
+      },
+      "espiada-abre": {
+        "$value": "250ms",
+        "$description": "MOV-01: o mouse parado antes de abrir."
+      },
+      "espiada-fecha": {
+        "$value": "300ms",
+        "$description": "MOV-01: a tolerância ao sair."
+      }
+    },
+    "curva": {
+      "$type": "cubicBezier",
+      "abre": {
+        "$value": [
+          0.16,
+          1,
+          0.3,
+          1
+        ],
+        "$description": "MOV-01: o que entra desacelera."
+      },
+      "fecha": {
+        "$value": [
+          0.4,
+          0,
+          1,
+          1
+        ],
+        "$description": "MOV-01: o que sai acelera."
+      }
+    },
+    "animacao": {
+      "$description": "Animações do kit: o nome dos keyframes, a duração e a curva, por alias.",
+      "accordion-down": {
+        "$value": {
+          "keyframes": "accordion-down",
+          "duracao": "{movimento.duracao.dobra-abre}",
+          "curva": "{movimento.curva.abre}"
+        }
+      },
+      "accordion-up": {
+        "$value": {
+          "keyframes": "accordion-up",
+          "duracao": "{movimento.duracao.dobra-fecha}",
+          "curva": "{movimento.curva.fecha}"
+        }
+      }
+    }
+  },
+  "medida": {
+    "$type": "dimension",
+    "altura": {
+      "ctrl": {
+        "$value": "30px",
+        "$description": "CTRL-01: a altura de botão e campo. Gera `h-ctrl` e `size-ctrl`, fora de `spacing` (não é degrau de espaço)."
+      }
+    },
+    "largura": {
+      "medida": {
+        "$value": "78ch",
+        "$description": "LAY-06: a largura de leitura (`max-w-medida`)."
+      }
+    }
+  }
+}

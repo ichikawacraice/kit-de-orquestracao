@@ -248,17 +248,19 @@ const git = (cwd, ...args) => {
   assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
   return r.stdout.trim();
 };
-const manifesto = (dir, nome, versao) => {
-  mkdirSync(join(dir, 'plugins', nome, '.claude-plugin'), { recursive: true });
-  writeFileSync(join(dir, 'plugins', nome, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: nome, version: versao }));
+const manifesto = (dir, nome, versao, pasta = join('plugins', nome)) => {
+  mkdirSync(join(dir, pasta, '.claude-plugin'), { recursive: true });
+  writeFileSync(join(dir, pasta, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: nome, version: versao }));
 };
 /** Um "GitHub" local (`origem`) e o clone do marketplace no HOME, os dois com as versões dadas. */
-function marketplace(versoes, mp = 'ichikawa-kit') {
+// `pastas`: a pasta de um plugin fora de plugins/<nome> (F357: o design-system mora em design-system/plugins/)
+function marketplace(versoes, mp = 'ichikawa-kit', pastas = {}) {
+  const pasta = (n) => pastas[n] ?? `plugins/${n}`;
   const origem = join(base, 'origem');
   mkdirSync(join(origem, '.claude-plugin'), { recursive: true });
   git(base, 'init', '-q', '-b', 'main', origem);
-  writeFileSync(join(origem, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: mp, plugins: Object.keys(versoes).map((name) => ({ name, source: `./plugins/${name}` })) }));
-  for (const [nome, v] of Object.entries(versoes)) manifesto(origem, nome, v);
+  writeFileSync(join(origem, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: mp, plugins: Object.keys(versoes).map((name) => ({ name, source: `./${pasta(name)}` })) }));
+  for (const [nome, v] of Object.entries(versoes)) manifesto(origem, nome, v, pasta(nome));
   git(origem, 'add', '-A');
   git(origem, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'v1');
   const clone = join(base, 'home', '.claude', 'plugins', 'marketplaces', mp);
@@ -266,7 +268,7 @@ function marketplace(versoes, mp = 'ichikawa-kit') {
   git(base, 'clone', '-q', origem, clone);
   return {
     origem, clone,
-    publicar(nome, v) { manifesto(origem, nome, v); git(origem, 'add', '-A'); git(origem, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', `${nome} ${v}`); },
+    publicar(nome, v) { manifesto(origem, nome, v, pasta(nome)); git(origem, 'add', '-A'); git(origem, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', `${nome} ${v}`); },
   };
 }
 function instalados(lista) {
@@ -303,6 +305,16 @@ test('F209: versão publicada mais nova que a instalada vira paraBaixar, no arqu
   assert.equal(git(m.clone, 'rev-parse', 'HEAD'), headAntes, 'a árvore do clone não anda (só o FETCH_HEAD)');
   const txt = painel(['pode-reiniciar', '--sessoes', sessoes(sessao(1, 'E1 · livre'))]).out;
   assert.match(txt, /Atualização do kit para baixar \(orquestracao 0\.1\.41\): rode atualizar-plugins\./);
+});
+
+test('F357: plugin fora de plugins/<nome> também vira paraBaixar, lido na pasta da entrada', () => {
+  const m = marketplace({ orquestracao: '0.1.40', 'design-system': '0.2.13' }, 'ichikawa-kit', { 'design-system': 'design-system/plugins/design-system' });
+  instalados([{ id: kit('orquestracao'), version: '0.1.40' }, { id: kit('design-system'), version: '0.2.13' }]);
+  m.publicar('design-system', '0.2.14');
+  assert.ok(existsSync(join(m.origem, 'design-system', 'plugins', 'design-system', '.claude-plugin', 'plugin.json')), 'precondição: o manifesto mora na pasta aninhada');
+  const r = conferir();
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().paraBaixar, [{ nome: 'design-system', instalada: '0.2.13', publicada: '0.2.14' }]);
 });
 
 test('F209: compara por número (0.1.9 < 0.1.10); plugin não instalado ou só de projeto não entra', () => {

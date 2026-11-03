@@ -1,0 +1,4 @@
+.dark {
+  --muted-foreground: #555B66;
+}
+.pulsa { animation: pulsa 1s infinite; }

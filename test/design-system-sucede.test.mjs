@@ -32,11 +32,10 @@ const escrever = (d, rel, texto) => { mkdirSync(dirname(join(d, rel)), { recursi
 const mexer = (d, rel, f) => { const v = json(d, rel); f(v); escrever(d, rel, `${JSON.stringify(v, null, 2)}\n`); };
 
 describe('o marketplace aponta a base sem marca', () => {
-  it('as duas entradas do repositório da empresa no commit da fatia 4 (e8b0b17)', () => {
-    const m = JSON.parse(ler(RAIZ, '.claude-plugin', 'marketplace.json'));
-    const shas = m.plugins.filter((p) => ['design-system', 'tema-wicomm'].includes(p.name)).map((p) => p.source.sha);
-    assert.equal(shas.length, 2, JSON.stringify(m.plugins.map((p) => p.name)));
-    assert.deepEqual(shas, ['e8b0b175998242174a0fd0dcbe401ce92ea5b46e', 'e8b0b175998242174a0fd0dcbe401ce92ea5b46e']);
+  it('o código das duas entradas veio com o histórico, até o commit da fatia 4 (e8b0b17)', () => {
+    // F357: o repositório da empresa entrou por subárvore; um squash no merge apagaria os commits de lá
+    const r = spawnSync('git', ['-C', RAIZ, 'merge-base', '--is-ancestor', 'e8b0b175998242174a0fd0dcbe401ce92ea5b46e', 'HEAD'], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+    assert.equal(r.status, 0, `e8b0b17 fora do histórico do HEAD: ${r.stderr}`);
   });
 
   it('o kit-design segue listado, como apontador para o sucessor', () => {

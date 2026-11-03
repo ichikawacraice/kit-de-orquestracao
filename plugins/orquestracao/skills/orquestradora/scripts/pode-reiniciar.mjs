@@ -167,10 +167,12 @@ function conferirPublicado({ clone, cache, agoraMs, env }) {
   let ref = 'FETCH_HEAD';
   try { gitNoClone(env, clone, ['fetch', '--quiet', 'origin', 'main']); } catch { ref = 'origin/main'; }
   try {
-    const nomes = JSON.parse(gitNoClone(env, clone, ['show', `${ref}:.claude-plugin/marketplace.json`])).plugins.map((p) => p.name);
+    const entradas = JSON.parse(gitNoClone(env, clone, ['show', `${ref}:.claude-plugin/marketplace.json`])).plugins;
     publicado = {};
-    for (const nome of nomes) {
-      try { publicado[nome] = JSON.parse(gitNoClone(env, clone, ['show', `${ref}:plugins/${nome}/.claude-plugin/plugin.json`])).version; } catch { /* sem manifesto */ }
+    for (const { name: nome, source } of entradas) {
+      // a pasta da entrada (F357: o design-system mora em design-system/plugins/); a de origem remota não tem manifesto no clone
+      const pasta = typeof source === 'string' ? source.replace(/^\.\//, '').replace(/\/$/, '') : `plugins/${nome}`;
+      try { publicado[nome] = JSON.parse(gitNoClone(env, clone, ['show', `${ref}:${pasta}/.claude-plugin/plugin.json`])).version; } catch { /* sem manifesto */ }
     }
   } catch { publicado = null; }
   // sem rede o cache guarda a tentativa: a próxima ida à rede espera a janela, e não a cada leitura do pane

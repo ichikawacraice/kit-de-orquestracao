@@ -1,0 +1,1489 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "wicomm",
+  "homepage": "https://github.com/wicomm-projects/wicomm-design-system",
+  "items": [
+    {
+      "name": "estilo",
+      "type": "registry:style",
+      "extends": "none",
+      "title": "Estilo Wicomm",
+      "description": "style/theme — os tokens da Wicomm (@wicomm/tokens) no globals.css: cores dos dois temas, raios, movimento, superfícies e as vozes de texto, mais o cn. Toda peça depende dele.",
+      "dependencies": [
+        "tw-animate-css@1.4.0",
+        "clsx@2.1.1",
+        "tailwind-merge@3.7.0"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/lib/utils.ts",
+          "type": "registry:lib"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "color-background": "var(--background)",
+          "color-card": "var(--card)",
+          "color-popover": "var(--popover)",
+          "color-muted": "var(--muted)",
+          "color-accent": "var(--accent)",
+          "color-secondary": "var(--secondary)",
+          "color-foreground": "var(--foreground)",
+          "color-card-foreground": "var(--card-foreground)",
+          "color-popover-foreground": "var(--popover-foreground)",
+          "color-foreground-2": "var(--foreground-2)",
+          "color-muted-foreground": "var(--muted-foreground)",
+          "color-secondary-foreground": "var(--secondary-foreground)",
+          "color-accent-foreground": "var(--accent-foreground)",
+          "color-primary": "var(--primary)",
+          "color-primary-hover": "var(--primary-hover)",
+          "color-primary-foreground": "var(--primary-foreground)",
+          "color-marca-viva": "var(--marca-viva)",
+          "color-primary-gradient-start": "var(--primary-gradient-start)",
+          "color-primary-gradient-mid": "var(--primary-gradient-mid)",
+          "color-primary-gradient-end": "var(--primary-gradient-end)",
+          "color-ia-violeta": "var(--ia-violeta)",
+          "color-ia-azul": "var(--ia-azul)",
+          "color-terminal": "var(--terminal)",
+          "color-terminal-foreground": "var(--terminal-foreground)",
+          "color-destructive": "var(--destructive)",
+          "color-destructive-foreground": "var(--destructive-foreground)",
+          "color-border": "var(--border)",
+          "color-input": "var(--input)",
+          "color-input-background": "var(--input-background)",
+          "color-switch-background": "var(--switch-background)",
+          "color-ring": "var(--ring)",
+          "color-anel": "var(--anel)",
+          "color-marca-tinta": "var(--marca-tinta)",
+          "color-chart-1": "var(--chart-1)",
+          "color-chart-2": "var(--chart-2)",
+          "color-chart-3": "var(--chart-3)",
+          "color-chart-4": "var(--chart-4)",
+          "color-chart-5": "var(--chart-5)",
+          "color-sidebar": "var(--sidebar)",
+          "color-sidebar-foreground": "var(--sidebar-foreground)",
+          "color-sidebar-primary": "var(--sidebar-primary)",
+          "color-sidebar-primary-foreground": "var(--sidebar-primary-foreground)",
+          "color-sidebar-accent": "var(--sidebar-accent)",
+          "color-sidebar-accent-foreground": "var(--sidebar-accent-foreground)",
+          "color-sidebar-border": "var(--sidebar-border)",
+          "color-sidebar-ring": "var(--sidebar-ring)",
+          "radius-lg": "var(--radius)",
+          "radius-md": "calc(var(--radius) - 2px)",
+          "radius-sm": "calc(var(--radius) - 4px)",
+          "radius-cartao": "var(--raio-cartao)",
+          "radius-painel": "var(--raio-painel)",
+          "radius-ctrl": "var(--raio-ctrl)",
+          "radius-badge": "var(--raio-badge)",
+          "radius-marcacao": "var(--raio-marcacao)",
+          "font-sans": "var(--font-archivo), ui-sans-serif, system-ui, sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"",
+          "text-legenda": "11px",
+          "text-controle": "13px",
+          "container-medida": "78ch",
+          "ease-abre": "cubic-bezier(0.16, 1, 0.3, 1)",
+          "ease-fecha": "cubic-bezier(0.4, 0, 1, 1)",
+          "shadow-linha-ativa": "inset 2px 0 0 var(--primary)",
+          "animate-accordion-down": "accordion-down 200ms cubic-bezier(0.16, 1, 0.3, 1)",
+          "animate-accordion-up": "accordion-up 150ms cubic-bezier(0.4, 0, 1, 1)",
+          "radius-xl": "0.75rem",
+          "radius-2xl": "1rem",
+          "radius-3xl": "1.5rem",
+          "radius-4xl": "2rem"
+        },
+        "light": {
+          "background": "#F9FAFC",
+          "card": "#FFFFFF",
+          "popover": "#FFFFFF",
+          "muted": "#F1F3F8",
+          "accent": "#EBEEF5",
+          "secondary": "#F1F3F8",
+          "foreground": "#131722",
+          "card-foreground": "#131722",
+          "popover-foreground": "#131722",
+          "foreground-2": "#4B5163",
+          "muted-foreground": "#565D70",
+          "secondary-foreground": "#4B5163",
+          "accent-foreground": "#131722",
+          "primary": "#F30B42",
+          "primary-hover": "#DB0A3B",
+          "primary-foreground": "#FFFFFF",
+          "marca-viva": "#F30B42",
+          "primary-gradient-start": "#C4002A",
+          "primary-gradient-mid": "#FF0041",
+          "primary-gradient-end": "#FF5C96",
+          "ia-violeta": "#5B3FD1",
+          "ia-azul": "#2F5BD0",
+          "terminal": "#09090B",
+          "terminal-foreground": "#F4F4F5",
+          "destructive": "#B8113A",
+          "destructive-foreground": "#FFFFFF",
+          "border": "#E6EAF1",
+          "input": "#7F8697",
+          "input-background": "#FFFFFF",
+          "switch-background": "#CBD2DE",
+          "ring": "#F30B42",
+          "anel": "rgba(19, 23, 34, .10)",
+          "marca-tinta": "#FFE9EE",
+          "chart-1": "#F30B42",
+          "chart-2": "#6D28D9",
+          "chart-3": "#036A4D",
+          "chart-4": "#9C430A",
+          "chart-5": "#0E7490",
+          "sidebar": "#FFFFFF",
+          "sidebar-foreground": "#131722",
+          "sidebar-primary": "#F30B42",
+          "sidebar-primary-foreground": "#FFFFFF",
+          "sidebar-accent": "#F1F3F8",
+          "sidebar-accent-foreground": "#131722",
+          "sidebar-border": "#E6EAF1",
+          "sidebar-ring": "#F30B42",
+          "radius": ".625rem"
+        },
+        "dark": {
+          "background": "#0D1017",
+          "card": "#161A22",
+          "popover": "#161A22",
+          "muted": "#0B0E14",
+          "accent": "#1E232D",
+          "secondary": "#1E232D",
+          "foreground": "#F2F4F8",
+          "card-foreground": "#F2F4F8",
+          "popover-foreground": "#F2F4F8",
+          "foreground-2": "#98A0B0",
+          "muted-foreground": "#848C9D",
+          "secondary-foreground": "#98A0B0",
+          "accent-foreground": "#F2F4F8",
+          "primary": "#F30B42",
+          "primary-hover": "#F63663",
+          "primary-foreground": "#FFFFFF",
+          "marca-viva": "#F30B42",
+          "primary-gradient-start": "#D6002E",
+          "primary-gradient-mid": "#FF0041",
+          "primary-gradient-end": "#FF7AAB",
+          "ia-violeta": "#A08BFF",
+          "ia-azul": "#6FA0FF",
+          "terminal": "#09090B",
+          "terminal-foreground": "#F4F4F5",
+          "destructive": "#FF8095",
+          "destructive-foreground": "#16181D",
+          "border": "#252B36",
+          "input": "#737A8A",
+          "input-background": "#11141B",
+          "switch-background": "#3A4150",
+          "ring": "#F30B42",
+          "anel": "rgba(255, 255, 255, .10)",
+          "marca-tinta": "#331320",
+          "chart-1": "#F30B42",
+          "chart-2": "#C4B5FD",
+          "chart-3": "#34D399",
+          "chart-4": "#FBBF24",
+          "chart-5": "#67E8F9",
+          "sidebar": "#161A22",
+          "sidebar-foreground": "#F2F4F8",
+          "sidebar-primary": "#F30B42",
+          "sidebar-primary-foreground": "#FFFFFF",
+          "sidebar-accent": "#1E232D",
+          "sidebar-accent-foreground": "#F2F4F8",
+          "sidebar-border": "#252B36",
+          "sidebar-ring": "#F30B42"
+        }
+      },
+      "css": {
+        "@import \"tw-animate-css\"": {},
+        ":root": {
+          "color-scheme": "light",
+          "--primary-gradient": "linear-gradient(118deg, var(--primary-gradient-start) 0%, var(--primary-gradient-mid) 46%, var(--primary-gradient-end) 100%)",
+          "--ia-gradient": "linear-gradient(110deg, var(--ia-violeta) 0%, var(--ia-azul) 50%, var(--ia-violeta) 100%)",
+          "--sombra-painel": "0 0 0 1px rgba(19,23,34,.05), 0 1px 2px rgba(19,23,34,.04), 0 8px 26px -14px rgba(19,23,34,.10)",
+          "--superficie-sombra": "0 0 0 1px rgba(19,23,34,.05), 0 1px 2px rgba(19,23,34,.05), 0 5px 14px -6px rgba(19,23,34,.09)",
+          "--superficie-sombra-alta": "0 0 0 1px rgba(19,23,34,.07), 0 2px 5px rgba(19,23,34,.07), 0 12px 26px -10px rgba(19,23,34,.15)",
+          "--superficie-sombra-flutuante": "0 0 0 1px rgba(19,23,34,.08), 0 24px 56px -16px rgba(19,23,34,.26), 0 4px 12px -4px rgba(19,23,34,.12)",
+          "--raio-cartao": "14px",
+          "--raio-painel": "16px",
+          "--raio-ctrl": "7px",
+          "--raio-badge": "6px",
+          "--raio-marcacao": "5px"
+        },
+        ".dark": {
+          "color-scheme": "dark",
+          "--primary-gradient": "linear-gradient(118deg, var(--primary-gradient-start) 0%, var(--primary-gradient-mid) 46%, var(--primary-gradient-end) 100%)",
+          "--ia-gradient": "linear-gradient(110deg, var(--ia-violeta) 0%, var(--ia-azul) 50%, var(--ia-violeta) 100%)",
+          "--sombra-painel": "0 0 0 1px rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.55)",
+          "--superficie-sombra": "0 0 0 1px rgba(255,255,255,.055), 0 1px 2px rgba(0,0,0,.4), 0 5px 14px -6px rgba(0,0,0,.5)",
+          "--superficie-sombra-alta": "0 0 0 1px rgba(255,255,255,.09), 0 2px 6px rgba(0,0,0,.5), 0 12px 28px -10px rgba(0,0,0,.6)",
+          "--superficie-sombra-flutuante": "0 0 0 1px rgba(255,255,255,.1), 0 26px 60px -16px rgba(0,0,0,.75), 0 4px 12px -4px rgba(0,0,0,.5)"
+        },
+        "@keyframes accordion-down": {
+          "from": {
+            "height": "0"
+          },
+          "to": {
+            "height": "var(--radix-accordion-content-height)"
+          }
+        },
+        "@keyframes accordion-up": {
+          "from": {
+            "height": "var(--radix-accordion-content-height)"
+          },
+          "to": {
+            "height": "0"
+          }
+        },
+        "@layer base": {
+          "*, ::after, ::before, ::backdrop, ::file-selector-button": {
+            "border-color": "var(--border)"
+          },
+          "body": {
+            "background-color": "var(--background)",
+            "color": "var(--foreground)"
+          }
+        },
+        "@utility duration-modal-abre": {
+          "--tw-duration": "220ms",
+          "transition-duration": "220ms"
+        },
+        "@utility duration-modal-fecha": {
+          "--tw-duration": "140ms",
+          "transition-duration": "140ms"
+        },
+        "@utility duration-menu-abre": {
+          "--tw-duration": "160ms",
+          "transition-duration": "160ms"
+        },
+        "@utility duration-menu-fecha": {
+          "--tw-duration": "110ms",
+          "transition-duration": "110ms"
+        },
+        "@utility duration-dica": {
+          "--tw-duration": "120ms",
+          "transition-duration": "120ms"
+        },
+        "@utility duration-painel": {
+          "--tw-duration": "200ms",
+          "transition-duration": "200ms"
+        },
+        "@utility duration-dobra-abre": {
+          "--tw-duration": "200ms",
+          "transition-duration": "200ms"
+        },
+        "@utility duration-dobra-fecha": {
+          "--tw-duration": "150ms",
+          "transition-duration": "150ms"
+        },
+        "@utility duration-cor": {
+          "--tw-duration": "150ms",
+          "transition-duration": "150ms"
+        },
+        "@utility duration-revela": {
+          "--tw-duration": "150ms",
+          "transition-duration": "150ms"
+        },
+        "@utility delay-veu": {
+          "transition-delay": "120ms",
+          "--tw-animation-delay": "120ms",
+          "animation-delay": "120ms"
+        },
+        "@utility delay-espiada-abre": {
+          "transition-delay": "250ms",
+          "--tw-animation-delay": "250ms",
+          "animation-delay": "250ms"
+        },
+        "@utility delay-espiada-fecha": {
+          "transition-delay": "300ms",
+          "--tw-animation-delay": "300ms",
+          "animation-delay": "300ms"
+        },
+        "@utility font-archivo": {
+          "font-family": "var(--font-archivo), sans-serif"
+        },
+        "@utility h-ctrl": {
+          "height": "30px"
+        },
+        "@utility size-ctrl": {
+          "width": "30px",
+          "height": "30px"
+        },
+        "@utility superficie": {
+          "background-color": "var(--card)",
+          "box-shadow": "var(--superficie-sombra)"
+        },
+        "@utility superficie-alta": {
+          "background-color": "var(--card)",
+          "box-shadow": "var(--superficie-sombra-alta)"
+        },
+        "@utility superficie-flutuante": {
+          "background-color": "var(--popover)",
+          "box-shadow": "var(--superficie-sombra-flutuante)"
+        },
+        "@utility anel-de-controle": {
+          "box-shadow": "inset 0 0 0 1px var(--input)"
+        },
+        "@utility bg-primary-gradient": {
+          "background-image": "var(--primary-gradient)",
+          "background-color": "var(--primary)"
+        },
+        "@layer components": {
+          ".t-display": {
+            "font-size": "23px",
+            "font-weight": "600",
+            "font-stretch": "106%",
+            "letter-spacing": "-.024em",
+            "line-height": "1.15"
+          },
+          ".t-titulo": {
+            "font-size": "15px",
+            "font-weight": "600",
+            "letter-spacing": "-.014em",
+            "line-height": "1.3"
+          },
+          ".t-denso": {
+            "font-size": "12px",
+            "font-weight": "400"
+          },
+          ".t-rotulo": {
+            "font-size": "10.5px",
+            "font-weight": "700",
+            "font-stretch": "80%",
+            "letter-spacing": ".13em",
+            "text-transform": "uppercase",
+            "color": "var(--foreground-2)"
+          },
+          ".t-coluna": {
+            "font-size": "10.5px",
+            "font-weight": "500",
+            "letter-spacing": ".08em",
+            "text-transform": "uppercase",
+            "color": "var(--foreground-2)"
+          },
+          ".t-campo": {
+            "font-size": "13px",
+            "font-weight": "500",
+            "line-height": "1.35",
+            "letter-spacing": "normal",
+            "text-transform": "none",
+            "font-stretch": "100%",
+            "color": "var(--foreground)"
+          },
+          ".t-medida": {
+            "font-family": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, monospace",
+            "font-size": "12px",
+            "font-variant-numeric": "tabular-nums",
+            "letter-spacing": "-.02em"
+          },
+          ".painel": {
+            "background-color": "var(--card)",
+            "border-radius": "var(--raio-painel)",
+            "box-shadow": "var(--sombra-painel)"
+          }
+        }
+      }
+    },
+    {
+      "name": "idioma-de-cor",
+      "type": "registry:lib",
+      "title": "Idioma de cor",
+      "description": "tone/status colors — as cinco vozes (ok, espera, ruim, neutro, alheio) e as classes de cada uma, num arquivo só (COR-03, COR-05).",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/lib/idioma-de-cor.ts",
+          "type": "registry:lib"
+        }
+      ]
+    },
+    {
+      "name": "button",
+      "type": "registry:ui",
+      "title": "Botão",
+      "description": "button — o botão: escala sm/default/lg/xl/icon e as variantes de forma (primário, secundário, contorno, quieto, destrutivo em contorno, link).",
+      "dependencies": [
+        "radix-ui@1.8.1",
+        "class-variance-authority@0.7.1"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/button.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "input",
+      "type": "registry:ui",
+      "title": "Campo",
+      "description": "input — o campo: altura e raio do botão, contorno de controle que paga 3:1, tamanho xl da tela de Entrada; classeDoCampo() para o controle nativo.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/input.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "label",
+      "type": "registry:ui",
+      "title": "Rótulo",
+      "description": "label — o rótulo de campo nas duas vozes: rotulo (maiúsculas espaçadas) e campo (13px, para rótulo que é conteúdo).",
+      "dependencies": [
+        "radix-ui@1.8.1",
+        "class-variance-authority@0.7.1"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/label.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "select",
+      "type": "registry:ui",
+      "title": "Seletor",
+      "description": "select — o seletor: gatilho com a forma do campo e a lista numa superfície flutuante.",
+      "dependencies": [
+        "radix-ui@1.8.1",
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/select.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "card",
+      "type": "registry:ui",
+      "title": "Cartão",
+      "description": "card — o cartão: a peça opaca levantada por sombra, sem contorno.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/card.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "secao",
+      "type": "registry:ui",
+      "title": "Seção",
+      "description": "section — o assunto dentro de uma peça, separado por ar e rótulo (30px acima, 12px abaixo), e o topo de painel.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/secao.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "painel",
+      "type": "registry:ui",
+      "title": "Painel",
+      "description": "card/panel — o painel de tela de trabalho que rola por conta própria, e a seção em painel.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/secao"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/painel.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "bloco",
+      "type": "registry:ui",
+      "title": "Bloco",
+      "description": "card with heading — um assunto de tela: o nome solto sobre o fundo e um cartão com o conteúdo; recolhível com resumo.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/bloco.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "bloco-de-tinta",
+      "type": "registry:ui",
+      "title": "Bloco de tinta",
+      "description": "callout/alert — o degrau de tinta da voz, sem contorno, no lugar de um cartão dentro de cartão; e o grupo de tinta.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/bloco-de-tinta.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "dialog",
+      "type": "registry:ui",
+      "title": "Diálogo",
+      "description": "dialog — o diálogo curto, o longo (cabeçalho e rodapé fixos, com modo que bloqueia) e o lateral não modal.",
+      "dependencies": [
+        "radix-ui@1.8.1",
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/dialog.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "confirm-dialog",
+      "type": "registry:ui",
+      "title": "Confirmação",
+      "description": "alert-dialog/confirm — useConfirm(), no lugar do window.confirm: título, o que não se desfaz, destrutivo em contorno, alternativa branda; com onConfirmar, a ação roda com o diálogo aberto e a falha aparece nele (MSG-04).",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/dialog",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/confirm-dialog.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "tooltip",
+      "type": "registry:ui",
+      "title": "Dica",
+      "description": "tooltip — a dica no lugar do title nativo, e o atalho Ajuda (um gatilho, um texto).",
+      "dependencies": [
+        "radix-ui@1.8.1"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/tooltip.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "dica-de-ajuda",
+      "type": "registry:ui",
+      "title": "Dica de ajuda",
+      "description": "tooltip/info — o ⓘ ao lado do controle: abre no hover, no foco e no toque.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/tooltip"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/dica-de-ajuda.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "com-motivo",
+      "type": "registry:ui",
+      "title": "Com motivo",
+      "description": "disabled tooltip — o gesto desabilitado diz por quê, numa dica alcançável pelo teclado.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/tooltip"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/com-motivo.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "toast",
+      "type": "registry:ui",
+      "title": "Aviso",
+      "description": "toast/sonner — o aviso efêmero do desfecho de uma ação, nas vozes ok, ruim e neutro; o de erro fica até ser fechado.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/toast.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "skeleton",
+      "type": "registry:ui",
+      "title": "Esqueleto",
+      "description": "skeleton — a caixa da espera, parada sob movimento reduzido, e a espera de uma lista.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/skeleton.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "menu",
+      "type": "registry:ui",
+      "title": "Menu",
+      "description": "dropdown-menu — o menu: grupos separados por ar, linha bloqueada que diz o motivo, confirmação pela peça, escolha, submenu com espera e erro.",
+      "dependencies": [
+        "radix-ui@1.8.1",
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor",
+        "@wicomm/confirm-dialog",
+        "@wicomm/skeleton"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/menu.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "antes-do-desenho",
+      "type": "registry:lib",
+      "title": "Antes do desenho",
+      "description": "theme script — o script que aplica o tema guardado e a barra recolhida no <html> antes do primeiro desenho; vai uma vez, no layout raiz (ou no index.html).",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/lib/antes-do-desenho.tsx",
+          "type": "registry:lib"
+        }
+      ]
+    },
+    {
+      "name": "link-do-app",
+      "type": "registry:lib",
+      "title": "Link do app",
+      "description": "link — o link das peças: um <a> por padrão e o do framework (next/link, react-router) quando o app o declara no ProvedorDeLink. É o que mantém as peças valendo em Next e Vite.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/lib/link-do-app.tsx",
+          "type": "registry:lib"
+        }
+      ]
+    },
+    {
+      "name": "chip-de-estado",
+      "type": "registry:ui",
+      "title": "Chip de estado",
+      "description": "badge/status — o estado em uma palavra, com a forma única do carimbo e a voz declarada em tom; o neutro abre com o ponto que o Badge não tem (CTRL-05); o ChipQueAbre abre o detalhe.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/chip-de-estado.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "estado",
+      "type": "registry:ui",
+      "title": "Estado",
+      "description": "status dot — o marcador mínimo de voz: o ponto de 6px e a palavra, à vista ou só para o leitor de tela.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/estado.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "medalhao-do-icone",
+      "type": "registry:ui",
+      "title": "Medalhão do ícone",
+      "description": "icon badge — o disco com o ícone que diz o assunto antes da leitura; neutro por padrão, tom só para erro, ausência ou recusa.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/medalhao-do-icone.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "trilha",
+      "type": "registry:ui",
+      "title": "Trilha",
+      "description": "breadcrumb — a trilha de volta da tela de detalhe até a lista de onde veio (CASCO-03); o último degrau é a página atual.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/link-do-app"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/trilha.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "vazio",
+      "type": "registry:ui",
+      "title": "Vazio",
+      "description": "empty state — a região sem itens diz a causa (nada ainda, filtro, não se aplica, não informado) e a saída, nunca um ✓ (EST-02).",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/medalhao-do-icone"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/vazio.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "tela-de-erro",
+      "type": "registry:ui",
+      "title": "Tela de erro",
+      "description": "error state — o que não deu para mostrar: a rota inteira (erro, não encontrado, sem permissão) ou um bloco que falhou com a tela de pé.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/medalhao-do-icone",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/tela-de-erro.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "topo-da-pagina",
+      "type": "registry:ui",
+      "title": "Topo da página",
+      "description": "page header — a página dentro do casco (largura e respiro) e o topo dela: trilha, o h1 único, o estado, o primário, o ⋯, a linha dos valores, o desfecho e os filtros (CASCO-01, CASCO-04).",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor",
+        "@wicomm/chip-de-estado",
+        "@wicomm/skeleton"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/topo-da-pagina.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "seletor-de-vista",
+      "type": "registry:ui",
+      "title": "Seletor de vista",
+      "description": "tabs/toggle-group — a troca de vista em duas densidades (abas e modos): trilha de tinta, pílula que desliza, o estado no texto (CTRL-06).",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/seletor-de-vista.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "table",
+      "type": "registry:ui",
+      "title": "Tabela",
+      "description": "table — a tabela em densidade instrumento: linha de 40px, cabeçalho grudado na voz de coluna com a régua embaixo, o filete-guia recuado entre linhas, e a linha inteira que abre o objeto.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/link-do-app"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/table.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "ficha",
+      "type": "registry:ui",
+      "title": "Ficha",
+      "description": "description list — pares rótulo/valor numa grade, com o ausente dito como \"não informado\".",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/ficha.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "trilho-do-percurso",
+      "type": "registry:ui",
+      "title": "Trilho do percurso",
+      "description": "stepper — o percurso de um objeto no arquétipo Mesa: as etapas em ordem, cada uma com o estado, e a aberta marcada.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/estado",
+        "@wicomm/secao",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/trilho-do-percurso.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "logotipo",
+      "type": "registry:ui",
+      "title": "Logotipo",
+      "description": "logo — a marca Wicomm no casco e na Entrada, em símbolo e horizontal (provisória até o desenho oficial).",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/logotipo.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "menu-do-tema",
+      "type": "registry:ui",
+      "title": "Menu do tema",
+      "description": "theme switcher — claro, escuro ou do sistema, numa escolha de menu que já é a ação, e o useTema.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/menu",
+        "@wicomm/antes-do-desenho"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/menu-do-tema.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "menu-da-conta",
+      "type": "registry:ui",
+      "title": "Menu da conta",
+      "description": "user menu — o monograma, o nome e o e-mail da pessoa, e as linhas Minha conta e Sair.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/menu",
+        "@wicomm/monograma"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/menu-da-conta.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "checkbox",
+      "type": "registry:ui",
+      "title": "Caixa de marcar",
+      "description": "checkbox — marcar itens de uma lista para uma ação em lote, ou o sim/não de um formulário que se grava com Salvar; a OpcaoDeMarcar com o texto ao lado.",
+      "dependencies": [
+        "radix-ui@1.8.1",
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/label"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/checkbox.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "progress",
+      "type": "registry:ui",
+      "title": "Progresso",
+      "description": "progress — o progresso de uma etapa conhecida: o rótulo, o valor escrito (3 de 8) e a barra no gradiente da marca, que reforça sem informar sozinha.",
+      "dependencies": [
+        "radix-ui@1.8.1"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/progress.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "medidor",
+      "type": "registry:ui",
+      "title": "Medidor",
+      "description": "meter — um número contra um teto (120 h de 200 h): o número em medida, a voz só nele, a barra neutra; sem teto, \"de —\" (ARQ-02).",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/progress",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/medidor.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "badge",
+      "type": "registry:ui",
+      "title": "Valor rotulado",
+      "description": "badge — o valor que classifica um objeto (não um estado), no casco do carimbo: neutro, ou de marca quando explícito, aberto pelo filete da marca (CTRL-05).",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/chip-de-estado",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/badge.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "carregando-por-cima",
+      "type": "registry:ui",
+      "title": "Carregando por cima",
+      "description": "loading overlay — a troca de contexto: o véu sobre a região que mente (nunca o casco), a partir de 120ms, com a frase do que acontece.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/carregando-por-cima.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "faixa",
+      "type": "registry:ui",
+      "title": "Faixa",
+      "description": "alert/banner — o aviso de quando a tela inteira mente: uma faixa por tela, uma linha por assunto, cada uma com a voz e a saída (MSG-02, MSG-06).",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/faixa.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "dobra",
+      "type": "registry:ui",
+      "title": "Dobra",
+      "description": "collapsible — um grupo dentro de uma peça que se abre sob demanda: os campos de um assunto no inspector, ou o informativo que pouca gente lê; nunca esconde ação.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/dobra.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "popover",
+      "type": "registry:ui",
+      "title": "Popover",
+      "description": "popover — o detalhe sob demanda, colado ao carimbo ou ao controle que o abre no clique, na superfície flutuante.",
+      "dependencies": [
+        "radix-ui@1.8.1"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/popover.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "monograma",
+      "type": "registry:ui",
+      "title": "Monograma",
+      "description": "avatar — o círculo de 20px com as iniciais, em tinta neutra (sem cor por pessoa), e o círculo tracejado da pessoa que não há.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/monograma.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "pessoa",
+      "type": "registry:ui",
+      "title": "Pessoa",
+      "description": "avatar group — a pessoa numa linha de lista (monograma, nome, papel; ausente, sem nome, carregando) e a pilha de pessoas com +N e a frase inteira na dica.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/monograma",
+        "@wicomm/skeleton",
+        "@wicomm/tooltip",
+        "@wicomm/table"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/pessoa.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "linha-do-grupo",
+      "type": "registry:ui",
+      "title": "Linha do grupo",
+      "description": "table/collapsible — o grupo de linhas de uma tabela: o próprio tbody, a linha do grupo no degrau de tinta que abre e fecha, a contagem e a trilha encostadas no fim (as barras no mesmo x), e as células alinhadas às colunas, que esvaziam no celular quando a coluna some.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/table",
+        "@wicomm/progress",
+        "@wicomm/chip-de-estado"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/linha-do-grupo.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "prazo",
+      "type": "registry:ui",
+      "title": "Prazo",
+      "description": "date cell — o prazo numa linha: a data ou o intervalo em medida e a legenda relativa (em 12 dias), com a voz só quando quem chama a declara; o intervalo de um dia só, só a data (sem a legenda), numa linha; sem data, proposta, concluído e parcial.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/estado",
+        "@wicomm/chip-de-estado",
+        "@wicomm/tooltip",
+        "@wicomm/table",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/prazo.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "escolha-na-celula",
+      "type": "registry:ui",
+      "title": "Escolha na célula",
+      "description": "dropdown-menu/popover — trocar um valor na própria célula: a leitura no peso dela com o chevron de 14px, o menu ou o popover com o formulário (Salvar, Cancelar e Enter, e o motivo de não salvar escrito nele), gravando, recusado e sem permissão.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/menu",
+        "@wicomm/popover",
+        "@wicomm/button",
+        "@wicomm/table",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/escolha-na-celula.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "barra-do-editor",
+      "type": "registry:ui",
+      "title": "Barra do editor",
+      "description": "editor toolbar — a linha única do topo do Editor: a volta e o nome (o h1), o rascunho, a vista ao centro, o primário, o ⋯ e a pessoa; altura fixa, sem quebra.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/card",
+        "@wicomm/menu-da-conta",
+        "@wicomm/menu-do-tema",
+        "@wicomm/tooltip",
+        "@wicomm/link-do-app"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/barra-do-editor.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "colunas-do-editor",
+      "type": "registry:ui",
+      "title": "Colunas do editor",
+      "description": "resizable/editor layout — a estrutura que recolhe a um trilho, o canvas que nunca fica abaixo de 60% e a coluna da direita que vira gaveta abaixo de 1280px; com a linha da estrutura e o item do trilho.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/dialog",
+        "@wicomm/estado",
+        "@wicomm/painel",
+        "@wicomm/secao",
+        "@wicomm/tooltip",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/colunas-do-editor.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "casco",
+      "type": "registry:block",
+      "title": "Casco",
+      "description": "sidebar/app shell — o casco de todo app autenticado: a barra lateral (marca, destinos com ícone e rótulo, recolher, tema e conta), o cabeçalho opcional e a região que rola; com o layout de exemplo do App Router.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/link-do-app",
+        "@wicomm/antes-do-desenho",
+        "@wicomm/idioma-de-cor",
+        "@wicomm/toast",
+        "@wicomm/tooltip",
+        "@wicomm/button",
+        "@wicomm/menu",
+        "@wicomm/chip-de-estado",
+        "@wicomm/logotipo",
+        "@wicomm/menu-do-tema",
+        "@wicomm/menu-da-conta"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/blocks/casco/barra-lateral.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/casco/cabecalho-do-app.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/casco/casco-do-app.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/casco/menu-do-contexto.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/casco/casco-no-next.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/casco/navegacao.ts",
+          "type": "registry:lib"
+        },
+        {
+          "path": "registry/design-system/blocks/casco/layout.tsx",
+          "type": "registry:page",
+          "target": "app/(casco)/layout.tsx"
+        }
+      ]
+    },
+    {
+      "name": "lista",
+      "type": "registry:block",
+      "title": "Tela de Lista",
+      "description": "list page — o arquétipo Lista (o que pede a minha atenção?): topo com título, modos com contagem, busca e primário; a tabela numa superfície; o vazio que diz a causa. Exemplo com pedidos, dentro do casco.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/casco",
+        "@wicomm/idioma-de-cor",
+        "@wicomm/link-do-app",
+        "@wicomm/button",
+        "@wicomm/chip-de-estado",
+        "@wicomm/input",
+        "@wicomm/painel",
+        "@wicomm/seletor-de-vista",
+        "@wicomm/skeleton",
+        "@wicomm/table",
+        "@wicomm/tela-de-erro",
+        "@wicomm/toast",
+        "@wicomm/topo-da-pagina",
+        "@wicomm/vazio"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/blocks/lista/lista-de-pedidos.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/lista/dados-da-lista.ts",
+          "type": "registry:lib"
+        },
+        {
+          "path": "registry/design-system/blocks/lista/page.tsx",
+          "type": "registry:page",
+          "target": "app/(casco)/pedidos/page.tsx"
+        }
+      ]
+    },
+    {
+      "name": "mesa",
+      "type": "registry:block",
+      "title": "Tela de Mesa",
+      "description": "detail page — o arquétipo Mesa (em que pé está isto, e o que eu faço agora?): trilha, nome, estado e primário no topo; o trilho do percurso; o conteúdo da etapa; a variante de leitura com abas. Exemplo com um pedido, dentro do casco.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/casco",
+        "@wicomm/lista",
+        "@wicomm/bloco",
+        "@wicomm/button",
+        "@wicomm/chip-de-estado",
+        "@wicomm/estado",
+        "@wicomm/ficha",
+        "@wicomm/menu",
+        "@wicomm/painel",
+        "@wicomm/seletor-de-vista",
+        "@wicomm/skeleton",
+        "@wicomm/table",
+        "@wicomm/tela-de-erro",
+        "@wicomm/toast",
+        "@wicomm/topo-da-pagina",
+        "@wicomm/trilha",
+        "@wicomm/trilho-do-percurso",
+        "@wicomm/vazio",
+        "@wicomm/link-do-app",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/blocks/mesa/mesa-do-pedido.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/mesa/dados-da-mesa.ts",
+          "type": "registry:lib"
+        },
+        {
+          "path": "registry/design-system/blocks/mesa/page.tsx",
+          "type": "registry:page",
+          "target": "app/(casco)/pedidos/[id]/page.tsx"
+        }
+      ]
+    },
+    {
+      "name": "entrada",
+      "type": "registry:block",
+      "title": "Tela de Entrada",
+      "description": "login page — o arquétipo Entrada (qual é o único passo?): o cartão sozinho no fundo, fora do casco, campos e botão xl, a recusa no próprio cartão.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/button",
+        "@wicomm/card",
+        "@wicomm/input",
+        "@wicomm/label",
+        "@wicomm/logotipo",
+        "@wicomm/menu-do-tema",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/blocks/entrada/tela-de-entrada.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/entrada/page.tsx",
+          "type": "registry:page",
+          "target": "app/(tela-inteira)/entrar/page.tsx"
+        }
+      ]
+    },
+    {
+      "name": "editor",
+      "type": "registry:block",
+      "title": "Tela de Editor",
+      "description": "editor page — o arquétipo Editor (como fica se eu mudar isto?): fora do casco, a barra com a volta, o rascunho e o Publicar; a estrutura que recolhe, o canvas com a página e o inspector em dobras. Exemplo com um documento.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/barra-do-editor",
+        "@wicomm/colunas-do-editor",
+        "@wicomm/dobra",
+        "@wicomm/popover",
+        "@wicomm/button",
+        "@wicomm/card",
+        "@wicomm/chip-de-estado",
+        "@wicomm/dialog",
+        "@wicomm/input",
+        "@wicomm/label",
+        "@wicomm/menu",
+        "@wicomm/select",
+        "@wicomm/seletor-de-vista",
+        "@wicomm/skeleton",
+        "@wicomm/tela-de-erro",
+        "@wicomm/toast",
+        "@wicomm/tooltip",
+        "@wicomm/vazio",
+        "@wicomm/link-do-app"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/blocks/editor/editor-de-documento.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/editor/editor-no-next.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/design-system/blocks/editor/dados-do-editor.ts",
+          "type": "registry:lib"
+        },
+        {
+          "path": "registry/design-system/blocks/editor/page.tsx",
+          "type": "registry:page",
+          "target": "app/(tela-inteira)/documentos/[id]/editar/page.tsx"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+// O ícone de cada FUNÇÃO no kit (COR-08: a forma é um canal; CTRL-09: uma
+// biblioteca). A lista é a dos ícones que o registro importa do lucide-react —
+// test/vitrine.test.ts cobra que as duas concordam, nos dois sentidos.
+import {
+  ArrowDownIcon,
+  ArrowLeftIcon,
+  ArrowUpIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
+  ChevronsUpDownIcon,
+  CircleAlertIcon,
+  ClipboardListIcon,
+  CopyIcon,
+  EyeIcon,
+  FileSignatureIcon,
+  FileTextIcon,
+  FilterIcon,
+  HistoryIcon,
+  InfoIcon,
+  LayoutDashboardIcon,
+  ListIcon,
+  LoaderCircleIcon,
+  LockIcon,
+  LogOutIcon,
+  MinusIcon,
+  MonitorIcon,
+  MoonIcon,
+  MoreHorizontalIcon,
+  MousePointerClickIcon,
+  PackageOpenIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  PanelRightCloseIcon,
+  PanelTopIcon,
+  PlusIcon,
+  Redo2Icon,
+  RotateCwIcon,
+  SearchXIcon,
+  SmartphoneIcon,
+  SunIcon,
+  SunMoonIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+  TypeIcon,
+  Undo2Icon,
+  UnplugIcon,
+  UserCogIcon,
+  UsersIcon,
+  XCircleIcon,
+  XIcon,
+  type LucideIcon,
+} from "lucide-react"
+
+export type IconeDoKit = { nome: string; icone: LucideIcon; funcao: string }
+
+export type GrupoDeIcones = { titulo: string; icones: IconeDoKit[] }
+
+export const GRUPOS_DE_ICONES: GrupoDeIcones[] = [
+  {
+    titulo: "Navegar e abrir",
+    icones: [
+      { nome: "ArrowLeftIcon", icone: ArrowLeftIcon, funcao: "Voltar, na barra do Editor" },
+      { nome: "ChevronRightIcon", icone: ChevronRightIcon, funcao: "Abre um submenu; a dobra fechada" },
+      { nome: "ChevronDownIcon", icone: ChevronDownIcon, funcao: "Abre uma lista; a dobra aberta" },
+      { nome: "ChevronUpIcon", icone: ChevronUpIcon, funcao: "Rola a lista do select para cima" },
+      { nome: "ChevronsUpDownIcon", icone: ChevronsUpDownIcon, funcao: "Troca de contexto" },
+      { nome: "MoreHorizontalIcon", icone: MoreHorizontalIcon, funcao: "O menu do objeto (⋯)" },
+      { nome: "PanelLeftCloseIcon", icone: PanelLeftCloseIcon, funcao: "Recolher a coluna da esquerda" },
+      { nome: "PanelLeftOpenIcon", icone: PanelLeftOpenIcon, funcao: "Expandir a coluna da esquerda" },
+      { nome: "PanelRightCloseIcon", icone: PanelRightCloseIcon, funcao: "Fechar a coluna da direita" },
+      { nome: "HistoryIcon", icone: HistoryIcon, funcao: "Abrir o histórico de versões; a versão, na faixa" },
+    ],
+  },
+  {
+    titulo: "Agir",
+    icones: [
+      { nome: "PlusIcon", icone: PlusIcon, funcao: "Criar um objeto novo" },
+      { nome: "CopyIcon", icone: CopyIcon, funcao: "Copiar" },
+      { nome: "RotateCwIcon", icone: RotateCwIcon, funcao: "Tentar de novo" },
+      { nome: "XIcon", icone: XIcon, funcao: "Fechar; limpar o filtro" },
+      { nome: "LogOutIcon", icone: LogOutIcon, funcao: "Sair da conta" },
+      { nome: "UserCogIcon", icone: UserCogIcon, funcao: "Abrir a conta" },
+      { nome: "Undo2Icon", icone: Undo2Icon, funcao: "Desfazer" },
+      { nome: "Redo2Icon", icone: Redo2Icon, funcao: "Refazer" },
+      { nome: "ArrowUpIcon", icone: ArrowUpIcon, funcao: "Mover para cima" },
+      { nome: "ArrowDownIcon", icone: ArrowDownIcon, funcao: "Mover para baixo" },
+      { nome: "Trash2Icon", icone: Trash2Icon, funcao: "Excluir" },
+    ],
+  },
+  {
+    titulo: "Dizer o estado",
+    icones: [
+      { nome: "CheckIcon", icone: CheckIcon, funcao: "Feito; o item escolhido; a caixa marcada" },
+      { nome: "MinusIcon", icone: MinusIcon, funcao: "A caixa marcada só em parte" },
+      { nome: "LoaderCircleIcon", icone: LoaderCircleIcon, funcao: "Em curso, no carimbo" },
+      { nome: "InfoIcon", icone: InfoIcon, funcao: "Ajuda que não gera decisão" },
+      { nome: "TriangleAlertIcon", icone: TriangleAlertIcon, funcao: "Pede atenção" },
+      { nome: "CircleAlertIcon", icone: CircleAlertIcon, funcao: "Erro de rota ou de bloco" },
+      { nome: "XCircleIcon", icone: XCircleIcon, funcao: "Recusado" },
+      { nome: "LockIcon", icone: LockIcon, funcao: "Sem permissão" },
+      { nome: "SearchXIcon", icone: SearchXIcon, funcao: "Não encontrado; o filtro escondeu tudo" },
+      { nome: "PackageOpenIcon", icone: PackageOpenIcon, funcao: "Vazio: ainda não há nada" },
+    ],
+  },
+  {
+    titulo: "O assunto da faixa",
+    icones: [
+      { nome: "MousePointerClickIcon", icone: MousePointerClickIcon, funcao: "O desfecho de um gesto" },
+      { nome: "UnplugIcon", icone: UnplugIcon, funcao: "A conexão com um serviço de fora" },
+      { nome: "EyeIcon", icone: EyeIcon, funcao: "A prévia" },
+      { nome: "FilterIcon", icone: FilterIcon, funcao: "O escopo diferente do normal" },
+    ],
+  },
+  {
+    titulo: "Tema",
+    icones: [
+      { nome: "SunIcon", icone: SunIcon, funcao: "Tema claro" },
+      { nome: "MoonIcon", icone: MoonIcon, funcao: "Tema escuro" },
+      { nome: "SunMoonIcon", icone: SunMoonIcon, funcao: "Tema do sistema" },
+    ],
+  },
+  {
+    titulo: "Prévia do Editor",
+    icones: [
+      { nome: "MonitorIcon", icone: MonitorIcon, funcao: "Ver no computador" },
+      { nome: "SmartphoneIcon", icone: SmartphoneIcon, funcao: "Ver no celular" },
+    ],
+  },
+  {
+    titulo: "Dos exemplos",
+    icones: [
+      { nome: "LayoutDashboardIcon", icone: LayoutDashboardIcon, funcao: "Início, no casco de exemplo" },
+      { nome: "ClipboardListIcon", icone: ClipboardListIcon, funcao: "Pedidos, no exemplo" },
+      { nome: "UsersIcon", icone: UsersIcon, funcao: "Clientes, no exemplo" },
+      { nome: "FileTextIcon", icone: FileTextIcon, funcao: "Documentos, no exemplo" },
+      { nome: "PanelTopIcon", icone: PanelTopIcon, funcao: "Seção de capa, no Editor de exemplo" },
+      { nome: "TypeIcon", icone: TypeIcon, funcao: "Seção de texto, no Editor de exemplo" },
+      { nome: "ListIcon", icone: ListIcon, funcao: "Seção de lista, no Editor de exemplo" },
+      { nome: "FileSignatureIcon", icone: FileSignatureIcon, funcao: "Seção de assinatura, no Editor de exemplo" },
+    ],
+  },
+]
+
+export const NOMES_DOS_ICONES = GRUPOS_DE_ICONES.flatMap((g) => g.icones.map((i) => i.nome))
