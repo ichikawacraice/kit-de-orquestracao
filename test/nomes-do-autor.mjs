@@ -22,11 +22,13 @@ const EMPRESA = Buffer.from('d2ljb21t', 'base64').toString();
  * As exceções: o dono do repositório no endereço publicado (`<dono>/kit-de-orquestracao`), por onde se instala, e o nome do kit
  * (F344: o id `ichikawa-kit` do marketplace e o nome de exibição "Ichikawa's Kit"), que o operador escolheu como marca. E (F350) os
  * dois nomes fixos do design system da empresa, que o marketplace lista vindo do repositório dela: o endereço desse repositório e o
- * id do plugin de tema (`tema-<marca>`). O nome fora dessas formas continua barrado.
+ * id do plugin de tema (`tema-<marca>`). E (F357) os dois pacotes que o kit publica no npm, `@<marca>/tokens` e `@<marca>/guardas`.
+ * O nome fora dessas formas continua barrado.
  */
 export const semOEnderecoPublicado = (texto) => texto
   .replace(/[\w.-]+\/kit-de-orquestracao\b/g, 'DONO/kit-de-orquestracao')
   .replace(new RegExp(`\\b${EMPRESA}-projects/${EMPRESA}-design-system\\b`, 'g'), 'EMPRESA/design-system')
   .replace(new RegExp(`\\btema-${EMPRESA}\\b`, 'g'), 'tema-EMPRESA')
+  .replace(new RegExp(`@${EMPRESA}/(tokens|guardas)\\b`, 'g'), '@EMPRESA/$1')
   .replace(/\bichikawa-kit\b/g, 'NOME-DO-KIT')
   .replace(/\bIchikawa['’]s Kit\b/g, 'NOME DO KIT');

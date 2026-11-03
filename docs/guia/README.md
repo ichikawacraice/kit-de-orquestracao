@@ -10,6 +10,7 @@ Para quem vai usar o kit num projeto e nunca o viu. Comece pelo primeiro dia; as
 | [O que ligar e desligar](ligar-e-desligar.md) | Cada trava e opção: o que faz, quando incomoda, como desligar e o que se perde |
 | [Conflitos com outros plugins](conflitos.md) | Quando o kit convive com outros plugins, skills ou hooks seus |
 | [Problemas comuns](problemas-comuns.md) | O sintoma, a causa e a saída |
+| [Os pacotes do design system no npm](pacotes-npm.md) | O primeiro envio de `@wicomm/tokens` e `@wicomm/guardas` e como sai a versão nova |
 
 ## O kit em um minuto
 

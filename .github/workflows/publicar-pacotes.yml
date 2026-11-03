@@ -1,0 +1,83 @@
+# Publica @wicomm/tokens e @wicomm/guardas (design-system/packages/) no npm público
+# (F357, ADR 0020). Roda a cada push na main que toca um dos dois pacotes (e à mão):
+# publica só a versão do package.json que o npm ainda não tem. Versão nova = subir o
+# "version" do pacote no PR; sem isso, o push passa sem publicar nada.
+#
+# Sem token guardado: publicação confiável (trusted publishing) pelo OIDC do GitHub,
+# que também grava a proveniência. Ela só vale para pacote que já existe no npm e que
+# tem este repositório e este arquivo como publicador confiável (npmjs.com → o pacote
+# → Settings → Trusted publishing). O primeiro envio de cada pacote é à mão, por quem
+# administra a organização no npm (docs/guia/pacotes-npm.md).
+#
+# Não é CI: não roda em PR. O gate do kit continua local, na fila de merge.
+name: publicar-pacotes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - design-system/packages/tokens/**
+      - design-system/packages/guardas/**
+      - .github/workflows/publicar-pacotes.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publicar-pacotes
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: design-system
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # a publicação confiável pede o npm 11.5.1 ou mais novo; o Node 22 traz o 10
+      - run: npm install -g npm@11.6.2
+
+      - run: npm ci
+
+      - name: Gate do design-system
+        run: npm test
+
+      - name: Publicar a versão que o npm não tem
+        run: |
+          set -euo pipefail
+          for dir in packages/tokens packages/guardas; do
+            nome=$(node -p "require('./$dir/package.json').name")
+            versao=$(node -p "require('./$dir/package.json').version")
+            acesso=$(node -p "require('./$dir/package.json').publishConfig?.access ?? ''")
+            if [ "$acesso" != "public" ]; then
+              echo "::error::$nome sem publishConfig.access public: não publico"; exit 1
+            fi
+            # Pacote que o npm ainda não tem: o primeiro envio é à mão (sem ele não há
+            # publicador confiável), então aqui só avisa.
+            if ! npm view "$nome" name >/dev/null 2>npm-view.err; then
+              if grep -q E404 npm-view.err; then
+                echo "::warning::$nome ainda não existe no npm: o primeiro envio é à mão (docs/guia/pacotes-npm.md)"; continue
+              fi
+              cat npm-view.err; exit 1
+            fi
+            # Versão que falta sai vazia com exit 0 (ou E404); outro erro para o job.
+            # O stderr fica fora da comparação (avisos do npm).
+            if saida=$(npm view "$nome@$versao" version 2>npm-view.err); then
+              if [ "$saida" = "$versao" ]; then
+                echo "$nome@$versao já publicado"; continue
+              fi
+            elif ! grep -q E404 npm-view.err; then
+              cat npm-view.err; exit 1
+            fi
+            npm publish -w "$dir"
+            echo "::notice::publicado $nome@$versao"
+          done
