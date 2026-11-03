@@ -107,7 +107,7 @@ describe('ponta a ponta: atualizar aplica, doutor confere, remover tira', () => 
   });
 
   it('o perfil desliga um plugin do próprio kit: no adotar sem conflito, e no atualizar depois de o kit tê-lo ligado', (t) => {
-    const KD = 'kit-design@ichikawa-kit';
+    const KD = 'design-system@ichikawa-kit';
     const casa = realpathSync(mkdtempSync(join(tmpdir(), 'kit-f347-casa-')));
     const a = realpathSync(mkdtempSync(join(tmpdir(), 'kit-f347-kd-')));
     const b = realpathSync(mkdtempSync(join(tmpdir(), 'kit-f347-kd2-')));
@@ -120,9 +120,9 @@ describe('ponta a ponta: atualizar aplica, doutor confere, remover tira', () => 
     const ra = kit(a, 'adotar');
     assert.equal(ra.status, 0, ra.stdout + ra.stderr);
     assert.equal(ler(a, '.claude', 'settings.json').enabledPlugins[KD], false);
-    // b: adotado sem perfil (o kit liga o kit-design), depois o perfil pede desligar
+    // b: adotado sem perfil (o kit liga o design-system), depois o perfil pede desligar
     assert.equal(kit(b, 'adotar').status, 0);
-    assert.equal(ler(b, '.claude', 'settings.json').enabledPlugins[KD], true, 'precondição: o kit ligou o kit-design');
+    assert.equal(ler(b, '.claude', 'settings.json').enabledPlugins[KD], true, 'precondição: o kit ligou o design-system');
     const kj = ler(b, '.claude', 'kit.json'); kj.plugins = { desligar: [KD] };
     writeFileSync(join(b, '.claude', 'kit.json'), JSON.stringify(kj));
     const rb = kit(b, 'atualizar');
@@ -132,7 +132,7 @@ describe('ponta a ponta: atualizar aplica, doutor confere, remover tira', () => 
     assert.ok(cs.desligados.includes(KD) && !cs.plugins.includes(KD), JSON.stringify(cs));
     assert.equal(kit(b, 'atualizar').status, 0, 'o segundo atualizar não pode virar conflito');
     const doutor = kit(b, 'doutor').stdout;
-    assert.match(doutor, /info: plugin kit-design desligado pelo perfil/);
-    assert.doesNotMatch(doutor, /para religar, enabledPlugins "kit-design/, 'o doutor manda desfazer o que o perfil pede');
+    assert.match(doutor, /info: plugin design-system desligado pelo perfil/);
+    assert.doesNotMatch(doutor, /para religar, enabledPlugins "design-system/, 'o doutor manda desfazer o que o perfil pede');
   });
 });

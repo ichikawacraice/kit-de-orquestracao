@@ -7,9 +7,9 @@ import { avisoDeLaco, carregarConfig, opcaoDaRegra, REGRAS_DE_DOCUMENTO } from '
 import { booleanoDaOpcao, opcoesDoPlugin, pastaDeConfig } from '../gate/opcoes-do-plugin.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { conferirPerformance, lerPraticas } from './performance.mjs';
-import { conferirDesligados } from './plugins-do-projeto.mjs';
+import { conferirDesligados, conferirTema } from './plugins-do-projeto.mjs';
 import { conferirSkillsDeFora } from './skills-de-fora.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, MARKETPLACE_ANTIGO, PLUGIN, REPO_DO_KIT, idNovoDe, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, SUCESSORES, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, MARKETPLACE_ANTIGO, PLUGIN, REPO_DO_KIT, idNovoDe, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
@@ -108,23 +108,31 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
 
 /** O que `enabledPlugins` diz do plugin: a camada mais próxima (local > projeto > conta), o nome velho valendo quando o novo não diz; `undefined` se ninguém diz. */
 function ligadoEm(id, configs) {
-  // o nome velho de qualquer plugin do kit (F332 e o marketplace antigo do F344): vale quando o novo não diz
-  const ids = [id, ...[...Object.keys(PLUGINS_RENOMEADOS), id.replace(`@${MARKETPLACE}`, `@${MARKETPLACE_ANTIGO}`)].filter((v, i, l) => l.indexOf(v) === i && v !== id && idNovoDe(v) === id)];
+  // o nome velho de qualquer plugin do kit (F332, o marketplace antigo do F344 e o sucedido do F353): vale quando o novo não diz
+  const velhosDe = (alvo) => [...Object.keys(PLUGINS_RENOMEADOS), alvo.replace(`@${MARKETPLACE}`, `@${MARKETPLACE_ANTIGO}`)].filter((v, i, l) => l.indexOf(v) === i && v !== alvo && idNovoDe(v) === alvo);
+  const sucedidos = Object.keys(SUCESSORES).filter((v) => SUCESSORES[v] === id);
+  const ids = [...new Set([id, ...velhosDe(id), ...sucedidos.flatMap((v) => [v, ...velhosDe(v)])])];
   for (const s of [configs[2], configs[1], configs[0]]) for (const i of ids) if (typeof s?.enabledPlugins?.[i] === 'boolean') return s.enabledPlugins[i];
   return undefined;
 }
 
-/** Os processos do kit (plugins `processos` e `kit-design`): o que o kit.json e o settings dizem, e onde um sobrepõe o outro. Só aviso e info: nada aqui reprova. */
+/** Os processos do kit (plugins `processos` e `design-system`): o que o kit.json e o settings dizem, e onde um sobrepõe o outro. Só aviso e info: nada aqui reprova. */
 function processos(destino, home, configs, linhas) {
   const kj = lerJson(join(destino, '.claude', 'kit.json')) ?? {};
+  // o sucedido ligado (F353): o false que o kit atualizar deixa não é aviso
+  for (const [velho, novo] of Object.entries(SUCESSORES)) {
+    for (const [i, onde] of [[1, '.claude/settings.json'], [2, '.claude/settings.local.json']]) {
+      if (configs[i]?.enabledPlugins?.[velho] === true) linhas.push(`aviso: ${onde} ainda liga ${velho}; o sucessor é ${novo}${i === 1 ? ' — rode `kit atualizar`' : ' — troque à mão'}`);
+    }
+  }
   for (const [velho, novo] of Object.entries(PLUGINS_RENOMEADOS)) {
     for (const [i, onde] of [[1, '.claude/settings.json'], [2, '.claude/settings.local.json']]) {
       if (configs[i]?.enabledPlugins && velho in configs[i].enabledPlugins) linhas.push(`aviso: ${onde} ainda liga ${velho}; o plugin agora se chama ${novo}${i === 1 ? ' — rode `kit atualizar`' : ' — troque a chave à mão'}`);
     }
   }
-  const ligado = { processos: ligadoEm(`processos@${MARKETPLACE}`, configs), design: ligadoEm(`kit-design@${MARKETPLACE}`, configs) };
+  const ligado = { processos: ligadoEm(`processos@${MARKETPLACE}`, configs), design: ligadoEm(`design-system@${MARKETPLACE}`, configs) };
   const secao = { processos: 'documentos', design: 'design' };
-  const plugin = { processos: 'processos', design: 'kit-design' };
+  const plugin = { processos: 'processos', design: 'design-system' };
   for (const nome of ['processos', 'design']) {
     const peloPerfil = Array.isArray(kj.plugins?.desligar) && kj.plugins.desligar.includes(`${plugin[nome]}@${MARKETPLACE}`);
     if (ligado[nome] === false && peloPerfil) linhas.push(`info: plugin ${plugin[nome]} desligado pelo perfil do .claude/kit.json (plugins.desligar); a seção ${secao[nome]} fica sem efeito enquanto ele estiver desligado`);
@@ -136,13 +144,13 @@ function processos(destino, home, configs, linhas) {
   const docsDoProj = docsDoProjeto(destino);
   if (ligado.processos === undefined && !Array.isArray(kj.documentos?.conferir) && docsDoProj.length) linhas.push(`aviso: plugin processos fora do enabledPlugins deste projeto, mas o gate confere as docs mesmo assim (documentos.conferir ausente = as cinco regras): ${avisoDasRegras(docsDoProj, ligado.processos)}`);
   // design: a guarda só age com pasta do front (design.pasta, design.visual ou a opção pasta_do_front do plugin)
-  const opDesign = opcoesDoPlugin('kit-design', home);
+  const opDesign = opcoesDoPlugin('design-system', home);
   const pasta = typeof kj.design?.pasta === 'string' ? kj.design.pasta.replace(/\/+$/, '') : '';
   const pastaDaOpcao = typeof opDesign.pasta_do_front === 'string' ? opDesign.pasta_do_front.replace(/\/+$/, '') : '';
   const front = pasta || pastaDaOpcao;
   const temDesign = ligado.design !== false && (kj.design !== undefined || ligado.design === true);
   if (temDesign && !front && !(Array.isArray(kj.design?.visual) && kj.design.visual.length)) {
-    linhas.push('info: design: sem design.pasta (nem design.visual) a guarda de design fica inerte e o crítico não é cobrado; para ligá-la, ponha design.pasta no .claude/kit.json (ou a opção pasta_do_front do plugin kit-design)');
+    linhas.push('info: design: sem design.pasta (nem design.visual) a guarda de design fica inerte e o crítico não é cobrado; para ligá-la, ponha design.pasta no .claude/kit.json (ou a opção pasta_do_front do plugin design-system)');
   }
   if (temDesign && front) {
     for (const f of ['PRODUCT.md', 'DESIGN.md']) if (!existsSync(join(destino, front, f))) linhas.push(`aviso: design: ${front}/${f} não existe; o designer e o crítico leem dele o que o produto é e como a tela parece (modelo em modelos/front do kit)`);
@@ -162,7 +170,8 @@ function processos(destino, home, configs, linhas) {
     if (typeof kj.design?.cobrarCritica === 'boolean' && kj.design.cobrarCritica !== booleanoDaOpcao(opDesign.cobrar_critica)) sobrepostas.push('cobrar_critica');
     if (pasta && pastaDaOpcao && pasta !== pastaDaOpcao) sobrepostas.push('pasta_do_front');
     if (kj.design?.largura !== undefined && kj.design.largura !== (opDesign.largura ?? 1280)) sobrepostas.push('largura');
-    if (sobrepostas.length) linhas.push(`info: o kit.json sobrepõe a opção do plugin kit-design (${sobrepostas.join(', ')}): a chave do kit.json vale para o time e vence a opção de cada conta`);
+    if (sobrepostas.length) linhas.push(`info: o kit.json sobrepõe a opção do plugin design-system (${sobrepostas.join(', ')}): a chave do kit.json vale para o time e vence a opção de cada conta`);
   }
+  linhas.push(...conferirTema(kj, configs));
 }
 const ok_ = (linhas, m) => linhas.push(`ok: ${m}`);

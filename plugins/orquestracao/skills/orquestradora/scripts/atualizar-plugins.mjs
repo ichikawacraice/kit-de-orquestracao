@@ -3,7 +3,9 @@
 // Sequência: lista os instalados → `marketplace update` → confere que o clone está no commit do GitHub (uma nova tentativa) →
 // `plugin update <nome>@ichikawa-kit -s user` onde a versão difere → lista de novo e confere que a instalada é a publicada (senão `não pegou`, exit 1). Cópia `project` não se mexe; plugin
 // que falta não se instala. Plugin renomeado (F332: `design` → `kit-design`): o velho no escopo user dá lugar ao novo, instalado com as
-// opções do velho (`--config`, só as que o manifesto novo declara) e desligado se a conta desligava o velho; só com o novo dentro o velho sai. Ambiente: CLAUDE_BIN, GIT_BIN (trocam os executáveis), KIT_MARKETPLACE_DIR (o clone, senão
+// opções do velho (`--config`, só as que o manifesto novo declara) e desligado se a conta desligava o velho; só com o novo dentro o velho sai.
+// O `kit-design` passou ao `design-system` (F353), que vem de fora do clone: o velho segue publicado até a troca, e o novo se confere pela
+// presença na lista, não pela versão. Ambiente: CLAUDE_BIN, GIT_BIN (trocam os executáveis), KIT_MARKETPLACE_DIR (o clone, senão
 // ~/.claude/plugins/marketplaces/<marketplace>), KIT_UPDATE_TIMEOUT_MS (marketplace e update; padrão 180 s). Conta que ainda tem os plugins com o
 // nome antigo do marketplace (`kit-de-orquestracao`, F344) é atualizada nele, com um aviso para rodar o `kit migrar-marketplace`.
 import { execFileSync } from 'node:child_process';
@@ -21,8 +23,8 @@ let CLONE = '';
 const cloneDe = (marketplace) => process.env.KIT_MARKETPLACE_DIR || join(homedir(), '.claude', 'plugins', 'marketplaces', marketplace);
 const LONGO_MS = Number(process.env.KIT_UPDATE_TIMEOUT_MS) || 180_000;
 const CURTO_MS = 30_000;
-/** Plugin do kit que mudou de nome: velho → novo (o `design` da Anthropic, instalado pela conta, ofuscava o do kit). */
-const RENOMEADOS = { design: 'kit-design' };
+/** Plugin do kit que mudou de nome: velho → novo (F332: o `design` da Anthropic ofuscava o do kit; F353: o `design-system` sucede o `kit-design`). */
+const RENOMEADOS = { design: 'kit-design', 'kit-design': 'design-system' };
 const pastaDeConfig = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
 
 function rodar(bin, args, limite) {
@@ -85,9 +87,11 @@ function trocarDeNome(velho, idNovo) {
   let conta = null;
   try { conta = lerJson(join(pastaDeConfig(), 'settings.json')); } catch { /* sem settings: sem opção, ligado */ }
   const opcoes = conta?.pluginConfigs?.[velho.id]?.options ?? {};
-  // só a opção que o manifesto novo declara: a que saiu dele faria o install recusar sempre
+  // só a opção que o manifesto novo declara: a que saiu dele faria o install recusar sempre. O novo de origem remota não tem manifesto no
+  // clone: valem as do velho (o `design-system` declara as mesmas quatro do `kit-design`; se uma sair de lá, o install recusa e o velho fica)
   let declaradas = [];
-  try { declaradas = Object.keys(lerJson(join(CLONE, 'plugins', idNovo.split('@')[0], '.claude-plugin', 'plugin.json')).userConfig ?? {}); } catch { /* sem manifesto: nenhuma */ }
+  const manifesto = (nome) => Object.keys(lerJson(join(CLONE, 'plugins', nome, '.claude-plugin', 'plugin.json')).userConfig ?? {});
+  try { declaradas = manifesto(idNovo.split('@')[0]); } catch { try { declaradas = manifesto(velho.id.split('@')[0]); } catch { /* sem manifesto: nenhuma */ } }
   const configs = Object.entries(opcoes && typeof opcoes === 'object' ? opcoes : {})
     .filter(([k, v]) => declaradas.includes(k) && ['string', 'number', 'boolean'].includes(typeof v) && v !== '')
     .flatMap(([k, v]) => ['--config', `${k}=${v}`]);
@@ -120,7 +124,7 @@ function main(argv) {
   const plugins = []; let falhou = false; let atualizou = false;
   const renomear = new Map(); // novo → a instalação user do velho
   for (const [velho, novo] of Object.entries(RENOMEADOS)) {
-    if (!publicados.includes(novo) || publicados.includes(velho)) continue;
+    if (![...publicados, ...remotos].includes(novo)) continue;
     const idVelho = `${velho}@${MARKETPLACE}`;
     for (const c of antes.filter((p) => p.id === idVelho && p.scope === 'project')) {
       plugins.push({ id: idVelho, antes: c.version, publicado: null, depois: c.version, acao: `não mexido (projeto ${c.projectPath ?? '?'}; o plugin agora é ${novo}@${MARKETPLACE}: rode kit atualizar lá)` });
@@ -128,27 +132,34 @@ function main(argv) {
     const user = antes.find((p) => p.id === idVelho && p.scope === 'user');
     if (user) renomear.set(novo, user);
   }
+  /** O velho de `nome` no escopo user: troca pelo novo (→ true: a linha do novo está feita) ou, com o novo já dentro, só o tira. */
+  const trocarVelho = (nome, id, publicado) => {
+    const velho = renomear.get(nome);
+    if (!velho) return false;
+    if (!antes.some((p) => p.id === id && p.scope === 'user')) {
+      const era = `era ${velho.id}`;
+      if (seco) { plugins.push({ id, antes: velho.version, publicado, depois: velho.version, acao: `renomearia (${era})` }); return true; }
+      const r = trocarDeNome(velho, id);
+      if (r.erro) { falhou = true; plugins.push({ id, antes: velho.version, publicado, depois: null, acao: 'falhou', mensagem: r.erro }); return true; }
+      plugins.push({ id, antes: velho.version, publicado, depois: null, acao: 'conferir', era });
+      return true;
+    }
+    // o novo já está: o velho só sai
+    if (seco) plugins.push({ id: velho.id, antes: velho.version, publicado: null, depois: velho.version, acao: `desinstalaria (já tem ${id})` });
+    else {
+      const u = claude(['plugin', 'uninstall', velho.id, '--json', '-s', 'user'], LONGO_MS);
+      if (u.status !== 0) { falhou = true; plugins.push({ id: velho.id, antes: velho.version, publicado: null, depois: velho.version, acao: 'falhou', mensagem: u.err || `exit ${u.status}` }); }
+      else { atualizou = true; plugins.push({ id: velho.id, antes: velho.version, publicado: null, depois: null, acao: `desinstalado (já tem ${id})` }); }
+    }
+    return false;
+  };
+  // o velho que segue publicado (F353: o `kit-design`, apontador até a troca) não se atualiza nem se lista: a linha é a do sucessor
+  const sucedidos = Object.keys(RENOMEADOS).filter((v) => publicados.includes(v) && [...publicados, ...remotos].includes(RENOMEADOS[v]));
   for (const nome of publicados) {
+    if (sucedidos.includes(nome)) continue;
     const id = `${nome}@${MARKETPLACE}`;
     const publicado = versaoPublicada(nome);
-    const velho = renomear.get(nome);
-    if (velho && !antes.some((p) => p.id === id && p.scope === 'user')) {
-      const era = `era ${velho.id}`;
-      if (seco) { plugins.push({ id, antes: velho.version, publicado, depois: velho.version, acao: `renomearia (${era})` }); continue; }
-      const r = trocarDeNome(velho, id);
-      if (r.erro) { falhou = true; plugins.push({ id, antes: velho.version, publicado, depois: null, acao: 'falhou', mensagem: r.erro }); continue; }
-      plugins.push({ id, antes: velho.version, publicado, depois: null, acao: 'conferir', era });
-      continue;
-    }
-    if (velho) {
-      // o novo já está: o velho só sai
-      if (seco) plugins.push({ id: velho.id, antes: velho.version, publicado: null, depois: velho.version, acao: `desinstalaria (já tem ${id})` });
-      else {
-        const u = claude(['plugin', 'uninstall', velho.id, '--json', '-s', 'user'], LONGO_MS);
-        if (u.status !== 0) { falhou = true; plugins.push({ id: velho.id, antes: velho.version, publicado: null, depois: velho.version, acao: 'falhou', mensagem: u.err || `exit ${u.status}` }); }
-        else { atualizou = true; plugins.push({ id: velho.id, antes: velho.version, publicado: null, depois: null, acao: `desinstalado (já tem ${id})` }); }
-      }
-    }
+    if (trocarVelho(nome, id, publicado)) continue;
     for (const c of antes.filter((p) => p.id === id && p.scope === 'project')) {
       plugins.push({ id, antes: c.version, publicado, depois: c.version, acao: `não mexido (projeto ${c.projectPath ?? '?'})` });
     }
@@ -163,6 +174,7 @@ function main(argv) {
   // as instalações de qualquer escopo (o guia manda ligar estes por projeto), cada uma com o comando que a atualiza
   for (const nome of remotos) {
     const id = `${nome}@${MARKETPLACE}`;
+    if (trocarVelho(nome, id, null)) continue;
     const todas = antes.filter((p) => p.id === id);
     if (!todas.length) { plugins.push({ id, antes: null, publicado: null, depois: null, acao: 'não instalado' }); continue; }
     for (const c of todas) {
@@ -175,7 +187,8 @@ function main(argv) {
     for (const p of plugins.filter((x) => x.acao === 'conferir')) {
       p.depois = relidos.find((x) => x.id === p.id && x.scope === 'user')?.version ?? null;
       const { era } = p; delete p.era;
-      if (p.depois === p.publicado && era) { p.acao = `renomeado (${era})`; atualizou = true; continue; }
+      // o novo de origem remota não tem versão publicada no clone: basta ter entrado
+      if (era && (p.publicado === null ? p.depois !== null : p.depois === p.publicado)) { p.acao = `renomeado (${era})`; atualizou = true; continue; }
       if (p.depois === p.publicado) { p.acao = 'atualizado'; atualizou = true; continue; }
       p.acao = 'não pegou'; falhou = true;
       p.mensagem = p.depois === null ? `instalada sumiu da lista, publicada ${p.publicado}` : `instalada ficou em ${p.depois}, publicada ${p.publicado}`;
@@ -190,7 +203,7 @@ function main(argv) {
       const nome = p.id.split('@')[0].padEnd(larg);
       const quadro = p.acao === 'atualizado' ? `${p.antes} → ${p.depois}`
         : p.acao === 'atualizaria' ? `${p.antes} → ${p.publicado} (atualizaria)`
-        : /^renome(ado|aria) /.test(p.acao) ? `${p.antes} → ${p.acao.startsWith('renomeado') ? p.depois : p.publicado} (${p.acao.replace(' (', ': ').replace(/\)$/, '')})`
+        : /^renome(ado|aria) /.test(p.acao) ? `${p.antes} → ${p.acao.startsWith('renomeado') ? p.depois : p.publicado ?? 'origem remota'} (${p.acao.replace(' (', ': ').replace(/\)$/, '')})`
         : /^desinstal/.test(p.acao) ? `${p.antes} (${p.acao})`
         : p.acao === 'não pegou' ? `${p.antes} (não pegou: ${p.mensagem})`
         : p.acao === 'em dia' ? `${p.antes} (em dia)`

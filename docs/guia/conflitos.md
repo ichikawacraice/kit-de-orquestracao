@@ -33,7 +33,7 @@ Só as skills que quebram uma regra do kit, não as que apenas repetem. Em proje
 | `engineering:code-review` | `orquestracao:validador` | a revisão antes do PR é por subagente de contexto limpo, só com o que afeta correção |
 | `superpowers:requesting-code-review` | `orquestracao:validador` | idem |
 | `ponytail:ponytail-review` | `orquestracao:validador`, ou a via rápida da revisão no item pequeno | revisa na sessão de quem escreveu, fora do corte e do roteiro do kit |
-| `design:design-critique` | `kit-design:critico-de-ui` | a crítica que conta é a do subagente crítico, com nota de 0 a 30 e teto de recríticas |
+| `design:design-critique` | `design-system:critico-de-ui` | a crítica que conta é a do subagente crítico, com nota de 0 a 30 e teto de recríticas |
 
 Para liberar uma delas num projeto, ponha o nome em `skillsDeFora.liberar` do `.claude/kit.json`. Fora de projeto com o kit, nada é barrado.
 

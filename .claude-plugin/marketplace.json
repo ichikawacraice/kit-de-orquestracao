@@ -25,7 +25,7 @@
     {
       "name": "kit-design",
       "source": "./plugins/kit-design",
-      "description": "Processo de design: designer, crítico de UI e a guarda que cobra a crítica do trabalho visual. Sai do kit quando o design-system, o sucessor, ficar sem marca."
+      "description": "Sucedido pelo design-system: fica só até a troca. O atualizar-plugins troca na conta e o kit atualizar em cada projeto."
     },
     {
       "name": "kit-performance",
@@ -39,9 +39,9 @@
         "url": "https://github.com/wicomm-projects/wicomm-design-system.git",
         "path": "plugins/design-system",
         "ref": "main",
-        "sha": "2a6e5cdf6984cb9977265bc7ae88de45c2e89e43"
+        "sha": "e8b0b175998242174a0fd0dcbe401ce92ea5b46e"
       },
-      "description": "Design system para apps React: a base (direção de design, anatomia, convenções), o designer, o crítico com nota e a guarda que cobra a crítica. Sucessor do kit-design; a marca vem de um plugin de tema. Opcional: o kit iniciar não o liga."
+      "description": "Processo de design para apps React: a base (direção de design, anatomia, convenções), o designer, o crítico com nota e a guarda que cobra a crítica. Sucessor do kit-design; a marca vem de um plugin de tema."
     },
     {
       "name": "tema-wicomm",
@@ -50,9 +50,9 @@
         "url": "https://github.com/wicomm-projects/wicomm-design-system.git",
         "path": "plugins/tema-wicomm",
         "ref": "main",
-        "sha": "2a6e5cdf6984cb9977265bc7ae88de45c2e89e43"
+        "sha": "e8b0b175998242174a0fd0dcbe401ce92ea5b46e"
       },
-      "description": "O tema Wicomm para o design-system: a cor da marca, a fonte, o logotipo e o registro. Só nos projetos internos da Wicomm; o kit iniciar não o liga."
+      "description": "O tema Wicomm para o design-system: a cor da marca, a fonte, o logotipo e o registro. Só nos projetos internos da Wicomm, pelo design.tema do .claude/kit.json."
     }
   ],
   "description": "Ichikawa's Kit: plugins opcionais para orquestrar sessões do Claude Code — escolha os que for usar (marketplace privado)."

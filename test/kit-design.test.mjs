@@ -16,6 +16,8 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const KIT = join(RAIZ, 'cli', 'kit.mjs');
 const MKT = 'ichikawa-kit';
 const NOVO = `kit-design@${MKT}`;
+// F353: o design-system sucede o kit-design; o projeto termina nele
+const ATUAL = `design-system@${MKT}`;
 // o projeto de antes do F332 tinha o `design` no marketplace com o nome antigo (F344)
 const VELHO = 'design@kit-de-orquestracao';
 
@@ -84,13 +86,13 @@ describe('o nome velho continua lido', () => {
 });
 
 describe('kit iniciar e kit atualizar', () => {
-  it('kit iniciar liga kit-design e não design', () => {
+  it('kit iniciar liga o design-system (F353), não kit-design nem design', () => {
     const d = projeto();
     assert.equal(kit(d, 'iniciar').status, 0);
     const s = json(d, '.claude/settings.json');
-    assert.equal(s.enabledPlugins[NOVO], true);
+    assert.equal(s.enabledPlugins[ATUAL], true);
     assert.ok(!(VELHO in s.enabledPlugins));
-    assert.ok(json(d, '.claude/kit.lock.json').chaves.settings.plugins.includes(NOVO));
+    assert.ok(json(d, '.claude/kit.lock.json').chaves.settings.plugins.includes(ATUAL));
   });
 
   /** Um projeto instalado antes do F332: o settings e o lock com design@. */
@@ -98,25 +100,25 @@ describe('kit iniciar e kit atualizar', () => {
     const d = projeto();
     assert.equal(kit(d, 'iniciar').status, 0);
     const texto = ler(d, '.claude/settings.json');
-    assert.ok(texto.includes(`"${NOVO}": true`), 'precondição: o iniciar ligou o novo');
-    escrever(d, '.claude/settings.json', texto.replace(`"${NOVO}": true`, `"${VELHO}": ${valor}`));
+    assert.ok(texto.includes(`"${ATUAL}": true`), 'precondição: o iniciar ligou o design-system');
+    escrever(d, '.claude/settings.json', texto.replace(`"${ATUAL}": true`, `"${VELHO}": ${valor}`));
     const lock = json(d, '.claude/kit.lock.json');
-    lock.chaves.settings.plugins = lock.chaves.settings.plugins.map((n) => (n === NOVO ? VELHO : n));
+    lock.chaves.settings.plugins = lock.chaves.settings.plugins.map((n) => (n === ATUAL ? VELHO : n));
     escrever(d, '.claude/kit.lock.json', `${JSON.stringify(lock, null, 2)}\n`);
     return d;
   }
 
-  it('kit atualizar troca design@ por kit-design@ no settings e no lock, guardando o valor e a ordem', () => {
+  it('kit atualizar leva design@ até o design-system no settings e no lock, guardando o valor', () => {
     const d = projetoVelho();
     const r = kit(d, 'atualizar');
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /design@kit-de-orquestracao → kit-design@ichikawa-kit/);
     const s = json(d, '.claude/settings.json');
-    assert.equal(s.enabledPlugins[NOVO], true);
+    assert.equal(s.enabledPlugins[ATUAL], true);
     assert.ok(!(VELHO in s.enabledPlugins), 'o nome velho ficou');
-    assert.deepEqual(Object.keys(s.enabledPlugins).at(-1), NOVO, 'a chave fica no lugar da velha');
+    assert.deepEqual(Object.keys(s.enabledPlugins).at(-1), ATUAL, 'a chave fica no lugar da velha');
     const plugins = json(d, '.claude/kit.lock.json').chaves.settings.plugins;
-    assert.ok(plugins.includes(NOVO) && !plugins.includes(VELHO), plugins.join());
+    assert.ok(plugins.includes(ATUAL) && !plugins.includes(VELHO), plugins.join());
     // de novo: nada a trocar
     const r2 = kit(d, 'atualizar');
     assert.equal(r2.status, 0, r2.stdout + r2.stderr);
@@ -124,14 +126,14 @@ describe('kit iniciar e kit atualizar', () => {
     // e o remover tira o novo
     const rm = kit(d, 'remover');
     assert.equal(rm.status, 0, rm.stdout + rm.stderr);
-    assert.ok(!existsSync(join(d, '.claude', 'settings.json')) || !(NOVO in (json(d, '.claude/settings.json').enabledPlugins ?? {})), 'o remover não tirou o kit-design');
+    assert.ok(!existsSync(join(d, '.claude', 'settings.json')) || !(ATUAL in (json(d, '.claude/settings.json').enabledPlugins ?? {})), 'o remover não tirou o design-system');
   });
 
   it('kit atualizar guarda o false de quem desligou o plugin', () => {
     const d = projetoVelho(false);
     assert.equal(kit(d, 'atualizar').status, 0);
     const s = json(d, '.claude/settings.json');
-    assert.equal(s.enabledPlugins[NOVO], false);
+    assert.equal(s.enabledPlugins[ATUAL], false);
     assert.ok(!(VELHO in s.enabledPlugins));
   });
 
@@ -146,22 +148,22 @@ describe('kit iniciar e kit atualizar', () => {
 
   it('com os dois nomes no settings, o velho sai e o novo fica como está', () => {
     const d = projetoVelho(true);
-    const s0 = json(d, '.claude/settings.json'); s0.enabledPlugins[NOVO] = false;
+    const s0 = json(d, '.claude/settings.json'); s0.enabledPlugins[ATUAL] = false;
     escrever(d, '.claude/settings.json', JSON.stringify(s0, null, 2));
     assert.equal(kit(d, 'atualizar').status, 0);
     const s = json(d, '.claude/settings.json');
-    assert.equal(s.enabledPlugins[NOVO], false);
+    assert.equal(s.enabledPlugins[ATUAL], false);
     assert.ok(!(VELHO in s.enabledPlugins));
   });
 
-  it('kit doutor com kit-design desligado manda religar pelo nome novo; com o velho no settings, manda rodar o kit atualizar', () => {
+  it('kit doutor com o design-system desligado manda religar pelo nome novo; com o velho no settings, manda rodar o kit atualizar', () => {
     const d = projeto();
     assert.equal(kit(d, 'iniciar').status, 0);
-    const s = json(d, '.claude/settings.json'); s.enabledPlugins[NOVO] = false;
+    const s = json(d, '.claude/settings.json'); s.enabledPlugins[ATUAL] = false;
     escrever(d, '.claude/settings.json', JSON.stringify(s, null, 2));
     const out = kit(d, 'doutor').stdout;
-    assert.match(out, /plugin kit-design desligado/);
-    assert.match(out, /enabledPlugins "kit-design@ichikawa-kit": true/);
+    assert.match(out, /plugin design-system desligado/);
+    assert.match(out, /enabledPlugins "design-system@ichikawa-kit": true/);
     assert.doesNotMatch(out, /"design@kit-de-orquestracao": true/);
     const v = projetoVelho(false);
     assert.match(kit(v, 'doutor').stdout, /settings\.json ainda liga design@kit-de-orquestracao.*kit atualizar/);
@@ -169,11 +171,11 @@ describe('kit iniciar e kit atualizar', () => {
 
   it('chave nova posta pela pessoa (fora do lock) não entra no lock: o remover não a apaga', () => {
     const d = projetoVelho(true);
-    const s0 = json(d, '.claude/settings.json'); s0.enabledPlugins[NOVO] = true;
+    const s0 = json(d, '.claude/settings.json'); s0.enabledPlugins[ATUAL] = true;
     escrever(d, '.claude/settings.json', JSON.stringify(s0, null, 2));
     assert.equal(kit(d, 'atualizar').status, 0);
     const plugins = json(d, '.claude/kit.lock.json').chaves.settings.plugins;
-    assert.ok(!plugins.includes(NOVO) && !plugins.includes(VELHO), plugins.join());
+    assert.ok(!plugins.includes(ATUAL) && !plugins.includes(VELHO), plugins.join());
   });
 
   it('settings.json ilegível não vira conflito do atualizar (ele não é do atualizar)', () => {

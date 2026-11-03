@@ -31,10 +31,11 @@ export function lerSettings(caminho) {
 export const pastaDeConfig = (home = homedir(), env = process.env) => (env?.CLAUDE_CONFIG_DIR ? env.CLAUDE_CONFIG_DIR : join(home, ".claude"));
 
 /**
- * Os nomes que um plugin do kit já teve (F332: o `design` virou `kit-design`, porque o `design` da Anthropic o ofuscava). A conta
+ * Os nomes que um plugin do kit já teve (F332: o `design` virou `kit-design`, porque o `design` da Anthropic o ofuscava; F353: o
+ * `design-system` sucede o `kit-design`). A conta
  * e o projeto que ainda não migraram guardam opção e liga/desliga sob o nome velho: ele vale enquanto o novo não diz nada.
  */
-export const NOMES_ANTIGOS = Object.freeze({ "kit-design": Object.freeze(["design"]) });
+export const NOMES_ANTIGOS = Object.freeze({ "kit-design": Object.freeze(["design"]), "design-system": Object.freeze(["kit-design", "design"]) });
 const idsDe = (plugin) => [MARKETPLACE_DO_KIT, MARKETPLACE_ANTIGO_DO_KIT].flatMap((m) => [plugin, ...(NOMES_ANTIGOS[plugin] ?? [])].map((n) => `${n}@${m}`));
 
 /** As opções gravadas para o plugin do kit (`{}` sem nada gravado); as do nome velho valem quando o novo não tem nenhuma. */

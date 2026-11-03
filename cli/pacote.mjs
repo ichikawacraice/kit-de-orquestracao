@@ -6,7 +6,7 @@ import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { LOCK, blocosDe, sha256 } from './lock.mjs';
-import { aplicarDesligados } from './plugins-do-projeto.mjs';
+import { TEMA_DO_KIT, aplicarDesligados, aplicarTema } from './plugins-do-projeto.mjs';
 
 export const RAIZ_DO_KIT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MARKETPLACE = 'ichikawa-kit';
@@ -19,15 +19,48 @@ export const MARKETPLACE_ANTIGO = 'kit-de-orquestracao';
 export const ehDoKit = (id) => [MARKETPLACE, MARKETPLACE_ANTIGO].some((m) => String(id).endsWith(`@${m}`));
 export const PLUGIN = `orquestracao@${MARKETPLACE}`;
 /** Os plugins do kit que o projeto liga em `enabledPlugins`, na ordem em que entram. */
-export const PLUGINS_DO_KIT = [PLUGIN, `painel-sessoes@${MARKETPLACE}`, `processos@${MARKETPLACE}`, `kit-design@${MARKETPLACE}`];
+export const PLUGINS_DO_KIT = [PLUGIN, `painel-sessoes@${MARKETPLACE}`, `processos@${MARKETPLACE}`, `design-system@${MARKETPLACE}`];
 /**
  * Id do kit que mudou: velho → novo. O `design` virou `kit-design` (F332: o `design` da Anthropic ofuscava o do kit) e o
  * marketplace virou `ichikawa-kit` (F344). O `kit atualizar` troca a chave.
  */
 export const PLUGINS_RENOMEADOS = {
   [`design@${MARKETPLACE_ANTIGO}`]: `kit-design@${MARKETPLACE}`,
+  [`kit-design@${MARKETPLACE_ANTIGO}`]: `kit-design@${MARKETPLACE}`,
   ...Object.fromEntries(PLUGINS_DO_KIT.map((id) => [id.replace(`@${MARKETPLACE}`, `@${MARKETPLACE_ANTIGO}`), id])),
 };
+/**
+ * Plugin do kit que outro sucede (F353: o `design-system` no lugar do `kit-design`): velho → novo. Diferente do renomeado, o velho
+ * fica `false` no projeto em vez de sair, porque a conta pode ainda tê-lo ligado até o `atualizar-plugins` fazer a troca nela.
+ */
+export const SUCESSORES = { [`kit-design@${MARKETPLACE}`]: `design-system@${MARKETPLACE}` };
+/**
+ * Passa no settings `s` (mutado) o valor de cada plugin sucedido ao sucessor (se o sucessor ainda não está) e deixa o velho `false`.
+ * O sucessor declarado por outro marketplace é conflito e nada muda. → `{ trocas, conflitos, pares: [{ velho, novo, novoJaEstava }] }`.
+ */
+export function sucederPlugins(s) {
+  const trocas = []; const conflitos = []; const pares = [];
+  const ligados = s?.enabledPlugins;
+  if (!ehObjeto(ligados)) return { trocas, conflitos, pares };
+  for (const [velho, novo] of Object.entries(SUCESSORES)) {
+    if (!(velho in ligados) || (ligados[velho] === false && novo in ligados)) continue;
+    const nome = novo.split('@')[0];
+    const outro = Object.keys(ligados).find((k) => k.split('@')[0] === nome && k !== novo);
+    if (outro) { conflitos.push(`enabledPlugins.${outro}: o ${nome} já vem de outro marketplace — não troquei ${velho} por ${novo}`); continue; }
+    const novoJaEstava = novo in ligados;
+    if (!novoJaEstava) ligados[novo] = ligados[velho];
+    ligados[velho] = false;
+    pares.push({ velho, novo, novoJaEstava });
+    trocas.push(novoJaEstava ? `${velho} desligado (${novo} já estava lá)` : `plugin ${velho} → ${novo} no enabledPlugins (o velho fica false)`);
+  }
+  return { trocas, conflitos, pares };
+}
+/** O kit.json com `plugins.desligar` estendido aos sucessores: o perfil que desliga o `kit-design` desliga o `design-system`. */
+export function perfilComSucessores(kj) {
+  const lista = kj?.plugins?.desligar;
+  if (!Array.isArray(lista) || !lista.some((id) => id in SUCESSORES)) return kj;
+  return { ...kj, plugins: { ...kj.plugins, desligar: [...new Set(lista.flatMap((id) => (id in SUCESSORES ? [id, SUCESSORES[id]] : [id])))] } };
+}
 /** O Impeccable: só entra com `--design` (recomendação, não dependência), com as envs que cortam telemetria e checagem de versão. */
 export const IMPECCABLE = { marketplace: 'impeccable', plugin: 'impeccable@impeccable', origem: { source: { source: 'github', repo: 'pbakaus/impeccable' } }, env: { IMPECCABLE_NO_TELEMETRY: '1', IMPECCABLE_NO_UPDATE_CHECK: '1' } };
 /**
@@ -215,7 +248,7 @@ function soDoKit(v) {
     && (v.hooks === undefined || (chaves(v.hooks).join() === 'PreToolUse' && pre.length === 1 && pre[0].hooks?.length === 1 && pre[0].hooks[0].command === HOOK_GUARDA))
     && chaves(v.extraKnownMarketplaces).every((n) => [MARKETPLACE, MARKETPLACE_ANTIGO, IMPECCABLE.marketplace].includes(n))
     && chaves(v.env).every((n) => n in IMPECCABLE.env)
-    && chaves(v.enabledPlugins).every((n) => [...PLUGINS_DO_KIT, ...Object.keys(PLUGINS_RENOMEADOS), IMPECCABLE.plugin].includes(n));
+    && chaves(v.enabledPlugins).every((n) => [...PLUGINS_DO_KIT, ...Object.keys(PLUGINS_RENOMEADOS), ...Object.keys(SUCESSORES), IMPECCABLE.plugin].includes(n) || TEMA_DO_KIT.test(n));
 }
 
 
@@ -488,16 +521,24 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     s.enabledPlugins = { ...(s.enabledPlugins ?? {}) };
     // o perfil de plugins do kit.json que o projeto já tem (F347): o que ele desliga entra como false
     let kjDoProjeto = {}; try { kjDoProjeto = JSON.parse(semBom(lerTexto(destino, '.claude/kit.json') ?? '{}')) ?? {}; } catch { /* ilegível: o kit.json acusa abaixo */ }
-    const perfil = aplicarDesligados(s, kjDoProjeto, { recuperando });
-    if (perfil.desligados.length) cs.desligados = perfil.desligados;
+    // o projeto que já liga o kit-design passa ao design-system (F353), como no kit atualizar; o valor que ele tinha é da pessoa
+    const suc = sucederPlugins(s);
+    conflitos.push(...suc.conflitos);
+    const perfil = aplicarDesligados(s, perfilComSucessores(kjDoProjeto), { recuperando });
+    cs.desligados = [...new Set([...perfil.desligados, ...suc.pares.map((p) => p.velho)])];
+    if (!cs.desligados.length) delete cs.desligados;
     conflitos.push(...perfil.conflitos);
     avisosDoProjeto.push(...perfil.avisos, ...perfil.desligados.map((id) => `o perfil do .claude/kit.json desliga ${id} neste projeto (enabledPlugins false)`));
     for (const nome of PLUGINS_DO_KIT) {
-      if (cs.desligados?.includes(nome)) continue; // o perfil do projeto o desliga
+      if (cs.desligados?.includes(nome) || suc.pares.some((p) => p.novo === nome)) continue; // o perfil do projeto o desliga, ou veio do sucedido
       if (!(nome in s.enabledPlugins)) { s.enabledPlugins[nome] = true; cs.plugins.push(nome); }
       else if (s.enabledPlugins[nome] !== true) conflitos.push(`enabledPlugins.${nome} já é ${JSON.stringify(s.enabledPlugins[nome])} — não troquei`);
       else if (recuperando) cs.plugins.push(nome);
     }
+    // o tema que o kit.json pede (F353): só no projeto, nunca na conta
+    const tema = aplicarTema(s, kjDoProjeto);
+    if (tema.ligado || (recuperando && tema.id && s.enabledPlugins[tema.id] === true)) cs.plugins.push(tema.id);
+    avisosDoProjeto.push(...tema.avisos);
     if (design) {
       // o Impeccable é recomendação: o que o projeto já declara fica como está (e fora do lock, logo o remover não o toca)
       s.extraKnownMarketplaces = { ...s.extraKnownMarketplaces };
