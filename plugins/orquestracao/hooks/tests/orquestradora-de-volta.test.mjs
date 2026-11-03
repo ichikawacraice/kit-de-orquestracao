@@ -131,3 +131,24 @@ test('orquestradora que volta com a fila do projeto órfã recebe o aviso e o co
   assert.match(t, /fila de merge deste projeto está sem processo/);
   assert.ok(t.includes("painel fila-de-merge 1307:a9f034d309a1546d29c807ea54ce3dc87cf919b2 1308 --gate 'pnpm test'"), t.slice(0, 1500));
 });
+
+// F351: o estado do projeto gira antes do "Ao assumir": as seções datadas antigas vão ao arquivo morto, a mais nova fica.
+test('orquestradora que volta: o arquivo de estado do projeto gira e o aviso diz onde está o morto; a outra sessão não gira', () => {
+  const estado = join(base, 'orq', 'Kit.md');
+  const texto = '# Kit\n\n## PRs abertos\n- #1\n\n## Retomar daqui (01/11)\nvelho\n\n## Retomar daqui (02/11)\nnovo\n';
+  writeFileSync(estado, texto);
+  registro(LOCAL, { title: 'qualquer título', cliSessionId: 'cli-novo' });
+  const fora = inicio('cli-novo');
+  assert.ok(!fora.includes(ORDEM), 'precondição: não é a orquestradora');
+  assert.equal(readFileSync(estado, 'utf8'), texto, 'sessão que não é a orquestradora não mexe no estado');
+  registro(LOCAL, { title: '🎛 orquestradora — kit', cliSessionId: 'cli-novo' });
+  const t = inicio('cli-novo');
+  assert.ok(t.includes(ORDEM));
+  const vivo = readFileSync(estado, 'utf8');
+  assert.ok(vivo.includes('## PRs abertos') && vivo.includes('novo'), vivo);
+  assert.ok(!vivo.includes('velho'), vivo);
+  assert.match(t, /Kit\.md` girou/);
+  assert.match(t, /arquivo-morto\/Kit\/\d{4}-\d{2}\.md/);
+  const segunda = inicio('cli-novo');
+  assert.doesNotMatch(segunda, /girou/, 'sem nada a mover, sem aviso');
+});

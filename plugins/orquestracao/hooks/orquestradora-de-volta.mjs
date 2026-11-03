@@ -6,10 +6,13 @@
 // apaga os das ids que ela deixou para trás e devolve a ordem para o additionalContext. Quem chama engole qualquer erro.
 // F220: a limpeza também mata a fila de merge que rodava em segundo plano; a fila do projeto órfã entra no aviso, com a
 // chamada que a retoma.
+// F351: o arquivo de estado do projeto (`<BASE>/<repo>.md`) gira aqui, antes do "Ao assumir" lê-lo: as seções datadas antigas
+// vão ao arquivo morto (estado-girar.mjs) e a orquestradora lê só o vivo.
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BASE, registroDaSessao, gitCommonDir, projetoDaSessao } from './pool-comum.mjs';
 import { comandoDeRelance, lerFilaOrfa } from '../skills/orquestradora/scripts/fila-orfa.mjs';
+import { girarArquivo } from '../skills/orquestradora/scripts/estado-girar.mjs';
 
 const ID_SEGURO = /^[\w-]+$/; // o session_id vira nome de arquivo em ativas/
 
@@ -34,6 +37,19 @@ function avisoDaFila(reg) {
       `**A fila de merge deste projeto está sem processo** (ocupada desde ${orfa.desde ?? '?'}; a limpeza de contexto mata a fila que roda em segundo plano): ${orfa.prs.map((p) => `#${p.pr}`).join(', ')} ficaram anotados e ninguém os leva.`,
       `Depois de carregar a skill, relance em segundo plano (run_in_background): \`${comandoDeRelance(orfa)}\`.`,
     ].join(' ');
+  } catch { return ''; }
+}
+
+// O `<repo>.md` do projeto: o nome do arquivo é o do repositório, com a caixa que a orquestradora escolheu (Luna.md, izanagi.md).
+function giroDoEstado(reg) {
+  try {
+    const nome = projetoDaSessao(reg)?.nome;
+    if (!nome) return '';
+    const arq = readdirSync(BASE).find((n) => n.endsWith('.md') && n.slice(0, -3).toLowerCase() === nome);
+    if (!arq) return '';
+    const g = girarArquivo(join(BASE, arq));
+    if (!g.movidas.length && !g.entregasMovidas) return '';
+    return `O arquivo de estado \`${arq}\` girou (${Math.round(g.antes / 1024)} → ${Math.round(g.depois / 1024)} KB): ${g.movidas.length} seção(ões) datada(s) antiga(s)${g.entregasMovidas ? ` e ${g.entregasMovidas} entrega(s) antiga(s)` : ''} foram para \`${g.morto}\`; leia só o vivo e busque no morto com grep quando precisar.`;
   } catch { return ''; }
 }
 
@@ -64,6 +80,7 @@ export function orquestradoraDeVolta({ sessionId, localId, cwd }) {
     'O contexto desta sessão começou agora (abertura, limpeza ou compactação), mas o papel continua. **Antes de qualquer outra coisa** — inclusive antes de responder ao pedido que abriu este turno —, carregue a skill `orquestracao:orquestradora` e cumpra o "Ao assumir". Pedido de código ou de mudança que chegar vira item com sessão dona, não edição aqui.',
     `O marcador \`ativas/${sessionId}\` já foi recriado por este hook${apagados.length ? ` (saíram os das ids anteriores: ${apagados.join(', ')})` : ''}: as travas da orquestradora valem desde já.`,
     avisoDaFila(reg),
+    giroDoEstado(reg),
   ].filter((l, i) => i < 3 || l).join('\n');
   return { texto, marcador, apagados };
 }
