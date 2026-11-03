@@ -1,6 +1,6 @@
 // F350: o design system da empresa entra no marketplace do kit como dois plugins opcionais, vindos do repositório dela por
 // git-subdir num commit fixo: o `design-system` (genérico, o sucessor do `kit-design`) e o `tema-wicomm` (a marca). O kit não
-// os traz para este repositório, o `kit iniciar` não os liga e a trava lê o `design-system:` como prefixo do kit.
+// os traz para este repositório, o `kit iniciar` liga só o `design-system` (F353) e a trava lê o `design-system:` como prefixo do kit.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -42,9 +42,10 @@ describe('o marketplace lista o design system da empresa', () => {
     assert.ok(m.plugins.filter((p) => typeof p.source === 'string').every((p) => !NOMES.includes(p.name)));
   });
 
-  it('kit iniciar não os liga (opcionais)', () => {
+  it('kit iniciar liga o design-system (F353: sucede o kit-design) e não o tema', () => {
     assert.ok(PLUGINS_DO_KIT.length >= 3, `precondição: lista lida: ${PLUGINS_DO_KIT}`);
-    for (const nome of NOMES) assert.ok(!PLUGINS_DO_KIT.some((id) => id.startsWith(`${nome}@`)), nome);
+    assert.ok(PLUGINS_DO_KIT.includes('design-system@ichikawa-kit'), PLUGINS_DO_KIT.join());
+    assert.ok(!PLUGINS_DO_KIT.some((id) => id.startsWith('tema-')), PLUGINS_DO_KIT.join());
   });
 });
 

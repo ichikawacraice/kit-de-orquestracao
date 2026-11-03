@@ -4,9 +4,9 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { pastaDeConfig, pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { diffTexto } from './diff.mjs';
-import { aplicarDesligados } from './plugins-do-projeto.mjs';
+import { aplicarDesligados, aplicarTema } from './plugins-do-projeto.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, RAIZ_DO_KIT, REPO_DO_KIT, idNovoDe, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
+import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, SUCESSORES, RAIZ_DO_KIT, perfilComSucessores, sucederPlugins, sucessorInstalado, REPO_DO_KIT, idNovoDe, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -98,6 +98,13 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
     const pendentes = copia ? trocarNomesDoKit(copia) : [];
     if (pendentes.length && !contaMigrada) linhas.push(`aviso: o .claude/settings.json usa o nome antigo do marketplace (${MARKETPLACE_ANTIGO}), e esta máquina ainda não migrou: rode \`npx -y github:${REPO_DO_KIT} migrar-marketplace\` (ele troca também este projeto) e depois o kit atualizar`);
     const trocas = s && contaMigrada ? trocarNomesDoKit(s) : [];
+    // F353: o design-system sucede o kit-design (depois do nome do marketplace: o `kit-design@` antigo chega ao novo e daí ao sucessor)
+    // só com o sucessor instalado para o projeto: antes disso, o velho desligado aqui deixaria o projeto sem guarda de design
+    const faltam = Object.entries(SUCESSORES).filter(([velho, novo]) => s?.enabledPlugins?.[velho] === true && s.enabledPlugins[novo] !== false && !sucessorInstalado(destino, novo));
+    for (const [velho, novo] of faltam) linhas.push(`aviso: ${velho} tem sucessor, ${novo}, que esta máquina ainda não instalou: rode o atualizar-plugins na conta (ou, só neste projeto, \`claude plugin install ${novo} --scope project\`) e depois o kit atualizar`);
+    const suc = s && !faltam.length ? sucederPlugins(s) : { trocas: [], conflitos: [], pares: [] };
+    for (const c of suc.conflitos) conflito(c);
+    trocas.push(...suc.trocas);
     if (trocas.length) {
       for (const t of trocas) linhas.push(`trocado: ${t} (.claude/settings.json)`);
       const base = mudancas.find((m) => m.arquivo === '.claude/settings.json');
@@ -108,10 +115,20 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
       // a chave nova que já estava não foi o kit que pôs: o lock larga a velha e não a toma (o remover não apaga o que é da pessoa)
       if (Array.isArray(cs?.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => (!idNovoDe(n) ? [n] : idNovoDe(n) in ligados ? [] : [idNovoDe(n)])))];
     }
+    if (suc.pares.length && (lock.chaves ??= {}).settings) {
+      const cs = lock.chaves.settings;
+      // o sucessor entra no lock no lugar do velho que o kit pôs (o que já estava é da pessoa); o false do velho é do kit
+      if (Array.isArray(cs.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => { const p = suc.pares.find((x) => x.velho === n); return !p ? [n] : p.novoJaEstava ? [] : [p.novo]; }))];
+      // o false do velho é do kit, e o do sucessor quando ele o recebeu do velho desligado (o remover tira os dois)
+      cs.desligados = [...new Set([...(cs.desligados ?? []), ...suc.pares.flatMap((p) => (!p.novoJaEstava && s.enabledPlugins[p.novo] === false ? [p.velho, p.novo] : [p.velho]))])];
+    }
   }
   const local = lerTexto(destino, '.claude/settings.local.json');
   if (local !== null) {
     let l = null; try { l = JSON.parse(semBom(local)); } catch { /* ilegível: não é do kit */ }
+    for (const [velho, novo] of Object.entries(SUCESSORES)) {
+      if (l?.enabledPlugins?.[velho] === true) linhas.push(`aviso: o .claude/settings.local.json ainda liga ${velho}; o sucessor é ${novo} — troque à mão (o kit não mexe no seu settings.local.json)`);
+    }
     for (const [velho, novo] of Object.entries(PLUGINS_RENOMEADOS)) {
       if (l?.enabledPlugins && velho in l.enabledPlugins) linhas.push(`aviso: o .claude/settings.local.json ainda tem ${velho}; o plugin agora se chama ${novo} — troque a chave à mão (o kit não mexe no seu settings.local.json)`);
     }
@@ -119,16 +136,23 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
   }
 }
 
-/** O perfil de plugins do kit.json (F347): o que `plugins.desligar` pede e o settings do projeto ainda não diz entra como false. */
+/** O perfil de plugins do kit.json (F347): o que `plugins.desligar` pede e o settings do projeto ainda não diz entra como false; e o tema de `design.tema` (F353) entra como true. */
 function desligarDoPerfil({ destino, lock, mudancas, linhas, conflito, kitJson }) {
   const base = mudancas.find((m) => m.arquivo === '.claude/settings.json');
   const texto = base ? base.novo : lerTexto(destino, '.claude/settings.json');
   let s = {}; try { s = texto === null ? {} : JSON.parse(semBom(texto)); } catch { return; } // ilegível: o doutor acusa
   const cs = (lock.chaves ??= {}).settings ??= {};
-  const r = aplicarDesligados(s, kitJson, { doKit: cs.plugins ?? [] });
+  const r = aplicarDesligados(s, perfilComSucessores(kitJson), { doKit: cs.plugins ?? [] });
   for (const a of r.avisos) linhas.push(`aviso: ${a}`);
   for (const c of r.conflitos) conflito(c);
-  if (!r.desligados.length) return;
+  // o tema que o kit.json pede (F353), no mesmo settings
+  const tema = aplicarTema(s, kitJson);
+  for (const a of tema.avisos) linhas.push(`aviso: ${a}`);
+  if (tema.ligado) {
+    linhas.push(`ligado: ${tema.id} (.claude/settings.json, pelo design.tema do kit.json)`);
+    cs.plugins = [...(cs.plugins ?? []), tema.id];
+  }
+  if (!r.desligados.length && !tema.ligado) return;
   for (const id of r.desligados) linhas.push(`desligado: ${id} (.claude/settings.json, pelo perfil do kit.json)`);
   const novo = serializar(s, texto);
   if (base) base.novo = novo; else mudancas.push({ arquivo: '.claude/settings.json', antigo: texto, novo });

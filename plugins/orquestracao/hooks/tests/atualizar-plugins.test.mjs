@@ -41,8 +41,11 @@ else if (a[1] === 'marketplace' && a[2] === 'update') {
 } else if (a[1] === 'install') {
   const id = a[2];
   if (process.env.FAKE_FALHA === id) { process.stderr.write('boom ' + id + '\\n'); process.exit(1); }
+  if (process.env.FAKE_INSTALA_NADA === id) { process.stdout.write(JSON.stringify({ outcome: 'ok' }) + '\\n'); process.exit(0); }
   const nome = id.split('@')[0];
-  const pub = JSON.parse(fs.readFileSync(process.env.FAKE_CLONE + '/plugins/' + nome + '/.claude-plugin/plugin.json', 'utf8')).version;
+  // origem remota (git-subdir): o manifesto não mora no clone; a versão vem do repositório de lá
+  const arq = process.env.FAKE_CLONE + '/plugins/' + nome + '/.claude-plugin/plugin.json';
+  const pub = fs.existsSync(arq) ? JSON.parse(fs.readFileSync(arq, 'utf8')).version : '0.9.0';
   const e = est();
   e.installed.push({ id, version: pub, scope: a[a.indexOf('-s') + 1], enabled: true });
   fs.writeFileSync(process.env.FAKE_ESTADO, JSON.stringify(e));
@@ -351,6 +354,138 @@ test('F332: o novo já instalado: só desinstala o velho; cópia project do velh
     assert.ok(proj, r.out);
     assert.match(proj.acao, /kit atualizar/);
     assert.ok(c.estado().some((x) => x.id === `design@${MP}` && x.scope === 'project'));
+  } finally { limpar(c); }
+});
+
+// F353: o `design-system` (origem remota) sucede o `kit-design`, que segue publicado como apontador até a troca rodar. Quem tem
+// o velho no escopo user ganha o novo com as opções e o liga/desliga dele, e só então o velho sai.
+const SUCEDIDO = { orquestracao: '0.1.2', 'kit-design': '0.2.0' };
+const publicarSucessor = (c) => c.publicar(SUCEDIDO, ['design-system', 'tema-wicomm']);
+
+test('F353: kit-design no escopo user: instala o design-system com as opções do velho e só então desinstala o velho', () => {
+  const c = montar(SUCEDIDO, [inst('orquestracao', '0.1.2'), inst('kit-design', '0.2.0')]);
+  try {
+    publicarSucessor(c);
+    c.settings({ pluginConfigs: { [`kit-design@${MP}`]: { options: { guarda: false, pasta_do_front: 'web', saiu_do_manifesto: true } } } });
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const ch = c.chamadas().filter((x) => ['install', 'uninstall', 'disable', 'update'].includes(x[1]));
+    assert.deepEqual(ch.map((x) => `${x[1]} ${x[2]}`), [`install design-system@${MP}`, `uninstall kit-design@${MP}`], 'o novo entra antes de o velho sair; nada de update');
+    const configs = ch[0].flatMap((x, i) => (x === '--config' ? [ch[0][i + 1]] : [])).sort();
+    assert.deepEqual(configs, ['guarda=false', 'pasta_do_front=web'], 'as opções do velho que o manifesto dele declara');
+    const s = JSON.parse(r.out);
+    const p = achar(s, 'design-system');
+    assert.ok(p, r.out);
+    assert.deepEqual([p.antes, p.depois], ['0.2.0', '0.9.0']);
+    assert.equal(p.acao, `renomeado (era kit-design@${MP})`);
+    assert.equal(s.reiniciar, true);
+    assert.ok(!achar(s, 'kit-design'), `o velho não aparece como linha própria: ${r.out}`);
+    assert.ok(!c.estado().some((x) => x.id === `kit-design@${MP}`), 'o velho ficou');
+    assert.match(c.rodar([]).out, /design-system\s+0\.9\.0 \(origem remota/, 'a segunda vez é só a linha remota');
+  } finally { limpar(c); }
+});
+
+test('F353: --seco diz que trocaria, sem install nem uninstall', () => {
+  const c = montar(SUCEDIDO, [inst('kit-design', '0.2.0')]);
+  try {
+    publicarSucessor(c);
+    const r = c.rodar(['--seco', '--json']);
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.equal(achar(JSON.parse(r.out), 'design-system').acao, `renomearia (era kit-design@${MP})`);
+    assert.ok(!c.chamadas().some((x) => ['install', 'uninstall', 'disable'].includes(x[1])));
+    const txt = c.rodar(['--seco']).out;
+    assert.match(txt, /design-system\s+0\.2\.0 → origem remota \(renomearia: era kit-design@ichikawa-kit\)/);
+    assert.match(txt, /Rode sem --seco para atualizar\./);
+  } finally { limpar(c); }
+});
+
+test('F353: kit-design desligado na conta: o design-system entra desligado', () => {
+  const c = montar(SUCEDIDO, [inst('kit-design', '0.2.0')]);
+  try {
+    publicarSucessor(c);
+    c.settings({ enabledPlugins: { [`kit-design@${MP}`]: false } });
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const ch = c.chamadas().filter((x) => ['install', 'uninstall', 'disable'].includes(x[1]));
+    assert.deepEqual(ch.map((x) => `${x[1]} ${x[2]}`), [`install design-system@${MP}`, `disable design-system@${MP}`, `uninstall kit-design@${MP}`]);
+  } finally { limpar(c); }
+});
+
+test('F353: install do design-system falha: o kit-design fica, falhou, exit 1', () => {
+  const c = montar(SUCEDIDO, [inst('kit-design', '0.2.0')]);
+  try {
+    publicarSucessor(c);
+    const r = c.rodar(['--json'], { FAKE_FALHA: `design-system@${MP}` });
+    assert.equal(r.exit, 1, r.err + r.out);
+    assert.equal(achar(JSON.parse(r.out), 'design-system').acao, 'falhou');
+    assert.ok(c.estado().some((x) => x.id === `kit-design@${MP}`), 'o velho saiu sem o novo');
+  } finally { limpar(c); }
+});
+
+test('F353: install do design-system sai 0 sem entrar na lista: o kit-design fica, falhou, exit 1', () => {
+  const c = montar(SUCEDIDO, [inst('orquestracao', '0.1.2'), inst('kit-design', '0.2.0')]);
+  try {
+    publicarSucessor(c);
+    const r = c.rodar(['--json'], { FAKE_INSTALA_NADA: `design-system@${MP}` });
+    assert.equal(r.exit, 1, r.err + r.out);
+    const p = achar(JSON.parse(r.out), 'design-system');
+    assert.equal(p.acao, 'falhou', r.out);
+    assert.match(p.mensagem, /não está na lista/);
+    assert.ok(!c.chamadas().some((x) => x[1] === 'uninstall'), 'desinstalou o velho sem o novo');
+    assert.ok(c.estado().some((x) => x.id === `kit-design@${MP}`));
+  } finally { limpar(c); }
+});
+
+test('F353: conta com o design de antes do F332 chega direto ao design-system', () => {
+  const c = montar(SUCEDIDO, [inst('design', '0.0.7')]);
+  try {
+    publicarSucessor(c);
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const ch = c.chamadas().filter((x) => ['install', 'uninstall', 'disable'].includes(x[1]));
+    assert.deepEqual(ch.map((x) => `${x[1]} ${x[2]}`), [`install design-system@${MP}`, `uninstall design@${MP}`]);
+    assert.equal(achar(JSON.parse(r.out), 'design-system').acao, `renomeado (era design@${MP})`);
+  } finally { limpar(c); }
+});
+
+test('F353: design e kit-design na conta: troca um e tira o outro, sempre com o novo dentro antes', () => {
+  const c = montar(SUCEDIDO, [inst('design', '0.0.7'), inst('kit-design', '0.2.0')]);
+  try {
+    publicarSucessor(c);
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const ch = c.chamadas().filter((x) => ['install', 'uninstall'].includes(x[1]));
+    assert.equal(ch.filter((x) => x[1] === 'install').length, 1, JSON.stringify(ch));
+    assert.equal(ch[0][1], 'install', 'o install vem antes de qualquer uninstall');
+    assert.deepEqual(c.estado().map((x) => x.id), [`design-system@${MP}`]);
+  } finally { limpar(c); }
+});
+
+test('F353: design-system já na conta: só desinstala o kit-design; a cópia project do velho pede o kit atualizar', () => {
+  const c = montar(SUCEDIDO, [inst('design-system', '0.9.0'), inst('kit-design', '0.2.0'), inst('kit-design', '0.2.0', { scope: 'project', projectPath: '/x/loja' })]);
+  try {
+    publicarSucessor(c);
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const ch = c.chamadas().filter((x) => ['install', 'uninstall', 'disable'].includes(x[1]));
+    assert.deepEqual(ch.map((x) => `${x[1]} ${x[2]} ${x[x.indexOf('-s') + 1]}`), [`uninstall kit-design@${MP} user`]);
+    const s = JSON.parse(r.out);
+    assert.match(s.plugins.find((p) => p.id === `kit-design@${MP}` && p.acao.startsWith('não mexido'))?.acao ?? r.out, /design-system@ichikawa-kit: rode kit atualizar/);
+    assert.match(achar(s, 'design-system', 'origem remota')?.acao ?? r.out, /^origem remota/);
+  } finally { limpar(c); }
+});
+
+test('F353: conta sem kit-design: nenhuma linha dele, e o design-system não se instala sozinho', () => {
+  const c = montar(SUCEDIDO, [inst('orquestracao', '0.1.2')]);
+  try {
+    publicarSucessor(c);
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.ok(s.plugins.length >= 2, `precondição: lista lida: ${r.out}`);
+    assert.ok(!achar(s, 'kit-design'), r.out);
+    assert.equal(achar(s, 'design-system').acao, 'não instalado');
+    assert.ok(!c.chamadas().some((x) => x[1] === 'install'));
   } finally { limpar(c); }
 });
 

@@ -13,10 +13,9 @@ Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perd
 | Plugin `orquestracao` | O núcleo: as travas (hooks), as skills da orquestradora e da dona, os agentes `validador` e `explorador`, e os comandos `painel`, `proximo-item`, `proxima-pergunta`, `testes-afetados`, `subir-versao` e `atualizar-plugins` |
 | Plugin `painel-sessoes` | O pane `/painel`, a barra de status acima do prompt e a batida que confere a fila a cada 10 min |
 | Plugin `processos` | Skills de processo (`spec-driven`, `revisar-diff`, `auditoria-de-clique`) e a conferência das docs no gate |
-| Plugin `kit-design` | Para projeto com tela: revisão de arquitetura de UI antes, crítico de UI depois, e a guarda que cobra a crítica. O `design-system` é o sucessor; o `kit-design` sai quando a base dele ficar sem marca |
 | Plugin `kit-performance` | Opcional, não vem ligado: as práticas de performance por camada (front, dados, entrega, medir), cada uma com quando vale e quando não vale, e o agente `revisor-de-performance` |
-| Plugin `design-system` | Opcional, vem do repositório da empresa (privado): o design system para apps React — a base (direção, anatomia, convenções), o designer, o crítico com nota e a guarda. Genérico: a marca vem de um plugin de tema ([como ligar](docs/guia/ligar-e-desligar.md#design-system)) |
-| Plugin `tema-wicomm` | Opcional, só nos projetos internos da empresa: o tema dela para o `design-system` (cor, fonte, logotipo, registro). Trocar as cores é trocar o plugin de tema |
+| Plugin `design-system` | O processo de design, para projeto com tela: a base (direção, anatomia, convenções), a revisão de arquitetura de UI antes, o crítico com nota depois e a guarda que cobra a crítica. Vem do repositório da empresa (privado); sem marca, que vem de um plugin de tema ([como ligar](docs/guia/ligar-e-desligar.md#design-system)). Sucede o `kit-design` |
+| Plugin `tema-wicomm` | Só nos projetos internos da empresa, pelo `design.tema` do `.claude/kit.json`: o tema dela para o `design-system` (cor, fonte, logotipo, registro). Trocar as cores é trocar o plugin de tema |
 | CLI `kit` | Põe o kit num projeto: gate de testes, guarda de operação, `CLAUDE.md` com as regras e `.claude/kit.json` |
 
 ## Requisitos
@@ -34,7 +33,7 @@ Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perd
    ```bash
    claude plugin install orquestracao@ichikawa-kit
    ```
-   Repita o `install` para `painel-sessoes`, `processos` e `kit-design`: o passo 2 liga os quatro no projeto. Os dois últimos se desligam por projeto, sem desinstalar ([o que ligar e desligar](docs/guia/ligar-e-desligar.md)).
+   Repita o `install` para `painel-sessoes`, `processos` e `design-system`: o passo 2 liga os quatro no projeto. Os dois últimos se desligam por projeto, sem desinstalar ([o que ligar e desligar](docs/guia/ligar-e-desligar.md)).
 2. O kit no projeto, na raiz do repositório (o `--simular` mostra o que faria; tire-o para gravar):
    ```bash
    npx -y github:ichikawacraice/kit-de-orquestracao adotar --simular
@@ -51,6 +50,8 @@ npx -y github:ichikawacraice/kit-de-orquestracao migrar-marketplace
 O comando troca também os projetos que o Claude Code conhece. Num projeto que ele não achou, rode o `kit atualizar` depois da troca: ele troca o nome no `.claude/settings.json` (antes da troca da conta, só avisa, porque o app ainda não conheceria o nome novo). Detalhes em [Comandos](docs/guia/comandos.md#kit-migrar-marketplace).
 
 **O plugin `design` virou `kit-design`.** O plugin `design` da Anthropic tem o mesmo nome e escondia os agentes e as skills do kit. O `atualizar-plugins` instala o `kit-design` com as opções do `design` (e desligado, se ele estava) e só então desinstala o velho; em cada projeto, o `kit atualizar` troca `design@kit-de-orquestracao` por `kit-design@ichikawa-kit` no `enabledPlugins` do `.claude/settings.json` (o `settings.local.json` é seu: ele só avisa). Até lá, as travas e o gate leem os dois nomes. A seção `design` do `.claude/kit.json` não muda.
+
+**O `kit-design` deu lugar ao `design-system`.** Mesmo processo (designer, crítico com nota, guarda), agora com a base e sem marca. Na conta, o `atualizar-plugins` instala o `design-system` com as opções do `kit-design` (e desligado, se ele estava) e só então desinstala o velho (`--seco` mostra antes); em cada projeto, o `kit atualizar` passa o valor de `kit-design@ichikawa-kit` para `design-system@ichikawa-kit` e deixa o velho `false`. A seção `design` do `.claude/kit.json` segue valendo. O `kit-design` fica no marketplace só até a troca rodar.
 
 ## Para quem mexe no kit
 

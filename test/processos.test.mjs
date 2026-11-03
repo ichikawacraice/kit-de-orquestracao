@@ -42,7 +42,7 @@ describe('kit iniciar liga os processos', () => {
     for (const f of esperados) assert.equal(ler(d, 'docs', f), ler(RAIZ, 'modelos', 'docs', f), `docs/${f} difere do modelo`);
     const s = json(d, '.claude/settings.json');
     assert.equal(s.enabledPlugins[`processos@${MKT}`], true);
-    assert.equal(s.enabledPlugins[`kit-design@${MKT}`], true);
+    assert.equal(s.enabledPlugins[`design-system@${MKT}`], true);
     assert.equal(s.enabledPlugins[`orquestracao@${MKT}`], true);
     const k = json(d, '.claude/kit.json');
     assert.deepEqual(Object.keys(k.documentos).sort(), ['adr', 'diario', 'docs', 'estados', 'orcamentos', 'planos', 'research', 'roadmap', 'specs']);
@@ -116,7 +116,7 @@ describe('kit adotar liga os processos sem tocar no que existe', () => {
     assert.match(r.stdout, /documentos\.conferir/);
     const s = json(d, '.claude/settings.json');
     assert.equal(s.enabledPlugins[`processos@${MKT}`], true);
-    assert.equal(s.enabledPlugins[`kit-design@${MKT}`], true);
+    assert.equal(s.enabledPlugins[`design-system@${MKT}`], true);
     assert.ok(!('conferir' in json(d, '.claude/kit.json').documentos));
     assert.ok(!JSON.stringify(s).includes('impeccable'));
     assert.ok(!json(d, '.claude/kit.json').design.pasta);
@@ -296,7 +296,7 @@ describe('V2 M1 — projeto instalado antes dos processos: o atualizar e o douto
     escrever(d, 'docs/adr/0001-x.md', '# 1\n');
     assert.equal(kit(d, 'adotar').status, 0);
     const s = json(d, '.claude/settings.json');
-    delete s.enabledPlugins[`processos@${MKT}`]; delete s.enabledPlugins[`kit-design@${MKT}`];
+    delete s.enabledPlugins[`processos@${MKT}`]; delete s.enabledPlugins[`design-system@${MKT}`];
     escrever(d, '.claude/settings.json', JSON.stringify(s));
     const k = json(d, '.claude/kit.json'); delete k.documentos; delete k.design;
     escrever(d, '.claude/kit.json', JSON.stringify(k));
