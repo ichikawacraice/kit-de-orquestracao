@@ -62,7 +62,7 @@ export function registro(tema = temaDoRegistro()) {
   return {
     $schema: 'https://ui.shadcn.com/schema/registry.json',
     name: prefixo.slice(1),
-    homepage: 'https://github.com/wicomm-projects/wicomm-design-system',
+    homepage: 'https://github.com/ichikawacraice/kit-de-orquestracao/tree/main/design-system',
     items: [estilo(tema), ...PECAS, ...BLOCOS].map((item) => comPrefixo(item, prefixo)),
   }
 }

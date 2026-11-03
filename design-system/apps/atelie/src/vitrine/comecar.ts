@@ -18,7 +18,9 @@ export type Guia = { titulo: string; abertura: string; secoes: SecaoDoGuia[] }
 
 const RAIZ = join(process.cwd(), "..", "..")
 const ARQUIVO = "docs/comecar.md"
-const REPOSITORIO = "https://github.com/wicomm-projects/wicomm-design-system"
+// O design system mora na pasta design-system/ do kit (ADR 0020 do kit).
+const REPOSITORIO = "https://github.com/ichikawacraice/kit-de-orquestracao"
+const PASTA = "design-system"
 const ATELIE = "https://wicomm-atelie.vercel.app"
 
 const escapar = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
@@ -36,7 +38,7 @@ export function destinoDoLink(href: string): string {
   const doRepo = posix.normalize(posix.join(posix.dirname(ARQUIVO), caminho))
   if (doRepo.startsWith("plugins/design-system/base") || doRepo.startsWith("plugins/wicomm/base")) return "/regras/"
   const tipo = doRepo.endsWith("/") ? "tree" : "blob"
-  return `${REPOSITORIO}/${tipo}/main/${doRepo.replace(/\/$/, "")}${ancora ? `#${ancora}` : ""}`
+  return `${REPOSITORIO}/${tipo}/main/${PASTA}/${doRepo.replace(/\/$/, "")}${ancora ? `#${ancora}` : ""}`
 }
 
 /** O título vai a um `string` (o nome do bloco): sem a crase do código. */

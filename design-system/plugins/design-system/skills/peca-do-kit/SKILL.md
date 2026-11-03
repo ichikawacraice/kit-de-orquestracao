@@ -38,4 +38,4 @@ Proponha a peça nova **para o registro**, no formato:
 - **Onde aparece primeiro:** tela e região
 ```
 
-A proposta vai ao repositório do sistema (`wicomm-design-system`), não ao projeto. Até ela entrar, a tela usa a peça mais próxima do kit e a revisão registra a lacuna.
+A proposta vai ao repositório do sistema (a pasta `design-system/` do repositório `ichikawacraice/kit-de-orquestracao`), não ao projeto. Até ela entrar, a tela usa a peça mais próxima do kit e a revisão registra a lacuna.

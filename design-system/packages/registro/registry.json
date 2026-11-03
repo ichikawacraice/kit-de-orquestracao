@@ -1,7 +1,7 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry.json",
   "name": "wicomm",
-  "homepage": "https://github.com/wicomm-projects/wicomm-design-system",
+  "homepage": "https://github.com/ichikawacraice/kit-de-orquestracao/tree/main/design-system",
   "items": [
     {
       "name": "estilo",
