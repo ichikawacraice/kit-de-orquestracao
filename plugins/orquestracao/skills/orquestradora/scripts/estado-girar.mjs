@@ -14,18 +14,19 @@ import { fileURLToPath } from 'node:url';
 export const MANTER_ENTREGAS = 15;
 const FIXOS = ['prs abertos', 'fila de merge', 'itens vivos', 'sessões', 'produção', 'decisões', 'números reservados', 'adiados', 'próximo release', 'entregas arquivadas'];
 const DATA = /\b\d{1,2}\/\d{1,2}\b|\b\d{4}-\d{2}-\d{2}\b/;
-const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/;
-const DM = /\b(\d{1,2})\/(\d{1,2})\b/;
-// o dia do título (AAAAMMDD); dd/mm sem ano é do ano de `agora`, ou do anterior quando cairia mais de um dia no futuro
+const ISO = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
+const DM = /\b(\d{1,2})\/(\d{1,2})\b/g;
+// o dia do título (AAAAMMDD), a maior das datas que ele cita; dd/mm sem ano é do ano de `agora`, ou do anterior quando
+// cairia mais de um dia no futuro
 function dia(s, agora) {
-  const iso = ISO.exec(s.titulo);
-  if (iso) return Number(`${iso[1]}${iso[2]}${iso[3]}`);
-  const dm = DM.exec(s.titulo);
-  if (!dm) return 0;
-  const [d, m] = [Number(dm[1]), Number(dm[2])];
-  let ano = agora.getUTCFullYear();
-  if (Date.UTC(ano, m - 1, d) > agora.getTime() + 86_400_000) ano -= 1;
-  return ano * 10_000 + m * 100 + d;
+  const dias = [...s.titulo.matchAll(ISO)].map((m) => Number(`${m[1]}${m[2]}${m[3]}`));
+  for (const m of s.titulo.matchAll(DM)) {
+    const [d, mes] = [Number(m[1]), Number(m[2])];
+    let ano = agora.getUTCFullYear();
+    if (Date.UTC(ano, mes - 1, d) > agora.getTime() + 86_400_000) ano -= 1;
+    dias.push(ano * 10_000 + mes * 100 + d);
+  }
+  return Math.max(0, ...dias);
 }
 const ENTREGAS = 'entregas arquivadas';
 

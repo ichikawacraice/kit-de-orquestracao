@@ -95,3 +95,10 @@ test('girar: dd/mm sem ano que cairia no futuro é do ano anterior (28/12 é mai
   assert.deepEqual(g.movidas, ['Retomar daqui (28/12)']);
   assert.ok(g.vivo.includes('de janeiro'));
 });
+
+test('girar: título com duas datas vale pela maior', () => {
+  const agora = new Date('2026-11-03T01:00:00Z');
+  const g = girar('# x\n\n## Retomar daqui (02/11, retoma o de 2026-10-29)\nnovo A\n\n## Estado de 30/10 a 02/11\nnovo B\n\n## Retomar daqui (01/11)\nvelho\n', { agora });
+  assert.deepEqual(g.movidas, ['Retomar daqui (01/11)']);
+  assert.ok(g.vivo.includes('novo A') && g.vivo.includes('novo B'));
+});
