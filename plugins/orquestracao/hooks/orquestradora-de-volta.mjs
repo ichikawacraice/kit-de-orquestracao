@@ -40,7 +40,7 @@ function avisoDaFila(reg) {
   } catch { return ''; }
 }
 
-// O `<repo>.md` do projeto: o nome do arquivo é o do repositório, com a caixa que a orquestradora escolheu (Luna.md, izanagi.md).
+// O `<repo>.md` do projeto: o nome do arquivo é o do repositório, com a caixa que a orquestradora escolheu (Projeto.md ou projeto.md).
 function giroDoEstado(reg) {
   try {
     const nome = projetoDaSessao(reg)?.nome;

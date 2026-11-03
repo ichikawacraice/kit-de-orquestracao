@@ -9,7 +9,7 @@
 ## Contexto
 - Medido em 02/11 sobre a semana de 26/10: as orquestradoras custaram ~6% do total; 84% dos turnos delas vieram de aviso automático, e cada turno relê ~232 mil tokens.
 - Cada PR pedia ao menos dois turnos dela: o recado `PR N pronto, HEAD <sha>` (para rodar `painel fila-de-merge`) e o desfecho (repassar o devolvido à dona, subir a versão). O gate já rodava sozinho; o turno só servia de gatilho e de carteiro.
-- O arquivo de estado (`~/.claude/orquestracao/<repo>.md`), lido inteiro a cada limpeza, crescia uma seção "Retomar daqui" por limpeza: 38 KB neste repo e 74 KB no izanagi.
+- O arquivo de estado (`~/.claude/orquestracao/<repo>.md`), lido inteiro a cada limpeza, crescia uma seção "Retomar daqui" por limpeza: 38 KB neste repo e 74 KB no de outro projeto.
 - A limpeza inteira com o operador presente é dele (botão `↺ Limpar`, trava T7), e isso não muda.
 
 <a id="decisao"></a>
@@ -32,4 +32,4 @@
 ## Consequências
 - O PR entra na fila sem turno da orquestradora, e ela recebe um turno por lote, não dois por PR. O aviso de fim de turno do app, que chega à sessão que abriu a dona, continua abrindo um turno dela; isso é do app e fica fora deste ADR.
 - O projeto cuja fila nunca rodou pela orquestradora não tem `config`: o primeiro PR vai pelo recado, como antes.
-- O arquivo de estado deste repo cai de 38 KB para ~13 KB no primeiro giro, e o do izanagi de 74 KB para ~21 KB (medido com `--seco` em 02/11).
+- O arquivo de estado deste repo cai de 38 KB para ~13 KB no primeiro giro, e o de outro projeto de 74 KB para ~21 KB (medido com `--seco` em 02/11).
