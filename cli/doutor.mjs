@@ -9,7 +9,7 @@ import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
 import { conferirPerformance, lerPraticas } from './performance.mjs';
 import { conferirDesligados, conferirTema } from './plugins-do-projeto.mjs';
 import { conferirSkillsDeFora } from './skills-de-fora.mjs';
-import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, SUCESSORES, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, MARKETPLACE_ANTIGO, PLUGIN, REPO_DO_KIT, idNovoDe, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
+import { COMPARTILHADOS, HOOK_GUARDA, IMPECCABLE, PLUGINS_RENOMEADOS, SUCESSORES, perfilComSucessores, avisoDasRegras, docsDoProjeto, gitDirComum, MARKETPLACE, MARKETPLACE_ANTIGO, PLUGIN, REPO_DO_KIT, idNovoDe, RAIZ_DO_KIT, baseDaOrquestracao, lerTexto } from './pacote.mjs';
 
 const lerJson = (caminho) => { try { return JSON.parse(readFileSync(caminho, 'utf8').replace(/^\uFEFF/, '')); } catch { return null; } };
 
@@ -54,7 +54,7 @@ export function doutor({ destino, versao, home = process.env.HOME || homedir() }
   try { const cfg = carregarConfig(destino); ok('.claude/kit.json válido'); const laco = avisoDeLaco(cfg.gate?.comandoCompleto); if (laco) linhas.push(`aviso: ${laco}`); } catch (e) { falha(`.claude/kit.json: ${e.message}`); }
 
   processos(destino, home, configs, linhas);
-  linhas.push(...conferirDesligados(lerJson(join(destino, '.claude', 'kit.json')) ?? {}, configs));
+  linhas.push(...conferirDesligados(perfilComSucessores(lerJson(join(destino, '.claude', 'kit.json')) ?? {}), configs));
   linhas.push(...conferirPerformance(lerJson(join(destino, '.claude', 'kit.json')) ?? {}, ligadoEm(`kit-performance@${MARKETPLACE}`, configs), lerPraticas()));
 
   // skills de fora (ADR 0014): a dependência que falta reprova; o plugin com skill barrada só avisa
@@ -134,7 +134,8 @@ function processos(destino, home, configs, linhas) {
   const secao = { processos: 'documentos', design: 'design' };
   const plugin = { processos: 'processos', design: 'design-system' };
   for (const nome of ['processos', 'design']) {
-    const peloPerfil = Array.isArray(kj.plugins?.desligar) && kj.plugins.desligar.includes(`${plugin[nome]}@${MARKETPLACE}`);
+    const desligar = perfilComSucessores(kj).plugins?.desligar;
+    const peloPerfil = Array.isArray(desligar) && desligar.includes(`${plugin[nome]}@${MARKETPLACE}`);
     if (ligado[nome] === false && peloPerfil) linhas.push(`info: plugin ${plugin[nome]} desligado pelo perfil do .claude/kit.json (plugins.desligar); a seção ${secao[nome]} fica sem efeito enquanto ele estiver desligado`);
     else if (ligado[nome] === false && kj[secao[nome]] !== undefined) linhas.push(`aviso: plugin ${plugin[nome]} desligado, mas o .claude/kit.json tem a seção ${secao[nome]}: o kit.json não o religa (plugin desligado não roda, diga o arquivo o que disser); para religar, enabledPlugins "${plugin[nome]}@${MARKETPLACE}": true`);
     else if (ligado[nome] === false) linhas.push(`info: plugin ${plugin[nome]} desligado neste projeto`);

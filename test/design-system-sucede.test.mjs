@@ -22,6 +22,8 @@ function projeto() { const d = nova('kit-f353-'); execFileSync('git', ['init', '
 const casa = nova('kit-f353-casa-');
 mkdirSync(join(casa, '.claude', 'plugins'), { recursive: true });
 writeFileSync(join(casa, '.claude', 'plugins', 'known_marketplaces.json'), JSON.stringify({ 'ichikawa-kit': {} }));
+// a conta já tem o design-system (F353): sem isso o kit atualizar não troca o kit-design do projeto
+writeFileSync(join(casa, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'design-system@ichikawa-kit': [{ scope: 'user', version: '0.9.0' }] } }));
 const base = nova('kit-f353-base-');
 const kit = (cwd, ...args) => spawnSync('node', [KIT, ...args], { cwd, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, HOME: casa, HOOKS_CREWAI_BASE: base, CI: '' } });
 const ler = (d, ...p) => readFileSync(join(d, ...p), 'utf8');
@@ -119,12 +121,31 @@ describe('kit iniciar e kit atualizar', () => {
     assert.ok(!(DS in depois) && !(KD in depois), JSON.stringify(depois));
   });
 
-  it('kit atualizar guarda o false de quem desligou o plugin', () => {
+  it('sem o design-system instalado para o projeto, o kit atualizar não troca e diz como instalar; instalado só no projeto, troca', () => {
+    const d = projetoVelho();
+    const outraCasa = nova('kit-f353-sem-');
+    mkdirSync(join(outraCasa, '.claude', 'plugins'), { recursive: true });
+    writeFileSync(join(outraCasa, '.claude', 'plugins', 'known_marketplaces.json'), JSON.stringify({ 'ichikawa-kit': {} }));
+    const rodar = () => spawnSync('node', [KIT, 'atualizar'], { cwd: d, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, HOME: outraCasa, HOOKS_CREWAI_BASE: base, CI: '' } });
+    const r = rodar();
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /aviso: kit-design@ichikawa-kit tem sucessor.*atualizar-plugins/);
+    assert.equal(json(d, '.claude/settings.json').enabledPlugins[KD], true, 'desligou o velho sem o novo instalado');
+    assert.ok(!(DS in json(d, '.claude/settings.json').enabledPlugins));
+    writeFileSync(join(outraCasa, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { [DS]: [{ scope: 'project', projectPath: d, version: '0.9.0' }] } }));
+    assert.equal(rodar().status, 0);
+    assert.equal(json(d, '.claude/settings.json').enabledPlugins[DS], true);
+  });
+
+  it('kit atualizar guarda o false de quem desligou o plugin; o remover tira os dois false', () => {
     const d = projetoVelho(false);
     assert.equal(kit(d, 'atualizar').status, 0);
     const s = json(d, '.claude/settings.json');
     assert.equal(s.enabledPlugins[DS], false);
     assert.equal(s.enabledPlugins[KD], false);
+    assert.equal(kit(d, 'remover').status, 0);
+    const depois = (() => { try { return json(d, '.claude/settings.json').enabledPlugins ?? {}; } catch { return {}; } })();
+    assert.ok(!(DS in depois) && !(KD in depois), JSON.stringify(depois));
   });
 
   it('kit atualizar --simular diz a troca e não grava', () => {

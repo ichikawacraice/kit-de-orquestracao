@@ -22,6 +22,7 @@ Tirar a entrada e a pasta agora é o que o F332 fez com o `design`. O risco: que
 5. **Nomes:** onde o kit cita o agente ou a skill de design, o padrão vira `design-system:`; o `kit-design:` segue aceito nas travas (`semPrefixoDoKit`, guarda) e nas skills da etapa `design`.
 
 ## Fora do escopo
+- Trazer o código do `design-system` e do `tema-wicomm` para este repositório: o operador decidiu trazer o repositório da empresa inteiro, com histórico, num item próprio (Q861).
 - Tirar o `kit-design` do marketplace e a pasta dele: item seguinte, depois que a troca rodar na conta e nos projetos.
 - Instalar na conta e rodar a troca no estado real: depois do merge, com o ok do operador (a orquestradora pergunta). O `atualizar-plugins` faz a troca na primeira execução sem `--seco`, então a primeira depois do merge precisa desse ok.
 - O `settings.local.json` (é de cada pessoa): só aviso.

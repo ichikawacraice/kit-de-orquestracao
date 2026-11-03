@@ -55,6 +55,18 @@ export function sucederPlugins(s) {
   }
   return { trocas, conflitos, pares };
 }
+/**
+ * O sucessor está instalado para este projeto (escopo user, ou project/local com o `projectPath` dele), segundo o
+ * `plugins/installed_plugins.json` da conta. Sem ele, trocar a chave no projeto desligaria o velho sem o novo para guardar.
+ */
+export function sucessorInstalado(destino, id, home = homedir()) {
+  let reg = null;
+  try { reg = JSON.parse(readFileSync(join(process.env.CLAUDE_CONFIG_DIR || join(home, '.claude'), 'plugins', 'installed_plugins.json'), 'utf8')); } catch { return false; }
+  const lista = reg?.plugins?.[id];
+  let alvo = destino; try { alvo = realpathSync(destino); } catch { /* fica o caminho dado */ }
+  const mesmo = (p) => { try { return realpathSync(p) === alvo; } catch { return p === destino; } };
+  return Array.isArray(lista) && lista.some((i) => i?.scope === 'user' || (typeof i?.projectPath === 'string' && mesmo(i.projectPath)));
+}
 /** O kit.json com `plugins.desligar` estendido aos sucessores: o perfil que desliga o `kit-design` desliga o `design-system`. */
 export function perfilComSucessores(kj) {
   const lista = kj?.plugins?.desligar;
@@ -522,7 +534,9 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     // o perfil de plugins do kit.json que o projeto já tem (F347): o que ele desliga entra como false
     let kjDoProjeto = {}; try { kjDoProjeto = JSON.parse(semBom(lerTexto(destino, '.claude/kit.json') ?? '{}')) ?? {}; } catch { /* ilegível: o kit.json acusa abaixo */ }
     // o projeto que já liga o kit-design passa ao design-system (F353), como no kit atualizar; o valor que ele tinha é da pessoa
-    const suc = sucederPlugins(s);
+    const semSucessor = Object.entries(SUCESSORES).filter(([velho, novo]) => s.enabledPlugins[velho] === true && !(novo in s.enabledPlugins) && !sucessorInstalado(destino, novo));
+    for (const [velho, novo] of semSucessor) avisosDoProjeto.push(`${velho} tem sucessor, ${novo}, que esta máquina ainda não instalou: rode o atualizar-plugins na conta e depois o kit atualizar`);
+    const suc = semSucessor.length ? { trocas: [], conflitos: [], pares: [] } : sucederPlugins(s);
     conflitos.push(...suc.conflitos);
     const perfil = aplicarDesligados(s, perfilComSucessores(kjDoProjeto), { recuperando });
     cs.desligados = [...new Set([...perfil.desligados, ...suc.pares.map((p) => p.velho)])];

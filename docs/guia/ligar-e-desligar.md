@@ -127,6 +127,7 @@ O `kit-design` era o processo de design do kit até a base do `design-system` fi
 O `design-system` não sabe de marca: a cor, a fonte, o logotipo e o prefixo do registro vêm de um plugin de tema. O `tema-wicomm` é o da empresa e só vale nos projetos internos dela.
 
 - **Ligar:** no `.claude/kit.json` do projeto interno, `"design": { "tema": "tema-wicomm" }` (o nome do plugin). O `kit adotar` e o `kit atualizar` põem `"tema-wicomm@ichikawa-kit": true` no `enabledPlugins` do `.claude/settings.json` (commitado, vale para o time), e o `kit doutor` confere. Depois, a skill `tema-wicomm:aplicar` liga o projeto ao tema. Tema que o marketplace do kit não lista é aviso e não liga nada; o `false` que o projeto pôs fica.
+- **Desligado por padrão:** o `kit iniciar` e o `kit adotar` não o ligam sem o `design.tema`. Em app de cliente ou de fora da empresa, é melhor não ativá-lo: a marca é dela.
 - **Nunca no escopo da conta:** a marca valeria em todo projeto da máquina, inclusive nos de fora da empresa. O `kit doutor` avisa quando a conta liga um tema.
 - **Trocar as cores é trocar o tema:** outro plugin `tema-<marca>` no lugar do `tema-wicomm` (e o `design.tema` com o nome dele), e o `design-system` fica como está. Cor da marca não se edita no projeto.
 

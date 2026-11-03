@@ -27,6 +27,8 @@ const casa = nova('kit-f332-casa-');
 // a conta já migrou para o ichikawa-kit (F344): sem isso o kit atualizar não troca o nome do projeto
 mkdirSync(join(casa, '.claude', 'plugins'), { recursive: true });
 writeFileSync(join(casa, '.claude', 'plugins', 'known_marketplaces.json'), JSON.stringify({ 'ichikawa-kit': {} }));
+// a conta já tem o design-system (F353): sem isso o kit atualizar não troca o kit-design do projeto
+writeFileSync(join(casa, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'design-system@ichikawa-kit': [{ scope: 'user', version: '0.9.0' }] } }));
 const base = nova('kit-f332-base-');
 const kit = (cwd, ...args) => spawnSync('node', [KIT, ...args], { cwd, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, HOME: casa, HOOKS_CREWAI_BASE: base, CI: '' } });
 const ler = (d, ...p) => readFileSync(join(d, ...p), 'utf8');
@@ -110,13 +112,19 @@ describe('kit iniciar e kit atualizar', () => {
 
   it('kit atualizar leva design@ até o design-system no settings e no lock, guardando o valor', () => {
     const d = projetoVelho();
+    // a chave velha primeiro: a troca no lugar dela se distingue de pôr a nova no fim
+    const s0 = json(d, '.claude/settings.json'); const { [VELHO]: v0, ...resto } = s0.enabledPlugins;
+    s0.enabledPlugins = { [VELHO]: v0, ...resto }; escrever(d, '.claude/settings.json', `${JSON.stringify(s0, null, 2)}\n`);
+    const ordem = Object.keys(json(d, '.claude/settings.json').enabledPlugins);
+    assert.ok(ordem.indexOf(VELHO) >= 0 && ordem.indexOf(VELHO) < ordem.length - 1, `precondição: a chave velha não é a última: ${ordem}`);
     const r = kit(d, 'atualizar');
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(r.stdout, /design@kit-de-orquestracao → kit-design@ichikawa-kit/);
     const s = json(d, '.claude/settings.json');
     assert.equal(s.enabledPlugins[ATUAL], true);
     assert.ok(!(VELHO in s.enabledPlugins), 'o nome velho ficou');
-    assert.deepEqual(Object.keys(s.enabledPlugins).at(-1), ATUAL, 'a chave fica no lugar da velha');
+    // o F332 troca a chave no lugar da velha; o F353 deixa essa chave false e põe o sucessor no fim
+    assert.equal(Object.keys(s.enabledPlugins).indexOf(NOVO), ordem.indexOf(VELHO), 'a chave do F332 fica no lugar da velha');
     const plugins = json(d, '.claude/kit.lock.json').chaves.settings.plugins;
     assert.ok(plugins.includes(ATUAL) && !plugins.includes(VELHO), plugins.join());
     // de novo: nada a trocar

@@ -6,7 +6,7 @@ import { pastaDeConfig, pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { diffTexto } from './diff.mjs';
 import { aplicarDesligados, aplicarTema } from './plugins-do-projeto.mjs';
 import { LOCK, blocosDe, lerLock, sha256 } from './lock.mjs';
-import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, SUCESSORES, RAIZ_DO_KIT, perfilComSucessores, sucederPlugins, REPO_DO_KIT, idNovoDe, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
+import { MARKETPLACE, MARKETPLACE_ANTIGO, PLUGINS_RENOMEADOS, SUCESSORES, RAIZ_DO_KIT, perfilComSucessores, sucederPlugins, sucessorInstalado, REPO_DO_KIT, idNovoDe, trocarNomesDoKit, arquivosDoGate, avisoDasRegras, docsDoProjeto, blocosDoModelo, gravar, inserirBloco, lerModelo, lerTexto, semBom, serializar } from './pacote.mjs';
 
 const escapar = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -99,7 +99,10 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
     if (pendentes.length && !contaMigrada) linhas.push(`aviso: o .claude/settings.json usa o nome antigo do marketplace (${MARKETPLACE_ANTIGO}), e esta máquina ainda não migrou: rode \`npx -y github:${REPO_DO_KIT} migrar-marketplace\` (ele troca também este projeto) e depois o kit atualizar`);
     const trocas = s && contaMigrada ? trocarNomesDoKit(s) : [];
     // F353: o design-system sucede o kit-design (depois do nome do marketplace: o `kit-design@` antigo chega ao novo e daí ao sucessor)
-    const suc = s ? sucederPlugins(s) : { trocas: [], conflitos: [], pares: [] };
+    // só com o sucessor instalado para o projeto: antes disso, o velho desligado aqui deixaria o projeto sem guarda de design
+    const faltam = Object.entries(SUCESSORES).filter(([velho, novo]) => s?.enabledPlugins?.[velho] === true && !(novo in s.enabledPlugins) && !sucessorInstalado(destino, novo));
+    for (const [velho, novo] of faltam) linhas.push(`aviso: ${velho} tem sucessor, ${novo}, que esta máquina ainda não instalou: rode o atualizar-plugins na conta (ou, só neste projeto, \`claude plugin install ${novo} --scope project\`) e depois o kit atualizar`);
+    const suc = s && !faltam.length ? sucederPlugins(s) : { trocas: [], conflitos: [], pares: [] };
     for (const c of suc.conflitos) conflito(c);
     trocas.push(...suc.trocas);
     if (trocas.length) {
@@ -116,7 +119,8 @@ function renomearPlugins({ destino, lock, mudancas, linhas, conflito }) {
       const cs = lock.chaves.settings;
       // o sucessor entra no lock no lugar do velho que o kit pôs (o que já estava é da pessoa); o false do velho é do kit
       if (Array.isArray(cs.plugins)) cs.plugins = [...new Set(cs.plugins.flatMap((n) => { const p = suc.pares.find((x) => x.velho === n); return !p ? [n] : p.novoJaEstava ? [] : [p.novo]; }))];
-      cs.desligados = [...new Set([...(cs.desligados ?? []), ...suc.pares.map((p) => p.velho)])];
+      // o false do velho é do kit, e o do sucessor quando ele o recebeu do velho desligado (o remover tira os dois)
+      cs.desligados = [...new Set([...(cs.desligados ?? []), ...suc.pares.flatMap((p) => (!p.novoJaEstava && s.enabledPlugins[p.novo] === false ? [p.velho, p.novo] : [p.velho]))])];
     }
   }
   const local = lerTexto(destino, '.claude/settings.local.json');
