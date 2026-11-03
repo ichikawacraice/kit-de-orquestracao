@@ -1,0 +1,44 @@
+{
+  "name": "@wicomm/tokens",
+  "version": "0.1.1",
+  "description": "Os tokens de design da Wicomm: uma fonte DTCG gerada para o tema do Tailwind v4 e variáveis CSS.",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wicomm-projects/wicomm-design-system.git",
+    "directory": "packages/tokens"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "type": "module",
+  "files": [
+    "dist",
+    "fonte"
+  ],
+  "exports": {
+    "./tokens.css": "./dist/tokens.css",
+    "./tailwind-v4.css": "./dist/tailwind-v4.css",
+    "./tokens.json": "./dist/tokens.json"
+  },
+  "scripts": {
+    "gerar": "node scripts/gerar.mjs",
+    "test": "node scripts/gerar.mjs --conferir && node --test test/*.test.mjs"
+  },
+  "peerDependencies": {
+    "tailwindcss": "^4"
+  },
+  "peerDependenciesMeta": {
+    "tailwindcss": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tailwindcss/node": "4.3.3",
+    "tailwindcss": "4.3.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

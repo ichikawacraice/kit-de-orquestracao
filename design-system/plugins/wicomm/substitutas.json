@@ -1,0 +1,7 @@
+{
+  "substitutas": {
+    "design:accessibility-review": "wicomm:acessibilidade",
+    "design:ux-copy": "wicomm:textos-de-interface",
+    "design:design-system": "wicomm:auditar-projeto"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "@wicomm/registro",
+  "version": "0.1.0",
+  "description": "O registro shadcn da Wicomm: o estilo (tokens) e as pe\u00e7as b\u00e1sicas, instal\u00e1veis com npx shadcn add @wicomm/<pe\u00e7a>.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gerar": "node scripts/gerar.mjs",
+    "build": "node scripts/gerar.mjs --conferir && node scripts/build.mjs",
+    "num-next-vazio": "node scripts/num-next-vazio.mjs",
+    "test": "node scripts/gerar.mjs --conferir && node --test test/*.test.mjs && vitest run && tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@wicomm/tokens": "*"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.2.3",
+    "@wicomm/guardas": "*",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "jsdom": "30.1.3",
+    "lucide-react": "1.57.0",
+    "radix-ui": "1.8.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "shadcn": "4.21.5",
+    "tailwind-merge": "3.7.0",
+    "tw-animate-css": "1.4.0",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}

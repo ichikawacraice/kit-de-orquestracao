@@ -16,7 +16,7 @@
 // mesmo nome em pastas diferentes pegam os dois (erra para o lado de rodar a mais).
 // Sem `--`, lista os testes, um por linha (`--json`: `{base, tocados, testes, todos}`). Com `--`, roda o comando com os
 // testes no fim (ex.: `testes-afetados -- node gate/com-fichas.mjs -- node --test`) e sai com o status dele; em "todos",
-// roda o comando sem lista (o runner acha todos); sem teste afetado, não roda nada e sai 0.
+// roda o comando sem lista (o runner acha todos), ou com a lista toda quando há `--padrao`; sem teste afetado, não roda nada e sai 0.
 //
 // Acerto (F184): quando o gate da fila fica vermelho num PR, `registrarAcerto` confere se os testes que falharam no log
 // estavam na seleção da dona no sha do PR e grava uma linha em `~/.claude/orquestracao/testes-afetados-acerto.jsonl`.
@@ -235,7 +235,9 @@ function main(argv) {
   }
   if (!comando.length) throw new Error('faltou o comando depois de --');
   let lista = s.testes;
-  if (s.todos) { lista = []; process.stderr.write(`testes-afetados: todos os testes (${s.todos})\n`); }
+  // com `--padrao`, o runner não o conhece: "todos" vai como a lista filtrada (F357: a raiz do kit roda sem design-system/)
+  if (s.todos && valor('--padrao') && !s.testes.length) throw new Error(`o --padrao não casa nenhum teste (${s.todos}): sem lista, o runner acharia todos`);
+  if (s.todos) { lista = valor('--padrao') ? s.testes : []; process.stderr.write(`testes-afetados: todos os testes (${s.todos})\n`); }
   else if (!lista.length) { process.stderr.write(`testes-afetados: nenhum teste afetado (base ${base}, ${s.tocados.length} tocados); nada a rodar\n`); return 0; }
   else process.stderr.write(`testes-afetados: ${lista.length} teste(s) (base ${base}): ${lista.join(' ')}\n`);
   const r = spawnSync(comando[0], [...comando.slice(1), ...lista], { cwd, stdio: 'inherit' });

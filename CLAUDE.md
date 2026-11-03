@@ -7,7 +7,7 @@ As seções marcadas `kit:` são do kit de orquestração: o `kit atualizar` tro
 Kit de orquestração de sessões do Claude Code (uma sessão dona por item, travas por hook, painel, fila de merge, teto de testes), instalável em qualquer projeto. Marketplace `ichikawa-kit` (nome de exibição "Ichikawa's Kit"; até o F344, `kit-de-orquestracao`: o código lê os dois nomes e grava só o novo) no repositório `kit-de-orquestracao`. Dois plugins em `plugins/` (`orquestracao`, `painel-sessoes`) e um CLI em `cli/` (`npx -y github:ichikawacraice/kit-de-orquestracao`). Decisão: `docs/adr/0001-*`; planos em `docs/planos/`.
 
 Regras do código (valem para toda fatia):
-- Node ≥ 20, ESM, só módulos nativos: o kit não traz dependência npm. Testes em `node:test` (`node --test`), nunca vitest.
+- Node ≥ 20, ESM, só módulos nativos: o kit não traz dependência npm. Testes em `node:test` (`node --test`), nunca vitest. A exceção é a pasta `design-system/` (ADR 0020): lá valem o `package.json`, o `CLAUDE.md` e o gate dela (`cd design-system && npm ci && node ../gate/com-fichas.mjs --quero 4 -- npm test`), e quem a muda cola a saída no PR.
 - Script termina por `process.exitCode`, nunca `process.exit()`.
 - Testes nunca tocam `~/.claude` real: `HOME` e as envs de pasta apontam para diretório temporário.
 - Commits conventional em PT-BR, sem citar ADR no título. `main` com push direto enquanto não houver outro colaborador.
@@ -20,11 +20,11 @@ Teste isolado neste repo: `node gate/com-fichas.mjs -- <comando>` (teto de núcl
 <!-- kit:comandos v1 -->
 ## Comandos
 Lidos de `.claude/kit.json`:
-- **Gate:** `npm test` (= `node gate/com-fichas.mjs -- node --test`, pelo teto de núcleos da máquina).
+- **Gate:** `npm test` (= `node gate/com-fichas.mjs -- node --test` nas pastas do kit, sem `design-system/`, pelo teto de núcleos da máquina).
 - Sem typecheck neste repo.
 - Validar manifestos: `claude plugin validate .` (e `claude plugin validate plugins/<nome> --strict`)
 - Testes do mod: `claude plugin test plugins/painel-sessoes` (o `node --test` da raiz não os pega: são `.tsx`).
-- **Testes afetados** (durante o trabalho, ADR 0011): `testes-afetados -- node gate/com-fichas.mjs -- node --test` (sem `--`, só lista).
+- **Testes afetados** (durante o trabalho, ADR 0011): `testes-afetados --padrao '^(?!design-system/)(?:.*/)?(?:[^/]*\.test\.(?:mjs|cjs|js)|test/.*\.(?:mjs|cjs|js))$' -- node gate/com-fichas.mjs -- node --test` (sem `--`, só lista). O `--padrao` deixa `design-system/` de fora, também quando a seleção cai em "todos" (ADR 0020).
 <!-- /kit:comandos -->
 
 <!-- kit:regras-de-operacao v1 -->

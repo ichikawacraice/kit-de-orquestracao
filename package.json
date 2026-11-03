@@ -6,6 +6,6 @@
   "type": "module",
   "bin": { "kit": "cli/kit.mjs" },
   "engines": { "node": ">=20" },
-  "scripts": { "test": "node gate/com-fichas.mjs --quero 4 -- node --test --test-concurrency={fichas}" },
+  "scripts": { "test": "node gate/com-fichas.mjs --quero 4 -- node --test --test-concurrency={fichas} '{cli,gate,modelos,plugins,scripts,test}/**/*.test.{cjs,mjs,js}' '{cli,gate,modelos,plugins,scripts,test}/**/test/**/*.{cjs,mjs,js}' 'test/**/*.{cjs,mjs,js}'" },
   "license": "MIT"
 }

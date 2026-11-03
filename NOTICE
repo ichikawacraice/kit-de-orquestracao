@@ -7,18 +7,24 @@ com as exceções abaixo.
 1. A marca Wicomm não é licenciada pelo MIT.
    O nome Wicomm, o logotipo, as cores, a fonte e o restante da identidade visual
    da empresa pertencem a ela. O MIT deste repositório não dá direito de usá-los.
-   Isso vale para o plugin de tema `tema-wicomm`, hoje e quando o código dele vier
-   morar aqui (pasta plugins/tema-wicomm/): ele fica fora do MIT e só se usa nos
-   projetos da própria empresa. Em app de cliente ou de fora da empresa, não o
-   ative; para outra marca, faça outro plugin de tema.
+   Ficam fora do MIT, com a marca, estas partes da pasta design-system/:
+   - plugins/tema-wicomm/ (o plugin de tema da empresa);
+   - temas/wicomm/ (o tema como dado);
+   - plugins/wicomm/ (o plugin antigo da empresa, congelado);
+   - o logotipo do registro (packages/registro/registry/design-system/ui/logotipo.tsx)
+     e a cor da marca nos tokens (packages/tokens/fonte/marca.tokens.json e o que
+     se gera dela).
+   Só se usam nos projetos da própria empresa. Em app de cliente ou de fora da
+   empresa, não ative o tema-wicomm; para outra marca, faça outro plugin de tema.
 
-2. Plugins de origem remota seguem a licença do repositório de origem.
-   O marketplace lista `design-system` e `tema-wicomm` vindos do repositório
-   wicomm-projects/wicomm-design-system, que é privado e não tem licença pública: os direitos são da empresa.
-   Este repositório não traz o código deles; o MIT daqui não se estende a eles.
-   Se esse código passar a morar aqui, a licença dele é a que a empresa definir
-   e fica registrada neste arquivo.
-
+2. O design system (pasta design-system/).
+   Veio do repositório wicomm-projects/wicomm-design-system, com o histórico, em
+   2026-11-02 (F357). Fora a marca (item 1) e o que foi adaptado de terceiros, o
+   código e os textos dele estão sob a licença MIT deste repositório (Q867).
+   O adaptado de terceiros segue a licença de origem (há trechos sob Apache-2.0),
+   com a atribuição em design-system/plugins/*/TERCEIROS.md e o texto das
+   licenças em design-system/plugins/*/licencas/. As dependências npm do ateliê
+   e dos pacotes têm a licença de cada uma.
 
 3. Código de terceiros, portado ou adaptado sob a licença MIT.
    O aviso de copyright de cada origem fica aqui; o texto de permissão é o mesmo

@@ -40,7 +40,9 @@ function main() {
     if (typeof pl.source !== 'string') continue;
     const fonte = pl.source.replace(/^\.\//, '').replace(/\/$/, '');
     const arquivoJson = `${fonte}/.claude-plugin/plugin.json`;
-    const ref = git(['log', '-1', '--format=%H', '-G"version"', '--', arquivoJson]);
+    // só a linha da base, e o diff do merge pelo primeiro pai: o plugin que chegou por merge de subárvore (F357) tem a versão vista no
+    // commit que o trouxe, e o merge da base dentro da branch de um PR não vira referência
+    const ref = git(['log', '-1', '--format=%H', '--first-parent', '--diff-merges=first-parent', '--no-patch', '-G"version"', '--', arquivoJson]);
     if (!ref) { pulados.push({ nome: pl.name, motivo: 'plugin.json nunca teve versão commitada' }); continue; }
     const arquivos = git(['diff', '--name-only', ref, 'HEAD', '--', fonte]).split('\n').filter(Boolean);
     if (arquivos.length === 0) continue;

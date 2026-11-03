@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,11 @@ const { execFileSync } = require('node:child_process');
 const a = process.argv.slice(2);
 fs.appendFileSync(process.env.FAKE_LOG, JSON.stringify(a) + '\\n');
 const est = () => JSON.parse(fs.readFileSync(process.env.FAKE_ESTADO, 'utf8'));
+// a pasta do plugin é a da entrada do marketplace (F357: o design-system mora em design-system/plugins/)
+const manifestoDe = (nome) => {
+  const e = JSON.parse(fs.readFileSync(process.env.FAKE_CLONE + '/.claude-plugin/marketplace.json', 'utf8')).plugins.find((p) => p.name === nome);
+  return process.env.FAKE_CLONE + '/' + (typeof e?.source === 'string' ? e.source.replace(/^\\.\\//, '') : 'plugins/' + nome) + '/.claude-plugin/plugin.json';
+};
 if (a[1] === 'list') process.stdout.write(JSON.stringify(est().installed));
 else if (a[1] === 'marketplace' && a[2] === 'update') {
   if (process.env.FAKE_PULL === '1') execFileSync('git', ['-C', process.env.FAKE_CLONE, 'pull', '-q'], { stdio: 'ignore' });
@@ -33,7 +38,7 @@ else if (a[1] === 'marketplace' && a[2] === 'update') {
     process.stdout.write(JSON.stringify({ outcome: 'ok' }) + '\\n'); process.exit(0);
   }
   const nome = id.split('@')[0];
-  const pub = JSON.parse(fs.readFileSync(process.env.FAKE_CLONE + '/plugins/' + nome + '/.claude-plugin/plugin.json', 'utf8')).version;
+  const pub = JSON.parse(fs.readFileSync(manifestoDe(nome), 'utf8')).version;
   const e = est();
   for (const p of e.installed) if (p.id === id && p.scope === 'user') p.version = pub;
   fs.writeFileSync(process.env.FAKE_ESTADO, JSON.stringify(e));
@@ -44,7 +49,7 @@ else if (a[1] === 'marketplace' && a[2] === 'update') {
   if (process.env.FAKE_INSTALA_NADA === id) { process.stdout.write(JSON.stringify({ outcome: 'ok' }) + '\\n'); process.exit(0); }
   const nome = id.split('@')[0];
   // origem remota (git-subdir): o manifesto não mora no clone; a versão vem do repositório de lá
-  const arq = process.env.FAKE_CLONE + '/plugins/' + nome + '/.claude-plugin/plugin.json';
+  const arq = manifestoDe(nome);
   const pub = fs.existsSync(arq) ? JSON.parse(fs.readFileSync(arq, 'utf8')).version : '0.9.0';
   const e = est();
   e.installed.push({ id, version: pub, scope: a[a.indexOf('-s') + 1], enabled: true });
@@ -76,13 +81,15 @@ function montar(publicadas, instalados, mp = MP) {
   git(raiz, 'clone', '-q', origin, work);
   git(work, 'checkout', '-q', '-b', 'main');
   // `remotos`: entradas com origem fora do clone (F350: o design-system vem do repositório da empresa por git-subdir)
-  const publicar = (versoes, remotos = []) => {
+  // `pastas`: a pasta de um plugin local fora de plugins/<nome> (F357), relativa à raiz do clone
+  const publicar = (versoes, remotos = [], pastas = {}) => {
+    const pasta = (n) => pastas[n] ?? `plugins/${n}`;
     mkdirSync(join(work, '.claude-plugin'), { recursive: true });
-    writeFileSync(join(work, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: mp, plugins: Object.keys(versoes).map((n) => ({ name: n, source: `./plugins/${n}` })).concat(remotos.map((n) => ({ name: n, source: { source: 'git-subdir', url: 'acme/ds', path: `plugins/${n}`, sha: 'a'.repeat(40) } }))) }));
+    writeFileSync(join(work, '.claude-plugin', 'marketplace.json'), JSON.stringify({ name: mp, plugins: Object.keys(versoes).map((n) => ({ name: n, source: `./${pasta(n)}` })).concat(remotos.map((n) => ({ name: n, source: { source: 'git-subdir', url: 'acme/ds', path: `plugins/${n}`, sha: 'a'.repeat(40) } }))) }));
     for (const [n, v] of Object.entries(versoes)) {
-      mkdirSync(join(work, 'plugins', n, '.claude-plugin'), { recursive: true });
+      mkdirSync(join(work, pasta(n), '.claude-plugin'), { recursive: true });
       const userConfig = n === 'kit-design' ? { guarda: {}, cobrar_critica: {}, pasta_do_front: {}, largura: {} } : undefined;
-      writeFileSync(join(work, 'plugins', n, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: n, version: v, userConfig }));
+      writeFileSync(join(work, pasta(n), '.claude-plugin', 'plugin.json'), JSON.stringify({ name: n, version: v, userConfig }));
     }
     git(work, 'add', '-A'); git(work, 'commit', '-qm', 'publica'); git(work, 'push', '-q', 'origin', 'main');
   };
@@ -125,6 +132,19 @@ test('versão instalada < publicada: chama plugin update com o id completo, most
     assert.deepEqual([p.antes, p.publicado, p.depois, p.acao], ['0.1.1', '0.1.3', '0.1.3', 'atualizado']);
     assert.equal(s.reiniciar, true);
     assert.ok(s.clone.depois && s.clone.depois === s.clone.remoto, JSON.stringify(s.clone));
+  } finally { limpar(c); }
+});
+
+test('plugin local fora de plugins/<nome> (F357): a versão publicada vem da pasta da entrada', () => {
+  const c = montar({ orquestracao: '0.1.2' }, [inst('orquestracao', '0.1.2'), inst('design-system', '0.2.12')]);
+  try {
+    c.publicar({ orquestracao: '0.1.2', 'design-system': '0.2.13' }, [], { 'design-system': 'design-system/plugins/design-system' });
+    assert.ok(existsSync(join(c.raiz, 'work', 'design-system', 'plugins', 'design-system', '.claude-plugin', 'plugin.json')), 'precondição: o manifesto mora na pasta aninhada');
+    assert.ok(!existsSync(join(c.raiz, 'work', 'plugins', 'design-system')), 'precondição: nada em plugins/design-system');
+    const r = c.rodar();
+    assert.equal(r.exit, 0, r.err + r.out);
+    const p = achar(JSON.parse(r.out), 'design-system');
+    assert.deepEqual([p.antes, p.publicado, p.depois, p.acao], ['0.2.12', '0.2.13', '0.2.13', 'atualizado']);
   } finally { limpar(c); }
 });
 
@@ -193,7 +213,7 @@ test('cópia scope project: "não mexido (projeto …)", sem plugin update para 
 });
 
 test('plugin de origem remota (git-subdir): não lê versão do clone, não chama plugin update e diz como atualizar', () => {
-  const c = montar({ orquestracao: '0.1.2' }, [inst('orquestracao', '0.1.2'), inst('design-system', '0.1.13'), inst('tema-x', '0.1.0', { scope: 'project', projectPath: '/p/interno' })]);
+  const c = montar({ orquestracao: '0.1.2' }, [inst('orquestracao', '0.1.2'), inst('design-system', '0.2.13'), inst('tema-x', '0.1.0', { scope: 'project', projectPath: '/p/interno' })]);
   try {
     c.publicar({ orquestracao: '0.1.2' }, ['design-system', 'tema-x', 'sem-inst']);
     const r = c.rodar();

@@ -1,0 +1,15 @@
+{
+  "name": "wicomm-design-system",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "node --test scripts/*.test.mjs plugins/design-system/hooks/tests/*.test.mjs plugins/design-system/scripts/tests/*.test.mjs && npm test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

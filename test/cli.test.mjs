@@ -35,7 +35,9 @@ test('package.json: bin, engines, test e type module', () => {
   assert.equal(p.type, 'module');
   assert.equal(p.bin.kit, 'cli/kit.mjs');
   assert.equal(p.engines.node, '>=20');
-  assert.equal(p.scripts.test, 'node gate/com-fichas.mjs --quero 4 -- node --test --test-concurrency={fichas}'); // o teste do kit passa pelo teto da máquina (ADR 0005)
+  // o teste do kit passa pelo teto da máquina (ADR 0005) e não roda o design-system/, que tem npm e gate próprios (ADR 0020)
+  assert.match(p.scripts.test, /^node gate\/com-fichas\.mjs --quero 4 -- node --test --test-concurrency=\{fichas\} '/);
+  assert.ok(!p.scripts.test.includes('design-system'), p.scripts.test);
   assert.ok(existsSync(join(RAIZ, p.bin.kit)));
   assert.equal(p.dependencies, undefined, 'o kit não traz dependência npm');
 });
@@ -71,8 +73,8 @@ test('CLAUDE.md do repo traz todos os blocos do modelo (escrito a partir dele)',
 
 test('nenhum teste fixa a versão atual de um plugin (a versão sobe no lote, pela orquestradora)', () => {
   const m = json('.claude-plugin', 'marketplace.json');
-  // só os plugins deste repositório: a versão do de origem remota (F350) mora no repositório dele
-  const versoes = m.plugins.filter((p) => typeof p.source === 'string').map((p) => json(p.source, '.claude-plugin', 'plugin.json').version);
+  // só os plugins deste repositório; o tema (F357) fica de fora: o 0.1.0 dele colide por acaso com os insumos dos testes
+  const versoes = m.plugins.filter((p) => typeof p.source === 'string' && p.name !== 'tema-wicomm').map((p) => json(p.source, '.claude-plugin', 'plugin.json').version);
   const testes = [];
   const varrer = (dir) => {
     if (!existsSync(dir)) return;

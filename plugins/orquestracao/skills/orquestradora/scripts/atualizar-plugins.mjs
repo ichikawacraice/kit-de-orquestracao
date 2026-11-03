@@ -54,6 +54,12 @@ function escolherMarketplace(lista) {
   CLONE = cloneDe(MARKETPLACE);
 }
 const lerJson = (arq) => JSON.parse(readFileSync(arq, 'utf8'));
+/** O manifesto de um plugin local no clone, na pasta da entrada do marketplace (F357: o design-system mora em design-system/plugins/). */
+const manifestoNoClone = (nome) => {
+  const e = lerJson(join(CLONE, '.claude-plugin', 'marketplace.json')).plugins.find((p) => p.name === nome);
+  const pasta = typeof e?.source === 'string' ? e.source.replace(/^\.\//, '') : join('plugins', nome);
+  return lerJson(join(CLONE, pasta, '.claude-plugin', 'plugin.json'));
+};
 const headDoClone = () => {
   const r = git(['-C', CLONE, 'rev-parse', 'HEAD']);
   if (r.status !== 0) throw new Error(`não achei o clone do marketplace em ${CLONE}: ${r.err}`);
@@ -90,7 +96,7 @@ function trocarDeNome(velho, idNovo) {
   // só a opção que o manifesto novo declara: a que saiu dele faria o install recusar sempre. O novo de origem remota não tem manifesto no
   // clone: valem as do velho (o `design-system` declara as mesmas quatro do `kit-design`; se uma sair de lá, o install recusa e o velho fica)
   let declaradas = [];
-  const manifesto = (nome) => Object.keys(lerJson(join(CLONE, 'plugins', nome, '.claude-plugin', 'plugin.json')).userConfig ?? {});
+  const manifesto = (nome) => Object.keys(manifestoNoClone(nome).userConfig ?? {});
   try { declaradas = manifesto(idNovo.split('@')[0]); } catch { try { declaradas = manifesto(velho.id.split('@')[0]); } catch { /* sem manifesto: nenhuma */ } }
   const configs = Object.entries(opcoes && typeof opcoes === 'object' ? opcoes : {})
     .filter(([k, v]) => declaradas.includes(k) && ['string', 'number', 'boolean'].includes(typeof v) && v !== '')
@@ -122,7 +128,7 @@ function main(argv) {
   // origem remota (F350: git-subdir do repositório da empresa): a versão publicada não está no clone, então não se confere aqui
   const publicados = entradas.filter((p) => typeof p.source === 'string').map((p) => p.name);
   const remotos = entradas.filter((p) => typeof p.source !== 'string').map((p) => p.name);
-  const versaoPublicada = (nome) => lerJson(join(CLONE, 'plugins', nome, '.claude-plugin', 'plugin.json')).version;
+  const versaoPublicada = (nome) => manifestoNoClone(nome).version;
   const plugins = []; let falhou = false; let atualizou = false;
   const renomear = new Map(); // novo → as instalações user dos velhos (a primeira é a que se troca; as outras só saem)
   const disponivel = (n) => [...publicados, ...remotos].includes(n);

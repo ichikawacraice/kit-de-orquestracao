@@ -14,7 +14,7 @@ Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perd
 | Plugin `painel-sessoes` | O pane `/painel`, a barra de status acima do prompt e a batida que confere a fila a cada 10 min |
 | Plugin `processos` | Skills de processo (`spec-driven`, `revisar-diff`, `auditoria-de-clique`) e a conferência das docs no gate |
 | Plugin `kit-performance` | Opcional, não vem ligado: as práticas de performance por camada (front, dados, entrega, medir), cada uma com quando vale e quando não vale, e o agente `revisor-de-performance` |
-| Plugin `design-system` | O processo de design, para projeto com tela: a base (direção, anatomia, convenções), a revisão de arquitetura de UI antes, o crítico com nota depois e a guarda que cobra a crítica. Vem do repositório da empresa (privado); sem marca, que vem de um plugin de tema ([como ligar](docs/guia/ligar-e-desligar.md#design-system)). Sucede o `kit-design` |
+| Plugin `design-system` | O processo de design, para projeto com tela: a base (direção, anatomia, convenções), a revisão de arquitetura de UI antes, o crítico com nota depois e a guarda que cobra a crítica. Mora em `design-system/`, com o ateliê e os pacotes; sem marca, que vem de um plugin de tema ([como ligar](docs/guia/ligar-e-desligar.md#design-system)). Sucede o `kit-design` |
 | Plugin `tema-wicomm` | Só nos projetos internos da empresa, pelo `design.tema` do `.claude/kit.json`: o tema dela para o `design-system` (cor, fonte, logotipo, registro). **Desligado por padrão:** o kit não o liga sem o `design.tema`, e em app de cliente ou de fora da empresa é melhor não ativá-lo, porque a marca é dela e não entra na licença ([NOTICE](NOTICE)). Trocar as cores é trocar o plugin de tema |
 | CLI `kit` | Põe o kit num projeto: gate de testes, guarda de operação, `CLAUDE.md` com as regras e `.claude/kit.json` |
 
@@ -22,7 +22,7 @@ Kit para trabalhar com várias sessões do Claude Code no mesmo projeto sem perd
 
 - Claude Code no **app desktop** (o pane e as sessões entre si usam ferramentas do app).
 - Node 20 ou mais novo, e git. O kit não traz dependência npm.
-- O repositório do kit é público: o marketplace e o `npx` não pedem convite. Só o `design-system` (e o `tema-wicomm`) vêm do repositório da empresa, que é privado: para eles, a conta do GitHub da máquina (`gh auth login`) precisa de acesso de leitura a ele.
+- O repositório do kit é público: o marketplace e o `npx` não pedem convite, nem para o `design-system` e o `tema-wicomm`, que moram em `design-system/` desde o F357.
 
 ## Instalar em 3 passos
 

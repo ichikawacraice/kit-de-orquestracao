@@ -53,6 +53,53 @@ test('entrada de origem remota (git-subdir) não é subida nem vira pulado: a ve
   assert.equal(r.json.pulados, undefined, JSON.stringify(r.json.pulados));
 });
 
+test('plugin que chegou por merge de subárvore (F357): não sobe na chegada e sobe quando muda depois', () => {
+  const outro = join(base, 'outro'); mkdirSync(join(outro, 'plugins', 'ds', '.claude-plugin'), { recursive: true });
+  git(['init', '-q', '-b', 'main'], outro); git(['config', 'user.name', 'T'], outro); git(['config', 'user.email', 't@t'], outro);
+  writeFileSync(join(outro, 'plugins', 'ds', '.claude-plugin', 'plugin.json'), pluginJson('ds', '0.2.13'));
+  writeFileSync(join(outro, 'plugins', 'ds', 'z.mjs'), 'um\n');
+  git(['add', '-A'], outro); git(['commit', '-q', '-m', 'ds'], outro);
+  git(['fetch', '-q', outro, 'main']);
+  git(['merge', '-q', '-s', 'ours', '--no-commit', '--allow-unrelated-histories', 'FETCH_HEAD']);
+  git(['read-tree', '--prefix=vendor/', '-u', 'FETCH_HEAD']);
+  git(['commit', '-q', '-m', 'traz o ds']);
+  escrever('.claude-plugin/marketplace.json', JSON.stringify({ name: 'm', plugins: [{ name: 'a', source: './plugins/a' }, { name: 'ds', source: './vendor/plugins/ds' }] }));
+  commitar('lista o ds');
+  assert.equal(git(['log', '-1', '--format=%H', '-G"version"', '--', 'vendor/plugins/ds/.claude-plugin/plugin.json']), '', 'precondição: o -G sozinho não lê o diff do merge');
+  const r = subir();
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.deepEqual(r.json.subiu, [], JSON.stringify(r.json));
+  assert.equal(r.json.pulados, undefined, JSON.stringify(r.json.pulados));
+  // o primeiro PR depois da chegada muda o código e o plugin.json fora da versão, no mesmo commit: sobe
+  escrever('vendor/plugins/ds/z.mjs', 'dois\n');
+  escrever('vendor/plugins/ds/.claude-plugin/plugin.json', pluginJson('ds', '0.2.13').replace('plugin ds', 'plugin ds, novo'));
+  commitar('feat(ds): muda');
+  const r2 = subir();
+  assert.equal(r2.exit, 0, r2.err + r2.out);
+  assert.deepEqual(r2.json.subiu, [{ nome: 'ds', antes: '0.2.13', depois: '0.2.14', arquivos: ['vendor/plugins/ds/.claude-plugin/plugin.json', 'vendor/plugins/ds/z.mjs'] }]);
+});
+
+test('PR por merge commit que recebeu a main com a versão subida: a referência é a subida da main, e o código do PR sobe', () => {
+  // datas crescentes: no mesmo segundo o git log desempata pela ordem e esconde o defeito
+  const quando = (k) => { process.env.GIT_COMMITTER_DATE = process.env.GIT_AUTHOR_DATE = `2026-11-0${k}T12:00:00Z`; };
+  git(['switch', '-q', '-c', 'pr']);
+  escrever('plugins/a/.claude-plugin/plugin.json', pluginJson('a', '0.1.5').replace('plugin a', 'plugin a, novo')); quando(1); commitar('pr: descrição');
+  escrever('plugins/a/x.mjs', 'dois\n'); quando(2); commitar('pr: código');
+  git(['switch', '-q', 'main']);
+  escrever('plugins/a/.claude-plugin/plugin.json', pluginJson('a', '0.1.6')); quando(3); commitar('chore(versao): a 0.1.6');
+  git(['switch', '-q', 'pr']);
+  // as duas mexeram no plugin.json em linhas vizinhas: o conflito se resolve com a versão da main e a descrição do PR
+  spawnSync('git', ['merge', '-q', '--no-edit', 'main'], { cwd: repo, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL' });
+  escrever('plugins/a/.claude-plugin/plugin.json', pluginJson('a', '0.1.6').replace('plugin a', 'plugin a, novo'));
+  quando(4); git(['add', '-A']); git(['commit', '-q', '--no-edit']);
+  git(['switch', '-q', 'main']);
+  quando(5); git(['merge', '-q', '--no-ff', '--no-edit', 'pr']);
+  delete process.env.GIT_COMMITTER_DATE; delete process.env.GIT_AUTHOR_DATE;
+  const r = subir();
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.deepEqual(r.json.subiu.map((s) => [s.nome, s.depois, s.arquivos.includes('plugins/a/x.mjs')]), [['a', '0.1.7', true]], JSON.stringify(r.json));
+});
+
 test('nada mudou desde a última subida → subiu vazio e nenhum commit novo', () => {
   const antes = contagem();
   const r = subir();

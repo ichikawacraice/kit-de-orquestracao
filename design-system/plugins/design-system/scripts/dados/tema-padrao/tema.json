@@ -1,0 +1,20 @@
+{
+  "$schema": "../../packages/tokens/tema.schema.json",
+  "$description": "O tema Wicomm: o que é da marca e não do sistema. As cores moram em tema.tokens.json (DTCG, o slot `marca`); aqui, o resto. Trocar a marca é trocar esta pasta.",
+  "id": "wicomm",
+  "nome": "Wicomm",
+  "logotipo": {
+    "horizontal": "wicomm",
+    "monograma": "w"
+  },
+  "fonte": {
+    "familia": "Archivo",
+    "variavel": "--font-archivo",
+    "utilitaria": "font-archivo",
+    "eixoDeLargura": true
+  },
+  "contrasteAceitoSobreAMarca": 4.25,
+  "registro": {
+    "prefixo": "@wicomm"
+  }
+}
