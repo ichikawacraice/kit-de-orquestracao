@@ -428,6 +428,15 @@ caso('T6: painel fila-de-merge de quem não é a orquestradora → ask; a orques
   ok(r?.permissionDecision === 'ask', `esperava ask: ${JSON.stringify(r)}`);
   passa(merge('ORQ', repo, 'painel fila-de-merge 12'), 'orquestradora');
 });
+caso('T6 (F351): a dona anota o PR na fila (--anotar) → passa; o --anotar não libera o mergear junto', () => {
+  const repo = repoComOrquestradora();
+  passa(merge('DONA', repo, 'painel fila-de-merge 12:abc1234 --anotar'), 'anotar');
+  passa(merge('DONA', repo, 'git push && painel fila-de-merge 12:abc1234 --anotar; echo "exit=$?"'), 'anotar depois do push');
+  const junto = merge('DONA', repo, 'painel fila-de-merge 12:abc1234 --anotar && painel mergear 12 abc1234');
+  ok(junto?.permissionDecision === 'ask', `esperava ask: ${JSON.stringify(junto)}`);
+  const semAnotar = merge('DONA', repo, 'painel fila-de-merge 12:abc1234 && echo --anotar');
+  ok(semAnotar?.permissionDecision === 'ask', `esperava ask: ${JSON.stringify(semAnotar)}`);
+});
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

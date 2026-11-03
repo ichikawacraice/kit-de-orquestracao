@@ -700,3 +700,70 @@ test('motivoDeConflito: lista longa de arquivos encurta e o caminho de resolver 
   assert.match(agora, /PR 123 pronto/);
   assert.match(motivoDeConflito({ pr: 1, sobre: 'main', arquivos: [], base: 'main' }), /arquivos não listados/);
 });
+
+// F351: a dona anota o PR com o sha que testou; a rodada sem turno (a batida a lança) mergeia e grava o desfecho.
+test('--anotar: exige o sha da ponta, só anota (sem gate nem merge), liga o item e grava a pasta do repositório', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21);
+    const semSha = c.painel('fila-de-merge', '21', '--anotar');
+    assert.notEqual(semSha.exit, 0); assert.match(semSha.err, /cada PR leva o sha/);
+    const outraPonta = c.painel('fila-de-merge', `21:${c.shas[22]}`, '--anotar');
+    assert.notEqual(outraPonta.exit, 0); assert.match(outraPonta.err, /a ponta do PR 21/);
+    const comGate = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--anotar', '--gate', 'true');
+    assert.notEqual(comGate.exit, 0); assert.match(comGate.err, /--anotar não roda nada/);
+    assert.ok(!existsSync(c.estadoDaFila), 'as recusas não gravam nada');
+    const r = c.painel('fila-de-merge', `21:${c.shas[21].slice(0, 9)}`, '--anotar');
+    assert.equal(r.exit, 0, r.err);
+    const s = JSON.parse(r.out);
+    assert.equal(s.anotado, true);
+    assert.match(s.aviso, /ainda não tem gate/);
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.pendentes, [{ pr: 21, sha: c.shas[21].slice(0, 9) }]);
+    assert.ok(e.config.cwd.endsWith('/projx'), e.config.cwd);
+    assert.deepEqual(c.merges(), [], 'anotar não mergeia');
+    assert.equal(c.worktrees(), 1, 'anotar não monta árvore');
+    assert.match(c.dado('F1').agora, /espera a batida/);
+  } finally { limpar(c); }
+});
+
+test('rodada da orquestradora grava o config; a rodada --sem-turno usa a lista anotada, mergeia e grava o desfecho', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F2', 24); c.item('F3', 23);
+    const orq = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', 'test ! -f c.txt');
+    assert.equal(orq.exit, 0, orq.err + orq.out);
+    let e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.equal(e.config.gate, 'test ! -f c.txt');
+    assert.ok(e.config.cwd.endsWith('/projx'));
+    assert.equal(e.desfechos, undefined, 'a rodada da orquestradora não grava desfecho: ela já leu a saída');
+    assert.equal(c.painel('fila-de-merge', `24:${c.shas[24]}`, `23:${c.shas[23]}`, '--anotar').exit, 0);
+    e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.equal(e.config.gate, 'test ! -f c.txt', 'anotar não apaga o gate gravado');
+    const r = c.painel('fila-de-merge', `24:${c.shas[24]}`, `23:${c.shas[23]}`, '--gate', e.config.gate, '--sem-turno');
+    assert.equal(r.exit, 0, r.err + r.out);
+    e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.pendentes, []);
+    assert.equal(e.ocupada, null);
+    assert.equal(e.config.gate, 'test ! -f c.txt', 'a rodada sem turno mantém o config');
+    assert.equal(e.desfechos.length, 1);
+    assert.deepEqual(e.desfechos[0].mergeados.map((m) => m.pr), [24]);
+    assert.deepEqual(e.desfechos[0].devolvidos.map((d) => d.pr), [23]);
+    assert.deepEqual(e.desfechos[0].devolvidos[0].itens, [{ item: 'F3', dona: LA }]);
+    assert.deepEqual(c.merges(), [21, 24]);
+    assert.equal(c.dado('F2').etapa, 'feito');
+    assert.equal(c.dado('F3').etapa, 'execucao');
+  } finally { limpar(c); }
+});
+
+test('--sem-turno com erro da rodada grava o desfecho com o erro', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21);
+    const r = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', 'true', '--preparar', 'exit 3', '--sem-turno');
+    assert.notEqual(r.exit, 0);
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.match(e.desfechos[0].erro, /preparo falhou/);
+    assert.deepEqual(c.merges(), []);
+  } finally { limpar(c); }
+});

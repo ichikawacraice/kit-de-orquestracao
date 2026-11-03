@@ -49,10 +49,10 @@
 // e PAINEL_PAUSA_* (só teste).
 //
 // Toda escrita grava `atualizadoEm` (agora, ISO) quando o JSON não traz um, e sobe `version`.
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
@@ -60,7 +60,7 @@ import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
 import { MOTIVO_DO_FORK, SHA_VALIDADO, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote, motivoDeConflito } from './fila-de-merge.mjs';
-import { donoDaFilaVivo, lerFilaOrfa } from './fila-orfa.mjs';
+import { donoDaFilaVivo, filaOrfa } from './fila-orfa.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
 import { custoDoItem, sessoesDoItem } from './custo-do-item.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
@@ -88,6 +88,17 @@ function projetoDoCwd(cwd = process.cwd()) {
     if (e?.code === 'ENOENT') return { projeto: null, motivo: 'git não encontrado no PATH' };
     return { projeto: null, motivo: 'cwd fora de git' };
   }
+}
+
+// F351: a pasta do checkout principal do repositório (a dona do git common dir), onde a fila sem turno roda o git: o worktree
+// da dona some quando ela é arquivada. Repositório sem `.git` no nome (bare): o próprio cwd.
+function raizDoRepo(cwd = process.cwd()) {
+  try {
+    const repo = execFileSync('git', ['-C', cwd, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
+      encoding: 'utf8', timeout: Number(process.env.KIT_GIT_TIMEOUT_MS) || 10000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return repo && basename(repo) === '.git' ? dirname(repo) : cwd;
+  } catch { return cwd; }
 }
 
 // Quem sou: CLAUDE_CODE_SESSION_ID (id do CLI, presente no Bash de toda sessão) → registro do app (hooks/pool-comum.mjs)
@@ -990,19 +1001,48 @@ const ligarComAviso = (branches, opcoes) => {
   }
 };
 
+// F351: `--anotar` (a dona, com o sha que entrega) só põe os PRs nos pendentes e grava a pasta do repositório; a batida lança a
+// fila com `--sem-turno` quando ninguém a roda, e essa rodada grava o desfecho no estado (`desfechos`) para a batida entregar.
+// O `config` ({cwd, gate, preparar}) vem da última rodada que a orquestradora chamou: sem ele a batida não lança (não sabe o gate).
 function comandoFilaDeMerge(args) {
+  const semTurno = flag(args, '--sem-turno', false);
+  if (!semTurno) return filaDeMerge(args);
+  const arquivo = ESTADO_DA_FILA(projetoDoCwd().projeto);
+  const desfecho = (d) => comTrava(() => {
+    const e = arquivoJson(arquivo, {});
+    gravarJson(arquivo, { ...e, desfechos: [...(Array.isArray(e?.desfechos) ? e.desfechos : []), { em: new Date().toISOString(), ...d }] });
+  });
+  let saida;
+  try { saida = filaDeMerge(args, { semTurno }); } catch (e) {
+    try { desfecho({ erro: String(e?.message || e).split('\n')[0] }); } catch { /* o erro segue no log da batida */ }
+    throw e;
+  }
+  if (!saida.pendente) {
+    const { mergeados = [], devolvidos = [], suspeitaDeInstavel, erros, logs } = saida;
+    desfecho({ mergeados, devolvidos, ...(suspeitaDeInstavel ? { suspeitaDeInstavel } : {}), ...(erros ? { erros } : {}), ...(logs ? { logs } : {}) });
+  }
+  return saida;
+}
+
+function filaDeMerge(args, { semTurno = false } = {}) {
   const seco = flag(args, '--seco', false);
-  const gate = flag(args, '--gate') ?? GATE_PADRAO;
+  const anotar = flag(args, '--anotar', false);
+  const gateDado = flag(args, '--gate');
+  const gate = gateDado ?? GATE_PADRAO;
   const preparar = flag(args, '--preparar');
-  const uso = 'uso: painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]';
+  const uso = 'uso: painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco] | <PR:sha>… --anotar';
+  if (anotar && (seco || gateDado || preparar)) throw new Error(`fila-de-merge: --anotar não roda nada (o gate é o da fila do projeto); ${uso}`);
   // `N:sha` é o sha do recado "PR N pronto, HEAD <sha>": a ponta que mudou depois dele é recusada, como no `mergear` (F150).
   const casados = args.map((a) => /^([1-9]\d*)(?::([0-9a-f]{7,40}))?$/i.exec(String(a)));
   if (!args.length || casados.some((m) => !m)) throw new Error(uso);
   const pedidos = juntarPedidos([], casados.map(([, n, sha]) => (sha ? { pr: Number(n), sha: sha.toLowerCase() } : { pr: Number(n) })));
+  // a fila sem turno só leva o PR com o sha que a dona testou: sem ele, ninguém diria qual ponta mergear
+  if (anotar && pedidos.some((p) => !p.sha)) throw new Error(`fila-de-merge --anotar: cada PR leva o sha que você testou (<PR>:<sha>); ${uso}`);
   const cwd = process.cwd();
   const arquivo = seco ? null : ESTADO_DA_FILA(projetoDoCwd(cwd).projeto);
   const lista = (v) => (Array.isArray(v) ? v : []);
-  const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };
+  // os outros campos do estado (config, desfechos, lancada) passam intactos por toda gravação
+  const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ...(e && typeof e === 'object' ? e : {}), ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };
   // o PR pedido agora tem de existir e estar aberto (erro de quem pediu, como antes); o resto se confere na rodada.
   // F220: o PR que já está anotado na fila (o relance da fila órfã repete a lista inteira) e fechou no meio tempo não
   // derruba a chamada: a rodada o tira da fila, como faz com o pendente que fechou.
@@ -1013,8 +1053,19 @@ function comandoFilaDeMerge(args) {
     branches.set(pr, typeof v.headRefName === 'string' ? v.headRefName : null);
     if (v.state !== 'OPEN' && !naFila.has(pr)) throw new Error(`fila-de-merge: o PR ${pr} não está aberto (${v.state})`);
     if (deFork(v)) throw new Error(`fila-de-merge: ${MOTIVO_DO_FORK(pr)}`);
+    const pedido = pedidos.find((p) => p.pr === pr).sha;
+    if (anotar && !String(v.headRefOid ?? '').toLowerCase().startsWith(pedido)) throw new Error(`fila-de-merge --anotar: a ponta do PR ${pr} é ${String(v.headRefOid ?? '?').slice(0, 7)}, não ${pedido}: empurre e anote o sha que você testou`);
   }
   if (seco) return rodadaDaFila(pedidos, { seco, gate, preparar, cwd });
+  if (anotar) {
+    const r = comTrava(() => {
+      const e = lerEstado();
+      const pendentes = juntarPedidos(e.pendentes, pedidos);
+      gravarJson(arquivo, { ...e, pendentes, config: { ...(e.config ?? {}), cwd: raizDoRepo(cwd) } });
+      return { anotado: true, pendentes, ...(e.config?.gate ? {} : { aviso: 'a fila deste projeto ainda não tem gate gravado: a batida não a lança até a orquestradora rodar a fila uma vez' }) };
+    });
+    return { ...r, ...ligarComAviso(branches, { projeto: projetoDoCwd(cwd).projeto, oQue: 'espera a batida lançar o gate' }) };
+  }
   const entrada = comTrava(() => {
     const e = lerEstado();
     if (e.ocupada && e.ocupada.pid !== process.pid && donoDaFilaVivo(e.ocupada)) {
@@ -1023,8 +1074,11 @@ function comandoFilaDeMerge(args) {
       return { pendente: true, ocupadaDesde: e.ocupada.desde ?? null, pendentes };
     }
     const lote = juntarPedidos(juntarPedidos(e.emVoo, e.pendentes), pedidos);
-    // o gate e o preparo ficam no estado: o relance da fila órfã (F220) os repete
-    gravarJson(arquivo, { ocupada: { pid: process.pid, desde: new Date().toISOString(), gate, ...(preparar ? { preparar } : {}) }, pendentes: [], emVoo: lote });
+    // o gate e o preparo ficam no estado: o relance da fila órfã (F220) os repete; a rodada da orquestradora grava também o
+    // `config` que a fila sem turno usa (F351)
+    const config = semTurno ? e.config : { cwd: raizDoRepo(cwd), gate, preparar: preparar ?? null };
+    // a fila que se gravou dona zera a contagem de lançamentos da batida
+    gravarJson(arquivo, { ...e, lancada: undefined, ...(config ? { config } : {}), ocupada: { pid: process.pid, desde: new Date().toISOString(), gate, ...(preparar ? { preparar } : {}) }, pendentes: [], emVoo: lote });
     return { lote };
   });
   const projetoDaFila = projetoDoCwd(cwd).projeto;
@@ -1068,7 +1122,7 @@ function comandoFilaDeMerge(args) {
       lote = comTrava(() => {
         const e = lerEstado();
         const seguinte = juntarPedidos(adiados, e.pendentes.filter((p) => !reler(p)));
-        gravarJson(arquivo, { ocupada: seguinte.length ? e.ocupada : null, pendentes: juntarPedidos(aReler, e.pendentes.filter(reler)), emVoo: seguinte });
+        gravarJson(arquivo, { ...e, ocupada: seguinte.length ? e.ocupada : null, pendentes: juntarPedidos(aReler, e.pendentes.filter(reler)), emVoo: seguinte });
         return seguinte;
       });
     }
@@ -1237,14 +1291,62 @@ function comandoPodeReiniciar(args) {
   return { saida, comoJson };
 }
 
-// F220: as filas de merge com PR anotado e sem processo vivo, por projeto (o nome do arquivo é o slug do projeto).
-function filasOrfas() {
+// F351: a batida lança a fila sem turno. Para cada projeto: a fila com PR anotado e sem processo vivo (órfã, F220) se lança
+// sozinha, destacada (o mod dá 60 s à batida; o gate leva muito mais), quando todo PR anotado tem o sha da dona, o `config` tem o
+// gate e a pasta do repositório, e não houve lançamento nos últimos RELANCE_MIN (o processo novo leva uns segundos para se gravar
+// dono). A que não se lança segue no relatório da orquestradora como fila parada. KIT_FILA_SEM_TURNO=off desliga o lançamento.
+// A marca `lancada` se grava dentro da trava da batida; o processo sobe depois que ela a solta (a fila também toma a trava, e
+// esperaria a batida inteira).
+const RELANCE_MIN = 5;
+const LANCAMENTOS = 3; // lançada tantas vezes sem nunca se gravar dona: volta ao relatório da orquestradora
+function lancarFilaSemTurno({ orfa, config, arquivo }) {
+  const log = arquivo.replace(/\.json$/, '.sem-turno.log');
+  const fd = openSync(log, 'w');
+  try {
+    const args = [fileURLToPath(import.meta.url), 'fila-de-merge', ...orfa.prs.map((p) => `${p.pr}:${p.sha}`), '--gate', config.gate, ...(config.preparar ? ['--preparar', config.preparar] : []), '--sem-turno'];
+    // sem a id da sessão que rodou a batida: a fila não é dela
+    const filho = spawn(process.execPath, args, { cwd: config.cwd, detached: true, stdio: ['ignore', fd, fd], env: { ...process.env, CLAUDE_CODE_SESSION_ID: '' } });
+    filho.on('error', () => { /* o log e o relance cobrem */ });
+    filho.unref();
+    return { pid: filho.pid ?? null, log };
+  } finally { closeSync(fd); }
+}
+function filasDaBatida({ seco, agoraMs }) {
   const dir = dirname(ESTADO_DA_FILA('x'));
   let nomes = [];
-  try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return {}; }
-  const r = {};
-  for (const n of nomes.sort()) { const o = lerFilaOrfa(join(dir, n)); if (o) r[n.slice(0, -'.json'.length)] = o; }
-  return r;
+  try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return { orfas: {}, vivas: {}, desfechos: {}, lancadas: {} }; }
+  const orfas = {}; const vivas = {}; const desfechos = {}; const lancadas = {};
+  const desligada = process.env.KIT_FILA_SEM_TURNO === 'off';
+  for (const n of nomes.sort()) {
+    const nome = n.slice(0, -'.json'.length);
+    const arquivo = join(dir, n);
+    const e = arquivoJson(arquivo, null);
+    if (!e || typeof e !== 'object') continue;
+    if (Array.isArray(e.desfechos) && e.desfechos.length) desfechos[nome] = e.desfechos;
+    const prsDe = (l) => (Array.isArray(l) ? l.map((p) => p?.pr).filter(Number.isInteger) : []);
+    const orfa = filaOrfa(e);
+    if (!orfa) { const prs = [...prsDe(e.emVoo), ...prsDe(e.pendentes)]; if (prs.length) vivas[nome] = prs; continue; }
+    const c = e.config ?? {};
+    const recente = Date.parse(e.lancada?.em) > agoraMs - RELANCE_MIN * 60_000;
+    const tentativas = Number.isInteger(e.lancada?.tentativas) ? e.lancada.tentativas : 0;
+    const pode = (recente || tentativas < LANCAMENTOS) && !desligada && orfa.prs.every((p) => p.sha) && textoNaoVazio(c.gate) && textoNaoVazio(c.cwd) && existsSync(c.cwd);
+    if (!pode) { orfas[nome] = orfa; continue; }
+    vivas[nome] = orfa.prs.map((p) => p.pr);
+    if (recente) continue;
+    if (!seco) gravarJson(arquivo, { ...e, lancada: { em: new Date(agoraMs).toISOString(), tentativas: tentativas + 1 } });
+    lancadas[nome] = { prs: vivas[nome], orfa, config: c, arquivo };
+  }
+  return { orfas, vivas, desfechos, lancadas };
+}
+// Tira do estado os desfechos entregues à orquestradora; os entregues só às donas ficam marcados até haver orquestradora.
+function baixarDesfechos(entregas) {
+  for (const [nome, { orquestradora, soDonas }] of Object.entries(entregas ?? {})) {
+    const arquivo = ESTADO_DA_FILA(nome);
+    const e = arquivoJson(arquivo, null);
+    if (!e || !Array.isArray(e.desfechos)) continue;
+    const resto = e.desfechos.slice(orquestradora).map((d, i) => (i < soDonas ? { ...d, donasAvisadas: true } : d));
+    gravarJson(arquivo, { ...e, desfechos: resto });
+  }
 }
 
 function comandoBatida(args) {
@@ -1259,8 +1361,9 @@ function comandoBatida(args) {
   const solta = Number(process.env.BATIDA_SOLTA_MIN);
   const rodar = () => {
     const itens = itensVivos();
+    const filas = filasDaBatida({ seco, agoraMs });
     const julgado = julgar({
-      agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(), filasOrfas: filasOrfas(),
+      agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(), filasOrfas: filas.orfas, filasVivas: filas.vivas, desfechos: filas.desfechos,
       estado: arquivoJson(join(pasta, 'estado.json'), {}),
       semDona, donaACaminho, cartoes: cartoesDoPainel().map((c) => c.data),
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
@@ -1269,13 +1372,15 @@ function comandoBatida(args) {
     });
     const marcadoresApagados = marcadoresMortos(new Map(linhas.map((r) => [r.sessionId, r])), agoraMs);
     const cartoesApagados = cartoesResolvidos({ cartoes: cartoesDoPainel(), linhas, projetoDe: projetoDeUmaLinha(), agoraMs, itens: new Map(itens) });
-    const saida = { cartoesApagados, mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
+    const saida = { cartoesApagados, ...(Object.keys(filas.lancadas).length ? { filasLancadas: Object.fromEntries(Object.entries(filas.lancadas).map(([n, l]) => [n, l.prs])) } : {}), mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
     if (seco) return saida;
     const soltos = [];
     for (const { F, motivo } of julgado.soltar) {
       try { soltarSemTrava(F, motivo, false); soltos.push(F); } catch (e) { process.stderr.write(`batida: não soltei ${F}: ${e?.message || e}\n`); }
     }
     saida.soltos = soltos;
+    saida.lancarDepois = filas.lancadas;
+    try { baixarDesfechos(julgado.desfechos); } catch (e) { process.stderr.write(`batida: não baixei os desfechos da fila: ${e?.message || e}\n`); }
     gravarJson(join(pasta, 'estado.json'), julgado.estado);
     const em = new Date(agoraMs).toISOString();
     for (const [nome, p] of Object.entries(julgado.projetos)) {
@@ -1292,7 +1397,16 @@ function comandoBatida(args) {
     try { gravarReinicio(conferirReinicio({ linhas, listaEm: statSync(arquivo).mtimeMs, sessoesDe: 'lista', agoraMs }).completo); } catch (e) { process.stderr.write(`batida: não gravei pode-reiniciar.json: ${e?.message || e}\n`); }
     return saida;
   };
-  return seco ? rodar() : comTrava(rodar);
+  if (seco) return rodar();
+  const saida = comTrava(rodar);
+  for (const [nome, l] of Object.entries(saida.lancarDepois ?? {})) {
+    try { lancarFilaSemTurno(l); } catch (err) {
+      process.stderr.write(`batida: não lancei a fila de ${nome}: ${err?.message || err}\n`);
+      delete saida.filasLancadas?.[nome];
+    }
+  }
+  delete saida.lancarDepois;
+  return saida;
 }
 
 // F183: as perguntas fechadas (respondida/cancelada) que ainda estão na pasta quente vão para o arquivo, sem mexer no conteúdo.
