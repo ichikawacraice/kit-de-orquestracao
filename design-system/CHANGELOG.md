@@ -4,6 +4,17 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.18.0 · 04/11/2026
+
+Camadas: base
+
+### O que muda
+- **MARCA-04 ganha a exceção do arquivo oficial da marca.** O logotipo que a dona da marca publica é a fonte quando mora no tema com a origem declarada (`logotipo.imagem.origem` do `tema.json`): entra como veio, sem redesenho pelos tokens, e o script só o leva para onde é usado, conferindo byte a byte. Trocar a cor da marca obriga a trocar o arquivo oficial no mesmo PR. O resto da regra não muda: favicon e qualquer outro raster com a cor da marca continuam saindo dos tokens por script.
+
+### Migração
+- Projeto com o logotipo oficial em PNG: guarde-o no tema com a `origem` declarada e deixe o script copiá-lo e conferi-lo. Logotipo redesenhado à mão a partir do oficial: troque-o pelo arquivo oficial.
+- Quem não usa raster da marca não precisa mudar nada.
+
 ## 0.17.0 · 04/11/2026
 
 Camadas: base, registro
