@@ -13,7 +13,7 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | MARCA-01 | DESIGN.md | ADR 0146 · ADR 0124. |
 | MARCA-02 | DESIGN.md | ADR 0124. |
 | MARCA-03 | DESIGN.md | ADR 0124 · ADR 0146. |
-| MARCA-04 | DESIGN.md | Convenção do front (raster da marca) · ADR 0124. |
+| MARCA-04 | DESIGN.md | Convenção do front (raster da marca) · ADR 0124 · a exceção do arquivo oficial da marca: Q938. |
 | MARCA-05 | DESIGN.md | ADR 0124. |
 | COR-01 | DESIGN.md | ADR 0102 · SPEC-065. |
 | COR-02 | DESIGN.md | ADR 0124 · ADR 0125. |

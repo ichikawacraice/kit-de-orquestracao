@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.17.0
+versao: 0.18.0
 description: A direção de design dos apps React do sistema — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   marca: "do tema (temas/<id>/tema.tokens.json, slot marca): cor, hover, sobre, tinta e gradiente, nos dois temas"
@@ -171,9 +171,9 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 - **Confere.** `tokens` (razão entre as pontas) · `guarda:a-marca-nao-carrega-texto`.
 
 ### MARCA-04 · Raster com a cor da marca nasce de script
-- **Regra.** Favicon, logotipo em PNG e qualquer raster com a cor da marca são gerados por script a partir dos tokens, com um modo `--conferir` que roda na suíte. Nada exportado à mão.
-- **Por quê.** Raster não lê token: depois de uma troca de cor, favicon e logotipos ficaram dois dias na cor antiga sem nenhum teste ver.
-- **Confere.** `guarda:o-raster-da-marca-sai-do-token`.
+- **Regra.** Favicon, logotipo em PNG e qualquer raster com a cor da marca são gerados por script a partir dos tokens, com um modo `--conferir` que roda na suíte. Nada exportado à mão. **Exceção declarada:** o arquivo oficial da marca (o logotipo que a dona da marca publica) é a fonte, desde que more no tema com a origem declarada (`logotipo.imagem.origem` do `tema.json`). Ele entra como veio, sem redesenho pelos tokens; o script só o leva para onde é usado e confere byte a byte. Trocar a cor da marca obriga a trocar o arquivo oficial no mesmo PR.
+- **Por quê.** Raster não lê token: depois de uma troca de cor, favicon e logotipos ficaram dois dias na cor antiga sem nenhum teste ver. O logotipo oficial não é do sistema para redesenhar: refeito pelos tokens, deixa de ser a marca. A cor da marca não muda sem o logotipo mudar junto, e a conferência byte a byte pega a cópia que ficou velha.
+- **Confere.** `guarda:o-raster-da-marca-sai-do-token` · o teste do registro que compara o desenho embutido com o arquivo do tema, byte a byte.
 
 ### MARCA-05 · Destrutivo é contorno; preenchido é primário
 - **Regra.** O botão destrutivo **nunca é preenchido**: é contorno com a tinta do token `destructive` (a voz `ruim` como token de tema: `#B8113A` no claro, `#FF8095` no escuro) e anel a 38% dela. Preenchimento na cor da marca é sempre o primário.
@@ -532,7 +532,7 @@ Cada app declara a sua densidade no arquivo do projeto, `design/design-system.js
 | MARCA-01 | A cor da marca é declarada | tokens |
 | MARCA-02 | A marca não escreve | guarda |
 | MARCA-03 | O gradiente vive em desenho | tokens, guarda |
-| MARCA-04 | Raster da marca nasce de script | guarda |
+| MARCA-04 | Raster da marca nasce de script (o arquivo oficial da marca, com origem, é a exceção) | guarda |
 | MARCA-05 | Destrutivo é contorno | guarda |
 | COR-01 | Duas paletas | guarda, tokens |
 | COR-02 | Neutros frios | tokens |
