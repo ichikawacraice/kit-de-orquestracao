@@ -243,30 +243,87 @@ function DialogLongo({
  * se consulta ao lado do trabalho (histórico, atividade), com a tela de trás à
  * vista e clicável.
  *
- * Por isso não é modal: sem véu, sem prender o foco, e clicar fora NÃO o fecha
- * (quem fecha é o X, o Esc ou o botão que o abriu). Monte o `Dialog` com
- * `modal={false}`.
+ * Por isso não é modal: sem véu, sem prender o foco, e por padrão clicar fora
+ * NÃO o fecha (quem fecha é o X, o Esc ou o botão que o abriu). Monte o
+ * `Dialog` com `modal={false}`.
+ *
+ * Com `fechaAoClicarFora`, o clique na tela de trás fecha — para o painel de
+ * detalhe que se abre de um item e some quando a pessoa volta à lista. Não
+ * fecham: o foco que sai (o Tab até a tela de trás não é clique), o que flutua
+ * por cima (menu, lista, outro diálogo, aviso), o gatilho marcado com
+ * `data-mantem-o-painel` ou o cartão do quadro (que trocam o item mostrado) e o
+ * rascunho escrito num campo de texto do painel, inclusive busca, e-mail,
+ * número e área editável (o clique não descarta texto).
  */
+const NAO_FECHA_O_PAINEL = [
+  "[data-mantem-o-painel]",
+  '[data-slot="cartao-do-quadro"]',
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+  '[role="menu"]',
+  '[role="listbox"]',
+  "[data-radix-popper-content-wrapper]",
+  '[data-slot="toast-viewport"]',
+  '[data-slot="toast"]',
+].join(", ")
+
+const CAMPO_DE_TEXTO = ["textarea", "input:not([type])", ...["text", "search", "email", "tel", "url", "number", "password"].map((t) => `input[type=${t}]`)].join(", ")
+
+function temRascunho(painel: Element | null) {
+  if (!painel) return false
+  return (
+    [...painel.querySelectorAll(CAMPO_DE_TEXTO)].some(
+      (campo) => (campo as HTMLTextAreaElement | HTMLInputElement).value.trim() !== ""
+    ) || [...painel.querySelectorAll('[contenteditable="true"], [contenteditable=""]')].some((el) => (el.textContent ?? "").trim() !== "")
+  )
+}
+
 function DialogLateral({
   titulo,
   cabecalho,
   tituloSoParaLeitor = false,
+  fechaAoClicarFora = false,
+  onInteractOutside,
+  onFocusOutside,
   className,
   children,
+  ref,
   ...props
 }: Omit<React.ComponentProps<typeof DialogPrimitive.Content>, "title"> & {
   titulo: React.ReactNode
   /** Um seletor de modos, por exemplo. Com `tituloSoParaLeitor`, ocupa a linha do título. */
   cabecalho?: React.ReactNode
   tituloSoParaLeitor?: boolean
+  /** O clique na tela de trás fecha o painel, com as exceções acima. */
+  fechaAoClicarFora?: boolean
 }) {
+  const painel = React.useRef<HTMLDivElement | null>(null)
+  // O ref de quem usa é composto com o da guarda do rascunho, não a substitui.
+  const juntaRefs = React.useCallback(
+    (no: HTMLDivElement | null) => {
+      painel.current = no
+      if (typeof ref === "function") ref(no)
+      else if (ref) ref.current = no
+    },
+    [ref]
+  )
   return (
     <DialogPortal>
       <DialogPrimitive.Content
+        ref={juntaRefs}
         data-slot="dialog-lateral"
         data-superficie
         aria-describedby={undefined}
-        onInteractOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => {
+          onFocusOutside?.(e)
+          if (fechaAoClicarFora) e.preventDefault()
+        }}
+        onInteractOutside={(e) => {
+          onInteractOutside?.(e)
+          if (e.defaultPrevented) return
+          const alvo = e.target instanceof Element ? e.target : null
+          if (!fechaAoClicarFora || alvo?.closest(NAO_FECHA_O_PAINEL) || temRascunho(painel.current)) e.preventDefault()
+        }}
         className={cn(
           "superficie-flutuante fixed top-3 right-3 bottom-3 z-50 flex w-[min(26rem,calc(100vw-1.5rem))] flex-col gap-3 overflow-hidden rounded-2xl p-4 text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-right-4 data-[state=closed]:slide-out-to-right-4 data-[state=open]:duration-painel data-[state=closed]:duration-painel data-[state=open]:ease-abre data-[state=closed]:ease-fecha motion-reduce:!animate-none",
           className

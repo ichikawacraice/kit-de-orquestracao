@@ -52,6 +52,21 @@ describe("o quadro", () => {
 })
 
 describe("a coluna", () => {
+  it("acompanha o conteúdo: a coluna carrega as classes que levam o cabeçalho e a tinta do alvo até o fim (o jsdom não mede layout)", () => {
+    const { container } = render(
+      <ColunaDoQuadro alvo>
+        <CabecalhoDaColuna nome="Entrada" />
+      </ColunaDoQuadro>,
+    )
+    const coluna = container.querySelector('[data-slot="coluna-do-quadro"]')
+    expect(coluna).toBeTruthy()
+    // Esticada à altura visível do quadro, a coluna acabava antes dos cartões: o cabeçalho
+    // `sticky` desgrudava no fim dela e a tinta do alvo cobria só a parte visível.
+    expect(classes(coluna)).toContain("h-max")
+    expect(classes(coluna)).toContain("min-h-full")
+    expect(classes(coluna)).toContain("bg-marca-tinta")
+  })
+
   it("mora no chão e se nomeia pelo cabeçalho; a contagem tem nome acessível", () => {
     render(
       <ColunaDoQuadro>

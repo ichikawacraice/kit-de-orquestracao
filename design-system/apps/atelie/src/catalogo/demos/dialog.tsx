@@ -81,6 +81,21 @@ export default function DemoDoDialogo() {
           </DialogLateral>
         </Dialog>
       </Amostra>
+      <Amostra titulo="Lateral que fecha ao clicar fora">
+        <Dialog modal={false}>
+          <DialogTrigger asChild>
+            <Button variant="secondary" data-mantem-o-painel>
+              Ver nota
+            </Button>
+          </DialogTrigger>
+          <DialogLateral titulo="Nota do pedido" fechaAoClicarFora>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="nota-lateral">Nota</Label>
+              <Input id="nota-lateral" placeholder="Com texto aqui, clicar fora não fecha" />
+            </div>
+          </DialogLateral>
+        </Dialog>
+      </Amostra>
     </Amostras>
   )
 }
