@@ -2,7 +2,7 @@ import * as React from 'react'
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-import { AutorDaConversa, BalaoDaConversa, Conversa, DiaDaConversa } from '@/registry/design-system/ui/conversa'
+import { AutorDaConversa, BalaoDaConversa, Conversa, DiaDaConversa, TextoComLinks } from '@/registry/design-system/ui/conversa'
 import {
   CORES_DA_PESSOA,
   MONOGRAMA_DA_PESSOA,
@@ -94,7 +94,7 @@ function Balao(props: Partial<React.ComponentProps<typeof BalaoDaConversa>>) {
         instante="2026-11-04T17:32:00.000Z"
         {...props}
       >
-        Pode revisar?
+        {props.children ?? 'Pode revisar?'}
       </BalaoDaConversa>
     </Conversa>
   )
@@ -208,5 +208,33 @@ describe('Conversa', () => {
     expect(screen.getByText('Ana Souza').className).toContain(NOME_DA_PESSOA.cyan)
     expect(screen.getByText('Bruno Lima').className).toContain('text-foreground-2')
     expect(screen.getByText('Cliente').dataset.slot).toBe('badge')
+  })
+})
+
+describe('TextoComLinks', () => {
+  it('o http(s) do corpo vira link em nova aba, com o aviso para o leitor; o resto segue texto', () => {
+    const { container } = render(
+      <Balao lado="meu">
+        <TextoComLinks texto={'veja https://loja.example/p/1. e javascript:alert(1)'} />
+      </Balao>
+    )
+    expect(screen.getAllByRole('link')).toHaveLength(1)
+    const link = screen.getByRole('link', { name: /^https:\/\/loja\.example\/p\/1\s*\(abre em nova aba\)$/ })
+    expect(link.getAttribute('href')).toBe('https://loja.example/p/1')
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(link.closest('p')).toBeTruthy()
+    expect(container.querySelector('p')?.textContent).toContain('. e javascript:alert(1)')
+  })
+
+  it('o sublinhado é da tinta, e o respiro do anel tem a cor do balão', () => {
+    render(<TextoComLinks texto="https://a.example" />)
+    const link = screen.getByRole('link')
+    for (const c of ['underline', 'decoration-current/50', 'hover:decoration-current', 'box-decoration-clone', 'focus-visible:ring-offset-2']) {
+      expect(link.className).toContain(c)
+    }
+    expect(link.className).toContain('in-data-[lado=meu]:focus-visible:ring-offset-marca-tinta')
+    expect(link.className).toContain('in-data-[lado=outro]:focus-visible:ring-offset-muted')
+    expect(link.className).not.toMatch(/text-(?:primary|marca)/)
   })
 })

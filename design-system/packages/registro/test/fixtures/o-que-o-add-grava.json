@@ -123,9 +123,10 @@
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
       "components/ui/badge.tsx": "0b6926a00ad9145d508e5385674abc5d6487baf48b93832a03e7ef3c43ba7467",
       "components/ui/chip-de-estado.tsx": "6f30c9e15475d0777a2dd698b04d0dc825df511a15bbb00125f54fcf092e0ec6",
-      "components/ui/conversa.tsx": "e8b9fc0364b972819bcb7ff3657e192c0bbb7acc0d3291de0491010aa878c603",
+      "components/ui/conversa.tsx": "34c21baac182dd2556ab74107b26555ebc52a04b8f5b268c511649fcc6592a1a",
       "components/ui/monograma.tsx": "04733294bb0b4bb4f9aeacee9c4ef0fee0ca149e0099444cfab7200c9abaa065",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/links-no-texto.ts": "3fe690b7c65f7461a5ca8cb26f1cb8034446fab3e10b31507074fbb76f75c0a2",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "dialog": {

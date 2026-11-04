@@ -4,6 +4,17 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.20.1 · 04/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **O link clicável na conversa.** A `conversa` ganha `TextoComLinks`, o corpo do balão com os links `http(s)` clicáveis em nova aba, montados como `<a>` (nunca HTML cru: o corpo vem de quem escreveu); `javascript:`, `www.` sem esquema e afins seguem texto, e a pontuação do fim fica com a frase. O link é tinta com sublinhado a 50%, o anel fecha em cada linha da URL quebrada e o respiro do anel tem a cor do balão. A linha *Conversa entre pessoas* da PECA-01 passa a citá-lo.
+- A lib nova `links-no-texto` (`trechosComLinks`) vem junto com a `conversa`.
+
+### Migração
+- `npx shadcn add <registro>/conversa.json`. No balão, troque `{corpo}` por `<TextoComLinks texto={corpo} />`.
+
 ## 0.20.0 · 04/11/2026
 
 Camadas: base, registro
