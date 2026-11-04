@@ -49,9 +49,10 @@ const arquivos = (pasta) =>
 /**
  * `{ itens: { <item>: { <arquivo>: sha256 } } }`: cada item instalado sozinho num projeto vazio (um item que só
  * instala junto de outro apareceria aqui), com o que ele gravou. `pasta`: o build do registro (os `<item>.json`);
- * `prefixo`: o do registro no `components.json`; `so`: só esses itens.
+ * `prefixo`: o do registro no `components.json`; `so`: só esses itens; `aoGravar(nome, projeto)`: chamado com a
+ * pasta do projeto descartável de cada item, antes de ela ser apagada (para ler o que o add gravou).
  */
-export async function oQueOAddGrava(pasta, { prefixo = '@wicomm', so } = {}) {
+export async function oQueOAddGrava(pasta, { prefixo = '@wicomm', so, aoGravar } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'registro-add-'))
   const bin = join(tmp, 'bin')
   mkdirSync(bin)
@@ -94,6 +95,7 @@ export async function oQueOAddGrava(pasta, { prefixo = '@wicomm', so } = {}) {
         f.on('error', falha)
         f.on('exit', (c) => (c === 0 ? ok() : falha(new Error(`shadcn add ${prefixo}/${nome} saiu ${c}:\n${saida}`))))
       })
+      if (aoGravar) await aoGravar(nome, proj)
       itens[nome] = Object.fromEntries(
         arquivos(proj)
           .map((p) => [relative(proj, p).split(sep).join('/'), p])

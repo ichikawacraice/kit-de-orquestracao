@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.20.2
+versao: 0.20.3
 description: A anatomia dos apps React do sistema — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 

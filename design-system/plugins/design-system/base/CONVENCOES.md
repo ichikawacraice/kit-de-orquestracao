@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.20.2
+versao: 0.20.3
 description: As convenções de engenharia do front dos apps React do sistema — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
 ---
 

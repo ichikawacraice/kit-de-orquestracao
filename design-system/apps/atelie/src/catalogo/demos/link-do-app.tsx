@@ -28,7 +28,7 @@ export default function DemoDoLinkDoApp() {
     <Amostras>
       <Amostra titulo="Com o link do framework (no Next, o next/link)" primeira>
         <ProvedorDeLink componente={Roteador}>
-          <LinkDoApp href="/pedidos" className="text-sm underline underline-offset-4">
+          <LinkDoApp href="/pedidos" className="text-sm sublinhado-de-link">
             Ver os pedidos
           </LinkDoApp>
         </ProvedorDeLink>

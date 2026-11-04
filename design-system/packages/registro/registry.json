@@ -322,6 +322,21 @@
           "background-image": "var(--primary-gradient)",
           "background-color": "var(--primary)"
         },
+        "@utility sublinhado-de-link": {
+          "text-decoration-line": "underline",
+          "text-underline-offset": "2.5px",
+          "text-decoration-style": "solid",
+          "text-decoration-color": "color-mix(in oklab, currentColor 50%, transparent)",
+          "@variant hover": {
+            "text-decoration-color": "currentColor"
+          }
+        },
+        "@utility sublinhado-de-ajuda": {
+          "text-decoration-line": "underline",
+          "text-underline-offset": "2.5px",
+          "text-decoration-style": "dotted",
+          "text-decoration-color": "color-mix(in oklab, currentColor 35%, transparent)"
+        },
         "@layer components": {
           ".t-display": {
             "font-size": "23px",

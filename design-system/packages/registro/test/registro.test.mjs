@@ -142,3 +142,19 @@ test('o shadcn build sai sem erro, na pasta da versão (o caminho padrão do bui
     for (const f of json.files ?? []) assert.ok(f.content?.length > 0, `${item.name}: ${f.path} sem conteúdo`)
   }
 })
+
+// O sublinhado é um só (CTRL-03, F382): a peça usa `sublinhado-de-link` ou `sublinhado-de-ajuda` do
+// `@wicomm/tokens`, e nunca escreve `underline` ou `decoration-dotted` à mão (as cópias divergiam: 35%, 40%, 50%).
+const SUBLINHADO_A_MAO = /(?<![\w-])(?:[\w-]+:)*(?:underline|decoration-dotted)(?![\w-])/
+test('nenhuma peça escreve o sublinhado à mão: usa o utilitário do pacote', () => {
+  const tsx = arquivosDoRegistro().filter((p) => p.endsWith('.tsx'))
+  assert.ok(tsx.length > 0, 'achou as peças')
+  const usam = tsx.filter((p) => /sublinhado-de-(link|ajuda)/.test(ler(p)))
+  assert.ok(usam.length >= 6, `as peças que sublinham usam o utilitário (${usam.length})`)
+  // A guarda detecta a cópia antiga (prova de que não passa por não medir nada).
+  assert.match('text-foreground underline decoration-foreground/35', SUBLINHADO_A_MAO)
+  assert.match('hover:underline', SUBLINHADO_A_MAO)
+  assert.doesNotMatch('sublinhado-de-link underline-offset-2', SUBLINHADO_A_MAO)
+  const amao = tsx.filter((p) => SUBLINHADO_A_MAO.test(ler(p)))
+  assert.deepEqual(amao, [], 'peça com sublinhado à mão')
+})
