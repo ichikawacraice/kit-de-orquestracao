@@ -31,3 +31,19 @@ test('o /ausente conta as donas sem o linked (a dona desligada some da família)
   assert.match(s, /list_sessions/, 'o passo que conta as donas existe');
   assert.doesNotMatch(s, /list_sessions \{"linked": true\}/);
 });
+
+// F373 (fatia 3, ADR 0023): o pós-merge é da rodada sem turno, e a dona do PR que fecha o item se arquiva pelo app no merge.
+test('o pós-merge sem turno: a skill, a dona e o protocolo dizem o mesmo', () => {
+  const s = ler('skills', 'orquestradora', 'SKILL.md');
+  const trecho = s.slice(s.indexOf('<a id="quando-acorda">'), s.indexOf('<a id="aviso-de-fim-de-turno">'));
+  assert.ok(trecho.length > 200, 'a seção existe');
+  assert.match(trecho, /pós-merge que falhou/);
+  assert.match(trecho, /desfechos\.log/);
+  assert.doesNotMatch(s, /o pós-merge é seu até a fatia/, 'a regra provisória da fatia 2 saiu');
+  assert.match(ler('pool', 'dona.md'), /auto_archive_on_close: true/);
+  const p = ler('pool', 'protocolo.md');
+  assert.match(p, /subir-versao --empurrar --destacado/);
+  assert.match(p, /KIT_POS_MERGE=off/);
+  assert.doesNotMatch(p, /resumo só com o que é dela \(subir a versão/, 'o protocolo não manda mais o pós-merge à orquestradora');
+  assert.ok(existsSync(join(PLUGIN, '..', '..', 'docs', 'adr', '0023-o-pos-merge-roda-sem-turno-da-orquestradora.md')), 'o ADR 0023 existe');
+});

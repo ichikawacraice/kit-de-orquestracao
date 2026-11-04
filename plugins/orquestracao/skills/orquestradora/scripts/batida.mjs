@@ -174,7 +174,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     projeto(nome).filaParada = { prs: o.prs.map((p) => p.pr), desde: o.desde ?? null, relance: comandoDeRelance(o) };
   }
 
-  const entregas = {};
+  const entregas = {}; const registros = {};
   for (const [nome, lista] of Object.entries(desfechos)) {
     if (!Array.isArray(lista) || !lista.length) continue;
     const orq = projeto(nome).orquestradora;
@@ -192,7 +192,9 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
           }
         }
       }
-      if (orq) nova(orq, resumoDoDesfecho(df), null, 'desfecho');
+      // F373 (fatia 3): só o que é dela a acorda; o resto vai ao registro do projeto (`batida/<projeto>.desfechos.log`)
+      if (orq && desfechoAcorda(df)) nova(orq, resumoDoDesfecho(df), null, 'desfecho');
+      else if (orq) (registros[nome] ??= []).push(resumoDoDesfecho(df));
     }
     entregas[nome] = { orquestradora: orq ? lista.length : 0, soDonas: orq ? 0 : lista.length };
   }
@@ -221,11 +223,17 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
       nova(proj.orquestradora, `Batida ${hora}: ${partes.join('; ')}. Relatório: ${caminhoDoRelatorio(nome)}.`, null, 'relatorio');
     }
   }
-  return { mensagens, soltar, projetos: relatorios, desfechos: entregas, estado: { cutucadas, ...(Object.keys(avisados).length ? { limites: avisados } : {}), ultima: new Date(agoraMs).toISOString() } };
+  return { mensagens, soltar, projetos: relatorios, desfechos: entregas, registros, estado: { cutucadas, ...(Object.keys(avisados).length ? { limites: avisados } : {}), ultima: new Date(agoraMs).toISOString() } };
 }
 
 const hhmm = (iso) => { const t = ms(iso); return t === null ? '?' : new Date(t).toTimeString().slice(0, 5); };
 // O resumo à orquestradora: o que entrou, o que voltou (a dona já foi avisada pela batida) e o que é dela fazer.
+// F373 (fatia 3, ADR 0023): o desfecho acorda a orquestradora só com erro da fila, pós-merge que falhou, suspeita de teste instável
+// ou merge sem o pós-merge (desfecho de uma fila antiga, ou `KIT_POS_MERGE=off`: o pós-merge ainda é dela). A devolução é da dona.
+export function desfechoAcorda(df) {
+  return Boolean(df?.erro || df?.erros?.length || df?.suspeitaDeInstavel || df?.posMerge?.erros?.length || (df?.mergeados?.length && !df.posMerge));
+}
+
 export function resumoDoDesfecho(df) {
   const partes = [];
   const itensDe = (m) => (m.itens ?? []).map((it) => `${it.item}${it.fechado ? ' fechou' : it.fatia ? ' fatia' : ''}`).join(', ');
@@ -233,6 +241,12 @@ export function resumoDoDesfecho(df) {
   if (df.devolvidos?.length) partes.push(`devolvidos ${df.devolvidos.map((d) => `#${d.pr}${(d.itens ?? []).length ? ` (${d.itens.map((i) => i.item).join(', ')}, dona avisada)` : ''}: ${String(d.motivo ?? '').slice(0, 160)}`).join('; ')}`);
   if (df.suspeitaDeInstavel) partes.push(`suspeita de teste instável: ${df.suspeitaDeInstavel}`);
   for (const e of [df.erro, ...(df.erros ?? [])].filter(Boolean)) partes.push(`erro: ${e}`);
-  const seu = df.mergeados?.length ? ' É seu: subir-versao --empurrar e atualizar-plugins; arquive as donas dos itens fechados; feche o lote (estado em dia, e o "Fim de lote" do Orçamento de contexto).' : df.erro || df.erros?.length ? ' É seu: leia o log, conserte e relance a fila com os PRs que seguem valendo.' : '';
+  const pm = df.posMerge;
+  if (pm?.versao?.subiu?.length) partes.push(`versão: ${pm.versao.subiu.map((x) => `${x.nome} ${x.depois}`).join(', ')}${pm.versao.empurrou ? ' (empurrada)' : ''}`);
+  if (pm?.erros?.length) partes.push(`pós-merge falhou: ${pm.erros.join('; ')}`);
+  const erroDaFila = df.erro || df.erros?.length;
+  const seu = erroDaFila ? ' É seu: leia o log, conserte e relance a fila com os PRs que seguem valendo.'
+    : pm?.erros?.length ? ' É seu: faça à mão só a etapa que falhou (versao: `subir-versao --empurrar`; plugins: `atualizar-plugins`; estado: `estado-girar.mjs`).'
+      : df.mergeados?.length && !pm ? ' É seu: subir-versao --empurrar e atualizar-plugins; feche o lote (estado em dia, e o "Fim de lote" do Orçamento de contexto).' : '';
   return `Fila de merge sem turno (${hhmm(df.em)}): ${partes.join('; ') || 'nada mergeado nem devolvido'}.${seu}${df.logs ? ` Logs: ${[].concat(df.logs).join(', ')}.` : ''}`;
 }

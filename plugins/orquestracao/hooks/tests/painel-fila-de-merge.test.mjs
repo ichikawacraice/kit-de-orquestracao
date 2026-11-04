@@ -757,6 +757,8 @@ test('rodada da orquestradora grava o config; a rodada --sem-turno usa a lista a
     assert.deepEqual(e.desfechos[0].mergeados.map((m) => m.pr), [24]);
     assert.deepEqual(e.desfechos[0].devolvidos.map((d) => d.pr), [23]);
     assert.deepEqual(e.desfechos[0].devolvidos[0].itens, [{ item: 'F3', dona: LA }]);
+    // F373 (fatia 3): com merge, o pós-merge roda na própria rodada; aqui não há marketplace nem arquivo de estado
+    assert.deepEqual(e.desfechos[0].posMerge, {}, JSON.stringify(e.desfechos[0]));
     assert.deepEqual(c.merges(), [21, 24]);
     assert.equal(c.dado('F2').etapa, 'feito');
     assert.equal(c.dado('F3').etapa, 'execucao');
@@ -771,6 +773,7 @@ test('--sem-turno com erro da rodada grava o desfecho com o erro', () => {
     assert.notEqual(r.exit, 0);
     const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
     assert.match(e.desfechos[0].erro, /preparo falhou/);
+    assert.equal(e.desfechos[0].posMerge, undefined, 'sem merge, sem pós-merge');
     assert.deepEqual(c.merges(), []);
   } finally { limpar(c); }
 });

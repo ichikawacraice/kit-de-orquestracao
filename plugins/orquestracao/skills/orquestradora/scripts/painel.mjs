@@ -51,7 +51,7 @@
 // e PAINEL_PAUSA_* (só teste).
 //
 // Toda escrita grava `atualizadoEm` (agora, ISO) quando o JSON não traz um, e sobe `version`.
-import { closeSync, cpSync, existsSync, mkdirSync, openSync, mkdtempSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, cpSync, existsSync, mkdirSync, openSync, mkdtempSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
@@ -64,6 +64,7 @@ import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, plugin
 import { GATE_PADRAO, montarLote, motivoDeConflito } from './fila-de-merge.mjs';
 import { donoDaFilaVivo, filaOrfa } from './fila-orfa.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
+import { posMerge } from './pos-merge.mjs';
 import { custoDoItem, projetosDir, sessoesDoItem } from './custo-do-item.mjs';
 import { limiteDoTranscript } from './limite-de-uso.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
@@ -1085,7 +1086,15 @@ function comandoFilaDeMerge(args) {
   }
   if (!saida.pendente) {
     const { mergeados = [], devolvidos = [], suspeitaDeInstavel, erros, logs } = saida;
-    desfecho({ mergeados, devolvidos, ...(suspeitaDeInstavel ? { suspeitaDeInstavel } : {}), ...(erros ? { erros } : {}), ...(logs ? { logs } : {}) });
+    // F373 (fatia 3): com merge, o pós-merge (versão, plugins, giro do estado) roda aqui, sem turno da orquestradora
+    let pos = null;
+    if (mergeados.length && process.env.KIT_POS_MERGE !== 'off') {
+      try {
+        const raiz = raizDoRepo();
+        pos = posMerge({ cwd: raiz, base: saida.base || 'main', nomes: [basename(raiz), projetoDoCwd().projeto], pastaOrq: join(BASE, '..') });
+      } catch (e) { pos = { erros: [`pos-merge: ${String(e?.message || e).split('\n')[0]}`] }; }
+    }
+    desfecho({ mergeados, devolvidos, ...(suspeitaDeInstavel ? { suspeitaDeInstavel } : {}), ...(erros ? { erros } : {}), ...(logs ? { logs } : {}), ...(pos ? { posMerge: pos } : {}) });
   }
   return saida;
 }
@@ -1495,6 +1504,9 @@ function comandoBatida(args) {
     }
     saida.soltos = soltos;
     saida.lancarDepois = filas.lancadas;
+    for (const [nome, linhas] of Object.entries(julgado.registros ?? {})) {
+      try { mkdirSync(pasta, { recursive: true }); appendFileSync(join(pasta, `${nome}.desfechos.log`), linhas.map((l) => `${new Date(agoraMs).toISOString()} ${l}\n`).join('')); } catch (e) { process.stderr.write(`batida: não registrei os desfechos de ${nome}: ${e?.message || e}\n`); }
+    }
     try { baixarDesfechos(julgado.desfechos); } catch (e) { process.stderr.write(`batida: não baixei os desfechos da fila: ${e?.message || e}\n`); }
     try { baixarAvisos(filas.avisos); } catch (e) { process.stderr.write(`batida: não baixei os avisos da fila: ${e?.message || e}\n`); }
     gravarJson(join(pasta, 'estado.json'), julgado.estado);

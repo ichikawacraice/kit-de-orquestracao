@@ -476,9 +476,45 @@ test('fila sem turno: desfecho sem orquestradora avisa só a dona uma vez e fica
   assert.equal(lerFila().desfechos[0].donasAvisadas, true);
   const b = batida(sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit')), T + 11 * MIN);
   assert.equal(msgs(b, 'devolucao').length, 0, 'a dona não é avisada duas vezes');
-  assert.equal(msgs(b, 'desfecho').length, 1);
-  assert.match(msgs(b, 'desfecho')[0].texto, /devolvidos #77 \(F1, dona avisada\)/);
+  // F373 (fatia 3): a devolução é da dona, já avisada: a orquestradora não acorda, e o desfecho vai ao registro
+  assert.equal(msgs(b, 'desfecho').length, 0, b.out);
+  assert.match(registroDeDesfechos(), /devolvidos #77 \(F1, dona avisada\)/);
   assert.deepEqual(lerFila().desfechos, []);
+});
+
+// F373 (fatia 3): o pós-merge roda na rodada sem turno; a orquestradora só acorda com erro da fila, pós-merge que falhou,
+// suspeita de teste instável ou o desfecho antigo, sem o pós-merge (aí o pós-merge ainda é dela).
+const registroDeDesfechos = () => { const f = join(pastaOrq(), 'batida', 'kit.desfechos.log'); return existsSync(f) ? readFileSync(f, 'utf8') : ''; };
+const ORQ = () => sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit'));
+const MERGEADO = [{ pr: 77, itens: [{ item: 'F1', fechado: true }] }];
+test('F373: merge com o pós-merge em ordem não acorda a orquestradora; vai ao registro e sai do estado', () => {
+  item('F1', { etapa: 'feito', atualizadoEm: iso(T) });
+  fila({ ocupada: null, emVoo: [], pendentes: [], desfechos: [{ em: iso(T - MIN), mergeados: MERGEADO, devolvidos: [], posMerge: { versao: { subiu: [{ nome: 'orquestracao', antes: '9.9.1', depois: '9.9.2' }], empurrou: true }, estado: { movidas: 0 } } }] });
+  const a = batida(ORQ());
+  assert.equal(a.exit, 0, a.err);
+  assert.deepEqual(msgs(a, 'desfecho'), [], a.out);
+  const reg = registroDeDesfechos();
+  assert.match(reg, /mergeados #77 \(F1 fechou\)/);
+  assert.match(reg, /orquestracao 9\.9\.2/);
+  assert.deepEqual(lerFila().desfechos, []);
+});
+test('F373: pós-merge que falhou, erro da fila, suspeita de instável e desfecho sem pós-merge acordam a orquestradora', () => {
+  item('F1', { etapa: 'feito', atualizadoEm: iso(T) });
+  const casos = [
+    [{ mergeados: MERGEADO, devolvidos: [], posMerge: { erros: ['plugins: claude não encontrado'] } }, /pós-merge falhou: plugins: claude não encontrado/],
+    [{ mergeados: [], devolvidos: [], erro: 'preparo falhou' }, /erro: preparo falhou.*relance a fila/],
+    [{ mergeados: MERGEADO, devolvidos: [], posMerge: {}, suspeitaDeInstavel: 'gate verde na repetição' }, /suspeita de teste instável/],
+    [{ mergeados: MERGEADO, devolvidos: [] }, /É seu: subir-versao --empurrar/],
+  ];
+  for (const [df, re] of casos) {
+    fila({ ocupada: null, emVoo: [], pendentes: [], desfechos: [{ em: iso(T - MIN), ...df }] });
+    const a = batida(ORQ());
+    const d = msgs(a, 'desfecho');
+    assert.equal(d.length, 1, `${JSON.stringify(df)}: ${a.out}`);
+    assert.equal(d[0].para, lid(30));
+    assert.match(d[0].texto, re);
+    assert.deepEqual(lerFila().desfechos, []);
+  }
 });
 
 // F370 caso 1: o aviso de fatia gravado pelo merge chega à dona na batida, uma vez, e o desfecho não o repete.

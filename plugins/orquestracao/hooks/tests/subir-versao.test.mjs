@@ -198,3 +198,27 @@ test('--empurrar manda o commit da subida ao origin', () => {
   assert.equal(r.json.empurrou, true);
   assert.equal(git(['log', '-1', '--format=%s'], bare), 'chore(versao): sobe os plugins do lote — a 0.1.6');
 });
+
+// F373 (fatia 3): a fila sem turno sobe a versão num worktree temporário destacado em origin/<base> (a main do checkout principal
+// não pode ser posta em dois worktrees); `--destacado` aceita o HEAD destacado em dia com a base e empurra para ela.
+test('--destacado: HEAD destacado em dia com origin/main sobe e empurra; sem a flag, recusa; atrás da base, recusa', () => {
+  const origem = join(base, 'origem.git');
+  git(['clone', '-q', '--bare', repo, origem], base);
+  git(['remote', 'add', 'origin', origem]);
+  escrever('plugins/a/x.mjs', 'dois\n'); commitar('feat: muda a');
+  git(['push', '-q', 'origin', 'HEAD:main']);
+  git(['checkout', '-q', '--detach']);
+  const sem = subir(['--empurrar']);
+  assert.equal(sem.exit, 1, sem.out);
+  assert.match(sem.json?.recusado ? sem.json.motivo : '', /fora da main/);
+  const r = subir(['--empurrar', '--destacado']);
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.deepEqual(r.json.subiu.map((s) => `${s.nome} ${s.depois}`), ['a 0.1.6']);
+  assert.equal(r.json.empurrou, true);
+  assert.match(git(['log', '-1', '--format=%s', 'main'], origem), /^chore\(versao\): sobe os plugins do lote — a 0\.1\.6$/);
+  // atrás da base: outro empurrou depois
+  git(['checkout', '-q', '--detach', 'HEAD~1']);
+  const atras = subir(['--empurrar', '--destacado']);
+  assert.equal(atras.exit, 1, atras.out);
+  assert.match(atras.json.motivo, /atrás de origin\/main/);
+});
