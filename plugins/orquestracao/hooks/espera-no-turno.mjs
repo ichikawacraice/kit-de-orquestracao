@@ -15,9 +15,13 @@ const HOOK = 'espera-no-turno';
 const TIPOS = new Set(['shell', 'subagent', 'local_bash', 'local_agent']);
 const TERMINADA = /^(?:completed|complete|done|failed|killed|stopped|cancell?ed|error)$/i;
 
+// Shell só conta quando o comando é de teste, tipo ou build: servidor e ensaio em segundo plano vivem de propósito.
+const TESTE = /\b(?:test|tests|vitest|jest|mocha|playwright|node\s+--test|com-fichas|testes-afetados|typecheck|tsc|lint|eslint|build|gate)\b/i;
+const ehShell = (t) => t.type === 'shell' || t.type === 'local_bash';
 export function emVoo(tarefas) {
   if (!Array.isArray(tarefas)) return [];
-  return tarefas.filter((t) => t && TIPOS.has(String(t.type)) && !TERMINADA.test(String(t.status ?? '')));
+  return tarefas.filter((t) => t && TIPOS.has(String(t.type)) && !TERMINADA.test(String(t.status ?? ''))
+    && (!ehShell(t) || TESTE.test(String(t.command ?? t.description ?? ''))));
 }
 
 function terminaPerguntando(texto) {
@@ -40,11 +44,11 @@ function main() {
   if (e.stop_hook_active) { registrar(sid, HOOK, 'deixou-passar', det); return; }
   registrar(sid, HOOK, 'segurou', det);
   const subagentes = voo.some((t) => t.type === 'subagent' || t.type === 'local_agent');
-  const shell = voo.filter((t) => t.type === 'shell' || t.type === 'local_bash');
+  const shell = voo.filter(ehShell);
   const reason = [
     `Ainda roda em segundo plano: ${voo.map(nome).join('; ')}. Terminar o turno agora manda à orquestradora um aviso só de espera, e ela relê o contexto inteiro para lê-lo.`,
     subagentes ? 'Espere o subagente dentro do turno: rode `esperar-fundo` (Bash, timeout 600000) — volta quando os subagentes desta sessão terminam, ou em 9 min; repita se precisar.' : '',
-    shell.length ? 'Teste: rode-o de novo em primeiro plano (Bash com timeout até 600000), ou, se precisa seguir em segundo plano, faça o comando gravar um marcador ao acabar (`… ; echo $? > <arquivo>`) e espere com `esperar-fundo --arquivo <arquivo>`.' : '',
+    shell.length ? 'Teste: se o comando grava um marcador ao acabar (`… ; echo $? > <arquivo>`), espere com `esperar-fundo --arquivo <arquivo>`; se não grava, termine de novo e, da próxima vez, rode o teste em primeiro plano (Bash com timeout até 600000).' : '',
     'Se o turno precisa mesmo terminar agora (pergunta ao operador, espera de horas), termine de novo: a segunda vez passa.',
   ].filter(Boolean).join(' ');
   process.stdout.write(JSON.stringify({ decision: 'block', reason }));

@@ -43,7 +43,11 @@ async function main(argv) {
   const arquivos = [];
   let max = 540;
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--arquivo') arquivos.push(argv[++i]);
+    if (argv[i] === '--arquivo') {
+      const a = argv[++i];
+      if (!a || a.startsWith('--')) throw new Error('--arquivo precisa de um caminho');
+      arquivos.push(a);
+    }
     else if (argv[i] === '--max') max = Number(argv[++i]);
   }
   if (!Number.isFinite(max) || max <= 0) throw new Error('--max precisa de segundos > 0');

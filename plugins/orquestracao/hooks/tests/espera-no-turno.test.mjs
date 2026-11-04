@@ -46,6 +46,13 @@ test('dona com validador e teste rodando: segura uma vez, nomeia o que roda e di
   assert.match(log(b), /\tespera-no-turno\tsegurou\t/);
 }));
 
+test('shell que não é teste (servidor, ensaio): não segura; teste por nome de comando conhecido: segura', () => com((b) => {
+  for (const command of ['pnpm dev', 'npx vite preview --port 4173', 'node scripts/ensaio.mjs serve'])
+    assert.equal(rodar(b, 'DONA', { background_tasks: [{ id: 's', type: 'shell', status: 'running', description: 'servidor', command }] }), null, command);
+  for (const command of ['pnpm vitest run', 'node gate/com-fichas.mjs -- node --test', 'npm test', 'pnpm -r typecheck'])
+    assert.equal(rodar(b, 'DONA', { background_tasks: [{ id: 't', type: 'shell', status: 'running', description: 'x', command }] })?.decision, 'block', command);
+}));
+
 test('a segunda tentativa de parar (stop_hook_active) passa e registra', () => com((b) => {
   assert.equal(rodar(b, 'DONA', { background_tasks: [VALIDADOR], stop_hook_active: true }), null);
   assert.match(log(b), /\tespera-no-turno\tdeixou-passar\t/);

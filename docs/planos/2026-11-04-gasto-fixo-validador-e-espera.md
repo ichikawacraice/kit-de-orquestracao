@@ -27,7 +27,7 @@ O que a medição muda no pedido:
 <a id="escopo"></a>
 ## Escopo
 1. `pool/via-rapida.mjs` devolve também `validador: sonnet|opus` pelo mesmo corte: contrato, trava, removido ou binário no diff → Opus; o resto → Sonnet; diff vazio → Opus.
-2. Hook PreToolUse `modelo-do-validador.mjs` (matcher `Agent`): o `orquestracao:validador` lançado sem `model` ganha `model: "sonnet"` quando o corte diz Sonnet (`updatedInput`). `model` dado pela dona vale sempre; erro ou base não achada não mexe.
+2. A dona declara o risco do item uma vez (`"risco":true|false` no painel). Hook PreToolUse `modelo-do-validador.mjs` (matcher `Agent`): o `orquestracao:validador` lançado sem `model` ganha `model: "sonnet"` (`updatedInput`, aviso por `additionalContext`) só com `risco: false` e o corte dizendo Sonnet; item de risco ou diff com risco fica Opus; risco não declarado com diff limpo é recusado pedindo a declaração. `model` dado pela dona vale sempre; sessão sem item, erro ou base não achada não mexe. (A primeira versão decidia só pelo diff; a revisão mostrou que o risco fora dos globs cairia em Sonnet. O modelo da dona não serve de sinal: 129 de 133 rodadas vieram de dona Opus.)
 3. Hook Stop `espera-no-turno.mjs`: a dona de item vivo com teste ou subagente em `background_tasks` é segurada **uma vez**, com o caminho para esperar no turno; a segunda tentativa passa; turno que pergunta ao operador passa.
 4. `bin/esperar-fundo` (`pool/esperar-fundo.mjs`): segura o Bash até os subagentes da sessão terminarem (ou `--arquivo` existir), teto de 540 s, sai 3 se o teto passou.
 5. `scripts/custo-fixo.mjs`: o medidor deste plano, para medir depois.
@@ -42,7 +42,7 @@ Fora do escopo: o esforço do validador (fica alto), a orquestradora ignorar o a
 
 <a id="efeito-esperado"></a>
 ## Efeito esperado e como medir depois
-- **Validador:** cada rodada que o hook põe em Sonnet custa ~33% menos. Neste repositório quase todo item toca hook, protocolo ou agente e fica em Opus; o ganho vem dos projetos com diff de código comum. Se metade das rodadas for a Sonnet, o validador cai ~16% (~3% do total).
+- **Validador:** cada rodada que o hook põe em Sonnet custa ~33% menos. Quantas vão depende de quantos itens as donas declaram sem risco. Neste repositório quase todo item toca hook, protocolo ou agente e fica em Opus; o ganho vem dos projetos com diff de código comum. Se metade das rodadas for a Sonnet, o validador cai ~16% (~3% do total).
 - **Orquestradora:** o teto do ganho é o custo medido dos avisos de espera, 1,5% do total (US$ 19 em 3 dias). A dona não gasta mais: a chamada de `esperar-fundo` substitui o fim de turno e a volta pela notificação.
 - **Medir depois** (uma semana de uso depois do merge e da atualização dos plugins, com a data de corte do merge):
 
