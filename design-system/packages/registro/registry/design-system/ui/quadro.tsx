@@ -22,7 +22,9 @@ import { Skeleton } from "@/registry/design-system/ui/skeleton"
  * - `@hello-pangea/dnd`: o `Droppable` dá `innerRef` + `droppableProps` à
  *   `PilhaDaColuna`; o `Draggable` dá `innerRef` + `draggableProps` ao
  *   `CartaoDoQuadro` e `dragHandleProps` ao `TituloDoCartao` (a alça é o que
- *   tem foco).
+ *   tem foco). Como a alça é um `button`, o `Draggable` leva
+ *   `disableInteractiveElementBlocking`: sem ele a biblioteca recusa o arraste
+ *   que começa em elemento interativo, com o mouse e com o teclado.
  * - `@dnd-kit`: `setNodeRef` do `useDroppable` na `PilhaDaColuna`;
  *   `setNodeRef` + `transform` do `useSortable` no `CartaoDoQuadro`,
  *   `attributes` + `listeners` no `TituloDoCartao`. O `KeyboardSensor` pega só
