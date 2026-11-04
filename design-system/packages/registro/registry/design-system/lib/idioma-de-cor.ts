@@ -46,15 +46,6 @@ export const COR_DO_TOM_DENSO: Record<Tom, string> = {
 /** A tinta do carimbo neutro, com o alfa fixado (COR-07): a do estado neutro e a do `Badge`, neutro ou de marca (CTRL-05). */
 export const TINTA_DO_CARIMBO_NEUTRO = "bg-foreground/[0.07]"
 
-/** O carimbo: tinta chapada e o texto sobre ela (CTRL-05). O neutro tem tinta, com alfa fixado (COR-07). */
-export const BADGE_DO_TOM: Record<Tom, string> = {
-  ok: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-300",
-  espera: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
-  ruim: "bg-rose-500/15 text-rose-800 dark:text-rose-300",
-  neutro: `${TINTA_DO_CARIMBO_NEUTRO} text-muted-foreground dark:text-foreground-2`,
-  alheio: "bg-violet-500/15 text-violet-800 dark:text-violet-300",
-}
-
 /**
  * Só o fundo: o bloco de tinta. `neutro` é o degrau afundado do tema
  * (`--muted`), não uma tinta de voz — bloco que não pede nada se separa do
@@ -66,6 +57,28 @@ export const TINTA_DO_TOM: Record<Tom, string> = {
   ruim: "bg-rose-500/15",
   neutro: "bg-muted",
   alheio: "bg-violet-500/15",
+}
+
+/**
+ * O texto SOBRE a tinta da voz (`*-500/15`): o carimbo, a bandeja do cartão do
+ * quadro. Sobre a tinta, o degrau que paga 4,5:1 é o 800 no claro e o 300 no
+ * escuro — o `COR_DO_TOM_DENSO` derruba o âmbar a 4,48 ali (COR-06).
+ */
+export const TEXTO_SOBRE_A_TINTA: Record<Tom, string> = {
+  ok: "text-emerald-800 dark:text-emerald-300",
+  espera: "text-amber-800 dark:text-amber-300",
+  ruim: "text-rose-800 dark:text-rose-300",
+  neutro: "text-muted-foreground dark:text-foreground-2",
+  alheio: "text-violet-800 dark:text-violet-300",
+}
+
+/** O carimbo: tinta chapada e o texto sobre ela (CTRL-05). O neutro tem tinta, com alfa fixado (COR-07). */
+export const BADGE_DO_TOM: Record<Tom, string> = {
+  ok: `${TINTA_DO_TOM.ok} ${TEXTO_SOBRE_A_TINTA.ok}`,
+  espera: `${TINTA_DO_TOM.espera} ${TEXTO_SOBRE_A_TINTA.espera}`,
+  ruim: `${TINTA_DO_TOM.ruim} ${TEXTO_SOBRE_A_TINTA.ruim}`,
+  neutro: `${TINTA_DO_CARIMBO_NEUTRO} ${TEXTO_SOBRE_A_TINTA.neutro}`,
+  alheio: `${TINTA_DO_TOM.alheio} ${TEXTO_SOBRE_A_TINTA.alheio}`,
 }
 
 /**

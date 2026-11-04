@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.16.0
+versao: 0.17.0
 description: A direção de design dos apps React do sistema — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   marca: "do tema (temas/<id>/tema.tokens.json, slot marca): cor, hover, sobre, tinta e gradiente, nos dois temas"
@@ -63,7 +63,8 @@ typography:
     controle: "13px (botão e campo default), 12px (sm), 14px (lg)"
     text-legenda: "11px — etiqueta, legenda, carimbo"
 rounded:
-  container: "16px (rounded-2xl) — cartão, painel, tabela, diálogo"
+  container: "16px (rounded-2xl) — cartão de tela, painel, tabela, diálogo"
+  cartao: "14px (rounded-cartao) — cartão de quadro e de lista"
   agrupador: "12px (rounded-xl) — popover, menu, select aberto, degrau de tinta"
   dica: "10px (rounded-lg = --radius) — tooltip"
   ctrl: "7px (rounded-ctrl) — botão default e lg, campo, select"
@@ -84,6 +85,9 @@ spacing:
 lista:
   instrumento: { linha: "40px no mínimo; 6px de ar em cima e embaixo, e cresce com o conteúdo (as entrelinhas + 12px)", topo-do-grupo: "48px no mínimo", vao-antes-do-grupo: "16px depois de grupo aberto", vao-entre-fechados: "6px", ar-depois-do-topo: "4px só com o grupo aberto", recuo: "32px", recuo-com-identidade: "46px", cabecalho: "40px, régua de 1px border embaixo, de ponta a ponta, sem fundo", ar-depois-do-cabecalho: "8px antes do primeiro grupo", filete: "1px border entre linhas do mesmo corpo, do x do texto da primeira célula até 12px antes do fim; nenhum depois da última linha nem entre o topo do grupo e a primeira linha" }
   site: { linha: "48px no mínimo; 8px de ar em cima e embaixo, e cresce com o conteúdo (as entrelinhas + 16px)", topo-do-grupo: "56px no mínimo", vao-antes-do-grupo: "24px depois de grupo aberto", vao-entre-fechados: "8px", ar-depois-do-topo: "6px só com o grupo aberto", recuo: "32px", recuo-com-identidade: "46px", cabecalho: "40px, régua de 1px border embaixo, de ponta a ponta, sem fundo", ar-depois-do-cabecalho: "12px antes do primeiro grupo", filete: "1px border entre linhas do mesmo corpo, do x do texto da primeira célula até 12px antes do fim; nenhum depois da última linha nem entre o topo do grupo e a primeira linha" }
+quadro:
+  instrumento: { coluna: "256px (basis-64), cresce até 320px (max-w-80), não encolhe", fita: "46px (w-11.5), a coluna vazia recolhida", vao-entre-colunas: "6px (gap-1.5)", cabecalho: "36px (h-9), grudado", vao-do-cabecalho-a-pilha: "3px (pt-0.75)", pilha: "8px nas laterais (px-2)", vao-entre-cartoes: "8px (gap-2)", ar-no-fim-da-pilha: "28px (pb-7)", cartao: "raio 14px (rounded-cartao), 14px × 13px de ar (px-3.5 py-3.25), zonas com 8px entre si", bandeja: "14px nas laterais, 11px em cima e 12px embaixo (px-3.5 pt-2.75 pb-3)", ponto-da-etapa: "6px (size-1.5)", contagem: "pílula de largura mínima 20px (min-w-5), 7px × 1px de ar (px-1.75 py-px)" }
+  site: { coluna: "256px (basis-64), cresce até 320px (max-w-80), não encolhe", fita: "46px (w-11.5)", vao-entre-colunas: "16px (gap-4)", cabecalho: "40px (h-10), grudado", vao-do-cabecalho-a-pilha: "6px (pt-1.5)", vao-entre-cartoes: "12px (gap-3)", ar-no-fim-da-pilha: "24px (pb-6)", cartao: "raio 14px (rounded-cartao), 16px de ar (p-4)", bandeja: "16px × 10px (px-4 py-2.5), a medir", ponto-da-etapa: "6px (size-1.5)", contagem: "pílula de largura mínima 20px (min-w-5), 7px × 1px de ar (px-1.75 py-px)" }
 controle:
   sm: "26px, raio rounded-md (ver FORMA-01), texto 12px"
   default: "30px, raio 7, texto 13px"
@@ -210,7 +214,7 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 - **Confere.** `crítica:consistência`.
 
 ### COR-05 · O componente declara TOM, nunca classe de cor
-- **Regra.** Componente que mostra voz recebe `tom: Tom` (`'ok' | 'espera' | 'ruim' | 'neutro' | 'alheio'`, ou um recorte derivado com `Extract<Tom, …>`) e compõe a classe de **um arquivo só**, o idioma de cor, com cinco mapas: `COR_DO_TOM` (número ≥ 24px), `COR_DO_TOM_DENSO` (texto menor), `BADGE_DO_TOM` (texto sobre a tinta do carimbo), `TINTA_DO_TOM` (fundo de bloco), `PONTO_DO_TOM` (marcador de 6px) — e `FILETE_DO_TOM` para a barra vertical. Literal de paleta (`text-emerald-700`) fora desse arquivo é defeito, salvo exceção listada com motivo. Vocabulário próprio (`atencao`, `bom`, `erro`) é defeito.
+- **Regra.** Componente que mostra voz recebe `tom: Tom` (`'ok' | 'espera' | 'ruim' | 'neutro' | 'alheio'`, ou um recorte derivado com `Extract<Tom, …>`) e compõe a classe de **um arquivo só**, o idioma de cor, com cinco mapas: `COR_DO_TOM` (número ≥ 24px), `COR_DO_TOM_DENSO` (texto menor), `BADGE_DO_TOM` (texto sobre a tinta do carimbo), `TINTA_DO_TOM` (fundo de bloco), `PONTO_DO_TOM` (marcador de 6px) — e `FILETE_DO_TOM` para a barra vertical e `TEXTO_SOBRE_A_TINTA` para o texto sobre a tinta de bloco (o `BADGE_DO_TOM` deriva dele). Literal de paleta (`text-emerald-700`) fora desse arquivo é defeito, salvo exceção listada com motivo; a exceção declarada da base é o mapa de etapas do projeto, que o `PontoDaEtapa` recebe (`criarPontoDaEtapa`), num arquivo só e listado na configuração das guardas (COR-09). Vocabulário próprio (`atencao`, `bom`, `erro`) é defeito.
 - **Por quê.** Foram medidos oito vocabulários de cor no mesmo produto e 40 pílulas em 22 construções antes do mapa único.
 - **Confere.** `guarda:o-carimbo-tem-forma`.
 
@@ -235,7 +239,7 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
   |---|---|---|
   | **tinta** (fundo e texto) | *o que isto pede de você?* | as cinco vozes |
   | **forma** (glifo) | *que tipo de coisa é esta?* | um ícone por tipo, **sem matiz próprio** — herda a tinta do texto ao lado |
-  | **etapa** (ponto de 7px) | *onde no percurso?* | a cor **declarada** da etapa, só no `PontoDaEtapa`, sempre com o nome ao lado — nunca a marca, nunca uma voz |
+  | **etapa** (ponto de 6px) | *onde no percurso?* | a cor **declarada** da etapa, só no `PontoDaEtapa`, sempre com o nome ao lado — nunca a marca, nunca uma voz |
   A **marca** não responde pergunta de estado: ela é a assinatura (MARCA-03) e o primário.
   Proibido: glifo com matiz próprio; fundo tingido pela posição; glifo sem a palavra ao lado.
 - **Por quê.** Dar um matiz a cada categoria "porque a tela está cinza demais" abre uma segunda régua cromática no mesmo cartão.
@@ -292,13 +296,13 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
   | voz | papel |
   |---|---|
   | `t-display` | o título da página — um por tela (no Editor, o `h1` da barra vai em `t-titulo`, TIPO-04) |
-  | `t-titulo` | o nome de bloco, de cartão e de diálogo; em densidade site, também o nome do grupo de linhas |
+  | `t-titulo` | o nome de bloco, de cartão e de diálogo; em densidade site, também o nome do grupo de linhas e o nome da coluna do quadro |
   | `t-denso` | o corpo em densidade instrumento: célula, metadado, linha de lista |
   | `t-rotulo` | nomeia um **conjunto** (seção dentro de um bloco, faixa, grupo de campos) — aparece uma vez, sozinho |
   | `t-coluna` | nomeia um **valor** que se repete (cabeçalho de coluna, legenda de imagem, unidade) — mais leve que o rótulo |
   | `t-campo` | o rótulo de campo em densidade **site** (frase de quem usa, sem caixa alta) |
   | `t-medida` | número que se compara (TIPO-03) |
-  Fora das vozes, só os tamanhos utilitários do frontmatter (`text-sm` para corpo em densidade site e, com peso 600, para o nome do grupo de linhas em densidade instrumento, os tamanhos de controle do kit, `text-legenda`). `text-[15px]` e afins são defeito; voz escrita à mão (`text-xl font-bold tracking-tight` no lugar de `t-display`) também.
+  Fora das vozes, só os tamanhos utilitários do frontmatter (`text-sm` para corpo em densidade site e, com peso 600, para o nome do grupo de linhas e da coluna do quadro em densidade instrumento; `text-controle font-medium leading-snug`, 13/500, para o título do item de quadro, que identifica o item sem pesar como nome de bloco; os tamanhos de controle do kit; `text-legenda`). `text-[15px]` e afins são defeito; voz escrita à mão (`text-xl font-bold tracking-tight` no lugar de `t-display`) também.
 - **Por quê.** O papel de cabeçalho de coluna nunca teve voz e era escrito à mão em 47 lugares, de 11 formas; um título de tela na voz anterior passou por uma varredura que só olhava um tipo de arquivo. O nome do grupo no mesmo corpo da linha (12px, só com o peso a mais) não se achava ao rolar uma lista de seis grupos.
 - **Confere.** `guarda:o-rotulo-tem-duas-vozes` · `guarda:o-titulo-da-pagina-e-um-so` · `guarda` de valor arbitrário (aviso na escrita; reprova no CI).
 
@@ -417,7 +421,7 @@ Cada app declara a sua densidade no arquivo do projeto, `design/design-system.js
 ## 7. Forma
 
 ### FORMA-01 · O raio sobe com o tamanho da superfície
-- **Regra.** Um raio por classe de peça, do frontmatter `rounded`: **container** 16px (cartão, painel, tabela, diálogo) · **agrupador** 12px (popover, menu, degrau de tinta) · **dica** 10px · **controle** 7px (botão default e lg, campo, select) · **`rounded-md`** (carimbo, botão `sm`) · **caixa de marcação** 5px · **pílula** (botão de ícone, contador, alça, trilha de progresso). Raio fora dessa escala é defeito.
+- **Regra.** Um raio por classe de peça, do frontmatter `rounded`: **container** 16px (cartão de tela, painel, tabela, diálogo) · **cartão de quadro e de lista** 14px (`rounded-cartao`: menor que o painel que o contém) · **agrupador** 12px (popover, menu, degrau de tinta) · **dica** 10px · **controle** 7px (botão default e lg, campo, select) · **`rounded-md`** (carimbo, botão `sm`) · **caixa de marcação** 5px · **pílula** (botão de ícone, contador, alça, trilha de progresso). Raio fora dessa escala é defeito.
 - **Por quê.** Raio por classe de peça mantém a família visual entre telas que nunca foram desenhadas juntas.
 - **Confere.** `tokens` · `guarda` de valor arbitrário.
 

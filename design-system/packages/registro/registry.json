@@ -812,6 +812,62 @@
       ]
     },
     {
+      "name": "prioridade",
+      "type": "registry:ui",
+      "title": "Prioridade",
+      "description": "priority badge — a prioridade de um item: o carimbo com o glifo de barras e a palavra; só a urgente fala, na voz de espera.",
+      "dependencies": [
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/chip-de-estado",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/prioridade.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "ponto-da-etapa",
+      "type": "registry:ui",
+      "title": "Ponto da etapa",
+      "description": "stage dot — o marcador de etapa de um fluxo do projeto, por fábrica: o mapa de matizes mora no projeto, e a chave fora dele cai no ponto neutro.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/ponto-da-etapa.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "quadro",
+      "type": "registry:ui",
+      "title": "Quadro",
+      "description": "kanban board — o quadro de tarefas: a coluna no chão, o cartão elevado, a bandeja da vida tingida pela voz e o alvo de soltar da marca; a peça desenha, o app arrasta.",
+      "dependencies": [
+        "radix-ui@1.8.1",
+        "lucide-react@1.57.0"
+      ],
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/idioma-de-cor",
+        "@wicomm/skeleton"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/quadro.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
       "name": "tela-de-erro",
       "type": "registry:ui",
       "title": "Tela de erro",

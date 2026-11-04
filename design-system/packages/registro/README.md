@@ -64,7 +64,10 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `estado` | — | o ponto de 6px e a palavra |
 | `medalhao-do-icone` | — | o disco com o ícone do assunto |
 | `trilha` | breadcrumb | a trilha de volta da tela de detalhe |
-| `vazio` | empty | a região sem itens diz a causa |
+| `vazio` | empty | a região sem itens diz a causa; `escala="coluna"`, o vazio baixo da coluna do quadro |
+| `quadro` | kanban | o quadro de tarefas: a coluna no chão, o cartão como peça, a bandeja da vida, a fita da coluna vazia, o alvo de soltar e a recusa; o arrastar é do app |
+| `prioridade` | — | o carimbo com o glifo de barras e a palavra; só a urgente fala, na voz de espera |
+| `ponto-da-etapa` | — | `criarPontoDaEtapa(mapa)`: o ponto de 6px com a cor de etapa que o projeto declara |
 | `tela-de-erro` | — | a rota ou o bloco que não deu para mostrar |
 | `topo-da-pagina` | — | `PaginaDoApp` e `TopoDaPagina`: o `h1` único, o estado, o primário, o ⋯, a linha dos valores (CASCO-04), o desfecho, os filtros |
 | `seletor-de-vista` | tabs/toggle-group | `BarraDeModos`: abas e modos, a pílula que desliza |
