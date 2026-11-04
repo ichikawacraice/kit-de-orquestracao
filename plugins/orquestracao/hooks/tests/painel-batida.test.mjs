@@ -467,6 +467,7 @@ test('F370: o desfecho sem turno não repete a fatia já avisada; o desfecho ant
   fila({ ocupada: null, emVoo: [], pendentes: [], desfechos: [{ em: iso(T - MIN), mergeados, devolvidos: [] }] });
   const a = batida(sessoes(sessao(1, 'F1 · a'), sessao(2, 'F2 · b')));
   assert.deepEqual(msgs(a, 'fatia').map((m) => m.para), [lid(2)], a.out);
+});
 
 // ---- F371: a dona parada pelo limite de uso ----
 // O registro do app dá a id do CLI atual da dona; o transcript dela, em <HOME>/.claude/projects/<pasta>/<cli>.jsonl, termina na recusa
