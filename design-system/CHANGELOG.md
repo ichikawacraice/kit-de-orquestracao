@@ -4,6 +4,20 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.20.0 · 04/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **A peça nova `conversa`: a conversa entre pessoas em balões.** `Conversa` (a lista, com o `rotulo` de quem chama), `BalaoDaConversa` (o meu à direita na tinta da marca, o do outro à esquerda no `muted`; `rounded-xl` e, no primeiro do grupo, o canto de quem fala menos redondo; a frase inteira escondida para o leitor de tela; a hora num `<time>` com o lugar reservado; o fade só no que chegou), `AutorDaConversa` (o nome e o selo do primeiro balão do outro lado) e `DiaDaConversa`. A PECA-01 ganha a linha *Conversa entre pessoas*.
+- **A cor da pessoa, só na conversa.** A COR-09 ganha a segunda exceção: 8 famílias sem dono (lime, teal, cyan, sky, blue, indigo, purple, fuchsia — nenhuma voz, nem o vermelho e o laranja da prioridade), escolhidas pelo id da pessoa (`corDaPessoa(id)`) e declaradas no `Monograma` (`NOME_DA_PESSOA`, `MONOGRAMA_DA_PESSOA`). Pinta só o monograma (fundo opaco) e o nome de quem fala; nunca o balão nem o cartão. O `sky` é dividido com o nível baixo da prioridade, declarado na regra; a COR-08 passa a listar a cor da pessoa entre as exceções. O *Não use* da linha *A pessoa numa linha* passa a dizer "cor por pessoa fora da conversa".
+- `Monograma` ganha a prop `cor`; `DadosDaPessoa` ganha `cor`, que a `Pessoa` e a `PilhaDePessoas` passam ao monograma. Sem `cor`, nada muda.
+- `PilhaDePessoas` ganha `decorativa`: quando a frase ao lado já diz os nomes, a pilha sai do leitor de tela e do Tab (`aria-hidden`, sem alvo e sem dica).
+
+### Migração
+- `npx shadcn add <registro>/conversa.json <registro>/monograma.json <registro>/pessoa.json`.
+- Quem tinha a conversa em balões como peça local: troque pela `conversa` e passe a cor da pessoa por `corDaPessoa(id)` — a chave é o id, não o nome. Quem pintava o monograma por `className`: troque pela prop `cor`.
+
 ## 0.19.1 · 04/11/2026
 
 Camadas: base, registro

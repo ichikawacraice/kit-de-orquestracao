@@ -3,15 +3,19 @@
 import * as React from "react"
 
 import { cn } from "@/registry/design-system/lib/utils"
-import { Monograma, MonogramaAusente } from "@/registry/design-system/ui/monograma"
+import { Monograma, MonogramaAusente, type CorDaPessoa } from "@/registry/design-system/ui/monograma"
 import { Skeleton } from "@/registry/design-system/ui/skeleton"
 import { useDensidadeDaTabela } from "@/registry/design-system/ui/table"
 import { Ajuda } from "@/registry/design-system/ui/tooltip"
 
 type Densidade = "instrumento" | "site"
 
-/** A pessoa como a lista a recebe: o nome pode faltar (o id veio, o nome não). */
-type DadosDaPessoa = { nome?: string | null }
+/**
+ * A pessoa como a lista a recebe: o nome pode faltar (o id veio, o nome não).
+ * A `cor` só vem onde a COR-09 a permite (a conversa entre pessoas):
+ * `corDaPessoa(id)`.
+ */
+type DadosDaPessoa = { nome?: string | null; cor?: CorDaPessoa }
 
 const NOME: Record<Densidade, string> = { instrumento: "t-denso", site: "text-sm" }
 const SEM_NOME = "Pessoa sem nome"
@@ -24,7 +28,8 @@ const ALVO =
 
 /**
  * A PESSOA numa linha de lista (ANATOMIA PECA-01): o monograma de 20px e o
- * nome, com o papel opcional embaixo, na legenda. Sem cor por pessoa (COR-09).
+ * nome, com o papel opcional embaixo, na legenda. A cor por pessoa só vem
+ * com `pessoa.cor`, onde a COR-09 a permite.
  *
  * - **Sem pessoa** (`pessoa={null}`): o círculo tracejado (a tracejada é
  *   ausência, FORMA-02) e o texto de quem chama (*Sem responsável*), em
@@ -68,7 +73,7 @@ function Pessoa({
     )
   }
   const nome = pessoa ? (nomeDe(pessoa) ?? SEM_NOME) : semPessoa
-  const marca = pessoa ? <Monograma nome={nomeDe(pessoa) ?? "?"} /> : <MonogramaAusente />
+  const marca = pessoa ? <Monograma nome={nomeDe(pessoa) ?? "?"} cor={pessoa.cor} /> : <MonogramaAusente />
 
   if (soMonograma) {
     return (
@@ -118,14 +123,19 @@ function juntar(nomes: string[]): string {
  * (*Ana Souza, Bruno Lima e Carla Dias*) é a dica e o nome acessível; o alvo é
  * focável, para a dica abrir no teclado.
  *
+ * `decorativa`: a frase ao lado já diz os nomes, e a pilha é só enfeite —
+ * `aria-hidden`, sem alvo e sem dica (o leitor de tela não ouve os nomes duas
+ * vezes, e o Tab não para num foco que não diz nada novo).
+ *
  * Vazia, não desenha: quem chama decide se a ausência se diz (com uma `Pessoa`
- * sem pessoa). Sem cor por pessoa (COR-09).
+ * sem pessoa). A cor por pessoa só vem com `pessoa.cor` (COR-09).
  */
 function PilhaDePessoas({
   pessoas,
   max = 3,
   sobre = "card",
   frase,
+  decorativa = false,
   className,
 }: {
   pessoas: DadosDaPessoa[]
@@ -134,6 +144,8 @@ function PilhaDePessoas({
   sobre?: "card" | "muted"
   /** A frase da dica e do nome acessível; o padrão junta os nomes. */
   frase?: string
+  /** A frase ao lado já diz os nomes: a pilha sai do leitor de tela e do Tab. */
+  decorativa?: boolean
   className?: string
 }) {
   if (pessoas.length === 0) return null
@@ -142,6 +154,29 @@ function PilhaDePessoas({
   const visiveis = pessoas.length === limite + 1 ? pessoas : pessoas.slice(0, limite)
   const excedente = pessoas.length - visiveis.length
   const texto = frase ?? juntar(pessoas.map((p) => nomeDe(p) ?? SEM_NOME))
+  const monogramas = (
+    <>
+      <span className="flex -space-x-0.5">
+        {visiveis.map((p, i) => (
+          // A tinta neutra do monograma é translúcida: o fundo opaco da superfície embaixo dele esconde o vizinho sobreposto.
+          <span
+            key={i}
+            className={cn("rounded-full ring-2", sobre === "muted" ? "bg-muted ring-muted" : "bg-card ring-card")}
+          >
+            <Monograma nome={nomeDe(p) ?? "?"} cor={p.cor} className="flex" />
+          </span>
+        ))}
+      </span>
+      {excedente > 0 ? <span className="t-medida text-muted-foreground">+{excedente}</span> : null}
+    </>
+  )
+  if (decorativa) {
+    return (
+      <span aria-hidden="true" data-slot="pilha-de-pessoas" className={cn("inline-flex shrink-0 items-center gap-1", className)}>
+        {monogramas}
+      </span>
+    )
+  }
   return (
     <Ajuda texto={texto}>
       <span
@@ -151,18 +186,7 @@ function PilhaDePessoas({
         tabIndex={0}
         className={cn(ALVO, "gap-1", className)}
       >
-        <span className="flex -space-x-0.5">
-          {visiveis.map((p, i) => (
-            // A tinta do monograma é translúcida: o fundo opaco da superfície embaixo dele esconde o vizinho sobreposto.
-            <span
-              key={i}
-              className={cn("rounded-full ring-2", sobre === "muted" ? "bg-muted ring-muted" : "bg-card ring-card")}
-            >
-              <Monograma nome={nomeDe(p) ?? "?"} className="flex" />
-            </span>
-          ))}
-        </span>
-        {excedente > 0 ? <span className="t-medida text-muted-foreground">+{excedente}</span> : null}
+        {monogramas}
       </span>
     </Ajuda>
   )
