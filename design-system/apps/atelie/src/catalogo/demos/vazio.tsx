@@ -21,6 +21,11 @@ export default function DemoDoVazio() {
       >
         O filtro escondeu todos os pedidos.
       </Vazio>
+      <div className="w-64">
+        <Vazio escala="coluna" causa="filtro">
+          Nenhum pedido com este filtro
+        </Vazio>
+      </div>
     </div>
   )
 }

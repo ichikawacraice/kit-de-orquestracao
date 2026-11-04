@@ -4,6 +4,20 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.17.0 · 04/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **O quadro de tarefas ganha peça e medida.** Peças novas no registro: `quadro` (a coluna mora no chão e o cartão é a peça, com sombra e raio de 14px; a bandeja no pé do cartão, cinza em repouso e tingida pela voz quando o item pede algo; a coluna vazia recolhe numa fita; o alvo de soltar na tinta da marca com o tracejado; a recusa com o motivo e *Tentar de novo*), `prioridade` (o carimbo com o glifo de barras e a palavra; só a urgente na voz de espera) e `ponto-da-etapa` (o ponto da etapa com o mapa que o projeto declara). O arrastar continua no app.
+- A DESIGN ganha o frontmatter `quadro` (as medidas em instrumento e site), o raio `cartao` de 14px na FORMA-01 (cartão de quadro e de lista; o container de 16 fica para cartão de tela, painel, tabela e diálogo), a voz do título do item de quadro (13/500) na TIPO-02 e, na COR-05, o mapa `TEXTO_SOBRE_A_TINTA` e o mapa de etapas como exceção declarada.
+- A ANATOMIA ganha as linhas *Quadro de tarefas* e *Prioridade* na PECA-01, e a região *lista ou quadro* do arquétipo Lista diz que a coluna mora no chão.
+- `idioma-de-cor` exporta `TEXTO_SOBRE_A_TINTA`, e o `BADGE_DO_TOM` passa a derivar dele (as classes não mudam). `vazio` ganha `escala="coluna"`.
+
+### Migração
+- Quadro feito à mão (coluna em `Painel`, cartão em `BlocoDeTinta`): `npx shadcn add <registro>/quadro.json` e troque a coluna e o cartão pelas peças, mantendo a biblioteca de arrastar do app. O mapa de etapas mora num arquivo só, listado em `guardas.regras["o-carimbo-tem-forma"].excecoes` do `design/<tema>.json`.
+- Quem só usa `idioma-de-cor` e `vazio` não precisa mudar nada; o `add` atualiza os dois arquivos.
+
 ## 0.16.0 · 03/11/2026
 
 Camadas: base, plugin, tokens, guardas

@@ -65,6 +65,14 @@
       },
       "o-vocabulario-da-tela": {
         "desligada": "o ateliê não tem domínio próprio: a palavra do código é a palavra da tela"
+      },
+      "o-carimbo-tem-forma": {
+        "excecoes": [
+          {
+            "arquivo": "src/catalogo/etapas-de-exemplo.ts",
+            "motivo": "o mapa de etapas das demonstrações: a exceção declarada de COR-05, com matizes que não são de voz nem da marca (COR-09)"
+          }
+        ]
       }
     }
   }

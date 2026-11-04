@@ -11,14 +11,8 @@ import { MedalhaoDoIcone } from "@/registry/design-system/ui/medalhao-do-icone"
  */
 type CausaDoVazio = "nada-ainda" | "filtro" | "nao-se-aplica" | "nao-informado"
 
-function Vazio({
-  causa,
-  icone,
-  titulo,
-  acao,
-  className,
-  children,
-}: {
+type PropsDaEscalaPadrao = {
+  escala?: "padrao"
   causa: CausaDoVazio
   icone: React.ComponentProps<typeof MedalhaoDoIcone>["icone"]
   titulo: string
@@ -27,7 +21,37 @@ function Vazio({
   className?: string
   /** A frase que diz a causa nas palavras de quem usa. */
   children?: React.ReactNode
-}) {
+}
+
+/**
+ * A escala baixa, para a coluna do quadro e o painel estreito: só a frase da
+ * causa, num contorno tracejado (a ausência, FORMA-02), sem medalhão nem título.
+ */
+type PropsDaEscalaColuna = {
+  escala: "coluna"
+  causa: CausaDoVazio
+  className?: string
+  /** A frase que diz a causa: "Nenhum item com este filtro". */
+  children: React.ReactNode
+}
+
+function Vazio(props: PropsDaEscalaPadrao | PropsDaEscalaColuna) {
+  if (props.escala === "coluna") {
+    return (
+      <p
+        data-slot="vazio"
+        data-causa={props.causa}
+        data-escala="coluna"
+        className={cn(
+          "rounded-cartao border border-dashed border-border px-3 py-4 text-center t-denso text-muted-foreground",
+          props.className
+        )}
+      >
+        {props.children}
+      </p>
+    )
+  }
+  const { causa, icone, titulo, acao, className, children } = props
   return (
     <div
       data-slot="vazio"

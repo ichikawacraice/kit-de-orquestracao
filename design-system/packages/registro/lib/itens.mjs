@@ -226,6 +226,28 @@ export const PECAS = [
     files: [ui('vazio')],
   }),
   peca({
+    name: 'prioridade',
+    title: 'Prioridade',
+    description: 'priority badge — a prioridade de um item: o carimbo com o glifo de barras e a palavra; só a urgente fala, na voz de espera.',
+    npm: [NPM.lucide],
+    pecas: ['chip-de-estado', 'idioma-de-cor'],
+    files: [ui('prioridade')],
+  }),
+  peca({
+    name: 'ponto-da-etapa',
+    title: 'Ponto da etapa',
+    description: 'stage dot — o marcador de etapa de um fluxo do projeto, por fábrica: o mapa de matizes mora no projeto, e a chave fora dele cai no ponto neutro.',
+    files: [ui('ponto-da-etapa')],
+  }),
+  peca({
+    name: 'quadro',
+    title: 'Quadro',
+    description: 'kanban board — o quadro de tarefas: a coluna no chão, o cartão elevado, a bandeja da vida tingida pela voz e o alvo de soltar da marca; a peça desenha, o app arrasta.',
+    npm: [NPM.radix, NPM.lucide],
+    pecas: ['idioma-de-cor', 'skeleton'],
+    files: [ui('quadro')],
+  }),
+  peca({
     name: 'tela-de-erro',
     title: 'Tela de erro',
     description: 'error state — o que não deu para mostrar: a rota inteira (erro, não encontrado, sem permissão) ou um bloco que falhou com a tela de pé.',
