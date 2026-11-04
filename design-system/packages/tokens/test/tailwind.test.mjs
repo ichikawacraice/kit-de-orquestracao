@@ -57,7 +57,7 @@ const esc = (c) => '.' + c.replace(/\//g, '\\/').replace(/:/g, '\\:')
 
 describe('Tailwind v4: `@import "@wicomm/tokens/tailwind-v4.css"`', async () => {
   const compilador = await compile('@import "tailwindcss";\n@import "./dist/tailwind-v4.css";', { base: RAIZ, onDependency() {} })
-  const css = compilador.build([...Object.keys(CLASSES), 'bg-primary/10', 'bg-terminal/95', 'dark:bg-card', 'p-4', INVENTADA])
+  const css = compilador.build([...Object.keys(CLASSES), 'bg-primary/10', 'bg-terminal/95', 'sublinhado-de-link', 'sublinhado-de-ajuda', 'hover:sublinhado-de-link', 'dark:bg-card', 'p-4', INVENTADA])
 
   it('a classe inventada não gera nada — a ausência é medível', () => {
     assert.ok(!css.includes('cor-que-nao-existe'))
@@ -93,6 +93,38 @@ describe('Tailwind v4: `@import "@wicomm/tokens/tailwind-v4.css"`', async () => 
   it('o espaçamento do Tailwind fica intacto: o pacote não declara `--spacing`', () => {
     for (const arq of ['tailwind-v4.css', 'tokens.css']) assert.ok(!/--spacing\s*:/.test(readFileSync(join(DIST, arq), 'utf8')), arq)
     assert.match(css, /--spacing: 0\.25rem/)
+  })
+
+  // O sublinhado do link é um só (MARCA-02, CTRL-03): linha cheia a 50% da tinta
+  // de quem o usa, a 2,5px do texto, que fecha no hover. A ajuda no texto é o
+  // pontilhado a 35% que não fecha. O alfa sai do `currentColor`: no balão da
+  // marca a tinta é a do balão, e o sublinhado a acompanha.
+  it('o sublinhado do link: linha cheia a 50% da tinta, a 2,5px, que fecha no hover', () => {
+    const r = regra(css, '.sublinhado-de-link') ?? ''
+    assert.ok(r.length > 0, 'sem regra para .sublinhado-de-link')
+    assert.match(r, /text-decoration-line: underline/)
+    assert.match(r, /text-decoration-style: solid/)
+    assert.match(r, /text-decoration-color: color-mix\(in oklab, currentcolor 50%, transparent\)/i)
+    assert.match(r, /text-underline-offset: 2\.5px/)
+    const corpo = css.slice(css.indexOf('.sublinhado-de-link {'), css.indexOf('.sublinhado-de-ajuda {'))
+    assert.match(corpo, /&:hover \{\s*@media \(hover: hover\) \{\s*text-decoration-color: currentcolor;\s*\}/i)
+  })
+
+  it('o sublinhado da ajuda no texto: pontilhado a 35%, a 2,5px, que não fecha no hover', () => {
+    const r = regra(css, '.sublinhado-de-ajuda') ?? ''
+    assert.ok(r.length > 0, 'sem regra para .sublinhado-de-ajuda')
+    assert.match(r, /text-decoration-line: underline/)
+    assert.match(r, /text-decoration-style: dotted/)
+    assert.match(r, /text-decoration-color: color-mix\(in oklab, currentcolor 35%, transparent\)/i)
+    assert.match(r, /text-underline-offset: 2\.5px/)
+    // O corpo vai até a chave que fecha a regra (dois espaços de recuo na camada).
+    const corpo = css.slice(css.indexOf('.sublinhado-de-ajuda {'), css.indexOf('\n  }\n', css.indexOf('.sublinhado-de-ajuda {')))
+    assert.match(corpo, /dotted/, 'o corte achou a regra da ajuda')
+    assert.ok(!corpo.includes('&:hover'), 'a ajuda não fecha no hover')
+  })
+
+  it('o sublinhado vale com variante: `hover:sublinhado-de-link` gera regra', () => {
+    assert.match(css, /\.hover\\:sublinhado-de-link:hover \{[^}]*text-underline-offset: 2\.5px/)
   })
 
   it('as vozes ficam na camada `components`: a utilitária ao lado ainda ajusta', () => {

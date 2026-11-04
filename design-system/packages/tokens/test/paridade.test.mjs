@@ -150,7 +150,14 @@ describe('paridade com o globals.css da origem', () => {
 
   it('as utilitárias de superfície e o painel têm as mesmas declarações da origem', () => {
     const { utilidades, componentes } = pecas(MD)
-    const todas = { ...utilidades, '.painel': componentes['.painel'] }
+    // O sublinhado nasceu no kit (F382), não na origem: fica de fora da paridade,
+    // mas a exclusão é medida — os dois existem e a origem não tem nenhum deles.
+    const doKit = ['.sublinhado-de-link', '.sublinhado-de-ajuda']
+    for (const sel of doKit) {
+      assert.ok(utilidades[sel], `${sel} existe no pacote`)
+      assert.ok(!CSS.includes(sel), `${sel} não está na origem`)
+    }
+    const todas = { ...Object.fromEntries(Object.entries(utilidades).filter(([sel]) => !doKit.includes(sel))), '.painel': componentes['.painel'] }
     for (const [sel, decl] of Object.entries(todas)) {
       assert.deepEqual(Object.fromEntries(Object.entries(decl).map(([k, v]) => [k, norma(v)])), regraDaOrigem(sel.slice(1)), sel)
     }

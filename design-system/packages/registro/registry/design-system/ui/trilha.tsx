@@ -39,7 +39,7 @@ function Trilha({ degraus, className }: { degraus: Degrau[]; className?: string 
               ) : (
                 <LinkDoApp
                   href={d.href}
-                  className="rounded-sm transition-colors duration-cor hover:text-foreground hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="rounded-sm transition-colors duration-cor hover:text-foreground hover:sublinhado-de-link focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   {d.rotulo}
                 </LinkDoApp>

@@ -380,7 +380,7 @@ function MesaDoPedido({
             {hrefDaConferencia ? (
               <LinkDoApp
                 href={hrefDaConferencia}
-                className="text-foreground underline decoration-foreground/35 underline-offset-2 hover:decoration-current"
+                className="text-foreground sublinhado-de-link"
               >
                 Abrir a conferência
               </LinkDoApp>

@@ -151,7 +151,7 @@ function Prazo({
         <Ajuda texto={parcial}>
           <span
             tabIndex={0}
-            className="cursor-help rounded-sm underline decoration-foreground/35 decoration-dotted underline-offset-[2.5px] outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="cursor-help rounded-sm sublinhado-de-ajuda outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {escrito}
             <span className="sr-only">, {parcial}</span>

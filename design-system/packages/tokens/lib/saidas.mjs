@@ -20,12 +20,28 @@ const bezier = (v) => `cubic-bezier(${v.join(', ')})`
  * cada uma só junta variáveis —, mas moram aqui para que quem as desenha e o
  * token que elas gastam não se separem (COR-11: o anel de controle usa `input`).
  */
+const SUBLINHADO = { 'text-decoration-line': 'underline', 'text-underline-offset': '2.5px' }
 const UTILIDADES = {
   superficie: { 'background-color': 'var(--card)', 'box-shadow': 'var(--superficie-sombra)' },
   'superficie-alta': { 'background-color': 'var(--card)', 'box-shadow': 'var(--superficie-sombra-alta)' },
   'superficie-flutuante': { 'background-color': 'var(--popover)', 'box-shadow': 'var(--superficie-sombra-flutuante)' },
   'anel-de-controle': { 'box-shadow': 'inset 0 0 0 1px var(--input)' },
   'bg-primary-gradient': { 'background-image': 'var(--primary-gradient)', 'background-color': 'var(--primary)' },
+  // O sublinhado do link, um só (MARCA-02, CTRL-03): linha cheia a 50% da tinta
+  // de quem o usa, a 2,5px do texto, que fecha no hover. O alfa sai do
+  // `currentColor`, para o link no balão da marca seguir a tinta do balão.
+  'sublinhado-de-link': {
+    ...SUBLINHADO,
+    'text-decoration-style': 'solid',
+    'text-decoration-color': 'color-mix(in oklab, currentColor 50%, transparent)',
+    '@variant hover': { 'text-decoration-color': 'currentColor' },
+  },
+  // A ajuda no texto (CTRL-03): pontilhado a 35% que não fecha no hover — a ajuda só diz.
+  'sublinhado-de-ajuda': {
+    ...SUBLINHADO,
+    'text-decoration-style': 'dotted',
+    'text-decoration-color': 'color-mix(in oklab, currentColor 35%, transparent)',
+  },
 }
 
 /** O painel é peça (camada `components`), como as vozes. */
@@ -123,8 +139,11 @@ export function modelo(opcoes = {}) {
   }
 }
 
+/** Valor objeto é bloco aninhado (`&:hover`, `@media`), que o `@utility` do v4 aceita. */
 const bloco = (seletor, decl, recuo = '') =>
-  `${recuo}${seletor} {\n${Object.entries(decl).map(([p, v]) => `${recuo}  ${p}: ${v};`).join('\n')}\n${recuo}}`
+  `${recuo}${seletor} {\n${Object.entries(decl)
+    .map(([p, v]) => (typeof v === 'object' ? bloco(p, v, recuo + '  ') : `${recuo}  ${p}: ${v};`))
+    .join('\n')}\n${recuo}}`
 
 function blocosDeTema(md) {
   return [

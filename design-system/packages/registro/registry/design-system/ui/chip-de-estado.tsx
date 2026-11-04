@@ -52,9 +52,9 @@ function ChipDeEstado({
 
 /**
  * O estado que ABRE o detalhe (PECA-01): o mesmo carimbo, como botão. O clique
- * leva ao que o estado resume (a pendência, a lista). O sublinhado pontilhado
- * diz que ele abre; o foco tem o anel de sempre (SUP-06). O neutro abre com o
- * ponto, como o `ChipDeEstado`.
+ * leva ao que o estado resume (a pendência, a lista). O sublinhado do link
+ * (`sublinhado-de-link`, CTRL-03) diz que ele abre; o foco tem o anel de
+ * sempre (SUP-06). O neutro abre com o ponto, como o `ChipDeEstado`.
  */
 function ChipQueAbre({
   tom,
@@ -75,7 +75,7 @@ function ChipQueAbre({
         CASCO_DO_CARIMBO,
         BADGE_DO_TOM[tom],
         // O desenho mede ~21px; o alvo de clique, 24px, por um pseudo-elemento (ACES-03).
-        "relative cursor-pointer after:absolute after:inset-x-0 after:-inset-y-[2px] after:content-[''] underline decoration-current/40 decoration-dotted underline-offset-2 transition-colors duration-cor hover:decoration-current focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        "relative cursor-pointer after:absolute after:inset-x-0 after:-inset-y-[2px] after:content-[''] sublinhado-de-link transition-colors duration-cor focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className
       )}
       {...props}

@@ -151,7 +151,7 @@ function TextoComLinks({ texto }: { texto: string }) {
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-              "rounded-sm underline decoration-current/50 underline-offset-[2.5px] transition-colors duration-cor hover:decoration-current",
+              "rounded-sm sublinhado-de-link transition-colors duration-cor",
               "box-decoration-clone focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               "in-data-[lado=meu]:focus-visible:ring-offset-marca-tinta in-data-[lado=outro]:focus-visible:ring-offset-muted"
             )}

@@ -230,7 +230,7 @@ describe('TextoComLinks', () => {
   it('o sublinhado é da tinta, e o respiro do anel tem a cor do balão', () => {
     render(<TextoComLinks texto="https://a.example" />)
     const link = screen.getByRole('link')
-    for (const c of ['underline', 'decoration-current/50', 'hover:decoration-current', 'box-decoration-clone', 'focus-visible:ring-offset-2']) {
+    for (const c of ['sublinhado-de-link', 'box-decoration-clone', 'focus-visible:ring-offset-2']) {
       expect(link.className).toContain(c)
     }
     expect(link.className).toContain('in-data-[lado=meu]:focus-visible:ring-offset-marca-tinta')
