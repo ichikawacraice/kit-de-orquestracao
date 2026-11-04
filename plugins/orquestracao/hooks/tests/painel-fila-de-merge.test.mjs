@@ -759,9 +759,23 @@ test('rodada da orquestradora grava o config; a rodada --sem-turno usa a lista a
     assert.deepEqual(e.desfechos[0].devolvidos[0].itens, [{ item: 'F3', dona: LA }]);
     // F373 (fatia 3): com merge, o pós-merge roda na própria rodada; aqui não há marketplace nem arquivo de estado
     assert.deepEqual(e.desfechos[0].posMerge, {}, JSON.stringify(e.desfechos[0]));
+    assert.match(e.desfechos[0].id ?? '', /^[0-9a-f]{12}$/, 'o desfecho tem id (o pós-merge o completa por ele)');
     assert.deepEqual(c.merges(), [21, 24]);
     assert.equal(c.dado('F2').etapa, 'feito');
     assert.equal(c.dado('F3').etapa, 'execucao');
+  } finally { limpar(c); }
+});
+
+test('F373: KIT_POS_MERGE=off: a rodada --sem-turno mergeia e grava o desfecho sem o pós-merge (fica com a orquestradora)', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21);
+    c.envExtra = { KIT_POS_MERGE: 'off' };
+    const r = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', 'true', '--sem-turno');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.desfechos[0].mergeados.map((m) => m.pr), [21], 'houve merge: sem o off, o pós-merge rodaria');
+    assert.equal(e.desfechos[0].posMerge, undefined);
   } finally { limpar(c); }
 });
 

@@ -1079,6 +1079,14 @@ function comandoFilaDeMerge(args) {
     const e = arquivoJson(arquivo, {});
     gravarJson(arquivo, { ...e, desfechos: [...(Array.isArray(e?.desfechos) ? e.desfechos : []), { em: new Date().toISOString(), ...d }] });
   });
+  // F373 (fatia 3): o desfecho sai antes do pós-merge, marcado `pendente` (a dona do devolvido é avisada já); o resultado entra
+  // depois no mesmo desfecho, pelo `id`. Se o processo morrer no meio, a batida acha o pendente velho e acorda a orquestradora.
+  const completar = (id, posMerge) => comTrava(() => {
+    const e = arquivoJson(arquivo, {});
+    const lista = Array.isArray(e?.desfechos) ? e.desfechos : [];
+    if (lista.some((d) => d?.id === id)) gravarJson(arquivo, { ...e, desfechos: lista.map((d) => (d?.id === id ? { ...d, posMerge } : d)) });
+    else gravarJson(arquivo, { ...e, desfechos: [...lista, { em: new Date().toISOString(), id, mergeados: [], devolvidos: [], posMerge }] });
+  });
   let saida;
   try { saida = filaDeMerge(args, { semTurno }); } catch (e) {
     try { desfecho({ erro: String(e?.message || e).split('\n')[0] }); } catch { /* o erro segue no log da batida */ }
@@ -1087,14 +1095,17 @@ function comandoFilaDeMerge(args) {
   if (!saida.pendente) {
     const { mergeados = [], devolvidos = [], suspeitaDeInstavel, erros, logs } = saida;
     // F373 (fatia 3): com merge, o pós-merge (versão, plugins, giro do estado) roda aqui, sem turno da orquestradora
-    let pos = null;
-    if (mergeados.length && process.env.KIT_POS_MERGE !== 'off') {
+    const comPos = mergeados.length > 0 && process.env.KIT_POS_MERGE !== 'off';
+    const id = randomBytes(6).toString('hex');
+    desfecho({ id, mergeados, devolvidos, ...(suspeitaDeInstavel ? { suspeitaDeInstavel } : {}), ...(erros ? { erros } : {}), ...(logs ? { logs } : {}), ...(comPos ? { posMerge: { pendente: true, desde: new Date().toISOString() } } : {}) });
+    if (comPos) {
+      let pos;
       try {
         const raiz = raizDoRepo();
         pos = posMerge({ cwd: raiz, base: saida.base || 'main', nomes: [basename(raiz), projetoDoCwd().projeto], pastaOrq: join(BASE, '..') });
       } catch (e) { pos = { erros: [`pos-merge: ${String(e?.message || e).split('\n')[0]}`] }; }
+      completar(id, pos);
     }
-    desfecho({ mergeados, devolvidos, ...(suspeitaDeInstavel ? { suspeitaDeInstavel } : {}), ...(erros ? { erros } : {}), ...(logs ? { logs } : {}), ...(pos ? { posMerge: pos } : {}) });
   }
   return saida;
 }

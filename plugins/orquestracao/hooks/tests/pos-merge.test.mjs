@@ -88,10 +88,39 @@ test('projeto sem marketplace: não sobe versão; com o arquivo de estado, gira;
   assert.doesNotMatch(vivo, /- velho/, 'a seção datada antiga foi ao arquivo morto');
 });
 
-test('a subida que falha (origem atrás, push recusado) vira erro com a etapa e não deixa worktree', () => {
+test('push recusado: tenta de novo, vira erro com o motivo do git e não deixa worktree; no kit, os plugins ficam por fazer', () => {
+  montar('ichikawa-kit');
+  // a presença seria detectada: um worktree a mais conta
+  const extra = join(base, 'extra'); git(['worktree', 'add', '-q', '--detach', extra, 'HEAD']);
+  assert.equal(worktrees(), 2); git(['worktree', 'remove', '--force', extra]); assert.equal(worktrees(), 1);
+  const gancho = join(origem, 'hooks', 'pre-receive'); const conta = join(base, 'pushes');
+  writeFileSync(gancho, `#!/bin/sh\necho x >> "${conta}"\necho "recusado pelo teste" >&2\nexit 1\n`); chmodSync(gancho, 0o755);
+  const c = claudeFalso();
+  const r = posMerge({ cwd: repo, base: 'main', nomes: ['kit'], pastaOrq: orq, env: ambiente({ CLAUDE_BIN: c.bin }) });
+  const v = (r.erros ?? []).find((e) => /^versao: /.test(e));
+  assert.ok(v, JSON.stringify(r));
+  assert.match(v, /rejected|recusado pelo teste/, 'o motivo é a linha que conta, não o "To <url>"');
+  assert.match(v, /3 tentativas/);
+  assert.equal(readFileSync(conta, 'utf8').trim().split('\n').length, 3, 'três pushes');
+  assert.equal(worktrees(), 1, 'nenhum worktree sobrou');
+  assert.equal(git(['rev-parse', '--abbrev-ref', 'HEAD']), 'outra');
+  assert.ok((r.erros ?? []).some((e) => /^plugins: não rodou porque a versão falhou/.test(e)), JSON.stringify(r.erros));
+  assert.ok(!existsSync(c.log), 'sem versão, o atualizar-plugins não roda');
+});
+
+test('a origem sumiu: erro de versão na etapa, sem lançar', () => {
   montar('outro');
-  rmSync(origem, { recursive: true, force: true }); // a origem sumiu: o fetch falha
+  rmSync(origem, { recursive: true, force: true });
   const r = posMerge({ cwd: repo, base: 'main', nomes: ['kit'], pastaOrq: orq, env: ambiente() });
   assert.ok((r.erros ?? []).some((e) => /^versao: /.test(e)), JSON.stringify(r));
-  assert.equal(worktrees(), 1);
+});
+
+test('a trava do botão do kit: a vencida ou com falha não segura; o pós-merge grava a dele e a tira no fim', () => {
+  montar('ichikawa-kit');
+  const trava = join(orq, 'batida', 'atualizando-kit.json'); mkdirSync(dirname(trava), { recursive: true });
+  writeFileSync(trava, JSON.stringify({ em: new Date(Date.now() - 11 * 60_000).toISOString() }));
+  const c = claudeFalso();
+  const r = posMerge({ cwd: repo, base: 'main', nomes: ['kit'], pastaOrq: orq, env: ambiente({ CLAUDE_BIN: c.bin, KIT_POS_MERGE_ESPERA_MS: '10' }) });
+  assert.ok(existsSync(c.log), `o atualizar-plugins rodou: ${JSON.stringify(r)}`);
+  assert.ok(!existsSync(trava), 'a trava do pós-merge saiu no fim');
 });

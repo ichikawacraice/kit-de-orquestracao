@@ -32,6 +32,7 @@ O resto não é seu e chega a quem é: a fila roda sem turno seu e, depois do me
 ## Ao assumir (e ao voltar de uma limpeza)
 1. Renomeie a sessão `🎛 orquestradora — <projeto>` (`set_session_title` com `"self"`), se ainda não estiver.
 2. Leia `~/.claude/orquestracao/<nome-do-repo>.md`, que o hook de início de sessão já girou: as seções datadas antigas e as entregas além das 15 últimas estão em `~/.claude/orquestracao/arquivo-morto/<nome-do-repo>/<AAAA-MM>.md`, que você **não lê**: busque nele com `grep -n` só quando precisar de um fato antigo. Se não existir, crie com as seções: PRs abertos (de quem, estado) · Decisões acumuladas · Números reservados · Adiados (sugestões de sessão) · Próximo release · Entregas arquivadas.
+2b. As últimas linhas de `~/.claude/orquestracao/batida/<projeto>.desfechos.log` (`tail -n 20`): os lotes que a fila fechou sem você (merge, versão, devolução). Leve ao arquivo de estado só o que segue valendo.
 3. `list_sessions` (com `limit`) e confira o que mudou desde o arquivo: sessão nova, sessão parada, PR mergeado. Leve a diferença ao painel com `painel` (seção "Perguntas com ID e o painel"). Não releia transcrições para reconstruir o passado: o que não está no arquivo, pergunte à sessão (seção "Orçamento de contexto").
 4. As perguntas que você abriu antes da limpeza continuam suas (protocolo, âncora `perguntas-proprias`): a lista chega no início da conversa; resposta pelo painel a elas não se repassa.
 

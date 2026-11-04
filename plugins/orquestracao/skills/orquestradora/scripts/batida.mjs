@@ -6,6 +6,7 @@ import { comandoDeRelance } from './fila-orfa.mjs';
 
 export const PRAZO_MIN = 30; // item parado: sem gravar há tanto (PAINEL_PRAZO_MIN troca)
 export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta (BATIDA_SOLTA_MIN troca)
+export const POS_MERGE_MAX_MIN = 30; // F373: o pós-merge pendente há mais que isto morreu no meio
 export const ANOTAR_MAX = 2; // F373: cobranças do `--anotar` por item e PRs; passado o teto, o item vai à orquestradora
 export const ESPERA_MIN = 5; // sem dona há tanto: vira vaga no relatório da orquestradora
 const LIMITE_VELHO_MS = 24 * 3_600_000; // F371: recusa de limite com reset mais velho que isto não conta
@@ -178,7 +179,16 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
   for (const [nome, lista] of Object.entries(desfechos)) {
     if (!Array.isArray(lista) || !lista.length) continue;
     const orq = projeto(nome).orquestradora;
-    for (const df of lista) {
+    let entregues = 0; let segura = false;
+    for (const df0 of lista) {
+      // F373 (fatia 3): o pós-merge ainda roda: avisa a dona, e este desfecho (e os de depois) esperam; velho demais, o processo
+      // morreu no meio e vira erro do pós-merge
+      let df = df0;
+      if (df.posMerge?.pendente) {
+        const desde = ms(df.posMerge.desde);
+        if (desde !== null && agoraMs - desde < POS_MERGE_MAX_MIN * 60_000) segura = true;
+        else df = { ...df, posMerge: { erros: [`o pós-merge não terminou em ${POS_MERGE_MAX_MIN} min (o processo morreu?): confira a versão, os plugins e o giro do estado`] } };
+      }
       if (!df.donasAvisadas) {
         for (const dv of df.devolvidos ?? []) {
           for (const it of dv.itens ?? []) {
@@ -193,10 +203,12 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
         }
       }
       // F373 (fatia 3): só o que é dela a acorda; o resto vai ao registro do projeto (`batida/<projeto>.desfechos.log`)
-      if (orq && desfechoAcorda(df)) nova(orq, resumoDoDesfecho(df), null, 'desfecho');
-      else if (orq) (registros[nome] ??= []).push(resumoDoDesfecho(df));
+      if (!orq || segura) continue;
+      if (desfechoAcorda(df)) nova(orq, resumoDoDesfecho(df), null, 'desfecho');
+      else (registros[nome] ??= []).push(resumoDoDesfecho(df));
+      entregues++;
     }
-    entregas[nome] = { orquestradora: orq ? lista.length : 0, soDonas: orq ? 0 : lista.length };
+    entregas[nome] = { orquestradora: entregues, soDonas: lista.length - entregues };
   }
 
   // F370: os avisos gravados pelo merge (`painel mergear`, nos dois caminhos da fila) vão à dona viva; quem chama os tira do

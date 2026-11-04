@@ -498,6 +498,21 @@ test('F373: merge com o pós-merge em ordem não acorda a orquestradora; vai ao 
   assert.match(reg, /orquestracao 9\.9\.2/);
   assert.deepEqual(lerFila().desfechos, []);
 });
+test('F373: o pós-merge pendente segura o desfecho (a dona já é avisada); pendente velho acorda a orquestradora', () => {
+  item('F1', { etapa: 'execucao', atualizadoEm: iso(T) });
+  const devolvido = { pr: 78, motivo: 'gate vermelho (exit 1)', itens: [{ item: 'F1', dona: lid(1) }] };
+  fila({ ocupada: null, emVoo: [], pendentes: [], desfechos: [{ em: iso(T - MIN), id: 'abc', mergeados: MERGEADO, devolvidos: [devolvido], posMerge: { pendente: true, desde: iso(T - 5 * MIN) } }] });
+  const a = batida(ORQ());
+  assert.equal(msgs(a, 'devolucao').length, 1, a.out);
+  assert.deepEqual(msgs(a, 'desfecho'), []);
+  assert.equal(registroDeDesfechos(), '');
+  assert.equal(lerFila().desfechos.length, 1, 'fica até o pós-merge terminar');
+  assert.equal(lerFila().desfechos[0].donasAvisadas, true);
+  const b = batida(ORQ(), T + 40 * MIN);
+  assert.equal(msgs(b, 'devolucao').length, 0, 'a dona não é avisada duas vezes');
+  assert.match(msgs(b, 'desfecho')[0]?.texto ?? '', /pós-merge falhou: o pós-merge não terminou em 30 min/, b.out);
+  assert.deepEqual(lerFila().desfechos, []);
+});
 test('F373: pós-merge que falhou, erro da fila, suspeita de instável e desfecho sem pós-merge acordam a orquestradora', () => {
   item('F1', { etapa: 'feito', atualizadoEm: iso(T) });
   const casos = [
