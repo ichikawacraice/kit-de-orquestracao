@@ -4,6 +4,20 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.16.0 · 03/11/2026
+
+Camadas: base, plugin, tokens, guardas
+
+### O que muda
+- **`@wicomm/tokens` e `@wicomm/guardas` saem no npm público**, pelo nome e sob a licença MIT (a cor da marca fica fora dela). Acaba o GitHub Packages da org: sem `.npmrc`, sem token, sem alias `@wicomm-projects/…`, no CI e na Vercel.
+- **CONV-25 revogada.** O build de produção na máquina existia só porque a Vercel não tinha o token do registro privado; o deploy volta a ser o da Vercel a cada push. O código fica, marcado *revogada*.
+- O plugin: `/design-system:novo` instala os pacotes pelo nome e escreve o `docs/deploy.md` com o deploy da Vercel; `/design-system:padronizar` instala pelo nome; `/design-system:atualizar` sobe pelo nome e troca o projeto que ainda instala pelo GitHub Packages. O guia Começar passa ao plugin `design-system` do marketplace do kit (`ichikawa-kit`), sem conta no GitHub nem token.
+
+### Migração
+- Projeto que instalou pelo GitHub Packages: `npm install @wicomm/tokens@latest @wicomm/guardas@latest` (sem o `@latest` o npm mantém o alias), tire as linhas do `npm.pkg.github.com` do `.npmrc` e o `NODE_AUTH_TOKEN`/`packages: read` do CI (`docs/instalar-pacotes.md`, seção *Projeto instalado pelo GitHub Packages*). O `/design-system:atualizar` faz a troca.
+- Projeto que faz o build na máquina por causa da CONV-25 pode voltar ao build da Vercel: ligue o repositório ao projeto da Vercel e reescreva o `docs/deploy.md`. Nada quebra se ficar como está.
+- A base muda só na CONV-25: o merge de três vias não tem conflito, salvo em projeto que reescreveu essa regra.
+
 ## 0.15.0 · 02/11/2026
 
 Camadas: base

@@ -3,7 +3,7 @@ import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { cartaoACaminho, semDona, semDonoDesde } from './sem-dona'
 import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
-import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, PROMPT_DA_VOLTA, PAINEL_NA_VOLTA_MS, idadeDaVolta, paraAcordar, limpezaAconteceu, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
+import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, promptDaVolta, PAINEL_NA_VOLTA_MS, idadeDaVolta, paraAcordar, limpezaAconteceu, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
 import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
@@ -1616,7 +1616,8 @@ async function acordarQuemVoltou($: EngineInterface, home: string, host: string 
       if (sessao.isRunning !== false || sessao.starting === true || sessao.isArchived === true) continue
       const tomou = await $.process.run(['mv', `${pasta}/${id}.json`, `${pasta}/${id}${ACORDADA}`], { timeoutMs: SCRIPT_TIMEOUT_MS })
       if (tomou.exitCode !== 0) continue
-      const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: id, message: PROMPT_DA_VOLTA })
+      // F371: a mensagem sai da marca (a da dona traz os itens e o handoff de cada um).
+      const r = await $.tool.call({ tool: 'mcp__ccd_session_mgmt__send_message', session_id: id, message: promptDaVolta(marcas.find(x => x.nome === `${id}.json`)?.texto) })
       if (r.deny !== undefined || r.isError) {
         // Devolve a marca: a próxima leitura (desta ou de outra sessão) tenta de novo, dentro do prazo.
         await $.process.run(['mv', `${pasta}/${id}${ACORDADA}`, `${pasta}/${id}.json`], { timeoutMs: SCRIPT_TIMEOUT_MS }).catch(() => undefined)

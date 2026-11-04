@@ -51,7 +51,7 @@
 // e PAINEL_PAUSA_* (só teste).
 //
 // Toda escrita grava `atualizadoEm` (agora, ISO) quando o JSON não traz um, e sobe `version`.
-import { closeSync, cpSync, existsSync, mkdirSync, openSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, mkdtempSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
@@ -64,7 +64,8 @@ import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, plugin
 import { GATE_PADRAO, montarLote, motivoDeConflito } from './fila-de-merge.mjs';
 import { donoDaFilaVivo, filaOrfa } from './fila-orfa.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
-import { custoDoItem, sessoesDoItem } from './custo-do-item.mjs';
+import { custoDoItem, projetosDir, sessoesDoItem } from './custo-do-item.mjs';
+import { limiteDoTranscript } from './limite-de-uso.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
 import * as arq from './perguntas-arquivo.mjs';
 
@@ -1427,6 +1428,39 @@ function baixarDesfechos(entregas) {
   }
 }
 
+// F371: as donas paradas no limite de uso, lidas do fim do transcript atual de cada uma (registro do app → id do CLI atual →
+// <projetos>/<pasta>/<id>.jsonl). Só o fim do arquivo: a recusa é a última fala. Erro de leitura = a dona fica fora (a batida segue como antes).
+const FIM_DO_TRANSCRIPT = 256 * 1024;
+function fimDoArquivo(f) {
+  const fd = openSync(f, 'r');
+  try {
+    const tam = statSync(f).size;
+    const n = Math.min(tam, FIM_DO_TRANSCRIPT);
+    const buf = Buffer.alloc(n);
+    readSync(fd, buf, 0, n, tam - n);
+    return buf.toString('utf8');
+  } finally { closeSync(fd); }
+}
+function limitesDasDonas(itens) {
+  const limites = {};
+  const raiz = projetosDir();
+  let pastas = null;
+  for (const [, d] of itens) {
+    const dona = d?.donoLocalId;
+    if (typeof dona !== 'string' || !dona || dona in limites || ['feito', 'descartado', 'merge'].includes(d.etapa)) continue;
+    try {
+      const cli = regras?.registroDaSessao(dona, { fresco: true })?.cliAtual;
+      if (!cli) continue;
+      pastas ??= readdirSync(raiz, { withFileTypes: true }).filter((x) => x.isDirectory()).map((x) => x.name);
+      const f = pastas.map((p) => join(raiz, p, `${cli}.jsonl`)).find((x) => existsSync(x));
+      const lim = f ? limiteDoTranscript(fimDoArquivo(f)) : null;
+      if (lim) limites[dona] = lim;
+    } catch { /* registro ou transcript ilegível: fora */ }
+  }
+  return limites;
+}
+const handoffDoItem = (F) => (/^F\d+$/.test(F) && existsSync(join(HANDOFFS, `${F}.md`)) ? join(HANDOFFS, `${F}.md`) : null);
+
 function comandoBatida(args) {
   const arquivo = flag(args, '--sessoes');
   const seco = flag(args, '--seco', false);
@@ -1440,6 +1474,7 @@ function comandoBatida(args) {
   const rodar = () => {
     const itens = itensVivos();
     const filas = filasDaBatida({ seco, agoraMs });
+    const limites = limitesDasDonas(itens);
     const julgado = julgar({
       agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(), filasOrfas: filas.orfas, filasVivas: filas.vivas, desfechos: filas.desfechos, avisos: filas.avisos,
       estado: arquivoJson(join(pasta, 'estado.json'), {}),
@@ -1447,10 +1482,11 @@ function comandoBatida(args) {
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
       caminhoDoRelatorio: (nome) => join(pasta, `${nome}.json`),
       prazoMin: prazoEmMin([]), soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
+      limites, handoffDe: handoffDoItem,
     });
     const marcadoresApagados = marcadoresMortos(new Map(linhas.map((r) => [r.sessionId, r])), agoraMs);
     const cartoesApagados = cartoesResolvidos({ cartoes: cartoesDoPainel(), linhas, projetoDe: projetoDeUmaLinha(), agoraMs, itens: new Map(itens) });
-    const saida = { cartoesApagados, ...(Object.keys(filas.lancadas).length ? { filasLancadas: Object.fromEntries(Object.entries(filas.lancadas).map(([n, l]) => [n, l.prs])) } : {}), mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
+    const saida = { cartoesApagados, ...(Object.keys(filas.lancadas).length ? { filasLancadas: Object.fromEntries(Object.entries(filas.lancadas).map(([n, l]) => [n, l.prs])) } : {}), mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), ...(Object.keys(limites).length ? { limites: Object.fromEntries(Object.entries(limites).map(([id, l]) => [id, new Date(l.resetsAtMs).toISOString()])) } : {}), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
     if (seco) return saida;
     const soltos = [];
     for (const { F, motivo } of julgado.soltar) {

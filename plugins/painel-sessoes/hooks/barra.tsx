@@ -22,6 +22,29 @@ export const PROMPT_DE_LIMPAR = 'O operador mandou limpar pelo botão da barra: 
  * mod de outra sessão viva, que acha a marca de volta que a T7 gravou ao liberar o `clear_session`.
  */
 export const PROMPT_DA_VOLTA = 'Voltei de uma limpeza de contexto (aviso automático do painel: o remetente é só a sessão que notou a volta, de qualquer projeto; não responda a ela): carregue a skill `orquestracao:orquestradora` e cumpra o "Ao assumir"; o painel já foi reaberto.'
+/**
+ * F371: a mensagem de volta escolhida pela marca. A marca da dona (`papel: "dona"`, gravada pela T7 no `clear_session "self"` de
+ * quem é dona de item vivo) traz os itens dela e o handoff de cada um; a mensagem manda reler o manual da dona e retomar por ele.
+ * Marca sem papel, de orquestradora ou ilegível: `PROMPT_DA_VOLTA`, como antes.
+ */
+export function promptDaVolta(textoDaMarca: string | null | undefined): string {
+  let marca: Record<string, unknown> | null = null
+  try {
+    marca = JSON.parse(textoDaMarca ?? '') as Record<string, unknown> | null
+  } catch {
+    return PROMPT_DA_VOLTA
+  }
+  if (marca?.papel !== 'dona') return PROMPT_DA_VOLTA
+  const itens = (Array.isArray(marca.itens) ? marca.itens : []).flatMap((i: unknown) => {
+    const r = (i ?? {}) as Record<string, unknown>
+    const id = texto(r.id)
+    return id && /^F\d+$/.test(id) ? [{ id, handoff: texto(r.handoff) }] : []
+  })
+  const deCada = itens.map(({ id, handoff }) => (handoff ? `${id}: retome pelo handoff \`${handoff}\`` : `${id}: sem handoff gravado, retome pelo item (\`painel get fila ${id}\`) e pelo estado da branch`))
+  const deOnde = deCada.length ? ` Você é a dona de ${itens.map(i => i.id).join(', ')}. ${deCada.join('; ')}.` : ''
+
+  return `Voltei de uma limpeza de contexto (aviso automático do painel: o remetente é só a sessão que notou a volta, de qualquer projeto; não responda a ela): releia o \`pool/dona.md\` do plugin orquestracao e siga o item de onde parou.${deOnde}`
+}
 /** A marca espera isto antes de acordar a sessão: a limpeza da própria sessão só acontece quando o turno dela termina. */
 export const ACORDAR_DEPOIS_DE_MS = 30_000
 /** Marca mais velha que isto não acorda ninguém: é limpeza que não aconteceu, ou o operador já voltou por conta própria. */

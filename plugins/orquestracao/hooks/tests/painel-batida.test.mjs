@@ -467,4 +467,44 @@ test('F370: o desfecho sem turno não repete a fatia já avisada; o desfecho ant
   fila({ ocupada: null, emVoo: [], pendentes: [], desfechos: [{ em: iso(T - MIN), mergeados, devolvidos: [] }] });
   const a = batida(sessoes(sessao(1, 'F1 · a'), sessao(2, 'F2 · b')));
   assert.deepEqual(msgs(a, 'fatia').map((m) => m.para), [lid(2)], a.out);
+
+// ---- F371: a dona parada pelo limite de uso ----
+// O registro do app dá a id do CLI atual da dona; o transcript dela, em <HOME>/.claude/projects/<pasta>/<cli>.jsonl, termina na recusa
+// (a forma medida em 03/11: linha `assistant` sintética com `isApiErrorMessage`, `error: "rate_limit"` e `quotaLimits.resetsAt` em segundos).
+const CLI_DA_DONA = 'cccccccc-0000-4000-8000-000000000001';
+function donaNoLimite(resetsAtMs, { comRegistro = true } = {}) {
+  if (comRegistro) {
+    mkdirSync(join(base, 'appsess', 'conta'), { recursive: true });
+    writeFileSync(join(base, 'appsess', 'conta', `${lid(1)}.json`), JSON.stringify({ sessionId: lid(1), cliSessionId: CLI_DA_DONA, priorCliSessionIds: [], title: 'F1 · faz o item', isArchived: false, cwd: repo, originCwd: repo }));
+  }
+  const pasta = join(base, 'home', '.claude', 'projects', '-repo-kit');
+  mkdirSync(pasta, { recursive: true });
+  const recusa = { type: 'assistant', isSidechain: false, timestamp: iso(T - 5 * MIN), message: { model: '<synthetic>', role: 'assistant', content: [{ type: 'text', text: "You've hit your session limit · resets 8pm (America/Sao_Paulo)" }] }, error: 'rate_limit', isApiErrorMessage: true, quotaLimits: { status: 'rejected', resetsAt: resetsAtMs / 1000 } };
+  writeFileSync(join(pasta, `${CLI_DA_DONA}.jsonl`), `${JSON.stringify({ type: 'user', timestamp: iso(T - 10 * MIN), message: { content: 'x' } })}\n${JSON.stringify(recusa)}\n`);
+}
+test('batida F371: dona no limite antes do reset → nem cutucada nem soltura; passado o reset, uma retomada com o handoff', () => {
+  item('F1');
+  const arq = sessoes(sessao(1, 'F1 · faz o item'));
+  const reset = T + 60 * MIN;
+  donaNoLimite(reset);
+  const a = batida(arq);
+  assert.equal(a.exit, 0, a.err);
+  assert.deepEqual(msgs(a), [], a.out);
+  assert.equal(a.json().limites?.[lid(1)], iso(reset), 'a hora do reset não foi lida');
+  assert.deepEqual(batida(arq, T + 25 * MIN).json().soltos, [], 'no limite o item não é solto');
+  mkdirSync(join(pastaPainel(), '..', 'pool', 'handoffs'), { recursive: true });
+  writeFileSync(join(pastaPainel(), '..', 'pool', 'handoffs', 'F1.md'), '# handoff');
+  const b = batida(arq, reset + 3 * MIN);
+  const ret = msgs(b, 'retomada');
+  assert.equal(ret.length, 1, b.out);
+  assert.equal(ret[0].para, lid(1));
+  assert.ok(ret[0].texto.includes(join(pastaPainel(), '..', 'pool', 'handoffs', 'F1.md')), ret[0].texto);
+  assert.equal(msgs(batida(arq, reset + 13 * MIN), 'retomada').length, 0, 'a retomada não se repete');
+});
+test('batida F371: sem o registro da dona, o limite não é lido e a batida cutuca como antes (o contraste do teste acima)', () => {
+  item('F1');
+  donaNoLimite(T + 60 * MIN, { comRegistro: false });
+  const a = batida(sessoes(sessao(1, 'F1 · faz o item')));
+  assert.equal(msgs(a, 'cutucada').length, 1, a.out);
+  assert.equal(a.json().limites, undefined);
 });

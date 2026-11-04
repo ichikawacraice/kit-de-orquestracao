@@ -31,11 +31,13 @@ Para cada documento, mescla a cópia do projeto, o ancestral (`design/.base/`, a
 
 ## 3. A nota de migração
 
-Leia as notas de release do sistema entre a versão antiga e a nova (na pasta `design-system/` do repositório `ichikawacraice/kit-de-orquestracao`, `docs/releases/`). MAJOR traz passos de migração de tela: liste-os como trabalho, não os aplique calado.
+Leia as notas de release do sistema entre a versão antiga e a nova (o `design-system/CHANGELOG.md` do repositório `ichikawacraice/kit-de-orquestracao`: uma entrada por versão da base, com *O que muda* e *Migração*). MAJOR traz passos de migração de tela: liste-os como trabalho, não os aplique calado.
 
 ## 4. Tokens e guardas
 
-Se o projeto usa `@wicomm/tokens` e `@wicomm/guardas`, suba os dois para a versão nova pelo alias com que foram instalados (`npm install @wicomm/tokens@npm:@wicomm-projects/tokens@<versão> @wicomm/guardas@npm:@wicomm-projects/guardas@<versão>`, com o `.npmrc` do GitHub Packages; nunca `@wicomm/tokens` direto, que iria ao npm público) e rode as guardas: regra nova entra com catraca, então a contagem atual vira a linha de base e só o que é novo reprova. Pacote não publicado: diga e siga.
+Se o projeto usa `@wicomm/tokens` e `@wicomm/guardas`, suba os dois para a versão nova, do npm público (`npm install @wicomm/tokens@<versão> @wicomm/guardas@<versão>`) e rode as guardas: regra nova entra com catraca, então a contagem atual vira a linha de base e só o que é novo reprova. Pacote não publicado: diga e siga.
+
+**Projeto instalado pelo GitHub Packages** (`package.json` com `npm:@wicomm-projects/…` ou `.npmrc` com `@wicomm-projects:registry`): os pacotes saíram dali para o npm público, e o registro antigo não recebe versão nova. Troque pelo nome, no mesmo `npm install` acima, sempre com a versão (`@<versão>` ou `@latest`: sem ela, o npm reaproveita o alias do `package.json`); tire do `.npmrc` as duas linhas do `npm.pkg.github.com` (o arquivo vazio sai); tire o `NODE_AUTH_TOKEN` e o `packages: read` do CI do projeto, se só serviam aos pacotes. Se o `docs/deploy.md` manda fazer o build na máquina (`vercel build --prebuilt`), diga à pessoa que o motivo acabou (a regra que o pedia foi revogada) e que o deploy pode voltar ao da Vercel: recomende, sem trocar calado, porque mexe no release dela.
 
 ## 5. As peças instaladas
 

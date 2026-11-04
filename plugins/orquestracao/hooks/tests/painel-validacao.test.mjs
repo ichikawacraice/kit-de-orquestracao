@@ -200,6 +200,7 @@ caso('c4 R1: o painel.mjs do plugin não cai para ~/.claude/hooks (só vale onde
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'fila-orfa.mjs'), readFileSync(join(SCRIPTS, 'fila-orfa.mjs'), 'utf8')); // idem (F220)
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'testes-afetados.mjs'), readFileSync(join(SCRIPTS, 'testes-afetados.mjs'), 'utf8')); // idem (F184)
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'custo-do-item.mjs'), readFileSync(join(SCRIPTS, 'custo-do-item.mjs'), 'utf8')); // idem (F348)
+  writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'limite-de-uso.mjs'), readFileSync(join(SCRIPTS, 'limite-de-uso.mjs'), 'utf8')); // idem (F371)
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'perguntas-arquivo.mjs'), readFileSync(join(SCRIPTS, 'perguntas-arquivo.mjs'), 'utf8')); // idem (F183)
   const r = spawnSync('node', [join(plugin, 'skills', 'orquestradora', 'scripts', 'painel.mjs'), 'set', 'sessoes', 'local_OUTRA', '{"titulo":"x"}'], {
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', cwd: base,
