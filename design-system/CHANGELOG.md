@@ -11,9 +11,11 @@ Camadas: base, registro
 ### O que muda
 - **O link clicável na conversa.** A `conversa` ganha `TextoComLinks`, o corpo do balão com os links `http(s)` clicáveis em nova aba, montados como `<a>` (nunca HTML cru: o corpo vem de quem escreveu); `javascript:`, `www.` sem esquema e afins seguem texto; a pontuação e as reticências do fim, as aspas (retas ou curvas) e o parêntese, o colchete ou a chave que envolvem o link ficam com a frase; a barra invertida encerra o link, para ele ir aonde a tela mostra; e o esquema grudado numa palavra não abre link. O link é tinta com sublinhado a 50%, o anel fecha em cada linha da URL quebrada e o respiro do anel tem a cor do balão. A linha *Conversa entre pessoas* da PECA-01 passa a citá-lo.
 - A lib nova `links-no-texto` (`trechosComLinks`) vem junto com a `conversa`.
+- **O link do botão em linha cheia a 50%** (CTRL-03): a regra dizia sublinhado pontilhado e o código desenhava linha cheia a 35%; agora as duas dizem linha cheia a 50% da tinta, que fecha no hover, como o link da conversa. O pontilhado fica só para a ajuda no texto.
 
 ### Migração
 - `npx shadcn add <registro>/conversa.json`. No balão, troque `{corpo}` por `<TextoComLinks texto={corpo} />`.
+- `npx shadcn add <registro>/button.json` traz o link a 50%; quem copiou o `decoration-foreground/35` à mão troca por `/50`.
 
 ## 0.20.0 · 04/11/2026
 
