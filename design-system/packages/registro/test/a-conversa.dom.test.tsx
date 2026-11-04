@@ -141,7 +141,10 @@ describe('Conversa', () => {
         <Balao lado="outro" primeira autor={<AutorDaConversa nome="Ana Souza" cor="sky" />} />
       </>
     )
-    for (const div of Array.from(container.querySelectorAll('[data-slot=balao-da-conversa] > div')) as HTMLElement[]) {
+    const corpos = Array.from(container.querySelectorAll('[data-slot=balao-da-conversa] > div')) as HTMLElement[]
+    expect(corpos).toHaveLength(2)
+    expect(corpos[1]!.textContent).toContain('Ana Souza')
+    for (const div of corpos) {
       expect(div.className).not.toMatch(/bg-(?:red|rose|orange|amber|emerald|violet|sky|lime|teal|cyan|blue|indigo|purple|fuchsia)-/)
     }
   })

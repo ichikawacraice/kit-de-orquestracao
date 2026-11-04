@@ -11,9 +11,10 @@ function iniciais(nome: string): string {
 }
 
 /**
- * A COR DA PESSOA (COR-09, a exceção declarada): 8 famílias sem dono — fora das
- * vozes (emerald, amber, rose, violet), do vermelho e do laranja da prioridade e
- * da marca. Só pinta o monograma e o nome de quem fala numa conversa entre
+ * A COR DA PESSOA (COR-09, a exceção declarada): 8 famílias fora das vozes
+ * (emerald, amber, rose, violet), do vermelho e do laranja da prioridade e da
+ * marca; o `sky` é dividido com o nível baixo da prioridade, porque as formas
+ * nunca coincidem (o carimbo com o glifo × o monograma e o nome do autor). Só pinta o monograma e o nome de quem fala numa conversa entre
  * pessoas, onde distinguir quem disse o quê responde a pergunta da tela; nunca o
  * balão, o cartão, o carimbo nem o glifo. A chave é o id da pessoa, para a cor
  * não mudar quando o nome muda.

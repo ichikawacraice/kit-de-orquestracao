@@ -16,6 +16,10 @@ import { NOME_DA_PESSOA, type CorDaPessoa } from "@/registry/design-system/ui/mo
  * forma e o lugar (MARCA-02). A cor da pessoa (COR-09) só pinta o nome do autor
  * e o monograma — nunca o balão.
  *
+ * A mensagem que chega com a conversa aberta (`chegou`) entra com o fade, mas
+ * o anúncio é do app: uma região `role="status"` que já existe (ACES-05), porque
+ * só o app sabe se a mensagem é de outra pessoa.
+ *
  * Não é a conversa com a IA: lá não há "o outro", há a resposta.
  */
 function Conversa({ rotulo, className, ...props }: Omit<React.ComponentProps<"ol">, "aria-label"> & { rotulo: string }) {
@@ -90,6 +94,7 @@ function BalaoDaConversa({
   /** Chegou com a conversa já aberta: entra com o fade. */
   chegou?: boolean
   className?: string
+  /** O texto da mensagem: conteúdo de frase (mora num `<p>`), sem bloco. */
   children: React.ReactNode
 }) {
   const meu = lado === "meu"
