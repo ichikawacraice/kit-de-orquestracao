@@ -387,9 +387,9 @@ export const PECAS = [
   peca({
     name: 'conversa',
     title: 'Conversa',
-    description: 'chat bubbles — a conversa entre pessoas: o meu balão à direita na tinta da marca, o do outro à esquerda no muted, o canto de quem fala no primeiro do grupo, a frase inteira para o leitor de tela e a hora num time; a cor da pessoa só no nome do autor.',
+    description: 'chat bubbles — a conversa entre pessoas: o meu balão à direita na tinta da marca, o do outro à esquerda no muted, o canto de quem fala no primeiro do grupo, a frase inteira para o leitor de tela e a hora num time; a cor da pessoa só no nome do autor; e o texto com os links http(s) clicáveis, em nova aba, sem HTML cru.',
     pecas: ['badge', 'monograma'],
-    files: [ui('conversa')],
+    files: [ui('conversa'), lib('links-no-texto')],
   }),
   peca({
     name: 'linha-do-grupo',

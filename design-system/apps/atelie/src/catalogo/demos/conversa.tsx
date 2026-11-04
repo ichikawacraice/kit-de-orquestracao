@@ -1,4 +1,4 @@
-import { AutorDaConversa, BalaoDaConversa, Conversa, DiaDaConversa } from "@/components/ui/conversa"
+import { AutorDaConversa, BalaoDaConversa, Conversa, DiaDaConversa, TextoComLinks } from "@/components/ui/conversa"
 import { corDaPessoa } from "@/components/ui/monograma"
 
 import { Amostra, Amostras } from "./_amostra"
@@ -30,7 +30,7 @@ export default function DemoDaConversa() {
               hora="16:06"
               instante="2026-11-03T19:06:00.000Z"
             >
-              O texto do botão mudou também.
+              <TextoComLinks texto="O texto do botão mudou também: https://loja.example/produto/1, confere?" />
             </BalaoDaConversa>
             <DiaDaConversa>Hoje</DiaDaConversa>
             <BalaoDaConversa

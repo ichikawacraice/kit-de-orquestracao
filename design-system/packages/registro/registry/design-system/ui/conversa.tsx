@@ -1,5 +1,6 @@
 import * as React from "react"
 
+import { trechosComLinks } from "@/registry/design-system/lib/links-no-texto"
 import { cn } from "@/registry/design-system/lib/utils"
 import { Badge } from "@/registry/design-system/ui/badge"
 import { NOME_DA_PESSOA, type CorDaPessoa } from "@/registry/design-system/ui/monograma"
@@ -132,4 +133,38 @@ function BalaoDaConversa({
   )
 }
 
-export { Conversa, DiaDaConversa, AutorDaConversa, BalaoDaConversa }
+/**
+ * O corpo da mensagem com os links clicáveis: o `http(s)` vira `<a>` em nova
+ * aba, o resto segue texto (sem HTML cru: o corpo vem de quem escreveu). Mora
+ * dentro do `BalaoDaConversa`. O link é tinta com sublinhado (MARCA-02): a 50%,
+ * porque é o único sinal dele e abaixo disso some no tema claro; o anel fecha em
+ * cada linha da URL quebrada, com o respiro na cor do balão.
+ */
+function TextoComLinks({ texto }: { texto: string }) {
+  return (
+    <>
+      {trechosComLinks(texto).map((trecho, i) =>
+        trecho.tipo === "link" ? (
+          <a
+            key={i}
+            href={trecho.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "rounded-sm underline decoration-current/50 underline-offset-[2.5px] transition-colors duration-cor hover:decoration-current",
+              "box-decoration-clone focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "in-data-[lado=meu]:focus-visible:ring-offset-marca-tinta in-data-[lado=outro]:focus-visible:ring-offset-muted"
+            )}
+          >
+            {trecho.texto}
+            <span className="sr-only"> (abre em nova aba)</span>
+          </a>
+        ) : (
+          <React.Fragment key={i}>{trecho.texto}</React.Fragment>
+        )
+      )}
+    </>
+  )
+}
+
+export { Conversa, DiaDaConversa, AutorDaConversa, BalaoDaConversa, TextoComLinks }
