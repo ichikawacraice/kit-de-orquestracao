@@ -67,7 +67,7 @@
       "components/ui/chip-de-estado.tsx": "6f30c9e15475d0777a2dd698b04d0dc825df511a15bbb00125f54fcf092e0ec6",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "c1c34d5b2f74927ffcedd9e03874b1a050bed325a5847cbee5efb09ea60ed2e0",
-      "components/ui/logotipo.tsx": "f9d33d98f1fcdf838f3a97049cd8e52a128efc1caceb4897a95ce51a5b9a9795",
+      "components/ui/logotipo.tsx": "62147b4181805680a7a4aeb3b32b798f9afd2e787aee38669d01a6b02257a9e1",
       "components/ui/menu-da-conta.tsx": "d98bfed7bcae1e524389b09eedd71df1434921d45c2842c4233668ec4b5bdc13",
       "components/ui/menu-do-tema.tsx": "83ffe0bf1e659ef9d615ac00aaaaef21c030046c4f69e8692a47026339efb543",
       "components/ui/menu.tsx": "1fe3895aca8e28638d72b439415b763fb553a4a4b384d8751cc452d11049452a",
@@ -182,7 +182,7 @@
       "components/ui/dialog.tsx": "c1c34d5b2f74927ffcedd9e03874b1a050bed325a5847cbee5efb09ea60ed2e0",
       "components/ui/input.tsx": "bcd4c801c304da419aeeced1a3202329277f30c0cfd1cf434106abb599063599",
       "components/ui/label.tsx": "2ca402b0491e54570f551958832b21fdb80dffa9bfb0d0c5d9e7eb7fcd42d4f0",
-      "components/ui/logotipo.tsx": "f9d33d98f1fcdf838f3a97049cd8e52a128efc1caceb4897a95ce51a5b9a9795",
+      "components/ui/logotipo.tsx": "62147b4181805680a7a4aeb3b32b798f9afd2e787aee38669d01a6b02257a9e1",
       "components/ui/menu-do-tema.tsx": "83ffe0bf1e659ef9d615ac00aaaaef21c030046c4f69e8692a47026339efb543",
       "components/ui/menu.tsx": "1fe3895aca8e28638d72b439415b763fb553a4a4b384d8751cc452d11049452a",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
@@ -268,7 +268,7 @@
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "c1c34d5b2f74927ffcedd9e03874b1a050bed325a5847cbee5efb09ea60ed2e0",
       "components/ui/input.tsx": "bcd4c801c304da419aeeced1a3202329277f30c0cfd1cf434106abb599063599",
-      "components/ui/logotipo.tsx": "f9d33d98f1fcdf838f3a97049cd8e52a128efc1caceb4897a95ce51a5b9a9795",
+      "components/ui/logotipo.tsx": "62147b4181805680a7a4aeb3b32b798f9afd2e787aee38669d01a6b02257a9e1",
       "components/ui/medalhao-do-icone.tsx": "2fee443e0c97a52f3cb1a391bb007f970dc9acc1b6cf470228f6ac33ef0c5134",
       "components/ui/menu-da-conta.tsx": "d98bfed7bcae1e524389b09eedd71df1434921d45c2842c4233668ec4b5bdc13",
       "components/ui/menu-do-tema.tsx": "83ffe0bf1e659ef9d615ac00aaaaef21c030046c4f69e8692a47026339efb543",
@@ -293,7 +293,7 @@
     },
     "logotipo": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/logotipo.tsx": "f9d33d98f1fcdf838f3a97049cd8e52a128efc1caceb4897a95ce51a5b9a9795",
+      "components/ui/logotipo.tsx": "62147b4181805680a7a4aeb3b32b798f9afd2e787aee38669d01a6b02257a9e1",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "medalhao-do-icone": {
@@ -360,7 +360,7 @@
       "components/ui/estado.tsx": "2ba49196556258021bd1d9bbd4f44514c5779b676af8499663a7fee40659d27e",
       "components/ui/ficha.tsx": "52526f5c5e84fe6ffc1ff7356ddf04538c9fe6b48bf8fab49e53f08a76f70111",
       "components/ui/input.tsx": "bcd4c801c304da419aeeced1a3202329277f30c0cfd1cf434106abb599063599",
-      "components/ui/logotipo.tsx": "f9d33d98f1fcdf838f3a97049cd8e52a128efc1caceb4897a95ce51a5b9a9795",
+      "components/ui/logotipo.tsx": "62147b4181805680a7a4aeb3b32b798f9afd2e787aee38669d01a6b02257a9e1",
       "components/ui/medalhao-do-icone.tsx": "2fee443e0c97a52f3cb1a391bb007f970dc9acc1b6cf470228f6ac33ef0c5134",
       "components/ui/menu-da-conta.tsx": "d98bfed7bcae1e524389b09eedd71df1434921d45c2842c4233668ec4b5bdc13",
       "components/ui/menu-do-tema.tsx": "83ffe0bf1e659ef9d615ac00aaaaef21c030046c4f69e8692a47026339efb543",
@@ -431,7 +431,7 @@
     "prioridade": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
       "components/ui/chip-de-estado.tsx": "6f30c9e15475d0777a2dd698b04d0dc825df511a15bbb00125f54fcf092e0ec6",
-      "components/ui/prioridade.tsx": "9e32548803f30c3ce9a1cc8f5ee6bf794a9f722cfda517b0eaa25b303c5e55cc",
+      "components/ui/prioridade.tsx": "282c1e3fd0ecfa0d3f1def5276e5f8a08cf53b5e886c7966b2675dadafad3eda",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -442,7 +442,7 @@
     },
     "quadro": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/quadro.tsx": "e445186054677f49358f753ac5e3649b14620e767fc82658d507c3fbcd01f0f0",
+      "components/ui/quadro.tsx": "4a3fa33b54314afd8bffd733e74b4ca8b8d7045ecb9644f5e89de55a68dbc8f6",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"

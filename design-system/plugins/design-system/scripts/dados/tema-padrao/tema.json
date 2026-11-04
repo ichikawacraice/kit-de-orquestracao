@@ -10,6 +10,10 @@
       "sobreClaro": "logotipo/sobre-claro.png",
       "sobreEscuro": "logotipo/sobre-escuro.png",
       "origem": "https://wicomm.com.br/wp-content/themes/wp-wicomm/assets/img/"
+    },
+    "simbolo": {
+      "sobreClaro": "logotipo/simbolo-sobre-claro.png",
+      "origem": "https://wicomm.com.br/wp-content/uploads/2026/03/cropped-monograma-positivo-1920w-192x192.webp"
     }
   },
   "fonte": {

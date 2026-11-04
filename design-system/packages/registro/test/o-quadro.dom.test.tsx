@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 import { fireEvent, render, screen, within } from "@testing-library/react"
 
 import { criarPontoDaEtapa } from "@/registry/design-system/ui/ponto-da-etapa"
-import { Prioridade } from "@/registry/design-system/ui/prioridade"
+import { COR_DO_NIVEL, Prioridade } from "@/registry/design-system/ui/prioridade"
 import {
   CabecalhoDaColuna,
   CartaoDoQuadro,
@@ -17,7 +17,7 @@ import {
   VidaDoCartao,
 } from "@/registry/design-system/ui/quadro"
 import { Vazio } from "@/registry/design-system/ui/vazio"
-import { TINTA_DO_CARIMBO_NEUTRO, TINTA_DO_TOM } from "@/registry/design-system/lib/idioma-de-cor"
+import { BADGE_DO_TOM, TINTA_DO_CARIMBO_NEUTRO, TINTA_DO_TOM } from "@/registry/design-system/lib/idioma-de-cor"
 
 const classes = (el: Element | null | undefined) => (el?.className ?? "").split(/\s+/)
 
@@ -166,6 +166,32 @@ describe("a prioridade", () => {
     expect(classes(media)).toContain(TINTA_DO_CARIMBO_NEUTRO)
     expect(classes(urgente)).toContain(TINTA_DO_TOM.espera)
     expect(classes(media)).not.toContain(TINTA_DO_TOM.espera)
+  })
+
+  it("pinta o nível com a cor declarada dele; sem prioridade e urgente ficam sem ela", () => {
+    const { container } = render(
+      <>
+        <Prioridade nivel={0}>Sem prioridade</Prioridade>
+        <Prioridade nivel={1}>Baixa</Prioridade>
+        <Prioridade nivel={2}>Média</Prioridade>
+        <Prioridade nivel={3}>Alta</Prioridade>
+        <Prioridade nivel="urgente">Urgente</Prioridade>
+      </>,
+    )
+    const [nenhuma, baixa, media, alta, urgente] = [...container.querySelectorAll('[data-slot="prioridade"]')]
+    expect(baixa).toBeDefined()
+    for (const [el, nivel] of [[baixa, 1], [media, 2], [alta, 3]] as const) {
+      for (const classe of COR_DO_NIVEL[nivel].split(" ")) expect(classes(el)).toContain(classe)
+    }
+    const todas = Object.values(COR_DO_NIVEL).flatMap((c) => c.split(" "))
+    expect(todas.length).toBeGreaterThan(0)
+    for (const classe of todas) expect(classes(nenhuma)).not.toContain(classe)
+    for (const classe of todas) expect(classes(urgente)).not.toContain(classe)
+    // Nunca uma voz emprestada (COR-09): nenhuma família do nível é família de voz.
+    const familia = (c: string) => c.replace(/^dark:/, "").split("-")[1]
+    const dasVozes = new Set(Object.values(BADGE_DO_TOM).flatMap((c) => c.split(" ")).map(familia))
+    expect(dasVozes.has("amber")).toBe(true)
+    for (const classe of todas) expect(dasVozes.has(familia(classe))).toBe(false)
   })
 })
 

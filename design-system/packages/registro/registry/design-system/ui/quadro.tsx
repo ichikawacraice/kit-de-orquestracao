@@ -62,7 +62,7 @@ function Quadro({
         aria-busy={carregando || undefined}
         className={cn(
           // O `-mx-2 px-2` dá lugar ao anel de foco do cartão na borda da rolagem.
-          "-mx-2 flex min-h-0 flex-1 snap-x snap-mandatory gap-1.5 overflow-auto px-2 pb-1 md:snap-none",
+          "-mx-2 flex min-h-0 flex-1 gap-1.5 overflow-auto px-2 pb-1",
           className
         )}
         {...props}
@@ -110,7 +110,7 @@ function ColunaDoQuadro({
         data-recusa={recusa || undefined}
         aria-labelledby={idDoNome}
         className={cn(
-          "group/coluna flex max-w-80 min-w-0 shrink-0 grow basis-64 snap-start flex-col rounded-painel",
+          "group/coluna flex max-w-80 min-w-0 shrink-0 grow basis-64 flex-col rounded-painel",
           alvo && "bg-marca-tinta",
           className
         )}
@@ -236,7 +236,7 @@ function FitaDaColuna({
       aria-label={`Abrir a coluna ${nome}${causa ? `, vazia: ${causa}` : ""}`}
       onClick={onAbrir}
       className={cn(
-        "flex w-11.5 shrink-0 snap-start flex-col items-center gap-3 rounded-cartao bg-foreground/3 py-3 outline-hidden transition-colors duration-cor motion-reduce:transition-none hover:bg-foreground/7 focus-visible:ring-2 focus-visible:ring-ring",
+        "flex w-11.5 shrink-0 flex-col items-center gap-3 rounded-cartao bg-foreground/3 py-3 outline-hidden transition-colors duration-cor motion-reduce:transition-none hover:bg-foreground/7 focus-visible:ring-2 focus-visible:ring-ring",
         alvo && "bg-marca-tinta outline-2 -outline-offset-4 outline-marca-viva outline-dashed hover:bg-marca-tinta",
         className
       )}

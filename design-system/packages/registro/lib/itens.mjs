@@ -228,7 +228,7 @@ export const PECAS = [
   peca({
     name: 'prioridade',
     title: 'Prioridade',
-    description: 'priority badge — a prioridade de um item: o carimbo com o glifo de barras e a palavra; só a urgente fala, na voz de espera.',
+    description: 'priority badge — a prioridade de um item: o carimbo com o glifo de barras e a palavra na cor do nível; só a urgente fala, na voz de espera.',
     npm: [NPM.lucide],
     pecas: ['chip-de-estado', 'idioma-de-cor'],
     files: [ui('prioridade')],
@@ -293,7 +293,7 @@ export const PECAS = [
   peca({
     name: 'logotipo',
     title: 'Logotipo',
-    description: 'logo — a marca Wicomm no casco e na Entrada: o desenho oficial do tema na horizontal e o monograma no símbolo.',
+    description: 'logo — a marca Wicomm no casco e na Entrada: o desenho oficial do tema na horizontal e o símbolo oficial na barra recolhida.',
     files: [ui('logotipo')],
   }),
   peca({
