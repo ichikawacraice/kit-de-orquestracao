@@ -59,7 +59,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
-import { MOTIVO_DO_FORK, SHA_VALIDADO, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub } from './mergear.mjs';
+import { MOTIVO_DO_FORK, SHA_VALIDADO, arquivosDoPr, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub, soDocumentacao } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote, motivoDeConflito } from './fila-de-merge.mjs';
 import { donoDaFilaVivo, filaOrfa } from './fila-orfa.mjs';
@@ -136,6 +136,9 @@ const regras = CONFERE_MEMBRO
     return null;
   })
   : null;
+// F370: a reabertura do item confere se a dona lembrada foi arquivada (o registro do app); sem o módulo, restaura sem conferir.
+const GRAVA_FILA = ['update', 'set'].includes(process.argv[2]) ? process.argv[3] === 'fila' : process.argv[2] === 'batch';
+const registroDoApp = regras ?? (GRAVA_FILA ? await import(pathToFileURL(POOL_COMUM).href).catch(() => null) : null);
 let meusIds; // Set de ids que contam como "a própria sessão"; null = não resolvido
 function ehMinha(id) {
   if (!MEU_CLI) return true;
@@ -407,7 +410,11 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     if (tem(k) && typeof novo[k] !== 'string') throw new Error(`${chave}: ${k} é texto`);
   }
   for (const k of DONOS_ANTIGOS) {
-    if (tem(k)) throw new Error(`${chave}: o campo "${k}" saiu do contrato; use donoLocalId e donoApelido`);
+    if (!tem(k)) continue;
+    // F370: a recusa traz o comando pronto (handoff antigo ensina o campo velho), com o local_ quando o valor já era um
+    const id = LOCAL_ID.test(String(novo[k])) ? novo[k] : '<seu local_…>';
+    const F = chave.replace(/^fila\//, '');
+    throw new Error(`${chave}: o campo "${k}" saiu do contrato; use donoLocalId e donoApelido: painel update fila ${F} '{"donoLocalId":"${id}","donoApelido":"dona"}' (o local_ vem de get_session "self")`);
   }
   if (tem('donoLocalId') && !/^local_[0-9a-f-]{36}$/.test(String(novo.donoLocalId))) {
     throw new Error(`${chave}: donoLocalId "${novo.donoLocalId}" não é local_<uuid>`);
@@ -481,6 +488,32 @@ function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom, ante
   }
 }
 
+// F370: o item que fecha guarda a dona e o `com` em `donaAoFechar`; reaberto sem dona nova no mesmo update, volta com eles (o
+// item fechado por engano, como o PR só da SPEC sem `maisFatias`, não vira "sem dona" na batida). Só o painel grava o campo.
+function lembrarDona(chave, novo, base, antes, viaCom) {
+  // regravar o valor lido (o `get` seguido de `set --se-versao`) passa; trocar, não. O `set` sem o campo o guarda.
+  if ('donaAoFechar' in novo && !viaCom && canonico(novo.donaAoFechar) !== canonico(antes?.donaAoFechar ?? null)) throw new Error(`${chave}: donaAoFechar só o painel grava (ao fechar o item)`);
+  if (!('donaAoFechar' in novo) && antes?.donaAoFechar && ETAPAS_FINAIS.has(antes.etapa)) base.donaAoFechar = antes.donaAoFechar;
+  const final = ETAPAS_FINAIS.has(base.etapa);
+  const eraFinal = ETAPAS_FINAIS.has(antes?.etapa);
+  if (final && !eraFinal && textoNaoVazio(antes?.donoLocalId)) {
+    base.donaAoFechar = { donoLocalId: antes.donoLocalId, donoApelido: antes.donoApelido ?? null, com: Array.isArray(antes.com) ? antes.com : [] };
+    return;
+  }
+  if (final || !eraFinal) return;
+  const lembranca = base.donaAoFechar;
+  delete base.donaAoFechar;
+  if (!lembranca || 'donoLocalId' in novo || 'donoApelido' in novo || textoNaoVazio(base.donoLocalId)) return;
+  // a orquestradora arquiva a dona do item fechado: quem o registro do app diz arquivada não volta (o item vira vaga na hora)
+  const viva = (id) => { try { return registroDoApp?.registroDaSessao(id, { fresco: true })?.arquivada !== true; } catch { return true; } };
+  if (LOCAL_ID.test(String(lembranca.donoLocalId)) && textoNaoVazio(lembranca.donoApelido) && viva(lembranca.donoLocalId)) {
+    base.donoLocalId = lembranca.donoLocalId;
+    base.donoApelido = lembranca.donoApelido;
+  }
+  const com = Array.isArray(lembranca.com) ? lembranca.com.filter((x) => LOCAL_ID.test(String(x?.localId)) && viva(x.localId)) : [];
+  if (com.length && !(Array.isArray(base.com) && base.com.length)) base.com = com;
+}
+
 // Histórico e `feitoEm` da fila: quem muda a etapa ou o dono não precisa lembrar de registrar (F27 fatia 1).
 function automaticosDaFila(base, novo, antes) {
   const etapaAntes = antes?.etapa ?? null;
@@ -533,6 +566,7 @@ function planejar(o, seVersao, vista) {
   if (colecao === 'perguntas' && ['resposta', 'estado', 'titulo', 'sessaoId'].some((k) => k in novo && novo[k] !== atual?.data?.[k])) {
     delete base.respondidaPor; delete base.respondidaEm;
   }
+  if (colecao === 'fila') lembrarDona(chave, novo, base, atual?.data, viaCom);
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.com) && atual.data.com.length) base.com = atual.data.com;
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.fez)) base.fez = atual.data.fez;
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.passaram)) base.passaram = atual.data.passaram;
@@ -913,8 +947,15 @@ function comandoMergear(args) {
     else if (fatia) data = { etapa: 'execucao', agora: `fatia mergeada (PR ${pr}, ponta ${curto}); a dona segue com a próxima` };
     else data = { com: [], agora: 'um PR entrou; falta outro' };
     efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
-    // a fatia volta à dona, que parou ao abrir o PR: a orquestradora a avisa pelo `dona` da saída
-    return { item: F, fechado: fecha, ...(fatia ? { fatia, dona: atual.data.donoLocalId ?? null } : {}), ...(data.custo ? { custo: data.custo.relativo } : {}), agora: data.agora };
+    // a fatia volta à dona, que parou ao abrir o PR. F370: o aviso se grava no estado da fila agora, e a batida o entrega;
+    // a saída da fila da orquestradora (ou o desfecho da sem turno) só chega no fim de todas as rodadas
+    const dona = fatia ? atual.data.donoLocalId ?? null : null;
+    let avisoGravado = false;
+    // com a batida desligada ninguém entregaria o aviso: a orquestradora avisa pela saída, como antes
+    if (dona && process.env.BATIDA !== 'off') {
+      try { gravarAviso(projeto, { tipo: 'fatia', pr, item: F, dona }); avisoGravado = true; } catch (e) { process.stderr.write(`painel.mjs: aviso: não gravei o aviso de fatia de ${F} (${e?.message || e}); avise a dona\n`); }
+    }
+    return { item: F, fechado: fecha, ...(fatia ? { fatia, dona } : {}), ...(avisoGravado ? { avisoGravado } : {}), ...(data.custo ? { custo: data.custo.relativo } : {}), agora: data.agora };
   }));
   return { mergeado: true, pr, sha: c.sha, base: c.base, ...(c.aviso ? { aviso: c.aviso } : {}), itens };
 }
@@ -929,6 +970,28 @@ function comandoMergear(args) {
 // lista: sai no erro com os PRs que não rodaram e os que ficaram na fila. `--seco` não usa nem mexe na lista.
 const LEITURAS_DA_FILA = 3;
 const ESTADO_DA_FILA = (projeto) => join(BASE, '..', 'fila-de-merge', `${projeto || 'sem-projeto'}.json`);
+// F370: o PR só de documentação (ex.: a SPEC) num item sem `maisFatias: true` fecha o item no merge, e a dona é arquivada
+// com o código por fazer. O `--anotar` avisa (não recusa: o item só de doc fecha mesmo). → texto do aviso ou null
+function avisoSemCodigo(prs, projeto, cwd) {
+  if (!projeto) return null;
+  const itens = [...itensVivos()].filter(([, d]) => String(d?.projeto ?? '').toLowerCase() === projeto && d.maisFatias !== true && Array.isArray(d.prs));
+  const partes = [];
+  for (const pr of prs) {
+    const meus = itens.filter(([, d]) => d.prs.includes(pr)).map(([F]) => F);
+    if (!meus.length || !soDocumentacao(arquivosDoPr(pr, cwd))) continue;
+    partes.push(`${meus.join(', ')}: o PR ${pr} só muda documentação e o merge fecha o item`);
+  }
+  return partes.length ? `${partes.join('; ')}: se o item ainda tem código a entregar, grave "maisFatias":true no item antes do merge (painel update fila <F> '{"maisFatias":true}')` : null;
+}
+
+// F370: avisos à dona gravados no estado da fila do projeto ({tipo, pr, item, dona, em}); a batida os entrega e os tira.
+// Chame dentro da trava.
+function gravarAviso(projeto, aviso) {
+  const arquivo = ESTADO_DA_FILA(projeto);
+  const e = arquivoJson(arquivo, {});
+  const base = e && typeof e === 'object' ? e : {};
+  gravarJson(arquivo, { ...base, avisos: [...(Array.isArray(base.avisos) ? base.avisos : []), { ...aviso, em: new Date().toISOString() }] });
+}
 // junta `novos` ao fim de `lista` sem repetir o PR (o sha mais novo vale)
 function juntarPedidos(lista, novos) {
   const r = lista.map((p) => ({ ...p }));
@@ -1067,7 +1130,9 @@ function filaDeMerge(args, { semTurno = false } = {}) {
       gravarJson(arquivo, { ...e, pendentes, config: { ...(e.config ?? {}), cwd: raizDoRepo(cwd) } });
       return { anotado: true, pendentes, ...(e.config?.gate ? {} : { aviso: 'a fila deste projeto ainda não tem gate gravado: a batida não a lança até a orquestradora rodar a fila uma vez' }) };
     });
-    return { ...r, ...ligarComAviso(branches, { projeto: projetoDoCwd(cwd).projeto, oQue: 'espera a batida lançar o gate' }) };
+    const lig = ligarComAviso(branches, { projeto: projetoDoCwd(cwd).projeto, oQue: 'espera a batida lançar o gate' });
+    const semCodigo = avisoSemCodigo(pedidos.map((p) => p.pr), projetoDoCwd(cwd).projeto, cwd);
+    return { ...r, ...lig, ...(semCodigo ? { avisoSemCodigo: semCodigo } : {}) };
   }
   const entrada = comTrava(() => {
     const e = lerEstado();
@@ -1317,8 +1382,8 @@ function lancarFilaSemTurno({ orfa, config, arquivo }) {
 function filasDaBatida({ seco, agoraMs }) {
   const dir = dirname(ESTADO_DA_FILA('x'));
   let nomes = [];
-  try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return { orfas: {}, vivas: {}, desfechos: {}, lancadas: {} }; }
-  const orfas = {}; const vivas = {}; const desfechos = {}; const lancadas = {};
+  try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return { orfas: {}, vivas: {}, desfechos: {}, avisos: {}, lancadas: {} }; }
+  const orfas = {}; const vivas = {}; const desfechos = {}; const avisos = {}; const lancadas = {};
   const desligada = process.env.KIT_FILA_SEM_TURNO === 'off';
   for (const n of nomes.sort()) {
     const nome = n.slice(0, -'.json'.length);
@@ -1326,6 +1391,7 @@ function filasDaBatida({ seco, agoraMs }) {
     const e = arquivoJson(arquivo, null);
     if (!e || typeof e !== 'object') continue;
     if (Array.isArray(e.desfechos) && e.desfechos.length) desfechos[nome] = e.desfechos;
+    if (Array.isArray(e.avisos) && e.avisos.length) avisos[nome] = e.avisos;
     const prsDe = (l) => (Array.isArray(l) ? l.map((p) => p?.pr).filter(Number.isInteger) : []);
     const orfa = filaOrfa(e);
     if (!orfa) { const prs = [...prsDe(e.emVoo), ...prsDe(e.pendentes)]; if (prs.length) vivas[nome] = prs; continue; }
@@ -1339,7 +1405,17 @@ function filasDaBatida({ seco, agoraMs }) {
     if (!seco) gravarJson(arquivo, { ...e, lancada: { em: new Date(agoraMs).toISOString(), tentativas: tentativas + 1 } });
     lancadas[nome] = { prs: vivas[nome], orfa, config: c, arquivo };
   }
-  return { orfas, vivas, desfechos, lancadas };
+  return { orfas, vivas, desfechos, avisos, lancadas };
+}
+// F370: tira do estado os avisos que a batida leu (entregues, ou sem dona viva para recebê-los); o que a fila gravou depois fica.
+function baixarAvisos(lidos) {
+  for (const [nome, lista] of Object.entries(lidos ?? {})) {
+    const arquivo = ESTADO_DA_FILA(nome);
+    const e = arquivoJson(arquivo, null);
+    if (!e || !Array.isArray(e.avisos)) continue;
+    const chaves = new Set(lista.map((a) => JSON.stringify(a)));
+    gravarJson(arquivo, { ...e, avisos: e.avisos.filter((a) => !chaves.has(JSON.stringify(a))) });
+  }
 }
 // Tira do estado os desfechos entregues à orquestradora; os entregues só às donas ficam marcados até haver orquestradora.
 function baixarDesfechos(entregas) {
@@ -1400,7 +1476,7 @@ function comandoBatida(args) {
     const filas = filasDaBatida({ seco, agoraMs });
     const limites = limitesDasDonas(itens);
     const julgado = julgar({
-      agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(), filasOrfas: filas.orfas, filasVivas: filas.vivas, desfechos: filas.desfechos,
+      agoraMs, itens, linhas, projetoDe: projetoDeUmaLinha(), filasOrfas: filas.orfas, filasVivas: filas.vivas, desfechos: filas.desfechos, avisos: filas.avisos,
       estado: arquivoJson(join(pasta, 'estado.json'), {}),
       semDona, donaACaminho, cartoes: cartoesDoPainel().map((c) => c.data),
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
@@ -1419,6 +1495,7 @@ function comandoBatida(args) {
     saida.soltos = soltos;
     saida.lancarDepois = filas.lancadas;
     try { baixarDesfechos(julgado.desfechos); } catch (e) { process.stderr.write(`batida: não baixei os desfechos da fila: ${e?.message || e}\n`); }
+    try { baixarAvisos(filas.avisos); } catch (e) { process.stderr.write(`batida: não baixei os avisos da fila: ${e?.message || e}\n`); }
     gravarJson(join(pasta, 'estado.json'), julgado.estado);
     const em = new Date(agoraMs).toISOString();
     for (const [nome, p] of Object.entries(julgado.projetos)) {

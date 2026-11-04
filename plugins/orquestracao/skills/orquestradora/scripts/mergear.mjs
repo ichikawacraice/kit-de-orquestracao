@@ -26,6 +26,15 @@ export function dadosDoPr(pr, cwd) {
   if (!v || typeof v.headRefOid !== 'string') throw new Error(`gh pr view ${pr}: resposta sem headRefOid`);
   return v;
 }
+// F370: os caminhos que o PR muda (até 100, o teto do gh); null quando o gh não lê.
+export function arquivosDoPr(pr, cwd) {
+  try {
+    const v = JSON.parse(gh(['pr', 'view', String(pr), '--json', 'files'], cwd));
+    return Array.isArray(v?.files) ? v.files.map((f) => String(f?.path ?? '')).filter(Boolean) : null;
+  } catch { return null; }
+}
+// Documentação: Markdown, ou qualquer coisa sob `docs/`.
+export const soDocumentacao = (arquivos) => Array.isArray(arquivos) && arquivos.length > 0 && arquivos.every((a) => /\.md$/i.test(a) || /^docs\//.test(a));
 // F200: o PR de fork traz código de fora; a fila roda o gate dele na máquina (com os tokens do ambiente) e o mergearia.
 export const deFork = (v) => v?.isCrossRepository === true;
 export const MOTIVO_DO_FORK = (pr) => `o PR ${pr} vem de um fork (outro repositório): a fila não roda o gate nem mergeia código de fora; quem é dono do repositório revisa e mergeia à mão`;

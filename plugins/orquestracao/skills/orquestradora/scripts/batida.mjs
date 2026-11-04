@@ -59,12 +59,13 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs, itens =
 // F351: `filasVivas` { <projeto>: [pr] } são os PRs que uma fila com processo vivo (ou lançada agora pela batida) vai levar: o
 // item em merge com PR nela não está parado. `desfechos` { <projeto>: [desfecho] } são os resultados da fila que rodou sem turno
 // (`fila-de-merge --sem-turno`): a batida avisa a dona do PR devolvido e da fatia mergeada, e manda à orquestradora um resumo só
-// do que é dela. A saída `desfechos` diz, por projeto, quantos foram entregues à orquestradora (saem do arquivo) e quantos só às
+// do que é dela (F370: a fatia já avisada no merge, `avisoGravado`, não se repete). `avisos` { <projeto>: [{tipo, pr, item, dona}] }
+// são os avisos que o merge gravou no estado da fila: cada um vai à dona viva. A saída `desfechos` diz, por projeto, quantos foram entregues à orquestradora (saem do arquivo) e quantos só às
 // donas (ficam, marcados, até haver orquestradora).
 // F371: `limites` { <local_…>: { resetsAtMs } } são as donas paradas no limite de uso (limite-de-uso.mjs, lido do transcript). Antes do
 // reset o item dela não é cutucado nem solto (a cutucada só bate de novo no limite); passado o reset, a dona parada recebe uma vez
 // por reset (estado `limites`) a mensagem de retomar, com o handoff de cada item (`handoffDe(F)` → caminho ou null).
-export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, filasVivas = {}, desfechos = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN, limites = {}, handoffDe = () => null }) {
+export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, filasVivas = {}, desfechos = {}, avisos = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN, limites = {}, handoffDe = () => null }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
   // a hora do reset já avisada, por dona; sai 24 h depois do reset
@@ -166,13 +167,22 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
         }
         for (const m of df.mergeados ?? []) {
           for (const it of m.itens ?? []) {
-            if (it.fatia && texto(it.dona) && viva(it.dona)) nova(it.dona, `fatia PR ${m.pr} mergeada (${it.item}): siga com a próxima.`, it.item, 'fatia');
+            // F370: a fatia com `avisoGravado` já tem o aviso no estado da fila (gravado no merge): não se repete aqui
+            if (it.fatia && !it.avisoGravado && texto(it.dona) && viva(it.dona)) nova(it.dona, `fatia PR ${m.pr} mergeada (${it.item}): siga com a próxima.`, it.item, 'fatia');
           }
         }
       }
       if (orq) nova(orq, resumoDoDesfecho(df), null, 'desfecho');
     }
     entregas[nome] = { orquestradora: orq ? lista.length : 0, soDonas: orq ? 0 : lista.length };
+  }
+
+  // F370: os avisos gravados pelo merge (`painel mergear`, nos dois caminhos da fila) vão à dona viva; quem chama os tira do
+  // estado depois (a dona arquivada ou sumida não tem a quem avisar: o aviso sai igual)
+  for (const lista of Object.values(avisos)) {
+    for (const a of Array.isArray(lista) ? lista : []) {
+      if (a?.tipo === 'fatia' && texto(a.dona) && viva(a.dona)) nova(a.dona, `fatia PR ${a.pr} mergeada (${a.item}): siga com a próxima.`, a.item, 'fatia');
+    }
   }
 
   // relatório à orquestradora de cada projeto, só quando algo mudou desde o último
