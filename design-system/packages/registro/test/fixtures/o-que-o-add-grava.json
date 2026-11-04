@@ -15,7 +15,7 @@
     "barra-do-editor": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
       "components/ui/barra-do-editor.tsx": "23f8e49a165d53e6102fcc65e1e7db47a74cc3ef02ec7df4ace0e6800fe17d8f",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/card.tsx": "2876d4586b7468a9cccb4f3461a01b1fc3612710e99efdcd08c9029f92a42d5c",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
@@ -43,7 +43,7 @@
     },
     "button": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "card": {
@@ -63,7 +63,7 @@
       "components/casco-do-app.tsx": "d827e96c639e43a3b740b0bc10ce63edd4327ecb17e12da2f4ed5f013fef228a",
       "components/casco-no-next.tsx": "99e4f4dcbbb10ff817da68a3d222b71e1c1d592b6d4390104213363cf3f2aa0c",
       "components/menu-do-contexto.tsx": "07b7d317ca9587597aa57f70de7dda5da3f0d208e8379f95d1e103c2d5ccf00e",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/chip-de-estado.tsx": "6f30c9e15475d0777a2dd698b04d0dc825df511a15bbb00125f54fcf092e0ec6",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
@@ -95,7 +95,7 @@
     },
     "colunas-do-editor": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/colunas-do-editor.tsx": "3d63159bc687251220394d6ba96db6fd32be89b411922fe4de17715e4a503fe9",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "components/ui/estado.tsx": "2ba49196556258021bd1d9bbd4f44514c5779b676af8499663a7fee40659d27e",
@@ -113,7 +113,7 @@
     },
     "confirm-dialog": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
@@ -136,14 +136,14 @@
     },
     "dica-de-ajuda": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/dica-de-ajuda.tsx": "f18a5ea76e4a3b425cd0deb08d2c80ea7e979ad80511285be70ecb55e9f14224",
       "components/ui/tooltip.tsx": "e2d5b9948b7d1f8681d8ee853d80b5d0e461a84941749bb5949f9f94bb16117e",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "dobra": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/dobra.tsx": "00945131c0ae8d386633ed8677ee873eba75d01ef9940eb9dcc040f0cbc05031",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -152,7 +152,7 @@
       "components/editor-de-documento.tsx": "4ff96f870c2f1b8f3e3c39273fcb3c48f1ee35f518c91e9bfa17f27af67acad6",
       "components/editor-no-next.tsx": "f9d2967e8c6ddf6c1a6560b23a1ccf038d6cf279b7ad5d0321eab5f379bb7500",
       "components/ui/barra-do-editor.tsx": "23f8e49a165d53e6102fcc65e1e7db47a74cc3ef02ec7df4ace0e6800fe17d8f",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/card.tsx": "2876d4586b7468a9cccb4f3461a01b1fc3612710e99efdcd08c9029f92a42d5c",
       "components/ui/chip-de-estado.tsx": "6f30c9e15475d0777a2dd698b04d0dc825df511a15bbb00125f54fcf092e0ec6",
       "components/ui/colunas-do-editor.tsx": "3d63159bc687251220394d6ba96db6fd32be89b411922fe4de17715e4a503fe9",
@@ -186,7 +186,7 @@
     "entrada": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
       "components/tela-de-entrada.tsx": "aeb9541866aeb4b7b467c4b2dc40a5ee0464422c264ec13b3a914d7a6acedd32",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/card.tsx": "2876d4586b7468a9cccb4f3461a01b1fc3612710e99efdcd08c9029f92a42d5c",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
@@ -202,7 +202,7 @@
     },
     "escolha-na-celula": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "components/ui/escolha-na-celula.tsx": "6b23f00871d0027ba821a6f738cf70acde36133436027c24765476e2e38eab9e",
@@ -273,7 +273,7 @@
       "components/casco-no-next.tsx": "99e4f4dcbbb10ff817da68a3d222b71e1c1d592b6d4390104213363cf3f2aa0c",
       "components/lista-de-pedidos.tsx": "7e85a81c028e04f7f361f6805fb4a7f6104de74bc911a52095938f4413f89ea0",
       "components/menu-do-contexto.tsx": "07b7d317ca9587597aa57f70de7dda5da3f0d208e8379f95d1e103c2d5ccf00e",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/chip-de-estado.tsx": "6f30c9e15475d0777a2dd698b04d0dc825df511a15bbb00125f54fcf092e0ec6",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
@@ -321,7 +321,7 @@
     },
     "menu": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "components/ui/menu.tsx": "1fe3895aca8e28638d72b439415b763fb553a4a4b384d8751cc452d11049452a",
@@ -331,7 +331,7 @@
     },
     "menu-da-conta": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "components/ui/menu-da-conta.tsx": "d98bfed7bcae1e524389b09eedd71df1434921d45c2842c4233668ec4b5bdc13",
@@ -343,7 +343,7 @@
     },
     "menu-do-tema": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "components/ui/menu-do-tema.tsx": "83ffe0bf1e659ef9d615ac00aaaaef21c030046c4f69e8692a47026339efb543",
@@ -363,7 +363,7 @@
       "components/menu-do-contexto.tsx": "07b7d317ca9587597aa57f70de7dda5da3f0d208e8379f95d1e103c2d5ccf00e",
       "components/mesa-do-pedido.tsx": "2058ff548a4dfdd786b5af482150da1e81cb3539828f27bfbbcc31717e8bcf42",
       "components/ui/bloco.tsx": "6cb5b40b67df1b0d202943d80840e7ad8b8f71edfbf53aff6ec99e13ebe0c4f3",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/chip-de-estado.tsx": "6f30c9e15475d0777a2dd698b04d0dc825df511a15bbb00125f54fcf092e0ec6",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
@@ -486,7 +486,7 @@
     },
     "tela-de-erro": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/button.tsx": "50eb7b888171f4cd2bcc66872741a89ffdf5f212ead33b9e41cea56040059b59",
+      "components/ui/button.tsx": "c22a1bcb87e2feb6ecfe1bfaf07871631f2475395ca6cb4ed614712dd5509b2b",
       "components/ui/medalhao-do-icone.tsx": "2fee443e0c97a52f3cb1a391bb007f970dc9acc1b6cf470228f6ac33ef0c5134",
       "components/ui/tela-de-erro.tsx": "d8a78d658c89150b3eb33025016663cb913cdb858c5710f4e9f3ff72d420929c",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
