@@ -18,7 +18,7 @@ No `package.json` fica `"@wicomm/tokens": "^0.1.1"`. O CSS importa `@wicomm/toke
 
 Até 03/11/2026 os pacotes moravam no GitHub Packages da org `wicomm-projects`, privados, com o nome `@wicomm-projects/…` e instalados por alias (`"@wicomm/tokens": "npm:@wicomm-projects/tokens@^0.1.0"`). Versão nova só sai no npm público. Para trocar:
 
-1. `npm install @wicomm/tokens @wicomm/guardas` (reescreve o alias no `package.json` e no `package-lock.json`).
+1. `npm install @wicomm/tokens@latest @wicomm/guardas@latest` (reescreve o alias no `package.json` e no `package-lock.json`; sem o `@latest`, o npm reaproveita o alias que já está no `package.json` e volta ao GitHub Packages).
 2. Tire do `.npmrc` as linhas `@wicomm-projects:registry=…` e `//npm.pkg.github.com/:_authToken=…`; se nada sobrar, apague o arquivo.
 3. No CI, tire o `NODE_AUTH_TOKEN`, o `registry-url`/`scope` do `setup-node` e o `packages: read`, se só serviam aos pacotes.
 4. Se o deploy era feito na máquina (`vercel build --prod && vercel deploy --prebuilt --prod`) só por causa do token, ele pode voltar ao build da Vercel: a regra que o pedia foi revogada.

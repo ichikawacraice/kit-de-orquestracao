@@ -90,13 +90,13 @@ O `design/design-system.json` do projeto vence a opção da sua conta: o que o t
 
 **O kit de orquestração** é opcional: o `design-system` mora no marketplace dele, mas não precisa dos outros plugins do kit, que servem para tocar várias sessões do Claude Code no mesmo projeto. Quem usa o kit:
 - O plugin de design antigo do kit, `kit-design`, é o antecessor do `design-system`. Não ligue os dois no mesmo projeto: o `kit atualizar` faz a troca. O que desligar e onde está no [guia de conflitos do kit](https://github.com/ichikawacraice/kit-de-orquestracao/blob/main/docs/guia/conflitos.md).
-- Declare o designer do `design-system` (`design-system:designer`) em `design.designers` do `.claude/kit.json`; as instruções estão no guia do kit.
+- As travas do kit reconhecem o `design-system:designer` como designer, sem declaração no `.claude/kit.json`.
 - O kit pede o plugin `superpowers`. O `design-system` não pede.
 
 ## Perguntas comuns
 
 **O projeto instalou os pacotes como `@wicomm-projects/…` (GitHub Packages).**\
-Era o registro antigo, privado; versão nova só sai no npm público. `npm install @wicomm/tokens @wicomm/guardas` troca o alias, e o `.npmrc` e o token do CI saem: o passo a passo está em [instalar os pacotes](instalar-pacotes.md#vindo-do-github-packages). O `/design-system:atualizar` faz isso junto com a subida de versão.
+Era o registro antigo, privado; versão nova só sai no npm público. `npm install @wicomm/tokens@latest @wicomm/guardas@latest` troca o alias (sem o `@latest`, o npm mantém o alias antigo), e o `.npmrc` e o token do CI saem: o passo a passo está em [instalar os pacotes](instalar-pacotes.md#vindo-do-github-packages). O `/design-system:atualizar` faz isso junto com a subida de versão.
 
 **O `shadcn add @wicomm/…` volta 401.**\
 Falta o segredo do registro no ambiente (`WICOMM_REGISTRO_BYPASS`). O `/design-system:novo` monta o `components.json` com ele lido do ambiente, nunca escrito no git.
