@@ -56,6 +56,7 @@ O plugin `orquestracao` põe estes comandos no `PATH` das sessões. Fora de uma 
 | `proximo-item` | O próximo ID de item (`F13`), único em toda a máquina | A orquestradora |
 | `proxima-pergunta` | O próximo ID de pergunta (`Q42`), único em toda a máquina | Toda sessão que pergunta |
 | `testes-afetados` | Lista os testes afetados pelo diff da branch; com `-- <comando>`, roda só eles | A dona, durante o trabalho |
+| `esperar-fundo [--arquivo <marcador>] [--max <s>]` | Segura o turno até os subagentes da sessão terminarem (ou o marcador existir), até 9 min; sai 3 se o tempo passou | A dona, esperando o validador sem terminar o turno |
 | `subir-versao` | Sobe a versão dos plugins mudados num commit só, depois de um lote de merges. Recusa com a árvore suja | Quem mantém o kit |
 | `atualizar-plugins [--seco] [--json]` | Atualiza o marketplace e os plugins do kit instalados na conta. Depois, reinicie o app | Você, ou o botão `Atualizar` do painel |
 
