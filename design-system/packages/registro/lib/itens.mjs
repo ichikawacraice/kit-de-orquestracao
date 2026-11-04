@@ -293,7 +293,7 @@ export const PECAS = [
   peca({
     name: 'logotipo',
     title: 'Logotipo',
-    description: 'logo — a marca Wicomm no casco e na Entrada, em símbolo e horizontal (provisória até o desenho oficial).',
+    description: 'logo — a marca Wicomm no casco e na Entrada: o desenho oficial do tema na horizontal e o monograma no símbolo.',
     files: [ui('logotipo')],
   }),
   peca({

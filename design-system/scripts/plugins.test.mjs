@@ -45,6 +45,12 @@ describe('os plugins do repositório', () => {
     for (const f of ['tema.json', 'tema.tokens.json']) {
       assert.equal(readFileSync(join(PLUGINS, 'tema-wicomm', 'tema', f), 'utf8'), readFileSync(join(RAIZ, 'temas', 'wicomm', f), 'utf8'), f)
     }
+    const desenhos = readdirSync(join(RAIZ, 'temas', 'wicomm', 'logotipo'))
+    assert.ok(desenhos.length >= 2, 'o tema traz o desenho do logotipo')
+    assert.deepEqual(readdirSync(join(PLUGINS, 'tema-wicomm', 'tema', 'logotipo')), desenhos)
+    for (const f of desenhos) {
+      assert.ok(readFileSync(join(PLUGINS, 'tema-wicomm', 'tema', 'logotipo', f)).equals(readFileSync(join(RAIZ, 'temas', 'wicomm', 'logotipo', f))), f)
+    }
   })
 
   it('o marketplace deste repositório lista só o wicomm: o design-system e o tema moram no do kit (um marketplace por plugin)', () => {

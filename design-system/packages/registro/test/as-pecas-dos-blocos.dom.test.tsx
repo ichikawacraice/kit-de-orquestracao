@@ -376,6 +376,26 @@ describe("o logotipo", () => {
     expect(screen.getByRole("img", { name: "Wicomm" })).toBeTruthy()
     expect(container.innerHTML).not.toMatch(/text-primary\b|text-marca/)
   })
+
+  it("a horizontal desenha o arquivo do tema, um por fundo, e não escreve o nome", () => {
+    const { container } = render(<Logotipo variante="horizontal" />)
+    const desenhos = [...container.querySelectorAll("img")]
+    expect(desenhos).toHaveLength(2)
+    for (const d of desenhos) {
+      expect(d.getAttribute("src")).toMatch(/^data:image\/png;base64,iVBORw0KGgo/)
+      expect(d.getAttribute("alt")).toBe("")
+    }
+    const [claro, escuro] = desenhos.map(classes)
+    expect(claro).toContain("dark:hidden")
+    expect(escuro).toEqual(expect.arrayContaining(["hidden", "dark:block"]))
+    expect(container.textContent).toBe("")
+  })
+
+  it("o símbolo, sem desenho recolhido no tema, escreve o monograma", () => {
+    const { container } = render(<Logotipo variante="simbolo" />)
+    expect(container.querySelector("img")).toBeNull()
+    expect(screen.getByRole("img", { name: "Wicomm" }).textContent).toBe("w")
+  })
 })
 
 describe("a rolagem do painel (LAY-06)", () => {
