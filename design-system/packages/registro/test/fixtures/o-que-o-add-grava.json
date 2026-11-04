@@ -442,7 +442,7 @@
     },
     "quadro": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/quadro.tsx": "64b094b03fd4a7dcd9d88949ae6cc1086c07a5a4080b21720443c4bd05bd2c9f",
+      "components/ui/quadro.tsx": "e445186054677f49358f753ac5e3649b14620e767fc82658d507c3fbcd01f0f0",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
