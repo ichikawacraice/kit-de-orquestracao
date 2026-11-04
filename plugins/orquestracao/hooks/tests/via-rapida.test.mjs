@@ -126,3 +126,37 @@ test('o protocolo diz os mesmos tetos que o script', () => {
   assert.match(sec, new RegExp(`até \\*\\*${ARQUIVOS_MAX} arquivos\\*\\*`));
   assert.match(sec, /via-rapida\.mjs/);
 });
+
+// F373: o mesmo corte escolhe o modelo do validador. Contrato, trava, removido ou binário → Opus; o resto → Sonnet, por maior que seja.
+test('validador: diff grande sem contrato vai a Sonnet; contrato, trava ou removido vão a Opus, com o motivo', (t) => {
+  const raiz = repo(t);
+  gravar(raiz, { 'src/a.mjs': n(5 + LINHAS_MAX + 40) });
+  const r = corte(raiz, 'main');
+  assert.equal(r.cabe, false, 'grande demais para a via rápida');
+  assert.equal(r.validador, 'sonnet');
+  assert.deepEqual(r.risco, []);
+
+  const raiz2 = repo(t);
+  gravar(raiz2, { 'plugins/p/hooks/trava.mjs': 'x\n', 'src/a.mjs': n(6) });
+  const r2 = corte(raiz2, 'main');
+  assert.equal(r2.validador, 'opus');
+  assert.ok(r2.risco.length > 0 && r2.risco.some((m) => m.includes('plugins/p/hooks/trava.mjs')), JSON.stringify(r2.risco));
+
+  const raiz3 = repo(t);
+  git(raiz3, 'rm', '-q', 'docs/x.md');
+  const r3 = corte(raiz3, 'main');
+  assert.equal(r3.validador, 'opus');
+  assert.match(r3.risco.join('\n'), /docs\/x\.md: removido/);
+});
+
+test('validador: diff vazio fica no padrão do agente (Opus), sem escolher Sonnet às cegas', (t) => {
+  const r = corte(repo(t), 'main');
+  assert.equal(r.validador, 'opus');
+});
+
+test('a saída de texto do script diz o modelo do validador', (t) => {
+  const raiz = repo(t);
+  gravar(raiz, { 'src/a.mjs': n(7) });
+  const r = rodar('node', [SCRIPT, '--base', 'main'], raiz);
+  assert.match(r.stdout, /^validador: sonnet/m, r.stdout + r.stderr);
+});

@@ -1,0 +1,3 @@
+#!/bin/bash
+# Wrapper do plugin: `esperar-fundo` = pool/esperar-fundo.mjs (o plugin põe bin/ no PATH).
+exec node "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/pool/esperar-fundo.mjs" "$@"

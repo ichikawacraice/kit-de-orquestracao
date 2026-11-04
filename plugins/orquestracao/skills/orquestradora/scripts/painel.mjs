@@ -1264,7 +1264,8 @@ function rodadaDaFila(pedidos, { seco, gate, preparar, cwd }) {
     if (log) try { registrarAcerto({ cwd, pr, sha, base: lote.base, log }); } catch { /* sem medição */ }
     const itens = semItem ? [] : comTrava(() => itensDoPr(pr).map(([F, d]) => {
       const agora = `devolvido pela fila de merge (PR ${pr}): ${motivo}`.slice(0, 300);
-      efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { etapa: 'execucao', agora } }, undefined, new Map()));
+      // F373: item que voltou da fila é de risco; o validador do conserto vai em Opus (hook `modelo-do-validador`)
+      efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: { etapa: 'execucao', agora, risco: true } }, undefined, new Map()));
       return { item: F, dona: d.donoLocalId ?? null };
     }));
     return { pr, motivo, ...(log ? { log } : {}), itens };

@@ -153,7 +153,9 @@ test('conflito e gate vermelho: devolve os dois à dona com o motivo, mergeia o 
       assert.equal(d.etapa, 'execucao', `${F} volta a execucao`);
       assert.match(d.agora, /devolvido pela fila de merge/);
       assert.equal(d.donoLocalId, LA, 'a dona continua dona');
+      assert.equal(d.risco, true, `${F}: voltou da fila, o validador do conserto vai em Opus (F373)`);
     }
+    assert.equal(c.dado('F1').risco, undefined, 'o mergeado não ganha risco');
     assert.deepEqual(s.devolvidos[1].itens, [{ item: 'F3', dona: LA }]);
   } finally { limpar(c); }
 });
