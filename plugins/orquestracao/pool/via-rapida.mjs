@@ -80,7 +80,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     const r = corte(process.cwd(), base);
     process.stdout.write(args.includes('--json') ? `${JSON.stringify(r, null, 2)}\n`
       : `via rápida: ${r.cabe ? 'cabe' : 'não cabe'} (base ${r.base}, ${r.linhas} linhas em ${r.arquivos.length} arquivos)\n${r.motivos.map((m) => `- ${m}\n`).join('')}`
-        + `validador: ${r.validador}${r.validador === 'opus' ? (r.risco.length ? ' (contrato, trava ou removido no diff)' : ' (diff vazio)') : ' (diff sem contrato nem trava; declare o que o script não vê para pedir Opus)'}\n`);
+        + `validador: ${r.validador}${r.validador === 'opus' ? (r.risco.length ? ' (contrato, trava ou removido no diff)' : ' (diff vazio)') : ' (diff sem contrato nem trava; o hook usa Sonnet só com o item declarado "risco":false)'}\n`);
     process.exitCode = r.cabe ? 0 : 1;
   } catch (e) {
     process.stderr.write(`via-rapida: ${e?.message || e}\n`);
