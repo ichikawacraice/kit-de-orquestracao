@@ -8,7 +8,7 @@
 npm install @wicomm/tokens @wicomm/guardas
 ```
 
-No `package.json` fica `"@wicomm/tokens": "^0.1.1"`. O CSS importa `@wicomm/tokens/tailwind-v4.css`, e as guardas rodam por `"test": "wicomm-guardas"`.
+No `package.json` fica `"@wicomm/tokens": "^0.1.2"`. O CSS importa `@wicomm/tokens/tailwind-v4.css`, e as guardas rodam por `"test": "wicomm-guardas"`.
 
 - **No CI do projeto:** `npm ci && npm test`, sem `NODE_AUTH_TOKEN` nem `packages: read`.
 - **Na Vercel (e afins):** o build padrão, a cada push. Nenhuma variável de token de pacote (`NPM_RC`, `NPM_TOKEN`, `NODE_AUTH_TOKEN`).
