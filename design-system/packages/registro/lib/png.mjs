@@ -1,6 +1,7 @@
 // PNG com os módulos nativos (o kit não traz dependência para isto): ler um PNG
 // RGBA de 8 bits sem entrelaçamento, escrevê-lo de volta e tirar dele o negativo
 // do símbolo da marca (MARCA-04: o negativo sai do oficial por script).
+import { createHash } from 'node:crypto'
 import { deflateSync, inflateSync } from 'node:zlib'
 
 const ASSINATURA = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -105,4 +106,18 @@ export function negativoDoSimbolo(png) {
     if (Math.max(r, g, b) - Math.min(r, g, b) <= LIMIAR_DO_NEUTRO) rgba.fill(255, i, i + 3)
   }
   return escreverPng({ ...imagem, rgba })
+}
+
+/** Duas PNG são a mesma imagem quando têm o mesmo tamanho e os mesmos pixels: os bytes variam com o zlib do Node. */
+export function mesmaImagem(a, b) {
+  const [x, y] = [lerPng(a), lerPng(b)]
+  return x.largura === y.largura && x.altura === y.altura && x.rgba.equals(y.rgba)
+}
+
+/** O texto com cada PNG embutido (`data:image/png;base64,…`) trocado pela impressão dos pixels: compara código gerado sem depender do zlib. */
+export function pngsPelosPixels(texto) {
+  return texto.replace(/data:image\/png;base64,([A-Za-z0-9+/=]+)/g, (_, b64) => {
+    const { largura, altura, rgba } = lerPng(Buffer.from(b64, 'base64'))
+    return `png:${largura}x${altura}:${createHash('sha256').update(rgba).digest('hex')}`
+  })
 }

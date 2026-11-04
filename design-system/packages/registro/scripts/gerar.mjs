@@ -7,6 +7,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { registro } from '../lib/registro.mjs'
+import { pngsPelosPixels } from '../lib/png.mjs'
 import { LINHAS_GERADAS, PECA_DO_LOGOTIPO, temaDoRegistro } from '../lib/tema.mjs'
 
 const RAIZ = join(import.meta.dirname, '..')
@@ -25,7 +26,8 @@ if (process.argv.includes('--conferir')) {
   try {
     atual = readFileSync(ALVO, 'utf8')
   } catch {}
-  if (peca !== pecaNova) {
+  // Os PNG comparam pelos pixels: o negativo é deflate do Node, e os bytes mudam com o zlib de cada Node.
+  if (pngsPelosPixels(peca) !== pngsPelosPixels(pecaNova)) {
     console.error(`${PECA_DO_LOGOTIPO}: o desenho ou o símbolo embutido não é o PNG do tema: rode \`npm run gerar -w @wicomm/registro\`.`)
     process.exitCode = 1
   }

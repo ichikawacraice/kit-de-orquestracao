@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, it } from 'node:test'
 import { registro } from '../lib/registro.mjs'
-import { negativoDoSimbolo } from '../lib/png.mjs'
+import { mesmaImagem, negativoDoSimbolo } from '../lib/png.mjs'
 import { LINHA_DO_DESENHO, LINHA_DO_SIMBOLO, MARCA_NO_CODIGO, PECA_DO_LOGOTIPO, arquivoComOTema, codigoComOTema, temaDoRegistro } from '../lib/tema.mjs'
 import { oQueOAddGrava } from '../scripts/o-que-o-add-grava.mjs'
 
@@ -46,7 +46,7 @@ describe('o tema no registro', () => {
     assert.ok(claro?.length > 0 && escuro?.length > 0)
     const oficial = readFileSync(join(padrao.pasta, padrao.meta.logotipo.simbolo.sobreClaro))
     assert.ok(claro.equals(oficial), 'sobre o claro: o oficial')
-    assert.ok(escuro.equals(negativoDoSimbolo(oficial)), 'sobre o escuro: o negativo do oficial')
+    assert.ok(mesmaImagem(escuro, negativoDoSimbolo(oficial)), 'sobre o escuro: o negativo do oficial, pelos pixels')
   })
 
   it('o trecho da marca que some do código é erro, não troca calada', () => {

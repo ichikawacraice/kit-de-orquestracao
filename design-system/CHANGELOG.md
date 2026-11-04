@@ -9,13 +9,13 @@ Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camada
 Camadas: base, registro
 
 ### O que muda
-- **A prioridade ganha cor por nível.** O nível baixo, o médio e o alto pintam o glifo de barras e a palavra do carimbo neutro com a cor declarada do nível (azul, âmbar e vermelho); a tinta do carimbo continua neutra, e a urgente continua na voz de espera. A COR-09 passa a listar o nível da prioridade como cor de identidade declarada, num lugar só e com o contraste de texto medido; a COR-08 a registra como a exceção do glifo com matiz; a COR-03 diz que cor de identidade não é régua de estado; a linha *Prioridade* da PECA-01 troca o "uma matiz por nível" do *Não use* pela tinta do carimbo por nível.
+- **A prioridade ganha cor por nível.** O nível baixo, o médio e o alto pintam o glifo de barras e a palavra do carimbo neutro com a cor declarada do nível (azul, laranja e vermelho: nenhuma família de voz); a tinta do carimbo continua neutra, e a urgente continua na voz de espera. A COR-09 passa a listar o nível da prioridade como cor de identidade declarada, num lugar só e com o contraste de texto medido; a COR-08 a registra como a exceção do glifo com matiz; a COR-03 diz que cor de identidade não é régua de estado; a linha *Prioridade* da PECA-01 troca o "uma matiz por nível" do *Não use* pela tinta do carimbo por nível.
 - `prioridade` exporta `COR_DO_NIVEL`, o mapa da cor do nível (fora do idioma de cor: não é voz).
 - O quadro deixa de encaixar a coluna ao rolar no celular (`snap-x snap-mandatory`): o encaixe brigava com o arrastar, e o quadro rolava sozinho durante o arrasto.
 - O logotipo ganha o símbolo oficial (o monograma recolhido da barra lateral), com o negativo para o tema escuro derivado do oficial por script; a MARCA-04 passa a aceitar esse negativo.
 
 ### Migração
-- `npx shadcn add <registro>/prioridade.json <registro>/quadro.json <registro>/logotipo.json` (o `add` atualiza também o `idioma-de-cor`).
+- `npx shadcn add <registro>/prioridade.json <registro>/quadro.json <registro>/logotipo.json`.
 - Quem pintava o nível da prioridade à mão: troque pela peça.
 
 ## 0.18.0 · 04/11/2026

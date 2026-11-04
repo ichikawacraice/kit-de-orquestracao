@@ -184,11 +184,14 @@ describe("a prioridade", () => {
       for (const classe of COR_DO_NIVEL[nivel].split(" ")) expect(classes(el)).toContain(classe)
     }
     const todas = Object.values(COR_DO_NIVEL).flatMap((c) => c.split(" "))
-    // A urgente fala na voz `espera`, cujo texto também é amber-800: o que conta é nada além da voz.
-    const daVoz = new Set(BADGE_DO_TOM.espera.split(" "))
-    expect(todas.some((c) => !daVoz.has(c))).toBe(true)
+    expect(todas.length).toBeGreaterThan(0)
     for (const classe of todas) expect(classes(nenhuma)).not.toContain(classe)
-    for (const classe of todas.filter((c) => !daVoz.has(c))) expect(classes(urgente)).not.toContain(classe)
+    for (const classe of todas) expect(classes(urgente)).not.toContain(classe)
+    // Nunca uma voz emprestada (COR-09): nenhuma família do nível é família de voz.
+    const familia = (c: string) => c.replace(/^dark:/, "").split("-")[1]
+    const dasVozes = new Set(Object.values(BADGE_DO_TOM).flatMap((c) => c.split(" ")).map(familia))
+    expect(dasVozes.has("amber")).toBe(true)
+    for (const classe of todas) expect(dasVozes.has(familia(classe))).toBe(false)
   })
 })
 

@@ -14,12 +14,14 @@ const ALTURA_DA_BARRA = ["h-1", "h-1.75", "h-2.5"] as const
  * A cor do nível (COR-09): identidade declarada, num lugar só — esta peça —,
  * que pinta o glifo e a palavra do carimbo neutro. A urgente não entra: ela
  * fala na voz `espera`. Os degraus são contraste medido sobre a tinta do
- * carimbo neutro: no claro, sky-700 5,15, amber-800 6,15 e red-700 5,61 sobre
- * o cartão (o amber-700 cairia a 4,36); no escuro, os 400 passam de 5,2.
+ * carimbo neutro: no claro, sky-700 5,1, orange-800 6,3 e red-700 5,6 sobre o
+ * cartão (o orange-700 cairia a 4,47); no escuro, os 400 passam de 5 (o red-400,
+ * o menor, mede 5,05). Nenhuma família é de voz: o âmbar é da `espera`, e a
+ * média em âmbar diria "decisão sua" (COR-09).
  */
 const COR_DO_NIVEL: Record<1 | 2 | 3, string> = {
   1: "text-sky-700 dark:text-sky-400",
-  2: "text-amber-800 dark:text-amber-400",
+  2: "text-orange-800 dark:text-orange-400",
   3: "text-red-700 dark:text-red-400",
 }
 

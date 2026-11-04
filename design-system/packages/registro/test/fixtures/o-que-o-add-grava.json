@@ -431,7 +431,7 @@
     "prioridade": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
       "components/ui/chip-de-estado.tsx": "6f30c9e15475d0777a2dd698b04d0dc825df511a15bbb00125f54fcf092e0ec6",
-      "components/ui/prioridade.tsx": "f83e9bef011f6888a0e8e67ca4877a5ceb67cc69d6510fa4edcbae35340b8610",
+      "components/ui/prioridade.tsx": "282c1e3fd0ecfa0d3f1def5276e5f8a08cf53b5e886c7966b2675dadafad3eda",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -442,7 +442,7 @@
     },
     "quadro": {
       "app/globals.css": "148200efa8f148c7d18d6acfd4f6cb271f5be5b5f0276cc577946e7cdf0ce859",
-      "components/ui/quadro.tsx": "e3946c78cef5632f3df5ea5b7221d1a83ff54631da75e2413e49cacb11db2a3b",
+      "components/ui/quadro.tsx": "4a3fa33b54314afd8bffd733e74b4ca8b8d7045ecb9644f5e89de55a68dbc8f6",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"

@@ -41,6 +41,11 @@ const CAMPOS = {
 const lerJson = (caminho) => JSON.parse(readFileSync(caminho, 'utf8'))
 const ASSINATURA_DO_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 const ePng = (caminho) => existsSync(caminho) && readFileSync(caminho).subarray(0, 8).equals(ASSINATURA_DO_PNG)
+/** O PNG que o gerador decodifica para tirar o negativo: RGBA de 8 bits, sem entrelaçamento (lido no IHDR). */
+const ePngRgba8 = (caminho) => {
+  const b = readFileSync(caminho)
+  return b.length > 28 && b.toString('latin1', 12, 16) === 'IHDR' && b[24] === 8 && b[25] === 6 && b[28] === 0
+}
 const campo = (obj, caminho) => caminho.split('.').reduce((no, parte) => no?.[parte], obj)
 
 /**
@@ -100,6 +105,8 @@ export function validarTema({ pasta, meta, tokens }) {
       problemas.push('tema.json: `logotipo.simbolo.sobreClaro` é o caminho de um PNG na pasta do tema')
     } else if (pasta && !ePng(join(pasta, arquivo))) {
       problemas.push(`tema.json: \`logotipo.simbolo.sobreClaro\` (${arquivo}) não é um PNG na pasta do tema`)
+    } else if (pasta && !ePngRgba8(join(pasta, arquivo))) {
+      problemas.push(`tema.json: \`logotipo.simbolo.sobreClaro\` (${arquivo}) é PNG RGBA de 8 bits sem entrelaçamento: o negativo sai dele por script`)
     }
     if (typeof simbolo?.origem !== 'string') problemas.push('tema.json: `logotipo.simbolo.origem` diz de onde o arquivo oficial veio')
   }

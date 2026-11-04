@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { deflateSync } from 'node:zlib'
-import { LIMIAR_DO_NEUTRO, escreverPng, lerPng, negativoDoSimbolo } from '../lib/png.mjs'
+import { LIMIAR_DO_NEUTRO, escreverPng, lerPng, mesmaImagem, negativoDoSimbolo, pngsPelosPixels } from '../lib/png.mjs'
 import { temaDoRegistro } from '../lib/tema.mjs'
 
 const tema = temaDoRegistro()
@@ -82,5 +82,27 @@ describe('o negativo do símbolo', () => {
 
   it('sai sempre nos mesmos bytes', () => {
     assert.ok(negativoDoSimbolo(oficial).equals(negativoDoSimbolo(oficial)))
+  })
+
+  it('compara pelos pixels: outro zlib, outros bytes, a mesma imagem', () => {
+    const negativo = negativoDoSimbolo(oficial)
+    const { largura, altura, rgba } = lerPng(negativo)
+    // Outro nível de compressão faz o papel de outro zlib: os bytes mudam, os pixels não.
+    const passo = largura * 4
+    const cru = Buffer.alloc(altura * (passo + 1))
+    for (let y = 0; y < altura; y++) rgba.copy(cru, y * (passo + 1) + 1, y * passo, (y + 1) * passo)
+    const idat = deflateSync(cru, { level: 1 })
+    const tam = Buffer.alloc(4)
+    tam.writeUInt32BE(idat.length)
+    // O leitor não confere o CRC: o do IDAT vai zerado, como no `pngComFiltro`.
+    const outro = Buffer.concat([negativo.subarray(0, 33), tam, Buffer.from('IDAT'), idat, Buffer.alloc(4), negativo.subarray(negativo.length - 12)])
+    assert.ok(!outro.equals(negativo), 'os bytes diferem (sem isso o teste não mede nada)')
+    assert.ok(mesmaImagem(outro, negativo))
+    const embute = (png) => `"data:image/png;base64,${png.toString('base64')}"`
+    assert.equal(pngsPelosPixels(embute(outro)), pngsPelosPixels(embute(negativo)))
+    // E um pixel trocado é outra imagem.
+    const mexido = Buffer.from(rgba)
+    mexido[0] ^= 0xff
+    assert.ok(!mesmaImagem(escreverPng({ largura, altura, rgba: mexido }), negativo))
   })
 })

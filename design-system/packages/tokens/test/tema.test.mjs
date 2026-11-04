@@ -6,9 +6,9 @@
 // e a fonte, e nada do núcleo; (3) o tema é conferido pelas regras que a base já
 // manda (MARCA-01, MARCA-03), e o que as quebra reprova ao gerar.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -104,7 +104,7 @@ describe('o tema é conferido pelas regras da base', () => {
     assert.equal(lerTema(OUTRO, { validar: false }).meta.logotipo.imagem, undefined)
   })
 
-  it('o símbolo, quando declarado, é PNG que existe na pasta do tema e diz a origem', () => {
+  it('o símbolo, quando declarado, é PNG RGBA de 8 bits que existe na pasta do tema e diz a origem', () => {
     const padrao = lerTema(TEMA_PADRAO, { validar: false })
     assert.ok(padrao.meta.logotipo.simbolo?.sobreClaro, 'o tema Wicomm declara o símbolo')
     const comSimbolo = (simbolo) => {
@@ -119,6 +119,19 @@ describe('o tema é conferido pelas regras da base', () => {
     assert.ok(naoPng.some((p) => /simbolo\.sobreClaro/.test(p)), naoPng.join('\n'))
     const semOrigem = comSimbolo({ sobreClaro: padrao.meta.logotipo.simbolo.sobreClaro })
     assert.ok(semOrigem.some((p) => /simbolo\.origem/.test(p)), semOrigem.join('\n'))
+    // PNG de paleta (o que o pngquant grava) é PNG, mas o gerador não tira o negativo dele: a validação recusa.
+    const tmp = mkdtempSync(join(tmpdir(), 'simbolo-'))
+    try {
+      const oficial = readFileSync(join(padrao.pasta, padrao.meta.logotipo.simbolo.sobreClaro))
+      assert.equal(oficial[25], 6, 'o oficial é RGBA (sem isso a troca abaixo não mede nada)')
+      const paleta = Buffer.from(oficial)
+      paleta[25] = 3
+      writeFileSync(join(tmp, 'paleta.png'), paleta)
+      const deParaPaleta = comSimbolo({ ...padrao.meta.logotipo.simbolo, sobreClaro: relative(padrao.pasta, join(tmp, 'paleta.png')) })
+      assert.ok(deParaPaleta.some((p) => /simbolo\.sobreClaro/.test(p) && /RGBA de 8 bits/.test(p)), deParaPaleta.join('\n'))
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
     assert.equal(lerTema(OUTRO, { validar: false }).meta.logotipo.simbolo, undefined)
   })
 
