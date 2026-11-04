@@ -4,6 +4,17 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.19.1 · 04/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **O `DialogLateral` pode fechar ao clicar fora.** Com `fechaAoClicarFora`, o clique fora da coluna a fecha; o foco que sai não fecha, e seguram a coluna o clique num elemento com `data-mantem-o-painel` (o cartão ou a linha que a abre), num cartão do quadro, em outro diálogo, menu, lista ou popover, num aviso, e o rascunho digitado num campo de texto dela. Sem a opção, nada muda: clicar fora continua sem fechar. Um `onInteractOutside` passado à peça passa a ser composto com o dela (antes, substituía): se ele chamar `preventDefault`, a coluna fica. A linha *Coluna lateral* da PECA-01 diz a opção.
+- **A coluna longa do quadro leva a tinta até o último cartão.** A `ColunaDoQuadro` cresce com os cartões (`h-max min-h-full`): o cabeçalho `sticky` e a tinta do alvo de soltar vão até o fim da coluna que passa da altura do quadro, e a coluna curta ainda enche a altura.
+
+### Migração
+- Quem fechava a coluna lateral ao clicar fora com um `onInteractOutside` à mão troca pelo `fechaAoClicarFora` e marca com `data-mantem-o-painel` o que abre a coluna. Quem reinstala `dialog` e `quadro` do registro recebe as peças novas; fora isso, nada quebra.
+
 ## 0.19.0 · 04/11/2026
 
 Camadas: base, registro

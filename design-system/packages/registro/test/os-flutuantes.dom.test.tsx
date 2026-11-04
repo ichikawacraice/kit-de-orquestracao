@@ -97,6 +97,74 @@ describe("o diálogo", () => {
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" })
     expect(aoMudar).toHaveBeenCalledWith(false)
   })
+
+  describe("o lateral com fechaAoClicarFora", () => {
+    async function abrir(corpo: React.ReactNode = "linhas", fora: React.ReactNode = null) {
+      const aoMudar = vi.fn()
+      render(
+        <>
+          <button type="button">fora</button>
+          <div data-mantem-o-painel>
+            <button type="button">outro item</button>
+          </div>
+          <div role="menu">
+            <button type="button">opção</button>
+          </div>
+          {fora}
+          <Dialog open modal={false} onOpenChange={aoMudar}>
+            <DialogLateral titulo="Item" fechaAoClicarFora>
+              {corpo}
+            </DialogLateral>
+          </Dialog>
+        </>
+      )
+      await screen.findByRole("dialog", { name: "Item" })
+      // O Radix só ouve o clique de fora depois de um `setTimeout(0)`.
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 20))
+      })
+      return aoMudar
+    }
+    const clicar = (el: Element) => {
+      fireEvent.pointerDown(el, { button: 0 })
+      fireEvent.mouseDown(el, { button: 0 })
+      fireEvent.mouseUp(el, { button: 0 })
+      fireEvent.click(el, { button: 0 })
+    }
+
+    it("clicar fora fecha", async () => {
+      const aoMudar = await abrir()
+      clicar(screen.getByText("fora"))
+      expect(aoMudar).toHaveBeenCalledWith(false)
+    })
+
+    it("o foco que sai não fecha", async () => {
+      const aoMudar = await abrir()
+      fireEvent.focusIn(screen.getByText("fora"))
+      expect(aoMudar).not.toHaveBeenCalled()
+    })
+
+    it("o que flutua por cima e o gatilho marcado não fecham", async () => {
+      const aoMudar = await abrir()
+      clicar(screen.getByText("opção"))
+      clicar(screen.getByText("outro item"))
+      expect(aoMudar).not.toHaveBeenCalled()
+      // A guarda não é vazia: fora de tudo isso, fecha.
+      clicar(screen.getByText("fora"))
+      expect(aoMudar).toHaveBeenCalledWith(false)
+    })
+
+    it("o rascunho escrito segura o painel", async () => {
+      const aoMudar = await abrir(<textarea aria-label="Comentário" />)
+      const campo = screen.getByRole("textbox", { name: "Comentário" })
+      fireEvent.change(campo, { target: { value: "meio comentário" } })
+      clicar(screen.getByText("fora"))
+      expect(aoMudar).not.toHaveBeenCalled()
+      fireEvent.change(campo, { target: { value: "  " } })
+      clicar(screen.getByText("fora"))
+      expect(aoMudar).toHaveBeenCalledWith(false)
+    })
+  })
 })
 
 describe("a dica e o com-motivo", () => {

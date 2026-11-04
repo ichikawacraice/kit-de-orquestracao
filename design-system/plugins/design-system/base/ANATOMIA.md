@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.19.0
+versao: 0.19.1
 description: A anatomia dos apps React do sistema — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -241,7 +241,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | Ícone de IA | `IconeDaIa`; em botão com cor, `IconeDaIa sobrePreenchido` (branco, sem disco) | ícone cru, disco atrás do ícone, `✦` escrito |
   | Instrução numerada | `Passos` / `Passo`, com a falha dentro do passo | `ol` à mão |
   | Detalhe sob demanda | `Popover` | faixa permanente, `HoverCard` |
-  | Coluna lateral sob demanda (consultar ao lado do trabalho) | `DialogLateral` | painel `fixed` à mão, `Sheet` (o trabalho que pede janela é `DialogLongo`) |
+  | Coluna lateral sob demanda (consultar ao lado do trabalho) | `DialogLateral`; clicar fora não fecha, salvo com `fechaAoClicarFora` (o que abre a coluna, menu, outro diálogo e o rascunho digitado nela a seguram) | painel `fixed` à mão, `Sheet` (o trabalho que pede janela é `DialogLongo`), fechar ao clicar fora à mão |
   | Conteúdo alto em janela | `DialogLongo`; tela cheia é `DialogLongo` com `tamanho="tela"` | imagem com teto de altura; camada `fixed inset-0` à mão |
   | Confirmação | `useConfirm` (`confirm-dialog`); com `onConfirmar`, a ação roda com o diálogo aberto e a falha aparece nele | `window.confirm`, rodar a ação depois de fechar sem dizer a falha, segundo diálogo para o erro |
   | Bloquear a tela até uma condição de fora | `DialogLongo` com `bloqueia` (exige o rodapé com a saída) | faixa, cartão no lugar do conteúdo |

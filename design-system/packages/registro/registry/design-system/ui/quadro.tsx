@@ -110,7 +110,9 @@ function ColunaDoQuadro({
         data-recusa={recusa || undefined}
         aria-labelledby={idDoNome}
         className={cn(
-          "group/coluna flex max-w-80 min-w-0 shrink-0 grow basis-64 flex-col rounded-painel",
+          // `h-max min-h-full`: a coluna cresce com os cartões (o cabeçalho `sticky` e a tinta do
+          // alvo vão até o último), e a curta ainda enche a altura do quadro.
+          "group/coluna flex h-max min-h-full max-w-80 min-w-0 shrink-0 grow basis-64 flex-col rounded-painel",
           alvo && "bg-marca-tinta",
           className
         )}
