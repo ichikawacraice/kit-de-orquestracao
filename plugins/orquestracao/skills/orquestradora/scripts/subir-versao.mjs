@@ -43,6 +43,8 @@ function main() {
     if (typeof pl.source !== 'string') continue;
     const fonte = pl.source.replace(/^\.\//, '').replace(/\/$/, '');
     const arquivoJson = `${fonte}/.claude-plugin/plugin.json`;
+    // F373: `design-system/packages/` dispara o publicar-pacotes no npm depois do merge; o commit de versão nunca toca ali
+    if (/^design-system\/packages\//.test(arquivoJson)) { pulados.push({ nome: pl.name, motivo: 'design-system/packages/ publica no npm: a versão é do operador' }); continue; }
     // só a linha da base, e o diff do merge pelo primeiro pai: o plugin que chegou por merge de subárvore (F357) tem a versão vista no
     // commit que o trouxe, e o merge da base dentro da branch de um PR não vira referência
     const ref = git(['log', '-1', '--format=%H', '--first-parent', '--diff-merges=first-parent', '--no-patch', '-G"version"', '--', arquivoJson]);

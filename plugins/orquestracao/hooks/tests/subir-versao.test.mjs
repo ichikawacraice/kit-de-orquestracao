@@ -222,3 +222,19 @@ test('--destacado: HEAD destacado em dia com origin/main sobe e empurra; sem a f
   assert.equal(atras.exit, 1, atras.out);
   assert.match(atras.json.motivo, /atrás de origin\/main/);
 });
+
+// F373 (fatia 3): a subida automática roda sem turno; `design-system/packages/**` dispara o publicar-pacotes no npm, e publicar
+// é do operador. O commit de versão nunca toca ali, mesmo com uma entrada do marketplace apontando para lá.
+test('entrada em design-system/packages/ é pulada: o commit de versão não toca o caminho que publica no npm', () => {
+  escrever('.claude-plugin/marketplace.json', JSON.stringify({ name: 'm', plugins: [{ name: 'a', source: './plugins/a' }, { name: 'pk', source: './design-system/packages/pk' }] }));
+  escrever('design-system/packages/pk/.claude-plugin/plugin.json', pluginJson('pk', '1.0.0'));
+  commitar('chore: pk entra');
+  escrever('plugins/a/x.mjs', 'dois\n'); escrever('design-system/packages/pk/z.mjs', 'um\n'); commitar('feat: muda a e pk');
+  const r = subir();
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.deepEqual(r.json.subiu.map((s) => s.nome), ['a'], 'precondição: o a sobe (a subida aconteceu)');
+  assert.ok(r.json.pulados?.some((p) => p.nome === 'pk' && /npm/.test(p.motivo)), JSON.stringify(r.json.pulados));
+  const tocados = git(['show', '--name-only', '--format=', 'HEAD']).split('\n').filter(Boolean);
+  assert.ok(tocados.length > 0, 'o commit de versão existe e tocou algo');
+  assert.deepEqual(tocados.filter((f) => f.startsWith('design-system/packages/')), []);
+});
