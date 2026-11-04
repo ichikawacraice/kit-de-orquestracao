@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// `subir-versao [--seco] [--empurrar] [--base <branch>]` (F173): depois de um lote de merges, sobe o patch da `version` de cada plugin
+// `subir-versao [--seco] [--empurrar] [--destacado] [--base <branch>]` (F173): depois de um lote de merges, sobe o patch da `version` de cada plugin
 // que mudou desde a última subida (o último commit que mexeu na linha "version" do plugin.json) e commita tudo de uma vez.
 // Rodar na raiz do repositório, na base (padrão main) em dia. Saída JSON: {subiu, commit?, empurrou?, pulados?} ou {recusado, motivo} com exit 1.
+// `--destacado` (F373): aceita o HEAD destacado (o worktree temporário da fila sem turno), que tem de estar em dia com origin/<base>.
 // Ambiente: GIT_BIN troca o `git` (teste).
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -20,13 +21,15 @@ function main() {
   const args = process.argv.slice(2);
   const seco = args.includes('--seco');
   const empurrar = args.includes('--empurrar');
+  const destacado = args.includes('--destacado');
   const i = args.indexOf('--base');
   const base = i >= 0 ? args[i + 1] : 'main';
   if (!base) { recusa('--base pede um valor'); return; }
 
   if (git(['status', '--porcelain'])) { recusa('árvore com mudança não commitada'); return; }
   const atual = git(['rev-parse', '--abbrev-ref', 'HEAD']);
-  if (atual !== base) { recusa(`fora da ${base} (estou em ${atual}); a subida é na ${base}`); return; }
+  if (atual !== base && !(destacado && atual === 'HEAD')) { recusa(`fora da ${base} (estou em ${atual}); a subida é na ${base}`); return; }
+  if (destacado && atual === 'HEAD' && !tenta(['remote', 'get-url', 'origin'])) { recusa(`--destacado precisa do origin/${base} para conferir a ponta`); return; }
   if (tenta(['remote', 'get-url', 'origin'])) {
     if (!tenta(['fetch', '-q', 'origin', base])) { recusa(`não consegui buscar origin/${base}`); return; }
     if (!tenta(['merge-base', '--is-ancestor', `origin/${base}`, 'HEAD'])) { recusa(`${base} atrás de origin/${base}; puxe antes`); return; }
@@ -68,6 +71,8 @@ function main() {
   process.stdout.write(`${JSON.stringify(saida)}\n`);
 }
 
+// o motivo do git que conta é a linha do `! [rejected]` ou do `fatal:`/`error:`, não o `To <url>` ou o `remote:` que vêm antes
 try { main(); } catch (err) {
-  recusa(String(err?.stderr || err?.message || err).trim().split('\n')[0]);
+  const linhas = String(err?.stderr || err?.message || err).split('\n').map((l) => l.trim()).filter(Boolean);
+  recusa(linhas.find((l) => /rejected|fatal:|error:/i.test(l)) ?? linhas[0] ?? 'erro sem mensagem');
 }

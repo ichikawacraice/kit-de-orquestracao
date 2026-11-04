@@ -51,7 +51,7 @@
 // e PAINEL_PAUSA_* (só teste).
 //
 // Toda escrita grava `atualizadoEm` (agora, ISO) quando o JSON não traz um, e sobe `version`.
-import { closeSync, cpSync, existsSync, mkdirSync, openSync, mkdtempSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, cpSync, existsSync, mkdirSync, openSync, mkdtempSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
@@ -64,6 +64,7 @@ import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, plugin
 import { GATE_PADRAO, montarLote, motivoDeConflito } from './fila-de-merge.mjs';
 import { donoDaFilaVivo, filaOrfa } from './fila-orfa.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
+import { posMerge } from './pos-merge.mjs';
 import { custoDoItem, projetosDir, sessoesDoItem } from './custo-do-item.mjs';
 import { limiteDoTranscript } from './limite-de-uso.mjs';
 // F183: o slug do projeto e o lugar de cada pergunta (pasta quente ou arquivo).
@@ -1078,6 +1079,14 @@ function comandoFilaDeMerge(args) {
     const e = arquivoJson(arquivo, {});
     gravarJson(arquivo, { ...e, desfechos: [...(Array.isArray(e?.desfechos) ? e.desfechos : []), { em: new Date().toISOString(), ...d }] });
   });
+  // F373 (fatia 3): o desfecho sai antes do pós-merge, marcado `pendente` (a dona do devolvido é avisada já); o resultado entra
+  // depois no mesmo desfecho, pelo `id`. Se o processo morrer no meio, a batida acha o pendente velho e acorda a orquestradora.
+  const completar = (id, posMerge) => comTrava(() => {
+    const e = arquivoJson(arquivo, {});
+    const lista = Array.isArray(e?.desfechos) ? e.desfechos : [];
+    if (lista.some((d) => d?.id === id)) gravarJson(arquivo, { ...e, desfechos: lista.map((d) => (d?.id === id ? { ...d, posMerge } : d)) });
+    else gravarJson(arquivo, { ...e, desfechos: [...lista, { em: new Date().toISOString(), id, mergeados: [], devolvidos: [], posMerge }] });
+  });
   let saida;
   try { saida = filaDeMerge(args, { semTurno }); } catch (e) {
     try { desfecho({ erro: String(e?.message || e).split('\n')[0] }); } catch { /* o erro segue no log da batida */ }
@@ -1085,7 +1094,23 @@ function comandoFilaDeMerge(args) {
   }
   if (!saida.pendente) {
     const { mergeados = [], devolvidos = [], suspeitaDeInstavel, erros, logs } = saida;
-    desfecho({ mergeados, devolvidos, ...(suspeitaDeInstavel ? { suspeitaDeInstavel } : {}), ...(erros ? { erros } : {}), ...(logs ? { logs } : {}) });
+    // F373 (fatia 3): com merge, o pós-merge (versão, plugins, giro do estado) roda aqui, sem turno da orquestradora
+    const comPos = mergeados.length > 0 && process.env.KIT_POS_MERGE !== 'off';
+    const id = randomBytes(6).toString('hex');
+    desfecho({ id, mergeados, devolvidos, ...(suspeitaDeInstavel ? { suspeitaDeInstavel } : {}), ...(erros ? { erros } : {}), ...(logs ? { logs } : {}), ...(comPos ? { posMerge: { pendente: true, desde: new Date().toISOString() } } : {}) });
+    if (comPos) {
+      let pos;
+      try {
+        const raiz = raizDoRepo();
+        pos = posMerge({ cwd: raiz, base: saida.base || 'main', nomes: [basename(raiz), projetoDoCwd().projeto], pastaOrq: join(BASE, '..') });
+      } catch (e) { pos = { erros: [`pos-merge: ${String(e?.message || e).split('\n')[0]}`] }; }
+      // a batida segura a mesma trava durante a rodada dela: o `comTrava` desiste em ~5 s, então tenta de novo antes de perder o resultado
+      for (let i = 0; i < 6; i++) {
+        try { completar(id, pos); break; } catch (e) {
+          if (i === 5) process.stderr.write(`fila-de-merge: não gravei o pós-merge no desfecho: ${e?.message || e}\n`);
+        }
+      }
+    }
   }
   return saida;
 }
@@ -1495,6 +1520,9 @@ function comandoBatida(args) {
     }
     saida.soltos = soltos;
     saida.lancarDepois = filas.lancadas;
+    for (const [nome, linhas] of Object.entries(julgado.registros ?? {})) {
+      try { mkdirSync(pasta, { recursive: true }); appendFileSync(join(pasta, `${nome}.desfechos.log`), linhas.map((l) => `${new Date(agoraMs).toISOString()} ${l}\n`).join('')); } catch (e) { process.stderr.write(`batida: não registrei os desfechos de ${nome}: ${e?.message || e}\n`); }
+    }
     try { baixarDesfechos(julgado.desfechos); } catch (e) { process.stderr.write(`batida: não baixei os desfechos da fila: ${e?.message || e}\n`); }
     try { baixarAvisos(filas.avisos); } catch (e) { process.stderr.write(`batida: não baixei os avisos da fila: ${e?.message || e}\n`); }
     gravarJson(join(pasta, 'estado.json'), julgado.estado);
