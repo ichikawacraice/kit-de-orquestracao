@@ -43,14 +43,24 @@ test('o protocolo da fila e a regra do CLAUDE.md abrem a exceção do merge do a
   assert.equal(raiz, modelo, 'o CLAUDE.md da raiz e o modelo dizem o mesmo');
 });
 
-test('a skill da orquestradora lê o aviso de fim de turno como segundo sinal', () => {
+// F373 (ADR 0022): a dona se desliga e o aviso deixa de ser sinal; o que ainda chegar abre um turno sem leitura, e o PR fora
+// da fila (item em merge) a batida cobra da dona.
+test('a skill da orquestradora: a dona desligada não avisa, e o aviso que chegar abre um turno sem leitura', () => {
   const s = secao(ler(PLUGIN, 'skills', 'orquestradora', 'SKILL.md'), 'aviso-de-fim-de-turno');
   assert.match(s, /side-sessions-event/);
   assert.match(s, /you started/, 'o formato real do aviso');
   assert.match(s, /PR N pronto/);
-  assert.match(s, /segundo sinal/);
-  // o cabeçalho traz o PR sempre que a branch tem um: só se pede a entrega com o item em merge ou a frase no relato
+  assert.match(s, /detach_session/);
+  assert.match(s, /sem leitura/);
+  assert.doesNotMatch(s, /segundo sinal/, 'o aviso não é mais sinal');
   assert.match(s, /etapa: "merge"/);
+  assert.match(s, /batida cobra da dona/);
+  // o protocolo diz o mesmo (antes ele ainda chamava o aviso de segundo sinal)
+  const sinais = ler(PLUGIN, 'pool', 'protocolo.md').split('\n').find((l) => l.includes('**Sinais de entrega:**')) ?? '';
+  assert.ok(sinais.length > 100, 'a linha dos sinais de entrega existe no protocolo');
+  assert.doesNotMatch(sinais, /segundo sinal/);
+  assert.match(sinais, /sem leitura/);
+  assert.match(sinais, /detach_session/);
   // e a dona põe a frase no começo da mensagem final, onde os 400 caracteres a alcançam
   assert.match(passo(ler(PLUGIN, 'pool', 'dona.md'), 6), /400 caracteres/);
 });

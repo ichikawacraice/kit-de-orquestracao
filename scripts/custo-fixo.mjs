@@ -43,6 +43,7 @@ export function origemDaMensagem(j) {
   if (t.includes('<side-sessions-event>') || /finished a turn/.test(t)) return 'evento';
   if (t.includes('cross-session-message')) return 'sessao';
   if (t.includes('task-notification')) return 'tarefa';
+  if (j.origin?.kind === 'plugin' || /^The [\w-]+ plugin sent a message:/.test(t)) return 'batida';
   return 'humano';
 }
 

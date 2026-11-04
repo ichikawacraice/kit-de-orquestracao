@@ -29,6 +29,7 @@ describe('custo fixo', () => {
     assert.equal(origemDaMensagem(evento('x')), 'evento');
     assert.equal(origemDaMensagem({ type: 'user', message: { content: '<cross-session-message from="a">oi</cross-session-message>' } }), 'sessao');
     assert.equal(origemDaMensagem({ type: 'user', message: { content: 'faz isto' } }), 'humano');
+    assert.equal(origemDaMensagem({ type: 'user', origin: { kind: 'plugin' }, message: { content: 'The painel-sessoes plugin sent a message: Batida 23:10: merge parado' } }), 'batida', 'F373 fatia 2: a batida à parte do operador');
     assert.equal(origemDaMensagem({ type: 'user', message: { content: [{ type: 'tool_result', content: 'ok' }] } }), null);
     const t = evento('Conflito resolvido; afetados rodando.').message.content;
     assert.deepEqual(notasDoEvento(t), ['Conflito resolvido; afetados rodando.']);
