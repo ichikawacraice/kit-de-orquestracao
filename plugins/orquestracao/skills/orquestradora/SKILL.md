@@ -23,7 +23,7 @@ A regra que TODA sessão segue (como achar a orquestradora, o que as outras sess
 2. **pedido de número de documento** (ADR, SPEC) e o que só você responde (mensagem `PR N pronto` quando o `--anotar` não serviu);
 3. **item sem dona com vaga aberta** (relatório da batida, `sem dona`);
 4. **erro da fila de merge** (a rodada inteira falhou, ou fila parada) e o desfecho com merge (o pós-merge é seu até a fatia que o leva à batida).
-O resto não é seu e chega a quem é: a fila roda sem turno seu, a batida cutuca o item parado, cobra da dona o PR pronto fora da fila (`anotar`) e só traz a você o `merge parado` sem dona viva ou que não respondeu.
+O resto não é seu e chega a quem é: a fila roda sem turno seu, a batida cutuca o item parado, cobra da dona o PR pronto fora da fila (`anotar`) até duas vezes pelos mesmos PRs, e só traz a você o `merge parado` sem dona viva, que não respondeu ou já cobrado duas vezes.
 
 <a id="aviso-de-fim-de-turno"></a>
 **O aviso de fim de turno da dona não existe mais na regra.** A dona se desliga de você no primeiro turno (`detach_session` com `"self"`, [dona.md](../../pool/dona.md) passo 1): o app deixa de avisar quem a abriu quando ela termina um turno, e você não acorda a cada "testes rodando, aguardo" (de 02 a 04/11 foram 306 turnos seus vindos desse aviso, um terço do seu custo). Desligada, ela some do `list_sessions {"linked": true}`: ache a dona pelo `donoLocalId` do item (`painel get fila F<n>`) e pelo `list_sessions` comum.

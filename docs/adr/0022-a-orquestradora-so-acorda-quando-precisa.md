@@ -15,7 +15,7 @@
 ## Decisão
 - **A dona se desliga da orquestradora no primeiro turno** (`detach_session` com `"self"`, `pool/dona.md` passo 1). O aviso de fim de turno deixa de existir para ela.
 - **A orquestradora acorda só por quatro gatilhos** (skill `orquestradora`, âncora `quando-acorda`): instrução do operador; pedido de número de documento (e a mensagem `PR N pronto` quando o `--anotar` não serviu); item sem dona com vaga aberta; erro da fila de merge (e, até a fatia 3 do F373, o desfecho com merge, cujo pós-merge ainda é dela).
-- **O PR pronto fora da fila a batida cobra da dona**, não da orquestradora: o item em `merge` parado com PR em `prs` e dona viva recebe `anotar`, uma vez por parada; só o item sem dona viva, sem PR, ou cuja dona não respondeu em 20 min vai ao relatório da orquestradora.
+- **O PR pronto fora da fila a batida cobra da dona**, não da orquestradora: o item em `merge` parado com PR em `prs` e dona viva recebe `anotar`, uma vez por parada e no máximo duas vezes pelos mesmos PRs (a rodada da fila que dá erro tira o PR da fila e deixa o item em merge: sem o teto, anotar e errar viraria laço); a dona no meio de um turno não é cobrada. Só o item sem dona viva, sem PR, cuja dona não respondeu em 20 min ou já cobrado duas vezes vai ao relatório da orquestradora.
 - **O aviso que ainda chegar abre um turno sem leitura**: sem batida, fila, `list_sessions` ou gravação; a exceção é a pergunta ao operador que não está no painel.
 
 <a id="alternativas"></a>
