@@ -60,9 +60,15 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs, itens =
 // (`fila-de-merge --sem-turno`): a batida avisa a dona do PR devolvido e da fatia mergeada, e manda à orquestradora um resumo só
 // do que é dela. A saída `desfechos` diz, por projeto, quantos foram entregues à orquestradora (saem do arquivo) e quantos só às
 // donas (ficam, marcados, até haver orquestradora).
-export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, filasVivas = {}, desfechos = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN }) {
+// F371: `limites` { <local_…>: { resetsAtMs } } são as donas paradas no limite de uso (limite-de-uso.mjs, lido do transcript). Antes do
+// reset o item dela não é cutucado nem solto (a cutucada só bate de novo no limite); passado o reset, a dona parada recebe uma vez
+// por reset (estado `limites`) a mensagem de retomar, com o handoff de cada item (`handoffDe(F)` → caminho ou null).
+export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, filasVivas = {}, desfechos = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN, limites = {}, handoffDe = () => null }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
+  // a hora do reset já avisada, por dona; sai 24 h depois do reset
+  const avisados = Object.fromEntries(Object.entries(estado?.limites ?? {}).filter(([, em]) => (ms(em) ?? 0) > agoraMs - 86_400_000));
+  const retomar = new Map(); // dona → { resetsAtMs, itens: [F] }
   const mensagens = []; const soltar = [];
   const projetos = new Map();
   const projeto = (nome) => {
@@ -88,6 +94,18 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     const t = ms(d.atualizadoEm);
     const parado = !d.espera && !d.trava && (t === null || agoraMs - t >= prazoMin * 60_000);
     const minParado = t === null ? null : Math.floor((agoraMs - t) / 60_000);
+
+    const lim = d.etapa !== 'merge' && texto(d.donoLocalId) ? limites[d.donoLocalId] : null;
+    if (lim && Number.isFinite(lim.resetsAtMs)) {
+      if (agoraMs < lim.resetsAtMs) { delete cutucadas[F]; continue; } // espera o reset: nem cutuca nem solta
+      const r = porId.get(d.donoLocalId);
+      if (viva(d.donoLocalId) && r?.isRunning !== true && avisados[d.donoLocalId] !== new Date(lim.resetsAtMs).toISOString()) {
+        const x = retomar.get(d.donoLocalId) ?? { resetsAtMs: lim.resetsAtMs, itens: [] };
+        x.itens.push(F); retomar.set(d.donoLocalId, x);
+        delete cutucadas[F];
+        continue;
+      }
+    }
 
     if (d.etapa === 'merge') {
       if (Array.isArray(d.prs) && d.prs.some((p) => (filasVivas[nome] ?? []).includes(p))) continue;
@@ -122,6 +140,11 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     if (r && r.minutos >= ESPERA_MIN && !donaACaminho(F, d, { cartoes, agoraMs })) proj.vagas.push({ papel: 'dona', item: F });
   }
   for (const F of Object.keys(cutucadas)) if (!vistos.has(F)) delete cutucadas[F];
+  for (const [dona, { resetsAtMs, itens: Fs }] of retomar) {
+    const deCada = Fs.map((F) => { const h = handoffDe(F); return h ? `${F}: retome pelo handoff \`${h}\`` : `${F}: sem handoff gravado, retome pelo item (\`painel get fila ${F}\`) e pelo estado da branch`; });
+    nova(dona, `O limite de uso voltou (resetou às ${new Date(resetsAtMs).toTimeString().slice(0, 5)}): retome pelo handoff de onde parou. ${deCada.join('; ')}.`, Fs[0], 'retomada');
+    avisados[dona] = new Date(resetsAtMs).toISOString();
+  }
   for (const [nome, o] of Object.entries(filasOrfas)) {
     if (!o?.prs?.length) continue;
     projeto(nome).filaParada = { prs: o.prs.map((p) => p.pr), desde: o.desde ?? null, relance: comandoDeRelance(o) };
@@ -165,7 +188,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
       nova(proj.orquestradora, `Batida ${hora}: ${partes.join('; ')}. Relatório: ${caminhoDoRelatorio(nome)}.`, null, 'relatorio');
     }
   }
-  return { mensagens, soltar, projetos: relatorios, desfechos: entregas, estado: { cutucadas, ultima: new Date(agoraMs).toISOString() } };
+  return { mensagens, soltar, projetos: relatorios, desfechos: entregas, estado: { cutucadas, ...(Object.keys(avisados).length ? { limites: avisados } : {}), ultima: new Date(agoraMs).toISOString() } };
 }
 
 const hhmm = (iso) => { const t = ms(iso); return t === null ? '?' : new Date(t).toTimeString().slice(0, 5); };

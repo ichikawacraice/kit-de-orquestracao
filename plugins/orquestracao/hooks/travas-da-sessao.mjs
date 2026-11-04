@@ -8,6 +8,7 @@
 //   T6  Bash `gh pr merge`, `painel mergear` ou `painel fila-de-merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
 //   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o botão de limpar
 //       da barra (o ok vale uma limpeza), o sim do painel ou o da janela). Ao liberar, grava a marca de volta (F219).
+//       A dona de item vivo que se limpa passa sem ok e também grava a marca, com os itens e o handoff de cada um (F371).
 // Limites conhecidos: o cache do registro (pool-comum.mjs, 2 min) atrasa em até 2 min a troca de título. Orquestradora
 // reconhecida só por título (sem marcador em ativas/) não ativa o T6; projeto não medido (null) pergunta; o
 // painel-das-sessoes.mjs repõe o marcador no primeiro Stop dela.
@@ -16,7 +17,7 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { registrar, lerEntrada, modoAusente, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
-import { BASE, registroDaSessao, ehOrquestradora, origemDoTurno, operadorNoTurno, gitCommonDir, projetoTemOrquestradora, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, marcarVoltaDaLimpeza, janelasDeLimpeza, SIM_DA_JANELA_MS, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
+import { BASE, registroDaSessao, ehOrquestradora, origemDoTurno, operadorNoTurno, gitCommonDir, projetoTemOrquestradora, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, marcarVoltaDaLimpeza, itensDonosDaSessao, handoffDoItem, janelasDeLimpeza, SIM_DA_JANELA_MS, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'travas-da-sessao';
 const H = homedir();
@@ -91,7 +92,16 @@ function main() {
     const reg = registroDaSessao(e.session_id);
     const alvo = ti.session_id;
     const ehEu = [undefined, null, 'self', e.session_id, reg?.localId].includes(alvo);
-    if (!ehEu || !ehOrquestradora(e.session_id, reg?.titulo)) return;
+    if (!ehEu) return;
+    if (!ehOrquestradora(e.session_id, reg?.titulo)) {
+      // F371: a dona se limpa sem pedir ok (o contexto-do-papel a cobra), mas sem a marca não volta: o app só sobe o processo novo
+      // quando chega mensagem. A marca leva os itens dela e o handoff de cada um, para a mensagem de acordar dizer de onde retomar.
+      const itens = itensDonosDaSessao(reg?.localId);
+      if (!itens.length) return;
+      marcarVoltaDaLimpeza(reg?.localId, 'dona se limpou', e.session_id, { papel: 'dona', itens: itens.map((id) => { const h = handoffDoItem(id); return { id, ...(h ? { handoff: h } : {}) }; }) });
+      registrar(sid, HOOK, 'marcou-volta-da-dona', itens.join(','));
+      return;
+    }
     const alvoReal = String(alvo ?? 'self');
     // F213: o ok do botão vale uma limpeza por qualquer caminho que a libere (a limpeza direta do cache frio não abre turno, e a
     // origem lida é a do último turno, muitas vezes `human`): se sobrasse, um clear_session de turno peer passaria nos 30 min seguintes.

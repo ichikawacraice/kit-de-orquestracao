@@ -202,12 +202,23 @@ export function gastarOkDoBotaoDeLimpar(localId) {
 // a sessão é acordada por outra sessão viva. `cli` é a id do CLI que pediu a limpeza: quem acorda só manda se o registro do app já
 // não a traz como atual (a limpeza aconteceu de fato; ela pode ser descartada depois de liberada). Falha de escrita não trava a limpeza.
 const voltaDir = () => join(process.env.PAINEL_DIR || join(H, '.claude', 'orquestracao', 'painel'), '..', 'volta-da-limpeza');
-export function marcarVoltaDaLimpeza(localId, motivo, cli) {
+// F371: `extra` entra na marca; a da dona leva `{ papel: "dona", itens: [{ id, handoff? }] }`, e o mod manda a ela a mensagem de retomar.
+export function marcarVoltaDaLimpeza(localId, motivo, cli, extra = {}) {
   if (!localId || !/^local_[\w-]+$/.test(localId)) return;
   try {
     mkdirSync(voltaDir(), { recursive: true });
-    writeFileSync(join(voltaDir(), `${localId}.json`), `${JSON.stringify({ em: new Date().toISOString(), motivo, ...(cli ? { cli } : {}) })}\n`);
+    writeFileSync(join(voltaDir(), `${localId}.json`), `${JSON.stringify({ em: new Date().toISOString(), motivo, ...(cli ? { cli } : {}), ...extra })}\n`);
   } catch { /* sem a marca, a volta espera o operador, como antes */ }
+}
+
+// Handoffs dos itens (o mesmo lugar do painel.mjs): PAINEL_HANDOFFS_DIR; senão PAINEL_DIR/../pool/handoffs; senão o padrão do HOME.
+export const handoffsDir = () => process.env.PAINEL_HANDOFFS_DIR
+  || (process.env.PAINEL_DIR ? join(process.env.PAINEL_DIR, '..', 'pool', 'handoffs') : join(H, '.claude', 'orquestracao', 'pool', 'handoffs'));
+// O handoff do item, `<handoffs>/F<n>.md`, só quando o arquivo existe (a mensagem de volta não aponta arquivo que não há). → caminho ou null
+export function handoffDoItem(id) {
+  if (!/^F\d+$/.test(String(id ?? ''))) return null;
+  const f = join(handoffsDir(), `${id}.md`);
+  return existsSync(f) ? f : null;
 }
 
 // Janela de limpeza (F53): o operador responde à pergunta `limpar · orquestradora` pela janela (AskUserQuestion). Só o termo inteiro vale

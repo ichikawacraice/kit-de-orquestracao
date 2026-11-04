@@ -9,6 +9,7 @@ import {
   ESPERA_DA_LIMPEZA_DIRETA_MS,
   PROMPT_DE_LIMPAR,
   PROMPT_DA_VOLTA,
+  promptDaVolta,
   VOLTA_VALE_MS,
   ACORDAR_DEPOIS_DE_MS,
   PAINEL_NA_VOLTA_MS,
@@ -993,6 +994,44 @@ for (const [caso, opc] of [
     expect(m.enviadas.filter(e => e.message === PROMPT_DA_VOLTA)).toEqual([])
   })
 }
+
+// F371: a dona que se limpou também volta; a marca dela (`papel: "dona"`) traz os itens e o handoff de cada um, e a mensagem diz de onde retomar.
+const marcaDaDona = (antesMs: number, itens: Array<Record<string, unknown>>) => JSON.stringify({ em: new Date(AGORA - antesMs).toISOString(), motivo: 'dona se limpou', papel: 'dona', itens })
+const HANDOFF = `${HOME}/.claude/orquestracao/pool/handoffs/F358.md`
+
+test('promptDaVolta: a marca da orquestradora (ou sem papel, ou ilegível) dá a mensagem dela; a da dona, a de retomar pelo handoff', () => {
+  expect(promptDaVolta(marcaDeVolta(60_000)), 'marca sem papel: a de antes do F371').toBe(PROMPT_DA_VOLTA)
+  expect(promptDaVolta('{nao json')).toBe(PROMPT_DA_VOLTA)
+  const dona = promptDaVolta(marcaDaDona(60_000, [{ id: 'F358', handoff: HANDOFF }, { id: 'F359' }]))
+  expect(dona, 'não é a da orquestradora').not.toBe(PROMPT_DA_VOLTA)
+  expect(dona).toMatch(/o remetente é só a sessão que notou a volta, de qualquer projeto; não responda a ela/)
+  expect(dona).toMatch(/dona/)
+  expect(dona).toMatch(/pool\/dona\.md/)
+  expect(dona.includes(HANDOFF), 'o caminho do handoff vai na mensagem').toBe(true)
+  expect(dona).toMatch(/F359/)
+  expect(dona).toMatch(/painel get fila F359/)
+  expect(dona).not.toMatch(/orquestracao:orquestradora/)
+  // marca da dona sem itens legíveis: ainda manda reler o manual, sem inventar item
+  expect(promptDaVolta(marcaDaDona(60_000, []))).toMatch(/pool\/dona\.md/)
+})
+
+test('acordar: a marca da dona → a mensagem de retomar pelo handoff, uma vez (e não a da orquestradora)', async ($, on) => {
+  const m = await iniciar($, on, { titulo: 'F1 · outra dona', voltas: { [`${OUTRA}.json`]: marcaDaDona(60_000, [{ id: 'F358', handoff: HANDOFF }]) } })
+  const paraDona = m.enviadas.filter(e => e.session_id === OUTRA)
+  expect(paraDona.length).toBe(1)
+  expect(String(paraDona[0]?.message).includes(HANDOFF), 'a mensagem leva o handoff').toBe(true)
+  expect(m.enviadas.filter(e => e.message === PROMPT_DA_VOLTA)).toEqual([])
+  expect(m.arquivos.has(`${PASTA_DA_VOLTA}/${OUTRA}.acordada.json`)).toBe(true)
+  await m.relogio.advance(LEITURA_MS + 1000)
+  expect(m.enviadas.filter(e => e.session_id === OUTRA).length, 'a leitura seguinte não manda de novo').toBe(1)
+})
+
+test('volta: o processo novo da dona com a marca apaga a marca e não abre o painel', async ($, on) => {
+  const m = await iniciar($, on, { titulo: 'F358 · uma dona', volta: marcaDaDona(60_000, [{ id: 'F358', handoff: HANDOFF }]) })
+  expect(m.arquivos.has(VOLTA), 'a marca saiu').toBe(false)
+  expect(m.painelAberto()).toBe(false)
+  expect(m.prompts).toEqual([])
+})
 
 test('acordar: a limpeza com o processo novo já de pé (outro cliSessionId) e a sessão parada → manda', async ($, on) => {
   const m = await iniciar($, on, { titulo: 'F1 · outra dona', voltas: { [`${OUTRA}.json`]: JSON.stringify({ em: new Date(AGORA - 60_000).toISOString(), cli: 'cli-velho' }) }, registroAlvo: { cliSessionId: 'cli-novo' } })

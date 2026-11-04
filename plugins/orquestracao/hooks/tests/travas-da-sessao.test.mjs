@@ -335,6 +335,28 @@ caso('F219 T7: a limpeza liberada grava a marca de volta (botão, operador, ause
   rmSync(volta()); passa(limpa('DONA', depeer()), 'dona'); passa(limpa('ORQ', depeer(), 'local_DONA'), 'outra sessão');
   ok(!existsSync(volta()), 'limpeza que não é da orquestradora sobre ela mesma gravou a marca');
 });
+// F371: a dona que se limpa (o contexto-do-papel a cobra) também volta: a marca leva `papel: "dona"` e os itens dela, com o
+// handoff de cada um quando o arquivo existe. Não é trava: a limpeza da dona segue liberada em qualquer turno.
+const voltaDaDona = () => dir('volta-da-limpeza', 'local_DONA.json');
+const itemDaDona = (id, extra = {}) => { mkdirSync(dir('painel', 'fila'), { recursive: true }); writeFileSync(dir('painel', 'fila', `${id}.json`), JSON.stringify({ id, version: 1, data: { titulo: 'x', etapa: 'execucao', donoLocalId: 'local_DONA', ...extra } })); };
+caso('F371 T7: a dona de item vivo que limpa "self" deixa a marca de volta com o papel, o item e o handoff', () => {
+  passa(limpa('DONA', depeer()), 'sem item: passa');
+  ok(!existsSync(voltaDaDona()), 'contraste: sessão sem item vivo não grava a marca');
+  itemDaDona('F1'); itemDaDona('F2'); itemDaDona('F3', { etapa: 'feito' }); itemDaDona('F4', { donoLocalId: 'local_OUTRA' });
+  mkdirSync(dir('pool', 'handoffs'), { recursive: true }); writeFileSync(dir('pool', 'handoffs', 'F1.md'), '# handoff');
+  passa(limpa('DONA', depeer()), 'dona self, turno de outra sessão: passa');
+  ok(existsSync(voltaDaDona()), 'a dona que se limpou não deixou a marca de volta');
+  const d = JSON.parse(readFileSync(voltaDaDona(), 'utf8'));
+  ok(d.papel === 'dona', `papel: ${JSON.stringify(d)}`);
+  ok(d.cli === S.DONA[0], `cli: ${JSON.stringify(d)}`);
+  ok(Math.abs(Date.now() - Date.parse(d.em)) < 60_000, `em: ${JSON.stringify(d)}`);
+  ok(Array.isArray(d.itens) && d.itens.length === 2, `só os itens vivos dela (F1, F2): ${JSON.stringify(d)}`);
+  const f1 = d.itens.find((i) => i.id === 'F1'); const f2 = d.itens.find((i) => i.id === 'F2');
+  ok(f1?.handoff === dir('pool', 'handoffs', 'F1.md'), `handoff do F1: ${JSON.stringify(d)}`);
+  ok(f2 && !('handoff' in f2), `F2 não tem handoff no disco, a marca não inventa: ${JSON.stringify(d)}`);
+  rmSync(voltaDaDona()); passa(limpa('DONA', depeer(), 'local_ORQ'), 'a dona limpando outra sessão');
+  ok(!existsSync(voltaDaDona()), 'limpar outra sessão gravou a marca da dona');
+});
 caso('T7: orquestradora limpando outra sessão passa; a dona limpando "self" passa', () => {
   passa(limpa('ORQ', depeer(), 'local_DONA'), 'orquestradora limpa outra sessão');
   passa(limpa('DONA', depeer()), 'dona self');

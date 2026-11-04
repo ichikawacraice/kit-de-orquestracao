@@ -31,7 +31,7 @@ O item no painel é o que o operador e a orquestradora leem de você; ninguém g
 - **E o critério:** em `execucao`, `validacao` e `merge`, o turno que edita só termina com a saída real do comando de teste no relatório (`; echo "exit=$?"` e as últimas linhas coladas; trava `criterio-da-dona.mjs`).
 
 ## Contexto
-A régua da dona ([papeis-e-modelos](../skills/papeis-e-modelos/SKILL.md#contexto)): a partir de 350 mil, grave o handoff do item (`~/.claude/orquestracao/pool/handoffs/F<n>.md`, skill `handoff-de-sessao`) e limpe no próximo momento oportuno; você continua dona depois da limpeza (o `local_…` não muda).
+A régua da dona ([papeis-e-modelos](../skills/papeis-e-modelos/SKILL.md#contexto)): a partir de 350 mil, grave o handoff do item (`~/.claude/orquestracao/pool/handoffs/F<n>.md`, skill `handoff-de-sessao`) e limpe no próximo momento oportuno; você continua dona depois da limpeza (o `local_…` não muda). A volta é sozinha: o `clear_session "self"` de quem é dona de item vivo grava a marca de volta, e o mod de outra sessão viva te acorda com o caminho do handoff de cada item; grave o handoff **antes** de limpar. Parou no limite de uso? Não precisa fazer nada: passada a hora da volta, a batida te manda retomar pelo handoff ([limite de uso](protocolo.md#limite-de-uso)).
 
 ## O que vai para o operador
 O estado do trabalho em palavras do produto: o que já funciona, o que falta, o PR. Item citado como `F13 · <título>` na primeira menção. Não narre a coordenação com a orquestradora.
