@@ -21,7 +21,7 @@ O operador digitou `/ausente on`: vai ficar fora ou dormir. Este turno é dele, 
 
 ## Passos
 
-1. **O que existe e o que está vivo.** Rode `list_sessions {"linked": true}` e `painel list fila sem-dona --projeto <este>`: quais itens estão sem dona e quantas donas já trabalham.
+1. **O que existe e o que está vivo.** Rode `painel list fila --projeto <este>` e `list_sessions` (sem `linked`: a dona que se desligou com `detach_session` some da família): quais itens estão sem dona e quantas donas já trabalham, contadas pelos itens vivos com `donoLocalId` de sessão não arquivada.
 2. **Abra as donas que faltam, até o teto** (4 donas trabalhando, 3 com a máquina cheia; protocolo, âncora `teto-de-donas`): um `start_session` por item sem dona, com o título `F<n> · <tema>` e o modelo pela classificação do item (skill `papeis-e-modelos`). É a última chance: depois deste turno, item que nascer sem dona espera a volta do operador.
 3. **O resto fica na fila.** Não se propõe cartão para cada item além do teto, e **nada se arquiva** enquanto o modo ausente durar.
 4. **Registre:**

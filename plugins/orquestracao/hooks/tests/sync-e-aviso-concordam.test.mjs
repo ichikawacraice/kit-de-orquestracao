@@ -55,6 +55,12 @@ test('a skill da orquestradora: a dona desligada não avisa, e o aviso que chega
   assert.doesNotMatch(s, /segundo sinal/, 'o aviso não é mais sinal');
   assert.match(s, /etapa: "merge"/);
   assert.match(s, /batida cobra da dona/);
+  // o protocolo diz o mesmo (antes ele ainda chamava o aviso de segundo sinal)
+  const sinais = ler(PLUGIN, 'pool', 'protocolo.md').split('\n').find((l) => l.includes('**Sinais de entrega:**')) ?? '';
+  assert.ok(sinais.length > 100, 'a linha dos sinais de entrega existe no protocolo');
+  assert.doesNotMatch(sinais, /segundo sinal/);
+  assert.match(sinais, /sem leitura/);
+  assert.match(sinais, /detach_session/);
   // e a dona põe a frase no começo da mensagem final, onde os 400 caracteres a alcançam
   assert.match(passo(ler(PLUGIN, 'pool', 'dona.md'), 6), /400 caracteres/);
 });

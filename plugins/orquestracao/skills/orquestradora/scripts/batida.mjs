@@ -6,6 +6,7 @@ import { comandoDeRelance } from './fila-orfa.mjs';
 
 export const PRAZO_MIN = 30; // item parado: sem gravar há tanto (PAINEL_PRAZO_MIN troca)
 export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta (BATIDA_SOLTA_MIN troca)
+export const ANOTAR_MAX = 2; // F373: cobranças do `--anotar` por item e PRs; passado o teto, o item vai à orquestradora
 export const ESPERA_MIN = 5; // sem dona há tanto: vira vaga no relatório da orquestradora
 const LIMITE_VELHO_MS = 24 * 3_600_000; // F371: recusa de limite com reset mais velho que isto não conta
 export const CARTAO_VALIDADE_H = 12; // cartão de sessão dona sem clique há tanto sai; enquanto vale, o item não é cobrado de novo (F218)
@@ -117,16 +118,21 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
       if (naFilaOrfa) { proj.merge.push(F); continue; }
       if (!parado) continue;
       // F373: o PR fora da fila é da dona viva: a batida cobra o `--anotar` dela, uma vez por parada; a orquestradora só recebe o
-      // item sem dona viva, sem PR em `prs`, ou cuja dona não respondeu à cobrança em `soltaMin`
+      // item sem dona viva, sem PR em `prs`, cuja dona não respondeu à cobrança em `soltaMin`, ou já cobrado ANOTAR_MAX vezes pelos
+      // mesmos PRs (a rodada da fila que dá erro tira o PR da fila e deixa o item em merge: sem o teto, anotar e errar viraria laço)
       const prs = (Array.isArray(d.prs) ? d.prs : []).filter((p) => Number.isInteger(p) && p > 0);
       if (prs.length && texto(d.donoLocalId) && viva(d.donoLocalId)) {
+        if (porId.get(d.donoLocalId)?.isRunning === true) continue; // a dona está num turno: cobra-se quando ela parar
         const cut = cutucadas[F];
+        const chave = prs.join(',');
+        const vezes = cut?.tipo === 'anotar' && cut.prs === chave ? (cut.vezes ?? 1) : 0;
         if (!cut || (t !== null && ms(cut.em) < t)) {
-          nova(d.donoLocalId, `${F} · ${d.titulo} está em merge há ${minParado ?? '?'} min com o PR ${prs.join(', ')} fora da fila de merge: anote-o com o sha que você testou, \`painel fila-de-merge ${prs[0]}:<sha completo> --anotar\`. Se o PR ainda não está pronto, volte o item a \`execucao\`.`, F, 'anotar');
-          cutucadas[F] = { em: new Date(agoraMs).toISOString(), localId: d.donoLocalId };
-          continue;
-        }
-        if (agoraMs - ms(cut.em) < soltaMin * 60_000) continue;
+          if (vezes < ANOTAR_MAX) {
+            nova(d.donoLocalId, `${F} · ${d.titulo} está em merge há ${minParado ?? '?'} min com o PR ${prs.join(', ')} fora da fila de merge: anote-o com o sha que você testou, \`painel fila-de-merge ${prs[0]}:<sha completo> --anotar\`. Se o PR ainda não está pronto, volte o item a \`execucao\`.`, F, 'anotar');
+            cutucadas[F] = { em: new Date(agoraMs).toISOString(), localId: d.donoLocalId, tipo: 'anotar', prs: chave, vezes: vezes + 1 };
+            continue;
+          }
+        } else if (agoraMs - ms(cut.em) < soltaMin * 60_000) continue;
       }
       proj.merge.push(F);
       continue;

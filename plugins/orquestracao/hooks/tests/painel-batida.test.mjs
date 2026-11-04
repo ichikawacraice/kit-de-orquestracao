@@ -173,6 +173,28 @@ test('batida F373: merge parado com PR fora da fila cobra a dona (anotar), sem r
   assert.deepEqual(a.json().projetos.kit.merge, []);
   assert.deepEqual(msgs(batida(arq, T + 6 * MIN), 'anotar'), [], 'a mesma parada não se cobra de novo');
 });
+// F373 (revisão): a rodada da fila que dá erro tira o PR da fila e deixa o item em merge; a dona anota de novo e o erro volta.
+// A cobrança tem teto: duas por PR, e a terceira parada vai à orquestradora, sem laço de gate e de turnos.
+test('batida F373: cobrança do --anotar tem teto de 2 por PR; a terceira parada vai à orquestradora', () => {
+  item('F1', { etapa: 'merge', prs: [7] });
+  const arq = sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit'));
+  assert.equal(msgs(batida(arq), 'anotar').length, 1, '1ª cobrança');
+  item('F1', { etapa: 'merge', prs: [7], atualizadoEm: iso(T + 10 * MIN) }); // a dona anotou; a fila deu erro e gravou o item
+  const b = batida(arq, T + 45 * MIN);
+  assert.equal(msgs(b, 'anotar').length, 1, `2ª cobrança: ${b.out}`);
+  item('F1', { etapa: 'merge', prs: [7], atualizadoEm: iso(T + 50 * MIN) });
+  const c = batida(arq, T + 85 * MIN);
+  assert.deepEqual(msgs(c, 'anotar'), [], 'sem 3ª cobrança');
+  assert.deepEqual(c.json().projetos.kit.merge, ['F1']);
+  item('F1', { etapa: 'merge', prs: [8], atualizadoEm: iso(T + 90 * MIN) }); // PR novo: a conta recomeça
+  assert.equal(msgs(batida(arq, T + 125 * MIN), 'anotar').length, 1, 'PR novo cobra de novo');
+});
+test('batida F373: dona rodando um turno não recebe a cobrança do --anotar', () => {
+  item('F1', { etapa: 'merge', prs: [7] });
+  const a = batida(sessoes(sessao(1, 'F1 · a', { isRunning: true }), sessao(30, '🎛 orquestradora — kit')));
+  assert.deepEqual(msgs(a, 'anotar'), []);
+  assert.deepEqual(a.json().projetos.kit.merge, []);
+});
 test('batida F373: merge parado com a dona arquivada (ou sem PR) segue para a orquestradora', () => {
   item('F1', { etapa: 'merge', prs: [7], historico: [{ em: iso(T - 40 * MIN), etapa: 'merge', dono: 'dona' }] });
   const a = batida(sessoes(sessao(1, 'F1 · a', { isArchived: true }), sessao(30, '🎛 orquestradora — kit')));

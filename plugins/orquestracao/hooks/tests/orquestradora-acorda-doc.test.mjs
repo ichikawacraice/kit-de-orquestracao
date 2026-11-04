@@ -25,3 +25,9 @@ test('a dona e o protocolo mandam desligar-se no primeiro turno', () => {
   assert.match(ler('pool', 'protocolo.md'), /detach_session` com `"self"`/);
   assert.ok(existsSync(join(PLUGIN, '..', '..', 'docs', 'adr', '0022-a-orquestradora-so-acorda-quando-precisa.md')), 'o ADR 0022 existe');
 });
+
+test('o /ausente conta as donas sem o linked (a dona desligada some da família)', () => {
+  const s = ler('skills', 'ausente', 'SKILL.md');
+  assert.match(s, /list_sessions/, 'o passo que conta as donas existe');
+  assert.doesNotMatch(s, /list_sessions \{"linked": true\}/);
+});
