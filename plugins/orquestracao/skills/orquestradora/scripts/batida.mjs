@@ -7,6 +7,7 @@ import { comandoDeRelance } from './fila-orfa.mjs';
 export const PRAZO_MIN = 30; // item parado: sem gravar há tanto (PAINEL_PRAZO_MIN troca)
 export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta (BATIDA_SOLTA_MIN troca)
 export const ESPERA_MIN = 5; // sem dona há tanto: vira vaga no relatório da orquestradora
+const LIMITE_VELHO_MS = 24 * 3_600_000; // F371: recusa de limite com reset mais velho que isto não conta
 export const CARTAO_VALIDADE_H = 12; // cartão de sessão dona sem clique há tanto sai; enquanto vale, o item não é cobrado de novo (F218)
 
 // F241: quem envia é o mod da sessão que rodou a batida, de qualquer projeto, e o app a mostra como remetente.
@@ -67,7 +68,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
   // a hora do reset já avisada, por dona; sai 24 h depois do reset
-  const avisados = Object.fromEntries(Object.entries(estado?.limites ?? {}).filter(([, em]) => (ms(em) ?? 0) > agoraMs - 86_400_000));
+  const avisados = Object.fromEntries(Object.entries(estado?.limites ?? {}).filter(([, em]) => (ms(em) ?? 0) > agoraMs - LIMITE_VELHO_MS));
   const retomar = new Map(); // dona → { resetsAtMs, itens: [F] }
   const mensagens = []; const soltar = [];
   const projetos = new Map();
@@ -95,8 +96,10 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     const parado = !d.espera && !d.trava && (t === null || agoraMs - t >= prazoMin * 60_000);
     const minParado = t === null ? null : Math.floor((agoraMs - t) / 60_000);
 
-    const lim = d.etapa !== 'merge' && texto(d.donoLocalId) ? limites[d.donoLocalId] : null;
-    if (lim && Number.isFinite(lim.resetsAtMs)) {
+    // a recusa cujo reset passou há mais de 24 h é velha (a batida não a viu a tempo, ou a mensagem não mudou o transcript): fluxo
+    // normal, para a retomada não sair em laço nem segurar o item; dona arquivada também segue o fluxo normal (o item é solto)
+    const lim = d.etapa !== 'merge' && texto(d.donoLocalId) && viva(d.donoLocalId) ? limites[d.donoLocalId] : null;
+    if (lim && Number.isFinite(lim.resetsAtMs) && agoraMs - lim.resetsAtMs < LIMITE_VELHO_MS) {
       if (agoraMs < lim.resetsAtMs) { delete cutucadas[F]; continue; } // espera o reset: nem cutuca nem solta
       const r = porId.get(d.donoLocalId);
       if (viva(d.donoLocalId) && r?.isRunning !== true && avisados[d.donoLocalId] !== new Date(lim.resetsAtMs).toISOString()) {

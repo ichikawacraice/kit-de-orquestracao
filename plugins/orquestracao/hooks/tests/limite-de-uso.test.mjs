@@ -108,3 +108,22 @@ test('julgar: dona de dois itens recebe uma retomada só, com os dois itens', ()
   assert.match(ret[0].texto, /F1/);
   assert.match(ret[0].texto, /F2/);
 });
+
+test('julgar (validador): recusa com reset de mais de 24 h é velha → a batida segue como antes (cutuca e solta), sem retomada em laço', () => {
+  const velho = { [DONA]: { resetsAtMs: T - 25 * 60 * MIN, emMs: T - 30 * 60 * MIN } };
+  let estado = {};
+  const tipos = [];
+  for (let i = 0; i < 3; i++) {
+    const r = rodar({ agoraMs: T + i * 21 * MIN, limites: velho, estado });
+    tipos.push(r.mensagens.map((m) => m.tipo).join(',') + (r.soltar.length ? '+soltar' : ''));
+    estado = r.estado;
+  }
+  // o item da fixtura não sai da lista depois do `soltar` (quem solta é o painel.mjs), então a 3ª volta cutuca de novo
+  assert.deepEqual(tipos.slice(0, 2), ['cutucada', '+soltar'], JSON.stringify(tipos));
+  assert.ok(!tipos.join().includes('retomada'), `retomada em laço: ${JSON.stringify(tipos)}`);
+});
+
+test('julgar (validador): dona arquivada no limite não segura o item até o reset (solta como antes)', () => {
+  const r = rodar({ ls: linhas({ isArchived: true }) });
+  assert.deepEqual(r.soltar.map((s) => s.F), ['F1']);
+});
