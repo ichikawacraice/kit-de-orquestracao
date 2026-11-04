@@ -71,6 +71,8 @@ function main() {
   process.stdout.write(`${JSON.stringify(saida)}\n`);
 }
 
+// o motivo do git que conta é a linha do `! [rejected]` ou do `fatal:`/`error:`, não o `To <url>` ou o `remote:` que vêm antes
 try { main(); } catch (err) {
-  recusa(String(err?.stderr || err?.message || err).trim().split('\n')[0]);
+  const linhas = String(err?.stderr || err?.message || err).split('\n').map((l) => l.trim()).filter(Boolean);
+  recusa(linhas.find((l) => /rejected|fatal:|error:/i.test(l)) ?? linhas[0] ?? 'erro sem mensagem');
 }

@@ -1104,7 +1104,12 @@ function comandoFilaDeMerge(args) {
         const raiz = raizDoRepo();
         pos = posMerge({ cwd: raiz, base: saida.base || 'main', nomes: [basename(raiz), projetoDoCwd().projeto], pastaOrq: join(BASE, '..') });
       } catch (e) { pos = { erros: [`pos-merge: ${String(e?.message || e).split('\n')[0]}`] }; }
-      completar(id, pos);
+      // a batida segura a mesma trava durante a rodada dela: o `comTrava` desiste em ~5 s, então tenta de novo antes de perder o resultado
+      for (let i = 0; i < 6; i++) {
+        try { completar(id, pos); break; } catch (e) {
+          if (i === 5) process.stderr.write(`fila-de-merge: não gravei o pós-merge no desfecho: ${e?.message || e}\n`);
+        }
+      }
     }
   }
   return saida;

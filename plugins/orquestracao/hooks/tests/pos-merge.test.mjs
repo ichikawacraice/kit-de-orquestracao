@@ -94,12 +94,13 @@ test('push recusado: tenta de novo, vira erro com o motivo do git e não deixa w
   const extra = join(base, 'extra'); git(['worktree', 'add', '-q', '--detach', extra, 'HEAD']);
   assert.equal(worktrees(), 2); git(['worktree', 'remove', '--force', extra]); assert.equal(worktrees(), 1);
   const gancho = join(origem, 'hooks', 'pre-receive'); const conta = join(base, 'pushes');
-  writeFileSync(gancho, `#!/bin/sh\necho x >> "${conta}"\necho "recusado pelo teste" >&2\nexit 1\n`); chmodSync(gancho, 0o755);
+  writeFileSync(gancho, `#!/bin/sh\necho x >> "${conta}"\necho "nao aceito" >&2\nexit 1\n`); chmodSync(gancho, 0o755);
   const c = claudeFalso();
   const r = posMerge({ cwd: repo, base: 'main', nomes: ['kit'], pastaOrq: orq, env: ambiente({ CLAUDE_BIN: c.bin }) });
   const v = (r.erros ?? []).find((e) => /^versao: /.test(e));
   assert.ok(v, JSON.stringify(r));
-  assert.match(v, /rejected|recusado pelo teste/, 'o motivo é a linha que conta, não o "To <url>"');
+  assert.match(v, /rejected/, 'o motivo é a linha do rejected');
+  assert.doesNotMatch(v, /^versao: (To |remote:)/, 'não o "To <url>" nem o "remote:" que vêm antes');
   assert.match(v, /3 tentativas/);
   assert.equal(readFileSync(conta, 'utf8').trim().split('\n').length, 3, 'três pushes');
   assert.equal(worktrees(), 1, 'nenhum worktree sobrou');

@@ -74,7 +74,7 @@ export function posMerge({ cwd, base = 'main', nomes = [], pastaOrq, env = proce
             mkdirSync(dirname(trava), { recursive: true });
             writeFileSync(trava, JSON.stringify(minha));
           }
-          const r = script('atualizar-plugins.mjs', ['--json'], cwd, 600_000);
+          const r = script('atualizar-plugins.mjs', ['--json'], cwd, 9 * 60_000); // abaixo da trava, como o botão do pane
           if (r.ok) out.plugins = r.json ?? { ok: true }; else erro('plugins', r.motivo);
         } catch (e) { erro('plugins', e); } finally {
           // a trava sai só se ainda é a minha (o pane pode ter gravado a dele por cima)
