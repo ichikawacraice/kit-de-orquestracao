@@ -252,7 +252,8 @@ function DialogLongo({
  * fecham: o foco que sai (o Tab até a tela de trás não é clique), o que flutua
  * por cima (menu, lista, outro diálogo, aviso), o gatilho marcado com
  * `data-mantem-o-painel` ou o cartão do quadro (que trocam o item mostrado) e o
- * rascunho escrito num campo do painel (o clique não descarta texto).
+ * rascunho escrito num campo de texto do painel, inclusive busca, e-mail,
+ * número e área editável (o clique não descarta texto).
  */
 const NAO_FECHA_O_PAINEL = [
   "[data-mantem-o-painel]",
@@ -266,10 +267,14 @@ const NAO_FECHA_O_PAINEL = [
   '[data-slot="toast"]',
 ].join(", ")
 
+const CAMPO_DE_TEXTO = ["textarea", "input:not([type])", ...["text", "search", "email", "tel", "url", "number", "password"].map((t) => `input[type=${t}]`)].join(", ")
+
 function temRascunho(painel: Element | null) {
   if (!painel) return false
-  return [...painel.querySelectorAll("textarea, input:not([type]), input[type=text]")].some(
-    (campo) => (campo as HTMLTextAreaElement | HTMLInputElement).value.trim() !== ""
+  return (
+    [...painel.querySelectorAll(CAMPO_DE_TEXTO)].some(
+      (campo) => (campo as HTMLTextAreaElement | HTMLInputElement).value.trim() !== ""
+    ) || [...painel.querySelectorAll('[contenteditable="true"], [contenteditable=""]')].some((el) => (el.textContent ?? "").trim() !== "")
   )
 }
 
@@ -282,6 +287,7 @@ function DialogLateral({
   onFocusOutside,
   className,
   children,
+  ref,
   ...props
 }: Omit<React.ComponentProps<typeof DialogPrimitive.Content>, "title"> & {
   titulo: React.ReactNode
@@ -291,11 +297,20 @@ function DialogLateral({
   /** O clique na tela de trás fecha o painel, com as exceções acima. */
   fechaAoClicarFora?: boolean
 }) {
-  const painel = React.useRef<HTMLDivElement>(null)
+  const painel = React.useRef<HTMLDivElement | null>(null)
+  // O ref de quem usa é composto com o da guarda do rascunho, não a substitui.
+  const juntaRefs = React.useCallback(
+    (no: HTMLDivElement | null) => {
+      painel.current = no
+      if (typeof ref === "function") ref(no)
+      else if (ref) ref.current = no
+    },
+    [ref]
+  )
   return (
     <DialogPortal>
       <DialogPrimitive.Content
-        ref={painel}
+        ref={juntaRefs}
         data-slot="dialog-lateral"
         data-superficie
         aria-describedby={undefined}

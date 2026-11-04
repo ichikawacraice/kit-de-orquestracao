@@ -52,7 +52,7 @@ describe("o quadro", () => {
 })
 
 describe("a coluna", () => {
-  it("acompanha o conteúdo: a coluna longa leva o cabeçalho grudado e a tinta do alvo até o fim", () => {
+  it("acompanha o conteúdo: a coluna carrega as classes que levam o cabeçalho e a tinta do alvo até o fim (o jsdom não mede layout)", () => {
     const { container } = render(
       <ColunaDoQuadro alvo>
         <CabecalhoDaColuna nome="Entrada" />
