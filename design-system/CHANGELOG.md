@@ -9,7 +9,7 @@ Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camada
 Camadas: base, registro
 
 ### O que muda
-- **O link clicável na conversa.** A `conversa` ganha `TextoComLinks`, o corpo do balão com os links `http(s)` clicáveis em nova aba, montados como `<a>` (nunca HTML cru: o corpo vem de quem escreveu); `javascript:`, `www.` sem esquema e afins seguem texto, e a pontuação do fim fica com a frase. O link é tinta com sublinhado a 50%, o anel fecha em cada linha da URL quebrada e o respiro do anel tem a cor do balão. A linha *Conversa entre pessoas* da PECA-01 passa a citá-lo.
+- **O link clicável na conversa.** A `conversa` ganha `TextoComLinks`, o corpo do balão com os links `http(s)` clicáveis em nova aba, montados como `<a>` (nunca HTML cru: o corpo vem de quem escreveu); `javascript:`, `www.` sem esquema e afins seguem texto; a pontuação e as reticências do fim, as aspas (retas ou curvas) e o parêntese, o colchete ou a chave que envolvem o link ficam com a frase; a barra invertida encerra o link, para ele ir aonde a tela mostra; e o esquema grudado numa palavra não abre link. O link é tinta com sublinhado a 50%, o anel fecha em cada linha da URL quebrada e o respiro do anel tem a cor do balão. A linha *Conversa entre pessoas* da PECA-01 passa a citá-lo.
 - A lib nova `links-no-texto` (`trechosComLinks`) vem junto com a `conversa`.
 
 ### Migração

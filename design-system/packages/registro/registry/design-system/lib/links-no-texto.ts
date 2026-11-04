@@ -7,24 +7,39 @@
 
 export type Trecho = { tipo: "texto"; texto: string } | { tipo: "link"; texto: string; href: string }
 
-const URL_NO_TEXTO = /https?:\/\/[^\s<>"]+/gi
+/**
+ * O link começa num `http(s)://` que não está grudado numa palavra e vai até o
+ * espaço, as aspas (retas ou curvas) ou a barra invertida — esta, porque o
+ * navegador a lê como `/` e o link iria a outro host que o escrito na tela.
+ */
+const URL_NO_TEXTO = /(?<![\p{L}\p{N}_/])https?:\/\/[^\s<>"“”‘’«»\\]+/giu
 
 /** A pontuação colada ao fim é da frase, não do link: *veja https://a.example.* */
-const PONTUACAO_FINAL = /[.,;:!?'*]+$/
+const PONTUACAO_FINAL = ".,;:!?'*…"
 
-function conta(texto: string, letra: string): number {
-  return texto.split(letra).length - 1
-}
+/** Quem fecha e quem abre: o que fecha no fim só sai quando não fecha um que o próprio link abriu. */
+const PARES: Record<string, string> = { ")": "(", "]": "[", "}": "{" }
 
-/** Tira do fim o que é da frase; o `)` só sai quando não fecha um `(` do próprio link. */
+/** Tira do fim o que é da frase, numa passada só (a mensagem vem de quem escreveu, de qualquer tamanho). */
 function aparaFim(bruto: string): string {
-  let url = bruto
-  for (;;) {
-    const antes = url
-    url = url.replace(PONTUACAO_FINAL, "")
-    if (url.endsWith(")") && conta(url, "(") < conta(url, ")")) url = url.slice(0, -1)
-    if (url === antes) return url
+  const sobra: Record<string, number> = { ")": 0, "]": 0, "}": 0 }
+  for (const letra of bruto) {
+    if (letra in sobra) sobra[letra]! += 1
+    else if (letra === "(" || letra === "[" || letra === "{") {
+      const fecha = letra === "(" ? ")" : letra === "[" ? "]" : "}"
+      sobra[fecha]! -= 1
+    }
   }
+  let fim = bruto.length
+  while (fim > 0) {
+    const letra = bruto[fim - 1]!
+    if (PONTUACAO_FINAL.includes(letra)) fim -= 1
+    else if (letra in PARES && sobra[letra]! > 0) {
+      sobra[letra]! -= 1
+      fim -= 1
+    } else break
+  }
+  return bruto.slice(0, fim)
 }
 
 function hrefSeguro(url: string): string | null {
