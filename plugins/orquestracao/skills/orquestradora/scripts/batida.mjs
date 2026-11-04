@@ -114,7 +114,21 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     if (d.etapa === 'merge') {
       if (Array.isArray(d.prs) && d.prs.some((p) => (filasVivas[nome] ?? []).includes(p))) continue;
       const naFilaOrfa = Array.isArray(d.prs) && (filasOrfas[nome]?.prs ?? []).some((p) => d.prs.includes(p.pr));
-      if (parado || naFilaOrfa) proj.merge.push(F);
+      if (naFilaOrfa) { proj.merge.push(F); continue; }
+      if (!parado) continue;
+      // F373: o PR fora da fila é da dona viva: a batida cobra o `--anotar` dela, uma vez por parada; a orquestradora só recebe o
+      // item sem dona viva, sem PR em `prs`, ou cuja dona não respondeu à cobrança em `soltaMin`
+      const prs = (Array.isArray(d.prs) ? d.prs : []).filter((p) => Number.isInteger(p) && p > 0);
+      if (prs.length && texto(d.donoLocalId) && viva(d.donoLocalId)) {
+        const cut = cutucadas[F];
+        if (!cut || (t !== null && ms(cut.em) < t)) {
+          nova(d.donoLocalId, `${F} · ${d.titulo} está em merge há ${minParado ?? '?'} min com o PR ${prs.join(', ')} fora da fila de merge: anote-o com o sha que você testou, \`painel fila-de-merge ${prs[0]}:<sha completo> --anotar\`. Se o PR ainda não está pronto, volte o item a \`execucao\`.`, F, 'anotar');
+          cutucadas[F] = { em: new Date(agoraMs).toISOString(), localId: d.donoLocalId };
+          continue;
+        }
+        if (agoraMs - ms(cut.em) < soltaMin * 60_000) continue;
+      }
+      proj.merge.push(F);
       continue;
     }
     if (parado && gente.length) {

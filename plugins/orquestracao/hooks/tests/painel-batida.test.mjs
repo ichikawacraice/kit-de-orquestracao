@@ -157,6 +157,30 @@ test('batida: item em merge parado vai ao relatório, nada à dona; com a orques
   assert.deepEqual(msgs(sem, 'relatorio'), [], 'sem orquestradora viva, ninguém a quem avisar');
 });
 
+// F373: o PR pronto e não anotado na fila é da dona, não da orquestradora: a batida cobra a dona viva, uma vez por parada,
+// e só o item sem dona viva (ou sem PR em `prs`) vai ao relatório da orquestradora.
+test('batida F373: merge parado com PR fora da fila cobra a dona (anotar), sem relatório à orquestradora', () => {
+  item('F1', { etapa: 'merge', prs: [7], historico: [{ em: iso(T - 40 * MIN), etapa: 'merge', dono: 'dona' }] });
+  const arq = sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit'));
+  const a = batida(arq);
+  assert.equal(a.exit, 0, a.err);
+  const cob = msgs(a, 'anotar');
+  assert.equal(cob.length, 1, a.out);
+  assert.equal(cob[0].para, lid(1));
+  assert.match(cob[0].texto, /PR 7/);
+  assert.match(cob[0].texto, /painel fila-de-merge 7:<sha completo> --anotar/);
+  assert.deepEqual(msgs(a, 'relatorio'), [], 'nada à orquestradora');
+  assert.deepEqual(a.json().projetos.kit.merge, []);
+  assert.deepEqual(msgs(batida(arq, T + 6 * MIN), 'anotar'), [], 'a mesma parada não se cobra de novo');
+});
+test('batida F373: merge parado com a dona arquivada (ou sem PR) segue para a orquestradora', () => {
+  item('F1', { etapa: 'merge', prs: [7], historico: [{ em: iso(T - 40 * MIN), etapa: 'merge', dono: 'dona' }] });
+  const a = batida(sessoes(sessao(1, 'F1 · a', { isArchived: true }), sessao(30, '🎛 orquestradora — kit')));
+  assert.deepEqual(msgs(a, 'anotar'), []);
+  assert.deepEqual(a.json().projetos.kit.merge, ['F1']);
+  assert.equal(msgs(a, 'relatorio').length, 1, a.out);
+});
+
 // F220: a limpeza de contexto mata a fila em background; o item gravado há menos do prazo não contava como merge parado.
 const estadoDaFila = () => join(base, 'fila-de-merge', 'kit.json');
 function fila(estado) { mkdirSync(dirname(estadoDaFila()), { recursive: true }); writeFileSync(estadoDaFila(), JSON.stringify(estado)); }
