@@ -7,7 +7,7 @@
 // O tema não é aceito às cegas: ele é conferido pelas regras que a base já
 // manda (MARCA-01, MARCA-03). Tema que as quebra reprova ao ler, com a regra no
 // erro — antes de gerar uma saída que a guarda do projeto acusaria depois.
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
 import { hsl, razao } from './contraste.mjs'
@@ -39,6 +39,8 @@ const CAMPOS = {
 }
 
 const lerJson = (caminho) => JSON.parse(readFileSync(caminho, 'utf8'))
+const ASSINATURA_DO_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const ePng = (caminho) => existsSync(caminho) && readFileSync(caminho).subarray(0, 8).equals(ASSINATURA_DO_PNG)
 const campo = (obj, caminho) => caminho.split('.').reduce((no, parte) => no?.[parte], obj)
 
 /**
@@ -76,6 +78,19 @@ export function validarTema({ pasta, meta, tokens }) {
   if (pasta && meta.id !== basename(pasta)) problemas.push(`tema.json: o \`id\` (${meta.id}) é o nome da pasta (${basename(pasta)})`)
   if (typeof meta.fonte?.variavel === 'string' && !meta.fonte.variavel.startsWith('--')) {
     problemas.push('tema.json: `fonte.variavel` é uma variável CSS (começa com `--`)')
+  }
+
+  const imagem = meta.logotipo?.imagem
+  if (imagem !== undefined) {
+    for (const chave of ['sobreClaro', 'sobreEscuro']) {
+      const arquivo = imagem?.[chave]
+      if (typeof arquivo !== 'string' || !arquivo.endsWith('.png')) {
+        problemas.push(`tema.json: \`logotipo.imagem.${chave}\` é o caminho de um PNG na pasta do tema`)
+      } else if (pasta && !ePng(join(pasta, arquivo))) {
+        problemas.push(`tema.json: \`logotipo.imagem.${chave}\` (${arquivo}) não é um PNG na pasta do tema`)
+      }
+    }
+    if (typeof imagem?.origem !== 'string') problemas.push('tema.json: `logotipo.imagem.origem` diz de onde o arquivo oficial veio')
   }
 
   const m = tokens?.marca

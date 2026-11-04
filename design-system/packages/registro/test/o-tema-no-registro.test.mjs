@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, it } from 'node:test'
 import { registro } from '../lib/registro.mjs'
-import { MARCA_NO_CODIGO, arquivoComOTema, codigoComOTema, temaDoRegistro } from '../lib/tema.mjs'
+import { LINHA_DO_DESENHO, MARCA_NO_CODIGO, PECA_DO_LOGOTIPO, arquivoComOTema, codigoComOTema, temaDoRegistro } from '../lib/tema.mjs'
 import { oQueOAddGrava } from '../scripts/o-que-o-add-grava.mjs'
 
 const RAIZ = join(import.meta.dirname, '..')
@@ -25,6 +25,16 @@ describe('o tema no registro', () => {
     const tema = { meta: { nome: 'A "B" \\ C', logotipo: { horizontal: 'ab', monograma: 'a' } } }
     const saida = codigoComOTema('registry/design-system/ui/logotipo.tsx', ler('registry/design-system/ui/logotipo.tsx'), tema)
     assert.ok(saida.includes('aria-label={"A \\"B\\" \\\\ C"}'), saida.match(/aria-label=[^\n]*/)[0])
+  })
+
+  it('o desenho embutido é o PNG do tema, byte a byte (MARCA-04)', () => {
+    const padrao = temaDoRegistro()
+    const linha = ler(PECA_DO_LOGOTIPO).match(LINHA_DO_DESENHO)?.[0]
+    assert.ok(linha && linha.length > 1000, 'a peça embute o desenho')
+    const [claro, escuro] = [...linha.matchAll(/"data:image\/png;base64,([^"]+)"/g)].map((m) => Buffer.from(m[1], 'base64'))
+    assert.ok(claro?.length > 0 && escuro?.length > 0)
+    assert.ok(claro.equals(readFileSync(join(padrao.pasta, padrao.meta.logotipo.imagem.sobreClaro))), 'sobre o claro')
+    assert.ok(escuro.equals(readFileSync(join(padrao.pasta, padrao.meta.logotipo.imagem.sobreEscuro))), 'sobre o escuro')
   })
 
   it('o trecho da marca que some do código é erro, não troca calada', () => {
@@ -52,6 +62,9 @@ describe('o build com --tema', () => {
     assert.match(logotipo, /aria-label="Outro"/)
     assert.match(logotipo, /"horizontal" \? "outro" : "o"/)
     assert.doesNotMatch(logotipo, /"wicomm"|aria-label="Wicomm"/)
+    // O tema sem desenho não leva o da Wicomm: a peça escreve o nome dele.
+    assert.match(logotipo, /DESENHO_DO_LOGOTIPO: \{ sobreClaro: string; sobreEscuro: string \} \| null = null$/m)
+    assert.doesNotMatch(logotipo, /data:image/)
     const casco = JSON.parse(readFileSync(join(pasta, 'casco.json'), 'utf8')).files.map((f) => f.content).join('\n')
     assert.match(casco, /aria-label="Outro, início"/)
     const { itens } = await oQueOAddGrava(pasta, { prefixo: '@outro', so: ['logotipo'] })

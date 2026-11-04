@@ -33,8 +33,29 @@ export const tailwindDoTema = (tema) => saidas({ tema: tema.pasta })['tailwind-v
 /** Um atributo JSX com o valor dado: entre aspas quando cabe; como expressão quando ele tem aspas ou barra. */
 const atributo = (nome, valor) => (/["\\]/.test(valor) ? `${nome}={${JSON.stringify(valor)}}` : `${nome}="${valor}"`)
 
+/** A peça que embute o desenho do logotipo do tema. */
+export const PECA_DO_LOGOTIPO = 'registry/design-system/ui/logotipo.tsx'
+
+/** A linha do desenho na peça, como está no arquivo (o gerador a reescreve; nada mais nela muda). */
+export const LINHA_DO_DESENHO = /^const DESENHO_DO_LOGOTIPO: .*$/m
+
+const dataUri = (caminho) => `data:image/png;base64,${readFileSync(caminho).toString('base64')}`
+
+/**
+ * A linha do desenho do logotipo com o tema dado (MARCA-04: o raster sai do arquivo do tema por script, e a
+ * suíte confere): os dois PNG do tema em data URI, ou `null` quando o tema não declara desenho.
+ */
+export function linhaDoDesenho(tema) {
+  const imagem = tema.meta.logotipo.imagem
+  const valor = imagem
+    ? `{ sobreClaro: ${JSON.stringify(dataUri(join(tema.pasta, imagem.sobreClaro)))}, sobreEscuro: ${JSON.stringify(dataUri(join(tema.pasta, imagem.sobreEscuro)))} }`
+    : 'null'
+  return `const DESENHO_DO_LOGOTIPO: { sobreClaro: string; sobreEscuro: string } | null = ${valor}`
+}
+
 export const MARCA_NO_CODIGO = {
-  'registry/design-system/ui/logotipo.tsx': [
+  [PECA_DO_LOGOTIPO]: [
+    [linhaDoDesenho(temaDoRegistro()), linhaDoDesenho],
     ['aria-label="Wicomm"', (t) => atributo('aria-label', t.meta.nome)],
     [
       '{variante === "horizontal" ? "wicomm" : "w"}',

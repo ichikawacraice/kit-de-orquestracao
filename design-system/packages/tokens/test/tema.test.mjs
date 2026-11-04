@@ -85,6 +85,25 @@ describe('o tema é conferido pelas regras da base', () => {
     assert.deepEqual(validarTema(lerTema(OUTRO, { validar: false })), [])
   })
 
+  it('o desenho do logotipo, quando declarado, é PNG que existe na pasta do tema', () => {
+    const padrao = lerTema(TEMA_PADRAO, { validar: false })
+    assert.ok(padrao.meta.logotipo.imagem?.sobreClaro, 'o tema Wicomm declara o desenho')
+    const comImagem = (imagem) => {
+      const t = lerTema(TEMA_PADRAO, { validar: false })
+      t.meta.logotipo.imagem = imagem
+      return validarTema(t)
+    }
+    assert.deepEqual(comImagem(padrao.meta.logotipo.imagem), [])
+    const sumiu = comImagem({ ...padrao.meta.logotipo.imagem, sobreEscuro: 'logotipo/nao-existe.png' })
+    assert.ok(sumiu.some((p) => /sobreEscuro/.test(p) && /não é um PNG/.test(p)), sumiu.join('\n'))
+    const naoPng = comImagem({ ...padrao.meta.logotipo.imagem, sobreClaro: 'tema.json' })
+    assert.ok(naoPng.some((p) => /sobreClaro/.test(p)), naoPng.join('\n'))
+    const semOrigem = comImagem({ sobreClaro: padrao.meta.logotipo.imagem.sobreClaro, sobreEscuro: padrao.meta.logotipo.imagem.sobreEscuro })
+    assert.ok(semOrigem.some((p) => /origem/.test(p)), semOrigem.join('\n'))
+    // O tema sem desenho continua valendo: a peça escreve o nome.
+    assert.equal(lerTema(OUTRO, { validar: false }).meta.logotipo.imagem, undefined)
+  })
+
   it('MARCA-01 · hover em outra matiz reprova ao ler, com a regra no erro', () => {
     assert.throws(() => lerTema(TORTO), /MARCA-01/)
     const problemas = validarTema(lerTema(TORTO, { validar: false }))
