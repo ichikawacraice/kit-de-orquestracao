@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.15.0
+versao: 0.16.0
 description: As convenções de engenharia do front dos apps React do sistema — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
 ---
 
@@ -154,11 +154,10 @@ As guardas do pacote (`@wicomm/guardas`) e as de cada projeto seguem estas regra
 <a id="distribuicao"></a>
 ## 7. Distribuição e instalação
 
-### CONV-25 · O build de produção com pacote privado `@wicomm` é feito na máquina, e a Vercel não recebe o token
-- **Regra.** Projeto que instala pacote privado `@wicomm` (tokens, guardas) faz o build de produção **na máquina de quem publica**, com o `~/.npmrc` dele: `vercel build --prod && vercel deploy --prebuilt --prod`. Nunca `vercel --prod` sem `--prebuilt`, nunca build na Vercel, e a Vercel não recebe o token dos pacotes (`NPM_RC`, `NPM_TOKEN`, `NODE_AUTH_TOKEN`). O projeto descreve o fluxo em `docs/deploy.md`.
-- **Por quê.** O `install` na Vercel baixa os pacotes do GitHub Packages da org e recebe 401 sem token; pôr o token lá espalha uma credencial de leitura da org por mais um lugar. Decisão do operador (piloto WiControl): o token fica fora da Vercel e o build sai da máquina.
-- **Confere.** Revisão: `vercel.json` e as variáveis de ambiente da Vercel sem `NPM_RC`, `NPM_TOKEN` nem `NODE_AUTH_TOKEN`, e `docs/deploy.md` com o comando do build local.
-- *Assumida, a confirmar:* o Confere é por revisão; uma guarda sobre o `vercel.json` entra se o desvio aparecer.
+### CONV-25 · *Revogada na 0.16.0* — o build de produção com pacote privado `@wicomm` era feito na máquina
+- **Regra.** *Revogada.* Valia: projeto que instalava os pacotes `@wicomm` privados (tokens, guardas) fazia o build de produção na máquina de quem publica (`vercel build --prod && vercel deploy --prebuilt --prod`), e a Vercel não recebia o token dos pacotes. Os pacotes passaram ao npm público: o `install` em qualquer lugar os baixa sem token, e o build de produção volta a ser o da Vercel, como o de qualquer app. O que sobra da regra vale sem ela: nenhum token de pacote (`NPM_RC`, `NPM_TOKEN`, `NODE_AUTH_TOKEN`) no repositório nem na Vercel, porque nenhum é preciso.
+- **Por quê.** O motivo era o 401 do registro privado na Vercel; sem registro privado, o build na máquina só tira o deploy do push e deixa o release na mão de uma pessoa. O código não se reaproveita (a base não renumera).
+- **Confere.** Nada a conferir. Projeto que ainda faz o build na máquina pode voltar ao build da Vercel (`/design-system:atualizar` diz como).
 
 
 <a id="acessibilidade"></a>
@@ -221,7 +220,7 @@ O contraste, o anel de foco e o escape do movimento já são regra da DESIGN (CO
 | CONV-21 | Protótipo aprovado é contrato | crítica |
 | CONV-22 | Terceiros sem rede por padrão | config |
 | CONV-23 | Conferir no ateliê | guarda, crítica |
-| CONV-25 | Build de produção na máquina, sem token na Vercel | revisão |
+| CONV-25 | *Revogada:* build de produção na máquina | — |
 | ACES-01 | Tudo se alcança e se aciona pelo teclado | skill, navegador |
 | ACES-02 | Todo controle tem nome; nada só com cor | skill, navegador |
 | ACES-03 | Alvo de clique de 24×24px | skill, navegador |

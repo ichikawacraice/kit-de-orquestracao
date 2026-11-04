@@ -154,11 +154,19 @@ describe('a skill, o agente e os comandos dizem a mesma coisa (correções 7, 19
     assert.match(ler('skills/plano-de-padronizacao/SKILL.md'), /uma fatia por arquivo/);
     assert.match(ler('commands/padronizar.md'), /em qualquer pasta/);
   });
-  it('nenhuma skill instala @wicomm/* sem o alias do GitHub Packages (o nome sozinho iria ao npm público)', () => {
+  it('as skills instalam @wicomm/* do npm público, pelo nome, sem o GitHub Packages (F357)', () => {
+    const doRegistroAntigo = /@wicomm-projects|npm\.pkg\.github\.com|NODE_AUTH_TOKEN|read:packages/;
+    // A régua morde: o texto de antes da troca seria pego.
+    assert.match('npm install @wicomm/tokens@npm:@wicomm-projects/tokens', doRegistroAntigo);
+    assert.match('@wicomm-projects:registry=https://npm.pkg.github.com', doRegistroAntigo);
     for (const nome of ['novo-projeto', 'plano-de-padronizacao', 'atualizar-sistema']) {
       const t = ler(`skills/${nome}/SKILL.md`);
-      assert.match(t, /@wicomm\/tokens@npm:@wicomm-projects\/tokens/, nome);
-      for (const m of t.matchAll(/npm (?:install|i) ([^`\n]+)/g)) assert.doesNotMatch(m[1], /@wicomm\/(?:tokens|guardas)(?!@npm:)(?:\s|$|@\d)/, `${nome}: ${m[0]}`);
+      const instala = [...t.matchAll(/npm (?:install|i) ([^`\n]+)/g)].map((m) => m[1]).filter((a) => /@wicomm\//.test(a));
+      assert.ok(instala.length > 0, `${nome}: nenhuma instalação de @wicomm/* achada`);
+      for (const a of instala) assert.match(a, /@wicomm\/tokens(?:@<versão>)?\s+@wicomm\/guardas/, `${nome}: ${a}`);
+      // O atualizar-sistema cita o registro antigo só para migrar dele.
+      const semMigracao = nome === 'atualizar-sistema' ? t.replace(/\*\*Projeto instalado pelo GitHub Packages\*\*[^\n]*/, '') : t;
+      assert.doesNotMatch(semMigracao, doRegistroAntigo, nome);
     }
   });
   it('os scripts que a skill manda rodar existem', () => {

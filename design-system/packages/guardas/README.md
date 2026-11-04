@@ -2,7 +2,7 @@
 
 As guardas de design da Wicomm: testes que leem os arquivos do projeto e reprovam tela fora da base ([`plugins/design-system/base/`](../../plugins/design-system/base/)). Rodam no CI, com ou sem Claude, e ligam no dia 1 de um projeto que já existe pela **catraca**. Cada guarda cita pelo código a regra que confere (`SUP-02`, `CTRL-07`).
 
-> **Privado, no GitHub Packages da org `wicomm-projects`.** Como instalar (o `.npmrc` e o token): [`docs/instalar-pacotes.md`](../../docs/instalar-pacotes.md).
+> **No npm público, licença MIT** (a cor da marca da empresa fica fora dela: `NOTICE` na raiz do repositório). `npm install @wicomm/guardas`, sem `.npmrc` nem token; o detalhe em [`docs/instalar-pacotes.md`](https://github.com/ichikawacraice/kit-de-orquestracao/blob/main/design-system/docs/instalar-pacotes.md).
 
 ## Uso
 
