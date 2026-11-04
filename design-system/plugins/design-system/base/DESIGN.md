@@ -458,11 +458,11 @@ Cada app declara a sua densidade no arquivo do projeto, `design/design-system.js
   - **destrutivo**: contorno (MARCA-05).
   - **outline/secondary**: superfície de cartão com o anel de controle; hover vai ao `accent`.
   - **ghost**: transparente até o hover.
-  - **link**: tinta com sublinhado em linha cheia a 50% da tinta, a 2,5px do texto, que fecha no hover; sem cor de marca. O sublinhado é o utilitário `sublinhado-de-link` do `@wicomm/tokens`, em todo link do kit (botão, conversa, bloco, carimbo que abre, trilha) — nunca uma cópia das classes. O pontilhado é só da ajuda no texto.
+  - **link**: tinta com sublinhado em linha cheia a 50% da tinta, a 2,5px do texto, que fecha no hover; sem cor de marca. O sublinhado é o utilitário `sublinhado-de-link` do `@wicomm/tokens`, em toda peça do registro que sublinha (botão, conversa, bloco, carimbo que abre, trilha) — nunca uma cópia das classes. O pontilhado é só da ajuda no texto.
   - **ajuda no texto** (`AjudaNoTexto`, não é botão): pontilhado a 35% da tinta que **não** fecha no hover (o utilitário `sublinhado-de-ajuda`), `cursor-help`, abre a dica no hover e no foco — o link leva a algum lugar; a ajuda só diz.
   - **dividido** (primário com alternativas): as duas metades com o mesmo preenchimento e altura, separadas por 1px de ar; com o primário bloqueado **ou em curso**, o `▾` passa a `secondary` sem mudar de altura nem de cantos, e o estado fica fora do preenchimento, colado ao `▾`.
 - **Por quê.** O peso cresce com a gravidade (ver ANATOMIA, PESO-02).
-- **Confere.** Registro (as variantes existem só no `button` do kit; o sublinhado, só nos dois utilitários do pacote de tokens) · `crítica:ação primária`.
+- **Confere.** Registro (as variantes existem só no `button` do kit; o sublinhado, só nos dois utilitários do pacote de tokens: `registro.test` reprova `underline` e `decoration-dotted` escritos à mão numa peça) · `crítica:ação primária`.
 
 ### CTRL-04 · Campo
 - **Regra.** Mesma altura e raio do botão, superfície de cartão, contorno `input`. Foco = o anel de SUP-06. Desabilitado: `cursor-not-allowed` e 45% de opacidade. Campo que grava tem `<label>`, não placeholder.

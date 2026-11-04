@@ -9,7 +9,7 @@ Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camada
 Camadas: base, tokens, registro
 
 ### O que muda
-- **Um sublinhado só para os links** (CTRL-03, MARCA-02). O `@wicomm/tokens` 0.1.3 traz dois utilitários: `sublinhado-de-link` (linha cheia a 50% da tinta, a 2,5px do texto, que fecha no hover) e `sublinhado-de-ajuda` (pontilhado a 35%, que não fecha). A cor sai da tinta de quem os usa, então o link no balão da marca acompanha o balão. As peças que copiavam o sublinhado com valores diferentes passam a usá-los: o link do `button`, o link da `conversa`, o link da `mesa`, o carimbo que abre do `chip-de-estado`, o hover da `trilha` (`hover:sublinhado-de-link`) e a ajuda do `prazo` (`sublinhado-de-ajuda`).
+- **Um sublinhado só para os links** (CTRL-03, MARCA-02). O `@wicomm/tokens` 0.1.3 traz dois utilitários: `sublinhado-de-link` (linha cheia a 50% da tinta, a 2,5px do texto, que fecha no hover) e `sublinhado-de-ajuda` (pontilhado a 35%, que não fecha). A cor sai da tinta de quem os usa, então o link no balão da marca acompanha o balão. As peças que copiavam o sublinhado com valores diferentes passam a usá-los: o link do `button`, o link da `conversa`, o link da `mesa`, o carimbo que abre do `chip-de-estado`, o hover da `trilha` (`hover:sublinhado-de-link`: o sublinhado só aparece no hover, já cheio) e a ajuda do `prazo` (`sublinhado-de-ajuda`).
 - O link da `mesa` sobe de 35% para 50%, e o carimbo que abre deixa o pontilhado a 40% pela linha cheia a 50%: o pontilhado é só da ajuda no texto.
 
 ### Migração
