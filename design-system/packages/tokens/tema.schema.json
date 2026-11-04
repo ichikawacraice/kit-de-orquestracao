@@ -15,9 +15,18 @@
       "properties": {
         "horizontal": { "type": "string", "description": "O logotipo por extenso, na barra aberta." },
         "monograma": { "type": "string", "description": "O logotipo curto, na barra recolhida." },
+        "simbolo": {
+          "type": "object",
+          "description": "O símbolo oficial da marca (a barra recolhida), em PNG, relativo à pasta do tema, só o positivo: o negativo para o fundo escuro sai dele por script, trocando a tinta neutra por branca. Sem ele, a peça escreve o `monograma`.",
+          "required": ["sobreClaro", "origem"],
+          "properties": {
+            "sobreClaro": { "type": "string", "pattern": "\\.png$", "description": "O símbolo para fundo claro (tinta escura), RGBA de 8 bits." },
+            "origem": { "type": "string", "description": "De onde o arquivo oficial veio: o arquivo não se edita à mão; troca-se pela origem." }
+          }
+        },
         "imagem": {
           "type": "object",
-          "description": "O desenho oficial da marca, em PNG, relativo à pasta do tema. Sem ele, a peça escreve `horizontal`. O símbolo recolhido continua o `monograma`.",
+          "description": "O desenho oficial da marca, em PNG, relativo à pasta do tema. Sem ele, a peça escreve `horizontal`.",
           "required": ["sobreClaro", "sobreEscuro", "origem"],
           "properties": {
             "sobreClaro": { "type": "string", "pattern": "\\.png$", "description": "O desenho para fundo claro (tinta escura)." },

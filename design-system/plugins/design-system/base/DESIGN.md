@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.18.0
+versao: 0.19.0
 description: A direção de design dos apps React do sistema — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   marca: "do tema (temas/<id>/tema.tokens.json, slot marca): cor, hover, sobre, tinta e gradiente, nos dois temas"
@@ -171,9 +171,9 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 - **Confere.** `tokens` (razão entre as pontas) · `guarda:a-marca-nao-carrega-texto`.
 
 ### MARCA-04 · Raster com a cor da marca nasce de script
-- **Regra.** Favicon, logotipo em PNG e qualquer raster com a cor da marca são gerados por script a partir dos tokens, com um modo `--conferir` que roda na suíte. Nada exportado à mão. **Exceção declarada:** o arquivo oficial da marca (o logotipo que a dona da marca publica) é a fonte, desde que more no tema com a origem declarada (`logotipo.imagem.origem` do `tema.json`). Ele entra como veio, sem redesenho pelos tokens; o script só o leva para onde é usado e confere byte a byte. Trocar a cor da marca obriga a trocar o arquivo oficial no mesmo PR.
-- **Por quê.** Raster não lê token: depois de uma troca de cor, favicon e logotipos ficaram dois dias na cor antiga sem nenhum teste ver. O logotipo oficial não é do sistema para redesenhar: refeito pelos tokens, deixa de ser a marca. A cor da marca não muda sem o logotipo mudar junto, e a conferência byte a byte pega a cópia que ficou velha.
-- **Confere.** `guarda:o-raster-da-marca-sai-do-token` · o teste do registro que compara o desenho embutido com o arquivo do tema, byte a byte.
+- **Regra.** Favicon, logotipo em PNG e qualquer raster com a cor da marca são gerados por script a partir dos tokens, com um modo `--conferir` que roda na suíte. Nada exportado à mão. **Exceção declarada:** o arquivo oficial da marca (o logotipo que a dona da marca publica) é a fonte, desde que more no tema com a origem declarada (`logotipo.imagem.origem` e `logotipo.simbolo.origem` do `tema.json`). Ele entra como veio, sem redesenho pelos tokens; o script só o leva para onde é usado e confere byte a byte. Quando a marca publica só o positivo de um desenho, o negativo para o fundo escuro sai do oficial por script, trocando só a tinta neutra por branca e mantendo o alfa e a cor da marca; nunca é refeito à mão. Trocar a cor da marca obriga a trocar o arquivo oficial no mesmo PR.
+- **Por quê.** Raster não lê token: depois de uma troca de cor, favicon e logotipos ficaram dois dias na cor antiga sem nenhum teste ver. O logotipo oficial não é do sistema para redesenhar: refeito pelos tokens, deixa de ser a marca. A cor da marca não muda sem o logotipo mudar junto, e a conferência byte a byte pega a cópia que ficou velha. O negativo por script é o mesmo desenho com a tinta trocada: não há redesenho, e ele acompanha o oficial quando o oficial muda.
+- **Confere.** `guarda:o-raster-da-marca-sai-do-token` · o teste do registro que compara o desenho embutido com o arquivo do tema, byte a byte, e o negativo com o que o script tira do oficial.
 
 ### MARCA-05 · Destrutivo é contorno; preenchido é primário
 - **Regra.** O botão destrutivo **nunca é preenchido**: é contorno com a tinta do token `destructive` (a voz `ruim` como token de tema: `#B8113A` no claro, `#FF8095` no escuro) e anel a 38% dela. Preenchimento na cor da marca é sempre o primário.
@@ -204,7 +204,7 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
   | `ruim` | rose | **conserto** — quebrou |
   | `alheio` | violet | **nada, porque está com outra pessoa** — pendência de outro time |
   | `neutro` | token | **nada ainda** — está andando, ou foi deliberadamente não feito |
-  Não existe segunda régua cromática em lugar nenhum.
+  Não existe segunda régua cromática em lugar nenhum; a cor de identidade declarada (COR-09) não é régua de estado e não responde esta pergunta.
 - **Por quê.** Duas linguagens de cor (estado de processo × veredito) se encontraram na mesma tela, com o mesmo verde querendo dizer duas coisas, e com classes copiadas à mão de um mapa para o outro.
 - **Confere.** `guarda:o-carimbo-tem-forma` · `crítica:consistência`.
 
@@ -214,7 +214,7 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 - **Confere.** `crítica:consistência`.
 
 ### COR-05 · O componente declara TOM, nunca classe de cor
-- **Regra.** Componente que mostra voz recebe `tom: Tom` (`'ok' | 'espera' | 'ruim' | 'neutro' | 'alheio'`, ou um recorte derivado com `Extract<Tom, …>`) e compõe a classe de **um arquivo só**, o idioma de cor, com cinco mapas: `COR_DO_TOM` (número ≥ 24px), `COR_DO_TOM_DENSO` (texto menor), `BADGE_DO_TOM` (texto sobre a tinta do carimbo), `TINTA_DO_TOM` (fundo de bloco), `PONTO_DO_TOM` (marcador de 6px) — e `FILETE_DO_TOM` para a barra vertical e `TEXTO_SOBRE_A_TINTA` para o texto sobre a tinta de bloco (o `BADGE_DO_TOM` deriva dele). Literal de paleta (`text-emerald-700`) fora desse arquivo é defeito, salvo exceção listada com motivo; a exceção declarada da base é o mapa de etapas do projeto, que o `PontoDaEtapa` recebe (`criarPontoDaEtapa`), num arquivo só e listado na configuração das guardas (COR-09). Vocabulário próprio (`atencao`, `bom`, `erro`) é defeito.
+- **Regra.** Componente que mostra voz recebe `tom: Tom` (`'ok' | 'espera' | 'ruim' | 'neutro' | 'alheio'`, ou um recorte derivado com `Extract<Tom, …>`) e compõe a classe de **um arquivo só**, o idioma de cor, com cinco mapas: `COR_DO_TOM` (número ≥ 24px), `COR_DO_TOM_DENSO` (texto menor), `BADGE_DO_TOM` (texto sobre a tinta do carimbo), `TINTA_DO_TOM` (fundo de bloco), `PONTO_DO_TOM` (marcador de 6px) — e `FILETE_DO_TOM` para a barra vertical e `TEXTO_SOBRE_A_TINTA` para o texto sobre a tinta de bloco (o `BADGE_DO_TOM` deriva dele). Literal de paleta (`text-emerald-700`) fora desse arquivo é defeito, salvo exceção listada com motivo; a exceção declarada da base é o mapa de etapas do projeto, que o `PontoDaEtapa` recebe (`criarPontoDaEtapa`), num arquivo só e listado na configuração das guardas (COR-09). A cor do nível da prioridade não é voz: mora na própria `Prioridade` (`COR_DO_NIVEL`, COR-09), como peça do kit. Vocabulário próprio (`atencao`, `bom`, `erro`) é defeito.
 - **Por quê.** Foram medidos oito vocabulários de cor no mesmo produto e 40 pílulas em 22 construções antes do mapa único.
 - **Confere.** `guarda:o-carimbo-tem-forma`.
 
@@ -241,12 +241,13 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
   | **forma** (glifo) | *que tipo de coisa é esta?* | um ícone por tipo, **sem matiz próprio** — herda a tinta do texto ao lado |
   | **etapa** (ponto de 6px) | *onde no percurso?* | a cor **declarada** da etapa, só no `PontoDaEtapa`, sempre com o nome ao lado — nunca a marca, nunca uma voz |
   A **marca** não responde pergunta de estado: ela é a assinatura (MARCA-03) e o primário.
-  Proibido: glifo com matiz próprio; fundo tingido pela posição; glifo sem a palavra ao lado.
+  A exceção declarada é a `Prioridade`: o glifo e a palavra levam a cor do nível (COR-09), e a tinta do carimbo continua a voz.
+  Proibido: glifo com matiz próprio fora dessa exceção; fundo tingido pela posição; glifo sem a palavra ao lado.
 - **Por quê.** Dar um matiz a cada categoria "porque a tela está cinza demais" abre uma segunda régua cromática no mesmo cartão.
 - **Confere.** `crítica:consistência`.
 
 ### COR-09 · Cor de identidade é declarada, num lugar só
-- **Regra.** Cor que identifica (etapa do percurso, categoria) é **token declarado por parada**, com o contraste medido ao lado, num mapa `Record<Tipo, …>` para o TypeScript cobrar o item novo — nunca rampa interpolada pela posição, nunca a marca, nunca uma voz emprestada. Cada família tem **um lugar só** (a etapa vive só no ponto do `PontoDaEtapa`) e nenhuma escreve texto. Onde a etapa e a voz dizem a mesma coisa (ninguém pegou, é a sua vez, acabou), a parada coincide com a voz (`neutro`, `espera`, `ok`).
+- **Regra.** Cor que identifica (etapa do percurso, categoria) é **token declarado por parada**, com o contraste medido ao lado, num mapa `Record<Tipo, …>` para o TypeScript cobrar o item novo — nunca rampa interpolada pela posição, nunca a marca, nunca uma voz emprestada. Cada família tem **um lugar só** (a etapa vive só no ponto do `PontoDaEtapa`; o nível da prioridade, só na `Prioridade`) e nenhuma escreve texto, salvo o nível da prioridade, que pinta a palavra e o glifo do carimbo neutro com o contraste de texto medido (4,5:1 sobre a tinta do carimbo, no cartão) e mora na própria peça (`COR_DO_NIVEL`), fora do idioma de cor das vozes. Onde a etapa e a voz dizem a mesma coisa (ninguém pegou, é a sua vez, acabou), a parada coincide com a voz (`neutro`, `espera`, `ok`).
 - **Por quê.** A rampa interpolada pela posição foi considerada e recusada: identidade com cor emprestada da marca ou de uma voz faz a mesma tinta dizer duas coisas.
 - **Confere.** `crítica:consistência` · revisão de código.
 
@@ -532,7 +533,7 @@ Cada app declara a sua densidade no arquivo do projeto, `design/design-system.js
 | MARCA-01 | A cor da marca é declarada | tokens |
 | MARCA-02 | A marca não escreve | guarda |
 | MARCA-03 | O gradiente vive em desenho | tokens, guarda |
-| MARCA-04 | Raster da marca nasce de script (o arquivo oficial da marca, com origem, é a exceção) | guarda |
+| MARCA-04 | Raster da marca nasce de script (o arquivo oficial da marca, com origem, é a exceção; o negativo dele sai por script) | guarda |
 | MARCA-05 | Destrutivo é contorno | guarda |
 | COR-01 | Duas paletas | guarda, tokens |
 | COR-02 | Neutros frios | tokens |

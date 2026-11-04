@@ -8,7 +8,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, it } from 'node:test'
 import { registro } from '../lib/registro.mjs'
-import { LINHA_DO_DESENHO, MARCA_NO_CODIGO, PECA_DO_LOGOTIPO, arquivoComOTema, codigoComOTema, temaDoRegistro } from '../lib/tema.mjs'
+import { negativoDoSimbolo } from '../lib/png.mjs'
+import { LINHA_DO_DESENHO, LINHA_DO_SIMBOLO, MARCA_NO_CODIGO, PECA_DO_LOGOTIPO, arquivoComOTema, codigoComOTema, temaDoRegistro } from '../lib/tema.mjs'
 import { oQueOAddGrava } from '../scripts/o-que-o-add-grava.mjs'
 
 const RAIZ = join(import.meta.dirname, '..')
@@ -35,6 +36,17 @@ describe('o tema no registro', () => {
     assert.ok(claro?.length > 0 && escuro?.length > 0)
     assert.ok(claro.equals(readFileSync(join(padrao.pasta, padrao.meta.logotipo.imagem.sobreClaro))), 'sobre o claro')
     assert.ok(escuro.equals(readFileSync(join(padrao.pasta, padrao.meta.logotipo.imagem.sobreEscuro))), 'sobre o escuro')
+  })
+
+  it('o símbolo embutido é o PNG oficial do tema, e o negativo sai dele por script (MARCA-04)', () => {
+    const padrao = temaDoRegistro()
+    const linha = ler(PECA_DO_LOGOTIPO).match(LINHA_DO_SIMBOLO)?.[0]
+    assert.ok(linha && linha.length > 1000, 'a peça embute o símbolo')
+    const [claro, escuro] = [...linha.matchAll(/"data:image\/png;base64,([^"]+)"/g)].map((m) => Buffer.from(m[1], 'base64'))
+    assert.ok(claro?.length > 0 && escuro?.length > 0)
+    const oficial = readFileSync(join(padrao.pasta, padrao.meta.logotipo.simbolo.sobreClaro))
+    assert.ok(claro.equals(oficial), 'sobre o claro: o oficial')
+    assert.ok(escuro.equals(negativoDoSimbolo(oficial)), 'sobre o escuro: o negativo do oficial')
   })
 
   it('o trecho da marca que some do código é erro, não troca calada', () => {
@@ -64,6 +76,7 @@ describe('o build com --tema', () => {
     assert.doesNotMatch(logotipo, /"wicomm"|aria-label="Wicomm"/)
     // O tema sem desenho não leva o da Wicomm: a peça escreve o nome dele.
     assert.match(logotipo, /DESENHO_DO_LOGOTIPO: \{ sobreClaro: string; sobreEscuro: string \} \| null = null$/m)
+    assert.match(logotipo, /SIMBOLO_DO_LOGOTIPO: \{ sobreClaro: string; sobreEscuro: string \} \| null = null$/m)
     assert.doesNotMatch(logotipo, /data:image/)
     const casco = JSON.parse(readFileSync(join(pasta, 'casco.json'), 'utf8')).files.map((f) => f.content).join('\n')
     assert.match(casco, /aria-label="Outro, início"/)

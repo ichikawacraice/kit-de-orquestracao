@@ -93,6 +93,17 @@ export function validarTema({ pasta, meta, tokens }) {
     if (typeof imagem?.origem !== 'string') problemas.push('tema.json: `logotipo.imagem.origem` diz de onde o arquivo oficial veio')
   }
 
+  const simbolo = meta.logotipo?.simbolo
+  if (simbolo !== undefined) {
+    const arquivo = simbolo?.sobreClaro
+    if (typeof arquivo !== 'string' || !arquivo.endsWith('.png')) {
+      problemas.push('tema.json: `logotipo.simbolo.sobreClaro` é o caminho de um PNG na pasta do tema')
+    } else if (pasta && !ePng(join(pasta, arquivo))) {
+      problemas.push(`tema.json: \`logotipo.simbolo.sobreClaro\` (${arquivo}) não é um PNG na pasta do tema`)
+    }
+    if (typeof simbolo?.origem !== 'string') problemas.push('tema.json: `logotipo.simbolo.origem` diz de onde o arquivo oficial veio')
+  }
+
   const m = tokens?.marca
   if (!m?.cor || !m.hover || !m.gradiente?.inicio || !m.gradiente?.fim) {
     problemas.push('tema.tokens.json: o slot `marca` declara `cor`, `hover` e `gradiente.inicio`/`fim`')

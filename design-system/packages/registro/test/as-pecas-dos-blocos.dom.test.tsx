@@ -391,10 +391,20 @@ describe("o logotipo", () => {
     expect(container.textContent).toBe("")
   })
 
-  it("o símbolo, sem desenho recolhido no tema, escreve o monograma", () => {
+  it("o símbolo desenha o arquivo do tema, um por fundo, e não escreve o monograma", () => {
     const { container } = render(<Logotipo variante="simbolo" />)
-    expect(container.querySelector("img")).toBeNull()
-    expect(screen.getByRole("img", { name: "Wicomm" }).textContent).toBe("w")
+    expect(screen.getByRole("img", { name: "Wicomm" })).toBeTruthy()
+    const desenhos = [...container.querySelectorAll("img")]
+    expect(desenhos).toHaveLength(2)
+    for (const d of desenhos) {
+      expect(d.getAttribute("src")).toMatch(/^data:image\/png;base64,iVBORw0KGgo/)
+      expect(d.getAttribute("alt")).toBe("")
+    }
+    const [claro, escuro] = desenhos.map(classes)
+    expect(claro).toContain("dark:hidden")
+    expect(escuro).toEqual(expect.arrayContaining(["hidden", "dark:block"]))
+    expect(desenhos[0]?.getAttribute("src")).not.toBe(desenhos[1]?.getAttribute("src"))
+    expect(container.textContent).toBe("")
   })
 })
 

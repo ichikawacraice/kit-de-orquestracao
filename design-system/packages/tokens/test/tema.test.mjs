@@ -104,6 +104,24 @@ describe('o tema é conferido pelas regras da base', () => {
     assert.equal(lerTema(OUTRO, { validar: false }).meta.logotipo.imagem, undefined)
   })
 
+  it('o símbolo, quando declarado, é PNG que existe na pasta do tema e diz a origem', () => {
+    const padrao = lerTema(TEMA_PADRAO, { validar: false })
+    assert.ok(padrao.meta.logotipo.simbolo?.sobreClaro, 'o tema Wicomm declara o símbolo')
+    const comSimbolo = (simbolo) => {
+      const t = lerTema(TEMA_PADRAO, { validar: false })
+      t.meta.logotipo.simbolo = simbolo
+      return validarTema(t)
+    }
+    assert.deepEqual(comSimbolo(padrao.meta.logotipo.simbolo), [])
+    const sumiu = comSimbolo({ ...padrao.meta.logotipo.simbolo, sobreClaro: 'logotipo/nao-existe.png' })
+    assert.ok(sumiu.some((p) => /simbolo\.sobreClaro/.test(p) && /não é um PNG/.test(p)), sumiu.join('\n'))
+    const naoPng = comSimbolo({ ...padrao.meta.logotipo.simbolo, sobreClaro: 'tema.json' })
+    assert.ok(naoPng.some((p) => /simbolo\.sobreClaro/.test(p)), naoPng.join('\n'))
+    const semOrigem = comSimbolo({ sobreClaro: padrao.meta.logotipo.simbolo.sobreClaro })
+    assert.ok(semOrigem.some((p) => /simbolo\.origem/.test(p)), semOrigem.join('\n'))
+    assert.equal(lerTema(OUTRO, { validar: false }).meta.logotipo.simbolo, undefined)
+  })
+
   it('MARCA-01 · hover em outra matiz reprova ao ler, com a regra no erro', () => {
     assert.throws(() => lerTema(TORTO), /MARCA-01/)
     const problemas = validarTema(lerTema(TORTO, { validar: false }))

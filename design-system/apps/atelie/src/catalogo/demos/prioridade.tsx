@@ -5,7 +5,7 @@ import { Amostra, Amostras } from "./_amostra"
 export default function DemoDaPrioridade() {
   return (
     <Amostras>
-      <Amostra titulo="Os níveis em forma; só a urgente ganha peso" primeira>
+      <Amostra titulo="O nível na forma e na cor; só a urgente ganha a tinta" primeira>
         <Prioridade nivel={0}>Sem prioridade</Prioridade>
         <Prioridade nivel={1}>Baixa</Prioridade>
         <Prioridade nivel={2}>Média</Prioridade>

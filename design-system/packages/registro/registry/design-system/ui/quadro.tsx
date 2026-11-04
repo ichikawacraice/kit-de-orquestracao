@@ -62,7 +62,7 @@ function Quadro({
         aria-busy={carregando || undefined}
         className={cn(
           // O `-mx-2 px-2` dá lugar ao anel de foco do cartão na borda da rolagem.
-          "-mx-2 flex min-h-0 flex-1 snap-x snap-mandatory gap-1.5 overflow-auto px-2 pb-1 md:snap-none",
+          "-mx-2 flex min-h-0 flex-1 gap-1.5 overflow-auto px-2 pb-1",
           className
         )}
         {...props}

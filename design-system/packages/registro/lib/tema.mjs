@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { lerTema } from '../../tokens/lib/tema.mjs'
 import { saidas } from '../../tokens/lib/saidas.mjs'
+import { negativoDoSimbolo } from './png.mjs'
 
 const RAIZ = join(import.meta.dirname, '..')
 
@@ -39,7 +40,11 @@ export const PECA_DO_LOGOTIPO = 'registry/design-system/ui/logotipo.tsx'
 /** A linha do desenho na peça, como está no arquivo (o gerador a reescreve; nada mais nela muda). */
 export const LINHA_DO_DESENHO = /^const DESENHO_DO_LOGOTIPO: .*$/m
 
-const dataUri = (caminho) => `data:image/png;base64,${readFileSync(caminho).toString('base64')}`
+/** A linha do símbolo na peça (o gerador a reescreve, como a do desenho). */
+export const LINHA_DO_SIMBOLO = /^const SIMBOLO_DO_LOGOTIPO: .*$/m
+
+const dataUriDe = (png) => `data:image/png;base64,${png.toString('base64')}`
+const dataUri = (caminho) => dataUriDe(readFileSync(caminho))
 
 /**
  * A linha do desenho do logotipo com o tema dado (MARCA-04: o raster sai do arquivo do tema por script, e a
@@ -53,9 +58,30 @@ export function linhaDoDesenho(tema) {
   return `const DESENHO_DO_LOGOTIPO: { sobreClaro: string; sobreEscuro: string } | null = ${valor}`
 }
 
+/**
+ * A linha do símbolo com o tema dado (MARCA-04): o PNG oficial positivo para o fundo claro e o negativo tirado
+ * dele por script para o escuro, ou `null` quando o tema não declara símbolo.
+ */
+export function linhaDoSimbolo(tema) {
+  const simbolo = tema.meta.logotipo.simbolo
+  let valor = 'null'
+  if (simbolo) {
+    const oficial = readFileSync(join(tema.pasta, simbolo.sobreClaro))
+    valor = `{ sobreClaro: ${JSON.stringify(dataUriDe(oficial))}, sobreEscuro: ${JSON.stringify(dataUriDe(negativoDoSimbolo(oficial)))} }`
+  }
+  return `const SIMBOLO_DO_LOGOTIPO: { sobreClaro: string; sobreEscuro: string } | null = ${valor}`
+}
+
+/** As linhas que o gerador reescreve na peça do logotipo. */
+export const LINHAS_GERADAS = [
+  [LINHA_DO_DESENHO, linhaDoDesenho],
+  [LINHA_DO_SIMBOLO, linhaDoSimbolo],
+]
+
 export const MARCA_NO_CODIGO = {
   [PECA_DO_LOGOTIPO]: [
     [linhaDoDesenho(temaDoRegistro()), linhaDoDesenho],
+    [linhaDoSimbolo(temaDoRegistro()), linhaDoSimbolo],
     ['aria-label="Wicomm"', (t) => atributo('aria-label', t.meta.nome)],
     [
       '{variante === "horizontal" ? "wicomm" : "w"}',
