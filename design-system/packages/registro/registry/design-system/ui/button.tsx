@@ -48,7 +48,7 @@ const buttonVariants = cva(
         ghost: "bg-transparent text-foreground-2 hover:bg-accent hover:text-foreground",
         destructive:
           "bg-transparent text-destructive shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--destructive)_38%,transparent)] hover:bg-destructive/10 hover:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--destructive)_60%,transparent)]",
-        link: "text-foreground underline decoration-foreground/35 underline-offset-[2.5px] hover:decoration-current",
+        link: "text-foreground underline decoration-foreground/50 underline-offset-[2.5px] hover:decoration-current",
       },
       size: {
         default: "h-ctrl rounded-ctrl px-2.5 text-[13px]",

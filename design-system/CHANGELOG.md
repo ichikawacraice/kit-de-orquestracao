@@ -4,6 +4,16 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.20.2 · 04/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **O link do botão em linha cheia a 50%** (CTRL-03): a regra dizia sublinhado pontilhado e o código desenhava linha cheia a 35%; agora as duas dizem linha cheia a 50% da tinta, que fecha no hover, como o link da conversa. O pontilhado fica só para a ajuda no texto.
+
+### Migração
+- `npx shadcn add <registro>/button.json` traz o link a 50%; quem copiou o `decoration-foreground/35` à mão troca por `/50`.
+
 ## 0.20.1 · 04/11/2026
 
 Camadas: base, registro
