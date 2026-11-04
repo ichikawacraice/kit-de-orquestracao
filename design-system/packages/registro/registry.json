@@ -1179,7 +1179,7 @@
       "name": "monograma",
       "type": "registry:ui",
       "title": "Monograma",
-      "description": "avatar — o círculo de 20px com as iniciais, em tinta neutra (sem cor por pessoa), e o círculo tracejado da pessoa que não há.",
+      "description": "avatar — o círculo de 20px com as iniciais, em tinta neutra, e o círculo tracejado da pessoa que não há; a cor da pessoa (`corDaPessoa(id)`) só na conversa entre pessoas.",
       "registryDependencies": [
         "@wicomm/estilo"
       ],
@@ -1194,7 +1194,7 @@
       "name": "pessoa",
       "type": "registry:ui",
       "title": "Pessoa",
-      "description": "avatar group — a pessoa numa linha de lista (monograma, nome, papel; ausente, sem nome, carregando) e a pilha de pessoas com +N e a frase inteira na dica.",
+      "description": "avatar group — a pessoa numa linha de lista (monograma, nome, papel; ausente, sem nome, carregando) e a pilha de pessoas com +N e a frase inteira na dica, ou decorativa quando a frase ao lado já diz os nomes.",
       "registryDependencies": [
         "@wicomm/estilo",
         "@wicomm/monograma",
@@ -1205,6 +1205,23 @@
       "files": [
         {
           "path": "registry/design-system/ui/pessoa.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "conversa",
+      "type": "registry:ui",
+      "title": "Conversa",
+      "description": "chat bubbles — a conversa entre pessoas: o meu balão à direita na tinta da marca, o do outro à esquerda no muted, o canto de quem fala no primeiro do grupo, a frase inteira para o leitor de tela e a hora num time; a cor da pessoa só no nome do autor.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/badge",
+        "@wicomm/monograma"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/conversa.tsx",
           "type": "registry:ui"
         }
       ]

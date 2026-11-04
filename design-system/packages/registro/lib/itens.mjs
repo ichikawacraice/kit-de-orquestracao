@@ -374,15 +374,22 @@ export const PECAS = [
   peca({
     name: 'monograma',
     title: 'Monograma',
-    description: 'avatar — o círculo de 20px com as iniciais, em tinta neutra (sem cor por pessoa), e o círculo tracejado da pessoa que não há.',
+    description: 'avatar — o círculo de 20px com as iniciais, em tinta neutra, e o círculo tracejado da pessoa que não há; a cor da pessoa (`corDaPessoa(id)`) só na conversa entre pessoas.',
     files: [ui('monograma')],
   }),
   peca({
     name: 'pessoa',
     title: 'Pessoa',
-    description: 'avatar group — a pessoa numa linha de lista (monograma, nome, papel; ausente, sem nome, carregando) e a pilha de pessoas com +N e a frase inteira na dica.',
+    description: 'avatar group — a pessoa numa linha de lista (monograma, nome, papel; ausente, sem nome, carregando) e a pilha de pessoas com +N e a frase inteira na dica, ou decorativa quando a frase ao lado já diz os nomes.',
     pecas: ['monograma', 'skeleton', 'tooltip', 'table'],
     files: [ui('pessoa')],
+  }),
+  peca({
+    name: 'conversa',
+    title: 'Conversa',
+    description: 'chat bubbles — a conversa entre pessoas: o meu balão à direita na tinta da marca, o do outro à esquerda no muted, o canto de quem fala no primeiro do grupo, a frase inteira para o leitor de tela e a hora num time; a cor da pessoa só no nome do autor.',
+    pecas: ['badge', 'monograma'],
+    files: [ui('conversa')],
   }),
   peca({
     name: 'linha-do-grupo',

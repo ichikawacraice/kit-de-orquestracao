@@ -1,3 +1,4 @@
+import { corDaPessoa } from "@/components/ui/monograma"
 import { Pessoa, PilhaDePessoas } from "@/components/ui/pessoa"
 
 import { Amostra, Amostras } from "./_amostra"
@@ -32,6 +33,18 @@ export default function DemoDaPessoa() {
           <PilhaDePessoas pessoas={EQUIPE} />
           <span className="rounded-xl bg-muted px-3 py-2">
             <PilhaDePessoas pessoas={EQUIPE} sobre="muted" />
+          </span>
+        </div>
+      </Amostra>
+      <Amostra titulo="Na conversa: a cor da pessoa e a pilha decorativa">
+        <div className="flex flex-wrap items-center gap-8">
+          <Pessoa pessoa={{ nome: "Ana Souza", cor: corDaPessoa("pessoa-ana") }} />
+          <span className="inline-flex items-center gap-2">
+            <PilhaDePessoas
+              decorativa
+              pessoas={EQUIPE.slice(0, 3).map((p, i) => ({ ...p, cor: corDaPessoa(`pessoa-${i}`) }))}
+            />
+            <span className="t-denso text-muted-foreground">Ana Souza, Bruno Lima e Carla Dias leram</span>
           </span>
         </div>
       </Amostra>

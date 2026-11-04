@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.19.1
+versao: 0.20.0
 description: A direção de design dos apps React do sistema — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   marca: "do tema (temas/<id>/tema.tokens.json, slot marca): cor, hover, sobre, tinta e gradiente, nos dois temas"
@@ -248,7 +248,8 @@ O sistema é **reservado**: a cor fala pouco, e quando fala responde uma pergunt
 
 ### COR-09 · Cor de identidade é declarada, num lugar só
 - **Regra.** Cor que identifica (etapa do percurso, categoria) é **token declarado por parada**, com o contraste medido ao lado, num mapa `Record<Tipo, …>` para o TypeScript cobrar o item novo — nunca rampa interpolada pela posição, nunca a marca, nunca uma voz emprestada. Cada família tem **um lugar só** (a etapa vive só no ponto do `PontoDaEtapa`; o nível da prioridade, só na `Prioridade`) e nenhuma escreve texto, salvo o nível da prioridade, que pinta a palavra e o glifo do carimbo neutro com o contraste de texto medido (4,5:1 sobre a tinta do carimbo, no cartão) e mora na própria peça (`COR_DO_NIVEL`), fora do idioma de cor das vozes. Onde a etapa e a voz dizem a mesma coisa (ninguém pegou, é a sua vez, acabou), a parada coincide com a voz (`neutro`, `espera`, `ok`).
-- **Por quê.** A rampa interpolada pela posição foi considerada e recusada: identidade com cor emprestada da marca ou de uma voz faz a mesma tinta dizer duas coisas.
+  A **cor da pessoa** é a outra exceção, e só na conversa entre pessoas, onde distinguir quem disse o quê é a pergunta da tela: 8 famílias sem dono (nenhuma voz, nem o vermelho e o laranja da prioridade, nem a marca), escolhidas pela chave estável da pessoa (o id, nunca o nome) e declaradas num lugar só, no `Monograma` (`NOME_DA_PESSOA`, `MONOGRAMA_DA_PESSOA`, `corDaPessoa`). Pinta só o monograma (fundo opaco, iniciais a 6:1) e o nome de quem fala (4,5:1 sobre `muted` e `card`); nunca o balão, o cartão, o carimbo nem o glifo. Fora da conversa, a pessoa segue neutra.
+- **Por quê.** A rampa interpolada pela posição foi considerada e recusada: identidade com cor emprestada da marca ou de uma voz faz a mesma tinta dizer duas coisas. Numa conversa com várias pessoas do outro lado, o nome cinza obriga a ler cada cabeçalho; a cor no monograma e no nome responde "quem é" de relance, sem tingir a mensagem.
 - **Confere.** `crítica:consistência` · revisão de código.
 
 ### COR-10 · O peso vem de posição e tamanho, nunca de saturação

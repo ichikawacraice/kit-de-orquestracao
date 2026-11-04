@@ -61,6 +61,7 @@ import Prazo from "./demos/prazo"
 import PontoDaEtapa from "./demos/ponto-da-etapa"
 import Prioridade from "./demos/prioridade"
 import Quadro from "./demos/quadro"
+import Conversa from "./demos/conversa"
 
 export const DEMOS: Record<string, ComponentType> = {
   "escolha-na-celula": EscolhaNaCelula,
@@ -71,6 +72,7 @@ export const DEMOS: Record<string, ComponentType> = {
   "ponto-da-etapa": PontoDaEtapa,
   "prioridade": Prioridade,
   "quadro": Quadro,
+  "conversa": Conversa,
   "progress": Progress,
   "medidor": Medidor,
   "faixa": Faixa,
