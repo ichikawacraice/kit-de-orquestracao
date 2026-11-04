@@ -606,6 +606,9 @@ caso('contrato 5: resumo/agora/nota são texto', () => {
 caso('contrato 6: campos de dono antigos são recusados; donoLocalId pede formato e donoApelido', () => {
   semear(); painel('set', 'fila', 'F1', COM());
   recusa(painel('update', 'fila', 'F1', '{"dono":"E1"}'), 'saiu do contrato', 'dono');
+  // F370: a recusa traz o comando certo pronto, com o local_ quando o valor velho já era um
+  recusa(painel('update', 'fila', 'F1', '{"dono":"E1"}'), `painel update fila F1 '{"donoLocalId":"<seu local_…>","donoApelido":"dona"}'`, 'comando pronto');
+  recusa(painel('update', 'fila', 'F1', JSON.stringify({ dono: UUID })), `painel update fila F1 '{"donoLocalId":"${UUID}","donoApelido":"dona"}'`, 'comando com o local_');
   recusa(painel('update', 'fila', 'F1', '{"donoLocalId":"abc","donoApelido":"E1"}'), 'local_<uuid>', 'formato');
   recusa(painel('update', 'fila', 'F1', JSON.stringify({ donoLocalId: UUID })), 'donoApelido', 'apelido');
   igual(painel('update', 'fila', 'F1', JSON.stringify({ donoLocalId: UUID, donoApelido: 'E1' })).exit, 0, 'dono válido');

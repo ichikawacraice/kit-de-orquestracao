@@ -356,3 +356,49 @@ test('mergear sem transcript na máquina: fecha igual, sem custo, e as sessões 
     assert.match(r2.err, /não achei transcript/);
   } finally { limpar(c); }
 });
+
+// F370 caso 4: o item fechado no merge e reaberto volta com a dona e o com de antes (a batida não o acusa "sem dona").
+test('F370: item que fechou no merge e é reaberto volta com a dona e o com', () => {
+  const c = montar();
+  try {
+    c.item('F1');
+    const comAntes = c.dado('F1').com;
+    assert.ok(comAntes.length === 2, 'com montado');
+    assert.equal(c.painel('mergear', '12', c.sha.slice(0, 7)).exit, 0);
+    const fechado = c.dado('F1');
+    assert.equal(fechado.etapa, 'feito');
+    assert.equal(fechado.donoLocalId, undefined);
+    const r = c.painel('update', 'fila', 'F1', '{"etapa":"execucao","agora":"reaberto: falta o código"}');
+    assert.equal(r.exit, 0, r.err);
+    const d = c.dado('F1');
+    assert.equal(d.donoLocalId, LA); assert.equal(d.donoApelido, 'P1');
+    assert.deepEqual(d.com, comAntes);
+    assert.equal(d.donaAoFechar, undefined, 'a lembrança sai ao reabrir');
+    assert.equal(d.historico.at(-1).dono, 'P1');
+  } finally { limpar(c); }
+});
+
+test('F370: reabrir com outra dona no mesmo update fica com a nova, sem o com antigo', () => {
+  const c = montar();
+  try {
+    c.item('F1');
+    assert.equal(c.painel('mergear', '12', c.sha.slice(0, 7)).exit, 0);
+    const r = c.painel('update', 'fila', 'F1', JSON.stringify({ etapa: 'execucao', donoLocalId: LB, donoApelido: 'dona' }));
+    assert.equal(r.exit, 0, r.err);
+    const d = c.dado('F1');
+    assert.equal(d.donoLocalId, LB);
+    assert.deepEqual(d.com ?? [], []);
+  } finally { limpar(c); }
+});
+
+test('F370: o aviso de fatia vai ao estado da fila do projeto; o merge que fecha não grava aviso', () => {
+  const c = montar();
+  try {
+    c.item('F1', { maisFatias: true });
+    const r = c.painel('mergear', '12', c.sha.slice(0, 7));
+    assert.equal(r.exit, 0, r.err);
+    assert.equal(JSON.parse(r.out).itens[0].avisoGravado, true);
+    const e = JSON.parse(readFileSync(join(c.raiz, 'fila-de-merge', 'projx.json'), 'utf8'));
+    assert.deepEqual(e.avisos.map(({ tipo, pr, item, dona }) => [tipo, pr, item, dona]), [['fatia', 12, 'F1', LA]]);
+  } finally { limpar(c); }
+});

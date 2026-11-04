@@ -434,3 +434,37 @@ test('fila sem turno: desfecho sem orquestradora avisa só a dona uma vez e fica
   assert.match(msgs(b, 'desfecho')[0].texto, /devolvidos #77 \(F1, dona avisada\)/);
   assert.deepEqual(lerFila().desfechos, []);
 });
+
+// F370 caso 1: o aviso de fatia gravado pelo merge chega à dona na batida, uma vez, e o desfecho não o repete.
+test('F370: aviso de fatia gravado pelo merge vai à dona viva uma vez e sai do estado; o --seco não o tira', () => {
+  item('F1', { etapa: 'execucao', atualizadoEm: iso(T) });
+  item('F2', { etapa: 'execucao', atualizadoEm: iso(T), donoLocalId: lid(2), com: [] });
+  fila({ ocupada: null, emVoo: [], pendentes: [], avisos: [
+    { tipo: 'fatia', pr: 77, item: 'F1', dona: lid(1), em: iso(T - MIN) },
+    { tipo: 'fatia', pr: 78, item: 'F2', dona: lid(2), em: iso(T - MIN) },
+  ] });
+  const so = sessoes(sessao(1, 'F1 · a'));
+  const seco = batida(so, T, ['--seco']);
+  assert.equal(msgs(seco, 'fatia').length, 1, seco.out);
+  assert.equal(lerFila().avisos.length, 2, 'o --seco não mexe no estado');
+  const a = batida(so);
+  const f = msgs(a, 'fatia');
+  assert.equal(f.length, 1, a.out);
+  assert.equal(f[0].para, lid(1));
+  assert.match(f[0].texto, /^fatia PR 77 mergeada \(F1\): siga com a próxima\./);
+  assert.deepEqual(lerFila().avisos, [], 'entregue (ou sem dona viva para receber) sai do estado');
+  const b = batida(so, T + 11 * MIN);
+  assert.equal(msgs(b, 'fatia').length, 0, 'a dona não é avisada duas vezes');
+});
+
+test('F370: o desfecho sem turno não repete a fatia já avisada; o desfecho antigo, sem a marca, ainda avisa', () => {
+  item('F1', { etapa: 'execucao', atualizadoEm: iso(T) });
+  item('F2', { etapa: 'execucao', atualizadoEm: iso(T), donoLocalId: lid(2), com: [] });
+  const mergeados = [
+    { pr: 77, itens: [{ item: 'F1', fechado: false, fatia: true, dona: lid(1), avisoGravado: true }] },
+    { pr: 78, itens: [{ item: 'F2', fechado: false, fatia: true, dona: lid(2) }] },
+  ];
+  fila({ ocupada: null, emVoo: [], pendentes: [], desfechos: [{ em: iso(T - MIN), mergeados, devolvidos: [] }] });
+  const a = batida(sessoes(sessao(1, 'F1 · a'), sessao(2, 'F2 · b')));
+  assert.deepEqual(msgs(a, 'fatia').map((m) => m.para), [lid(2)], a.out);
+});

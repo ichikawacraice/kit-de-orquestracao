@@ -52,22 +52,25 @@ function montar() {
   writeFileSync(join(clone, 'a.txt'), 'base\n');
   git(clone, 'add', '.'); git(clone, 'commit', '-qm', 'base'); git(clone, 'branch', '-M', 'main'); git(clone, 'push', '-q', 'origin', 'main');
   const shas = {};
+  const arquivos = {};
   const pr = (n, arquivo, conteudo) => {
     git(clone, 'checkout', '-q', '-b', `pr${n}`, 'main');
+    mkdirSync(dirname(join(clone, arquivo)), { recursive: true });
     writeFileSync(join(clone, arquivo), conteudo);
+    arquivos[n] = arquivo;
     git(clone, 'add', '.'); git(clone, 'commit', '-qm', `pr ${n}`);
     shas[n] = git(clone, 'rev-parse', 'HEAD');
     git(clone, 'push', '-q', 'origin', `pr${n}:refs/pull/${n}/head`);
     git(clone, 'checkout', '-q', 'main');
   };
   pr(21, 'a.txt', 'do 21\n'); pr(22, 'a.txt', 'do 22\n'); pr(23, 'c.txt', 'quebra\n'); pr(24, 'd.txt', 'ok\n');
-  pr(25, 'e.txt', 'ok\n'); pr(26, 'f.txt', 'ok\n'); pr(27, 'g.txt', 'quebra\n');
+  pr(25, 'e.txt', 'ok\n'); pr(26, 'f.txt', 'ok\n'); pr(27, 'g.txt', 'quebra\n'); pr(28, 'docs/specs/SPEC-1.md', 'só a spec\n');
   const gh = join(raiz, 'gh');
   writeFileSync(gh, GH_FALSO); chmodSync(gh, 0o755);
   const estado = join(raiz, 'estado.json');
   const log = join(raiz, 'gh.log');
   writeFileSync(log, '');
-  writeFileSync(estado, JSON.stringify({ prs: Object.fromEntries(Object.entries(shas).map(([n, sha]) => [n, { state: 'OPEN', headRefOid: sha, baseRefName: 'main', headRefName: `pr${n}` }])) }));
+  writeFileSync(estado, JSON.stringify({ prs: Object.fromEntries(Object.entries(shas).map(([n, sha]) => [n, { state: 'OPEN', headRefOid: sha, baseRefName: 'main', headRefName: `pr${n}`, files: [{ path: arquivos[n] }] }])) }));
   mkdirSync(join(raiz, 'painel')); mkdirSync(join(raiz, 'home'));
   writeFileSync(join(raiz, 'painel', 'temas.json'), JSON.stringify([{ id: 'editor', rotulo: 'Editor', projeto: 'projx' }]));
   const ctx = { raiz, clone, shas, estadoDaFila: join(raiz, 'fila-de-merge', 'projx.json') };
@@ -767,5 +770,55 @@ test('--sem-turno com erro da rodada grava o desfecho com o erro', () => {
     const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
     assert.match(e.desfechos[0].erro, /preparo falhou/);
     assert.deepEqual(c.merges(), []);
+  } finally { limpar(c); }
+});
+
+// F370 caso 1: o aviso de fatia se grava no estado da fila na hora do merge (a batida o entrega), nos dois caminhos.
+test('F370: a rodada da orquestradora grava o aviso de fatia no merge, e a saída diz que ele foi gravado', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F2', 24);
+    assert.equal(c.painel('update', 'fila', 'F1', '{"maisFatias":true}').exit, 0);
+    const r = c.painel('fila-de-merge', `21:${c.shas[21]}`, `24:${c.shas[24]}`, '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [21, 24]);
+    assert.equal(s.mergeados[0].itens[0].avisoGravado, true, JSON.stringify(s.mergeados));
+    assert.equal(s.mergeados[1].itens[0].avisoGravado, undefined, 'o item que fecha não gera aviso de fatia');
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.ok(Array.isArray(e.avisos) && e.avisos.length === 1, JSON.stringify(e));
+    const { em, ...aviso } = e.avisos[0];
+    assert.deepEqual(aviso, { tipo: 'fatia', pr: 21, item: 'F1', dona: LA });
+    assert.ok(!Number.isNaN(Date.parse(em)));
+  } finally { limpar(c); }
+});
+
+test('F370: a rodada --sem-turno grava o aviso de fatia e o desfecho marca o item como já avisado', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21);
+    assert.equal(c.painel('update', 'fila', 'F1', '{"maisFatias":true}').exit, 0);
+    const r = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', 'true', '--sem-turno');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.equal(e.avisos.length, 1);
+    assert.equal(e.desfechos[0].mergeados[0].itens[0].avisoGravado, true);
+  } finally { limpar(c); }
+});
+
+// F370 caso 4: o PR só de documentação, com o item sem maisFatias, fecharia o item no merge.
+test('F370: --anotar avisa quando o PR só muda documentação e o item fecharia no merge', () => {
+  const c = montar();
+  try {
+    c.item('F1', 28);
+    const r = c.painel('fila-de-merge', `28:${c.shas[28]}`, '--anotar');
+    assert.equal(r.exit, 0, r.err);
+    assert.match(JSON.parse(r.out).avisoSemCodigo ?? '', /F1.*só muda documentação.*maisFatias/, r.out);
+    assert.equal(c.painel('update', 'fila', 'F1', '{"maisFatias":true}').exit, 0);
+    const marcado = c.painel('fila-de-merge', `28:${c.shas[28]}`, '--anotar');
+    assert.equal(JSON.parse(marcado.out).avisoSemCodigo, undefined, 'com maisFatias: true não avisa');
+    c.item('F2', 24);
+    const codigo = c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar');
+    assert.equal(JSON.parse(codigo.out).avisoSemCodigo, undefined, 'PR com código não avisa');
   } finally { limpar(c); }
 });
