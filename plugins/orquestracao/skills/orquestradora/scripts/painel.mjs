@@ -135,6 +135,9 @@ const regras = CONFERE_MEMBRO
     return null;
   })
   : null;
+// F370: a reabertura do item confere se a dona lembrada foi arquivada (o registro do app); sem o módulo, restaura sem conferir.
+const GRAVA_FILA = ['update', 'set'].includes(process.argv[2]) ? process.argv[3] === 'fila' : process.argv[2] === 'batch';
+const registroDoApp = regras ?? (GRAVA_FILA ? await import(pathToFileURL(POOL_COMUM).href).catch(() => null) : null);
 let meusIds; // Set de ids que contam como "a própria sessão"; null = não resolvido
 function ehMinha(id) {
   if (!MEU_CLI) return true;
@@ -487,7 +490,9 @@ function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom, ante
 // F370: o item que fecha guarda a dona e o `com` em `donaAoFechar`; reaberto sem dona nova no mesmo update, volta com eles (o
 // item fechado por engano, como o PR só da SPEC sem `maisFatias`, não vira "sem dona" na batida). Só o painel grava o campo.
 function lembrarDona(chave, novo, base, antes, viaCom) {
-  if ('donaAoFechar' in novo && !viaCom) throw new Error(`${chave}: donaAoFechar só o painel grava (ao fechar o item)`);
+  // regravar o valor lido (o `get` seguido de `set --se-versao`) passa; trocar, não. O `set` sem o campo o guarda.
+  if ('donaAoFechar' in novo && !viaCom && canonico(novo.donaAoFechar) !== canonico(antes?.donaAoFechar ?? null)) throw new Error(`${chave}: donaAoFechar só o painel grava (ao fechar o item)`);
+  if (!('donaAoFechar' in novo) && antes?.donaAoFechar && ETAPAS_FINAIS.has(antes.etapa)) base.donaAoFechar = antes.donaAoFechar;
   const final = ETAPAS_FINAIS.has(base.etapa);
   const eraFinal = ETAPAS_FINAIS.has(antes?.etapa);
   if (final && !eraFinal && textoNaoVazio(antes?.donoLocalId)) {
@@ -498,10 +503,14 @@ function lembrarDona(chave, novo, base, antes, viaCom) {
   const lembranca = base.donaAoFechar;
   delete base.donaAoFechar;
   if (!lembranca || 'donoLocalId' in novo || 'donoApelido' in novo || textoNaoVazio(base.donoLocalId)) return;
-  if (!LOCAL_ID.test(String(lembranca.donoLocalId)) || !textoNaoVazio(lembranca.donoApelido)) return;
-  base.donoLocalId = lembranca.donoLocalId;
-  base.donoApelido = lembranca.donoApelido;
-  if (Array.isArray(lembranca.com) && lembranca.com.length && !(Array.isArray(base.com) && base.com.length)) base.com = lembranca.com;
+  // a orquestradora arquiva a dona do item fechado: quem o registro do app diz arquivada não volta (o item vira vaga na hora)
+  const viva = (id) => { try { return registroDoApp?.registroDaSessao(id, { fresco: true })?.arquivada !== true; } catch { return true; } };
+  if (LOCAL_ID.test(String(lembranca.donoLocalId)) && textoNaoVazio(lembranca.donoApelido) && viva(lembranca.donoLocalId)) {
+    base.donoLocalId = lembranca.donoLocalId;
+    base.donoApelido = lembranca.donoApelido;
+  }
+  const com = Array.isArray(lembranca.com) ? lembranca.com.filter((x) => LOCAL_ID.test(String(x?.localId)) && viva(x.localId)) : [];
+  if (com.length && !(Array.isArray(base.com) && base.com.length)) base.com = com;
 }
 
 // Histórico e `feitoEm` da fila: quem muda a etapa ou o dono não precisa lembrar de registrar (F27 fatia 1).
@@ -941,7 +950,8 @@ function comandoMergear(args) {
     // a saída da fila da orquestradora (ou o desfecho da sem turno) só chega no fim de todas as rodadas
     const dona = fatia ? atual.data.donoLocalId ?? null : null;
     let avisoGravado = false;
-    if (dona) {
+    // com a batida desligada ninguém entregaria o aviso: a orquestradora avisa pela saída, como antes
+    if (dona && process.env.BATIDA !== 'off') {
       try { gravarAviso(projeto, { tipo: 'fatia', pr, item: F, dona }); avisoGravado = true; } catch (e) { process.stderr.write(`painel.mjs: aviso: não gravei o aviso de fatia de ${F} (${e?.message || e}); avise a dona\n`); }
     }
     return { item: F, fechado: fecha, ...(fatia ? { fatia, dona } : {}), ...(avisoGravado ? { avisoGravado } : {}), ...(data.custo ? { custo: data.custo.relativo } : {}), agora: data.agora };

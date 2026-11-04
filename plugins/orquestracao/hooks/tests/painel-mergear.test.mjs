@@ -64,13 +64,13 @@ function montar({ conflito = false, bump = false } = {}) {
   writeFileSync(log, '');
   const prs = { 12: { state: 'OPEN', headRefOid: sha, baseRefName: 'main', headRefName: 'pr' } };
   writeFileSync(estado, JSON.stringify({ prs }));
-  mkdirSync(join(raiz, 'painel')); mkdirSync(join(raiz, 'home'));
+  mkdirSync(join(raiz, 'painel')); mkdirSync(join(raiz, 'home')); mkdirSync(join(raiz, 'appsess'));
   writeFileSync(join(raiz, 'painel', 'temas.json'), JSON.stringify([{ id: 'editor', rotulo: 'Editor', projeto: 'projx' }, { id: 'editor', rotulo: 'Editor', projeto: 'outro' }]));
   const ctx = { raiz, clone, sha, estado, log, gh };
   ctx.painel = (...args) => {
     const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
       cwd: clone, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL',
-      env: { ...process.env, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), CLAUDE_CODE_SESSION_ID: '', GH_BIN: gh, GH_ESTADO: estado, GH_LOG: log },
+      env: { ...process.env, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(raiz, 'appsess'), GH_BIN: gh, GH_ESTADO: estado, GH_LOG: log, ...(ctx.envExtra ?? {}) },
     });
     assert.ok(!r.error, String(r.error));
     return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -400,5 +400,52 @@ test('F370: o aviso de fatia vai ao estado da fila do projeto; o merge que fecha
     assert.equal(JSON.parse(r.out).itens[0].avisoGravado, true);
     const e = JSON.parse(readFileSync(join(c.raiz, 'fila-de-merge', 'projx.json'), 'utf8'));
     assert.deepEqual(e.avisos.map(({ tipo, pr, item, dona }) => [tipo, pr, item, dona]), [['fatia', 12, 'F1', LA]]);
+  } finally { limpar(c); }
+});
+
+test('F370: reabrir não devolve a dona nem quem do com foi arquivado (o item vira vaga na hora)', () => {
+  const c = montar();
+  try {
+    c.item('F1');
+    const reg = (id, arquivada) => writeFileSync(join(c.raiz, 'appsess', `${id}.json`), JSON.stringify({ sessionId: id, cliSessionId: `cli-${id.slice(-2)}`, title: 'F1 · x', cwd: c.clone, isArchived: arquivada }));
+    reg(LA, true); reg(LB, false);
+    assert.equal(c.painel('mergear', '12', c.sha.slice(0, 7)).exit, 0);
+    assert.equal(c.painel('update', 'fila', 'F1', '{"etapa":"execucao"}').exit, 0);
+    const d = c.dado('F1');
+    assert.equal(d.donoLocalId, undefined, 'a dona arquivada não volta');
+    assert.deepEqual((d.com ?? []).map((x) => x.localId), [LB], 'só quem segue viva volta ao com');
+  } finally { limpar(c); }
+});
+
+test('F370: set --se-versao com a donaAoFechar lida pelo get passa e a guarda; o set sem o campo também a guarda', () => {
+  const c = montar();
+  try {
+    c.item('F1');
+    assert.equal(c.painel('mergear', '12', c.sha.slice(0, 7)).exit, 0);
+    const doc = JSON.parse(c.painel('get', 'fila', 'F1').out);
+    assert.ok(doc.data.donaAoFechar, 'a lembrança existe antes de medir');
+    const r = c.painel('set', 'fila', 'F1', JSON.stringify({ ...doc.data, titulo: 'outro' }), '--se-versao', String(doc.version));
+    assert.equal(r.exit, 0, r.err);
+    const { donaAoFechar, ...semCampo } = c.dado('F1');
+    assert.equal(donaAoFechar.donoLocalId, LA);
+    const v = JSON.parse(c.painel('get', 'fila', 'F1').out).version;
+    assert.equal(c.painel('set', 'fila', 'F1', JSON.stringify(semCampo), '--se-versao', String(v)).exit, 0);
+    assert.equal(c.dado('F1').donaAoFechar?.donoLocalId, LA, 'o set sem o campo não o apaga');
+    const forjado = c.painel('update', 'fila', 'F1', JSON.stringify({ donaAoFechar: { donoLocalId: LB, donoApelido: 'x', com: [] } }));
+    assert.notEqual(forjado.exit, 0, 'trocar o valor segue recusado');
+  } finally { limpar(c); }
+});
+
+test('F370: com BATIDA=off o merge não grava aviso (ninguém o entregaria) e a saída não marca avisoGravado', () => {
+  const c = montar();
+  try {
+    c.item('F1', { maisFatias: true });
+    c.envExtra = { BATIDA: 'off' };
+    const r = c.painel('mergear', '12', c.sha.slice(0, 7));
+    assert.equal(r.exit, 0, r.err);
+    const it = JSON.parse(r.out).itens[0];
+    assert.equal(it.fatia, true); assert.equal(it.dona, LA);
+    assert.equal(it.avisoGravado, undefined);
+    assert.ok(!existsSync(join(c.raiz, 'fila-de-merge', 'projx.json')));
   } finally { limpar(c); }
 });
