@@ -41,8 +41,8 @@ Senha vazia ou ausente **fecha** o site (`503`), nunca o abre. Gere a senha com 
 
 | campo | valor |
 |---|---|
-| Repositório | `wicomm-projects/wicomm-design-system` |
-| Root Directory | `apps/atelie` |
+| Repositório | `ichikawacraice/kit-de-orquestracao` |
+| Root Directory | `design-system/apps/atelie` |
 | Install / Build / Saída | do `vercel.json`: `cd ../.. && npm ci`, `npm run build`, `out/` |
 | Node | 22 ou mais (o `engines` da raiz) |
 | "Include files outside the root directory" | **ligado** (é o padrão): o build lê `packages/`, `plugins/design-system/base/`, o `CHANGELOG.md` e o `docs/comecar.md` (a página Começar) |
@@ -63,6 +63,6 @@ O `shadcn` CLI não abre janela de senha. Ele passa pela guarda com o **Protecti
 }
 ```
 
-O `shadcn` troca `${WICOMM_REGISTRO_BYPASS}` pela variável de ambiente: o segredo não vai para o git. Cada dev guarda o valor no próprio ambiente (o mesmo lugar do `NODE_AUTH_TOKEN` dos pacotes, [instalar-pacotes.md](instalar-pacotes.md)); quem administra o projeto o lê em *Settings → Deployment Protection → Protection Bypass for Automation*.
+O `shadcn` troca `${WICOMM_REGISTRO_BYPASS}` pela variável de ambiente: o segredo não vai para o git. Cada dev guarda o valor no próprio ambiente (uma linha `export WICOMM_REGISTRO_BYPASS=…` no `~/.zshrc`, nunca num arquivo do projeto); quem administra o projeto o lê em *Settings → Deployment Protection → Protection Bypass for Automation*.
 
 A guarda aceita o mesmo segredo que a Vercel, **e só nos caminhos do registro (`/r/`)**: o segredo não abre a vitrine. Ela compara o cabeçalho com `VERCEL_AUTOMATION_BYPASS_SECRET`, que a Vercel grava em cada deploy; se o projeto tiver mais de um segredo de bypass, só o marcado como variável de ambiente passa pela guarda. **Gerar um segredo novo na Vercel pede um *Redeploy*** para a guarda passar a aceitá-lo, e cada projeto troca o valor de `WICOMM_REGISTRO_BYPASS`.

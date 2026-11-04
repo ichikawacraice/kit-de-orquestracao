@@ -2,7 +2,7 @@
 
 Os tokens de design dos apps React da Wicomm — cor, raio, sombra, tipo, movimento e medida — numa fonte só, gerada para o tema do Tailwind v4 e para variáveis CSS puras. As regras que estes valores pagam estão na base ([`plugins/design-system/base/DESIGN.md`](../../plugins/design-system/base/DESIGN.md)); cada token cita o código da regra (`MARCA-01`, `COR-11`).
 
-> **Privado, no GitHub Packages da org `wicomm-projects`.** Como instalar (o `.npmrc` e o token): [`docs/instalar-pacotes.md`](../../docs/instalar-pacotes.md).
+> **No npm público, licença MIT** (a cor da marca da empresa fica fora dela: `NOTICE` na raiz do repositório). `npm install @wicomm/tokens`, sem `.npmrc` nem token; o detalhe em [`docs/instalar-pacotes.md`](../../docs/instalar-pacotes.md).
 
 ## Uso
 

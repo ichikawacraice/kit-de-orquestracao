@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.15.0
+versao: 0.16.0
 description: A direção de design dos apps React do sistema — como a tela parece, com a regra, o porquê medido e como cada regra se confere.
 colors:
   marca: "do tema (temas/<id>/tema.tokens.json, slot marca): cor, hover, sobre, tinta e gradiente, nos dois temas"
