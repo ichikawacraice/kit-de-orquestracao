@@ -22,14 +22,17 @@ export function reabertoEm(d) {
 
 // Os PRs ligados ao item: os que ele lista em `prs` (o item antigo, e a fila que já os ligou) e os que saem da branch da dona
 // (a `branch` do item, ou a do worktree dela). O PR da branch só conta se foi criado depois do item nascer: o worktree
-// reaproveitado não herda o PR do item anterior. O PR mergeado antes da última reabertura não conta (o item reaberto não
-// refecha pelo merge que já o tinha fechado). `ambiguos`: os números que a branch liga a mais de um item vivo (não ligam
+// reaproveitado não herda o PR do item anterior. O PR mergeado antes do item nascer não conta (o número de `prs` que é de outro
+// repositório e colide com um PR antigo deste), nem o mergeado antes da última reabertura (o item reaberto não refecha pelo
+// merge que já o tinha fechado). `ambiguos`: os números que a branch liga a mais de um item vivo (não ligam
 // nenhum). → [{number, state, mergedAt, updatedAt, headRefName, fonte}]
 export function prsDoItem(d, { prs = null, branchDaDona = null, ambiguos = null } = {}) {
   const porNumero = new Map((prs ?? []).filter((p) => Number.isInteger(p?.number)).map((p) => [p.number, p]));
   const nasceu = ms(d?.historico?.[0]?.em);
   const reaberto = reabertoEm(d);
-  const jaFechou = (p) => reaberto !== null && ms(p?.mergedAt) !== null && ms(p.mergedAt) < reaberto;
+  // mergeado antes do item nascer (o número que colide com um PR de outro repositório) ou antes da última reabertura: não é dele
+  const corte = Math.max(nasceu ?? -Infinity, reaberto ?? -Infinity);
+  const jaFechou = (p) => ms(p?.mergedAt) !== null && ms(p.mergedAt) < corte;
   const ligados = new Map();
   for (const n of inteiros(d?.prs)) {
     const p = porNumero.get(n);
@@ -70,7 +73,7 @@ export function deduzir({ item: d, linha = null, prs = null, git = null, agoraMs
   else if (todosMergeados && fatia) { etapa = 'execucao'; fontes.etapa = 'gh'; }
   // em merge, o gh leu todos os PRs ligados e nenhum está aberto: o PR foi fechado sem merge (sem PR ligado, ou com um que o gh não leu, vale o declarado)
   else if (etapa === 'merge' && prs && ligados.length && ligados.every((p) => p.state)) { etapa = 'execucao'; fontes.etapa = 'gh'; }
-  // o git só promove a `execucao` o item que ainda não começou: não rebaixa `merge` (o gh caído, o PR em outro repositório)
+  // o git só promove a `execucao` o item que ainda não começou: não rebaixa `merge` (o gh caído, o PR que o gh não achou)
   else if (git && (git.aFrente > 0 || git.sujo)) { if (!['design', 'execucao', 'validacao', 'merge'].includes(etapa)) etapa = 'execucao'; fontes.etapa = 'git'; }
 
   const temDona = texto(d?.donoLocalId);

@@ -17,6 +17,7 @@
   - **PRs do item:** os de `prs` e os da branch da dona (a `branch` do item ou a do worktree dela, lida pelo `git rev-parse`; a da lista do app é a branch com que o app criou a sessão e só vale sem o git).
     - O PR da branch só conta se foi criado depois do item nascer: o worktree reaproveitado não herda o PR do item anterior.
     - O PR que a branch liga a mais de um item vivo, ou que outro item já lista em `prs`, não liga pela branch.
+    - O PR mergeado antes do item nascer não conta, nem o de `prs`: o número que é de outro repositório e colide com um PR antigo deste não fecha o item.
     - O PR mergeado antes da última reabertura do item não conta: o item reaberto não refecha pelo merge que já o fechou.
     - A branch de base (`main`, `master`, `develop`) não liga PR.
   - **Etapa:**
@@ -24,7 +25,7 @@
     - PR aberto → `merge`;
     - fatia mergeada (`maisFatias`) → `execucao`;
     - `merge` sem PR aberto, com todos os PRs ligados lidos → `execucao`;
-    - commit à frente da base ou mudança sem commit → `execucao` (`design`, `validacao` e `merge` declarados ficam: o git não rebaixa o item em merge quando o `gh` caiu ou o PR está em outro repositório).
+    - commit à frente da base ou mudança sem commit → `execucao` (`design`, `validacao` e `merge` declarados ficam: o git não rebaixa o item em merge quando o `gh` caiu ou não achou o PR).
   - **Dona viva:** sessão não arquivada na lista do app.
   - **Parado:** a dona não está num turno, o item não está em espera nem travado, e a última atividade passou do prazo. Conta como atividade a gravação no item, a atividade da sessão viva, o último commit ou a atualização de um PR ligado.
   - O PR fechado sem merge não conta. O PR que o `gh` não leu segura o fechamento e conta como aberto, para a cobrança do `--anotar`.

@@ -126,7 +126,10 @@ test('merge declarado com o gh caído e a branch à frente da base: fica em merg
   assert.equal(caido.etapa, 'merge');
   assert.deepEqual(caido.prsAbertos, [7]);
   const outroRepo = ded({ item: item({ etapa: 'merge', prs: [7] }), linha: linha(), prs: [pr(9, 'OPEN', { headRefName: 'z' })], git });
-  assert.equal(outroRepo.etapa, 'merge', 'PR de outro repositório: o gh não o leu, vale o declarado');
+  assert.equal(outroRepo.etapa, 'merge', 'PR que o gh não achou: vale o declarado');
+  const colide = ded({ item: item({ etapa: 'merge', prs: [7] }), linha: linha(), prs: [pr(7, 'MERGED', { headRefName: 'z', createdAt: iso(T - 900 * MIN), mergedAt: iso(T - 800 * MIN) })], git });
+  assert.equal(colide.mergeado, false, 'o #7 deste repositório, mergeado antes do item nascer, não é o PR do item (de outro repositório)');
+  assert.equal(colide.etapa, 'merge');
   const semPrs = ded({ item: item({ etapa: 'merge' }), linha: linha(), prs: [], git });
   assert.equal(semPrs.etapa, 'merge', 'merge declarado sem prs: o git também não rebaixa');
   assert.equal(ded({ item: item({ etapa: 'planejamento' }), linha: linha(), prs: null, git }).etapa, 'execucao', 'o git ainda promove quem não começou');
