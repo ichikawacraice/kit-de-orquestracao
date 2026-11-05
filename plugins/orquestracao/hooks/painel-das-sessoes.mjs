@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Stop hook (Q14, opção b): numa sessão de projeto (com ou sem orquestradora ativa, ADR 0007),
-// o turno não termina se a sessão mudou de estado no painel (abriu/mergeou PR,
-// tirou ID de pergunta, abriu/arquivou sessão, recebeu resposta a um Qnn) e não
-// gravou nada no painel (painel.mjs set|update|batch|delete) no mesmo turno.
+// o turno não termina se a sessão tirou ID de pergunta ou recebeu resposta a uma pergunta Qnn dela ainda aberta
+// e não gravou a coleção `perguntas` do painel (painel.mjs set|update|batch|delete … perguntas) no mesmo turno.
+// F424 (ADR 0027): abrir, mergear ou fechar PR e abrir ou arquivar sessão não se cobram mais: o PR e a etapa a batida
+// deduz do gh e do git, e a sessão aberta ou arquivada da lista de sessões. A pergunta, só a sessão sabe.
 //
 // "Projeto com orquestradora": existe marcador ~/.claude/orquestracao/ativas/<session_id>
 // de OUTRA sessão cujo repositório (git common dir) é o desta. O marcador guarda o
@@ -37,9 +38,6 @@ function textoDe(msg) {
 const GRAVA_NO_PAINEL = { test: gravaNoPainel };
 
 const GATILHOS_BASH = [
-  [/\bgh\s+pr\s+create\b/, 'abriu PR'],
-  [/\bgh\s+pr\s+merge\b/, 'mergeou PR'],
-  [/\bgh\s+pr\s+(ready|close)\b/, 'mudou o estado de um PR'],
   // Só a chamada (início do comando, depois de ; & | ( ou $(, com caminho e `bash` opcionais): grep, cat ou commit que
   // citam o nome não tiram ID.
   [/(?:^|[;&|(\n]|\$\()\s*(?:(?:ba)?sh\s+)?(?:[^\s;&|()]*\/)?proxima-pergunta(?:\.sh)?(?![\w.-])/, 'tirou ID de pergunta'],
@@ -47,6 +45,8 @@ const GATILHOS_BASH = [
 
 // Só conta o Qnn que é pergunta DESTA sessão: existe perguntas/<Qnn>.json no painel com `sessaoId` igual ao
 // local_… dela. Citação de decisão alheia ("Q197") não é resposta. Sem o local_… resolvido, não conta.
+// F424: a pergunta já respondida no painel (o operador respondeu por lá) não tem o que gravar; conta a aberta e a assumida.
+const ESPERA_RESPOSTA = new Set(['aberta', 'assumida']);
 function citaPerguntaDestaSessao(texto, sessionId) {
   const ids = [...new Set(texto.match(/\bQ\d+\b/g) ?? [])];
   if (ids.length === 0) return false;
@@ -58,14 +58,18 @@ function citaPerguntaDestaSessao(texto, sessionId) {
   const painel = process.env.PAINEL_DIR || join(BASE, 'painel');
   return ids.some((q) => {
     // F183: a pergunta fechada mora no arquivo; acharPergunta olha a pasta quente e depois ele
-    try { const f = acharPergunta(join(painel, 'perguntas'), q); return Boolean(f) && JSON.parse(readFileSync(f, 'utf8')).data?.sessaoId === local; } catch { return false; }
+    try {
+      const f = acharPergunta(join(painel, 'perguntas'), q);
+      const d = f ? JSON.parse(readFileSync(f, 'utf8')).data : null;
+      return d?.sessaoId === local && ESPERA_RESPOSTA.has(d.estado ?? 'aberta');
+    } catch { return false; }
   });
 }
 
 const ETAPAS_FINAIS = ['feito', 'descartado'];
 const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'feito', 'descartado'];
 // Itens vivos da fila de que esta sessão é dona (mesma leitura do fila-do-item.mjs: donoLocalId + etapa fora de
-// feito/descartado; sem etapa, o critério antigo estado === 'em-andamento'). Só serve para escolher a mensagem.
+// feito/descartado; sem etapa, o critério antigo estado === 'em-andamento'). Só serve para o campo `item` das mensagens.
 function itensDaSessao(sessionId) {
   const local = registroDaSessao(sessionId)?.localId;
   if (!local) return [];
@@ -295,11 +299,9 @@ function main() {
       if (it.name === 'Bash') {
         const cmd = String(it.input?.command ?? '');
         comandos.push(cmd);
-        if (GRAVA_NO_PAINEL.test(cmd)) gravou = true;
+        if (GRAVA_NO_PAINEL.test(cmd) && /\bperguntas\b/.test(cmd)) gravou = true;
         for (const [re, m] of GATILHOS_BASH) if (re.test(cmd)) motivos.add(m);
       }
-      if (it.name.endsWith('start_session')) motivos.add('abriu sessão');
-      if (it.name.endsWith('archive_session')) motivos.add('arquivou sessão');
     }
   }
   // A trava antiga recusa uma vez (stop_hook_active); a da assumida tem a marca própria por turno (F400).
@@ -324,7 +326,7 @@ function main() {
   if (!cobraPainel && soltas.length === 0 && fantasmas.length === 0) return;
 
   const partes = [];
-  if (cobraPainel) partes.push(motivoDoPainel(session_id, motivos));
+  if (cobraPainel) partes.push(motivoDoPainel(local ?? registroDaSessao(session_id)?.localId, motivos, itensDaSessao(session_id)));
   if (soltas.length) partes.push(motivoDaAssumida(soltas, local, itensDaSessao(session_id)));
   if (fantasmas.length) partes.push(motivoDoQidSemPergunta(fantasmas, local, itensDaSessao(session_id)));
   process.stdout.write(JSON.stringify({ decision: 'block', reason: partes.join('\n\n') }));
@@ -350,14 +352,11 @@ function motivoDoQidSemPergunta(ids, local, itens) {
 
 const umaLinha = (s) => String(s).replace(/\s+/g, ' ').trim();
 
-function motivoDoPainel(session_id, motivos) {
-  const itens = itensDaSessao(session_id);
-  const onde = itens.length
-    ? `Grave no item que você é dona: ${itens.map((f) => `\`painel update fila ${f} '{"etapa":…,"agora":…}'\``).join(' · ')} ` +
-      '(e, se houve pergunta ou resposta, `… perguntas <ID>`). Depois encerre o turno.'
-    : 'Grave no painel com `painel update sessoes <sessionId> \'{...}\'` ' +
-      '(estado, etapa, pr) e, se houve pergunta ou resposta, `… perguntas <ID>`. Depois encerre o turno.';
-  return `Painel das sessões não atualizado neste turno, e a sessão mudou de estado (${[...motivos].join('; ')}). ${onde}`;
+function motivoDoPainel(local, motivos, itens) {
+  const item = itens.length === 1 ? `,"item":"${itens[0]}"` : '';
+  return `A pergunta deste turno não foi gravada no painel (${[...motivos].join('; ')}): sem ela o operador não a vê. ` +
+    `Pergunta nova: \`painel set perguntas <Q-ID> '{"sessaoId":"${local ?? '<seu local_…>'}"${item},"estado":"aberta","titulo":"…","caso":"…","recomendacao":"…"}'\`; ` +
+    'resposta recebida no chat: `painel update perguntas <Q-ID> \'{"estado":"respondida","resposta":"…"}\'`. Depois encerre o turno.';
 }
 
 try {

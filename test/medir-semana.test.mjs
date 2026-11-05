@@ -51,6 +51,8 @@ describe('medir-semana: peças puras', () => {
     assert.equal(m('Ritual da orquestradora não feito neste turno.'), 'ritual-da-orquestradora');
     assert.equal(m('O visual do front mudou neste turno e o crítico não rodou.'), 'critico-de-ui');
     assert.equal(m('Você é dona do item F9 (em andamento), mudou algo neste turno e não o gravou.'), 'fila-do-item');
+    assert.equal(m('O PR que fecha o item F9 está na fila sem a entrega, que é o que o operador vê.'), 'fila-do-item');
+    assert.equal(m('A pergunta deste turno não foi gravada no painel (tirou ID): sem ela o operador não a vê.'), 'painel-das-sessoes');
     assert.equal(m('Seu título ainda diz "livre" e você trabalhou neste turno.'), 'titulo-da-dona');
     assert.equal(m('coisa nova que ninguém conhece'), 'outras');
   });

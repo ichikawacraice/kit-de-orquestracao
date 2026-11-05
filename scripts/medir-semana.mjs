@@ -35,9 +35,9 @@ function repoDe(dir) {
 // A mensagem de cada trava de Stop → o hook que a escreve. Mensagem nova cai em `outras`: confira a fatia dela na saída.
 const TRAVAS = [
   [/Relatório sem a saída real/, 'criterio-da-dona'],
-  [/Painel das sessões não atualizado/, 'painel-das-sessoes'],
+  [/Painel das sessões não atualizado|A pergunta deste turno não foi gravada no painel/, 'painel-das-sessoes'],
   [/O visual do front mudou/, 'critico-de-ui'],
-  [/Você é dona do item .*não o (?:atualizou|gravou)/s, 'fila-do-item'],
+  [/Você é dona do item .*não o (?:atualizou|gravou)|O PR que fecha (?:o item|os itens) .*sem a entrega/s, 'fila-do-item'],
   [/^Contexto em \d+ mil/m, 'contexto-do-papel'],
   [/Ritual da orquestradora não feito/, 'ritual-da-orquestradora'],
   [/Item parado sem o papel da etapa/, 'espera-de-papel'],
