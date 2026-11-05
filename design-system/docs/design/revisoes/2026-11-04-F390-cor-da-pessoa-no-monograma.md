@@ -264,3 +264,14 @@ Nenhum. A cor não anima: sem `transition-colors` no monograma. Se o id chegar d
 
 - **Tema com a marca numa das 8 famílias.** Hoje a marca é a Wicomm (`#F30B42`, longe de todas as famílias; a mais perto é o fuchsia, a ΔE 6,9 da `marca-tinta` no claro). Um tema com marca azul (a fixture `outro`, `#0057D9`) cairia em `blue` e `indigo`, e a regra *"nunca a marca"* deixaria de valer sem ninguém notar. Se um dia houver outro tema, a lista de famílias passa a ser do tema, com a família da marca fora. Não é deste item: a marca dos apps é sempre a Wicomm.
 - **No claro, purple e fuchsia ficam a ΔE 2,6.** As 8 famílias valem como cerca de 5 tintas distintas. Se o crítico achar pouco, o conserto é o degrau, não a família, e a troca de degrau pede medir de novo as iniciais.
+
+## Crítica 1 (2026-11-04)
+
+Nota 26/30 (hierarquia 4 · densidade 5 · consistência 4 · ruído 4 · ação primária 5 · aderência 4). Aprovada com ressalvas.
+
+- **P1 · média · o `className` pintava o monograma por cima da chave.** Corrigido: no `Monograma`, a tinta vem depois do `className`; teste novo em `a-cor-da-pessoa.dom.test.tsx`; a migração do CHANGELOG diz para tirar o `className` com a cor.
+- **P2 · baixa · "família" com dois sentidos na COR-09.** Corrigido: "Cada identidade (a etapa, o nível da prioridade, a pessoa) tem um lugar só"; "família" fica só para a matiz.
+- **P3 · baixa · as demos acham o id pelo nome (`pessoaDaDemo`).** Os dois testes que usavam o nome como id passaram a ids próprios. As demos ficam como estão neste PR: pendência para o `depois` (os dados das demos guardarem `{ id, nome }`).
+- **P4 · baixa · falta no quadro uma pilha de 3 pessoas ao lado do dono para conferir o peso no escuro.** Pendência para o `depois`.
+- **P5 · fora do escopo · a lista de escolha de pessoas não mostra o monograma.** Trabalho novo.
+- A conferência visual nos dois temas (itens 2 a 5 de *O que o crítico confere*) ficou em aberto: o ateliê não estava no ar.

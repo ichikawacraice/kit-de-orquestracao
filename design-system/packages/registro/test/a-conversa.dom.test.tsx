@@ -88,7 +88,7 @@ describe('A cor da pessoa', () => {
 
 describe('A pilha decorativa', () => {
   it('não é alvo nem imagem: aria-hidden, sem tabIndex e sem dica', () => {
-    const pessoas = ['Ana Souza', 'Bruno Lima'].map((nome) => ({ id: nome, nome }))
+    const pessoas = [{ id: 'pessoa-ana', nome: 'Ana Souza' }, { id: 'pessoa-bruno', nome: 'Bruno Lima' }]
     const { container } = render(<PilhaDePessoas pessoas={pessoas} decorativa />)
     const pilha = container.querySelector('[data-slot=pilha-de-pessoas]') as HTMLElement
     expect(pilha).toBeTruthy()

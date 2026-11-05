@@ -11,7 +11,7 @@ import { DESTINOS } from "@/registry/design-system/blocks/casco/navegacao"
 import { GrupoDaPessoa } from "@/registry/design-system/ui/barra-do-editor"
 import { AutorDaConversa } from "@/registry/design-system/ui/conversa"
 import { MenuDaConta } from "@/registry/design-system/ui/menu-da-conta"
-import { corDaPessoa } from "@/registry/design-system/ui/monograma"
+import { corDaPessoa, Monograma, MONOGRAMA_DA_PESSOA } from "@/registry/design-system/ui/monograma"
 import { Pessoa, PilhaDePessoas } from "@/registry/design-system/ui/pessoa"
 
 const ID = "pessoa-ana"
@@ -90,5 +90,16 @@ describe("a mesma pessoa, a mesma cor em toda peça", () => {
       expect(sem.getAllByText("Ana Souza").at(-1)!.hasAttribute("data-cor")).toBe(false)
       sem.unmount()
     }
+  })
+
+  it("o className de quem chama não pinta por cima da chave", () => {
+    const { container } = render(<Monograma nome="Ana Souza" chave={ID} className="bg-red-500 text-red-900 ml-1" />)
+    const m = container.querySelector("[data-slot=monograma]") as HTMLElement
+    expect(m).toBeTruthy()
+    // Presença antes: a família da chave está lá, e o layout de quem chama também.
+    for (const c of MONOGRAMA_DA_PESSOA[corDaPessoa(ID)].split(" ")) expect(m.classList.contains(c)).toBe(true)
+    expect(m.classList.contains("ml-1")).toBe(true)
+    expect(m.classList.contains("bg-red-500")).toBe(false)
+    expect(m.classList.contains("text-red-900")).toBe(false)
   })
 })

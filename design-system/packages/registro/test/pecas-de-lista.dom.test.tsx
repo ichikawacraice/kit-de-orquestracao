@@ -388,7 +388,7 @@ describe('Pessoa e PilhaDePessoas', () => {
   })
 
   it('um a mais que o limite mostra a pessoa, não +1; vazia não desenha', () => {
-    const { rerender, container } = render(<PilhaDePessoas pessoas={['A B', 'C D', 'E F', 'G H'].map((nome) => ({ id: nome, nome }))} />)
+    const { rerender, container } = render(<PilhaDePessoas pessoas={['A B', 'C D', 'E F', 'G H'].map((nome, i) => ({ id: `pessoa-${i}`, nome }))} />)
     expect(container.querySelectorAll('[data-slot=monograma]')).toHaveLength(4)
     expect(screen.queryByText('+1')).toBeNull()
     rerender(<PilhaDePessoas pessoas={[]} />)

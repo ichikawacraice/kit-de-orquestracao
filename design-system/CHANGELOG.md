@@ -17,6 +17,7 @@ Camadas: base, registro
 - `npx shadcn add <registro>/monograma.json <registro>/pessoa.json <registro>/menu-da-conta.json <registro>/barra-lateral.json <registro>/barra-do-editor.json <registro>/conversa.json`.
 - Em cada lugar que o compilador apontar, passe o id da pessoa ou `null`; troque `cor={corDaPessoa(id)}` por `chave={id}`.
 - Apague a cópia local da cor da pessoa, se houver.
+- Tire o `className` com a cor da pessoa de cima do `Monograma`: a tinta da chave vem por último e vence; o `className` fica para o layout.
 
 ## 0.20.3 · 04/11/2026
 

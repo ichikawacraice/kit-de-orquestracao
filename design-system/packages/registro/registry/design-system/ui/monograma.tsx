@@ -89,8 +89,9 @@ function Monograma({ nome, chave, className }: { nome: string; chave: string | n
       data-cor={cor}
       className={cn(
         "inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-[650]",
-        cor ? MONOGRAMA_DA_PESSOA[cor] : NEUTRO,
-        className
+        className,
+        // A tinta vem por último: o `className` de quem chama mexe no layout, nunca na cor (COR-09).
+        cor ? MONOGRAMA_DA_PESSOA[cor] : NEUTRO
       )}
     >
       {iniciais(nome)}
