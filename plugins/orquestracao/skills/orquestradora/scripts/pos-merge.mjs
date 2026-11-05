@@ -1,6 +1,9 @@
 // F373 (fatia 3, ADR 0023): o pós-merge sem turno da orquestradora. A rodada da fila sem turno que mergeou chama `posMerge` e
 // grava o resultado no desfecho; a orquestradora só acorda se algo der erro.
-// - versão: com `.claude-plugin/marketplace.json` em origin/<base>, `subir-versao --empurrar --destacado` num worktree temporário
+// - versão: no máximo uma vez por dia de São Paulo (F426: `--por-dia`; `forcar` sobe no mesmo dia). O lote que não sobe devolve
+//   `versao: {subiu: [], adiado}`, sem tocar nos plugins (o `atualizar-plugins` só troca plugin de versão diferente: sem subida seria
+//   um `marketplace update` à toa); eles se atualizam no lote em que a versão sobe;
+//   com `.claude-plugin/marketplace.json` em origin/<base>, `subir-versao --empurrar --destacado --por-dia` num worktree temporário
 //   destacado em origin/<base> (o checkout principal pode estar em outra branch, e a base não cabe em dois worktrees). O pós-merge
 //   roda fora da trava da fila: outra rodada pode mergear no meio e o push ser recusado; refaz do fetch, até TENTATIVAS vezes;
 // - plugins: só no marketplace do kit e só quando a versão subiu, `atualizar-plugins --json`, sob a trava do botão do pane
@@ -22,7 +25,7 @@ const motivoDoGit = (t) => { const ls = String(t ?? '').split('\n').map((l) => l
 const KIT = new Set(['ichikawa-kit', 'kit-de-orquestracao']);
 const primeiraLinha = (x) => String(x ?? '').trim().split('\n')[0];
 
-export function posMerge({ cwd, base = 'main', nomes = [], pastaOrq, env = process.env }) {
+export function posMerge({ cwd, base = 'main', nomes = [], pastaOrq, forcar = false, env = process.env }) {
   const GIT = env.GIT_BIN || 'git';
   const git = (args, onde = cwd) => execFileSync(GIT, args, { cwd: onde, env, encoding: 'utf8', timeout: 120_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const script = (nome, args, onde, timeout) => {
@@ -49,7 +52,7 @@ export function posMerge({ cwd, base = 'main', nomes = [], pastaOrq, env = proce
       try {
         if (i > 1) git(['fetch', '-q', 'origin', `+refs/heads/${base}:refs/remotes/origin/${base}`]);
         git(['worktree', 'add', '-q', '--detach', wt, `origin/${base}`]);
-        const r = script('subir-versao.mjs', ['--empurrar', '--destacado', '--base', base], wt, 180_000);
+        const r = script('subir-versao.mjs', ['--empurrar', '--destacado', '--por-dia', ...(forcar ? ['--forcar'] : []), '--base', base], wt, 180_000);
         if (r.ok && r.json) out.versao = r.json; else motivo = r.motivo;
       } catch (e) { motivo = motivoDoGit(e?.stderr) || primeiraLinha(e?.message || e); } finally {
         try { git(['worktree', 'remove', '--force', wt]); } catch { /* a pasta sai abaixo */ }

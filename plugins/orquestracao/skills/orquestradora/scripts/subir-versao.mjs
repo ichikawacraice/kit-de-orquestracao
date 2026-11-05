@@ -3,13 +3,17 @@
 // que mudou desde a última subida (o último commit que mexeu na linha "version" do plugin.json) e commita tudo de uma vez.
 // Rodar na raiz do repositório, na base (padrão main) em dia. Saída JSON: {subiu, commit?, empurrou?, pulados?} ou {recusado, motivo} com exit 1.
 // `--destacado` (F373): aceita o HEAD destacado (o worktree temporário da fila sem turno), que tem de estar em dia com origin/<base>.
-// Ambiente: GIT_BIN troca o `git` (teste).
+// `--por-dia` (F426, o pós-merge da fila): sobe no máximo uma vez por dia de São Paulo, no primeiro lote depois das 00:00; o dia da última
+// subida é o do último commit `chore(versao)` na base. Antes dela, ou com `--forcar`, sobe. Adiado: {subiu: [], adiado: '<motivo>'}, exit 0.
+// Sem `--por-dia` (uso manual) sobe sempre. Ambiente: GIT_BIN troca o `git` (teste); KIT_AGORA (ISO) injeta o relógio (teste).
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 const GIT = process.env.GIT_BIN || 'git';
 const git = (args) => execFileSync(GIT, args, { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+const diaDeSp = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+const agoraMs = () => { const t = Date.parse(process.env.KIT_AGORA ?? ''); return Number.isNaN(t) ? Date.now() : t; };
 const tenta = (args) => { try { git(args); return true; } catch { return false; } };
 
 function recusa(motivo) {
@@ -22,6 +26,8 @@ function main() {
   const seco = args.includes('--seco');
   const empurrar = args.includes('--empurrar');
   const destacado = args.includes('--destacado');
+  const porDia = args.includes('--por-dia');
+  const forcar = args.includes('--forcar');
   const i = args.indexOf('--base');
   const base = i >= 0 ? args[i + 1] : 'main';
   if (!base) { recusa('--base pede um valor'); return; }
@@ -33,6 +39,15 @@ function main() {
   if (tenta(['remote', 'get-url', 'origin'])) {
     if (!tenta(['fetch', '-q', 'origin', base])) { recusa(`não consegui buscar origin/${base}`); return; }
     if (!tenta(['merge-base', '--is-ancestor', `origin/${base}`, 'HEAD'])) { recusa(`${base} atrás de origin/${base}; puxe antes`); return; }
+  }
+
+  if (porDia && !forcar) {
+    const achado = git(['log', '--first-parent', '-E', '--grep=^chore\\(versao\\)', '--format=%ct %s', 'HEAD']).split('\n').find((l) => /^\d+ chore\(versao\)/.test(l));
+    const ultima = Number(achado?.split(' ')[0] ?? 0) * 1000;
+    if (ultima && diaDeSp(ultima) === diaDeSp(agoraMs())) {
+      process.stdout.write(`${JSON.stringify({ subiu: [], adiado: `a versão já subiu hoje (${diaDeSp(ultima)}); sobe no primeiro lote depois das 00:00 de São Paulo, ou com --forcar` })}\n`);
+      return;
+    }
   }
 
   const raiz = git(['rev-parse', '--show-toplevel']);

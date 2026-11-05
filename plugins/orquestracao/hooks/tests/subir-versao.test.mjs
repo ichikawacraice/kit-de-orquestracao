@@ -37,8 +37,8 @@ beforeEach(() => {
 });
 afterEach(() => { rmSync(base, { recursive: true, force: true }); });
 
-function subir(args = [], cwd = repo) {
-  const r = spawnSync('node', [SCRIPT, ...args], { cwd, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: { ...process.env, HOME: join(base, 'home') } });
+function subir(args = [], cwd = repo, env = {}) {
+  const r = spawnSync('node', [SCRIPT, ...args], { cwd, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: { ...process.env, HOME: join(base, 'home'), ...env } });
   if (r.error) throw r.error;
   let json = null; try { json = JSON.parse(r.stdout); } catch { /* sem JSON */ }
   return { exit: r.status, out: r.stdout, err: r.stderr, json };
@@ -237,4 +237,61 @@ test('entrada em design-system/packages/ é pulada: o commit de versão não toc
   const tocados = git(['show', '--name-only', '--format=', 'HEAD']).split('\n').filter(Boolean);
   assert.ok(tocados.length > 0, 'o commit de versão existe e tocou algo');
   assert.deepEqual(tocados.filter((f) => f.startsWith('design-system/packages/')), []);
+});
+
+// F426: o pós-merge sobe a versão no máximo uma vez por dia de São Paulo (`--por-dia`), com relógio injetado em KIT_AGORA.
+function subidaDeManha() { // a última subida: 05/11 10:00 (SP); depois, a mudança de um PR
+  escrever('plugins/a/x.mjs', 'dois\n'); commitar('feat: PR 1');
+  const r = subir();
+  assert.equal(r.json.subiu.length, 1, `precondição: a primeira subida acontece ${r.out}${r.err}`);
+  const iso = '2026-11-05T10:00:00-03:00';
+  const e = spawnSync('git', ['commit', '-q', '--amend', '--no-edit', '--reset-author'], { cwd: repo, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_DATE: iso, GIT_COMMITTER_DATE: iso } });
+  assert.equal(e.status, 0, e.stderr);
+  assert.match(git(['log', '-1', '--format=%s']), /^chore\(versao\)/);
+  assert.equal(git(['log', '-1', '--format=%cI']), iso, 'precondição: o commit de versão está datado de manhã');
+  escrever('plugins/a/x.mjs', 'tres\n'); commitar('feat: PR 2');
+}
+
+test('--por-dia: segundo lote no mesmo dia de São Paulo não sobe a versão e diz por quê', () => {
+  subidaDeManha();
+  const antes = contagem();
+  const r = subir(['--por-dia'], repo, { KIT_AGORA: '2026-11-05T22:00:00-03:00' });
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.deepEqual(r.json.subiu, []);
+  assert.match(r.json.adiado, /2026-11-05/);
+  assert.equal(contagem(), antes, 'nenhum commit novo');
+  assert.match(readFileSync(join(repo, 'plugins/a/.claude-plugin/plugin.json'), 'utf8'), /"0\.1\.6"/, 'a versão ficou');
+});
+
+test('--por-dia: o dia é o de São Paulo, não o do UTC (23:00 SP de 05/11 já é 06/11 em UTC)', () => {
+  subidaDeManha();
+  const r = subir(['--por-dia'], repo, { KIT_AGORA: '2026-11-06T02:00:00Z' });
+  assert.deepEqual(r.json.subiu, []);
+  assert.ok(r.json.adiado, JSON.stringify(r.json));
+});
+
+test('--por-dia: primeiro lote do dia seguinte (depois das 00:00 de SP) sobe', () => {
+  subidaDeManha();
+  const r = subir(['--por-dia'], repo, { KIT_AGORA: '2026-11-06T00:10:00-03:00' });
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.deepEqual(r.json.subiu.map((s) => s.depois), ['0.1.7']);
+  assert.equal(r.json.adiado, undefined);
+});
+
+test('--por-dia --forcar: sobe no mesmo dia', () => {
+  subidaDeManha();
+  const r = subir(['--por-dia', '--forcar'], repo, { KIT_AGORA: '2026-11-05T22:00:00-03:00' });
+  assert.deepEqual(r.json.subiu.map((s) => s.depois), ['0.1.7'], r.out + r.err);
+});
+
+test('--por-dia sem nenhuma subida anterior (sem commit chore(versao)): sobe', () => {
+  escrever('plugins/a/x.mjs', 'dois\n'); commitar('feat: PR 1');
+  const r = subir(['--por-dia'], repo, { KIT_AGORA: '2026-11-05T22:00:00-03:00' });
+  assert.equal(r.json.subiu.length, 1, r.out + r.err);
+});
+
+test('sem --por-dia (uso manual): sobe sempre, como antes', () => {
+  subidaDeManha();
+  const r = subir([], repo, { KIT_AGORA: '2026-11-05T22:00:00-03:00' });
+  assert.equal(r.json.subiu.length, 1, r.out + r.err);
 });
