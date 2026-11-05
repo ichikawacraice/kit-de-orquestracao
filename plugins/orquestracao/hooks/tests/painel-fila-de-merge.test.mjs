@@ -725,6 +725,8 @@ test('--anotar: exige o sha da ponta, só anota (sem gate nem merge), liga o ite
     const s = JSON.parse(r.out);
     assert.equal(s.anotado, true);
     assert.match(s.aviso, /ainda não tem gate/);
+    assert.equal(s.lancou, false, 'sem gate gravado não lança');
+    assert.match(s.naoLancou, /gate/);
     const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
     assert.deepEqual(e.pendentes, [{ pr: 21, sha: c.shas[21].slice(0, 9) }]);
     assert.ok(e.config.cwd.endsWith('/projx'), e.config.cwd);
@@ -744,9 +746,16 @@ test('rodada da orquestradora grava o config; a rodada --sem-turno usa a lista a
     assert.equal(e.config.gate, 'test ! -f c.txt');
     assert.ok(e.config.cwd.endsWith('/projx'));
     assert.equal(e.desfechos, undefined, 'a rodada da orquestradora não grava desfecho: ela já leu a saída');
-    assert.equal(c.painel('fila-de-merge', `24:${c.shas[24]}`, `23:${c.shas[23]}`, '--anotar').exit, 0);
+    // o --anotar lançaria a fila sozinho (F427): desligado aqui, a rodada sem turno é a chamada abaixo
+    c.envExtra = { KIT_FILA_SEM_TURNO: 'off' };
+    const an = c.painel('fila-de-merge', `24:${c.shas[24]}`, `23:${c.shas[23]}`, '--anotar');
+    assert.equal(an.exit, 0, an.err);
+    assert.equal(JSON.parse(an.out).lancou, false);
+    assert.match(JSON.parse(an.out).naoLancou, /desligad/);
+    c.envExtra = {};
     e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
     assert.equal(e.config.gate, 'test ! -f c.txt', 'anotar não apaga o gate gravado');
+    assert.equal(e.lancada, undefined, 'desligado, não marca lançamento');
     const r = c.painel('fila-de-merge', `24:${c.shas[24]}`, `23:${c.shas[23]}`, '--gate', e.config.gate, '--sem-turno');
     assert.equal(r.exit, 0, r.err + r.out);
     e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
@@ -822,6 +831,115 @@ test('F370: a rodada --sem-turno grava o aviso de fatia e o desfecho marca o ite
     const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
     assert.equal(e.avisos.length, 1);
     assert.equal(e.desfechos[0].mergeados[0].itens[0].avisoGravado, true);
+  } finally { limpar(c); }
+});
+
+// F427: o --anotar lança a fila sem turno (a mesma da batida) quando nenhum gate do projeto roda, sem esperar a batida
+async function esperar(cond, ms = 30000) {
+  const fim = Date.now() + ms;
+  while (Date.now() < fim) { if (cond()) return true; await new Promise((r) => setTimeout(r, 100)); }
+  return false;
+}
+test('F427: --anotar com gate gravado e fila livre lança a rodada sem turno, que mergeia e grava o desfecho', async () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F2', 24);
+    // com a entrega gravada: sem ela o --anotar avisa e não lança (teste abaixo)
+    assert.equal(c.painel('update', 'fila', 'F2', JSON.stringify({ entrega: { resultado: 'r', medido: 'm', naoMedido: 'n', proximos: [] } })).exit, 0);
+    c.envExtra = { KIT_POS_MERGE: 'off' };
+    const orq = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', 'true');
+    assert.equal(orq.exit, 0, orq.err + orq.out);
+    const r = c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar');
+    assert.equal(r.exit, 0, r.err);
+    const s = JSON.parse(r.out);
+    assert.equal(s.lancou, true, r.out);
+    assert.ok(Number.isInteger(s.pid) && s.pid > 0, r.out);
+    assert.ok(s.log.endsWith('projx.sem-turno.log'), s.log);
+    const lerFila = () => JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.ok(await esperar(() => (lerFila().desfechos ?? []).length > 0), `sem desfecho: ${existsSync(s.log) ? readFileSync(s.log, 'utf8') : 'sem log'}`);
+    const e = lerFila();
+    assert.deepEqual(e.desfechos[0].mergeados.map((m) => m.pr), [24], JSON.stringify(e.desfechos[0]));
+    assert.equal(e.lancada, undefined, 'a fila que se gravou dona zera a marca de lançamento');
+    assert.equal(e.ocupada, null);
+    assert.deepEqual(c.merges(), [21, 24]);
+  } finally { limpar(c); }
+});
+
+test('F427: --anotar não lança com gate rodando nem com lançamento recente; só anota e diz por quê', () => {
+  const c = montar();
+  try {
+    c.item('F2', 24);
+    assert.equal(c.painel('update', 'fila', 'F2', JSON.stringify({ entrega: { resultado: 'r' } })).exit, 0, 'sem aviso pendente');
+    const config = { cwd: c.clone, gate: 'true', preparar: null };
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    // um dono vivo: o próprio processo do teste, gravado agora (começou antes do `desde`)
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: process.pid, desde: new Date().toISOString(), gate: 'true' }, pendentes: [], emVoo: [{ pr: 21, sha: c.shas[21] }], config }));
+    const vivo = JSON.parse(c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar').out);
+    assert.equal(vivo.lancou, false);
+    assert.match(vivo.naoLancou, /gate.*rodando/);
+    let e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.pendentes.map((p) => p.pr), [24], 'fica nos pendentes: entra no lote seguinte');
+    assert.equal(e.lancada, undefined);
+    assert.match(c.dado('F2').agora, /espera a vez/);
+    const lancada = { em: new Date(Date.now() - 60_000).toISOString(), tentativas: 1 };
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [], config, lancada }));
+    const recente = JSON.parse(c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar').out);
+    assert.equal(recente.lancou, false);
+    assert.match(recente.naoLancou, /lançada há pouco/);
+    e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.lancada, lancada, 'não remarca');
+    // lançada 3 vezes sem nunca se gravar dona: fica com a orquestradora (como na batida)
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [], config, lancada: { em: new Date(Date.now() - 3600_000).toISOString(), tentativas: 3 } }));
+    const esgotada = JSON.parse(c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar').out);
+    assert.equal(esgotada.lancou, false);
+    assert.match(esgotada.naoLancou, /lançamentos/);
+  } finally { limpar(c); }
+});
+
+// F427: o aviso do --anotar (PR só de doc que fecharia o item, item sem entrega) pede conserto antes do merge: não lança
+test('F427: --anotar com aviso pendente não lança a fila, mesmo livre e com gate gravado', () => {
+  const c = montar();
+  try {
+    c.item('F1', 28);
+    const config = { cwd: c.clone, gate: 'true', preparar: null };
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [], config }));
+    const r = c.painel('fila-de-merge', `28:${c.shas[28]}`, '--anotar');
+    assert.equal(r.exit, 0, r.err);
+    const s = JSON.parse(r.out);
+    assert.match(s.avisoSemCodigo ?? '', /só muda documentação/, r.out);
+    assert.equal(s.lancou, false, r.out);
+    assert.match(s.naoLancou ?? '', /corrija o aviso.*avisoSemCodigo.*avisoSemEntrega/, r.out);
+    assert.equal(s.pid, undefined);
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.pendentes.map((p) => p.pr), [28], 'fica anotado');
+    assert.equal(e.lancada, undefined, 'não marca lançamento');
+    assert.match(c.dado('F1').agora, /corrija o aviso/);
+    // o motivo de fundo vence o aviso: com gate rodando, diz que roda
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: process.pid, desde: new Date().toISOString(), gate: 'true' }, pendentes: [], emVoo: [], config }));
+    const rodando = JSON.parse(c.painel('fila-de-merge', `28:${c.shas[28]}`, '--anotar').out);
+    assert.equal(rodando.lancou, false);
+    assert.match(rodando.naoLancou, /gate.*rodando/);
+    assert.match(rodando.avisoSemCodigo ?? '', /só muda documentação/);
+  } finally { limpar(c); }
+});
+
+test('F427: o item ligado ao PR só pela branch também segura o lançamento (os avisos veem a ligação)', () => {
+  const c = montar();
+  try {
+    assert.equal(c.painel('set', 'fila', 'F1', JSON.stringify({ titulo: 'item pela branch', etapa: 'execucao', tema: 'editor', via: 'dona', branch: 'pr28', donoLocalId: LA, donoApelido: 'dona' })).exit, 0);
+    assert.equal(c.dado('F1').prs, undefined, 'começa sem o PR em prs');
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [], config: { cwd: c.clone, gate: 'true', preparar: null } }));
+    const r = c.painel('fila-de-merge', `28:${c.shas[28]}`, '--anotar');
+    assert.equal(r.exit, 0, r.err);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.ligados, [{ pr: 28, item: 'F1' }], r.out);
+    assert.match(s.avisoSemCodigo ?? '', /F1.*só muda documentação/, r.out);
+    assert.match(s.avisoSemEntrega ?? '', /F1/, r.out);
+    assert.equal(s.lancou, false, r.out);
+    assert.equal(s.pid, undefined);
+    assert.deepEqual(c.dado('F1').prs, [28]);
   } finally { limpar(c); }
 });
 
