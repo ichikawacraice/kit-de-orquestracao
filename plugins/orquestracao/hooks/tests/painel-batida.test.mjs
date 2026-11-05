@@ -15,6 +15,16 @@ const lid = (n) => `local_00000000-0000-4000-8000-${String(n).padStart(12, '0')}
 const iso = (ms) => new Date(ms).toISOString();
 
 let base; let repo; let outro; let T;
+const GH_FALSO = `#!/usr/bin/env node
+const { existsSync, readFileSync } = require('node:fs');
+const f = process.env.GH_PRS;
+const prs = f && existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : [];
+const [cmd, sub, n] = process.argv.slice(2);
+if (cmd === 'pr' && sub === 'list') process.stdout.write(JSON.stringify(prs));
+else if (cmd === 'pr' && sub === 'view') { const p = prs.find((x) => String(x.number) === n); if (!p) process.exitCode = 1; else process.stdout.write(JSON.stringify(p)); }
+else process.exitCode = 1;
+`;
+const prsNoGh = (lista) => writeFileSync(join(base, 'prs.json'), JSON.stringify(lista));
 const pastaPainel = () => join(base, 'painel');
 const pastaOrq = () => join(base, 'orq');
 
@@ -32,12 +42,14 @@ beforeEach(() => {
   repo = criarRepo('kit');
   outro = criarRepo('outro');
   T = Date.now();
+  // F423: o `gh` falso devolve os PRs de prs.json (sem o arquivo, nenhum): a batida nunca chama o gh real
+  writeFileSync(join(base, 'gh'), GH_FALSO, { mode: 0o755 });
 });
 afterEach(() => { rmSync(base, { recursive: true, force: true }); });
 
 const ambiente = (extra = {}) => ({
   ...process.env, PAINEL_DIR: pastaPainel(), CLAUDE_CODE_SESSION_ID: '', CLAUDE_CODE_HOST_SESSION_ID: '', HOME: join(base, 'home'), HOOKS_CREWAI_BASE: pastaOrq(),
-  POOL_APP_SESSOES_DIR: join(base, 'appsess'), KIT_CARGA_1MIN: '0', KIT_NUCLEOS_DIR: join(base, 'nuc'), KIT_NUCLEOS_DE_TESTE: '4', ...extra,
+  POOL_APP_SESSOES_DIR: join(base, 'appsess'), GH_BIN: join(base, 'gh'), GH_PRS: join(base, 'prs.json'), KIT_CARGA_1MIN: '0', KIT_NUCLEOS_DIR: join(base, 'nuc'), KIT_NUCLEOS_DE_TESTE: '4', ...extra,
 });
 function painel(args, { env = {}, cwd = repo } = {}) {
   const r = spawnSync('node', [PAINEL, ...args], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', cwd, env: ambiente(env) });
@@ -629,4 +641,51 @@ test('batida F371: sem o registro da dona, o limite não é lido e a batida cutu
   const a = batida(sessoes(sessao(1, 'F1 · faz o item')));
   assert.equal(msgs(a, 'cutucada').length, 1, a.out);
   assert.equal(a.json().limites, undefined);
+});
+
+// ---- F423: o estado deduzido (git, gh, sessões) ----
+test('batida F423: o item cujo PR ligado mergeou fecha pela batida, com a dona e o com fora e deduzido.json gravado', () => {
+  item('F1', { etapa: 'merge', prs: [7] });
+  prsNoGh([{ number: 7, state: 'MERGED', headRefName: 'f1-x', mergedAt: iso(T - 5 * MIN), createdAt: iso(T - 30 * MIN), updatedAt: iso(T - 5 * MIN) }]);
+  const r = batida(sessoes(sessao(1, 'F1 · Item'), sessao(30, '🎛 orquestradora — kit')));
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().fechados, ['F1']);
+  const d = lerItem('F1').data;
+  assert.equal(d.etapa, 'feito');
+  assert.equal(d.donoLocalId, undefined);
+  assert.deepEqual(d.com ?? [], []);
+  assert.ok(d.sessoes.includes(lid(1)), 'a dona fica em sessoes');
+  assert.match(d.agora, /PR 7/);
+  const dd = JSON.parse(readFileSync(join(pastaOrq(), 'batida', 'deduzido.json'), 'utf8'));
+  assert.equal(dd.itens.F1.mergeado, true);
+  assert.equal(dd.itens.F1.fontes.prs, 'gh');
+});
+test('batida F423: o PR mergeado da mesma branch ANTES do item nascer (worktree reaproveitado) não fecha o item', () => {
+  item('F1', { etapa: 'execucao', branch: 'velha' });
+  prsNoGh([{ number: 3, state: 'MERGED', headRefName: 'velha', mergedAt: iso(T - 90 * MIN), createdAt: iso(T - 120 * MIN), updatedAt: iso(T - 90 * MIN) }]);
+  const r = batida(sessoes(sessao(1, 'F1 · Item', { branch: 'velha' })));
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(r.json().fechados, undefined);
+  assert.equal(lerItem('F1').data.etapa, 'execucao');
+});
+test('batida F423: o PR aberto na branch da dona vira etapa merge deduzida; KIT_ESTADO_DEDUZIDO=off volta ao declarado', () => {
+  item('F1', { etapa: 'execucao', atualizadoEm: iso(T - 2 * MIN) });
+  prsNoGh([{ number: 9, state: 'MERGED', headRefName: 'f1-y', mergedAt: iso(T - 1 * MIN), createdAt: iso(T - 20 * MIN), updatedAt: iso(T - 1 * MIN) }]);
+  const linhas = sessoes(sessao(1, 'F1 · Item', { branch: 'f1-y' }));
+  const desligado = painel(['batida', '--sessoes', linhas, '--agora', iso(T)], { env: { KIT_ESTADO_DEDUZIDO: 'off' } });
+  assert.equal(desligado.exit, 0, desligado.err);
+  assert.equal(lerItem('F1').data.etapa, 'execucao', 'desligado: nada fecha');
+  assert.equal(existsSync(join(pastaOrq(), 'batida', 'deduzido.json')), false);
+  const ligado = batida(linhas);
+  assert.equal(ligado.exit, 0, ligado.err);
+  assert.equal(lerItem('F1').data.etapa, 'feito', 'ligado: o PR da branch da dona mergeou');
+});
+test('batida F423 --seco: deduz mas não fecha nem grava', () => {
+  item('F1', { etapa: 'merge', prs: [7] });
+  prsNoGh([{ number: 7, state: 'MERGED', headRefName: 'f1-x', mergedAt: iso(T - 5 * MIN), createdAt: iso(T - 30 * MIN) }]);
+  const r = batida(sessoes(sessao(1, 'F1 · Item')), T, ['--seco']);
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().fechados, ['F1']);
+  assert.equal(lerItem('F1').data.etapa, 'merge');
+  assert.equal(existsSync(join(pastaOrq(), 'batida', 'deduzido.json')), false);
 });

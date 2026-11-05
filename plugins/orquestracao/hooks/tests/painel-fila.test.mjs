@@ -7,6 +7,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, utimesSync, 
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// F423: "feito" não se declara (painel.mjs recusa); o caso que exercita o fechamento por update liga a escotilha só na chamada que o declara
+const fechaDeclarado = (args) => (args.some((a) => /"etapa"\s*:\s*"feito"/.test(String(a))) ? { KIT_FECHAR_DECLARADO: '1' } : {});
 
 const TEMAS = JSON.stringify([{ id: 'editor', rotulo: 'Editor' }, { id: 'motor', rotulo: 'Motor' }]);
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
@@ -24,7 +26,7 @@ function novoBase() {
 function run(cmd, args, extraEnv = {}, prazo = 30000) {
   const r = spawnSync(cmd, args, {
     encoding: 'utf8', timeout: prazo, killSignal: 'SIGKILL',
-    env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", CLAUDE_CODE_HOST_SESSION_ID: "", HOME: join(base, "home"), ...extraEnv },
+    env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", CLAUDE_CODE_HOST_SESSION_ID: "", HOME: join(base, "home"), ...extraEnv },
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -364,7 +366,7 @@ await casoAsync('C2 painel: durante a publicação a .trava não existe vazia (o
 // de pausa entre o julgamento e o rename; exatamente um rouba, o outro não toca a trava (o dono final é o de quem tomou).
 const orfaSemeada = (trava, extra = '') => { mkdirSync(trava); writeFileSync(join(trava, 'dono'), `${pidMorto()}-morto${extra}`); antigo(trava); };
 const spawnComEnv = (cmd, args, env) => {
-  const c = spawn(cmd, args, { env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), ...env } });
+  const c = spawn(cmd, args, { env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), ...env } });
   const r = { out: '', err: '', exit: null, pid: c.pid }; c.stdout.on('data', (d) => { r.out += d; }); c.stderr.on('data', (d) => { r.err += d; });
   r.fim = new Promise((res) => c.on('close', (code) => { r.exit = code; res(r); }));
   return r;

@@ -8,6 +8,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// F423: "feito" não se declara (painel.mjs recusa); o caso que exercita o fechamento por update liga a escotilha só na chamada que o declara
+const fechaDeclarado = (args) => (args.some((a) => /"etapa"\s*:\s*"feito"/.test(String(a))) ? { KIT_FECHAR_DECLARADO: '1' } : {});
 
 const SCRIPTS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 const LA = 'local_00000000-0000-4000-8000-0000000000a1';
@@ -19,7 +21,7 @@ function montar() {
   const painel = (...args) => {
     const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
       cwd: raiz, encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL',
-      env: { ...process.env, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(raiz, 'appsess'), BATIDA: 'off' },
+      env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(raiz, 'appsess'), BATIDA: 'off' },
     });
     assert.ok(!r.error, String(r.error));
     return { exit: r.status, out: r.stdout, err: r.stderr };
