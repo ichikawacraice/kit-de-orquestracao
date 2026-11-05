@@ -153,5 +153,83 @@ caso('F27-3h: sessão sem item (ou com item feito / de outro dono): a mensagem d
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
   ok(r.reason.includes('painel update sessoes <sessionId>') && !r.reason.includes('update fila'), `mensagem: ${r.reason}`);
 });
+
+// ---- F400: decisão marcada "assumida, a confirmar" (ou "Q-ID não reservado") na mensagem final sem a pergunta assumida no painel ----
+// O turno: a mensagem do operador, os comandos (cada um com o tool_result) e, por último, o texto final do assistente.
+function turnoComFinal(final, comandos = [], { antes = '' } = {}) {
+  const f = dir('t.jsonl');
+  const linhas = [{ type: 'user', timestamp: '2026-10-24T12:00:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'F9 para você' } }];
+  if (antes) linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: antes }] } });
+  for (const c of comandos) {
+    linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Bash', input: { command: c } }] } });
+    linhas.push({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: 'ok' }] } });
+  }
+  linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: final }] } });
+  writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
+  return f;
+}
+const assumidaNoPainel = (id, sessaoId, atualizadoEm = '2026-10-24T11:00:00.000Z', estado = 'assumida') =>
+  writeFileSync(dir('painel', 'perguntas', `${id}.json`), JSON.stringify({ id, version: 1, data: { estado, sessaoId, atualizadoEm } }));
+// A forma real do F385 (izanagi, 05/11): marca no masculino, em itálico, e o "(Q-ID não reservado)" na linha da decisão.
+const FINAL_IZANAGI = 'PR 1662 na fila.\n\nO que falta você confirmar:\n- **(Q-ID não reservado) Só lote encerrado?** Recomendo manter. *assumido, a confirmar*';
+const GRAVA_ASSUMIDA_REAL = `Q2=$(proxima-pergunta); S=${LOCAL}\npainel set perguntas Q986 "$(cat <<EOF\n{"id":"Q986","sessaoId":"$S","item":"F385","estado":"assumida","titulo":"x","caso":"y","recomendacao":"z"}\nEOF\n)"`;
+
+caso('F400-a: mensagem final sem a marca, sem gravar nada: passa (e a mesma com a marca bloqueia)', () => {
+  ok(rodar(turnoComFinal('PR 12 na fila. Testes verdes.')) === null, 'sem a marca devia passar');
+  ok(rodar(turnoComFinal('Usei o nome curto (*assumida, a confirmar*).'))?.decision === 'block', 'precondição: a marca seria detectada');
+});
+caso('F400-b: a forma real do izanagi ("assumido", "Q-ID não reservado") sem gravar: bloqueia e diz o comando', () => {
+  const r = rodar(turnoComFinal(FINAL_IZANAGI));
+  ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
+  ok(r.reason.includes('proxima-pergunta') && r.reason.includes('painel set perguntas') && r.reason.includes('"estado":"assumida"'), `o motivo devia dar o comando: ${r.reason}`);
+  ok(r.reason.includes(LOCAL), `o comando devia trazer o sessaoId desta sessão: ${r.reason}`);
+});
+caso('F400-c: só "Q-ID não reservado", sem a palavra assumida: bloqueia', () => {
+  const r = rodar(turnoComFinal('- (Q-ID não reservado) troquei o nome da coluna.'));
+  ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
+});
+caso('F400-d: o turno gravou a pergunta assumida (forma real do heredoc e a de aspas escapadas): passa', () => {
+  ok(rodar(turnoComFinal(FINAL_IZANAGI, [GRAVA_ASSUMIDA_REAL])) === null, 'heredoc devia passar');
+  const escapado = `painel set perguntas Q7 "{\\"sessaoId\\":\\"${LOCAL}\\",\\"estado\\":\\"assumida\\"}"`;
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*, Q7).', [escapado])) === null, 'aspas escapadas deviam passar');
+});
+caso('F400-e: gravar pergunta aberta (não assumida) ou outra coisa no painel não basta', () => {
+  const aberta = `painel set perguntas Q8 '{"sessaoId":"${LOCAL}","estado":"aberta"}'`;
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', [aberta]))?.decision === 'block', 'pergunta aberta não é a assumida');
+  const fila = `painel update fila F9 '{"agora":"x"}'`;
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', [fila]))?.decision === 'block', 'gravar o item não é gravar a assumida');
+});
+caso('F400-f: a mensagem que só cita a regra, entre crases ou aspas: passa', () => {
+  for (const t of ['A regra manda marcar `assumida, a confirmar` e gravar a pergunta.', 'O protocolo pede "assumida, a confirmar" no PR.', 'Ela pediu para tirar o “assumido, a confirmar”.', '```\n- (Q-ID não reservado) exemplo\n```']) {
+    const r = rodar(turnoComFinal(t));
+    ok(r === null, `citação devia passar: ${t} → ${JSON.stringify(r)}`);
+  }
+});
+caso('F400-g: a assumida gravada num turno anterior, citada pelo Q-ID na linha da marca: passa; Q-ID de outra sessão não', () => {
+  assumidaNoPainel('Q50', LOCAL);
+  ok(rodar(turnoComFinal('- Nome curto (Q50, *assumida, a confirmar*).')) === null, 'Q50 é assumida desta sessão');
+  assumidaNoPainel('Q51', LOCAL, '2026-10-24T11:00:00.000Z', 'respondida');
+  ok(rodar(turnoComFinal('- Nome curto (Q51, *assumida, a confirmar*).')) === null, 'Q51 desta sessão já confirmada também conta');
+  assumidaNoPainel('Q60', 'local_OUTRA');
+  ok(rodar(turnoComFinal('- Nome curto (Q60, *assumida, a confirmar*).'))?.decision === 'block', 'Q60 é de outra sessão');
+  ok(rodar(turnoComFinal('- Nome curto (Q50, *assumida, a confirmar*).\n- Coluna nova (*assumida, a confirmar*).'))?.decision === 'block', 'a segunda linha não tem Q-ID');
+});
+caso('F400-h: assumida desta sessão gravada no turno por outro caminho (atualizadoEm depois do início do turno): passa; antes do turno, não', () => {
+  assumidaNoPainel('Q70', LOCAL, '2026-10-24T11:59:00.000Z');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'))?.decision === 'block', 'gravada antes do turno e não citada: bloqueia');
+  assumidaNoPainel('Q71', LOCAL, '2026-10-24T12:00:30.000Z');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).')) === null, 'gravada no turno: passa');
+});
+caso('F400-i: a marca numa mensagem do meio do turno, não na final: passa', () => {
+  ok(rodar(turnoComFinal('PR na fila.', ['ls'], { antes: 'Vou usar o nome curto (*assumida, a confirmar*).' })) === null, 'só a mensagem final conta');
+});
+caso('F400-j: junto com outro motivo (abriu PR sem gravar), um bloqueio só com os dois', () => {
+  const r = rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', ['gh pr create --fill']));
+  ok(r?.decision === 'block' && r.reason.includes('abriu PR') && r.reason.includes('proxima-pergunta'), `esperava os dois motivos: ${JSON.stringify(r)}`);
+});
+caso('F400-k: a orquestradora (marcador próprio em ativas/) fica de fora', () => {
+  writeFileSync(dir('home', '.claude', 'orquestracao', 'ativas', SID), 'x\n');
+  ok(rodar(turnoComFinal('Q50 e Q51 seguem *assumidas, a confirmar*.')) === null, 'a orquestradora tem o hook dela');
+});
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

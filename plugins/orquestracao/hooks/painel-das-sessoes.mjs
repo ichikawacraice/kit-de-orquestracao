@@ -11,6 +11,8 @@
 // A própria orquestradora fica com orquestradora-ritual.mjs; a que perdeu o marcador
 // (limpeza de contexto troca o session_id) ganha um de volta no início da sessão (sessao-inicio.mjs, F208)
 // e, se aquele falhar, aqui pelo título, no fim do primeiro turno.
+// F400: o turno também não termina se a mensagem final marca decisão "assumida, a confirmar" (ou "Q-ID não reservado")
+// e a pergunta `estado:"assumida"` dela não está no painel (protocolo.md#nunca-travar): sem ela o operador não vê a decisão.
 import { readFileSync, existsSync, appendFileSync, writeFileSync, mkdirSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -96,6 +98,70 @@ function inicioDoTurno(entradas) {
   return -1;
 }
 
+// ---- F400: a decisão assumida da mensagem final precisa da pergunta assumida no painel ----
+// A marca: "assumida, a confirmar" em qualquer gênero e número, ou "Q-ID não reservado" (a sessão admitindo que não gravou).
+const MARCA_ASSUMIDA = /\bassumid[oa]s?\s*,\s*a\s+confirmar\b|\bQ-?IDs?\s+n[ãa]o\s+reservad[oa]s?\b/i;
+const NAO_RESERVADO = /\bQ-?IDs?\s+n[ãa]o\s+reservad[oa]s?\b/i;
+// Gravar a assumida pelo comando: escrita no painel, na coleção perguntas, com `"estado":"assumida"` (aspas escapadas ou não).
+const ESTADO_ASSUMIDA = /estado\\?"\s*:\s*\\?"assumida\\?"/;
+
+// A mensagem final do turno: o texto do assistente depois da última chamada de ferramenta (ou da última linha `user`).
+function mensagemFinal(entradas, inicio) {
+  const partes = [];
+  for (let i = entradas.length - 1; i > inicio; i--) {
+    const e = entradas[i];
+    if (e.type === 'user') break;
+    if (e.type !== 'assistant') continue;
+    const c = e.message?.content;
+    if (Array.isArray(c) && c.some((b) => b?.type === 'tool_use')) break;
+    partes.unshift(textoDe(e.message));
+  }
+  return partes.join('\n');
+}
+
+// Citar a regra não é marcar decisão: o que está em bloco de código, entre crases ou entre aspas sai antes de procurar a marca.
+function semCitacao(t) {
+  return t
+    .replace(/```[\s\S]*?(?:```|$)/g, ' ')
+    .replace(/`[^`\n]*`/g, ' ')
+    .replace(/"[^"\n]*"/g, ' ')
+    .replace(/“[^”\n]*”/g, ' ')
+    .replace(/«[^»\n]*»/g, ' ');
+}
+
+function perguntaDaSessao(painel, q, local) {
+  try { const f = acharPergunta(join(painel, 'perguntas'), q); return Boolean(f) && JSON.parse(readFileSync(f, 'utf8')).data?.sessaoId === local; } catch { return false; }
+}
+
+// Assumida desta sessão gravada no turno por qualquer caminho (batch de arquivo, script): `atualizadoEm` desde o início do turno.
+function gravouAssumidaNoTurno(painel, local, desdeIso) {
+  const desde = Date.parse(desdeIso ?? '');
+  const dir = join(painel, 'perguntas');
+  if (Number.isNaN(desde) || !existsSync(dir)) return false;
+  for (const nome of readdirSync(dir)) {
+    if (!nome.endsWith('.json')) continue;
+    try {
+      const d = JSON.parse(readFileSync(join(dir, nome), 'utf8')).data;
+      if (d?.sessaoId === local && d.estado === 'assumida' && Date.parse(d.atualizadoEm ?? '') >= desde) return true;
+    } catch { /* ilegível: ignora */ }
+  }
+  return false;
+}
+
+// Devolve as linhas marcadas que ficaram sem pergunta no painel ([] = nada a cobrar). A linha marcada se resolve sozinha quando cita
+// um Qnn que é pergunta desta sessão (assumida de turno anterior, já confirmada ou não), salvo a que diz "Q-ID não reservado"; as
+// demais se resolvem se o turno gravou uma assumida (pelo comando ou pelo `atualizadoEm`).
+function assumidasSemPergunta(entradas, inicio, comandos, local) {
+  const linhas = semCitacao(mensagemFinal(entradas, inicio)).split('\n').filter((l) => MARCA_ASSUMIDA.test(l));
+  if (linhas.length === 0) return [];
+  const painel = process.env.PAINEL_DIR || join(BASE, 'painel');
+  const soltas = linhas.filter((l) => NAO_RESERVADO.test(l) || !local || !(l.match(/\bQ\d+\b/g) ?? []).some((q) => perguntaDaSessao(painel, q, local)));
+  if (soltas.length === 0) return [];
+  const peloComando = comandos.some((c) => GRAVA_NO_PAINEL.test(c) && /\bperguntas\b/.test(c) && ESTADO_ASSUMIDA.test(c));
+  if (peloComando || (local && gravouAssumidaNoTurno(painel, local, entradas[inicio]?.timestamp))) return [];
+  return soltas;
+}
+
 function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id, transcript_path, stop_hook_active, cwd } = input;
@@ -129,12 +195,14 @@ function main() {
   if (citaPerguntaDestaSessao(textoDe(entradas[inicio].message), session_id)) motivos.add('recebeu resposta a uma pergunta Qnn');
 
   let gravou = false;
+  const comandos = [];
   for (const e of entradas.slice(inicio + 1)) {
     if (e.type !== 'assistant' || !Array.isArray(e.message?.content)) continue;
     for (const it of e.message.content) {
       if (it.type !== 'tool_use') continue;
       if (it.name === 'Bash') {
         const cmd = String(it.input?.command ?? '');
+        comandos.push(cmd);
         if (GRAVA_NO_PAINEL.test(cmd)) gravou = true;
         for (const [re, m] of GATILHOS_BASH) if (re.test(cmd)) motivos.add(m);
       }
@@ -142,18 +210,36 @@ function main() {
       if (it.name.endsWith('archive_session')) motivos.add('arquivou sessão');
     }
   }
-  if (gravou || motivos.size === 0) return;
+  const local = registroDaSessao(session_id)?.localId;
+  const soltas = assumidasSemPergunta(entradas, inicio, comandos, local);
+  const cobraPainel = !gravou && motivos.size > 0;
+  if (!cobraPainel && soltas.length === 0) return;
 
+  const partes = [];
+  if (cobraPainel) partes.push(motivoDoPainel(session_id, motivos));
+  if (soltas.length) partes.push(motivoDaAssumida(soltas, local, itensDaSessao(session_id)));
+  process.stdout.write(JSON.stringify({ decision: 'block', reason: partes.join('\n\n') }));
+}
+
+function motivoDaAssumida(soltas, local, itens) {
+  const item = itens.length === 1 ? `,"item":"${itens[0]}"` : '';
+  const exemplo = soltas.length ? ` (ex.: «${umaLinha(soltas[0]).slice(0, 120)}»)` : '';
+  return `A mensagem final marca ${soltas.length} decisão(ões) como "assumida, a confirmar" ou "Q-ID não reservado"${exemplo}, ` +
+    'e o turno não gravou a pergunta assumida no painel: sem ela o operador não vê a decisão (protocolo.md#nunca-travar). Para cada uma: ' +
+    `\`Q=$(proxima-pergunta) && painel set perguntas "$Q" '{"sessaoId":"${local ?? '<seu local_…>'}"${item},"estado":"assumida","titulo":"…","caso":"…","recomendacao":"o que você assumiu"}'\` ` +
+    'e cite o Q-ID na linha da decisão. Se a mensagem só cita a regra, ponha a expressão entre crases. Depois encerre o turno.';
+}
+
+const umaLinha = (s) => String(s).replace(/\s+/g, ' ').trim();
+
+function motivoDoPainel(session_id, motivos) {
   const itens = itensDaSessao(session_id);
   const onde = itens.length
     ? `Grave no item que você é dona: ${itens.map((f) => `\`painel update fila ${f} '{"etapa":…,"agora":…}'\``).join(' · ')} ` +
       '(e, se houve pergunta ou resposta, `… perguntas <ID>`). Depois encerre o turno.'
     : 'Grave no painel com `painel update sessoes <sessionId> \'{...}\'` ' +
       '(estado, etapa, pr) e, se houve pergunta ou resposta, `… perguntas <ID>`. Depois encerre o turno.';
-  process.stdout.write(JSON.stringify({
-    decision: 'block',
-    reason: `Painel das sessões não atualizado neste turno, e a sessão mudou de estado (${[...motivos].join('; ')}). ${onde}`,
-  }));
+  return `Painel das sessões não atualizado neste turno, e a sessão mudou de estado (${[...motivos].join('; ')}). ${onde}`;
 }
 
 try {
