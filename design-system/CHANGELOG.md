@@ -4,6 +4,21 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.22.0 · 05/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **A prioridade que recorta** (PECA-01, CTRL-03): a `Prioridade` ganha `onAbrir`. Com ele, o carimbo vira botão e aplica o recorte pelo nível, com o mesmo gesto do `ChipQueAbre` (o sublinhado do link, o anel de foco, o alvo de 24px), agora exportado como `GESTO_DO_CARIMBO` do `chip-de-estado`. O nome acessível é a palavra visível: na contagem, quem chama escreve o número e a palavra (*3 altas*).
+- **A contagem zerada** (PECA-01, COR-09): `zerada` mostra o zero na forma do nível (as barras ou o alerta), na tinta neutra, sem a cor do nível nem a voz da urgente, e sem gesto: não há recorte para abrir.
+- **A cor do nível só dentro do carimbo** (COR-09): a Alta (vermelho) e a voz `ruim` (rosa) são o mesmo vermelho como texto solto e se separam como carimbo, pela tinta e pelo glifo. A Alta segue vermelha; a regra passa a proibir a cor do nível fora do carimbo neutro da `Prioridade`.
+
+### Migração
+- `npx shadcn add <registro>/prioridade.json <registro>/chip-de-estado.json`.
+- Troque o `button` à mão em volta da `Prioridade` por `onAbrir`.
+- Troque `nivel={0}` usado como contagem zero por `nivel={n} zerada`, com o nível que a contagem conta.
+- Tire a cor do nível de onde ela estiver fora da `Prioridade` (texto, ponto, filete, legenda).
+
 ## 0.21.0 · 04/11/2026
 
 Camadas: base, registro

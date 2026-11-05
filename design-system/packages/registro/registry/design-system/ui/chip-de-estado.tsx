@@ -13,6 +13,15 @@ const CASCO_DO_CARIMBO =
   "inline-flex shrink-0 items-center gap-[5px] whitespace-nowrap rounded-md px-2 py-[3px] text-[11px] leading-[1.4] font-[650] [font-stretch:96%]"
 
 /**
+ * O gesto do carimbo que abre (CTRL-03): o sublinhado do link diz que ele abre,
+ * o foco tem o anel de sempre (SUP-06). O desenho mede ~21px; o alvo de clique,
+ * 24px, por um pseudo-elemento (ACES-03). É o mesmo no `ChipQueAbre` e na
+ * `Prioridade` com `onAbrir`: quem abre um recorte não inventa outro gesto.
+ */
+const GESTO_DO_CARIMBO =
+  "relative cursor-pointer after:absolute after:inset-x-0 after:-inset-y-[2px] after:content-[''] sublinhado-de-link transition-colors duration-cor focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+
+/**
  * O marcador do estado neutro (CTRL-05): o ponto de 6px, na tinta do texto
  * (`PONTO_NO_CARIMBO`). Sem ele, o carimbo neutro e o
  * `Badge` são a mesma tinta no mesmo casco, e o estado se lê como valor. A voz
@@ -74,8 +83,7 @@ function ChipQueAbre({
       className={cn(
         CASCO_DO_CARIMBO,
         BADGE_DO_TOM[tom],
-        // O desenho mede ~21px; o alvo de clique, 24px, por um pseudo-elemento (ACES-03).
-        "relative cursor-pointer after:absolute after:inset-x-0 after:-inset-y-[2px] after:content-[''] sublinhado-de-link transition-colors duration-cor focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        GESTO_DO_CARIMBO,
         className
       )}
       {...props}
@@ -86,4 +94,4 @@ function ChipQueAbre({
   )
 }
 
-export { ChipDeEstado, ChipQueAbre, CASCO_DO_CARIMBO }
+export { ChipDeEstado, ChipQueAbre, CASCO_DO_CARIMBO, GESTO_DO_CARIMBO }

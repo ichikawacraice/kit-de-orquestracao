@@ -8,7 +8,7 @@
     "badge": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/badge.tsx": "0b6926a00ad9145d508e5385674abc5d6487baf48b93832a03e7ef3c43ba7467",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -64,7 +64,7 @@
       "components/casco-no-next.tsx": "e188ef0711826d69d837732717776d6b4182aa84ab231b45f17695a6470d4a8d",
       "components/menu-do-contexto.tsx": "07b7d317ca9587597aa57f70de7dda5da3f0d208e8379f95d1e103c2d5ccf00e",
       "components/ui/button.tsx": "0b3555fe7b1862dc7d6dcde5b80e8bb86059953cc5177f3fabea90285c6a8240",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "components/ui/logotipo.tsx": "62147b4181805680a7a4aeb3b32b798f9afd2e787aee38669d01a6b02257a9e1",
@@ -89,7 +89,7 @@
     },
     "chip-de-estado": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -122,7 +122,7 @@
     "conversa": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/badge.tsx": "0b6926a00ad9145d508e5385674abc5d6487baf48b93832a03e7ef3c43ba7467",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/conversa.tsx": "b83c52ec690fa4a737d2f00c6eb0ed10e47f3f705f9e53e6e74afa563dd36a16",
       "components/ui/monograma.tsx": "9127d3249ed99e814db9bed1f6df05c3016177cbaca9475d1923ccb5eaa9956d",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
@@ -154,7 +154,7 @@
       "components/ui/barra-do-editor.tsx": "c5ed2dab547cf1a762906fa65a2701f4da1d50d0cc2d0eadb484ae917ed0d4a2",
       "components/ui/button.tsx": "0b3555fe7b1862dc7d6dcde5b80e8bb86059953cc5177f3fabea90285c6a8240",
       "components/ui/card.tsx": "2876d4586b7468a9cccb4f3461a01b1fc3612710e99efdcd08c9029f92a42d5c",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/colunas-do-editor.tsx": "3d63159bc687251220394d6ba96db6fd32be89b411922fe4de17715e4a503fe9",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
@@ -252,7 +252,7 @@
     },
     "linha-do-grupo": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/linha-do-grupo.tsx": "fa6303c1d925236aca2f1adab039da1397059d1fe070698a8e64aa0da6c1b366",
       "components/ui/progress.tsx": "891effbd859afe0f830f59b4fa3494254d0d4c04540e681dc0ef7103354cab4d",
       "components/ui/table.tsx": "6b3a8cfa47a523f7e212027d9fd8287300d208877a831e8a25c4d8ff26c3d0e4",
@@ -274,7 +274,7 @@
       "components/lista-de-pedidos.tsx": "7e85a81c028e04f7f361f6805fb4a7f6104de74bc911a52095938f4413f89ea0",
       "components/menu-do-contexto.tsx": "07b7d317ca9587597aa57f70de7dda5da3f0d208e8379f95d1e103c2d5ccf00e",
       "components/ui/button.tsx": "0b3555fe7b1862dc7d6dcde5b80e8bb86059953cc5177f3fabea90285c6a8240",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "components/ui/input.tsx": "bcd4c801c304da419aeeced1a3202329277f30c0cfd1cf434106abb599063599",
@@ -364,7 +364,7 @@
       "components/mesa-do-pedido.tsx": "332f68bb05d93464e6ba6ffa076b8a40b0699596d34aa506489d90a2aed3f34f",
       "components/ui/bloco.tsx": "6cb5b40b67df1b0d202943d80840e7ad8b8f71edfbf53aff6ec99e13ebe0c4f3",
       "components/ui/button.tsx": "0b3555fe7b1862dc7d6dcde5b80e8bb86059953cc5177f3fabea90285c6a8240",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "components/ui/estado.tsx": "2ba49196556258021bd1d9bbd4f44514c5779b676af8499663a7fee40659d27e",
@@ -429,7 +429,7 @@
     },
     "prazo": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/estado.tsx": "2ba49196556258021bd1d9bbd4f44514c5779b676af8499663a7fee40659d27e",
       "components/ui/prazo.tsx": "a8d6edf0f747ac2172708e8ad53473d1f49b9ee290642d9be99a9e8868bdca72",
       "components/ui/table.tsx": "6b3a8cfa47a523f7e212027d9fd8287300d208877a831e8a25c4d8ff26c3d0e4",
@@ -440,8 +440,8 @@
     },
     "prioridade": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
-      "components/ui/prioridade.tsx": "282c1e3fd0ecfa0d3f1def5276e5f8a08cf53b5e886c7966b2675dadafad3eda",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
+      "components/ui/prioridade.tsx": "171d07cd1b8013ca9a3829ee7d899127106625e65da9bfd102a8d8a09b651407",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -505,7 +505,7 @@
     },
     "topo-da-pagina": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
-      "components/ui/chip-de-estado.tsx": "7310ff89945834585457fca2380d75c85410ab50567b054180cb97560ccc5554",
+      "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "components/ui/topo-da-pagina.tsx": "991e7870a5a9d3834ceccbee6734d8dfaeb9dbcb7600d1e0b2a13b54ad5afab4",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
