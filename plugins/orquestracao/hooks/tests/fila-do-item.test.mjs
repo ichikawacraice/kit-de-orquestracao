@@ -247,5 +247,51 @@ caso('R1: o mesmo item gravado DEPOIS do turno aberto por peer → passa', () =>
   igual(rodar(stop()), null, 'saída');
 });
 
+// F404 (ADR 0024): o PR que fecha o item leva a entrega; a trava cobra.
+const emMerge = (extra = {}) => vivo({ etapa: 'merge', prs: [77], atualizadoEm: DEPOIS, ...extra });
+caso('F404: item meu em merge com PR, sem maisFatias e sem entrega: bloqueia com o comando da entrega', () => {
+  item('F12', emMerge());
+  registroLocal(LOCAL, SID);
+  transcript(turno(usaNoTurno('Bash', { command: 'gh pr create --title x' })));
+  const r = rodar(stop());
+  igual(r?.decision, 'block', 'decisão');
+  ok(r.reason.includes('F12') && r.reason.includes('"entrega"') && r.reason.includes('"resultado"') && r.reason.includes('dona.md'), `motivo: ${r.reason}`);
+  igual(desfechos().join(','), 'bloqueou-entrega', 'log');
+});
+caso('F404: com entrega.resultado passa; maisFatias true passa; fora de merge passa; merge sem PR passa', () => {
+  registroLocal(LOCAL, SID);
+  transcript(turno());
+  for (const [rotulo, dado] of [
+    ['com entrega', emMerge({ entrega: { resultado: 'a home caiu de 984 ms para 270 ms' } })],
+    ['maisFatias', emMerge({ maisFatias: true })],
+    ['execucao', emMerge({ etapa: 'execucao' })],
+    ['merge sem PR', emMerge({ prs: [] })],
+  ]) {
+    item('F12', dado);
+    igual(rodar(stop()), null, rotulo);
+  }
+  item('F12', emMerge());
+  igual(rodar(stop())?.decision, 'block', 'prova: sem entrega bloqueia');
+});
+caso('F404: entrega com resultado vazio ou só espaço não conta', () => {
+  registroLocal(LOCAL, SID);
+  transcript(turno());
+  item('F12', emMerge({ entrega: { resultado: '  ' } }));
+  igual(rodar(stop())?.decision, 'block', 'resultado vazio');
+});
+caso('F404: turno que só leu não é cobrado pela entrega', () => {
+  registroLocal(LOCAL, SID);
+  item('F12', emMerge());
+  transcript(turno(usaNoTurno('Read', { file_path: '/r/a.mjs' })));
+  igual(rodar(stop()), null, 'só leu');
+});
+caso('F404: sem gravar o item E sem entrega, um só bloqueio cita os dois', () => {
+  registroLocal(LOCAL, SID);
+  item('F12', emMerge({ atualizadoEm: ANTES }));
+  transcript(turno());
+  const r = rodar(stop());
+  ok(r?.decision === 'block' && r.reason.includes('"agora"') && r.reason.includes('"entrega"'), `motivo: ${r?.reason}`);
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

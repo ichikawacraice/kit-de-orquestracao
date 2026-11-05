@@ -434,6 +434,12 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
       partes.push(texto(30, y, 13, 's', xml(l)))
     }
     alt.push(item.resumo)
+  } else if (item.entrega) {
+    // F404: na linha, o resultado cabe numa linha; o texto inteiro vai ao alt
+    const entregue = `Entregue: ${item.entrega.resultado}`
+    y += 19
+    partes.push(texto(30, y, 13, 's', xml(caber(entregue, 13, tw))))
+    alt.push(item.entrega.proximos > 0 ? `${entregue} · próximos: ${item.entrega.proximos}` : entregue)
   } else if (item.situacao !== 'fila' && item.agora) {
     y += 19
     partes.push(texto(30, y, 13, 's', xml(caber(item.agora, 13, tw))))
@@ -678,7 +684,22 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
     alt.push(...saiu)
   }
 
-  if (item.agora) {
+  if (item.entrega) {
+    // F404: o item fechado diz o que entregou, no lugar do "mergeado, ponta <sha>"
+    const entregue = `Entregue: ${item.entrega.resultado}`
+    y += 6
+    for (const l of quebrar(entregue, 12.5, W, 3)) {
+      y += 17
+      partes.push(texto(0, y, 12.5, 's', xml(l)))
+    }
+    alt.push(entregue)
+    if (item.entrega.proximos > 0) {
+      const proximos = `próximos: ${item.entrega.proximos}`
+      y += 17
+      partes.push(texto(0, y, 12, 'm', xml(proximos)))
+      alt.push(proximos)
+    }
+  } else if (item.agora) {
     y += 6
     for (const l of quebrar(item.agora, 12.5, W, 2)) {
       y += 17

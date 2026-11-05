@@ -44,6 +44,8 @@ export type LinhaItem = {
   feitoEm?: string
   /** F348: o custo relativo do item fechado (milhões de tokens-equivalentes de entrada), gravado pelo `painel mergear`. */
   custo?: number
+  /** F404: o que o item fechado entregou (o `resultado`) e quantos próximos passos a dona viu; só no item final. */
+  entrega?: { resultado: string; proximos: number }
   foraDoContrato?: string
 }
 

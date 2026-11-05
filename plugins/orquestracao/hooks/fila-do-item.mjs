@@ -8,6 +8,9 @@
 // turno (a última entrada `user` com `origin.kind` do transcript, o mesmo critério do painel-das-sessoes).
 // Protocolo: pool/protocolo.md#painel-em-dia
 //
+// F404 (ADR 0024): o item em `merge` com PR e sem `maisFatias: true` (o PR que fecha o item) cobra também a `entrega`
+// (`entrega.resultado` não vazio), no mesmo turno que mudou algo: é ela que o pane e o `painel entregas` mostram ao operador.
+//
 // Erro do próprio hook vai para o log e DEIXA PASSAR. Variáveis para teste: FILA_DIR, FILA_APP_SESSOES_DIR, FILA_LOG.
 import { readFileSync, existsSync, appendFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -34,7 +37,7 @@ function registrar(sessionId, localId, desfecho, detalhe = '') {
 const ETAPAS = ['planejamento', 'design', 'execucao', 'validacao', 'merge', 'feito', 'descartado'];
 const ETAPAS_FINAIS = ['feito', 'descartado'];
 
-// Itens da fila que têm dono e estão vivos: [{ id, dono, atualizadoEm }].
+// Itens da fila que têm dono e estão vivos: [{ id, dono, atualizadoEm, semEntrega }].
 function itensComDono() {
   if (!existsSync(FILA_DIR)) return [];
   const itens = [];
@@ -44,7 +47,9 @@ function itensComDono() {
       const doc = JSON.parse(readFileSync(join(FILA_DIR, nome), 'utf8'));
       const d = doc?.data;
       if (ETAPAS.includes(d?.etapa) && !ETAPAS_FINAIS.includes(d.etapa) && d?.donoLocalId) {
-        itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), dono: d.donoLocalId, atualizadoEm: d.atualizadoEm });
+        const semEntrega = d.etapa === 'merge' && Array.isArray(d.prs) && d.prs.length > 0 && d.maisFatias !== true
+          && !(typeof d.entrega?.resultado === 'string' && d.entrega.resultado.trim());
+        itens.push({ id: doc.id ?? nome.replace(/\.json$/, ''), dono: d.donoLocalId, atualizadoEm: d.atualizadoEm, semEntrega });
       }
     } catch { /* arquivo parcial ou ilegível: ignora este item */ }
   }
@@ -145,18 +150,29 @@ function main() {
     const t = Date.parse(i.atualizadoEm);
     return Number.isNaN(t) || t < inicio;
   });
-  if (pendentes.length === 0) return registrar(sid, local, 'passou', meus.map((i) => i.id).join(','));
+  const semEntrega = meus.filter((i) => i.semEntrega);
+  if (pendentes.length === 0 && semEntrega.length === 0) return registrar(sid, local, 'passou', meus.map((i) => i.id).join(','));
 
-  const ids = pendentes.map((i) => i.id);
-  const lista = ids.length === 1 ? `do item ${ids[0]} (em andamento)` : `dos itens ${ids.join(', ')} (em andamento)`;
-  const cmds = ids.map((id) => `\`painel update fila ${id} '{"agora":"…"}'\``).join(' · ');
+  const partes = [];
+  if (pendentes.length) {
+    const ids = pendentes.map((i) => i.id);
+    const lista = ids.length === 1 ? `do item ${ids[0]} (em andamento)` : `dos itens ${ids.join(', ')} (em andamento)`;
+    const cmds = ids.map((id) => `\`painel update fila ${id} '{"agora":"…"}'\``).join(' · ');
+    partes.push(`Você é dona ${lista}, mudou algo neste turno e não o gravou. Grave o estado antes de terminar: ${cmds} (protocolo em ${PROTOCOLO}).`);
+  }
+  if (semEntrega.length) {
+    const ids = semEntrega.map((i) => i.id);
+    const cmds = ids.map((id) => `\`painel update fila ${id} '{"entrega":{"resultado":"…","medido":"…","naoMedido":"…","proximos":["…"]}}'\``).join(' · ');
+    partes.push(`O PR que fecha ${ids.length === 1 ? `o item ${ids[0]}` : `os itens ${ids.join(', ')}`} está na fila sem a entrega, que é o que o operador vê do que saiu. Grave-a: ${cmds} — resultado obrigatório, o resto quando houver (passo 6 do pool/dona.md).`);
+  }
+  const ids = [...new Set([...pendentes, ...semEntrega].map((i) => i.id))];
   // O texto do painel (ids dos itens) é dado de outra sessão: com padrão de injeção, o aviso vai antes.
   const aviso = avisoDeInjecao(ids.join('\n'));
   process.stdout.write(JSON.stringify({
     decision: 'block',
-    reason: `${aviso ? `${aviso}\n` : ''}Você é dona ${lista}, mudou algo neste turno e não o gravou. Grave o estado antes de terminar: ${cmds} (protocolo em ${PROTOCOLO}).`,
+    reason: `${aviso ? `${aviso}\n` : ''}${partes.join('\n')}`,
   }));
-  registrar(sid, local, 'bloqueou', ids.join(','));
+  registrar(sid, local, pendentes.length ? 'bloqueou' : 'bloqueou-entrega', ids.join(','));
 }
 
 try {

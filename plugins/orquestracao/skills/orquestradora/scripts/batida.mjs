@@ -248,7 +248,9 @@ export function desfechoAcorda(df) {
 
 export function resumoDoDesfecho(df) {
   const partes = [];
-  const itensDe = (m) => (m.itens ?? []).map((it) => `${it.item}${it.fechado ? ' fechou' : it.fatia ? ' fatia' : ''}`).join(', ');
+  // F404: o item que fechou com entrega leva o resultado (o operador lê o registro sem acordar ninguém)
+  const resultado = (it) => (typeof it.entrega === 'string' && it.entrega.trim() ? `: "${it.entrega.trim().replace(/\s+/g, ' ').slice(0, 200)}"` : '');
+  const itensDe = (m) => (m.itens ?? []).map((it) => `${it.item}${it.fechado ? ` fechou${resultado(it)}` : it.fatia ? ' fatia' : ''}`).join(', ');
   if (df.mergeados?.length) partes.push(`mergeados ${df.mergeados.map((m) => `#${m.pr}${itensDe(m) ? ` (${itensDe(m)})` : ''}`).join(', ')}`);
   if (df.devolvidos?.length) partes.push(`devolvidos ${df.devolvidos.map((d) => `#${d.pr}${(d.itens ?? []).length ? ` (${d.itens.map((i) => i.item).join(', ')}, dona avisada)` : ''}: ${String(d.motivo ?? '').slice(0, 160)}`).join('; ')}`);
   if (df.suspeitaDeInstavel) partes.push(`suspeita de teste instável: ${df.suspeitaDeInstavel}`);

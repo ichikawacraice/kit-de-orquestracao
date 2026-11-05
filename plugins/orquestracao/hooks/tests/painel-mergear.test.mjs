@@ -174,6 +174,20 @@ test('item com o PR: fecha (feito, sem dono, com vazio), agora com o sha curto; 
   } finally { limpar(c); }
 });
 
+test('F404: o item que fecha mantém a entrega e a saída do mergear leva o resultado (para o desfecho)', () => {
+  const c = montar();
+  try {
+    c.item('F1', { entrega: { resultado: 'a home caiu de 984 ms para 270 ms', proximos: ['cache'] } });
+    const r = c.painel('mergear', '12', c.sha.slice(0, 7));
+    assert.equal(r.exit, 0, r.err);
+    assert.equal(c.dado('F1').etapa, 'feito');
+    assert.deepEqual(c.dado('F1').entrega, { resultado: 'a home caiu de 984 ms para 270 ms', proximos: ['cache'] });
+    const s = JSON.parse(r.out);
+    assert.equal(s.itens.length, 1, 'veio o item');
+    assert.equal(s.itens[0].entrega, 'a home caiu de 984 ms para 270 ms');
+  } finally { limpar(c); }
+});
+
 test('item com dois PRs e o outro ainda OPEN: fica em merge, com vazio, agora "um PR entrou; falta outro"', () => {
   const c = montar();
   try {
@@ -192,7 +206,8 @@ test('item com dois PRs e o outro ainda OPEN: fica em merge, com vazio, agora "u
 test('F222: item com maisFatias: o merge da fatia não fecha — volta a execucao com a dona e o com; o --seco diz fecharia: false', () => {
   const c = montar();
   try {
-    c.item('F1', { maisFatias: true });
+    c.item('F1', { maisFatias: true, entrega: { resultado: 'a primeira fatia' } });
+    assert.equal(c.dado('F1').entrega.resultado, 'a primeira fatia', 'precondição: a fatia tem entrega');
     const seco = JSON.parse(c.painel('mergear', '12', c.sha.slice(0, 7), '--seco').out);
     assert.deepEqual(seco.itens.map((i) => [i.item, i.fecharia]), [['F1', false]]);
     const comAntes = c.dado('F1').com;
@@ -204,6 +219,7 @@ test('F222: item com maisFatias: o merge da fatia não fecha — volta a execuca
     assert.equal(d.donoLocalId, LA); assert.equal(d.donoApelido, 'P1');
     assert.deepEqual(d.com, comAntes);
     assert.equal(d.maisFatias, true, 'a marca fica até a dona tirá-la na última fatia');
+    assert.equal(d.entrega, undefined, 'F404: a entrega da fatia sai, para a trava cobrar a do PR final');
     assert.deepEqual(d.prs, [12], 'o PR mergeado continua no item');
     assert.ok(d.agora.includes('fatia') && d.agora.includes(c.sha.slice(0, 7)), d.agora);
     assert.deepEqual(JSON.parse(r.out).itens.map((i) => [i.item, i.fechado, i.fatia, i.dona]), [['F1', false, true, LA]]);

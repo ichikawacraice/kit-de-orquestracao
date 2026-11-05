@@ -485,6 +485,25 @@ test('feitos: só nas últimas 24 h, recolhidos, e o botão abre', async ($, on)
   }
 })
 
+test('F404: nos Feitos hoje, as duas superfícies mostram "Entregue:" e os próximos no lugar do agora', async ($, on) => {
+  const comEntrega = { ...FILA_REAL.F28, agora: 'mergeado, ponta abc1234', entrega: { resultado: 'a home caiu de 984 ms para 270 ms', proximos: ['cache', 'imagens'] } }
+  const { relogio } = engine(on, false, {}, { agora: AGORA, fila: { F28: comEntrega as Record<string, unknown> }, vivas: vivasDe(), perguntas: [] })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.command.run(ABRIR)
+  await relogio.settle()
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'feitos' })
+    const aberto = await lerSuperficie(ui)
+    expect(aberto, `${surface}: o item feito apareceu`).toMatch(/executora que termina o turno/)
+    expect(aberto, surface).toMatch(/Entregue: a home caiu de 984 ms para 270 ms/)
+    expect(aberto, surface).toMatch(/próximos: 2/)
+    expect(aberto, surface).not.toMatch(/mergeado, ponta abc1234/)
+    await ui.press({ key: 'feitos' })
+    await ui.unmount()
+  }
+})
+
 test('a 300 px os quatro rótulos do resumo cabem inteiros, em 2×2', () => {
   const contagens = [
     { rotulo: 'Esperam você', n: 2, cor: 'av' },
@@ -3252,4 +3271,44 @@ test('F348: o item feito leva o custo gravado pelo mergear; o vivo e o sem custo
   expect(com.alt).toMatch(/custo 12,3 M/)
   expect(cartaoSvg(360, por.F2!, AGORA, { situacao: situacaoDoTeste }).source, 'sem custo gravado, sem chip').not.toMatch(/custo /)
   expect(D.textoDoCusto(0.04)).toBe('custo 0,0 M')
+})
+
+test('F404: o item feito com entrega mostra "Entregue:" no lugar do agora, e os próximos; o vivo e o sem entrega não', () => {
+  const feitoEm = new Date(AGORA - 3600e3).toISOString()
+  const entrega = { resultado: 'a home caiu de 984 ms para 270 ms', medido: 'Lighthouse', proximos: ['cache da busca', 'imagens'] }
+  const itens = montarItens(
+    [
+      docF('F1', { etapa: 'feito', feitoEm, agora: 'mergeado, ponta abc1234', entrega }),
+      docF('F2', { etapa: 'feito', feitoEm, agora: 'mergeado, ponta def5678' }),
+      docF('F3', { etapa: 'merge', agora: 'PR 9 na fila', entrega }),
+      docF('F4', { etapa: 'feito', feitoEm, entrega: { resultado: 'só o resultado' } }),
+      docF('F5', { etapa: 'descartado', feitoEm, agora: 'PR fechado sem merge', entrega }),
+    ],
+    TEMAS_T,
+    [] as never,
+    undefined,
+    [],
+    AGORA,
+  )
+  const por = Object.fromEntries(itens.map(i => [i.id, i]))
+  expect(itens.length, 'os cinco itens vieram').toBe(5)
+  expect(por.F1!.entrega).toEqual({ resultado: entrega.resultado, proximos: 2 })
+  expect([por.F2!.entrega, por.F3!.entrega], 'o sem entrega e o vivo não levam').toEqual([undefined, undefined])
+  expect(por.F5!.entrega, 'o descartado não entregou, mesmo com o campo gravado').toBeUndefined()
+  const com = cartaoSvg(360, por.F1!, AGORA, { situacao: situacaoDoTeste })
+  expect(com.source, 'o resultado no cartão').toMatch(/Entregue: a home caiu de 984 ms/)
+  expect(com.source, 'os próximos').toMatch(/próximos: 2/)
+  expect(com.source, 'o agora sai').not.toMatch(/mergeado, ponta/)
+  expect(com.alt).toMatch(/Entregue: a home caiu de 984 ms para 270 ms/)
+  const sem = cartaoSvg(360, por.F2!, AGORA, { situacao: situacaoDoTeste })
+  expect(sem.source, 'sem entrega, o agora como antes').toMatch(/mergeado, ponta def5678/)
+  expect(sem.source).not.toMatch(/Entregue:/)
+  const so = cartaoSvg(360, por.F4!, AGORA, { situacao: situacaoDoTeste })
+  expect(so.source).toMatch(/Entregue: só o resultado/)
+  expect(so.source, 'sem próximos, sem a linha').not.toMatch(/próximos:/)
+  const linha = D.itemSvg(360, por.F1!, AGORA)
+  expect(linha.source, 'a linha da lista também').toMatch(/Entregue: a home/)
+  expect(linha.source).not.toMatch(/mergeado, ponta/)
+  expect(linha.alt).toMatch(/Entregue: a home caiu de 984 ms para 270 ms · próximos: 2/)
+  expect(D.itemSvg(360, por.F2!, AGORA).source, 'sem entrega, a linha como antes').toMatch(/mergeado, ponta def5678/)
 })
