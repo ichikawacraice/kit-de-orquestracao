@@ -228,7 +228,7 @@ export const PECAS = [
   peca({
     name: 'prioridade',
     title: 'Prioridade',
-    description: 'priority badge — a prioridade de um item: o carimbo com o glifo de barras e a palavra na cor do nível; só a urgente fala, na voz de espera.',
+    description: 'priority badge — a prioridade de um item: o carimbo com o glifo de barras e a palavra na cor do nível; só a urgente fala, na voz de espera; com `onAbrir`, aplica o recorte pelo nível; `zerada` mostra a contagem zero na forma do nível, sem a cor.',
     npm: [NPM.lucide],
     pecas: ['chip-de-estado', 'idioma-de-cor'],
     files: [ui('prioridade')],

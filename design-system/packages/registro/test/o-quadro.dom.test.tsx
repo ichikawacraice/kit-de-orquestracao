@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest"
 import { fireEvent, render, screen, within } from "@testing-library/react"
 
 import { criarPontoDaEtapa } from "@/registry/design-system/ui/ponto-da-etapa"
+import { ChipQueAbre, GESTO_DO_CARIMBO } from "@/registry/design-system/ui/chip-de-estado"
 import { COR_DO_NIVEL, Prioridade } from "@/registry/design-system/ui/prioridade"
 import {
   CabecalhoDaColuna,
@@ -207,6 +208,112 @@ describe("a prioridade", () => {
     const dasVozes = new Set(Object.values(BADGE_DO_TOM).flatMap((c) => c.split(" ")).map(familia))
     expect(dasVozes.has("amber")).toBe(true)
     for (const classe of todas) expect(dasVozes.has(familia(classe))).toBe(false)
+  })
+
+  it("sem onAbrir é texto: nenhum botão", () => {
+    render(<Prioridade nivel={3}>Alta</Prioridade>)
+    expect(screen.getByText("Alta")).toBeDefined()
+    expect(screen.queryByRole("button")).toBeNull()
+  })
+
+  it("com onAbrir é botão, com a palavra visível como nome, e o clique aplica o recorte", () => {
+    let chamadas = 0
+    render(
+      <Prioridade nivel={3} onAbrir={() => chamadas++}>
+        3 altas
+      </Prioridade>,
+    )
+    const botao = screen.getByRole("button", { name: "3 altas" })
+    expect(botao.getAttribute("type")).toBe("button")
+    expect(botao.getAttribute("data-slot")).toBe("prioridade")
+    expect(botao.hasAttribute("aria-label")).toBe(false)
+    expect(botao.hasAttribute("aria-pressed")).toBe(false)
+    expect(botao.hasAttribute("aria-expanded")).toBe(false)
+    fireEvent.click(botao)
+    expect(chamadas).toBe(1)
+  })
+
+  it("o gesto é o do ChipQueAbre: o mesmo sublinhado, anel e alvo", () => {
+    const gesto = GESTO_DO_CARIMBO.split(/\s+/).filter(Boolean)
+    expect(gesto.length).toBeGreaterThan(0)
+    expect(gesto).toContain("sublinhado-de-link")
+    expect(gesto).toContain("focus-visible:ring-2")
+    render(
+      <>
+        <Prioridade nivel={1} onAbrir={() => {}}>7 baixas</Prioridade>
+        <ChipQueAbre tom="espera" onAbrir={() => {}}>15 pendentes</ChipQueAbre>
+      </>,
+    )
+    const prioridade = screen.getByRole("button", { name: "7 baixas" })
+    const chip = screen.getByRole("button", { name: "15 pendentes" })
+    for (const classe of gesto) {
+      expect(classes(prioridade)).toContain(classe)
+      expect(classes(chip)).toContain(classe)
+    }
+  })
+
+  it("o alvo da que abre passa de 24px (ACES-03)", () => {
+    render(<Prioridade nivel={2} onAbrir={() => {}}>2 médias</Prioridade>)
+    const c = classes(screen.getByRole("button", { name: "2 médias" }))
+    expect(c).toContain("text-[11px]")
+    expect(c).toContain("leading-[1.4]")
+    expect(c).toContain("py-[3px]")
+    expect(c).toContain("after:-inset-y-[2px]")
+    expect(11 * 1.4 + 2 * 3 + 2 * 2).toBeGreaterThanOrEqual(24)
+  })
+
+  it("a zerada guarda a forma do nível sem a cor", () => {
+    const { container } = render(
+      <>
+        <Prioridade nivel={3}>3 altas</Prioridade>
+        <Prioridade nivel={3} zerada>0 altas</Prioridade>
+      </>,
+    )
+    const [cheia, zerada] = [...container.querySelectorAll('[data-slot="prioridade"]')]
+    const barrasCheias = (el: Element | undefined) =>
+      [...(el?.querySelectorAll("span[aria-hidden] > span") ?? [])].filter((b) => !classes(b).includes("opacity-25")).length
+    // Antes: a sem zerada tem as 3 barras cheias e a cor do nível.
+    expect(barrasCheias(cheia)).toBe(3)
+    for (const classe of COR_DO_NIVEL[3].split(" ")) expect(classes(cheia)).toContain(classe)
+    // A zerada: as mesmas barras, a tinta neutra, nenhuma cor de nível.
+    expect(zerada?.hasAttribute("data-zerada")).toBe(true)
+    expect(barrasCheias(zerada)).toBe(3)
+    expect(classes(zerada)).toContain(TINTA_DO_CARIMBO_NEUTRO)
+    const todas = Object.values(COR_DO_NIVEL).flatMap((c) => c.split(" "))
+    expect(todas.length).toBeGreaterThan(0)
+    for (const classe of todas) expect(classes(zerada)).not.toContain(classe)
+  })
+
+  it("a urgente zerada perde a voz de espera e guarda o alerta", () => {
+    const { container } = render(
+      <Prioridade nivel="urgente" zerada>
+        0 urgentes
+      </Prioridade>,
+    )
+    const el = container.querySelector('[data-slot="prioridade"]')
+    expect(el).not.toBeNull()
+    expect(classes(el)).not.toContain(TINTA_DO_TOM.espera)
+    expect(classes(el)).toContain(TINTA_DO_CARIMBO_NEUTRO)
+    expect(el?.querySelector("svg")).not.toBeNull()
+  })
+
+  it("o zero não abre: a zerada ignora o onAbrir", () => {
+    let chamadas = 0
+    const { unmount } = render(
+      <Prioridade nivel={2} onAbrir={() => chamadas++}>
+        2 médias
+      </Prioridade>,
+    )
+    expect(screen.getByRole("button", { name: "2 médias" })).toBeDefined()
+    unmount()
+    render(
+      <Prioridade nivel={2} zerada onAbrir={() => chamadas++}>
+        0 médias
+      </Prioridade>,
+    )
+    expect(screen.queryByRole("button")).toBeNull()
+    fireEvent.click(screen.getByText("0 médias"))
+    expect(chamadas).toBe(0)
   })
 })
 

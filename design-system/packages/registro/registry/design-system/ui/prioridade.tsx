@@ -2,7 +2,7 @@ import * as React from "react"
 import { CircleAlertIcon } from "lucide-react"
 
 import { BADGE_DO_TOM } from "@/registry/design-system/lib/idioma-de-cor"
-import { CASCO_DO_CARIMBO } from "@/registry/design-system/ui/chip-de-estado"
+import { CASCO_DO_CARIMBO, GESTO_DO_CARIMBO } from "@/registry/design-system/ui/chip-de-estado"
 import { cn } from "@/registry/design-system/lib/utils"
 
 /** 0 é *sem prioridade*; 1 a 3, baixa a alta; `urgente` tem glifo próprio. */
@@ -34,31 +34,40 @@ const COR_DO_NIVEL: Record<1 | 2 | 3, string> = {
  * pela cor declarada do nível (COR-09), na palavra e nas barras cheias, que
  * pintam com `bg-current`. A palavra vem sempre (COR-08).
  *
+ * Com `onAbrir`, o carimbo aplica o recorte pelo nível, no gesto do
+ * `ChipQueAbre`. Na contagem, o zero é `zerada`: a forma do nível, sem a cor
+ * (a cor do nível só existe dentro do carimbo, e não num zero) e sem gesto.
+ *
  * O nível que significa *normal*, quando o projeto tem um, não se mostra
  * (PRIN-04): carimbo que diz *nada de especial* é ruído em cada cartão.
  */
 function Prioridade({
   nivel,
+  onAbrir,
+  zerada = false,
   className,
   children,
 }: {
   nivel: NivelDaPrioridade
+  /**
+   * Aplica o recorte pelo nível (a contagem que filtra): o carimbo vira botão,
+   * com o gesto do `ChipQueAbre` (CTRL-03). O nome acessível é a palavra
+   * visível; quem chama escreve o número e a palavra ("3 altas").
+   */
+  onAbrir?: () => void
+  /**
+   * O zero de uma contagem: a forma do nível, sem a cor (COR-09) e sem gesto —
+   * não há recorte para abrir. Ignora o `onAbrir`.
+   */
+  zerada?: boolean
   className?: string
-  /** A palavra: "Alta", "Urgente". */
+  /** A palavra: "Alta", "Urgente", "3 altas". */
   children: string
 }) {
   const urgente = nivel === "urgente"
-  return (
-    <span
-      data-slot="prioridade"
-      data-nivel={nivel}
-      className={cn(
-        CASCO_DO_CARIMBO,
-        BADGE_DO_TOM[urgente ? "espera" : "neutro"],
-        !urgente && nivel > 0 && COR_DO_NIVEL[nivel as 1 | 2 | 3],
-        className,
-      )}
-    >
+  const abre = onAbrir !== undefined && !zerada
+  const conteudo = (
+    <>
       {urgente ? (
         <CircleAlertIcon aria-hidden="true" className="size-3 shrink-0" />
       ) : (
@@ -72,6 +81,25 @@ function Prioridade({
         </span>
       )}
       {children}
+    </>
+  )
+  const classe = cn(
+    CASCO_DO_CARIMBO,
+    BADGE_DO_TOM[urgente && !zerada ? "espera" : "neutro"],
+    !urgente && !zerada && nivel > 0 && COR_DO_NIVEL[nivel as 1 | 2 | 3],
+    abre && GESTO_DO_CARIMBO,
+    className,
+  )
+  if (abre) {
+    return (
+      <button type="button" data-slot="prioridade" data-nivel={nivel} onClick={onAbrir} className={classe}>
+        {conteudo}
+      </button>
+    )
+  }
+  return (
+    <span data-slot="prioridade" data-nivel={nivel} data-zerada={zerada || undefined} className={classe}>
+      {conteudo}
     </span>
   )
 }
