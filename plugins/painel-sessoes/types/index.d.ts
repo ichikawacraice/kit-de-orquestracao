@@ -57,10 +57,15 @@ export type LinhaItem = {
 
 export type Deduzido = {
   parado: boolean
-  minParado: number | null
+  /** A última atividade que a batida viu (gravação, sessão, commit ou PR); os minutos do parado contam dela na hora do desenho. */
+  ultimaAtividade?: string
+  /** Quando a batida deduziu: atividade depois disto desmente o parado. */
+  em: string
   etapaDeclarada: string
   fontes: { etapa?: string; prs?: string; dona?: string }
   prsAbertos: number[]
+  /** Todos os PRs que valem estão mergeados (o item inteiro ou a fatia). */
+  mergeado: boolean
 }
 
 /** Um item de `batida/deduzido.json`, como `estado-deduzido.mjs#deduzir` o grava (só os campos que o pane lê). */
@@ -69,8 +74,12 @@ export type DeduzidoDaBatida = {
   prs?: number[]
   prsAbertos?: number[]
   parado?: boolean
-  minParado?: number | null
+  ultimaAtividade?: string | null
+  mergeado?: boolean
+  fatiaMergeada?: boolean
   fontes?: { etapa?: string; prs?: string; dona?: string }
+  /** O `em` do arquivo, que o pane copia em cada item. */
+  em?: string
 }
 
 /** Um item de qualquer etapa e idade, para resolver número citado e listar todos os itens. */

@@ -3323,7 +3323,7 @@ test('F425: deduzido fresco troca a etapa e os PRs e traz o parado', () => {
   expect(i, 'a montagem não pode vir vazia').toBeDefined()
   expect(i!.etapa).toBe('merge')
   expect(i!.prs).toEqual([170])
-  expect(i!.deduzido).toEqual({ parado: true, minParado: 47, etapaDeclarada: 'execucao', fontes: { etapa: 'gh', prs: 'gh', dona: 'item' }, prsAbertos: [170] })
+  expect(i!.deduzido).toEqual({ parado: true, ultimaAtividade: undefined, em: dd.em, etapaDeclarada: 'execucao', fontes: { etapa: 'gh', prs: 'gh', dona: 'item' }, prsAbertos: [170], mergeado: false })
 })
 
 test('F425: sem deduzido, velho ou fora do formato, vale o declarado', () => {
@@ -3355,4 +3355,65 @@ test('F425: item final não usa o deduzido', () => {
   expect(i!.etapa).toBe('feito')
   expect(i!.prs).toEqual([5])
   expect(i!.deduzido).toBeUndefined()
+})
+
+// F425, o desenho (revisão 2026-11-05-pane-estado-deduzido): o parado mora no canto, o PR mergeado ganha a palavra, a origem vai ao alt.
+const EM_DD = new Date(AGORA - 5 * 60_000).toISOString()
+const ATIV_45 = new Date(AGORA - 45 * 60_000).toISOString()
+const ded = (extra: Partial<NonNullable<Linha['deduzido']>> = {}): NonNullable<Linha['deduzido']> =>
+  ({ parado: true, ultimaAtividade: ATIV_45, em: EM_DD, etapaDeclarada: 'execucao', fontes: { etapa: 'item', prs: 'gh', dona: 'sessoes' }, prsAbertos: [], mergeado: false, ...extra })
+const DONA_V1 = { apelido: 'F7', localId: 'local_v1', dona: true as const }
+const paradoF7 = (extra: Partial<Linha> = {}) => linha('F7', { dono: DONA_V1, atualizadoEm: ATIV_45, deduzido: ded(), ...extra })
+const cartaoF7 = (i: Linha, situacao = situacaoDoTeste) => cartaoSvg(360, i, AGORA, { situacao })
+
+test('F425: o item parado em Executando diz "parado há X" no canto e a dona fica "ociosa"', () => {
+  const sem = cartaoF7(paradoF7({ deduzido: undefined }))
+  expect(sem.source, 'sem dedução, o canto é o de hoje').toContain('há 45 min')
+  expect(sem.source).toContain('parada há 40 min')
+  expect(sem.source).not.toContain('parado há')
+  const r = cartaoF7(paradoF7())
+  expect(r.source).toContain('parado há 45 min')
+  expect(r.source).toMatch(/class="t"[^>]*font-weight="600"[^>]*>parado há 45 min</)
+  expect(r.source).toContain('ociosa')
+  expect(r.source).not.toContain('parada há 40 min')
+  expect(r.alt).toContain('parado há 45 min')
+})
+
+test('F425: o parado some quando a dona trabalha, há atividade depois da batida, falta dona, espera, trava, pergunta ou o item está em merge', () => {
+  expect(cartaoF7(paradoF7()).source, 'o caso base mostra o parado').toContain('parado há')
+  const casos: Array<[string, Linha, typeof situacaoDoTeste?]> = [
+    ['trabalhando', paradoF7(), (id: string) => (id === 'local_v1' ? 'trabalhando agora' : undefined)],
+    ['gravou depois da batida', paradoF7({ atualizadoEm: new Date(AGORA - 60_000).toISOString() })],
+    ['sem dona', paradoF7({ esperando: { desde: ATIV_45 } })],
+    ['espera', paradoF7({ espera: { motivo: 'gate', texto: 'gate' } })],
+    ['trava', paradoF7({ trava: { motivo: 'x', texto: 'y' } })],
+    ['pergunta', paradoF7({ perguntas: ['Q1'] })],
+    ['merge', paradoF7({ etapa: 'merge' })],
+    ['não parado', paradoF7({ deduzido: ded({ parado: false }) })],
+  ]
+  for (const [nome, i, sit] of casos) expect(cartaoF7(i, sit).source, nome).not.toContain('parado há')
+})
+
+test('F425: o chip do PR mostra o aberto; sem aberto, o mergeado com a palavra em verde; o fechado sem merge some', () => {
+  const aberto = cartaoF7(paradoF7({ prs: [160, 164], deduzido: ded({ parado: false, prsAbertos: [164] }) })).source
+  expect(aberto).toContain('#164 +1')
+  const merg = cartaoF7(paradoF7({ prs: [160], deduzido: ded({ parado: false, mergeado: true }) })).source
+  expect(merg).toContain('#160 mergeado')
+  expect(merg).toMatch(/class="oks"/)
+  const fechado = cartaoF7(paradoF7({ prs: [160], deduzido: ded({ parado: false }) })).source
+  expect(fechado, 'o fechado sem merge não vira chip').not.toContain('#160')
+  expect(cartaoF7(paradoF7({ prs: [160], deduzido: undefined })).source, 'sem dedução, o chip de hoje').toContain('#160')
+})
+
+test('F425: a origem do dado e a etapa declarada que diverge vão só ao alt', () => {
+  const r = cartaoF7(paradoF7({ etapa: 'merge', prs: [164], deduzido: ded({ parado: false, etapaDeclarada: 'validacao', fontes: { etapa: 'gh', prs: 'gh' }, prsAbertos: [164] }) }))
+  expect(r.alt).toContain('etapa pelo GitHub')
+  expect(r.alt).toContain('PRs pelo GitHub')
+  expect(r.alt).toContain('declarada: validação')
+  expect(r.source).not.toContain('pelo GitHub')
+  expect(r.source).not.toContain('declarada')
+  const igual = cartaoF7(paradoF7({ deduzido: ded({ parado: false, fontes: { etapa: 'item', prs: 'item' } }) })).alt
+  expect(igual).toContain('etapa declarada')
+  expect(igual).toContain('PRs declarados')
+  expect(igual).not.toContain('declarada:')
 })

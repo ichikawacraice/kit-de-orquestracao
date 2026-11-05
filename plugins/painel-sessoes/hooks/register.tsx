@@ -6,7 +6,7 @@ import type { CartaoDeSessao, Citado, DeduzidoDaBatida, EstadoPedido, ItemDoIndi
 import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, promptDaVolta, PAINEL_NA_VOLTA_MS, idadeDaVolta, paraAcordar, limpezaAconteceu, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
-import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
+import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, paradoDoCartao, textoDoPr, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -203,7 +203,7 @@ export function deduzidosValidos(v: unknown, agora: number): Map<string, Deduzid
   const quando = typeof em === 'string' ? Date.parse(em) : NaN
   if (Number.isNaN(quando) || agora - quando > DEDUZIDO_VALE_MS || !itens || typeof itens !== 'object' || Array.isArray(itens)) return vazio
   const saida = new Map<string, DeduzidoDaBatida>()
-  for (const [F, x] of Object.entries(itens as Record<string, unknown>)) if (/^F\d+$/.test(F) && x && typeof x === 'object' && !Array.isArray(x)) saida.set(F, x as DeduzidoDaBatida)
+  for (const [F, x] of Object.entries(itens as Record<string, unknown>)) if (/^F\d+$/.test(F) && x && typeof x === 'object' && !Array.isArray(x)) saida.set(F, { ...(x as DeduzidoDaBatida), em: em as string })
 
   return saida
 }
@@ -365,10 +365,12 @@ function montarTodos(
       deduzido: dd
         ? {
             parado: dd.parado === true,
-            minParado: typeof dd.minParado === 'number' && Number.isFinite(dd.minParado) ? dd.minParado : null,
+            ultimaAtividade: texto(dd.ultimaAtividade),
+            em: dd.em as string,
             etapaDeclarada: etapaCrua as string,
             fontes: { ...(dd.fontes ?? {}) },
             prsAbertos: inteiros(dd.prsAbertos),
+            mergeado: dd.mergeado === true || dd.fatiaMergeada === true,
           }
         : undefined,
     } })
@@ -2457,6 +2459,8 @@ export const register: Register = on => {
     const lido = l.lidoEm !== null
     const parada = leituraParada(l.lidoEm, agora)
     const situacao = (localId: string) => situacaoDe(localId, l.sessoes ?? [], undefined, l.semLista ?? false, agora)
+    // F425: a atividade da sessão na lista ao vivo desmente o parado que a batida deduziu antes dela
+    const atividade = (localId: string) => (l.sessoes ?? []).find(v => v.sessionId === localId)?.lastActivityAt
     const trabalhando = sec.executando.filter(i => pessoasVivas(i).some(p => situacao(p.localId) === 'trabalhando agora')).length
 
     const aberta = await read($, respondendoEm)
@@ -2754,7 +2758,7 @@ export const register: Register = on => {
       }
       // A moldura é do `Box round`, na cor do tom; o desenho e os botões ficam dentro dela.
       const cartao = (i: LinhaItem, tom: 'subtle' | 'error' | 'warning') => {
-        const r = cartaoSvg(Wc, i, agora, { situacao, citados: citadosDoCartao(i) })
+        const r = cartaoSvg(Wc, i, agora, { situacao, atividade, citados: citadosDoCartao(i) })
         const botoes = [...(() => { const a = acaoDoPedido(i, false); return [a.botao, a.orq].filter(Boolean) })(), ...botoesAbrir(i)]
         const a = acaoDoPedido(i, false)
 
@@ -2995,11 +2999,12 @@ export const register: Register = on => {
       const etapa = ROTULO_ETAPA_TERMINAL[i.etapa] ?? i.etapa
       const info = [
         i.situacao === 'fila' ? `espera ${etapa}` : etapa,
+        paradoDoCartao(i, agora, situacao, atividade),
         tituloDoTema(i),
         i.perguntas[0] ? `aguarda você · ${i.perguntas[0]}` : undefined,
         seloDaEspera(i),
         ...quemDoItem(i).map(q => q.t),
-        i.prs.length > 0 ? `#${i.prs[i.prs.length - 1]}${i.prs.length > 1 ? ` +${i.prs.length - 1}` : ''}` : undefined,
+        textoDoPr(i)?.t,
         ...quemSaiu(i).map(q => q.t),
       ].filter(Boolean).join(' · ')
 
