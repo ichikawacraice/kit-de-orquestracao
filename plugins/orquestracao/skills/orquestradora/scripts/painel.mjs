@@ -1239,12 +1239,15 @@ function filaDeMerge(args, { semTurno = false } = {}) {
     // F427: com a fila livre (nenhum gate do projeto vivo), o próprio `--anotar` a lança destacada, pelo julgamento e pelo
     // lançador da batida: a marca `lancada` gravada aqui, dentro da trava, segura a batida (e outro `--anotar`) por RELANCE_MIN.
     // Com gate rodando, só anota: a rodada viva leva os pendentes como lote seguinte. A batida segue como rede (fila órfã).
-    // Os avisos (F370, F404) pedem conserto do item antes do merge: com algum deles, não lança; o próximo `--anotar` lança.
+    // Os avisos (F370, F404) pedem conserto do item antes do merge: com algum deles, não lança (a batida ainda pode lançar).
+    // O item se liga ao PR antes dos avisos: eles acham o item pelo `prs`, que a ligação pela branch preenche.
     const projetoDaAnotacao = projetoDoCwd(cwd).projeto;
+    const ESPERA_A_BATIDA = 'espera a batida lançar o gate';
+    let lig = ligarComAviso(branches, { projeto: projetoDaAnotacao, oQue: ESPERA_A_BATIDA });
     const semCodigo = avisoSemCodigo(pedidos.map((p) => p.pr), projetoDaAnotacao, cwd);
     const semEntrega = avisoSemEntrega(pedidos.map((p) => p.pr), projetoDaAnotacao);
     const comAviso = semCodigo || semEntrega
-      ? { motivo: `corrija o aviso (${[semCodigo && 'avisoSemCodigo', semEntrega && 'avisoSemEntrega'].filter(Boolean).join(', ')}) e anote de novo: o próximo --anotar lança a fila` }
+      ? { motivo: `corrija o aviso (${[semCodigo && 'avisoSemCodigo', semEntrega && 'avisoSemEntrega'].filter(Boolean).join(', ')}) e anote de novo: o --anotar seguinte lança a fila, se a batida não a lançar antes`, aviso: true }
       : null;
     const r = comTrava(() => {
       const e = lerEstado();
@@ -1257,20 +1260,20 @@ function filaDeMerge(args, { semTurno = false } = {}) {
       gravarJson(arquivo, j.lancada ? { ...novo, lancada: j.lancada } : novo);
       return {
         anotado: true, pendentes, lancou: !!j.lancada, ...(j.motivo ? { naoLancou: j.motivo } : {}),
-        ...(j.lancada ? { lancar: { orfa, config: j.config, arquivo } } : {}), ...(j.vivo ? { vivo: true } : {}),
+        ...(j.lancada ? { lancar: { orfa, config: j.config, arquivo } } : {}), ...(j.vivo ? { vivo: true } : {}), ...(j.aviso ? { seguraAviso: true } : {}),
         ...(e.config?.gate ? {} : { aviso: 'a fila deste projeto ainda não tem gate gravado: nem o --anotar nem a batida a lançam até a orquestradora rodar a fila uma vez' }),
       };
     });
-    // o item vai a `etapa: merge` antes de o processo subir: a rodada lançada pode devolver o PR em segundos, e a ligação
+    // o `agora` do item se acerta antes de o processo subir: a rodada lançada pode devolver o PR em segundos, e a ligação
     // depois dela apagaria a devolução. O processo sobe fora da trava (a fila também a toma); falhar aqui deixa a fila para a
     // batida, que relança depois de RELANCE_MIN.
-    const { lancar, vivo, ...saidaDaTrava } = r;
-    const oQue = (lancado) => (lancado ? 'a fila foi lançada: o gate roda' : vivo ? 'espera a vez' : 'espera a batida lançar o gate');
-    let lig = ligarComAviso(branches, { projeto: projetoDaAnotacao, oQue: oQue(!!lancar) });
+    const { lancar, vivo, seguraAviso, ...saidaDaTrava } = r;
+    const oQue = lancar ? 'a fila foi lançada: o gate roda' : vivo ? 'espera a vez' : seguraAviso ? 'corrija o aviso do --anotar e anote de novo' : ESPERA_A_BATIDA;
+    if (oQue !== ESPERA_A_BATIDA) lig = ligarComAviso(branches, { projeto: projetoDaAnotacao, oQue });
     if (lancar) {
       try { Object.assign(saidaDaTrava, lancarFilaSemTurno(lancar)); } catch (err) {
         Object.assign(saidaDaTrava, { lancou: false, naoLancou: `não consegui lançar a fila (${String(err?.message || err).split('\n')[0]}): a batida relança` });
-        lig = ligarComAviso(branches, { projeto: projetoDaAnotacao, oQue: oQue(false) });
+        lig = ligarComAviso(branches, { projeto: projetoDaAnotacao, oQue: ESPERA_A_BATIDA });
       }
     }
     return { ...saidaDaTrava, ...lig, ...(semCodigo ? { avisoSemCodigo: semCodigo } : {}), ...(semEntrega ? { avisoSemEntrega: semEntrega } : {}) };

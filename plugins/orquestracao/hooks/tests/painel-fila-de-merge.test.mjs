@@ -914,7 +914,32 @@ test('F427: --anotar com aviso pendente não lança a fila, mesmo livre e com ga
     const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
     assert.deepEqual(e.pendentes.map((p) => p.pr), [28], 'fica anotado');
     assert.equal(e.lancada, undefined, 'não marca lançamento');
-    assert.match(c.dado('F1').agora, /espera a batida/);
+    assert.match(c.dado('F1').agora, /corrija o aviso/);
+    // o motivo de fundo vence o aviso: com gate rodando, diz que roda
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: process.pid, desde: new Date().toISOString(), gate: 'true' }, pendentes: [], emVoo: [], config }));
+    const rodando = JSON.parse(c.painel('fila-de-merge', `28:${c.shas[28]}`, '--anotar').out);
+    assert.equal(rodando.lancou, false);
+    assert.match(rodando.naoLancou, /gate.*rodando/);
+    assert.match(rodando.avisoSemCodigo ?? '', /só muda documentação/);
+  } finally { limpar(c); }
+});
+
+test('F427: o item ligado ao PR só pela branch também segura o lançamento (os avisos veem a ligação)', () => {
+  const c = montar();
+  try {
+    assert.equal(c.painel('set', 'fila', 'F1', JSON.stringify({ titulo: 'item pela branch', etapa: 'execucao', tema: 'editor', via: 'dona', branch: 'pr28', donoLocalId: LA, donoApelido: 'dona' })).exit, 0);
+    assert.equal(c.dado('F1').prs, undefined, 'começa sem o PR em prs');
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [], config: { cwd: c.clone, gate: 'true', preparar: null } }));
+    const r = c.painel('fila-de-merge', `28:${c.shas[28]}`, '--anotar');
+    assert.equal(r.exit, 0, r.err);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.ligados, [{ pr: 28, item: 'F1' }], r.out);
+    assert.match(s.avisoSemCodigo ?? '', /F1.*só muda documentação/, r.out);
+    assert.match(s.avisoSemEntrega ?? '', /F1/, r.out);
+    assert.equal(s.lancou, false, r.out);
+    assert.equal(s.pid, undefined);
+    assert.deepEqual(c.dado('F1').prs, [28]);
   } finally { limpar(c); }
 });
 
