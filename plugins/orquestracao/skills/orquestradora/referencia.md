@@ -12,7 +12,7 @@ Antes do release, roda o gate na base combinada, depois do último merge: duas b
 
 <a id="versao-dos-plugins"></a>
 ## Versão dos plugins
-o PR não mexe na versão. Fechado o lote de merges, na main em dia: `subir-versao --seco` mostra quais plugins mudaram desde a última subida; `subir-versao --empurrar` sobe o patch de cada um num commit só e empurra. Depois, `atualizar-plugins [--seco] [--json]` atualiza o clone do marketplace (confere o commit contra o GitHub) e os plugins `user` desatualizados; mostra `antes → depois` e `Reinicie o app para valer.` Cópia `project` não é mexida e plugin que falta não é instalado. O `painel mergear` avisa (`aviso`) quando o PR ainda traz bump.
+o PR não mexe na versão. Fechado o lote de merges, na main em dia: `subir-versao --seco` mostra quais plugins mudaram desde a última subida; `subir-versao --empurrar` sobe o patch de cada um num commit só e empurra. Com `--por-dia` (o que o pós-merge da fila sem turno usa) sobe no máximo uma vez por dia de São Paulo: o dia é o do último commit `chore(versao)`, e o lote que não sobe devolve `adiado`; `--forcar` sobe mesmo assim (à mão: `subir-versao --empurrar` já sobe sempre). Sem versão nova o `atualizar-plugins` não troca nada (ele compara versão): o pós-merge só o chama no lote que sobe, e o plugin instalado fica na do dia até a próxima subida. Depois, `atualizar-plugins [--seco] [--json]` atualiza o clone do marketplace (confere o commit contra o GitHub) e os plugins `user` desatualizados; mostra `antes → depois` e `Reinicie o app para valer.` Cópia `project` não é mexida e plugin que falta não é instalado. O `painel mergear` avisa (`aviso`) quando o PR ainda traz bump.
 
 <a id="pode-reiniciar"></a>
 ## Posso reiniciar o app?

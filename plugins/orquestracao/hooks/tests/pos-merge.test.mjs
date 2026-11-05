@@ -125,3 +125,43 @@ test('a trava do botão do kit: a vencida ou com falha não segura; o pós-merge
   assert.ok(existsSync(c.log), `o atualizar-plugins rodou: ${JSON.stringify(r)}`);
   assert.ok(!existsSync(trava), 'a trava do pós-merge saiu no fim');
 });
+
+// F426: a versão sobe no máximo uma vez por dia de São Paulo; os plugins seguem a cada lote. Relógio injetado em KIT_AGORA.
+function outroPr(texto) { // um PR a mais na origin/main, sem sair da branch do checkout principal
+  git(['fetch', '-q', 'origin']);
+  git(['switch', '-q', '-c', `pr-${texto}`, 'origin/main']);
+  escrever('plugins/a/x.mjs', `pr ${texto}\n`); commitar(`feat: PR ${texto}`);
+  git(['push', '-q', 'origin', 'HEAD:main']);
+  git(['switch', '-q', 'outra']);
+}
+const versaoNaOrigem = () => /"version": "([^"]+)"/.exec(git(['show', 'main:plugins/a/.claude-plugin/plugin.json'], origem))[1];
+
+test('uma subida por dia: o segundo lote do mesmo dia não sobe a versão e não chama o atualizar-plugins; o primeiro do dia seguinte sobe', () => {
+  montar('ichikawa-kit');
+  const c = claudeFalso();
+  const rodar = (agora, extra = {}) => posMerge({ cwd: repo, base: 'main', nomes: ['kit'], pastaOrq: orq, ...extra, env: ambiente({ CLAUDE_BIN: c.bin, KIT_AGORA: agora }) });
+  const hoje = new Date().toISOString();
+  const amanha = new Date(Date.now() + 26 * 3_600_000).toISOString(); // 26 h depois: sempre é o dia seguinte em SP
+
+  const l1 = rodar(hoje);
+  assert.equal(versaoNaOrigem(), '0.1.6', `precondição: o primeiro lote sobe ${JSON.stringify(l1)}`);
+
+  outroPr('dois');
+  const log1 = readFileSync(c.log, 'utf8').split('\n').filter(Boolean).length;
+  assert.ok(log1 > 0, 'precondição: o primeiro lote chamou o claude');
+  const l2 = rodar(hoje);
+  assert.equal(versaoNaOrigem(), '0.1.6', `o segundo lote do dia não sobe: ${JSON.stringify(l2)}`);
+  assert.deepEqual(l2.versao?.subiu, []);
+  assert.match(l2.versao?.adiado ?? '', /já subiu hoje/);
+  assert.equal(readFileSync(c.log, 'utf8').split('\n').filter(Boolean).length, log1, 'o lote que não sobe não chama o atualizar-plugins (ele só troca versão diferente)');
+  assert.equal((l2.erros ?? []).some((e) => /^versao:/.test(e)), false, 'adiar não é erro da versão');
+
+  outroPr('tres');
+  const l3 = rodar(hoje, { forcar: true });
+  assert.equal(versaoNaOrigem(), '0.1.7', `--forcar sobe no mesmo dia: ${JSON.stringify(l3)}`);
+
+  outroPr('quatro');
+  const l4 = rodar(amanha);
+  assert.equal(versaoNaOrigem(), '0.1.8', `o primeiro lote do dia seguinte sobe: ${JSON.stringify(l4)}`);
+  assert.equal(worktrees(), 1, 'nenhum worktree temporário sobrou');
+});
