@@ -25,11 +25,12 @@ const AR: Record<Densidade, string> = {
 }
 /**
  * As mesmas medidas, para a `EsperaDosGrupos` (fora da tabela, sem os seletores): da régua ao primeiro grupo,
- * o vão depois de grupo aberto e o ar depois do topo. Um teste confere que batem com o `AR`.
+ * o vão depois de grupo aberto, o espaço curto depois de grupo fechado e o ar depois do topo (só no aberto).
+ * Um teste confere que batem com o `AR`.
  */
-const MEDIDA_DA_ESPERA: Record<Densidade, { primeiro: string; vao: string; ar: string }> = {
-  instrumento: { primeiro: "pt-2", vao: "pt-4", ar: "pb-1" },
-  site: { primeiro: "pt-3", vao: "pt-6", ar: "pb-1.5" },
+const MEDIDA_DA_ESPERA: Record<Densidade, { primeiro: string; vao: string; curto: string; ar: string }> = {
+  instrumento: { primeiro: "pt-2", vao: "pt-4", curto: "pt-1.5", ar: "pb-1" },
+  site: { primeiro: "pt-3", vao: "pt-6", curto: "pt-2", ar: "pb-1.5" },
 }
 /** A contagem: a fração (*7 de 10*) ou a quantidade com a unidade (*3 entregas*). */
 type ContagemDoGrupo = { feitas: number; total: number } | { total: number; unidade: { um: string; varios: string } }
@@ -72,7 +73,9 @@ const NOME: Record<Densidade, string> = { instrumento: "text-sm font-[600]", sit
  * - **Contagem.** Tem duas formas: a fração (`{ feitas, total }`, *7 de 10*,
  *   com a trilha opcional) e a quantidade (`{ total, unidade: { um, varios } }`,
  *   *3 entregas*, sem trilha: não há o que concluir). As duas no mesmo lugar
- *   fixo, o número em `t-medida`. Com `total > 0`, a contagem aparece mesmo sem
+ *   fixo, o número em `t-medida`; na quantidade, o número numa caixa de 3
+ *   algarismos alinhada à direita, para os números da coluna não dançarem com a
+ *   palavra, e com `progresso` o lugar da trilha fica guardado e vazio. Com `total > 0`, a contagem aparece mesmo sem
  *   linhas (o total é seu). Grupo vazio — `total` 0, ou sem `contagem` e sem
  *   linhas — diz o `semLinhas`; troque o padrão (*Sem linhas*) pela causa. Não
  *   finja uma fração (`{ feitas: 0, total: 0 }`) para chegar a ele.
@@ -246,9 +249,10 @@ function LinhaDoGrupo({
             {/* Daqui em diante, tudo encosta no fim do th, em lugares de largura fixa. */}
             <span data-slot="fim-da-linha-do-grupo" className="@container flex min-w-0 flex-1 items-center justify-end gap-2">
               {diz === "contagem" && quantidade ? (
-                // A palavra pede mais lugar que a fração: cede antes, em 5rem.
-                <span className="shrink-0 text-foreground-2 @max-[5rem]:hidden">
-                  <span className="t-medida">{quantidade.total}</span>{" "}
+                // A palavra pede mais lugar que a fração: cede antes, em 5rem. O número mora numa caixa de 3
+                // algarismos à direita e a palavra num lugar de piso fixo: entre grupos, os números ficam no mesmo x.
+                <span data-slot="quantidade-do-grupo" className="flex min-w-24 shrink-0 items-baseline gap-1 text-foreground-2 @max-[5rem]:hidden">
+                  <span className="t-medida min-w-[3ch] text-right">{quantidade.total}</span>{" "}
                   <span className="t-denso">{quantidade.total === 1 ? quantidade.unidade.um : quantidade.unidade.varios}</span>
                 </span>
               ) : diz === "contagem" && fracaoDaContagem ? (
@@ -257,17 +261,20 @@ function LinhaDoGrupo({
                 </span>
               ) : diz === "vazio" ? (
                 // Zero de zero não é progresso parado: é grupo sem linhas, e a frase diz isso (EST-02, EST-04).
-                <span className="t-denso shrink-0 text-muted-foreground @max-[5rem]:hidden">{semLinhas}</span>
+                // Encolhe e trunca (com a frase inteira no title): a causa longa nunca passa por cima do nome.
+                <span data-slot="sem-linhas" title={semLinhas} className="t-denso min-w-0 truncate text-muted-foreground">
+                  {semLinhas}
+                </span>
               ) : null}
               {concluido ? (
                 // O carimbo cede como a trilha só quando a contagem diz o mesmo (*2 de 2*).
                 <span className={cn("flex w-24 shrink-0", contagem && semTrilha)}>
                   <ChipDeEstado tom="ok">{rotuloDoConcluido}</ChipDeEstado>
                 </span>
-              ) : progresso && !quantidade ? (
-                // O lugar fica guardado no grupo sem linhas: a contagem dos grupos encosta no mesmo x.
+              ) : progresso ? (
+                // O lugar fica guardado no grupo sem linhas e no de quantidade: a contagem dos grupos encosta no mesmo x.
                 <span data-slot="lugar-da-trilha" className={cn("flex w-24 shrink-0", semTrilha)}>
-                  {fracao !== null ? <TrilhaDoProgresso fracao={fracao} compacta className="w-full" /> : null}
+                  {fracao !== null && !quantidade ? <TrilhaDoProgresso fracao={fracao} compacta className="w-full" /> : null}
                 </span>
               ) : null}
               {medida ? <span className="w-28 shrink-0 @max-[11rem]:hidden">{medida}</span> : null}
@@ -293,7 +300,10 @@ const BARRAS = ["w-1/2", "w-2/3", "w-5/12"] as const
  * espera da lista agrupada, com o degrau, o ar, o recuo e o vão da
  * `LinhaDoGrupo` (as mesmas constantes, para a lista não pular quando chega).
  * Vai no lugar da `Table` inteira, com a régua do cabeçalho reservada
- * (`cabecalho`); a `alturaDaLinha` é a da linha real, como na `EsperaDaLista`.
+ * (`cabecalho`); a `alturaDaLinha` é a da linha real **com o conteúdo de
+ * verdade** (o prazo de duas linhas dá `h-12`), não o mínimo da `TableCell`.
+ * Um `0` em `grupos` é grupo fechado: o espaço curto antes do próximo e sem o
+ * ar depois do topo, como na peça.
  * Declara a espera (`role="status"`, `aria-busy`) com o `rotulo` do que vem. A
  * lista corrida espera na `EsperaDaLista`; o quadro, na `EsperaDoQuadro`. A
  * tela com mais de uma vista troca a espera junto com a vista.
@@ -306,9 +316,9 @@ function EsperaDosGrupos({
   cabecalho = true,
   className,
 }: {
-  /** Quantas linhas em cada grupo; um número por grupo. */
+  /** Quantas linhas em cada grupo aberto; um número por grupo, `0` para o fechado. */
   grupos?: readonly number[]
-  /** A classe de altura da linha real (`h-10`), como na EsperaDaLista. */
+  /** A classe de altura da linha real, medida com o conteúdo (`h-12` com o prazo de duas linhas). */
   alturaDaLinha: string
   /** O que o leitor de tela ouve: o que está vindo, não "carregando". */
   rotulo: string
@@ -332,9 +342,9 @@ function EsperaDosGrupos({
           key={i}
           aria-hidden="true"
           data-slot="espera-do-grupo"
-          className={cn(i > 0 ? medida.vao : cabecalho && medida.primeiro)}
+          className={cn(i > 0 ? (grupos[i - 1]! > 0 ? medida.vao : medida.curto) : cabecalho && medida.primeiro)}
         >
-          <div className={medida.ar}>
+          <div className={cn(linhas > 0 && medida.ar)}>
             <Skeleton data-slot="espera-do-degrau" className={cn("rounded-xl", ALTURA[densidade])} />
           </div>
           {Array.from({ length: linhas }, (_, j) => (

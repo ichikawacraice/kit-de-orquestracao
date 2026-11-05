@@ -169,7 +169,7 @@ export default function DemoDaLinhaDoGrupo() {
           </Table>
         </div>
       </Amostra>
-      <Amostra titulo="Contagem: a quantidade com unidade e a fração no mesmo x; o total sem linhas e o vazio sem contagem">
+      <Amostra titulo="Contagem: a quantidade e a fração terminam no mesmo x (com progresso, a quantidade guarda o lugar da trilha); o total sem linhas e o vazio sem contagem">
         <div className="w-full">
           <Table className="table-fixed">
             <TableHeader>
@@ -178,7 +178,7 @@ export default function DemoDaLinhaDoGrupo() {
                 <TableHead className="w-32">Prazo</TableHead>
               </TableRow>
             </TableHeader>
-            <LinhaDoGrupo nome="Esta semana · 2 a 8 de nov" colunas={2} contagem={{ total: 3, unidade: { um: "entrega", varios: "entregas" } }}>
+            <LinhaDoGrupo nome="Esta semana · 2 a 8 de nov" colunas={2} progresso contagem={{ total: 3, unidade: { um: "entrega", varios: "entregas" } }}>
               {["Revisão do contrato", "Painel de vendas", "Página de produto"].map((n) => (
                 <TableRow key={n}>
                   <TableCell>{n}</TableCell>

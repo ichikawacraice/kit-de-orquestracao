@@ -103,7 +103,8 @@ function IntervaloDeCampos({
                 max={maximo}
                 onChange={(e) => aoMudar(lado, e.target.value)}
                 aria-invalid={errado || undefined}
-                aria-describedby={comFrase ? idDoErro : atributos?.["aria-describedby"]}
+                // A dica de quem chama (o formato) continua lida junto com o erro.
+                aria-describedby={[atributos?.["aria-describedby"], comFrase && idDoErro].filter(Boolean).join(" ") || undefined}
                 className={cn("w-full min-w-0", atributos?.className)}
               />
               {comFrase ? (

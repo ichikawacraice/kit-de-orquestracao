@@ -49,6 +49,8 @@ const SEMANAS: { nome: string; aberta?: boolean; vazias?: number; entregas: Entr
 ]
 
 const TODAS = SEMANAS.flatMap((s) => s.entregas)
+/** A espera desenha os grupos como a lista chega: o aberto com as linhas dele, os fechados com 0 (o espaço curto, sem ar). */
+const GRUPOS_DA_ESPERA = SEMANAS.map((s) => (s.aberta ? s.entregas.length : 0))
 
 function Cabecalho() {
   return (
@@ -152,13 +154,13 @@ export function ListaPorPeriodo() {
       </div>
       {vista === "lista" ? (
         esperando ? (
-          <EsperaDaLista linhas={TODAS.length} alturaDaLinha="h-10" rotulo="As entregas" />
+          <EsperaDaLista linhas={TODAS.length} alturaDaLinha="h-12" rotulo="As entregas" />
         ) : (
           <Corrida />
         )
       ) : vista === "semana" ? (
         esperando ? (
-          <EsperaDosGrupos grupos={[3]} alturaDaLinha="h-10" rotulo="As entregas por semana" />
+          <EsperaDosGrupos grupos={GRUPOS_DA_ESPERA} alturaDaLinha="h-12" rotulo="As entregas por semana" />
         ) : (
           <PorSemana />
         )
@@ -185,7 +187,7 @@ export function EsperaSobreALista() {
           </LinhaDoGrupo>
         ))}
       </Table>
-      <EsperaDosGrupos grupos={[3, 2]} alturaDaLinha="h-10" rotulo="As entregas por semana" className="pointer-events-none absolute inset-0 opacity-50" />
+      <EsperaDosGrupos grupos={[3, 2]} alturaDaLinha="h-12" rotulo="As entregas por semana" className="pointer-events-none absolute inset-0 opacity-50" />
     </div>
   )
 }

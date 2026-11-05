@@ -57,6 +57,14 @@ export default function DemoDoPopover() {
       <Amostra titulo="Um intervalo de datas dentro, na largura padrão">
         <FiltroDoPrazo />
       </Amostra>
+      <Amostra titulo="Perto da borda direita: o popover não passa da janela (no celular, a larga cede ao espaço que há)">
+        <div className="flex w-full justify-end gap-2">
+          <PopoverNaLargura botao="Larga, na borda" largura="larga">
+            A larga aberta de um gatilho encostado na borda: no celular, o teto pela janela vence os 320px.
+          </PopoverNaLargura>
+          <FiltroDoPrazo />
+        </div>
+      </Amostra>
     </Amostras>
   )
 }

@@ -248,7 +248,7 @@
     "intervalo-de-campos": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/input.tsx": "bcd4c801c304da419aeeced1a3202329277f30c0cfd1cf434106abb599063599",
-      "components/ui/intervalo-de-campos.tsx": "8962eb83caa857f745cc0cca72bb98a21556e49b6c8486b89af15bd0a55eeec3",
+      "components/ui/intervalo-de-campos.tsx": "a40f8973cccbb87d3851cf74b6a2f1dfed9b8ef197388dcc02d089f42c97c298",
       "components/ui/label.tsx": "f2061bde312942aae24f34df4d0bb7917367285d9388ab5ee4402917d57e74ed",
       "components/ui/table.tsx": "6b3a8cfa47a523f7e212027d9fd8287300d208877a831e8a25c4d8ff26c3d0e4",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
@@ -263,7 +263,7 @@
     "linha-do-grupo": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
-      "components/ui/linha-do-grupo.tsx": "4c0d2ad17bbc341a502e8d8c83083caf7671fe5909c478ddbed0dc0ec331a602",
+      "components/ui/linha-do-grupo.tsx": "bd6c13be081505c01c7cefe9a7ba8efb05622ac0fe82a84a3f2e552e06ef2b59",
       "components/ui/progress.tsx": "891effbd859afe0f830f59b4fa3494254d0d4c04540e681dc0ef7103354cab4d",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "components/ui/table.tsx": "6b3a8cfa47a523f7e212027d9fd8287300d208877a831e8a25c4d8ff26c3d0e4",

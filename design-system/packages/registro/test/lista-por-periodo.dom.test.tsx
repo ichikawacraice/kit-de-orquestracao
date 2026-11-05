@@ -137,6 +137,22 @@ describe('K2 · IntervaloDeCampos', () => {
     expect(screen.getByRole('group').querySelector('p')).toBeNull()
   })
 
+  it('com erro, a dica de quem chama continua lida junto com a frase', () => {
+    render(
+      <IntervaloDeCampos
+        legenda="Prazo"
+        tipo="date"
+        valor={vazio}
+        aoMudar={() => {}}
+        campoAte={{ 'aria-describedby': 'formato' }}
+        erro={{ lado: 'ate', texto: 'A data final vem antes da inicial' }}
+      />
+    )
+    const frase = screen.getByText('A data final vem antes da inicial')
+    expect(frase.id).toBeTruthy()
+    expect(screen.getByLabelText('Até').getAttribute('aria-describedby')).toBe(`formato ${frase.id}`)
+  })
+
   it('aoMudar recebe o lado e o valor', () => {
     const mudar = vi.fn()
     render(<IntervaloDeCampos legenda="Valor (R$)" tipo="number" valor={vazio} aoMudar={mudar} />)
@@ -206,7 +222,18 @@ describe('K3 · a contagem da LinhaDoGrupo', () => {
     unmount()
     render(<Grupo progresso contagem={{ total: 2, unidade }} />)
     expect(document.querySelector('[data-slot=trilha-do-progresso]')).toBeNull()
-    expect(document.querySelector('[data-slot=lugar-da-trilha]')).toBeNull()
+    // O lugar fica guardado e vazio: a contagem encosta no mesmo x da fração na mesma tabela.
+    const lugar = document.querySelector('[data-slot=lugar-da-trilha]')
+    expect(lugar).toBeTruthy()
+    expect(lugar!.childElementCount).toBe(0)
+  })
+
+  it('a quantidade mora num lugar de piso fixo, com o número numa caixa de 3 algarismos à direita', () => {
+    render(<Grupo contagem={{ total: 12, unidade }} />)
+    const lugar = document.querySelector('[data-slot=quantidade-do-grupo]')!
+    expect(lugar).toBeTruthy()
+    expect(classes(lugar)).toContain('min-w-24')
+    expect(classes(screen.getByText('12'))).toEqual(expect.arrayContaining(['min-w-[3ch]', 'text-right']))
   })
 
   it('com total e sem linhas, a contagem fica (o total é de quem chama)', () => {
@@ -222,6 +249,18 @@ describe('K3 · a contagem da LinhaDoGrupo', () => {
     unmount()
     render(<Grupo linhas={[]} semLinhas="Nenhuma entrega" />)
     expect(fim().textContent).toBe('Nenhuma entrega')
+  })
+
+  // O jsdom não mede caixas: o teste prova a classe que impede a frase de transbordar sobre o nome.
+  it('a causa longa encolhe e trunca, com a frase inteira no title, e não some no estreito', () => {
+    const frase = 'Nenhuma entrega em 3 semanas'
+    render(<Grupo linhas={[]} semLinhas={frase} />)
+    const causa = document.querySelector('[data-slot=sem-linhas]')!
+    expect(causa.textContent).toBe(frase)
+    expect(causa.getAttribute('title')).toBe(frase)
+    expect(classes(causa)).toEqual(expect.arrayContaining(['min-w-0', 'truncate']))
+    expect(classes(causa)).not.toContain('shrink-0')
+    expect(classes(causa).some((c) => c.includes(':hidden'))).toBe(false)
   })
 
   it('com linhas e sem contagem, nada no fim', () => {
@@ -293,5 +332,30 @@ describe('K5 · EsperaDosGrupos', () => {
       recuo: classes(linha).find((c) => c.startsWith('ml-['))?.match(/\[(\d+px)\]$/)?.[1],
     }).toEqual(medidasReais)
     expect(classes(linha)).toContain('h-10')
+  })
+
+  it.each(['instrumento', 'site'] as const)('0 é grupo fechado: espaço curto antes do próximo e sem ar (%s)', (densidade) => {
+    const real = render(
+      <Table densidade={densidade}>
+        <LinhaDoGrupo nome="A" colunas={1} abertoDeInicio={false}>
+          <TableRow>
+            <TableCell>x</TableCell>
+          </TableRow>
+        </LinhaDoGrupo>
+      </Table>
+    )
+    const curtoReal = classes(screen.getByRole('rowheader'))
+      .find((c) => c.startsWith('[tbody:not(:first-of-type)_&]:'))
+      ?.slice('[tbody:not(:first-of-type)_&]:'.length)
+    expect(curtoReal).toBeTruthy()
+    real.unmount()
+
+    render(<EsperaDosGrupos densidade={densidade} grupos={[0, 0, 2]} alturaDaLinha="h-12" rotulo="Carregando" />)
+    const [g1, g2, g3] = [...screen.getByRole('status').querySelectorAll('[data-slot=espera-do-grupo]')]
+    expect(classes(g2!).find((c) => c.startsWith('pt-'))).toBe(curtoReal)
+    expect(classes(g3!).find((c) => c.startsWith('pt-'))).toBe(curtoReal)
+    expect(classes(g1!.querySelector('[data-slot=espera-do-degrau]')!.parentElement!).some((c) => c.startsWith('pb-'))).toBe(false)
+    expect(g1!.querySelectorAll('[data-slot=espera-da-linha]')).toHaveLength(0)
+    expect(classes(g3!.querySelector('[data-slot=espera-do-degrau]')!.parentElement!).some((c) => c.startsWith('pb-'))).toBe(true)
   })
 })
