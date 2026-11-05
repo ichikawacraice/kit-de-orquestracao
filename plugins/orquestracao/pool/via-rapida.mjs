@@ -19,7 +19,7 @@ export const FORA_PADRAO = [
   'docs/adr/**', 'docs/specs/**', '**/migrations/**', '*.sql', '*schema*',
   'package.json', 'package-lock.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'yarn.lock',
   '.claude/kit.json', 'settings.json', 'settings.local.json', 'plugin.json', 'marketplace.json',
-  '**/hooks/**', 'hooks.json', 'gate/**', '**/pool/protocolo.md', '**/pool/dona.md', '**/pool/via-rapida.mjs',
+  '**/hooks/**', 'hooks.json', 'gate/**', '**/pool/protocolo.md', '**/pool/referencia.md', '**/pool/dona.md', '**/pool/via-rapida.mjs',
   '**/agents/**', 'skills-de-fora.json', '**/skills/papeis-e-modelos/**', 'CLAUDE.md', '.github/**',
 ];
 

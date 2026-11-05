@@ -11,6 +11,8 @@ import { nomesDoAutorEm } from './nomes-do-autor.mjs';
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAINEL = join(RAIZ, 'plugins', 'orquestracao', 'skills', 'orquestradora', 'scripts', 'painel.mjs');
 const SKILL = join(RAIZ, 'plugins', 'orquestracao', 'skills', 'orquestradora', 'SKILL.md');
+// F421: o detalhe do `painel mergear` mora na referência que a SKILL linka.
+const REFERENCIA = join(RAIZ, 'plugins', 'orquestracao', 'skills', 'orquestradora', 'referencia.md');
 const git = (d, ...a) => execFileSync('git', ['-C', d, ...a], { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
 const novo = () => realpathSync(mkdtempSync(join(tmpdir(), 'kit-c13-')));
 const painel = (dir, ...args) => spawnSync('node', [PAINEL, ...args], {
@@ -82,7 +84,12 @@ describe('c13 — temas.json semeado pelo painel', () => {
 });
 
 describe('c13 — regra do merge sem rebase em dia, genérica, na SKILL da orquestradora', () => {
-  const t = readFileSync(SKILL, 'utf8');
+  const skill = readFileSync(SKILL, 'utf8');
+  const t = readFileSync(REFERENCIA, 'utf8');
+  it('a SKILL linka a regra na referência', () => {
+    assert.match(skill, /referencia\.md#mergear/);
+    assert.match(t, /<a id="mergear"><\/a>/);
+  });
   it('traz o merge-tree, o --match-head-commit e o destino de cada status', () => {
     assert.ok(t.length > 1000);
     assert.match(t, /git merge-tree --write-tree origin\/<integração> <Y>/);
