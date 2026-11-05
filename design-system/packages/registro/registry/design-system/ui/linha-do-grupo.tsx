@@ -6,6 +6,7 @@ import { ChevronRightIcon } from "lucide-react"
 import { cn } from "@/registry/design-system/lib/utils"
 import { ChipDeEstado } from "@/registry/design-system/ui/chip-de-estado"
 import { TrilhaDoProgresso } from "@/registry/design-system/ui/progress"
+import { Skeleton } from "@/registry/design-system/ui/skeleton"
 import { useDensidadeDaTabela } from "@/registry/design-system/ui/table"
 
 type Densidade = "instrumento" | "site"
@@ -22,6 +23,18 @@ const AR: Record<Densidade, string> = {
   instrumento: "[thead+tbody_&]:pt-2 [tbody:not(:first-of-type)_&]:pt-1.5 [tbody[data-aberto=true]+tbody_&]:pt-4 [tbody[data-aberto=true]_&]:pb-1",
   site: "[thead+tbody_&]:pt-3 [tbody:not(:first-of-type)_&]:pt-2 [tbody[data-aberto=true]+tbody_&]:pt-6 [tbody[data-aberto=true]_&]:pb-1.5",
 }
+/**
+ * As mesmas medidas, para a `EsperaDosGrupos` (fora da tabela, sem os seletores): da régua ao primeiro grupo,
+ * o vão depois de grupo aberto, o espaço curto depois de grupo fechado e o ar depois do topo (só no aberto).
+ * Um teste confere que batem com o `AR`.
+ */
+const MEDIDA_DA_ESPERA: Record<Densidade, { primeiro: string; vao: string; curto: string; ar: string }> = {
+  instrumento: { primeiro: "pt-2", vao: "pt-4", curto: "pt-1.5", ar: "pb-1" },
+  site: { primeiro: "pt-3", vao: "pt-6", curto: "pt-2", ar: "pb-1.5" },
+}
+/** A contagem: a fração (*7 de 10*) ou a quantidade com a unidade (*3 entregas*). */
+type ContagemDoGrupo = { feitas: number; total: number } | { total: number; unidade: { um: string; varios: string } }
+
 /** Uma célula sob uma coluna; `esconderNoCelular` quando a coluna some abaixo de 640px. */
 type CelulaDoGrupo = { conteudo: React.ReactNode; esconderNoCelular?: boolean }
 
@@ -54,10 +67,18 @@ const NOME: Record<Densidade, string> = { instrumento: "text-sm font-[600]", sit
  *   como outro grupo. Vão, ar e recuo são da peça: a tela não os escreve. A
  *   densidade vem da `Table`.
  * - **Partes.** O alternador (o botão com o chevron de 14px, `aria-expanded`),
- *   a identidade opcional (o ponto de quem chama), o nome, a contagem (*7 de
- *   10*, `t-medida`), o progresso opcional (a trilha compacta da marca), a
+ *   a identidade opcional (o ponto de quem chama), o nome, a contagem, o progresso opcional (a trilha compacta da marca), a
  *   medida opcional (um `Medidor compacto`), as células alinhadas sob as
  *   colunas da tabela (o prazo sob Prazo, a pilha sob Responsável) e o `⋯`.
+ * - **Contagem.** Tem duas formas: a fração (`{ feitas, total }`, *7 de 10*,
+ *   com a trilha opcional) e a quantidade (`{ total, unidade: { um, varios } }`,
+ *   *3 entregas*, sem trilha: não há o que concluir). As duas no mesmo lugar
+ *   fixo, o número em `t-medida`; na quantidade, o número numa caixa de 3
+ *   algarismos alinhada à direita, para os números da coluna não dançarem com a
+ *   palavra, e com `progresso` o lugar da trilha fica guardado e vazio. Com `total > 0`, a contagem aparece mesmo sem
+ *   linhas (o total é seu). Grupo vazio — `total` 0, ou sem `contagem` e sem
+ *   linhas — diz o `semLinhas`; troque o padrão (*Sem linhas*) pela causa. Não
+ *   finja uma fração (`{ feitas: 0, total: 0 }`) para chegar a ele.
  * - **Alinhamento.** A contagem, a trilha e a medida encostam no fim do `th`,
  *   cada uma num lugar de largura fixa: entre grupos da mesma tabela, as barras começam no mesmo x. O carimbo do
  *   concluído mora no lugar da trilha. A `medida` vai em todos os grupos da
@@ -103,14 +124,14 @@ function LinhaDoGrupo({
   nome: string
   /** Quantas colunas a tabela tem: a linha do grupo ocupa todas. */
   colunas: number
-  /** *7 de 10*: quantas linhas acabaram, de quantas. */
-  contagem?: { feitas: number; total: number }
-  /** A trilha compacta da marca, a partir da contagem (a medida da marca da linha). */
+  /** *7 de 10* (quantas linhas acabaram, de quantas) ou *3 entregas* (quantas há, com a unidade no singular e no plural). */
+  contagem?: ContagemDoGrupo
+  /** A trilha compacta da marca, a partir da fração (a medida da marca da linha). A quantidade não tem trilha. */
   progresso?: boolean
   /** O grupo acabou: a barra sai e entra o carimbo `ok`. */
   concluido?: boolean
   rotuloDoConcluido?: string
-  /** A frase da contagem quando o grupo não tem linhas, na palavra de quem chama (*Sem tarefas*). */
+  /** A frase do grupo vazio (total 0, ou sem contagem e sem linhas), na causa de quem chama (*Nenhuma entrega*). */
   semLinhas?: string
   /** O ponto antes do nome (a cor de dado do grupo, quando o projeto a declara). Enfeite: `aria-hidden` de quem passa. */
   identidade?: React.ReactNode
@@ -142,7 +163,11 @@ function LinhaDoGrupo({
   const finais: CelulaDoGrupo[] = [...celulas, ...(acao ? [acao] : [])].map((c) => (ehCelula(c) ? c : { conteudo: c }))
   // No celular, o raio da direita vai à última célula que fica (ou ao `th`, se todas somem).
   const ultimaNoCelular = finais.map((c) => !c.esconderNoCelular).lastIndexOf(true)
-  const fracao = contagem && contagem.total > 0 ? contagem.feitas / contagem.total : null
+  const quantidade = contagem && "unidade" in contagem ? contagem : null
+  const fracaoDaContagem = contagem && "feitas" in contagem ? contagem : null
+  const fracao = fracaoDaContagem && fracaoDaContagem.total > 0 ? fracaoDaContagem.feitas / fracaoDaContagem.total : null
+  // O grupo vazio diz a causa, com ou sem contagem (EST-02); com total, a contagem fica mesmo sem linhas.
+  const diz = contagem && contagem.total > 0 ? "contagem" : (contagem || vazio) ? "vazio" : null
   // O fim cede pela largura que sobra no th, nesta ordem: a trilha (a contagem diz o mesmo), a medida, a contagem.
   const semTrilha = medida ? "@max-[17.5rem]:hidden" : "@max-[10rem]:hidden"
 
@@ -223,15 +248,24 @@ function LinhaDoGrupo({
             )}
             {/* Daqui em diante, tudo encosta no fim do th, em lugares de largura fixa. */}
             <span data-slot="fim-da-linha-do-grupo" className="@container flex min-w-0 flex-1 items-center justify-end gap-2">
-              {contagem ? (
-                contagem.total > 0 ? (
-                  <span className="t-medida shrink-0 text-foreground-2 @max-[3.5rem]:hidden">
-                    {contagem.feitas} de {contagem.total}
-                  </span>
-                ) : (
-                  // Zero de zero não é progresso parado: é grupo sem linhas, e a frase diz isso (EST-02, EST-04).
-                  <span className="t-denso shrink-0 text-muted-foreground @max-[5rem]:hidden">{semLinhas}</span>
-                )
+              {diz === "contagem" && quantidade ? (
+                // A palavra pede mais lugar que a fração: cede antes, em 5rem. O número mora numa caixa de 3
+                // algarismos à direita e a palavra num lugar de piso fixo: entre grupos, os números ficam no mesmo x.
+                <span data-slot="quantidade-do-grupo" className="flex min-w-24 shrink-0 items-baseline justify-end gap-1 text-foreground-2 @max-[5rem]:hidden">
+                  <span className="t-medida min-w-[3ch] text-right">{quantidade.total}</span>{" "}
+                  <span className="t-denso">{quantidade.total === 1 ? quantidade.unidade.um : quantidade.unidade.varios}</span>
+                </span>
+              ) : diz === "contagem" && fracaoDaContagem ? (
+                <span className="t-medida shrink-0 text-foreground-2 @max-[3.5rem]:hidden">
+                  {fracaoDaContagem.feitas} de {fracaoDaContagem.total}
+                </span>
+              ) : diz === "vazio" ? (
+                // Zero de zero não é progresso parado: é grupo sem linhas, e a frase diz isso (EST-02, EST-04).
+                // Encolhe e trunca (com a frase inteira no title): a causa longa nunca passa por cima do nome. Com
+                // piso de 6ch: ou cabe o começo legível, ou sai inteira abaixo de 4rem, nunca uma lasca.
+                <span data-slot="sem-linhas" title={semLinhas} className="t-denso min-w-[6ch] truncate text-muted-foreground @max-[4rem]:hidden">
+                  {semLinhas}
+                </span>
               ) : null}
               {concluido ? (
                 // O carimbo cede como a trilha só quando a contagem diz o mesmo (*2 de 2*).
@@ -239,9 +273,9 @@ function LinhaDoGrupo({
                   <ChipDeEstado tom="ok">{rotuloDoConcluido}</ChipDeEstado>
                 </span>
               ) : progresso ? (
-                // O lugar fica guardado no grupo sem linhas: a contagem dos grupos encosta no mesmo x.
+                // O lugar fica guardado no grupo sem linhas e no de quantidade: a contagem dos grupos encosta no mesmo x.
                 <span data-slot="lugar-da-trilha" className={cn("flex w-24 shrink-0", semTrilha)}>
-                  {fracao !== null ? <TrilhaDoProgresso fracao={fracao} compacta className="w-full" /> : null}
+                  {fracao !== null && !quantidade ? <TrilhaDoProgresso fracao={fracao} compacta className="w-full" /> : null}
                 </span>
               ) : null}
               {medida ? <span className="w-28 shrink-0 @max-[11rem]:hidden">{medida}</span> : null}
@@ -259,4 +293,71 @@ function LinhaDoGrupo({
   )
 }
 
-export { LinhaDoGrupo, type CelulaDoGrupo }
+/** As larguras da barra de cada linha da espera, alternadas: a espera não se lê como uma coluna de blocos iguais. */
+const BARRAS = ["w-1/2", "w-2/3", "w-5/12"] as const
+
+/**
+ * A ESPERA DOS GRUPOS (ARQ-01: a espera tem a forma do que vai chegar) — a
+ * espera da lista agrupada, com o degrau, o ar, o recuo e o vão da
+ * `LinhaDoGrupo` (as mesmas constantes, para a lista não pular quando chega).
+ * Vai no lugar da `Table` inteira, com a régua do cabeçalho reservada
+ * (`cabecalho`); a `alturaDaLinha` é a da linha real **com o conteúdo de
+ * verdade** (o prazo de duas linhas dá `h-12`), não o mínimo da `TableCell`.
+ * Um `0` em `grupos` é grupo fechado: o espaço curto antes do próximo e sem o
+ * ar depois do topo, como na peça.
+ * Declara a espera (`role="status"`, `aria-busy`) com o `rotulo` do que vem. A
+ * lista corrida espera na `EsperaDaLista`; o quadro, na `EsperaDoQuadro`. A
+ * tela com mais de uma vista troca a espera junto com a vista.
+ */
+function EsperaDosGrupos({
+  grupos = [3, 1, 2],
+  alturaDaLinha,
+  rotulo,
+  densidade: densidadeDeFora,
+  cabecalho = true,
+  className,
+}: {
+  /** Quantas linhas em cada grupo aberto; um número por grupo, `0` para o fechado. */
+  grupos?: readonly number[]
+  /** A classe de altura da linha real, medida com o conteúdo (`h-12` com o prazo de duas linhas). */
+  alturaDaLinha: string
+  /** O que o leitor de tela ouve: o que está vindo, não "carregando". */
+  rotulo: string
+  /** Sem ela: a da Table em volta, senão instrumento. */
+  densidade?: Densidade
+  /** Reserva a altura do cabeçalho da tabela (40px, com a régua). */
+  cabecalho?: boolean
+  className?: string
+}) {
+  const densidadeDaTabela = useDensidadeDaTabela()
+  const densidade = densidadeDeFora ?? densidadeDaTabela
+  const medida = MEDIDA_DA_ESPERA[densidade]
+  let barra = 0
+  return (
+    <div role="status" aria-busy="true" data-slot="espera-dos-grupos" className={cn("flex flex-col", className)}>
+      <span className="sr-only">{rotulo}</span>
+      {/* A régua do cabeçalho, sem nome de coluna fingido. */}
+      {cabecalho ? <div aria-hidden="true" data-slot="espera-do-cabecalho" className="h-10 shrink-0 border-b border-border" /> : null}
+      {grupos.map((linhas, i) => (
+        <div
+          key={i}
+          aria-hidden="true"
+          data-slot="espera-do-grupo"
+          className={cn("shrink-0", i > 0 ? (grupos[i - 1]! > 0 ? medida.vao : medida.curto) : cabecalho && medida.primeiro)}
+        >
+          <div className={cn(linhas > 0 && medida.ar)}>
+            <Skeleton data-slot="espera-do-degrau" className={cn("rounded-xl", ALTURA[densidade])} />
+          </div>
+          {Array.from({ length: linhas }, (_, j) => (
+            // O recuo é o da linha real (a borda de 20px do primeiro td), e o texto começa no px-3 da célula.
+            <div key={j} data-slot="espera-da-linha" className={cn("ml-[20px] flex items-center px-3", alturaDaLinha)}>
+              <Skeleton className={cn("h-3", BARRAS[barra++ % BARRAS.length])} />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export { EsperaDosGrupos, LinhaDoGrupo, type CelulaDoGrupo, type ContagemDoGrupo }

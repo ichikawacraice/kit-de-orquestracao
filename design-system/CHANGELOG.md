@@ -4,6 +4,26 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.24.0 · 05/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **A espera tem a forma do que vai chegar** (ARQ-01): a regra que era só da Mesa com abas vale para toda tela com mais de uma vista. A lista corrida espera em linhas (`EsperaDaLista`), a lista agrupada em grupos (`EsperaDosGrupos`, nova, na `linha-do-grupo`) e o quadro em colunas (`EsperaDoQuadro`); a troca de vista troca a espera junto. A `EsperaDosGrupos` usa o degrau, o ar, o recuo e o vão da `LinhaDoGrupo` (o `0` é grupo fechado), e a `alturaDaLinha` é a da linha com o conteúdo real, para a lista não pular quando chega.
+- **A lista agrupada por período** (PECA-01): uma `LinhaDoGrupo` por período, na ordem do tempo, com a quantidade com unidade (*3 entregas*); o período vazio fica no lugar e diz a causa, e os vazios em sequência viram um grupo só.
+- **A `LinhaDoGrupo` conta sem fração:** a `contagem` aceita a quantidade com a unidade (`{ total, unidade: { um, varios } }`), sem trilha (com `progresso`, guarda o lugar dela), o número numa caixa fixa para a coluna não dançar. O grupo vazio diz a causa (`semLinhas`) também sem `contagem`; a causa longa trunca, com a frase inteira no `title`, e não passa por cima do nome.
+- **O `IntervaloDeCampos`** (peça nova): o intervalo de dois valores (de, até), num `fieldset` com a legenda e um campo por linha, as pontas amarradas no seletor e o erro do lado abaixo do campo; cabe no popover.
+- **O `Label` ganha a voz `coluna`**, para o rótulo que se repete (o *De* e o *Até* do intervalo, no instrumento).
+- **O `Popover` ganha a `largura`** (`padrao`, `larga`, `conteudo`) e nunca passa da tela; o conteúdo mais largo que ele é cortado, sem rolagem lateral. A `EscolhaNaCelula` abre na largura do conteúdo, sem mudança visual.
+
+### Migração
+- `npx shadcn add <registro>/popover.json <registro>/label.json <registro>/linha-do-grupo.json <registro>/escolha-na-celula.json <registro>/intervalo-de-campos.json`.
+- Troque o `className="w-72"`, `"w-80"` ou `"w-auto"` do `PopoverContent` pela prop `largura` (`padrao`, `larga`, `conteudo`).
+- Troque o intervalo montado à mão (dois campos lado a lado, `fieldset` sem `min-w-0`) pelo `IntervaloDeCampos`.
+- Apague o `contagem={{ feitas: 0, total: 0 }}` fingido no grupo vazio e passe `{ total, unidade }` onde a contagem é quantidade.
+- Troque a espera da lista agrupada montada à mão pela `EsperaDosGrupos`.
+- Atenção: o grupo vazio sem `contagem` passa a mostrar *Sem linhas*; passe a causa em `semLinhas`.
+
 ## 0.23.0 · 05/11/2026
 
 Camadas: base, registro

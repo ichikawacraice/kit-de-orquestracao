@@ -160,7 +160,7 @@ function EscolhaNaCelula({
       ) : (
         <Popover open={aberto} onOpenChange={mudar}>
           <PopoverTrigger asChild>{gatilho}</PopoverTrigger>
-          <PopoverContent aria-label={rotulo} className="w-auto">
+          <PopoverContent aria-label={rotulo} largura="conteudo">
             <form
               className="flex flex-col gap-3"
               onSubmit={(e) => {

@@ -55,6 +55,7 @@ import Progress from "./demos/progress"
 import Vazio from "./demos/vazio"
 import EscolhaNaCelula from "./demos/escolha-na-celula"
 import LinhaDoGrupo from "./demos/linha-do-grupo"
+import IntervaloDeCampos from "./demos/intervalo-de-campos"
 import Monograma from "./demos/monograma"
 import Pessoa from "./demos/pessoa"
 import Prazo from "./demos/prazo"
@@ -66,6 +67,7 @@ import Conversa from "./demos/conversa"
 export const DEMOS: Record<string, ComponentType> = {
   "escolha-na-celula": EscolhaNaCelula,
   "linha-do-grupo": LinhaDoGrupo,
+  "intervalo-de-campos": IntervaloDeCampos,
   "monograma": Monograma,
   "pessoa": Pessoa,
   "prazo": Prazo,
