@@ -1,6 +1,6 @@
 # Linha de base da orquestração: semana de 29/10 a 05/11/2026
 
-Snapshot (não se edita), saída de `node scripts/medir-semana.mjs --desde 2026-10-29 --ate 2026-11-05` em 05/11/2026 (SP). É a base das fases 1 a 3 de [o diagnóstico](2026-11-05-diagnostico-orquestracao.md#plano). Para medir de novo, rode o mesmo comando com outra janela e compare.
+Snapshot (não se edita), saída de `node scripts/medir-semana.mjs --desde 2026-10-29 --ate 2026-11-05 --projeto izanagi=Izanagi --projeto wicontrol=WiControl` em 05/11/2026 (SP). É a base das fases 1 a 3 de [o diagnóstico](2026-11-05-diagnostico-orquestracao.md#plano). Para medir de novo, rode o mesmo comando com outra janela e compare.
 
 Limites: "item fechado" é o item com PR mergeado na janela, mesmo que ele continue em outra fatia; o custo do item soma todas as chamadas da sessão dona e dos subagentes dela (não só as da janela); PR sem `F<n>` no título ou na branch fica fora do custo por item.
 

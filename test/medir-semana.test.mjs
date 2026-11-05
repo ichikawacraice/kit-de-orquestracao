@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { custoDaChamada } from '../scripts/custo-fixo.mjs';
-import { classificarTrava, dataDeSP, idDoItem, medirSemana, papelDoTitulo, quantil, relatorioMarkdown } from '../scripts/medir-semana.mjs';
+import { classificarTrava, dataDeSP, idDoItem, medirSemana, papelDoTitulo, projetosDe, quantil, relatorioMarkdown } from '../scripts/medir-semana.mjs';
 
 const U = (rd, out = 100) => ({ input_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: rd, output_tokens: out });
 const resp = (ts, id, model, usage) => ({ type: 'assistant', timestamp: ts, requestId: `r${id}`, message: { id: `m${id}`, model, usage } });
@@ -16,8 +16,9 @@ const trava = (ts, texto) => ({ type: 'user', isMeta: true, timestamp: ts, messa
 const humano = (ts, texto) => ({ type: 'user', timestamp: ts, message: { role: 'user', content: texto } });
 const escrever = (f, linhas) => writeFileSync(f, linhas.map((l) => JSON.stringify(l)).join('\n') + '\n');
 
-const KIT = '-Users-ichikawacraice-Developer-Projects-kit-de-orquestracao';
-const IZA = '-Users-ichikawacraice-Developer-Projects-Izanagi';
+const PROJ = projetosDe('/sintetico/casa', { kit: 'kit-de-orquestracao', outro: 'Outro', terceiro: 'Terceiro' });
+const KIT = PROJ.kit.prefixo;
+const OUTRO = PROJ.outro.prefixo;
 const OPUS = 'claude-opus-5-5';
 const SONNET = 'claude-sonnet-5-5';
 const DENTRO = '2026-11-03T12:00:00.000Z';
@@ -65,8 +66,8 @@ describe('medir-semana: medição', () => {
   const montar = () => {
     const raiz = mkdtempSync(join(tmpdir(), 'medir-semana-'));
     const kit = join(raiz, KIT);
-    const iza = join(raiz, IZA);
-    const outro = join(raiz, '-Users-ichikawacraice-Developer-Projects-Luna');
+    const iza = join(raiz, OUTRO);
+    const outro = join(raiz, `${PROJ.kit.prefixo.replace('kit-de-orquestracao', 'Luna')}`);
     for (const d of [kit, iza, outro, join(kit, 'dona1', 'subagents')]) mkdirSync(d, { recursive: true });
     // Orquestradora do kit: 1 chamada Opus.
     escrever(join(kit, 'orq.jsonl'), [titulo('🎛 orquestradora — kit-de-orquestracao'), resp(DENTRO, 1, OPUS, U(1000))]);
@@ -81,8 +82,8 @@ describe('medir-semana: medição', () => {
     ]);
     escrever(join(kit, 'dona1', 'subagents', 'agent-a.jsonl'), [resp('2026-11-03T12:30:00.000Z', 5, SONNET, U(5000))]);
     writeFileSync(join(kit, 'dona1', 'subagents', 'agent-a.meta.json'), JSON.stringify({ agentType: 'orquestracao:validador' }));
-    // Izanagi (worktree): dona F2 fechada e dona F3 aberta; mais uma chamada fora da janela.
-    const wt = join(raiz, `${IZA}--claude-worktrees-x`);
+    // Outro (worktree): dona F2 fechada e dona F3 aberta; mais uma chamada fora da janela.
+    const wt = join(raiz, `${OUTRO}--claude-worktrees-x`);
     mkdirSync(wt, { recursive: true });
     escrever(join(wt, 'dona2.jsonl'), [titulo('F2 · segundo'), resp('2026-11-04T09:00:00.000Z', 6, OPUS, U(6000)), resp('2026-12-30T00:00:00.000Z', 7, OPUS, U(9e6))]);
     escrever(join(iza, 'dona3.jsonl'), [titulo('F3 · terceiro'), resp(DENTRO, 8, OPUS, U(7000))]);
@@ -94,8 +95,8 @@ describe('medir-semana: medição', () => {
         { number: 11, title: 'chore: sem id', headRefName: 'x', createdAt: '2026-11-03T13:00:00Z', mergedAt: '2026-11-03T14:00:00Z' },
         { number: 12, title: 'feat: F0 · antigo', headRefName: 'f0', createdAt: '2026-10-01T13:00:00Z', mergedAt: '2026-10-01T14:00:00Z' },
       ],
-      izanagi: [{ number: 20, title: 'feat: F2 · segundo', headRefName: 'f2', createdAt: '2026-11-04T10:00:00Z', mergedAt: '2026-11-04T10:10:00Z' }],
-      wicontrol: [],
+      outro: [{ number: 20, title: 'feat: F2 · segundo', headRefName: 'f2', createdAt: '2026-11-04T10:00:00Z', mergedAt: '2026-11-04T10:10:00Z' }],
+      terceiro: [],
     };
     return { raiz, prs };
   };
@@ -104,7 +105,7 @@ describe('medir-semana: medição', () => {
   it('tokens e US$ por papel e por modelo, só dentro da janela e só nos projetos do kit', () => {
     const { raiz, prs } = montar();
     try {
-      const r = medirSemana({ pasta: raiz, prs, ...janela });
+      const r = medirSemana({ pasta: raiz, prs, projetos: PROJ, ...janela });
       const c = (id, modelo, rd) => custoDaChamada(U(rd), modelo);
       assert.equal(r.papeis.orquestradora.chamadas, 1);
       assert.ok(Math.abs(r.papeis.orquestradora.usd - c(1, OPUS, 1000)) < 1e-12);
@@ -123,7 +124,7 @@ describe('medir-semana: medição', () => {
   it('custo por item fechado: dona + subagentes, só os itens com PR mergeado na janela', () => {
     const { raiz, prs } = montar();
     try {
-      const r = medirSemana({ pasta: raiz, prs, ...janela });
+      const r = medirSemana({ pasta: raiz, prs, projetos: PROJ, ...janela });
       assert.equal(r.itens.fechados, 2, 'F1 e F2; F0 mergeou antes da janela, F3 não fechou');
       const f1 = r.itens.lista.find((i) => i.item === 'F1');
       assert.equal(f1.projeto, 'kit');
@@ -146,7 +147,7 @@ describe('medir-semana: medição', () => {
   it('turnos extras de trava por hook, com o custo do turno que a trava abriu', () => {
     const { raiz, prs } = montar();
     try {
-      const r = medirSemana({ pasta: raiz, prs, ...janela });
+      const r = medirSemana({ pasta: raiz, prs, projetos: PROJ, ...janela });
       assert.equal(r.travas.total, 1);
       assert.equal(r.travas.porHook['criterio-da-dona'].turnos, 1);
       assert.ok(Math.abs(r.travas.porHook['criterio-da-dona'].usd - custoDaChamada(U(4000), OPUS)) < 1e-12);
@@ -157,7 +158,7 @@ describe('medir-semana: medição', () => {
   it('o Markdown traz as quatro seções; a CLI --json devolve o mesmo objeto', () => {
     const { raiz, prs } = montar();
     try {
-      const md = relatorioMarkdown(medirSemana({ pasta: raiz, prs, ...janela }));
+      const md = relatorioMarkdown(medirSemana({ pasta: raiz, prs, projetos: PROJ, ...janela }));
       for (const s of ['## Por papel', '## Custo por item fechado', '## Turnos extras de trava', '## Tempo até o merge']) assert.ok(md.includes(s), s);
       const arq = join(raiz, 'prs.json');
       writeFileSync(arq, JSON.stringify(prs));

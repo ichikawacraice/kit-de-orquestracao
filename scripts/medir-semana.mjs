@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// A linha de base semanal (F418, fase 0 do diagnóstico da orquestração): para uma janela, nos projetos do kit, Izanagi e
-// WiControl, dá tokens e US$ por papel e por modelo, o custo por item fechado (mediana e p90), os turnos extras de trava por
+// A linha de base semanal (F418, fase 0 do diagnóstico da orquestração): para uma janela, nos projetos que você
+// nomear (o do kit por padrão), dá tokens e US$ por papel e por modelo, o custo por item fechado (mediana e p90), os turnos extras de trava por
 // hook e o tempo de item aberto → PR → merge. Método em docs/research/2026-11-05-diagnostico-orquestracao.md#como-foi-medido.
 // Reusa o preço e a leitura de transcripts do `custo-fixo` e o piso do `piso-da-sessao`; o que é novo aqui é o papel (pelo título
 // da sessão), o item (pelo `F<n>` do título e do PR) e a trava (mensagem `Stop hook feedback`).
-// Só lê. Os PRs vêm do `gh` (um por repositório) ou de `--prs <arquivo.json>` ({ kit: [...], izanagi: [...], wicontrol: [...] }).
-//   node scripts/medir-semana.mjs --desde AAAA-MM-DD --ate AAAA-MM-DD [--pasta <dir de projects>] [--prs <json>] [--sem-piso] [--json]
+// Só lê. Os PRs vêm do `gh` (um por repositório) ou de `--prs <arquivo.json>` ({ kit: [...], <outro>: [...] }).
+//   node scripts/medir-semana.mjs --desde AAAA-MM-DD --ate AAAA-MM-DD [--projeto chave=Pasta]… [--pasta <dir de projects>] [--prs <json>] [--sem-piso] [--json]
 // `--desde` vale da meia-noite de São Paulo; `--ate` é inclusivo (o dia inteiro). Data com hora (ISO completo) vale como está.
 import { execFileSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';
@@ -15,12 +15,22 @@ import { pathToFileURL } from 'node:url';
 import { custoDaChamada, familia, linhas, tipoDoSubagente, transcripts } from './custo-fixo.mjs';
 import { agregar } from './piso-da-sessao.mjs';
 
-// Projeto → prefixo do diretório em ~/.claude/projects (pega também os worktrees: `<prefixo>--claude-worktrees-…`) e repositório.
-export const PROJETOS = {
-  kit: { prefixo: '-Users-ichikawacraice-Developer-Projects-kit-de-orquestracao', repo: 'ichikawacraice/kit-de-orquestracao' },
-  izanagi: { prefixo: '-Users-ichikawacraice-Developer-Projects-Izanagi', repo: 'ichikawacraice/izanagi' },
-  wicontrol: { prefixo: '-Users-ichikawacraice-Developer-Projects-WiControl', repo: 'ichikawacraice/WiControl' },
-};
+// Projeto → pasta em ~/Developer/Projects. O prefixo do diretório em ~/.claude/projects (que pega também os worktrees:
+// `<prefixo>--claude-worktrees-…`) e o repositório (do `origin` da pasta) saem da pasta do usuário, sem nome fixo.
+const PASTAS = { kit: 'kit-de-orquestracao' };
+export function projetosDe(home = homedir(), pastas = PASTAS) {
+  const base = join(home, 'Developer', 'Projects');
+  return Object.fromEntries(Object.entries(pastas).map(([k, nome]) => [k, { dir: join(base, nome), prefixo: join(base, nome).replace(/[/.]/g, '-') }]));
+}
+export const PROJETOS = projetosDe();
+
+// `dono/nome` do remote origin da pasta, ou null.
+function repoDe(dir) {
+  try {
+    const u = execFileSync('git', ['-C', dir, 'remote', 'get-url', 'origin'], { encoding: 'utf8', timeout: 10000 }).trim();
+    return u.match(/[:/]([^/:]+\/[^/]+?)(?:\.git)?$/)?.[1] ?? null;
+  } catch { return null; }
+}
 
 // A mensagem de cada trava de Stop → o hook que a escreve. Mensagem nova cai em `outras`: confira a fatia dela na saída.
 const TRAVAS = [
@@ -84,17 +94,17 @@ const textoDe = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((b)
 const ehResultadoDeFerramenta = (j) => Array.isArray(j.message?.content) && j.message.content.some((b) => b?.type === 'tool_result');
 const ultimoTitulo = (js) => { let t; for (const j of js) if (j.type === 'custom-title' && j.customTitle) t = j.customTitle; return t; };
 
-function* arquivosDosProjetos(pasta) {
+function* arquivosDosProjetos(pasta, projetos) {
   let nomes = [];
   try { nomes = readdirSync(pasta); } catch { return; }
   for (const nome of nomes.sort()) {
-    const projeto = Object.entries(PROJETOS).find(([, p]) => nome === p.prefixo || nome.startsWith(`${p.prefixo}--`))?.[0];
+    const projeto = Object.entries(projetos).find(([, p]) => nome === p.prefixo || nome.startsWith(`${p.prefixo}--`))?.[0];
     if (!projeto) continue;
     for (const f of transcripts(join(pasta, nome))) yield { projeto, f };
   }
 }
 
-export function medirSemana({ pasta = join(homedir(), '.claude', 'projects'), desde = new Date(0), ate = new Date(8.64e15), prs = {}, piso = true } = {}) {
+export function medirSemana({ pasta = join(homedir(), '.claude', 'projects'), desde = new Date(0), ate = new Date(8.64e15), prs = {}, piso = true, projetos = PROJETOS } = {}) {
   const dentro = (ts) => { const d = new Date(ts); return d >= desde && d < ate; };
   const vistos = new Set();
   const papeis = { orquestradora: novoGrupo(), dona: novoGrupo(), avulsa: novoGrupo(), subagente: { ...novoGrupo(), porTipo: {} } };
@@ -104,7 +114,7 @@ export function medirSemana({ pasta = join(homedir(), '.claude', 'projects'), de
   const arquivosPiso = [];
   const subs = [];
 
-  for (const { projeto, f } of arquivosDosProjetos(pasta)) {
+  for (const { projeto, f } of arquivosDosProjetos(pasta, projetos)) {
     if (statSync(f).mtime < desde) continue;
     const sub = basename(dirname(f)) === 'subagents';
     const js = linhas(f);
@@ -161,7 +171,7 @@ export function medirSemana({ pasta = join(homedir(), '.claude', 'projects'), de
   const minutosPorPr = []; // PR aberto → merge de cada PR mergeado na janela, com ou sem item (o número do diagnóstico)
   let semItem = 0;
   const avisos = [];
-  for (const projeto of Object.keys(PROJETOS)) if (!(projeto in prs)) avisos.push(`sem os PRs de ${projeto}: itens desse projeto ficam de fora`);
+  for (const projeto of Object.keys(projetos)) if (!(projeto in prs)) avisos.push(`sem os PRs de ${projeto}: itens desse projeto ficam de fora`);
   for (const [projeto, lista] of Object.entries(prs)) {
     if (lista == null) { avisos.push(`sem os PRs de ${projeto}: itens desse projeto ficam de fora`); continue; }
     for (const pr of lista) {
@@ -195,7 +205,7 @@ export function medirSemana({ pasta = join(homedir(), '.claude', 'projects'), de
   const itens = {
     fechados: lista.length, semItem, semCusto: lista.length - custos.length,
     custo: { n: custos.length, total: custos.reduce((s, x) => s + x, 0), mediana: quantil(custos, 0.5), p90: quantil(custos, 0.9) },
-    tempos: { porPr: { n: minutosPorPr.length, mediana: quantil(minutosPorPr.map((x) => x.min), 0.5), p90: quantil(minutosPorPr.map((x) => x.min), 0.9), porProjeto: Object.fromEntries(Object.keys(PROJETOS).map((k) => { const v = minutosPorPr.filter((x) => x.projeto === k).map((x) => x.min); return [k, { n: v.length, mediana: quantil(v, 0.5), p90: quantil(v, 0.9) }]; })) }, abertoAtePr: tempo('abertoAtePr'), prAteMerge: tempo('prAteMerge'), abertoAteMerge: tempo('abertoAteMerge') },
+    tempos: { porPr: { n: minutosPorPr.length, mediana: quantil(minutosPorPr.map((x) => x.min), 0.5), p90: quantil(minutosPorPr.map((x) => x.min), 0.9), porProjeto: Object.fromEntries(Object.keys(projetos).map((k) => { const v = minutosPorPr.filter((x) => x.projeto === k).map((x) => x.min); return [k, { n: v.length, mediana: quantil(v, 0.5), p90: quantil(v, 0.9) }]; })) }, abertoAtePr: tempo('abertoAtePr'), prAteMerge: tempo('prAteMerge'), abertoAteMerge: tempo('abertoAteMerge') },
     lista,
   };
 
@@ -265,13 +275,15 @@ function buscarPrs(repo, desde, ate) {
 
 async function principal(argv) {
   const arg = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
-  if (!arg('--desde')) { console.error('uso: medir-semana --desde AAAA-MM-DD [--ate AAAA-MM-DD] [--pasta <dir>] [--prs <json>] [--sem-piso] [--json]'); process.exitCode = 2; return; }
+  if (!arg('--desde')) { console.error('uso: medir-semana --desde AAAA-MM-DD [--ate AAAA-MM-DD] [--projeto chave=Pasta]… [--pasta <dir>] [--prs <json>] [--sem-piso] [--json]'); process.exitCode = 2; return; }
   const desde = dataDeSP(arg('--desde'));
   const ate = arg('--ate') ? dataDeSP(arg('--ate'), true) : new Date();
+  const extras = argv.flatMap((a, i) => (a === '--projeto' ? [argv[i + 1]] : [])).map((x) => x.split('='));
+  const projetos = projetosDe(homedir(), { ...PASTAS, ...Object.fromEntries(extras) });
   let prs;
   if (arg('--prs')) prs = JSON.parse((await import('node:fs')).readFileSync(arg('--prs'), 'utf8'));
-  else prs = Object.fromEntries(Object.entries(PROJETOS).map(([k, p]) => [k, buscarPrs(p.repo, desde, ate)]));
-  const r = medirSemana({ pasta: arg('--pasta') ?? join(homedir(), '.claude', 'projects'), desde, ate, prs, piso: !argv.includes('--sem-piso') });
+  else prs = Object.fromEntries(Object.entries(projetos).map(([k, p]) => { const repo = repoDe(p.dir); return [k, repo ? buscarPrs(repo, desde, ate) : null]; }));
+  const r = medirSemana({ projetos, pasta: arg('--pasta') ?? join(homedir(), '.claude', 'projects'), desde, ate, prs, piso: !argv.includes('--sem-piso') });
   console.log(argv.includes('--json') ? JSON.stringify(r, null, 2) : relatorioMarkdown(r));
 }
 
