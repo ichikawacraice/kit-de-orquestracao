@@ -29,7 +29,7 @@ npx -y github:ichikawacraice/kit-de-orquestracao doutor
 | O gate espera a vez para sempre, ou sai com código 2 | `gate.comandoCompleto` chama `npm test`, que é o próprio gate | Aponte o `comandoCompleto` para a suíte (`npm run test:suite`) |
 | Subagente recusado ao editar | Trava `subagente-nao-edita`: quem escreve é a sessão | Normal: a sessão grava o que o subagente devolveu. Se o fluxo precisa de subagente escritor, veja [conflitos](conflitos.md) |
 | A sessão não termina o turno: "Painel das sessões não atualizado" | Ela abriu PR ou sessão, ou perguntou, e não gravou o painel | Ela grava e termina. A cobrança é uma por turno |
-| A dona não termina o turno pedindo a saída do teste | Trava `criterio-da-dona`: editou sem mostrar o teste rodando | Ela roda os testes afetados e cola a saída |
+| A dona não termina o turno: "Relatório não confere com a saída real" | Trava `criterio-da-dona`: o relatório esconde uma falha da saída, cita número ou status que a saída não tem, ou afirma sucesso sem teste rodado no turno (o relatório que só não cola a saída ganha um aviso, sem turno extra) | Ela corrige o relatório pela saída real ou roda o teste |
 | A orquestradora pede confirmação para editar | Trava `orquestradora-nao-edita`: ela coordena, a dona escreve | Diga não e peça um item; ou, se o projeto quer a orquestradora editando, veja [o que ligar e desligar](ligar-e-desligar.md) |
 | Comando git ou `rm` pede confirmação | Guarda de operação | Confirme se é o que você quer; a regra e o motivo estão em [o que ligar e desligar](ligar-e-desligar.md#guarda-de-operacao) |
 | Item parado no painel | A dona travou ou sumiu | A batida cutuca a dona e, se ela sumiu, solta o item; a orquestradora abre outra dona. Para apressar, peça à orquestradora |

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Stop hook: cobra a regra de contexto por papel da skill `papeis-e-modelos` ("Contexto"), que só valeria se a sessão
-// lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain) e não grava estado nenhum.
+// lembrasse de chamar `get_usage`. Lê o `usage` do transcript (último não-sidechain). Grava só o nível já cobrado da sessão
+// (F420, `<sid>:contexto` no estado dos hooks): um aviso por limiar cruzado, não um por turno.
 //   orquestradora: com o operador presente o Stop não a bloqueia: a limpeza é dele, pelo botão `↺ Limpar` da barra (destacado
 //     a partir de 250 mil: a sessão já recomeça com ~105 mil, F219); o hook só registra (`contexto-alto`, ou `limpou`). Com o modo ausente ligado o papel é
 //     `orquestradora-ausente` e segue a régua da dona; o aviso diz que a régua vem da bandeira e como desligá-la, porque a
@@ -9,11 +10,14 @@
 //     ≥ 350 mil cobra limpar OU a linha `Contexto: sigo — <o que falta na unidade>`; ≥ 250 mil com o turno terminando
 //     esperando o operador (`?` ou `Q<n>` no último parágrafo) cobra limpar antes.
 // `clear_session` recusado (tool_result com `is_error`) não conta como limpeza.
-// Uma cobrança por turno (`stop_hook_active` deixa passar). Erro nunca prende o turno. Limites: constantes abaixo, com override
+// Uma cobrança por limiar (espera=1, alto=2, teto=3): o turno seguinte no mesmo limiar passa (`ja-avisado`); só um limiar acima
+// cobra de novo, e o contexto que cai abaixo do nível cobrado (limpeza, compactação) rearma. A linha `Contexto: sigo` também
+// responde ao limiar. `stop_hook_active` deixa passar sem contar como avisado. Erro nunca prende o turno. Limites: constantes abaixo, com override
 // `CONTEXTO_LIMITE_<NOME>` só para teste. Fonte da regra: skills/papeis-e-modelos/SKILL.md, seção "Contexto".
 import { readFileSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { registrar, textoDe, modoAusente } from './hooks-crewai-comum.mjs';
+import { BASE, registrar, textoDe, modoAusente, lerEstadoDe, gravarEstadoDe } from './hooks-crewai-comum.mjs';
 import { registroDaSessao, ehOrquestradora, itensDonosDaSessao, inicioDoTurno, contextoDoTranscript } from './pool-comum.mjs';
 
 const HOOK = 'contexto-do-papel';
@@ -21,6 +25,7 @@ const limite = (nome, padrao) => { const v = Number(process.env[`CONTEXTO_LIMITE
 const ESPERA = limite('ESPERA', 250_000); const ALTO = limite('ALTO', 350_000); const TETO = limite('TETO', 500_000);
 const PEDIR = limite('PEDIR', 250_000);
 const mil = (t) => Math.round(t / 1000);
+const ESTADO = join(BASE, 'hooks-crewai-estado.json');
 
 // Papel pela ordem: orquestradora (ou orquestradora-ausente), dona de item vivo. Sem papel → null.
 function papelDe(e, reg) {
@@ -88,14 +93,20 @@ function main() {
   const t = ctx.tokens; const det = `${papel} ${mil(t)} mil`;
 
   if (papel === 'orquestradora') return orquestradora(e, sid, transcript, t, det);
+  // Nível já cobrado nesta sessão; o contexto abaixo dele (limpeza, compactação) rearma.
+  const chave = `${sid}:contexto`;
+  const nivelDosTokens = t >= TETO ? 3 : t >= ALTO ? 2 : t >= ESPERA ? 1 : 0;
+  let cobrado = Number(lerEstadoDe(ESTADO)[chave]?.nivel) || 0;
+  if (cobrado && nivelDosTokens < cobrado) { gravarEstadoDe(ESTADO, (s) => { delete s[chave]; }); cobrado = 0; }
+  const marcar = (nivel) => gravarEstadoDe(ESTADO, (s) => { s[chave] = { nivel, em: Date.now() }; });
   // O que cobraria, nesta ordem de gravidade. `sigoVale`: a linha de escape não vale no teto.
   let cobranca = null;
   if (t >= TETO) {
-    cobranca = { desfecho: 'cobrou-300', sigoVale: false, reason: `Contexto em ${mil(t)} mil. Não pegue trabalho novo. Escreva o estado (o próximo passo exato) e chame clear_session "self".` };
+    cobranca = { nivel: 3, desfecho: 'cobrou-300', sigoVale: false, reason: `Contexto em ${mil(t)} mil. Não pegue trabalho novo. Escreva o estado (o próximo passo exato) e chame clear_session "self".` };
   } else if (t >= ALTO) {
-    cobranca = { desfecho: 'cobrou-200', sigoVale: true, reason: `Contexto em ${mil(t)} mil, acima de ${mil(ALTO)} mil. Se a unidade de trabalho acabou, escreva o estado e chame clear_session "self"; se não acabou, diga numa linha \`Contexto: sigo — <o que falta na unidade>\`.` };
+    cobranca = { nivel: 2, desfecho: 'cobrou-200', sigoVale: true, reason: `Contexto em ${mil(t)} mil, acima de ${mil(ALTO)} mil. Se a unidade de trabalho acabou, escreva o estado e chame clear_session "self"; se não acabou, diga numa linha \`Contexto: sigo — <o que falta na unidade>\`.` };
   } else if (t >= ESPERA) {
-    cobranca = { desfecho: 'cobrou-150-espera', sigoVale: true, esperando: true, reason: `Contexto em ${mil(t)} mil e o turno termina esperando resposta: limpe antes (retomar custa ~105 mil, reler ${mil(t)} mil a cada turno custa mais).` };
+    cobranca = { nivel: 1, desfecho: 'cobrou-150-espera', sigoVale: true, esperando: true, reason: `Contexto em ${mil(t)} mil e o turno termina esperando resposta: limpe antes (retomar custa ~105 mil, reler ${mil(t)} mil a cada turno custa mais).` };
   }
   if (!cobranca) return;
   if (papel === 'orquestradora-ausente') cobranca.reason += ` Vale porque o modo ausente está ligado${desdeDoModo()}; se o operador está aqui, quem desliga é ele (\`/ausente off\` ou o botão do painel), e aí a limpeza volta a ser dele.`;
@@ -104,8 +115,10 @@ function main() {
   const { limpou, texto } = doTurno(transcript, inicio, e.last_assistant_message);
   if (cobranca.esperando && !terminaEsperando(texto)) return; // não termina esperando o operador
   if (limpou) { registrar(sid, HOOK, 'limpou', det); return; }
-  if (cobranca.sigoVale && /^\s*Contexto:\s*sigo\s*—\s*\S.{8,}/m.test(texto)) { registrar(sid, HOOK, 'satisfeito-sigo', det); return; }
+  if (cobranca.nivel <= cobrado) { registrar(sid, HOOK, 'ja-avisado', `${cobranca.desfecho} ${det}`); return; }
+  if (cobranca.sigoVale && /^\s*Contexto:\s*sigo\s*—\s*\S.{8,}/m.test(texto)) { marcar(cobranca.nivel); registrar(sid, HOOK, 'satisfeito-sigo', det); return; }
   if (ativo) { registrar(sid, HOOK, 'deixou-passar', `${cobranca.desfecho} ${det}`); return; }
+  marcar(cobranca.nivel);
   registrar(sid, HOOK, cobranca.desfecho, det);
   process.stdout.write(JSON.stringify({ decision: 'block', reason: cobranca.reason }));
 }
