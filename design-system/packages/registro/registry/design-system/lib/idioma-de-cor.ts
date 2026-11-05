@@ -1,3 +1,5 @@
+export type Tom = "ok" | "espera" | "ruim" | "neutro" | "alheio"
+
 /**
  * O idioma de cor da Wicomm: as cinco VOZES e as classes de cada uma, num
  * arquivo só (DESIGN COR-03, COR-05).
@@ -21,8 +23,6 @@
  * escuro (COR-01). Os degraus de cada mapa são contraste medido (COR-06): mudar
  * um degrau pede medir de novo no navegador (MED-01).
  */
-export type Tom = "ok" | "espera" | "ruim" | "neutro" | "alheio"
-
 export const TONS = ["ok", "espera", "ruim", "neutro", "alheio"] as const satisfies readonly Tom[]
 
 /** Número de voz com 24px ou mais. No claro, o 600 só passa como texto grande (COR-06). */

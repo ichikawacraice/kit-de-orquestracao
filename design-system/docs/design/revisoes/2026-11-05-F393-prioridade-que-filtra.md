@@ -205,3 +205,15 @@ Nenhuma bloqueia a execução. Duas foram tomadas aqui e são *assumidas, a conf
 Nota 28/30 (hierarquia 4 · densidade 5 · consistência 5 · ruído 5 · ação primária 5 · aderência 4). Aprovada com ressalvas, as duas atendidas no mesmo PR:
 - **P1 (média):** o *Por quê* da COR-09 citava o item (F393) e o ΔEok 0,038, que a medição não repetiu. Volta ao texto do item 7 desta revisão (0,04 e 0,03; dentro do carimbo, 0,07 e 0,13; as famílias livres já são da pessoa), sem ID de item na base.
 - **P2 (baixa):** a amostra do ateliê agrupa as contagens em `role="group"` com `aria-label="Por prioridade"`, ao lado do chip, e a primeira fileira ganha um `ChipDeEstado` `ruim` para a conferência da Alta × `ruim`.
+
+## Emenda da D1 (F408, 2026-11-05)
+
+A D1 dizia: sem `aria-pressed`, o recorte aparece no gatilho do filtro da tela. O piloto (WiControl, F406) mostrou que a tela com a contagem por nível não tem gatilho de filtro: o carimbo que filtrou não dizia que estava ligado, e o segundo clique aplicava o recorte de novo em vez de desligá-lo. **Emenda:** a `Prioridade` ganha `ativo?: boolean` e `onDesligar?: () => void`. Com `onAbrir`, `ativo` dá `aria-pressed` e o sublinhado cheio e mais grosso (sem contorno: CTRL-05; 0,48px a 50% da tinta no repouso, 2px a 100% ligado); o clique no ativo chama `onDesligar`, ou `onAbrir` se não houver. `onAbrir(null)` foi descartado: o carimbo não tem chave para passar. Sem `ativo`, vale a D1 como estava. A `zerada` segue sem gesto (D3), exceto a ligada: o recorte que caiu a zero continua ativo (ARQ-05). *Assumida, a confirmar:* se uma tela tiver o gatilho do filtro visível, ela pode não passar `ativo`.
+
+## Crítica 2 (2026-11-05)
+
+Nota 23/30 (hierarquia 4 · densidade 3 · consistência 3 · ruído 5 · ação primária 5 · aderência 3). Volta por: **P1** a barra de abas encolhia por cima da busca no estreito (agora `shrink-0`); **P2** a zerada ligada virava `span` e não se desligava mais (agora segue botão apertado); **P3** a terceira forma de "ligado" contra a D1 (registrada na emenda acima, com o piloto como motivo; o crítico recomendava retirar `ativo`); **P4** comentário citava peça inexistente e faltavam versão e CHANGELOG (feitos).
+
+## Crítica 3 (2026-11-05)
+
+Nota 26/30 (hierarquia 4 · densidade 4 · consistência 4 · ruído 5 · ação primária 5 · aderência 4). Aprovada com ressalvas. P3 (o `Button` encolhia na fileira: agora `shrink-0`) e P4 (amostra da zerada ligada) atendidas neste PR. **Decisões ao operador** (*assumidas, a confirmar*): (1) conferir no ateliê, nos dois temas, se o ligado (2px, 100%) se separa do vizinho sob o mouse (1px passa a 100% no hover); se não, a forma de selecionado da `BarraDeModos` entra e mexe na D1; (2) tipar `ativo` e `onDesligar` juntos e tirar a volta ao `onAbrir`: a emenda mantém a volta ao `onAbrir` porque o piloto usa só `onAbrir`; o tipo mais rígido fica para uma revisão própria.

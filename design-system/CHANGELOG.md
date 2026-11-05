@@ -4,6 +4,20 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.26.0 · 05/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **A `Prioridade` que filtra mostra que está ligada** (ANATOMIA PECA-01, ARQ-05): com `onAbrir`, a prop `ativo` dá `aria-pressed` e a forma de selecionado (o sublinhado do gesto fecha em linha cheia e mais grosso, sem contorno: CTRL-05), e o clique no ativo desliga o recorte (`onDesligar`, ou o próprio `onAbrir`). O recorte ligado que cai a zero continua um botão apertado, para desligar. Sem `ativo`, nada muda: o carimbo só aplica o recorte. Isto substitui a decisão D1 da revisão F393, que deixava o estado ligado só no gatilho do filtro da tela.
+- **A fileira de filtros do `TopoDaPagina` encolhe os filhos** no estreito, sem `div` de contorno na tela; a barra de abas não encolhe, quem cede é o resto da fileira (a busca).
+- **`"use client"` só onde a peça tem estado, efeito ou contexto próprio**: o `topo-da-pagina` ganha a diretiva (usa `useRef`/`useEffect`; no Next ele quebrava no servidor). Manipulador que chega por prop não a pede, e pô-la numa peça que exporta constante de estilo faria o servidor receber uma referência no lugar da classe. Um teste do registro trava a regra.
+- **O cabeçalho do `idioma-de-cor` sobrevive ao `shadcn add --overwrite`**: o `shadcn` apaga o comentário que antecede a primeira instrução do arquivo; o cabeçalho passa a vir depois do `type Tom`.
+
+### Migração
+- Nada a migrar. Para adotar o `ativo`, passe `ativo={nivel === n}` e `onDesligar` (sem ele, o clique no ligado chama o `onAbrir` e aplica o recorte de novo); a tela que já embrulhava os filtros num `div flex min-w-0` pode tirá-lo.
+- Ao rodar `shadcn add --overwrite`, o diff de `"use client"` no topo de `topo-da-pagina` é esperado; o do cabeçalho de `idioma-de-cor` some.
+
 ## 0.25.0 · 05/11/2026
 
 Camadas: base, registro

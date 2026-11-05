@@ -25,6 +25,9 @@ const COR_DO_NIVEL: Record<1 | 2 | 3, string> = {
   3: "text-red-700 dark:text-red-400",
 }
 
+/** A forma do carimbo ligado: o sublinhado do gesto fecha em linha cheia e engrossa; contorno, nunca (CTRL-05). */
+const SELECIONADO_DO_CARIMBO = "aria-pressed:[text-decoration-color:currentcolor] aria-pressed:decoration-2"
+
 /**
  * A prioridade de um item (ANATOMIA PECA-01): um carimbo, no casco de todo
  * carimbo (CTRL-05), com o glifo de barras e a palavra. A cor responde uma
@@ -44,6 +47,8 @@ const COR_DO_NIVEL: Record<1 | 2 | 3, string> = {
 function Prioridade({
   nivel,
   onAbrir,
+  onDesligar,
+  ativo,
   zerada = false,
   className,
   children,
@@ -56,8 +61,23 @@ function Prioridade({
    */
   onAbrir?: () => void
   /**
+   * O recorte está ligado por este carimbo. Só vale com `onAbrir`: o botão ganha
+   * `aria-pressed` e a forma de selecionado (o sublinhado fecha em linha cheia e
+   * mais grossa, sem contorno: CTRL-05), e o clique no ativo desliga o recorte,
+   * como a `FileiraDoResumo` do topo (ARQ-05). Sem `ativo`, o botão não é de alternância
+   * e não leva `aria-pressed`; `ativo={false}` é o desligado de quem alterna.
+   */
+  ativo?: boolean
+  /**
+   * O que o clique no carimbo `ativo` chama. Sem ele, o clique chama o
+   * `onAbrir`. Por que não `onAbrir(null)`: o carimbo não tem chave para
+   * passar, e o `onAbrir` já é `() => void`.
+   */
+  onDesligar?: () => void
+  /**
    * O zero de uma contagem: a forma do nível, sem a cor (COR-09) e sem gesto —
-   * não há recorte para abrir. Ignora o `onAbrir`.
+   * não há recorte para abrir. Ignora o `onAbrir`, salvo com `ativo`: o recorte ligado que caiu a zero
+   * continua um botão apertado, para desligar (ARQ-05).
    */
   zerada?: boolean
   className?: string
@@ -65,7 +85,8 @@ function Prioridade({
   children: string
 }) {
   const urgente = nivel === "urgente"
-  const abre = onAbrir !== undefined && !zerada
+  // A zerada ignora o onAbrir, salvo a que está ligada: o recorte que caiu a zero continua ativo e se desliga por ela (ARQ-05).
+  const abre = onAbrir !== undefined && (!zerada || ativo === true)
   const conteudo = (
     <>
       {urgente ? (
@@ -88,11 +109,19 @@ function Prioridade({
     BADGE_DO_TOM[urgente && !zerada ? "espera" : "neutro"],
     !urgente && !zerada && nivel > 0 && COR_DO_NIVEL[nivel as 1 | 2 | 3],
     abre && GESTO_DO_CARIMBO,
+    abre && ativo !== undefined && SELECIONADO_DO_CARIMBO,
     className,
   )
   if (abre) {
     return (
-      <button type="button" data-slot="prioridade" data-nivel={nivel} onClick={onAbrir} className={classe}>
+      <button
+        type="button"
+        data-slot="prioridade"
+        data-nivel={nivel}
+        aria-pressed={ativo}
+        onClick={ativo && onDesligar ? onDesligar : onAbrir}
+        className={classe}
+      >
         {conteudo}
       </button>
     )

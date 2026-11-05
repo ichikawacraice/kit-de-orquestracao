@@ -1,7 +1,7 @@
 // O quadro de tarefas (ANATOMIA PECA-01): a coluna no chão, o cartão como peça,
 // a cor com função (a bandeja tinge só pela voz que pede algo), a prioridade
 // em forma e o ponto da etapa do mapa do projeto.
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { fireEvent, render, screen, within } from "@testing-library/react"
 
 import { criarPontoDaEtapa } from "@/registry/design-system/ui/ponto-da-etapa"
@@ -295,6 +295,75 @@ describe("a prioridade", () => {
     expect(classes(el)).not.toContain(TINTA_DO_TOM.espera)
     expect(classes(el)).toContain(TINTA_DO_CARIMBO_NEUTRO)
     expect(el?.querySelector("svg")).not.toBeNull()
+  })
+
+  it("ativo, com onAbrir: aria-pressed e a forma de selecionado; o clique no ativo desliga, o no inativo abre", () => {
+    const onAbrir = vi.fn()
+    const onDesligar = vi.fn()
+    const { rerender } = render(
+      <Prioridade nivel={3} onAbrir={onAbrir} onDesligar={onDesligar}>
+        3 altas
+      </Prioridade>,
+    )
+    const solto = screen.getByRole("button", { name: "3 altas" })
+    expect(solto.hasAttribute("aria-pressed")).toBe(false)
+    rerender(
+      <Prioridade nivel={3} ativo={false} onAbrir={onAbrir} onDesligar={onDesligar}>
+        3 altas
+      </Prioridade>,
+    )
+    expect(screen.getByRole("button", { name: "3 altas" }).getAttribute("aria-pressed")).toBe("false")
+    fireEvent.click(screen.getByRole("button", { name: "3 altas" }))
+    expect([onAbrir.mock.calls.length, onDesligar.mock.calls.length]).toEqual([1, 0])
+    rerender(
+      <Prioridade nivel={3} ativo onAbrir={onAbrir} onDesligar={onDesligar}>
+        3 altas
+      </Prioridade>,
+    )
+    const ativo = screen.getByRole("button", { name: "3 altas" })
+    expect(ativo.getAttribute("aria-pressed")).toBe("true")
+    // A forma não é só cor: o sublinhado fecha em linha cheia e mais grossa quando o botão está apertado.
+    expect(classes(ativo)).toContain("aria-pressed:[text-decoration-color:currentcolor]")
+    expect(classes(ativo)).toContain("aria-pressed:decoration-2")
+    fireEvent.click(ativo)
+    expect([onAbrir.mock.calls.length, onDesligar.mock.calls.length]).toEqual([1, 1])
+  })
+
+  it("ativo sem onDesligar: o clique segue no onAbrir; sem onAbrir ou zerada e desligada, ativo não vira botão apertado", () => {
+    const onAbrir = vi.fn()
+    const { unmount } = render(
+      <Prioridade nivel={2} ativo onAbrir={onAbrir}>
+        2 médias
+      </Prioridade>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "2 médias" }))
+    expect(onAbrir).toHaveBeenCalledTimes(1)
+    unmount()
+    const { container } = render(
+      <>
+        <Prioridade nivel={2} ativo>
+          Média
+        </Prioridade>
+        <Prioridade nivel={2} ativo={false} zerada onAbrir={onAbrir}>
+          0 médias
+        </Prioridade>
+      </>,
+    )
+    expect(screen.queryByRole("button")).toBeNull()
+    expect(container.querySelector("[aria-pressed]")).toBeNull()
+  })
+
+  it("o recorte ligado que cai a zero continua apertado e se desliga pelo carimbo (ARQ-05)", () => {
+    const onDesligar = vi.fn()
+    render(
+      <Prioridade nivel={2} ativo zerada onAbrir={() => {}} onDesligar={onDesligar}>
+        0 médias
+      </Prioridade>,
+    )
+    const botao = screen.getByRole("button", { name: "0 médias" })
+    expect(botao.getAttribute("aria-pressed")).toBe("true")
+    fireEvent.click(botao)
+    expect(onDesligar).toHaveBeenCalledTimes(1)
   })
 
   it("o zero não abre: a zerada ignora o onAbrir", () => {

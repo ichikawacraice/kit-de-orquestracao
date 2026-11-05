@@ -153,6 +153,11 @@ export default function DemoDoTopo() {
         <Amostra titulo="Sem recortes: a linha não existe">
           <TopoDaLista semResumo />
         </Amostra>
+        <Amostra titulo="No estreito, a fileira dos filtros encolhe os filhos: a busca cede, sem div de contorno">
+          <div className="w-full max-w-80">
+            <TopoDaPagina titulo="Pedidos" filtros={<FiltrosDaLista />} />
+          </div>
+        </Amostra>
         <Amostra titulo="No estreito, a linha dos valores quebra e o título fica inteiro">
           <div className="w-full max-w-72">
             <TopoDaPagina

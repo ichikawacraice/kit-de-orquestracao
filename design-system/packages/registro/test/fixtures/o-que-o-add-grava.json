@@ -9,7 +9,7 @@
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/badge.tsx": "0b6926a00ad9145d508e5385674abc5d6487baf48b93832a03e7ef3c43ba7467",
       "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "barra-do-editor": {
@@ -26,7 +26,7 @@
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "components/ui/tooltip.tsx": "e2d5b9948b7d1f8681d8ee853d80b5d0e461a84941749bb5949f9f94bb16117e",
       "lib/antes-do-desenho.tsx": "6e466b7ebc779db8d4b02ea3474e3c2daa2dc0a6196f57a6126bf6ba5763671c",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/link-do-app.tsx": "c5a9d2b90544b44c72c99a23a6a97e818fb2ddc028b17ff4eb346882341d85b8",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -38,7 +38,7 @@
     "bloco-de-tinta": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/bloco-de-tinta.tsx": "49279c047b0689a26c2274378dd3cb31c6a53f4aa449e061a4b5faafcce84537",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "button": {
@@ -76,7 +76,7 @@
       "components/ui/toast.tsx": "d70b25f1d443451f08d0f38b2d3268962003f88ff41ad1e1f963b89763d944eb",
       "components/ui/tooltip.tsx": "e2d5b9948b7d1f8681d8ee853d80b5d0e461a84941749bb5949f9f94bb16117e",
       "lib/antes-do-desenho.tsx": "6e466b7ebc779db8d4b02ea3474e3c2daa2dc0a6196f57a6126bf6ba5763671c",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/link-do-app.tsx": "c5a9d2b90544b44c72c99a23a6a97e818fb2ddc028b17ff4eb346882341d85b8",
       "lib/navegacao.ts": "1b61365960117d112a720800899fdcdf6b17eea3be9f68e76a95bce7be81ab69",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
@@ -90,7 +90,7 @@
     "chip-de-estado": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "colunas-do-editor": {
@@ -102,7 +102,7 @@
       "components/ui/painel.tsx": "f9952cfc6affa8c8af142bafc2d87622ace4011bdbbb05e2f301e1da7ab4f2f9",
       "components/ui/secao.tsx": "4ef9ee98e9fca54367294f6bc7a1a8686090dde2835984770bf6e4ed95bea1b5",
       "components/ui/tooltip.tsx": "e2d5b9948b7d1f8681d8ee853d80b5d0e461a84941749bb5949f9f94bb16117e",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "com-motivo": {
@@ -116,7 +116,7 @@
       "components/ui/button.tsx": "0b3555fe7b1862dc7d6dcde5b80e8bb86059953cc5177f3fabea90285c6a8240",
       "components/ui/confirm-dialog.tsx": "309ac067f0e0a714c3aef877f75dfb446759ecd3c269c892f09d8325ecb2f582",
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "conversa": {
@@ -125,7 +125,7 @@
       "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/conversa.tsx": "b83c52ec690fa4a737d2f00c6eb0ed10e47f3f705f9e53e6e74afa563dd36a16",
       "components/ui/monograma.tsx": "9127d3249ed99e814db9bed1f6df05c3016177cbaca9475d1923ccb5eaa9956d",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/links-no-texto.ts": "e6620f84860b41fe9f77cee982ada170f21f59a4d0a3ee38f2662e627efa7c61",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -179,7 +179,7 @@
       "components/ui/vazio.tsx": "ec05734da900dc582ed8cba2c84d0d76b777900e7c0e0cd52bdb012ef46b0f5d",
       "lib/antes-do-desenho.tsx": "6e466b7ebc779db8d4b02ea3474e3c2daa2dc0a6196f57a6126bf6ba5763671c",
       "lib/dados-do-editor.ts": "d4185423320b5eb9d29d50f2c5f4c77d6e7c37c572cfa26491d4da995acac28e",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/link-do-app.tsx": "c5a9d2b90544b44c72c99a23a6a97e818fb2ddc028b17ff4eb346882341d85b8",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -197,7 +197,7 @@
       "components/ui/menu.tsx": "1fe3895aca8e28638d72b439415b763fb553a4a4b384d8751cc452d11049452a",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "lib/antes-do-desenho.tsx": "6e466b7ebc779db8d4b02ea3474e3c2daa2dc0a6196f57a6126bf6ba5763671c",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "escolha-na-celula": {
@@ -210,14 +210,14 @@
       "components/ui/popover.tsx": "76561a04bf5ee4c3cc2a4e164e5d5f0a394649339807422157d23f7268f6509d",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "components/ui/table.tsx": "6b3a8cfa47a523f7e212027d9fd8287300d208877a831e8a25c4d8ff26c3d0e4",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/link-do-app.tsx": "c5a9d2b90544b44c72c99a23a6a97e818fb2ddc028b17ff4eb346882341d85b8",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "estado": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/estado.tsx": "2ba49196556258021bd1d9bbd4f44514c5779b676af8499663a7fee40659d27e",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "estilo": {
@@ -227,7 +227,7 @@
     "faixa": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/faixa.tsx": "98b048f1da92308d93a767c6463d79a558e91bec2009ccbc9cbba2dc0009fbf4",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "ficha": {
@@ -242,7 +242,7 @@
     },
     "idioma-de-cor": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "input": {
@@ -256,7 +256,7 @@
       "components/ui/intervalo-de-campos.tsx": "a40f8973cccbb87d3851cf74b6a2f1dfed9b8ef197388dcc02d089f42c97c298",
       "components/ui/label.tsx": "f2061bde312942aae24f34df4d0bb7917367285d9388ab5ee4402917d57e74ed",
       "components/ui/table.tsx": "6b3a8cfa47a523f7e212027d9fd8287300d208877a831e8a25c4d8ff26c3d0e4",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/link-do-app.tsx": "c5a9d2b90544b44c72c99a23a6a97e818fb2ddc028b17ff4eb346882341d85b8",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -272,7 +272,7 @@
       "components/ui/progress.tsx": "891effbd859afe0f830f59b4fa3494254d0d4c04540e681dc0ef7103354cab4d",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "components/ui/table.tsx": "6b3a8cfa47a523f7e212027d9fd8287300d208877a831e8a25c4d8ff26c3d0e4",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/link-do-app.tsx": "c5a9d2b90544b44c72c99a23a6a97e818fb2ddc028b17ff4eb346882341d85b8",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
@@ -308,11 +308,11 @@
       "components/ui/tela-de-erro.tsx": "d8a78d658c89150b3eb33025016663cb913cdb858c5710f4e9f3ff72d420929c",
       "components/ui/toast.tsx": "d70b25f1d443451f08d0f38b2d3268962003f88ff41ad1e1f963b89763d944eb",
       "components/ui/tooltip.tsx": "e2d5b9948b7d1f8681d8ee853d80b5d0e461a84941749bb5949f9f94bb16117e",
-      "components/ui/topo-da-pagina.tsx": "65659c83159bd4b2d3fd60e747c9f463821d1b86497213e268a3d1b12de6b32a",
+      "components/ui/topo-da-pagina.tsx": "01ebe01632bf9456858eca9eef4f06779e97f2090741e12912e37468ab625e9c",
       "components/ui/vazio.tsx": "ec05734da900dc582ed8cba2c84d0d76b777900e7c0e0cd52bdb012ef46b0f5d",
       "lib/antes-do-desenho.tsx": "6e466b7ebc779db8d4b02ea3474e3c2daa2dc0a6196f57a6126bf6ba5763671c",
       "lib/dados-da-lista.ts": "56c40f7f54f88761897fffb9ac79156c3cd31443105bb25e17d8a3356a53c993",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/link-do-app.tsx": "c5a9d2b90544b44c72c99a23a6a97e818fb2ddc028b17ff4eb346882341d85b8",
       "lib/navegacao.ts": "1b61365960117d112a720800899fdcdf6b17eea3be9f68e76a95bce7be81ab69",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
@@ -325,14 +325,14 @@
     "medalhao-do-icone": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/medalhao-do-icone.tsx": "2fee443e0c97a52f3cb1a391bb007f970dc9acc1b6cf470228f6ac33ef0c5134",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "medidor": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/medidor.tsx": "42834319c1458b0ebde928e3642147b2c915762bc19283b83d60827ba0403cdd",
       "components/ui/progress.tsx": "891effbd859afe0f830f59b4fa3494254d0d4c04540e681dc0ef7103354cab4d",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "menu": {
@@ -342,7 +342,7 @@
       "components/ui/dialog.tsx": "869a9321e6f69e288d05658f05dc36f75664f037b1511e1dcdd3f891e14b473a",
       "components/ui/menu.tsx": "1fe3895aca8e28638d72b439415b763fb553a4a4b384d8751cc452d11049452a",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "menu-da-conta": {
@@ -354,7 +354,7 @@
       "components/ui/menu.tsx": "1fe3895aca8e28638d72b439415b763fb553a4a4b384d8751cc452d11049452a",
       "components/ui/monograma.tsx": "9127d3249ed99e814db9bed1f6df05c3016177cbaca9475d1923ccb5eaa9956d",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "menu-do-tema": {
@@ -366,7 +366,7 @@
       "components/ui/menu.tsx": "1fe3895aca8e28638d72b439415b763fb553a4a4b384d8751cc452d11049452a",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "lib/antes-do-desenho.tsx": "6e466b7ebc779db8d4b02ea3474e3c2daa2dc0a6196f57a6126bf6ba5763671c",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "mesa": {
@@ -400,14 +400,14 @@
       "components/ui/tela-de-erro.tsx": "d8a78d658c89150b3eb33025016663cb913cdb858c5710f4e9f3ff72d420929c",
       "components/ui/toast.tsx": "d70b25f1d443451f08d0f38b2d3268962003f88ff41ad1e1f963b89763d944eb",
       "components/ui/tooltip.tsx": "e2d5b9948b7d1f8681d8ee853d80b5d0e461a84941749bb5949f9f94bb16117e",
-      "components/ui/topo-da-pagina.tsx": "65659c83159bd4b2d3fd60e747c9f463821d1b86497213e268a3d1b12de6b32a",
+      "components/ui/topo-da-pagina.tsx": "01ebe01632bf9456858eca9eef4f06779e97f2090741e12912e37468ab625e9c",
       "components/ui/trilha.tsx": "cfb8a4893259feee7c02db9ef96a2ca26bcea4e7cc5272807ff7ddd9f5bc228d",
       "components/ui/trilho-do-percurso.tsx": "52abe6658d5f903391b99aafcf26a08f27bee4e389629d635325d98b0dc6f260",
       "components/ui/vazio.tsx": "ec05734da900dc582ed8cba2c84d0d76b777900e7c0e0cd52bdb012ef46b0f5d",
       "lib/antes-do-desenho.tsx": "6e466b7ebc779db8d4b02ea3474e3c2daa2dc0a6196f57a6126bf6ba5763671c",
       "lib/dados-da-lista.ts": "56c40f7f54f88761897fffb9ac79156c3cd31443105bb25e17d8a3356a53c993",
       "lib/dados-da-mesa.ts": "17de6b75047ba8a4eeef8ea774c4c5814ba406e0d66ff5dea18259625ee753b1",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/link-do-app.tsx": "c5a9d2b90544b44c72c99a23a6a97e818fb2ddc028b17ff4eb346882341d85b8",
       "lib/navegacao.ts": "1b61365960117d112a720800899fdcdf6b17eea3be9f68e76a95bce7be81ab69",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
@@ -450,15 +450,15 @@
       "components/ui/prazo.tsx": "a8d6edf0f747ac2172708e8ad53473d1f49b9ee290642d9be99a9e8868bdca72",
       "components/ui/table.tsx": "6b3a8cfa47a523f7e212027d9fd8287300d208877a831e8a25c4d8ff26c3d0e4",
       "components/ui/tooltip.tsx": "e2d5b9948b7d1f8681d8ee853d80b5d0e461a84941749bb5949f9f94bb16117e",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/link-do-app.tsx": "c5a9d2b90544b44c72c99a23a6a97e818fb2ddc028b17ff4eb346882341d85b8",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "prioridade": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
-      "components/ui/prioridade.tsx": "171d07cd1b8013ca9a3829ee7d899127106625e65da9bfd102a8d8a09b651407",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "components/ui/prioridade.tsx": "43f3787a65b713af92a8a1bf92eb930fa338c3ce881471ceac426d88d326adde",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "progress": {
@@ -470,7 +470,7 @@
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/quadro.tsx": "771a676f35828ff66c0da4b1a13bf561dee2852c31e3989a8b6b79969e4d5b2a",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "secao": {
@@ -486,7 +486,7 @@
     "seletor-de-vista": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/seletor-de-vista.tsx": "6eda40bcc26e7dabaec2f781fae2170b095921188265658e7fe5996dbff8c1fc",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "skeleton": {
@@ -505,13 +505,13 @@
       "components/ui/button.tsx": "0b3555fe7b1862dc7d6dcde5b80e8bb86059953cc5177f3fabea90285c6a8240",
       "components/ui/medalhao-do-icone.tsx": "2fee443e0c97a52f3cb1a391bb007f970dc9acc1b6cf470228f6ac33ef0c5134",
       "components/ui/tela-de-erro.tsx": "d8a78d658c89150b3eb33025016663cb913cdb858c5710f4e9f3ff72d420929c",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "toast": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/toast.tsx": "d70b25f1d443451f08d0f38b2d3268962003f88ff41ad1e1f963b89763d944eb",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "tooltip": {
@@ -524,8 +524,8 @@
       "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
       "components/ui/seletor-de-vista.tsx": "6eda40bcc26e7dabaec2f781fae2170b095921188265658e7fe5996dbff8c1fc",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
-      "components/ui/topo-da-pagina.tsx": "65659c83159bd4b2d3fd60e747c9f463821d1b86497213e268a3d1b12de6b32a",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "components/ui/topo-da-pagina.tsx": "01ebe01632bf9456858eca9eef4f06779e97f2090741e12912e37468ab625e9c",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "trilha": {
@@ -539,14 +539,14 @@
       "components/ui/estado.tsx": "2ba49196556258021bd1d9bbd4f44514c5779b676af8499663a7fee40659d27e",
       "components/ui/secao.tsx": "4ef9ee98e9fca54367294f6bc7a1a8686090dde2835984770bf6e4ed95bea1b5",
       "components/ui/trilho-do-percurso.tsx": "52abe6658d5f903391b99aafcf26a08f27bee4e389629d635325d98b0dc6f260",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
     "vazio": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/medalhao-do-icone.tsx": "2fee443e0c97a52f3cb1a391bb007f970dc9acc1b6cf470228f6ac33ef0c5134",
       "components/ui/vazio.tsx": "ec05734da900dc582ed8cba2c84d0d76b777900e7c0e0cd52bdb012ef46b0f5d",
-      "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",
+      "lib/idioma-de-cor.ts": "d34f290ba611b0f4ad18e07ecd4f6e3e1a52741926b62df6bca3608b849133ef",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     }
   }
