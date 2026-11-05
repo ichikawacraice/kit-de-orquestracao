@@ -16,8 +16,15 @@ import { cn } from "@/registry/design-system/lib/utils"
  *   a pílula contra a trilha mede ~1,2:1, e nenhuma superfície sutil pagaria os
  *   3:1 de objeto gráfico. O texto já diz o ativo antes de a pílula ser medida.
  * - `abas` (30px) troca o PAINEL: `role="tablist"`, item `tab` com
- *   `aria-selected`. `modos` (24px) troca o DESENHO do mesmo conteúdo:
- *   `role="group"`, item com `aria-pressed` — chamar de aba mentiria.
+ *   `aria-selected`. Serve quando as situações REPARTEM o conjunto: cada item
+ *   numa só, uma sempre escolhida (salvo a busca que cruza), as contagens
+ *   somam o todo — a fila por situação dos filtros da Lista.
+ * - `modos` (24px): `role="group"`, item com `aria-pressed` — chamar de aba
+ *   mentiria. Troca o DESENHO do mesmo conteúdo (lista, quadro, calendário);
+ *   dentro do `resumo` do `TopoDaPagina`, serve também aos RECORTES que se
+ *   sobrepõem (ANATOMIA ARQ-05), com o valor nulo e o clicar de novo que
+ *   desliga — quem os monta é a peça do topo. Fora dele, recorte contado é
+ *   defeito (PECA-01).
  * - A pílula anima posição e largura, nunca cor, e não anda para quem pediu
  *   menos movimento.
  */
@@ -63,7 +70,8 @@ type ModoDoSeletor<T extends string> = {
   icone?: React.ComponentType<{ className?: string }>
   /**
    * A contagem do modo, no mesmo botão do rótulo. `0` desenha `0` (EST-04);
-   * `null` desenha `—`, o não contado (ainda carregando); ausente não desenha nada.
+   * `null` desenha `‒`, o travessão numérico (o não contado, ainda carregando);
+   * ausente não desenha nada.
    */
   numero?: number | null
   /** A voz do número, só quando ele passa de zero: zero não pede nada. */

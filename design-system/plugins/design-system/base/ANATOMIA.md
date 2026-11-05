@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.22.0
+versao: 0.23.0
 description: A anatomia dos apps React do sistema — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -59,7 +59,7 @@ O casco é o que faz dois apps da mesma empresa parecerem um só: é a primeira 
   | região | o que mora | o que NÃO mora |
   |---|---|---|
   | **Barra lateral** (esquerda, recolhível) | o logotipo do tema, os destinos do app (item com ícone **e** rótulo), a conta e o tema ao pé | ação de tela, aviso, filtro |
-  | **Topo da página** | a trilha (em tela de detalhe), o título (`h1`, um só), o estado do objeto quando a tela é de um objeto, os valores que o classificam (na linha de baixo, CASCO-04), o primário da tela | ação rara (vai ao `⋯`) |
+  | **Topo da página** | a trilha (em tela de detalhe), o título (`h1`, um só), o estado do objeto quando a tela é de um objeto, os valores que o classificam (na linha de baixo, CASCO-04), o primário da tela; na Lista, os filtros que valem para a tela inteira e, abaixo deles, os recortes contados (ARQ-05) | ação rara (vai ao `⋯`) |
   | **Conteúdo** | o arquétipo da tela, em superfície | conteúdo solto no fundo |
   O **cabeçalho**, grudado acima do topo, é opcional e só leva o que vale **igual em todas as telas** e muda o app inteiro: a troca de contexto, a busca global, a conexão com um serviço de fora — nunca título, primário, conta ou tema. O **topo da página** leva o que muda quando a tela muda. Para um caso novo, o teste é: *a coisa continua valendo depois de trocar de destino?* Se sim, é do cabeçalho; se não, é do topo. O topo não rola (LAY-01). Os arquétipos **Entrada e Editor ficam fora do casco**; no Editor, a barra (ARQ-03) faz o papel dele e leva a volta, o nome do objeto e a conta.
 - **Por quê.** Navegação, título e primário no mesmo lugar em todo app é o que o cliente reconhece como "a mesma empresa".
@@ -89,7 +89,7 @@ O casco é o que faz dois apps da mesma empresa parecerem um só: é a primeira 
 - **Regra.** Toda tela é um destes arquétipos. A que não cabe em nenhum vira **arquétipo novo, aqui, antes do código** (proposta à base, não exceção local).
   | Arquétipo | Pergunta | Exemplos | Regiões |
   |---|---|---|---|
-  | **Lista** | *o que pede a minha atenção?* | a fila de pedidos, os clientes, as novidades | topo (título + filtro global + primário) · lista ou quadro (no quadro, a coluna mora no chão e o cartão é a peça; a coluna vazia recolhe) · vazio |
+  | **Lista** | *o que pede a minha atenção?* | a fila de pedidos, os clientes, as novidades | topo (título + filtro global + primário; os recortes contados abaixo dos filtros, quando a atenção se divide em situações que se sobrepõem, ARQ-05) · lista ou quadro (no quadro, a coluna mora no chão e o cartão é a peça; a coluna vazia recolhe) · vazio |
   | **Mesa** | *em que pé está isto, e o que eu faço agora?* | o detalhe de um pedido, uma conferência | topo (nome + estado + primário) · trilho do percurso · conteúdo da etapa |
   | **Editor** | *como fica se eu mudar isto?* | editor de página, construtor de formulário | barra · estrutura · canvas · inspector ou conversa |
   | **Entrada** | *qual é o único passo?* | login, senha nova, conectar uma conta | cartão sozinho no fundo, uma ação (`xl`) |
@@ -121,6 +121,11 @@ O casco é o que faz dois apps da mesma empresa parecerem um só: é a primeira 
 - **Regra.** A linha começa pelo botão de selecionar (ícone + nome); a alça de arrastar fica **no fim**, à esquerda do `⋯`, com `gap-1`, aparece no hover, no foco e na linha ativa, e tem a dica *Arrastar para mudar a ordem*.
 - **Por quê.** No início, a alça fica sob o ícone do trilho quando a lista abre por cima dele, e o clique vira arrasto.
 - **Confere.** `crítica:clareza da ação`.
+
+### ARQ-05 · O que pede atenção em situações que se sobrepõem é uma fileira de recortes contados
+- **Regra.** Quando a pergunta da Lista se responde por situações que **se sobrepõem** (atrasado, sem responsável, parado: um item pode estar em várias), o topo leva uma fileira de recortes contados no `resumo` do `TopoDaPagina`, **abaixo dos filtros**: o nome da fileira e um botão por situação, com o nome e a contagem. É **um recorte por vez**: clicar de novo desliga, e sem recorte a lista mostra tudo o que os filtros mostram. O recorte vale junto com os filtros, mora no endereço (CONV-06) e conta como filtro ativo: o *limpar* o leva, e a lista vazia diz `filtro` (EST-02); chave desconhecida no endereço vale como sem recorte. Cada número conta o que os filtros mostram e cai no recorte, pelo **mesmo predicado** que recorta a lista (CONV-15), e não muda com o recorte ativo. Todos os recortes do papel aparecem, o zero inclusive (EST-04), e o nome do recorte não muda no zero: aqui o zero informa. O recorte ativo que cai a zero continua ativo. **Não há total:** as partes se sobrepõem e não somam. O tom do número é a voz que a situação pede (COR-03), só acima de zero, e `ok` não entra. A linha mostra, numa célula dela (o prazo, a pessoa, o estado), o sinal de cada recorte em que entra. A situação que **reparte** o conjunto é a `BarraDeModos` em `abas` dos filtros, e o recorte que coincide com uma aba não se repete. O peso vem da posição e da voz do número, não do tamanho: nada de cartão de indicador, número grande ou gráfico (PRIN-04, COR-10), e *quanto* e *como evoluiu* são de outra tela (ARQ-02). A fileira cabe numa linha na largura de referência com a barra lateral aberta; se não cabe, são recortes demais.
+- **Por quê.** Sem lugar na base, a fileira é montada à mão, com o rótulo à vista e o nome do grupo em duas strings que podem divergir. O número fora do predicado da lista promete uma quantidade e entrega outra; o total de situações que se sobrepõem conta o mesmo item duas vezes; e o cartão de indicador dá peso de análise a um gesto que só recorta.
+- **Confere.** Peça `TopoDaPagina` (registro, slot `resumo`: a alternância, o zero, o `‒` e o nome do grupo em teste) · `crítica:hierarquia` · `crítica:aderência`.
 
 ---
 
@@ -226,7 +231,8 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | Número contra teto | `Medidor` (o número em `t-medida` primeiro, a barra neutra depois; `tom` pinta só o número; sem teto, `—` e sem barra), `Medidas` | `Progress` para cota, porcentagem sozinha, barra pintada pela voz |
   | Progresso de etapa | `Progress`, com o valor escrito (`3 de 8`) e o indicador no gradiente; `LinhaDeAndamento` para espera de uma linha só, sem etapas conhecidas | indicador girando sem texto, `Progress` sem valor escrito ou pintado pela voz |
   | Escolha com mais de dois desfechos e estado no servidor | `DialogLongo` (com `icone`) com o fato num parágrafo e a consequência de cada saída numa lista curta acima do rodapé (`Consequencias`), cada item encabeçado pelo termo do botão; as saídas lado a lado no rodapé (`AcoesDoDialogo`), o terciário como link | `useConfirm` com alternativa |
-  | Troca de vista | `BarraDeModos` / `TrilhaDoSeletor` (`seletor-de-vista`) | botões `secondary`/`ghost` alternados, `Tabs`, `ToggleGroup` |
+  | Troca de vista | `BarraDeModos` / `TrilhaDoSeletor` (`seletor-de-vista`; `abas` quando reparte o conjunto; o recorte que se sobrepõe é a linha abaixo) | botões `secondary`/`ghost` alternados, `Tabs`, `ToggleGroup` |
+  | Recortes contados da lista (situações que se sobrepõem) | `resumo` do `TopoDaPagina` (a peça monta a `BarraDeModos` em `modos`, com `numero` e `tom`, e o clicar de novo que desliga; ARQ-05) | cartão de indicador, número grande, gráfico, total, `BarraDeModos` com recortes solta no topo ou no corpo, chip clicável à mão |
   | Escolha com imagem | `EscolhaVisual` | radio com imagem à mão |
   | Marcar itens de uma lista, ou o sim/não de um formulário que se grava com *Salvar* | `Checkbox`; com o texto ao lado, `OpcaoDeMarcar`; na lista, a primeira coluna, com *Marcar todos* indeterminado no cabeçalho | caixa à mão, botão que alterna com ✓, `Select` sim/não |
   | Escolher um valor de uma lista num formulário (vale com *Salvar*) | `Select` | `Command` (a escolha com busca ainda não tem regra) |
@@ -257,6 +263,11 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Regra.** Peça nova parte do componente equivalente do **shadcn oficial** quando existe (menu ← `DropdownMenu`, botão dividido ← `ButtonGroup`, faixa ← `Alert`, colunas ← `Resizable`; as colunas do Editor são a exceção: `ColunasDoEditor` mede a regra da ARQ-03 e não se redimensiona à mão até um projeto pedir), adaptada aos tokens e à escala da DESIGN e à forma do kit (nome em português, `tom`, motivo no desabilitado). Entra pelo **registro do sistema**; o projeto a instala com `shadcn add @wicomm/<peça>` (o prefixo é o do tema). As peças que o kit já tem não são trocadas pelas do catálogo oficial: já são shadcn por baixo e estão ajustadas à escala. Catálogo de terceiros serve só de referência visual: não se copia nem se instala. O crítico julga a peça antes de ela chegar a uma tela.
 - **Por quê.** O shadcn já resolveu acessibilidade e comportamento; o que é do sistema é a forma. Peça de catálogo de terceiros traz outra marca, outra fonte e padrão de landing page.
 - **Confere.** Revisão de arquitetura · `crítica:consistência`.
+
+### PECA-03 · O gráfico desenha a forma que o dado tem
+- **Regra.** O gráfico entra só quando responde uma pergunta que o número escrito não responde (comparar muitas partes de um todo, ver uma tendência) e quando o dado tem a forma que o desenho afirma. Contagens que se sobrepõem não viram pizza nem barra empilhada: as partes não somam o todo. Tendência só se desenha com o histórico gravado; a série não se reconstrói para trás a partir do estado de hoje. Número contra teto é o `Medidor`. O kit ainda não tem peça de gráfico: o primeiro entra pelo registro (PECA-02), julgado por esta regra.
+- **Por quê.** A pizza de partes sobrepostas passa de 100% ou esconde a sobreposição, e a curva reconstruída inventa o passado. Os dois desenhos parecem dado e não são.
+- **Confere.** Revisão de arquitetura · `crítica:aderência`.
 
 ---
 
@@ -309,7 +320,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Confere.** `crítica:aderência` · guarda por projeto (quem dispara observa).
 
 ### EST-04 · Todos os contadores, e o zero é número
-- **Regra.** Uma fileira de contadores mostra **todos** os da fonte, inclusive os zerados. O zero é sempre o número `0`: quando ele não informa nada, sai em `neutro` e o **rótulo** muda para a frase que diz o que o zero quer dizer. O não contado é `—`, também em `neutro`. O tom é do número que pede ação.
+- **Regra.** Uma fileira de contadores mostra **todos** os da fonte, inclusive os zerados. O zero é sempre o número `0`: quando ele não informa nada, sai em `neutro` e o **rótulo** muda para a frase que diz o que o zero quer dizer. O não contado é `‒` (o travessão numérico, da largura de um algarismo), também em `neutro`. O tom é do número que pede ação.
 - **Por quê.** Mostrar só os diferentes de zero faz a linha mentir por omissão.
 - **Confere.** `crítica:aderência`.
 
@@ -317,6 +328,11 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Regra.** Números que pertencem a pessoas ou causas diferentes não se resumem numa porcentagem só; cada um aparece com o seu dono.
 - **Por quê.** A porcentagem única esconde de quem é a próxima ação.
 - **Confere.** `crítica:hierarquia`.
+
+### EST-06 · A vista que deixa itens de fora diz quantos
+- **Regra.** Quando a vista escolhida não consegue desenhar parte do conjunto que os filtros e o recorte mostram (o calendário, os itens sem data; o mapa, os sem endereço), a tela diz **quantos ficaram de fora** numa linha da `Faixa` (assunto `escopo`, `neutro`, MSG-01), com a saída para a vista que mostra todos **sem desfazer o recorte nem os filtros** (MSG-06). Com zero de fora, a linha não existe. A paginação, que já diz a parte, não conta.
+- **Por quê.** A vista que omite em silêncio mente como o contador que some no zero (EST-04): o topo diz 7, o calendário mostra 4, e a pessoa conclui que os outros 3 não existem. Na vista que mostra todos, o vazio dos sem data diz a causa (EST-02).
+- **Confere.** `crítica:aderência`.
 
 ---
 
@@ -348,6 +364,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 | ARQ-02 | Análise é Lista com medidores | crítica |
 | ARQ-03 | O Editor, região por região | registro, crítica |
 | ARQ-04 | Linha que se reordena | crítica |
+| ARQ-05 | Recortes contados no topo da Lista | registro, crítica |
 | MSG-01 | A matriz das mensagens | crítica |
 | MSG-02 | No máximo uma faixa | crítica |
 | MSG-03 | O técnico não chega a quem usa | crítica |
@@ -359,6 +376,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 | MSG-09 | O erro diz o que fazer agora | crítica, skill |
 | PECA-01 | A peça de cada função | crítica, guarda |
 | PECA-02 | De onde a peça nova parte | revisão, crítica |
+| PECA-03 | O gráfico tem a forma do dado | revisão, crítica |
 | PESO-01 | Um primário | crítica |
 | PESO-02 | O peso cresce com a gravidade | guarda, crítica |
 | PESO-03 | Recusado não aparece; bloqueado é linha | crítica |
@@ -369,4 +387,5 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 | EST-03 | Ação assíncrona visível | crítica, guarda |
 | EST-04 | Todos os contadores, zero é número | crítica |
 | EST-05 | Sem porcentagem única | crítica |
+| EST-06 | A vista diz quantos deixou de fora | crítica |
 | MOVA-01 | O que entra se move | guarda, crítica |
