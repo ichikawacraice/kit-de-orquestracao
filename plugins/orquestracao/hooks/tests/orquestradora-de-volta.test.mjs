@@ -130,6 +130,13 @@ test('orquestradora que volta com a fila do projeto órfã recebe o aviso e o co
   assert.ok(t.includes(ORDEM));
   assert.match(t, /fila de merge deste projeto está sem processo/);
   assert.ok(t.includes("painel fila-de-merge 1307:a9f034d309a1546d29c807ea54ce3dc87cf919b2 1308 --gate 'pnpm test'"), t.slice(0, 1500));
+  assert.doesNotMatch(t, /nunca gravou gate/, 'com gate conhecido, sem o alerta');
+  // F396: a fila só anotada de um projeto que nunca gravou gate: o aviso diz que falta o --gate, em vez de um comando que
+  // parece pronto e roda `npm test`
+  writeFileSync(fila, JSON.stringify({ config: { cwd: '/x' }, ocupada: null, pendentes: [{ pr: 67, sha: 'aaaaaaa' }] }));
+  const sem = inicio('cli-novo');
+  assert.ok(sem.includes('painel fila-de-merge 67:aaaaaaa'), sem.slice(0, 1500));
+  assert.match(sem, /nunca gravou gate: acrescente `--gate/);
 });
 
 // F351: o estado do projeto gira antes do "Ao assumir": as seções datadas antigas vão ao arquivo morto, a mais nova fica.

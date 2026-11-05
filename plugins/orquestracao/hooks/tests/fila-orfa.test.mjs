@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { comandoDeRelance, donoDaFilaVivo, filaOrfa, inicioDoProcesso } from '../../skills/orquestradora/scripts/fila-orfa.mjs';
+import { avisoSemGate, comandoDeRelance, donoDaFilaVivo, filaOrfa, inicioDoProcesso } from '../../skills/orquestradora/scripts/fila-orfa.mjs';
 
 const DESDE = '2026-10-28T13:03:03.261Z';
 const ms = (iso) => Date.parse(iso);
@@ -71,4 +71,29 @@ test('aspas simples no gate não quebram o comando de relance', () => {
 test('PR no emVoo e nos pendentes leva o sha do pendente, o mais novo', () => {
   const o = filaOrfa({ ocupada: null, emVoo: [{ pr: 21, sha: 'aaaaaaa' }, { pr: 22, sha: 'ccccccc' }], pendentes: [{ pr: 21, sha: 'bbbbbbb' }, { pr: 22 }] });
   assert.deepEqual(o.prs, [{ pr: 21, sha: 'bbbbbbb' }, { pr: 22, sha: 'ccccccc' }]);
+});
+
+// F396: a fila só anotada (`--anotar`, sem ninguém ocupando) não tem gate na `ocupada`: o relance sem `--gate` rodava
+// `npm test` (medido no WiControl em 04/11). O comando de relance leva o par gravado no `config` da fila.
+test('F396: órfã sem gate na ocupada relança com o gate e o preparo do config', () => {
+  const o = filaOrfa({
+    config: { cwd: '/x', gate: 'cd frontend && yarn build', preparar: 'yarn install --frozen-lockfile' },
+    ocupada: null, pendentes: [{ pr: 67, sha: 'aaaaaaa' }, { pr: 68, sha: 'bbbbbbb' }],
+  });
+  assert.equal(comandoDeRelance(o), "painel fila-de-merge 67:aaaaaaa 68:bbbbbbb --gate 'cd frontend && yarn build' --preparar 'yarn install --frozen-lockfile'");
+});
+
+test('F396: o par de quem rodava vale antes do config, inteiro (sem misturar o preparo do config)', () => {
+  const o = filaOrfa({ config: { gate: 'g-config', preparar: 'p-config' }, ocupada: { pid: 10, gate: 'g-rodada' }, emVoo: [{ pr: 3 }] }, { vivo: morto });
+  assert.equal(comandoDeRelance(o), "painel fila-de-merge 3 --gate 'g-rodada'");
+  const semPreparo = filaOrfa({ config: { gate: 'g-config', preparar: null }, ocupada: null, pendentes: [{ pr: 4 }] });
+  assert.equal(comandoDeRelance(semPreparo), "painel fila-de-merge 4 --gate 'g-config'");
+});
+
+test('F396: sem gate conhecido (nem na ocupada nem no config), o relance avisa que falta o --gate; com gate, não', () => {
+  const sem = filaOrfa({ config: { cwd: '/x' }, ocupada: null, pendentes: [{ pr: 67, sha: 'aaaaaaa' }] });
+  assert.equal(comandoDeRelance(sem), 'painel fila-de-merge 67:aaaaaaa');
+  assert.match(avisoSemGate(sem), /nunca gravou gate: acrescente `--gate/);
+  const com = filaOrfa({ config: { cwd: '/x', gate: 'g' }, ocupada: null, pendentes: [{ pr: 67, sha: 'aaaaaaa' }] });
+  assert.equal(avisoSemGate(com), '');
 });

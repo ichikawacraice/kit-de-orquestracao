@@ -50,10 +50,14 @@ export function filaOrfa(estado, deps) {
   }
   if (!prs.length || donoDaFilaVivo(estado.ocupada, deps)) return null;
   const o = estado.ocupada ?? {};
+  // F396: o par de quem rodava; sem ele (a fila só anotada), o gravado no `config` da fila. O par vem inteiro de um lado só:
+  // o `--gate` sem `--preparar` roda sem preparo.
+  const texto = (v) => typeof v === 'string' && v.trim() !== '';
+  const par = texto(o.gate) ? o : (estado.config && typeof estado.config === 'object' ? estado.config : {});
   return {
     prs, desde: o.desde ?? null, pid: o.pid ?? null,
-    ...(typeof o.gate === 'string' && o.gate ? { gate: o.gate } : {}),
-    ...(typeof o.preparar === 'string' && o.preparar ? { preparar: o.preparar } : {}),
+    ...(texto(par.gate) ? { gate: par.gate } : {}),
+    ...(texto(par.gate) && texto(par.preparar) ? { preparar: par.preparar } : {}),
   };
 }
 
@@ -65,7 +69,14 @@ export function lerFilaOrfa(arquivo, deps) {
 
 const aspas = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 
-// A chamada que retoma a fila órfã, com o gate e o preparo de quem rodava.
+// A chamada que retoma a fila órfã, com o gate e o preparo de quem rodava (ou os gravados no `config`, F396).
+// F396: a fila que nunca gravou gate (só o `--anotar`, que grava o cwd) não tem par para o relance; o comando sairia sem
+// `--gate` e rodaria `npm test`, que então ficaria gravado como o gate do projeto. O aviso diz o que falta, em vez de
+// entregar um comando que parece pronto. O comando segue sem placeholder, para nunca rodar `<gate>` no shell.
+export function avisoSemGate(orfa) {
+  return orfa?.gate ? '' : ' — a fila deste projeto nunca gravou gate: acrescente `--gate "<o gate do projeto>"` (e `--preparar`, se ele precisa) antes de rodar; sem isso a rodada usa `npm test` e o grava como gate do projeto';
+}
+
 export function comandoDeRelance(orfa) {
   const prs = orfa.prs.map((p) => (p.sha ? `${p.pr}:${p.sha}` : String(p.pr))).join(' ');
   return `painel fila-de-merge ${prs}${orfa.gate ? ` --gate ${aspas(orfa.gate)}` : ''}${orfa.preparar ? ` --preparar ${aspas(orfa.preparar)}` : ''}`;

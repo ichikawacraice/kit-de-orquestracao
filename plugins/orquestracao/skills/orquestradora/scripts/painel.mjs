@@ -24,7 +24,7 @@
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio, `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge; com `maisFatias: true` volta a `execucao` com a dona, F222); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); (F209) traz também `paraAplicar` (plugins do kit instalados depois que o app abriu) e `paraBaixar` (plugins do kit com versão publicada mais nova, por `git fetch` no clone do marketplace com cache de 30 min em batida/kit-publicado.json); exit 0 nos dois casos, 1 só em erro de leitura
-//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (padrão `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), liga cada PR ao item vivo pelo `prs`, pelo `branch` do item ou pela branch do worktree da dona e o põe em `merge` (F221), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar; a rodada que não é --sem-turno grava o `config` {cwd, gate, preparar} do projeto
+//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (sem `--gate`, o par gate/preparo do `config` gravado; sem config, `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), liga cada PR ao item vivo pelo `prs`, pelo `branch` do item ou pela branch do worktree da dona e o põe em `merge` (F221), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar; a rodada que não é --sem-turno grava o `config` {cwd, gate, preparar} do projeto
 //   painel.mjs fila-de-merge <PR:sha> [<PR:sha>…] --anotar   (F351) a entrega da dona: confere que a ponta de cada PR é o sha dado, só anota os PRs nos pendentes, grava a pasta do repositório e liga o item → {anotado, pendentes, aviso?}; não roda gate nem mergeia
 //   painel.mjs fila-de-merge <PR:sha>… --gate "<cmd>" [--preparar "<cmd>"] --sem-turno   (F351) a rodada que a batida lança destacada: igual à da orquestradora, e grava o desfecho em `desfechos` do estado da fila
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga), lança a fila de merge anotada sem processo e entrega os desfechos dela (F351) → {mensagens, soltos, projetos, marcadoresApagados, filasLancadas?}; --seco não grava nem lança nada
@@ -1119,10 +1119,9 @@ function filaDeMerge(args, { semTurno = false } = {}) {
   const seco = flag(args, '--seco', false);
   const anotar = flag(args, '--anotar', false);
   const gateDado = flag(args, '--gate');
-  const gate = gateDado ?? GATE_PADRAO;
-  const preparar = flag(args, '--preparar');
+  const prepararDado = flag(args, '--preparar');
   const uso = 'uso: painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco] | <PR:sha>… --anotar';
-  if (anotar && (seco || gateDado || preparar)) throw new Error(`fila-de-merge: --anotar não roda nada (o gate é o da fila do projeto); ${uso}`);
+  if (anotar && (seco || gateDado || prepararDado)) throw new Error(`fila-de-merge: --anotar não roda nada (o gate é o da fila do projeto); ${uso}`);
   // `N:sha` é o sha do recado "PR N pronto, HEAD <sha>": a ponta que mudou depois dele é recusada, como no `mergear` (F150).
   const casados = args.map((a) => /^([1-9]\d*)(?::([0-9a-f]{7,40}))?$/i.exec(String(a)));
   if (!args.length || casados.some((m) => !m)) throw new Error(uso);
@@ -1131,6 +1130,13 @@ function filaDeMerge(args, { semTurno = false } = {}) {
   if (anotar && pedidos.some((p) => !p.sha)) throw new Error(`fila-de-merge --anotar: cada PR leva o sha que você testou (<PR>:<sha>); ${uso}`);
   const cwd = process.cwd();
   const arquivo = seco ? null : ESTADO_DA_FILA(projetoDoCwd(cwd).projeto);
+  // F396: sem `--gate`, vale o par gravado no `config` da fila do projeto (o relance depois da limpeza de contexto vinha só com
+  // os PRs e rodava o padrão, medido no WiControl em 04/11); o `--gate` dado sem `--preparar` segue sem preparo. O padrão fica
+  // para a fila que nunca gravou gate.
+  const gravado = (() => { const c = arquivoJson(ESTADO_DA_FILA(projetoDoCwd(cwd).projeto), {})?.config; return c && typeof c === 'object' ? c : {}; })();
+  const doConfig = !gateDado && textoNaoVazio(gravado.gate);
+  const gate = gateDado ?? (doConfig ? gravado.gate : GATE_PADRAO);
+  const preparar = prepararDado ?? (doConfig && textoNaoVazio(gravado.preparar) ? gravado.preparar : null);
   const lista = (v) => (Array.isArray(v) ? v : []);
   // os outros campos do estado (config, desfechos, lancada) passam intactos por toda gravação
   const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ...(e && typeof e === 'object' ? e : {}), ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };

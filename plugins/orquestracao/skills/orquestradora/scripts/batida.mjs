@@ -2,7 +2,7 @@
 // de sessões (`list_sessions`, passada por arquivo) e o estado da batida, chama `julgar` e aplica o resultado (grava o estado,
 // solta). Quem chama a cada 10 min é o mod painel-sessoes.
 import { slugDoProjeto } from './perguntas-arquivo.mjs';
-import { comandoDeRelance } from './fila-orfa.mjs';
+import { avisoSemGate, comandoDeRelance } from './fila-orfa.mjs';
 
 export const PRAZO_MIN = 30; // item parado: sem gravar há tanto (PAINEL_PRAZO_MIN troca)
 export const BATIDA_SOLTA_MIN = 20; // depois da cutucada, sem gravação, solta (BATIDA_SOLTA_MIN troca)
@@ -172,7 +172,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
   }
   for (const [nome, o] of Object.entries(filasOrfas)) {
     if (!o?.prs?.length) continue;
-    projeto(nome).filaParada = { prs: o.prs.map((p) => p.pr), desde: o.desde ?? null, relance: comandoDeRelance(o) };
+    projeto(nome).filaParada = { prs: o.prs.map((p) => p.pr), desde: o.desde ?? null, relance: comandoDeRelance(o), ...(avisoSemGate(o) ? { semGate: avisoSemGate(o) } : {}) };
   }
 
   const entregas = {}; const registros = {};
@@ -228,7 +228,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     const algo = proj.merge.length || proj.vagas.length || proj.filaParada;
     if (proj.orquestradora && algo && mudou) {
       const partes = [];
-      if (proj.filaParada) partes.push(`fila de merge sem processo vivo para ${proj.filaParada.prs.map((n) => `#${n}`).join(', ')} (a limpeza de contexto mata a fila em segundo plano); relance em segundo plano: \`${proj.filaParada.relance}\``);
+      if (proj.filaParada) partes.push(`fila de merge sem processo vivo para ${proj.filaParada.prs.map((n) => `#${n}`).join(', ')} (a limpeza de contexto mata a fila em segundo plano); relance em segundo plano: \`${proj.filaParada.relance}\`${proj.filaParada.semGate ?? ''}`);
       if (proj.merge.length) partes.push(`merge parado: ${proj.merge.join(', ')}`);
       if (proj.vagas.length) partes.push(`sem dona: ${proj.vagas.map((v) => v.item).join(', ')}`);
       const hora = new Date(agoraMs).toTimeString().slice(0, 5);
