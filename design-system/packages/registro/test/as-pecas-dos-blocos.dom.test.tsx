@@ -469,7 +469,7 @@ describe("o menu da conta", () => {
     expect(iniciais("Ana")).toBe("A")
     const onSair = vi.fn()
     render(
-      <MenuDaConta nome="Ana Souza" email="ana@exemplo.com.br" onSair={onSair}>
+      <MenuDaConta id="pessoa-ana" nome="Ana Souza" email="ana@exemplo.com.br" onSair={onSair}>
         <button>Conta</button>
       </MenuDaConta>
     )

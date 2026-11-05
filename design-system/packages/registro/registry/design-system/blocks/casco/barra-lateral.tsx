@@ -28,7 +28,8 @@ type Contagem = { numero: number; tom: Extract<Tom, "espera" | "ruim">; frase: s
 
 type GrupoDeDestinos = { rotulo?: string; destinos: Destino[] }
 
-type Conta = { nome: string; email: string; onAbrirConta?: () => void; onSair: () => void }
+/** A conta do pé: o `id` dá a cor do monograma (COR-09); `null` quando o app não o tem. */
+type Conta = { id: string | null; nome: string; email: string; onAbrirConta?: () => void; onSair: () => void }
 
 /** O destino ativo: a própria rota ou uma rota abaixo dela. */
 function destinoAtivo(caminhoAtual: string, href: string): boolean {
@@ -306,9 +307,9 @@ function BarraLateral({
             }}
           </MenuDoTema>
           {conta ? (
-            <MenuDaConta nome={conta.nome} email={conta.email} onAbrirConta={conta.onAbrirConta} onSair={conta.onSair} lado={lado}>
+            <MenuDaConta id={conta.id} nome={conta.nome} email={conta.email} onAbrirConta={conta.onAbrirConta} onSair={conta.onSair} lado={lado}>
               <button type="button" aria-label={`Conta de ${conta.nome}`} className={linha}>
-                <Monograma nome={conta.nome} />
+                <Monograma nome={conta.nome} chave={conta.id} />
                 {recolhida ? null : <span className={cn(texto, "text-foreground")}>{conta.nome}</span>}
               </button>
             </MenuDaConta>

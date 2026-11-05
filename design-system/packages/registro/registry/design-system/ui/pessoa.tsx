@@ -3,7 +3,7 @@
 import * as React from "react"
 
 import { cn } from "@/registry/design-system/lib/utils"
-import { Monograma, MonogramaAusente, type CorDaPessoa } from "@/registry/design-system/ui/monograma"
+import { Monograma, MonogramaAusente } from "@/registry/design-system/ui/monograma"
 import { Skeleton } from "@/registry/design-system/ui/skeleton"
 import { useDensidadeDaTabela } from "@/registry/design-system/ui/table"
 import { Ajuda } from "@/registry/design-system/ui/tooltip"
@@ -11,11 +11,11 @@ import { Ajuda } from "@/registry/design-system/ui/tooltip"
 type Densidade = "instrumento" | "site"
 
 /**
- * A pessoa como a lista a recebe: o nome pode faltar (o id veio, o nome não).
- * A `cor` só vem onde a COR-09 a permite (a conversa entre pessoas):
- * `corDaPessoa(id)`.
+ * A pessoa como a lista a recebe: o `id` estável (dele sai a cor do monograma,
+ * COR-09; `null` quando o app não o tem, e o monograma fica neutro) e o nome,
+ * que pode faltar (o id veio, o nome não).
  */
-type DadosDaPessoa = { nome?: string | null; cor?: CorDaPessoa }
+type DadosDaPessoa = { id: string | null; nome?: string | null }
 
 const NOME: Record<Densidade, string> = { instrumento: "t-denso", site: "text-sm" }
 const SEM_NOME = "Pessoa sem nome"
@@ -28,14 +28,14 @@ const ALVO =
 
 /**
  * A PESSOA numa linha de lista (ANATOMIA PECA-01): o monograma de 20px e o
- * nome, com o papel opcional embaixo, na legenda. A cor por pessoa só vem
- * com `pessoa.cor`, onde a COR-09 a permite.
+ * nome, com o papel opcional embaixo, na legenda. O monograma leva a cor da
+ * pessoa pelo `id` (COR-09); o nome segue na tinta de texto.
  *
  * - **Sem pessoa** (`pessoa={null}`): o círculo tracejado (a tracejada é
  *   ausência, FORMA-02) e o texto de quem chama (*Sem responsável*), em
  *   `muted-foreground`.
- * - **Pessoa sem nome** (o id veio e o nome não): *?* e *Pessoa sem nome* —
- *   nunca o id cru.
+ * - **Pessoa sem nome** (o id veio e o nome não): *?* na cor do id e *Pessoa
+ *   sem nome* — nunca o id cru.
  * - **Carregando**: o esqueleto redondo e uma barra, na altura da linha.
  * - `soMonograma`: o nome sai da vista e vai para a dica e para o nome
  *   acessível; o alvo é focável, para a dica abrir no teclado.
@@ -73,7 +73,7 @@ function Pessoa({
     )
   }
   const nome = pessoa ? (nomeDe(pessoa) ?? SEM_NOME) : semPessoa
-  const marca = pessoa ? <Monograma nome={nomeDe(pessoa) ?? "?"} cor={pessoa.cor} /> : <MonogramaAusente />
+  const marca = pessoa ? <Monograma nome={nomeDe(pessoa) ?? "?"} chave={pessoa.id} /> : <MonogramaAusente />
 
   if (soMonograma) {
     return (
@@ -128,7 +128,8 @@ function juntar(nomes: string[]): string {
  * vezes, e o Tab não para num foco que não diz nada novo).
  *
  * Vazia, não desenha: quem chama decide se a ausência se diz (com uma `Pessoa`
- * sem pessoa). A cor por pessoa só vem com `pessoa.cor` (COR-09).
+ * sem pessoa). Cada monograma leva a cor da pessoa pelo `id` (COR-09), sem
+ * troca para evitar a vizinha da mesma família: o anel e as iniciais separam.
  */
 function PilhaDePessoas({
   pessoas,
@@ -158,12 +159,12 @@ function PilhaDePessoas({
     <>
       <span className="flex -space-x-0.5">
         {visiveis.map((p, i) => (
-          // A tinta neutra do monograma é translúcida: o fundo opaco da superfície embaixo dele esconde o vizinho sobreposto.
+          // O neutro de reserva (sem id) é translúcido: o fundo opaco da superfície embaixo dele esconde o vizinho sobreposto.
           <span
-            key={i}
+            key={p.id ?? i}
             className={cn("rounded-full ring-2", sobre === "muted" ? "bg-muted ring-muted" : "bg-card ring-card")}
           >
-            <Monograma nome={nomeDe(p) ?? "?"} cor={p.cor} className="flex" />
+            <Monograma nome={nomeDe(p) ?? "?"} chave={p.id} className="flex" />
           </span>
         ))}
       </span>

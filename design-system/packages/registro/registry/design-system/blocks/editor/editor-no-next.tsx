@@ -13,7 +13,7 @@ import type { CargaDoEditor } from "@/registry/design-system/blocks/editor/dados
 export function EditorNoNext({ carga }: { carga: CargaDoEditor }) {
   return (
     <CascoDoEditor link={Link}>
-      <EditorDeDocumento carga={carga} conta={{ nome: "Ana Souza", email: "ana.souza@exemplo.com.br", onSair: () => {} }} />
+      <EditorDeDocumento carga={carga} conta={{ id: "pessoa-ana", nome: "Ana Souza", email: "ana.souza@exemplo.com.br", onSair: () => {} }} />
     </CascoDoEditor>
   )
 }

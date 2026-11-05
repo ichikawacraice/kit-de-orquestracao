@@ -29,4 +29,4 @@ export function LinkDoPalco(props: React.ComponentProps<"a">) {
   )
 }
 
-export const CONTA = { nome: "Ana Souza", email: "ana.souza@exemplo.com.br", onSair: () => {} }
+export const CONTA = { id: "pessoa-ana", nome: "Ana Souza", email: "ana.souza@exemplo.com.br", onSair: () => {} }

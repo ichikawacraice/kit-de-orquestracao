@@ -12,6 +12,7 @@ import { Monograma, iniciais } from "@/registry/design-system/ui/monograma"
  * linhas. Sair não pede confirmação: não perde nada. `children` é o gatilho.
  */
 function MenuDaConta({
+  id,
   nome,
   email,
   onAbrirConta,
@@ -19,6 +20,8 @@ function MenuDaConta({
   children,
   lado = "bottom",
 }: {
+  /** O id da pessoa: dele sai a cor do monograma (COR-09); `null` quando o app não o tem. */
+  id: string | null
   nome: string
   email: string
   onAbrirConta?: () => void
@@ -31,7 +34,7 @@ function MenuDaConta({
       <GatilhoDoMenu asChild>{children}</GatilhoDoMenu>
       <ConteudoDoMenu side={lado} align="start" aria-label="Conta">
         <div data-slot="topo-do-menu-da-conta" className="flex items-center gap-2 px-2 pt-1">
-          <Monograma nome={nome} />
+          <Monograma nome={nome} chave={id} />
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-[13px] font-[550] text-foreground">{nome}</span>
             <span className="truncate text-legenda text-muted-foreground">{email}</span>

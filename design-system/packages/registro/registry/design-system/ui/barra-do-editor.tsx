@@ -88,7 +88,7 @@ function GrupoDaBarra({ className, ...props }: React.ComponentProps<"div">) {
  * O par da pessoa, ao fim da barra: o tema e a conta — os mesmos do pé da
  * barra lateral, porque aqui a barra substitui o casco (CASCO-01).
  */
-function GrupoDaPessoa({ conta }: { conta: { nome: string; email: string; onSair: () => void } }) {
+function GrupoDaPessoa({ conta }: { conta: { id: string | null; nome: string; email: string; onSair: () => void } }) {
   return (
     <GrupoDaBarra data-slot="grupo-da-pessoa">
       <MenuDoTema>
@@ -102,9 +102,9 @@ function GrupoDaPessoa({ conta }: { conta: { nome: string; email: string; onSair
           )
         }}
       </MenuDoTema>
-      <MenuDaConta nome={conta.nome} email={conta.email} onSair={conta.onSair}>
+      <MenuDaConta id={conta.id} nome={conta.nome} email={conta.email} onSair={conta.onSair}>
         <Button variant="ghost" size="icon" aria-label={`Conta: ${conta.nome}`}>
-          <Monograma nome={conta.nome} />
+          <Monograma nome={conta.nome} chave={conta.id} />
         </Button>
       </MenuDaConta>
     </GrupoDaBarra>

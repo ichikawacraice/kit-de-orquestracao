@@ -4,6 +4,21 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.21.0 · 04/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **A cor da pessoa em todo monograma** (COR-08, COR-09): o monograma leva a cor da pessoa em todo lugar que a represente (a linha, a pilha, o cartão, a conta, a escolha de pessoas, a conversa), para a mesma pessoa ser reconhecida de relance de uma região à outra. A cor sai do id, nunca do nome, dentro do próprio `Monograma`. O nome fora da conversa segue na tinta de texto; na conversa, o nome do autor leva a mesma cor, pela mesma chave.
+- **A chave é obrigatória e anulável:** `Monograma` pede `chave: string | null`, `Pessoa` e `PilhaDePessoas` pedem `id: string | null` nos dados da pessoa, `MenuDaConta` pede `id`, e a conta da `BarraLateral` e da `BarraDoEditor` ganha `id`. Sem id estável, passe `null`: o monograma fica neutro. A chave vazia também dá neutro.
+- O `cor` do `Monograma` sai: quem chama passa a chave, nunca a cor. O `corDaPessoa` segue exportado, e ganha a companhia do `corDaChave`.
+
+### Migração
+- `npx shadcn add <registro>/monograma.json <registro>/pessoa.json <registro>/menu-da-conta.json <registro>/conversa.json <registro>/barra-do-editor.json <registro>/casco.json <registro>/editor.json` (o `casco` traz a `BarraLateral` e o `editor` traz o `EditorDeDocumento`, os dois com o `id` novo na conta).
+- Em cada lugar que o compilador apontar, passe o id da pessoa ou `null`; troque `cor={corDaPessoa(id)}` por `chave={id}`.
+- Apague a cópia local da cor da pessoa, se houver.
+- Tire o `className` com a cor da pessoa de cima do `Monograma`: a tinta da chave vem por último e vence; o `className` fica para o layout.
+
 ## 0.20.3 · 04/11/2026
 
 Camadas: base, tokens, registro

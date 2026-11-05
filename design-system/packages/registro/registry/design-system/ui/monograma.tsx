@@ -13,11 +13,13 @@ function iniciais(nome: string): string {
 /**
  * A COR DA PESSOA (COR-09, a exceção declarada): 8 famílias fora das vozes
  * (emerald, amber, rose, violet), do vermelho e do laranja da prioridade e da
- * marca; o `sky` é dividido com o nível baixo da prioridade, porque as formas
- * nunca coincidem (o carimbo com o glifo × o monograma e o nome do autor). Só pinta o monograma e o nome de quem fala numa conversa entre
- * pessoas, onde distinguir quem disse o quê responde a pergunta da tela; nunca o
- * balão, o cartão, o carimbo nem o glifo. A chave é o id da pessoa, para a cor
- * não mudar quando o nome muda.
+ * marca. As identidades se separam pela forma: o `sky` também é do nível baixo
+ * da prioridade (o carimbo com o glifo) e o mapa de etapas pode usar as mesmas
+ * famílias (o ponto de 6px); a pessoa é o círculo com as iniciais. Pinta o
+ * monograma em todo lugar que represente a pessoa e, só na conversa, o nome de
+ * quem fala; nunca o fundo da linha, do menu, do cartão ou do balão, nem o
+ * carimbo, o glifo, a borda ou o foco. A chave é o id da pessoa, para a cor não
+ * mudar quando o nome muda.
  */
 const CORES_DA_PESSOA = ["lime", "teal", "cyan", "sky", "blue", "indigo", "purple", "fuchsia"] as const
 
@@ -53,7 +55,7 @@ const MONOGRAMA_DA_PESSOA: Record<CorDaPessoa, string> = {
   fuchsia: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900 dark:text-fuchsia-200", // 7,17 / 7,35
 }
 
-/** A cor estável de uma chave (o id da pessoa), pelo hash FNV-1a de 32 bits. */
+/** A cor estável de uma chave (o id da pessoa), pelo hash FNV-1a de 32 bits, sobre a chave crua. */
 function corDaPessoa(chave: string): CorDaPessoa {
   let h = 0x811c9dc5
   for (let i = 0; i < chave.length; i++) {
@@ -65,13 +67,21 @@ function corDaPessoa(chave: string): CorDaPessoa {
 
 const NEUTRO = "bg-foreground/[0.07] text-foreground-2"
 
+/** A cor de uma chave que pode faltar: `null`, `""` e só espaços não têm cor. */
+function corDaChave(chave: string | null | undefined): CorDaPessoa | undefined {
+  return chave?.trim() ? corDaPessoa(chave) : undefined
+}
+
 /**
- * O monograma da pessoa (CTRL-05): círculo de 20px com as iniciais, em tinta
- * neutra — nunca na cor da marca (MARCA-02). A `cor` da pessoa só entra onde a
- * COR-09 a permite: a conversa entre pessoas e quem fala nela.
- * É enfeite do nome que vem ao lado ou da dica: `aria-hidden`.
+ * O monograma da pessoa (CTRL-05): círculo de 20px com as iniciais, na cor da
+ * pessoa (COR-09) em todo lugar que a represente — nunca na cor da marca
+ * (MARCA-02). Quem chama passa a `chave` (o id estável da pessoa, nunca o
+ * nome), e a peça decide a cor; sem id, quem chama diz `null`, e o monograma
+ * fica neutro. A chave é obrigatória para o neutro ser escolha escrita, não
+ * esquecimento. É enfeite do nome que vem ao lado ou da dica: `aria-hidden`.
  */
-function Monograma({ nome, cor, className }: { nome: string; cor?: CorDaPessoa; className?: string }) {
+function Monograma({ nome, chave, className }: { nome: string; chave: string | null; className?: string }) {
+  const cor = corDaChave(chave)
   return (
     <span
       aria-hidden="true"
@@ -79,8 +89,9 @@ function Monograma({ nome, cor, className }: { nome: string; cor?: CorDaPessoa; 
       data-cor={cor}
       className={cn(
         "inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-[650]",
-        cor ? MONOGRAMA_DA_PESSOA[cor] : NEUTRO,
-        className
+        className,
+        // A tinta vem por último: o `className` de quem chama mexe no layout, nunca na cor (COR-09).
+        cor ? MONOGRAMA_DA_PESSOA[cor] : NEUTRO
       )}
     >
       {iniciais(nome)}
@@ -107,6 +118,7 @@ export {
   MonogramaAusente,
   iniciais,
   corDaPessoa,
+  corDaChave,
   CORES_DA_PESSOA,
   NOME_DA_PESSOA,
   MONOGRAMA_DA_PESSOA,

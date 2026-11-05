@@ -11,6 +11,7 @@ import { LinkDaLinha, Table, TableCell, TableHead, TableHeader, TableRow } from 
 import { ProvedorDeLink } from "@/lib/link-do-app"
 
 import { Amostra, Amostras } from "./_amostra"
+import { pessoaDaDemo } from "./_pessoas"
 import { ListaGrande } from "./_lista-grande"
 import { LinkDoPalco } from "./_tela"
 
@@ -59,7 +60,7 @@ function Tabela({ densidade }: { densidade: "instrumento" | "site" }) {
         {GRUPOS.map((g) => {
           const feitas = g.tarefas.filter((t) => t.feita).length
           const concluido = g.tarefas.length > 0 && feitas === g.tarefas.length
-          const pessoas = [...new Set(g.tarefas.map((t) => t.quem).filter(Boolean))].map((nome) => ({ nome }))
+          const pessoas = [...new Set(g.tarefas.map((t) => t.quem).filter(Boolean))].flatMap((nome) => pessoaDaDemo(nome) ?? [])
           return (
             <LinhaDoGrupo
               key={g.nome}
@@ -88,7 +89,7 @@ function Tabela({ densidade }: { densidade: "instrumento" | "site" }) {
                     <LinkDaLinha href={`/tarefas/${t.id}`}>{t.nome}</LinkDaLinha>
                   </TableCell>
                   <TableCell esconderNoCelular>
-                    <Pessoa pessoa={t.quem ? { nome: t.quem } : null} />
+                    <Pessoa pessoa={pessoaDaDemo(t.quem)} />
                   </TableCell>
                   <TableCell>
                     <Prazo periodo={t.prazo} concluido={t.feita} hoje={HOJE} />

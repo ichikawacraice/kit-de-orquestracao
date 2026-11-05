@@ -3,7 +3,7 @@ import * as React from "react"
 import { trechosComLinks } from "@/registry/design-system/lib/links-no-texto"
 import { cn } from "@/registry/design-system/lib/utils"
 import { Badge } from "@/registry/design-system/ui/badge"
-import { NOME_DA_PESSOA, type CorDaPessoa } from "@/registry/design-system/ui/monograma"
+import { corDaChave, NOME_DA_PESSOA } from "@/registry/design-system/ui/monograma"
 
 /**
  * A CONVERSA ENTRE PESSOAS (ANATOMIA PECA-01): os meus balões à direita, na
@@ -41,23 +41,30 @@ function DiaDaConversa({ children, className }: { children: React.ReactNode; cla
 }
 
 /**
- * O cabeçalho do primeiro balão do outro lado: o nome (na cor da pessoa, se
- * vier) e o selo. Enfeite: o nome já vai na frase do balão.
+ * O cabeçalho do primeiro balão do outro lado: o nome (na cor da pessoa,
+ * quando há `chave`) e o selo. Enfeite: o nome já vai na frase do balão.
+ * A conversa é o único lugar onde o nome ganha a cor da pessoa (COR-09).
  */
 function AutorDaConversa({
   nome,
   selo,
-  cor,
+  chave,
 }: {
   nome: string | null
   selo?: string | null
-  /** `corDaPessoa(id)`: a mesma do monograma dela. */
-  cor?: CorDaPessoa
+  /** O id da pessoa, o mesmo do monograma dela; `null` quando o app não o tem. */
+  chave: string | null
 }) {
+  const cor = corDaChave(chave)
   return (
     <p aria-hidden="true" data-slot="autor-da-conversa" className="mb-0.5 flex min-w-0 items-center gap-1.5">
       {nome ? (
-        <span className={cn("truncate t-denso font-medium", cor ? NOME_DA_PESSOA[cor] : "text-foreground-2")}>{nome}</span>
+        <span
+          data-cor={cor}
+          className={cn("truncate t-denso font-medium", cor ? NOME_DA_PESSOA[cor] : "text-foreground-2")}
+        >
+          {nome}
+        </span>
       ) : null}
       {selo ? <Badge>{selo}</Badge> : null}
     </p>

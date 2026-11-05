@@ -17,7 +17,7 @@ import { cargaDaMesa, estacoesDoPedido } from "@/registry/design-system/blocks/m
 import { MesaDoPedido } from "@/registry/design-system/blocks/mesa/mesa-do-pedido"
 import { ToastProvider } from "@/registry/design-system/ui/toast"
 
-const conta = { nome: "Ana Souza", email: "ana@exemplo.com.br", onSair: () => {} }
+const conta = { id: "pessoa-ana", nome: "Ana Souza", email: "ana@exemplo.com.br", onSair: () => {} }
 /** A pilha dos avisos é uma região `status` montada desde o início (ACES-05); aqui se procura a região da peça. */
 const statusDaPeca = () => screen.getAllByRole("status").find((el) => el.getAttribute("data-slot") !== "toast-viewport")!
 const comAviso = (no: React.ReactNode) => <ToastProvider>{no}</ToastProvider>

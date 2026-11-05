@@ -33,39 +33,62 @@ describe('A cor da pessoa', () => {
     for (const cor of usadas) expect(CORES_DA_PESSOA).toContain(cor)
   })
 
-  it('o Monograma com cor troca a tinta neutra pela opaca da pessoa; sem cor, segue neutro', () => {
+  it('o Monograma com chave troca a tinta neutra pela opaca da pessoa; chave null, vazia ou só espaços segue neutro', () => {
+    const cor = corDaPessoa('pessoa-ana')
     const { container } = render(
       <>
-        <Monograma nome="Ana Souza" cor="teal" />
-        <Monograma nome="Bruno Lima" />
+        <Monograma nome="Ana Souza" chave="pessoa-ana" />
+        <Monograma nome="Bruno Lima" chave={null} />
+        <Monograma nome="Carla Dias" chave="" />
+        <Monograma nome="Davi Melo" chave="  " />
       </>
     )
-    const [comCor, neutro] = Array.from(container.children) as [HTMLElement, HTMLElement]
-    expect(comCor.className).toContain('bg-teal-100')
-    expect(comCor.className).toContain('text-teal-800')
-    expect(comCor.className).not.toContain('bg-foreground/[0.07]')
-    expect(neutro.className).toContain('bg-foreground/[0.07]')
-    expect(neutro.className).not.toMatch(/bg-(?:lime|teal|cyan|sky|blue|indigo|purple|fuchsia)-/)
+    const [comCor, ...neutros] = Array.from(container.children) as HTMLElement[]
+    // A presença seria detectada: o monograma com chave tem a cor e o data-cor.
+    expect(comCor!.className).toContain(MONOGRAMA_DA_PESSOA[cor])
+    expect(comCor!.className).not.toContain('bg-foreground/[0.07]')
+    expect(comCor!.dataset.cor).toBe(cor)
+    expect(neutros).toHaveLength(3)
+    for (const n of neutros) {
+      expect(n.className).toContain('bg-foreground/[0.07]')
+      expect(n.className).not.toMatch(/bg-(?:lime|teal|cyan|sky|blue|indigo|purple|fuchsia)-/)
+      expect(n.hasAttribute('data-cor')).toBe(false)
+    }
   })
 
-  it('a Pessoa e a PilhaDePessoas passam a cor ao monograma', () => {
+  it('a Pessoa e a PilhaDePessoas tiram a cor do id; sem id, neutro', () => {
     const { container } = render(
       <>
-        <Pessoa pessoa={{ nome: 'Ana Souza', cor: 'indigo' }} />
-        <PilhaDePessoas pessoas={[{ nome: 'Bruno Lima', cor: 'fuchsia' }, { nome: 'Carla Dias' }]} />
+        <Pessoa pessoa={{ id: 'pessoa-ana', nome: 'Ana Souza' }} />
+        <PilhaDePessoas pessoas={[{ id: 'pessoa-bruno', nome: 'Bruno Lima' }, { id: null, nome: 'Carla Dias' }]} />
       </>
     )
     const monogramas = Array.from(container.querySelectorAll('[data-slot=monograma]')) as HTMLElement[]
     expect(monogramas).toHaveLength(3)
-    expect(monogramas[0]!.className).toContain('bg-indigo-100')
-    expect(monogramas[1]!.className).toContain('bg-fuchsia-100')
+    expect(monogramas[0]!.className).toContain(MONOGRAMA_DA_PESSOA[corDaPessoa('pessoa-ana')])
+    expect(monogramas[1]!.className).toContain(MONOGRAMA_DA_PESSOA[corDaPessoa('pessoa-bruno')])
     expect(monogramas[2]!.className).toContain('bg-foreground/[0.07]')
+  })
+
+  it('o id sem nome mostra o ? na cor do id e Pessoa sem nome', () => {
+    const { container } = render(<Pessoa pessoa={{ id: 'pessoa-ana', nome: null }} />)
+    const m = container.querySelector('[data-slot=monograma]') as HTMLElement
+    expect(m.textContent).toBe('?')
+    expect(m.className).toContain(MONOGRAMA_DA_PESSOA[corDaPessoa('pessoa-ana')])
+    expect(screen.getByText('Pessoa sem nome')).toBeTruthy()
+    expect(container.textContent).not.toContain('pessoa-ana')
+  })
+
+  it('a chave é obrigatória: esquecer não compila', () => {
+    // @ts-expect-error sem chave, o neutro seria esquecimento, não escolha
+    const semChave = <Monograma nome="A" />
+    expect(semChave).toBeTruthy()
   })
 })
 
 describe('A pilha decorativa', () => {
   it('não é alvo nem imagem: aria-hidden, sem tabIndex e sem dica', () => {
-    const pessoas = ['Ana Souza', 'Bruno Lima'].map((nome) => ({ nome }))
+    const pessoas = [{ id: 'pessoa-ana', nome: 'Ana Souza' }, { id: 'pessoa-bruno', nome: 'Bruno Lima' }]
     const { container } = render(<PilhaDePessoas pessoas={pessoas} decorativa />)
     const pilha = container.querySelector('[data-slot=pilha-de-pessoas]') as HTMLElement
     expect(pilha).toBeTruthy()
@@ -78,7 +101,7 @@ describe('A pilha decorativa', () => {
   })
 
   it('sem decorativa, segue a imagem focável de antes', () => {
-    render(<PilhaDePessoas pessoas={[{ nome: 'Ana Souza' }]} />)
+    render(<PilhaDePessoas pessoas={[{ id: 'pessoa-ana', nome: 'Ana Souza' }]} />)
     expect(screen.getByRole('img', { name: 'Ana Souza' }).tabIndex).toBe(0)
   })
 })
@@ -138,7 +161,7 @@ describe('Conversa', () => {
     const { container } = render(
       <>
         <Balao lado="meu" primeira />
-        <Balao lado="outro" primeira autor={<AutorDaConversa nome="Ana Souza" cor="sky" />} />
+        <Balao lado="outro" primeira autor={<AutorDaConversa nome="Ana Souza" chave="pessoa-ana" />} />
       </>
     )
     const corpos = Array.from(container.querySelectorAll('[data-slot=balao-da-conversa] > div')) as HTMLElement[]
@@ -173,14 +196,14 @@ describe('Conversa', () => {
     expect(corpo.className).toContain('motion-reduce:animate-none')
   })
 
-  it('o autor e o dia são enfeite (aria-hidden); o nome leva a cor da pessoa só quando ela vem', () => {
+  it('o autor e o dia são enfeite (aria-hidden); o nome leva a cor da pessoa quando há id', () => {
     const { container } = render(
       <Conversa rotulo="Mensagens">
         <DiaDaConversa>Hoje</DiaDaConversa>
         <BalaoDaConversa
           lado="outro"
           primeira
-          autor={<AutorDaConversa nome="Ana Souza" selo="Cliente" cor="cyan" />}
+          autor={<AutorDaConversa nome="Ana Souza" selo="Cliente" chave="pessoa-ana" />}
           paraLeitor="Ana Souza, cliente, hoje às 14:32:"
           hora="14:32"
           instante="2026-11-04T17:32:00.000Z"
@@ -190,7 +213,7 @@ describe('Conversa', () => {
         <BalaoDaConversa
           lado="outro"
           primeira
-          autor={<AutorDaConversa nome="Bruno Lima" />}
+          autor={<AutorDaConversa nome="Bruno Lima" chave={null} />}
           paraLeitor="Bruno Lima, hoje às 14:33:"
           hora="14:33"
           instante="2026-11-04T17:33:00.000Z"
@@ -205,7 +228,7 @@ describe('Conversa', () => {
     const autores = Array.from(container.querySelectorAll('[data-slot=autor-da-conversa]')) as HTMLElement[]
     expect(autores).toHaveLength(2)
     for (const a of autores) expect(a.getAttribute('aria-hidden')).toBe('true')
-    expect(screen.getByText('Ana Souza').className).toContain(NOME_DA_PESSOA.cyan)
+    expect(screen.getByText('Ana Souza').className).toContain(NOME_DA_PESSOA[corDaPessoa('pessoa-ana')])
     expect(screen.getByText('Bruno Lima').className).toContain('text-foreground-2')
     expect(screen.getByText('Cliente').dataset.slot).toBe('badge')
   })

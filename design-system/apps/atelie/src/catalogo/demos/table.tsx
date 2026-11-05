@@ -9,6 +9,7 @@ import { LinkDaLinha, Table, TableBody, TableCell, TableHead, TableHeader, Table
 import { ProvedorDeLink } from "@/lib/link-do-app"
 
 import { LinkDoPalco } from "./_tela"
+import { pessoaDaDemo } from "./_pessoas"
 
 type Etapa = { nome: string; tom: "ok" | "espera" | "ruim" | "neutro" }
 
@@ -63,7 +64,7 @@ function Linha({ p }: { p: Pedido }) {
       </TableCell>
       <TableCell esconderNoCelular>{p.cliente}</TableCell>
       <TableCell esconderNoCelular>
-        <Pessoa pessoa={p.quem ? { nome: p.quem } : null} />
+        <Pessoa pessoa={pessoaDaDemo(p.quem)} />
       </TableCell>
       <TableCell>
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
