@@ -50,10 +50,14 @@ export function filaOrfa(estado, deps) {
   }
   if (!prs.length || donoDaFilaVivo(estado.ocupada, deps)) return null;
   const o = estado.ocupada ?? {};
+  // F396: o par de quem rodava; sem ele (a fila só anotada), o gravado no `config` da fila. O par vem inteiro de um lado só:
+  // o `--gate` sem `--preparar` roda sem preparo.
+  const texto = (v) => typeof v === 'string' && v.trim() !== '';
+  const par = texto(o.gate) ? o : (estado.config && typeof estado.config === 'object' ? estado.config : {});
   return {
     prs, desde: o.desde ?? null, pid: o.pid ?? null,
-    ...(typeof o.gate === 'string' && o.gate ? { gate: o.gate } : {}),
-    ...(typeof o.preparar === 'string' && o.preparar ? { preparar: o.preparar } : {}),
+    ...(texto(par.gate) ? { gate: par.gate } : {}),
+    ...(texto(par.gate) && texto(par.preparar) ? { preparar: par.preparar } : {}),
   };
 }
 
@@ -65,7 +69,7 @@ export function lerFilaOrfa(arquivo, deps) {
 
 const aspas = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 
-// A chamada que retoma a fila órfã, com o gate e o preparo de quem rodava.
+// A chamada que retoma a fila órfã, com o gate e o preparo de quem rodava (ou os gravados no `config`, F396).
 export function comandoDeRelance(orfa) {
   const prs = orfa.prs.map((p) => (p.sha ? `${p.pr}:${p.sha}` : String(p.pr))).join(' ');
   return `painel fila-de-merge ${prs}${orfa.gate ? ` --gate ${aspas(orfa.gate)}` : ''}${orfa.preparar ? ` --preparar ${aspas(orfa.preparar)}` : ''}`;

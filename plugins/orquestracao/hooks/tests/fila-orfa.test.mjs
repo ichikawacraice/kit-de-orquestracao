@@ -72,3 +72,20 @@ test('PR no emVoo e nos pendentes leva o sha do pendente, o mais novo', () => {
   const o = filaOrfa({ ocupada: null, emVoo: [{ pr: 21, sha: 'aaaaaaa' }, { pr: 22, sha: 'ccccccc' }], pendentes: [{ pr: 21, sha: 'bbbbbbb' }, { pr: 22 }] });
   assert.deepEqual(o.prs, [{ pr: 21, sha: 'bbbbbbb' }, { pr: 22, sha: 'ccccccc' }]);
 });
+
+// F396: a fila só anotada (`--anotar`, sem ninguém ocupando) não tem gate na `ocupada`: o relance sem `--gate` rodava
+// `npm test` (medido no WiControl em 04/11). O comando de relance leva o par gravado no `config` da fila.
+test('F396: órfã sem gate na ocupada relança com o gate e o preparo do config', () => {
+  const o = filaOrfa({
+    config: { cwd: '/x', gate: 'cd frontend && yarn build', preparar: 'yarn install --frozen-lockfile' },
+    ocupada: null, pendentes: [{ pr: 67, sha: 'aaaaaaa' }, { pr: 68, sha: 'bbbbbbb' }],
+  });
+  assert.equal(comandoDeRelance(o), "painel fila-de-merge 67:aaaaaaa 68:bbbbbbb --gate 'cd frontend && yarn build' --preparar 'yarn install --frozen-lockfile'");
+});
+
+test('F396: o par de quem rodava vale antes do config, inteiro (sem misturar o preparo do config)', () => {
+  const o = filaOrfa({ config: { gate: 'g-config', preparar: 'p-config' }, ocupada: { pid: 10, gate: 'g-rodada' }, emVoo: [{ pr: 3 }] }, { vivo: morto });
+  assert.equal(comandoDeRelance(o), "painel fila-de-merge 3 --gate 'g-rodada'");
+  const semPreparo = filaOrfa({ config: { gate: 'g-config', preparar: null }, ocupada: null, pendentes: [{ pr: 4 }] });
+  assert.equal(comandoDeRelance(semPreparo), "painel fila-de-merge 4 --gate 'g-config'");
+});

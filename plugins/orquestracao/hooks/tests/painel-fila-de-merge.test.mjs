@@ -841,3 +841,59 @@ test('F370: --anotar avisa quando o PR só muda documentação e o item fecharia
     assert.equal(JSON.parse(codigo.out).avisoSemCodigo, undefined, 'PR com código não avisa');
   } finally { limpar(c); }
 });
+
+// F396: medido no WiControl em 04/11 — o relance da fila órfã sem `--gate` rodou `npm test` (o padrão) no lugar do gate
+// gravado do projeto, e os PRs voltaram vermelhos falsos (ENOENT package.json). A chamada sem `--gate`/`--preparar` usa o
+// par gravado no `config` da fila; o `npm test` fica para a fila que nunca gravou gate.
+test('F396: sem --gate nem --preparar, a fila usa o gate e o preparo gravados, e não troca o config pelo padrão', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F2', 24);
+    const preparou = join(c.raiz, 'preparou');
+    const rodou = join(c.raiz, 'gate-rodou');
+    const gate = `touch ${rodou} && test ! -f c.txt`;
+    const preparar = `touch ${preparou}`;
+    const orq = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', gate, '--preparar', preparar);
+    assert.equal(orq.exit, 0, orq.err + orq.out);
+    let e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual([e.config.gate, e.config.preparar], [gate, preparar], 'a rodada da orquestradora gravou o par');
+    rmSync(preparou, { force: true }); rmSync(rodou, { force: true });
+    // o relance como o aviso de início de sessão o mandava: só os PRs
+    const r = c.painel('fila-de-merge', `24:${c.shas[24]}`);
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.devolvidos.map((d) => `${d.pr}: ${d.motivo}`), [], 'o npm test sem package.json devolveria o 24');
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24]);
+    assert.ok(existsSync(preparou), 'o preparo gravado rodou');
+    assert.ok(existsSync(rodou), 'o gate gravado rodou');
+    e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual([e.config.gate, e.config.preparar], [gate, preparar], 'o config segue o gravado, não o npm test');
+  } finally { limpar(c); }
+});
+
+test('F396: --gate dado sem --preparar roda sem preparo (o par explícito não herda o preparo gravado)', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F2', 24);
+    const orq = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', 'true', '--preparar', 'true');
+    assert.equal(orq.exit, 0, orq.err + orq.out);
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ...e, config: { ...e.config, preparar: 'false' } }));
+    const r = c.painel('fila-de-merge', `24:${c.shas[24]}`, '--gate', 'test -f d.txt');
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.deepEqual(JSON.parse(r.out).mergeados.map((m) => m.pr), [24], 'o preparo gravado (false) não rodou');
+  } finally { limpar(c); }
+});
+
+test('F396: --seco sem --gate também usa o gate gravado', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21);
+    assert.equal(c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', 'test ! -f c.txt').exit, 0);
+    const r = c.painel('fila-de-merge', '23', '24', '--seco');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergearia, [24], JSON.stringify(s));
+    assert.deepEqual(s.devolveria.map((d) => d.pr), [23], 'o gate gravado recusa o c.txt; o npm test recusaria os dois');
+  } finally { limpar(c); }
+});
