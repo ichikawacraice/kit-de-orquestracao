@@ -897,3 +897,137 @@ test('F396: --seco sem --gate também usa o gate gravado', () => {
     assert.deepEqual(s.devolveria.map((d) => d.pr), [23], 'o gate gravado recusa o c.txt; o npm test recusaria os dois');
   } finally { limpar(c); }
 });
+
+// F398: gate vermelho cuja saída casa com um padrão de falha de infraestrutura (container do Docker/Supabase) roda de novo,
+// uma vez, depois da espera, antes da repetição por instável e da bisseção; persistindo, é erro da rodada, não devolução.
+// O gate conta as próprias rodadas num arquivo e falha com a mensagem dada nas rodadas listadas.
+const gateContado = (c, { infra = [], vermelho = [], msg = 'db container is not ready: unhealthy', resto = 'true' }) => {
+  const conta = join(c.raiz, 'conta');
+  const casos = [...infra.map((n) => `${n}) echo "${msg}"; exit 1;;`), ...vermelho.map((n) => `${n}) echo "assert falhou"; exit 1;;`)].join(' ');
+  return { conta, gate: `n=$(( $(cat ${conta} 2>/dev/null || echo 0) + 1 )); echo $n > ${conta}; case $n in ${casos} *) ${resto};; esac` };
+};
+const rodadasDoGate = (g) => Number(readFileSync(g.conta, 'utf8').trim());
+
+test('F398: falha de container no gate do lote roda de novo uma vez e mergeia, sem suspeita de instável', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F4', 24);
+    const g = gateContado(c, { infra: [1] });
+    const r = c.painel('fila-de-merge', '21', '24', '--gate', g.gate, '--espera-de-infra', '0');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.equal(rodadasDoGate(g), 2, 'a primeira rodada caiu na falha de infraestrutura e a segunda passou');
+    assert.equal(s.gates, 2);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [21, 24]);
+    assert.deepEqual(s.devolvidos, []);
+    assert.equal(s.suspeitaDeInstavel, undefined, 'a nova tentativa por infraestrutura não é a repetição por instável');
+    assert.equal(s.infraRepetida?.length, 1, JSON.stringify(s));
+    assert.match(s.infraRepetida[0], /container is not ready/i);
+  } finally { limpar(c); }
+});
+
+test('F398: falha de container que persiste é erro da rodada (não rodaram), sem devolver o PR nem bisseção', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F4', 24);
+    const g = gateContado(c, { infra: [1, 2, 3, 4, 5], msg: 'service container is not ready' });
+    const r = c.painel('fila-de-merge', '21', '24', '--gate', g.gate, '--espera-de-infra', '0');
+    assert.equal(r.exit, 1, r.out);
+    assert.match(r.err, /infraestrutura/);
+    assert.match(r.err, /container is not ready/);
+    assert.match(r.err, /não rodaram: #21, #24/);
+    assert.equal(rodadasDoGate(g), 2, 'o gate do lote e a nova tentativa; nem repetição nem bisseção');
+    assert.deepEqual(c.merges(), []);
+    assert.equal(c.dado('F1').etapa, 'merge', 'o item não volta à dona');
+    assert.equal(c.dado('F4').etapa, 'merge');
+    assert.deepEqual(c.listas(), { ocupada: null, pendentes: [], emVoo: [] });
+  } finally { limpar(c); }
+});
+
+test('F398: vermelho comum (sem o padrão) segue direto para a repetição e a bisseção, como antes', () => {
+  const c = montar();
+  try {
+    c.item('F4', 24); c.item('F3', 23);
+    // o teste pgTAP vermelho do `supabase test db` também diz "error running container": não é falha de infraestrutura; e o
+    // "container is not ready" do primeiro `db reset`, que o gate do WiControl já repete sozinho, fica no começo do log
+    const corpo = Array.from({ length: 15 }, (_, i) => `echo "ok ${i + 1} - teste"`).join('; ');
+    const g = gateContado(c, { resto: `echo "supabase_storage container is not ready: unhealthy"; echo "Resetting local database..."; if [ -f c.txt ]; then ${corpo}; echo "Result: FAIL"; echo "error running container: exit 1"; exit 1; fi` });
+    const r = c.painel('fila-de-merge', '24', '23', '--gate', g.gate, '--espera-de-infra', '0');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    // lote vermelho, repetição vermelha, [24] verde; o 23 sai por dedução — nenhuma rodada a mais
+    assert.equal(s.gates, 3);
+    assert.equal(rodadasDoGate(g), 3);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24]);
+    assert.deepEqual(s.devolvidos.map((d) => d.pr), [23]);
+    assert.equal(s.infraRepetida, undefined);
+  } finally { limpar(c); }
+});
+
+test('F398: a falha de container num gate da bisseção também roda de novo, e não devolve o PR verde', () => {
+  const c = montar();
+  try {
+    c.item('F4', 24); c.item('F3', 23);
+    // 1 lote vermelho de verdade, 2 repetição vermelha, 3 o [24] cai no container, 4 o [24] passa; o 23 sai por dedução
+    const g = gateContado(c, { infra: [3], resto: 'test ! -f c.txt' });
+    const r = c.painel('fila-de-merge', '24', '23', '--gate', g.gate, '--espera-de-infra', '0');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.equal(s.gates, 4);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [24]);
+    assert.deepEqual(s.devolvidos.map((d) => d.pr), [23]);
+    assert.equal(s.infraRepetida?.length, 1);
+  } finally { limpar(c); }
+});
+
+test('F398: os padrões e a espera ficam no config da fila; a rodada sem a flag os mantém, e "nenhuma" desliga', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F4', 24); c.item('F5', 25);
+    let g = gateContado(c, { infra: [1], msg: 'banco de testes caiu' });
+    let r = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', g.gate, '--falha-de-infra', 'banco de testes caiu', '--falha-de-infra', 'rede sumiu', '--espera-de-infra', '0');
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.deepEqual(JSON.parse(r.out).mergeados.map((m) => m.pr), [21], 'o padrão dado casou e a nova tentativa passou');
+    let e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual([e.config.falhaDeInfra, e.config.esperaDeInfra], [['banco de testes caiu', 'rede sumiu'], 0]);
+    // a rodada seguinte, sem as flags: o gravado vale e fica; o padrão de fábrica saiu (o dado o substitui)
+    rmSync(g.conta, { force: true });
+    g = gateContado(c, { infra: [1], msg: 'db container is not ready' });
+    r = c.painel('fila-de-merge', `24:${c.shas[24]}`, '--gate', g.gate);
+    assert.equal(r.exit, 0, r.err + r.out);
+    let s = JSON.parse(r.out);
+    assert.equal(s.gates, 2, 'lote e repetição por instável: o padrão de fábrica não casa mais');
+    assert.match(s.suspeitaDeInstavel ?? '', /instável/);
+    e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual([e.config.falhaDeInfra, e.config.esperaDeInfra], [['banco de testes caiu', 'rede sumiu'], 0], 'a rodada sem a flag não apagou o config');
+    // "nenhuma" desliga a nova tentativa
+    rmSync(g.conta, { force: true });
+    g = gateContado(c, { infra: [1], msg: 'banco de testes caiu' });
+    r = c.painel('fila-de-merge', `25:${c.shas[25]}`, '--gate', g.gate, '--falha-de-infra', 'nenhuma');
+    assert.equal(r.exit, 0, r.err + r.out);
+    s = JSON.parse(r.out);
+    assert.equal(s.infraRepetida, undefined);
+    assert.match(s.suspeitaDeInstavel ?? '', /instável/);
+    assert.deepEqual(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')).config.falhaDeInfra, []);
+  } finally { limpar(c); }
+});
+
+test('F398: sem config, valem os padrões de fábrica e a espera de 30 s (lida do config, não esperada no teste)', async () => {
+  const { padroesDeInfra, ESPERA_DE_INFRA_S, casaInfra } = await import(join(SCRIPTS, 'fila-de-merge.mjs'));
+  assert.deepEqual(padroesDeInfra(undefined), ['container is not ready']);
+  assert.deepEqual(padroesDeInfra([]), []);
+  assert.equal(ESPERA_DE_INFRA_S, 30);
+  assert.equal(casaInfra('...\nSUPABASE_DB CONTAINER IS NOT READY: unhealthy\n', padroesDeInfra(undefined)), 'container is not ready');
+  assert.equal(casaInfra('assert falhou\n', padroesDeInfra(undefined)), null);
+  assert.equal(casaInfra('Result: FAIL\nerror running container: exit 1\n', padroesDeInfra(undefined)), null, 'o pgTAP vermelho não é infraestrutura');
+  assert.equal(casaInfra('container is not ready', []), null);
+});
+
+test('F398: --anotar recusa as flags de infraestrutura (o config é da rodada da orquestradora)', () => {
+  const c = montar();
+  try {
+    const r = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--anotar', '--falha-de-infra', 'x');
+    assert.equal(r.exit, 1, r.out);
+    assert.match(r.err, /--anotar/);
+  } finally { limpar(c); }
+});

@@ -24,7 +24,7 @@
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio, `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge; com `maisFatias: true` volta a `execucao` com a dona, F222); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); (F209) traz também `paraAplicar` (plugins do kit instalados depois que o app abriu) e `paraBaixar` (plugins do kit com versão publicada mais nova, por `git fetch` no clone do marketplace com cache de 30 min em batida/kit-publicado.json); exit 0 nos dois casos, 1 só em erro de leitura
-//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (sem `--gate`, o par gate/preparo do `config` gravado; sem config, `npm test`; vermelho → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), liga cada PR ao item vivo pelo `prs`, pelo `branch` do item ou pela branch do worktree da dona e o põe em `merge` (F221), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar; a rodada que não é --sem-turno grava o `config` {cwd, gate, preparar} do projeto
+//   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--falha-de-infra "<padrão>"…|nenhuma] [--espera-de-infra <s>] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (sem `--gate`, o par gate/preparo do `config` gravado; sem config, `npm test`; vermelho com a saída casando um padrão de falha de infraestrutura (fábrica: "container is not ready"; `--falha-de-infra` troca, `nenhuma` desliga, e fica no `config`) → espera `--espera-de-infra` s (30) e roda de novo uma vez, e persistindo é erro da rodada (F398); vermelho comum → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), liga cada PR ao item vivo pelo `prs`, pelo `branch` do item ou pela branch do worktree da dona e o põe em `merge` (F221), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar; a rodada que não é --sem-turno grava o `config` {cwd, gate, preparar, falhaDeInfra?, esperaDeInfra?} do projeto
 //   painel.mjs fila-de-merge <PR:sha> [<PR:sha>…] --anotar   (F351) a entrega da dona: confere que a ponta de cada PR é o sha dado, só anota os PRs nos pendentes, grava a pasta do repositório e liga o item → {anotado, pendentes, aviso?}; não roda gate nem mergeia
 //   painel.mjs fila-de-merge <PR:sha>… --gate "<cmd>" [--preparar "<cmd>"] --sem-turno   (F351) a rodada que a batida lança destacada: igual à da orquestradora, e grava o desfecho em `desfechos` do estado da fila
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga), lança a fila de merge anotada sem processo e entrega os desfechos dela (F351) → {mensagens, soltos, projetos, marcadoresApagados, filasLancadas?}; --seco não grava nem lança nada
@@ -61,7 +61,7 @@ import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparAr
 import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
 import { MOTIVO_DO_FORK, SHA_VALIDADO, arquivosDoPr, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub, soDocumentacao } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
-import { GATE_PADRAO, montarLote, motivoDeConflito } from './fila-de-merge.mjs';
+import { GATE_PADRAO, montarLote, motivoDeConflito, padroesDeInfra, ESPERA_DE_INFRA_S } from './fila-de-merge.mjs';
 import { donoDaFilaVivo, filaOrfa } from './fila-orfa.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
 import { posMerge } from './pos-merge.mjs';
@@ -1093,11 +1093,11 @@ function comandoFilaDeMerge(args) {
     throw e;
   }
   if (!saida.pendente) {
-    const { mergeados = [], devolvidos = [], suspeitaDeInstavel, erros, logs } = saida;
+    const { mergeados = [], devolvidos = [], suspeitaDeInstavel, infraRepetida, erros, logs } = saida;
     // F373 (fatia 3): com merge, o pós-merge (versão, plugins, giro do estado) roda aqui, sem turno da orquestradora
     const comPos = mergeados.length > 0 && process.env.KIT_POS_MERGE !== 'off';
     const id = randomBytes(6).toString('hex');
-    desfecho({ id, mergeados, devolvidos, ...(suspeitaDeInstavel ? { suspeitaDeInstavel } : {}), ...(erros ? { erros } : {}), ...(logs ? { logs } : {}), ...(comPos ? { posMerge: { pendente: true, desde: new Date().toISOString() } } : {}) });
+    desfecho({ id, mergeados, devolvidos, ...(suspeitaDeInstavel ? { suspeitaDeInstavel } : {}), ...(infraRepetida ? { infraRepetida } : {}), ...(erros ? { erros } : {}), ...(logs ? { logs } : {}), ...(comPos ? { posMerge: { pendente: true, desde: new Date().toISOString() } } : {}) });
     if (comPos) {
       let pos;
       try {
@@ -1120,8 +1120,14 @@ function filaDeMerge(args, { semTurno = false } = {}) {
   const anotar = flag(args, '--anotar', false);
   const gateDado = flag(args, '--gate');
   const prepararDado = flag(args, '--preparar');
-  const uso = 'uso: painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--seco] | <PR:sha>… --anotar';
-  if (anotar && (seco || gateDado || prepararDado)) throw new Error(`fila-de-merge: --anotar não roda nada (o gate é o da fila do projeto); ${uso}`);
+  // F398: `--falha-de-infra "<padrão>"` (repetível; `nenhuma` desliga) e `--espera-de-infra <s>` trocam os do `config`
+  const infraDada = [];
+  for (let v = flag(args, '--falha-de-infra'); v !== null; v = flag(args, '--falha-de-infra')) infraDada.push(v);
+  const esperaDada = flag(args, '--espera-de-infra');
+  const uso = 'uso: painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--falha-de-infra "<padrão>"…|nenhuma] [--espera-de-infra <s>] [--seco] | <PR:sha>… --anotar';
+  if (esperaDada !== null && !/^\d+$/.test(esperaDada)) throw new Error(`fila-de-merge: --espera-de-infra pede segundos inteiros; ${uso}`);
+  if (infraDada.length > 1 && infraDada.some((v) => v.trim().toLowerCase() === 'nenhuma')) throw new Error(`fila-de-merge: --falha-de-infra nenhuma não se junta a outros padrões; ${uso}`);
+  if (anotar && (seco || gateDado || prepararDado || infraDada.length || esperaDada !== null)) throw new Error(`fila-de-merge: --anotar não roda nada (o gate é o da fila do projeto); ${uso}`);
   // `N:sha` é o sha do recado "PR N pronto, HEAD <sha>": a ponta que mudou depois dele é recusada, como no `mergear` (F150).
   const casados = args.map((a) => /^([1-9]\d*)(?::([0-9a-f]{7,40}))?$/i.exec(String(a)));
   if (!args.length || casados.some((m) => !m)) throw new Error(uso);
@@ -1137,6 +1143,10 @@ function filaDeMerge(args, { semTurno = false } = {}) {
   const doConfig = !gateDado && textoNaoVazio(gravado.gate);
   const gate = gateDado ?? (doConfig ? gravado.gate : GATE_PADRAO);
   const preparar = prepararDado ?? (doConfig && textoNaoVazio(gravado.preparar) ? gravado.preparar : null);
+  // F398: o dado vale sobre o gravado; sem nenhum dos dois, os de fábrica
+  const falhaDeInfra = infraDada.length ? (infraDada[0].trim().toLowerCase() === 'nenhuma' ? [] : infraDada) : padroesDeInfra(gravado.falhaDeInfra);
+  const esperaDeInfra = esperaDada !== null ? Number(esperaDada) : (Number.isInteger(gravado.esperaDeInfra) && gravado.esperaDeInfra >= 0 ? gravado.esperaDeInfra : ESPERA_DE_INFRA_S);
+  const infraDoConfig = { ...(infraDada.length ? { falhaDeInfra } : {}), ...(esperaDada !== null ? { esperaDeInfra } : {}) };
   const lista = (v) => (Array.isArray(v) ? v : []);
   // os outros campos do estado (config, desfechos, lancada) passam intactos por toda gravação
   const lerEstado = () => { const e = arquivoJson(arquivo, {}); return { ...(e && typeof e === 'object' ? e : {}), ocupada: e?.ocupada ?? null, pendentes: lista(e?.pendentes), emVoo: lista(e?.emVoo) }; };
@@ -1153,7 +1163,7 @@ function filaDeMerge(args, { semTurno = false } = {}) {
     const pedido = pedidos.find((p) => p.pr === pr).sha;
     if (anotar && !String(v.headRefOid ?? '').toLowerCase().startsWith(pedido)) throw new Error(`fila-de-merge --anotar: a ponta do PR ${pr} é ${String(v.headRefOid ?? '?').slice(0, 7)}, não ${pedido}: empurre e anote o sha que você testou`);
   }
-  if (seco) return rodadaDaFila(pedidos, { seco, gate, preparar, cwd });
+  if (seco) return rodadaDaFila(pedidos, { seco, gate, preparar, falhaDeInfra, esperaDeInfra, cwd });
   if (anotar) {
     const r = comTrava(() => {
       const e = lerEstado();
@@ -1175,7 +1185,8 @@ function filaDeMerge(args, { semTurno = false } = {}) {
     const lote = juntarPedidos(juntarPedidos(e.emVoo, e.pendentes), pedidos);
     // o gate e o preparo ficam no estado: o relance da fila órfã (F220) os repete; a rodada da orquestradora grava também o
     // `config` que a fila sem turno usa (F351)
-    const config = semTurno ? e.config : { cwd: raizDoRepo(cwd), gate, preparar: preparar ?? null };
+    // F398: os outros campos do config (os padrões de infraestrutura) passam; só o dado agora os troca
+    const config = semTurno ? e.config : { ...(e.config && typeof e.config === 'object' ? e.config : {}), cwd: raizDoRepo(cwd), gate, preparar: preparar ?? null, ...infraDoConfig };
     // a fila que se gravou dona zera a contagem de lançamentos da batida
     gravarJson(arquivo, { ...e, lancada: undefined, ...(config ? { config } : {}), ocupada: { pid: process.pid, desde: new Date().toISOString(), gate, ...(preparar ? { preparar } : {}) }, pendentes: [], emVoo: lote });
     return { lote };
@@ -1195,7 +1206,7 @@ function filaDeMerge(args, { semTurno = false } = {}) {
       for (const n of lig.ambiguos) if (!ligacoes.ambiguos.includes(n)) ligacoes.ambiguos.push(n);
       let r;
       try {
-        r = rodadaDaFila(lote, { seco, gate, preparar, cwd });
+        r = rodadaDaFila(lote, { seco, gate, preparar, falhaDeInfra, esperaDeInfra, cwd });
       } catch (erro) {
         // erro da rodada inteira: os PRs dela não voltam à lista (um PR que derruba o preparo travaria a fila para sempre)
         const adiados = [...(erro?.adiados ?? []), ...(erro?.releitura ?? [])];
@@ -1231,6 +1242,7 @@ function filaDeMerge(args, { semTurno = false } = {}) {
   const lig = ligacoes.ligados.length || ligacoes.ambiguos.length ? ligacoes : {};
   if (rodadas.length === 1) { const { prs, ...r } = rodadas[0]; return { ...r, ...lig }; }
   const suspeitas = rodadas.map((r) => r.suspeitaDeInstavel).filter(Boolean);
+  const infraRepetida = rodadas.flatMap((r) => r.infraRepetida ?? []);
   const erros = rodadas.map((r) => r.erro).filter(Boolean);
   const releitura = rodadas.flatMap((r) => r.releitura ?? []);
   return {
@@ -1240,6 +1252,7 @@ function filaDeMerge(args, { semTurno = false } = {}) {
     mergeados: rodadas.flatMap((r) => r.mergeados),
     devolvidos: rodadas.flatMap((r) => r.devolvidos),
     ...(suspeitas.length ? { suspeitaDeInstavel: suspeitas.join(' · ') } : {}),
+    ...(infraRepetida.length ? { infraRepetida } : {}),
     ...(erros.length ? { erros } : {}),
     ...(releitura.length ? { releitura } : {}),
     rodadas,
@@ -1248,7 +1261,7 @@ function filaDeMerge(args, { semTurno = false } = {}) {
 }
 
 // Uma rodada da fila: confere cada PR, monta o lote e testa, mergeia o que passou e devolve o resto à dona.
-function rodadaDaFila(pedidos, { seco, gate, preparar, cwd }) {
+function rodadaDaFila(pedidos, { seco, gate, preparar, falhaDeInfra, esperaDeInfra, cwd }) {
   const recusados = [];
   const prs = [];
   const releitura = [];
@@ -1276,11 +1289,11 @@ function rodadaDaFila(pedidos, { seco, gate, preparar, cwd }) {
   const extra = { ...(adiados.length ? { adiados } : {}), ...(releitura.length ? { releitura } : {}) };
   // sem PR para montar, a devolução dos recusados segue o mesmo caminho (o item fechado sem merge volta à dona)
   let lote = { aprovados: [], devolvidos: [], gates: 0 };
-  if (doLote.length) try { lote = montarLote({ prs: doLote.map(({ pr, sha }) => ({ pr, sha })), base, cwd, gate, preparar }); } catch (e) { e.adiados = adiados; e.releitura = releitura; throw e; }
+  if (doLote.length) try { lote = montarLote({ prs: doLote.map(({ pr, sha }) => ({ pr, sha })), base, cwd, gate, preparar, falhaDeInfra, esperaDeInfra }); } catch (e) { e.adiados = adiados; e.releitura = releitura; throw e; }
   lote.devolvidos.unshift(...recusados);
   const { projeto } = projetoDoCwd();
   const itensDoPr = (pr) => [...itensVivos()].filter(([, d]) => projeto && String(d?.projeto ?? '').toLowerCase() === projeto && Array.isArray(d.prs) && d.prs.includes(pr));
-  const resumo = { base: lote.base, gates: lote.gates, logs: lote.pasta, ...(lote.suspeitaDeInstavel ? { suspeitaDeInstavel: lote.suspeitaDeInstavel } : {}) };
+  const resumo = { base: lote.base, gates: lote.gates, logs: lote.pasta, ...(lote.suspeitaDeInstavel ? { suspeitaDeInstavel: lote.suspeitaDeInstavel } : {}), ...(lote.infraRepetida ? { infraRepetida: lote.infraRepetida } : {}) };
   if (seco) return { seco: true, ...resumo, mergearia: lote.aprovados.map((a) => a.pr), devolveria: lote.devolvidos.map(({ pr, motivo }) => ({ pr, motivo })), ...(adiados.length ? { outraBase: adiados.map((a) => a.pr) } : {}) };
   const mergeados = [];
   for (const { pr, sha } of lote.aprovados) {

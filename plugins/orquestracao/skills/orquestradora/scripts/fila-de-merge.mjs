@@ -3,16 +3,44 @@
 // (`git merge --squash` + commit); o que conflita sai do lote. Roda o gate UMA vez na combinação. Verde: todos os aplicados
 // passam. Vermelho: roda de novo uma vez (verde na repetição passa o lote e registra a suspeita de teste instável em
 // `instavel.txt`); ainda vermelho, bisseção: divide ao meio sobre a parte verde, a metade verde entra sem retestar e a
-// vermelha divide de novo, até sobrar o PR que quebra. O merge no GitHub e a escrita no painel ficam no painel.mjs (só ele
+// vermelha divide de novo, até sobrar o PR que quebra. F398: todo gate (ou preparo) vermelho cuja saída casa com um padrão de
+// falha de infraestrutura (container do Docker/Supabase) espera e roda de novo uma vez, antes da repetição e da bisseção;
+// a falha que persiste é erro da rodada, não culpa de PR. O merge no GitHub e a escrita no painel ficam no painel.mjs (só ele
 // tem a trava). GIT_BIN troca o git (teste).
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, openSync, closeSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, openSync, closeSync, readSync, fstatSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const LIMITE_GIT_MS = 120_000;
 const LIMITE_GATE_MS = Number(process.env.KIT_FILA_GATE_TIMEOUT_MS) || 60 * 60_000;
 export const GATE_PADRAO = 'npm test';
+// F398: os padrões de fábrica da falha de infraestrutura (Docker/Supabase: o container que não ficou saudável) e a espera antes
+// da nova tentativa. O `config` da fila troca os dois; a lista vazia desliga. `error running container` fica de fora: o
+// `supabase test db` imprime `error running container: exit N` também quando um teste pgTAP falha de verdade, e com ele na
+// fábrica o PR que quebra teste do banco travaria a fila (erro da rodada) em vez de voltar à dona pela bisseção.
+const PADROES_DE_INFRA = ['container is not ready'];
+export const ESPERA_DE_INFRA_S = 30;
+export const padroesDeInfra = (gravado) => (Array.isArray(gravado) ? gravado.filter((p) => typeof p === 'string' && p.trim()) : [...PADROES_DE_INFRA]);
+// o padrão que casa (sem diferença de caixa) com o texto, ou null
+export const casaInfra = (texto, padroes) => padroes.find((p) => String(texto).toLowerCase().includes(p.toLowerCase())) ?? null;
+const FIM_DO_LOG = 64 * 1024;
+export const LINHAS_DE_INFRA = 10;
+// as últimas linhas não vazias do log: o erro que derrubou o gate fica no fim. O log inteiro não serve: o gate do WiControl
+// repete o `supabase db reset` sozinho, e o "container is not ready" do primeiro reset, que se recuperou, ficaria no começo do
+// log de um teste pgTAP vermelho de verdade, travando a fila em vez de devolver o PR pela bisseção.
+function fimDoLog(log) {
+  let fd;
+  try {
+    fd = openSync(log, 'r');
+    const tam = fstatSync(fd).size;
+    const n = Math.min(tam, FIM_DO_LOG);
+    const buf = Buffer.alloc(n);
+    readSync(fd, buf, 0, n, tam - n);
+    return buf.toString('utf8').split('\n').filter((l) => l.trim()).slice(-LINHAS_DE_INFRA).join('\n');
+  } catch { return ''; } finally { if (fd !== undefined) closeSync(fd); }
+}
+const dormir = (ms) => { if (ms > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
 
 function git(args, cwd) {
   try {
@@ -66,7 +94,7 @@ export function motivoDeConflito({ pr, sobre, arquivos, base }) {
 }
 
 // prs: [{ pr, sha }] na ordem. → { base, aprovados: [{pr, sha}], devolvidos: [{pr, sha, motivo, arquivos?, log?}], gates, pasta }
-export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null }) {
+export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null, falhaDeInfra = padroesDeInfra(), esperaDeInfra = ESPERA_DE_INFRA_S }) {
   if (!Array.isArray(prs) || prs.length === 0) throw new Error('fila-de-merge: nenhum PR');
   gitOk(['fetch', '-q', 'origin', `+refs/heads/${base}:refs/remotes/origin/${base}`], cwd);
   for (const { pr } of prs) gitOk(['fetch', '-q', 'origin', `refs/pull/${pr}/head`], cwd);
@@ -75,7 +103,8 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
   gitOk(['worktree', 'add', '-q', '--detach', wt, `origin/${base}`], cwd);
   const devolvidos = [];
   let gates = 0;
-  const gateAqui = (nome) => {
+  const infraRepetida = [];
+  const umaVez = (nome) => {
     gates += 1;
     if (preparar) {
       const p = rodarComando(preparar, wt, join(pasta, `preparar-${nome}.log`));
@@ -83,6 +112,21 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
     }
     return rodarComando(gate, wt, join(pasta, `gate-${nome}.log`));
   };
+  // F398: vermelho com cara de infraestrutura espera e roda de novo uma vez na mesma árvore; o vermelho comum passa direto
+  const gateAqui = (nome) => {
+    const r = umaVez(nome);
+    const padrao = r.ok ? null : casaInfra(fimDoLog(r.log), falhaDeInfra);
+    if (!padrao) return r;
+    const passo = r.preparo ? 'o preparo' : 'o gate';
+    limpar(wt, 'HEAD');
+    dormir(esperaDeInfra * 1000);
+    const nova = umaVez(`${nome}-infra`);
+    const persiste = nova.ok ? null : casaInfra(fimDoLog(nova.log), falhaDeInfra);
+    if (persiste) throw new Error(`falha de infraestrutura: ${passo} (${nome}) saiu com "${persiste}" também na nova tentativa, ${esperaDeInfra} s depois (exit ${nova.status}); veja ${nova.log}${infraRepetida.length ? ` (antes, nesta rodada, ${infraRepetida.length} nova(s) tentativa(s) por infraestrutura; logs em ${pasta})` : ''}`);
+    infraRepetida.push(`${passo} (${nome}) saiu com "${padrao}" (exit ${r.status}) e ${nova.ok ? 'passou' : `ficou vermelho sem o padrão (exit ${nova.status})`} na nova tentativa; logs ${r.log} e ${nova.log}`);
+    return nova;
+  };
+  const comInfra = (o) => (infraRepetida.length ? { ...o, infraRepetida } : o);
   try {
     const aplicados = [];
     for (const item of prs) {
@@ -90,9 +134,9 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
       if (a.ok) aplicados.push(item);
       else devolvidos.push({ ...item, motivo: motivoDeConflito({ pr: item.pr, sobre: `${base} + o lote`, arquivos: a.arquivos, base }), arquivos: a.arquivos });
     }
-    if (aplicados.length === 0) return { base, aprovados: [], devolvidos, gates, pasta };
+    if (aplicados.length === 0) return comInfra({ base, aprovados: [], devolvidos, gates, pasta });
     const todos = gateAqui('lote');
-    if (todos.ok) return { base, aprovados: aplicados, devolvidos, gates, pasta };
+    if (todos.ok) return comInfra({ base, aprovados: aplicados, devolvidos, gates, pasta });
     if (todos.preparo) throw new Error(`o preparo falhou (exit ${todos.status}); veja ${todos.log}`);
     // vermelho: uma repetição na mesma árvore antes de culpar alguém (o gate pode ter deixado arquivo solto)
     limpar(wt, 'HEAD');
@@ -101,7 +145,7 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
     if (repeticao.ok) {
       const suspeitaDeInstavel = `o gate do lote falhou (exit ${todos.status}) e passou ao repetir: suspeita de teste instável; logs ${todos.log} e ${repeticao.log}`;
       writeFileSync(join(pasta, 'instavel.txt'), `${suspeitaDeInstavel}\nPRs: ${aplicados.map((x) => `#${x.pr}`).join(', ')}\n`);
-      return { base, aprovados: aplicados, devolvidos, gates, pasta, suspeitaDeInstavel };
+      return comInfra({ base, aprovados: aplicados, devolvidos, gates, pasta, suspeitaDeInstavel });
     }
     // bisseção sobre a parte verde (`refVerde`): o que entra verde não se retesta
     const aprovados = [];
@@ -143,7 +187,7 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
       else resolver(d.grupo, d);
     };
     resolver(aplicados, repeticao);
-    return { base, aprovados, devolvidos, gates, pasta };
+    return comInfra({ base, aprovados, devolvidos, gates, pasta });
   } finally {
     git(['worktree', 'remove', '--force', wt], cwd);
     writeFileSync(join(pasta, 'LEIA.txt'), 'Logs da fila de merge; o worktree já foi removido.\n');
