@@ -53,11 +53,14 @@ describe("a mesma pessoa, a mesma cor em toda peça", () => {
     vistas.push(...cores(aberta.getByRole("button", { name: "Conta de Ana Souza" })))
     aberta.unmount()
 
+    // Recolhida como o código antes do desenho deixa: a preferência guardada e a marca no <html>.
     localStorage.setItem("wicomm-barra", "recolhida")
+    document.documentElement.setAttribute("data-barra-recolhida", "")
     const recolhida = render(<BarraLateral grupos={DESTINOS} caminhoAtual="/pedidos" conta={conta} />)
-    expect(document.documentElement.hasAttribute("data-barra-recolhida")).toBe(true)
     vistas.push(...cores(recolhida.getByRole("button", { name: "Conta de Ana Souza" })))
     recolhida.unmount()
+    document.documentElement.removeAttribute("data-barra-recolhida")
+    localStorage.clear()
 
     const editor = render(<GrupoDaPessoa conta={conta} />)
     vistas.push(...cores(editor.container))

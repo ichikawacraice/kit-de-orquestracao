@@ -60,7 +60,7 @@ function Tabela({ densidade }: { densidade: "instrumento" | "site" }) {
         {GRUPOS.map((g) => {
           const feitas = g.tarefas.filter((t) => t.feita).length
           const concluido = g.tarefas.length > 0 && feitas === g.tarefas.length
-          const pessoas = [...new Set(g.tarefas.map((t) => t.quem).filter(Boolean))].map((nome) => ({ nome }))
+          const pessoas = [...new Set(g.tarefas.map((t) => t.quem).filter(Boolean))].flatMap((nome) => pessoaDaDemo(nome) ?? [])
           return (
             <LinhaDoGrupo
               key={g.nome}
