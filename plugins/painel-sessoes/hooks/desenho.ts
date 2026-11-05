@@ -542,7 +542,8 @@ export function textoDoPr(item: LinhaItem): { t: string; mergeado: boolean } | u
   if (item.prs.length === 0) return undefined
   const mais = item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''
   const dd = item.deduzido
-  if (!dd) return { t: `#${item.prs[item.prs.length - 1]}${mais}`, mergeado: false }
+  // sem o GitHub (PRs de fonte item) a dedução não sabe o estado dos PRs: o chip é o declarado
+  if (!dd || dd.fontes.prs !== 'gh') return { t: `#${item.prs[item.prs.length - 1]}${mais}`, mergeado: false }
   // com dedução, o `+M` conta só os outros abertos; o mergeado sem saber qual (a batida não grava) só leva número se o PR é um só
   const abertos = item.prs.filter(n => dd.prsAbertos.includes(n))
   if (abertos.length > 0) return { t: `#${abertos[abertos.length - 1]}${abertos.length > 1 ? ` +${abertos.length - 1}` : ''}`, mergeado: false }

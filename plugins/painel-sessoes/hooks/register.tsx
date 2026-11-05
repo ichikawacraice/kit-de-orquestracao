@@ -299,14 +299,15 @@ function montarTodos(
     const final = etapaCrua === 'feito' || etapaCrua === 'descartado'
     // F425: no item vivo, a etapa e os PRs deduzidos valem mais que os gravados; `feito` deduzido não fecha aqui (a batida fecha)
     const dd = final || !etapaOk ? undefined : deduzidos.get(d.id)
-    // a etapa de fonte `item` é só a declarada da hora da batida, e a gravação depois da batida vence; `feito` deduzido aparece como merge
-    const gravadoDepois = dd ? Date.parse(texto(d.data.atualizadoEm) ?? '') > Date.parse(dd.em as string) : false
-    const etapaBruta = dd && !gravadoDepois && dd.fontes?.etapa !== 'item' && typeof dd.etapa === 'string' ? (dd.etapa === 'feito' ? 'merge' : dd.etapa) : undefined
+    // a etapa de fonte `item` é só a declarada da hora da batida; a troca de etapa (o `historico`, não o `agora` de todo turno)
+    // depois da batida vence; `feito` deduzido aparece como merge
+    const mudouDepois = dd ? Date.parse(texto(historico[historico.length - 1]?.em) ?? '') > Date.parse(dd.em as string) : false
+    const etapaBruta = dd && !mudouDepois && dd.fontes?.etapa !== 'item' && typeof dd.etapa === 'string' ? (dd.etapa === 'feito' ? 'merge' : dd.etapa) : undefined
     const etapaDeduzida = etapaBruta && ETAPAS.includes(etapaBruta) && etapaBruta !== 'descartado' ? etapaBruta : undefined
-    // os PRs que a dona gravou e a batida não viu entram como abertos (o PR aberto depois da batida)
+    // o PR gravado com a troca de etapa depois da batida entra como aberto; fora disso, o que a batida descartou (item reaberto) fica fora
     const prsGravados = inteiros(d.data.prs)
     const prsDaBatida = dd && dd.fontes?.prs === 'gh' ? inteiros(dd.prs) : undefined
-    const prsNovos = prsDaBatida ? prsGravados.filter(n => !prsDaBatida.includes(n)) : []
+    const prsNovos = prsDaBatida && mudouDepois ? prsGravados.filter(n => !prsDaBatida.includes(n)) : []
     const prsDeduzidos = prsDaBatida ? [...prsDaBatida, ...prsNovos] : undefined
     let situacao: Situacao
     let trava: LinhaItem['trava']
@@ -375,7 +376,7 @@ function montarTodos(
             ultimaAtividade: texto(dd.ultimaAtividade),
             em: dd.em as string,
             etapaDeclarada: etapaCrua as string,
-            fontes: { ...(dd.fontes ?? {}) },
+            fontes: { ...(dd.fontes ?? {}), etapa: etapaDeduzida ? dd.fontes?.etapa : 'item' },
             prsAbertos: [...inteiros(dd.prsAbertos), ...prsNovos],
             mergeado: dd.mergeado === true || dd.fatiaMergeada === true,
           }

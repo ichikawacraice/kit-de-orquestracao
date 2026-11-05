@@ -3420,26 +3420,42 @@ test('F425: a origem do dado e a etapa declarada que diverge vão só ao alt', (
 
 // F425, os consertos da revisão: a gravação mais nova que a batida vence; o PR mergeado só leva número quando é um só;
 // o `+M` conta só os abertos; a etapa `feito` deduzida aparece como merge; o parado conta da atividade mais nova.
-test('F425: a gravação da dona depois da batida vence a etapa deduzida; a etapa de fonte item não troca a declarada', () => {
+test('F425: a troca de etapa da dona depois da batida vence a dedução; só gravar o agora não; etapa de fonte item não troca a declarada', () => {
   const dd = DD({
     F1: { etapa: 'merge', prs: [170], prsAbertos: [170], parado: false, fontes: { etapa: 'gh', prs: 'gh' } },
     F2: { etapa: 'validacao', prs: [], prsAbertos: [], parado: false, fontes: { etapa: 'item', prs: 'item' } },
   })
   const antes = new Date(AGORA - 10 * 60_000).toISOString()
   const depois = new Date(AGORA - 60_000).toISOString()
-  const velha = montaDD([docF('F1', { etapa: 'execucao', atualizadoEm: antes })], dd)[0]!
-  expect(velha.etapa, 'a dedução mais nova que a gravação vale').toBe('merge')
-  const nova = montaDD([docF('F1', { etapa: 'execucao', atualizadoEm: depois })], dd)[0]!
-  expect(nova.etapa, 'a gravação depois da batida vale').toBe('execucao')
-  const item = montaDD([docF('F2', { etapa: 'execucao', atualizadoEm: antes })], dd)[0]!
+  const hist = (em: string) => [{ etapa: 'execucao', em }]
+  const velha = montaDD([docF('F1', { etapa: 'execucao', historico: hist(antes), atualizadoEm: depois })], dd)[0]!
+  expect(velha.etapa, 'gravar só o agora depois da batida não derruba a dedução').toBe('merge')
+  expect(D.origemNoAlt(velha)).toContain('etapa pelo GitHub')
+  const nova = montaDD([docF('F1', { etapa: 'execucao', historico: hist(depois), atualizadoEm: depois })], dd)[0]!
+  expect(nova.etapa, 'a troca de etapa depois da batida vale').toBe('execucao')
+  expect(D.origemNoAlt(nova), 'o alt não diz GitHub sobre a etapa declarada').toContain('etapa declarada')
+  const item = montaDD([docF('F2', { etapa: 'execucao', historico: hist(antes) })], dd)[0]!
   expect(item.etapa, 'etapa deduzida de fonte item é só a declarada da hora da batida').toBe('execucao')
 })
 
-test('F425: o PR que a dona gravou e a batida não viu entra como aberto', () => {
-  const dd = DD({ F1: { etapa: 'execucao', prs: [160], prsAbertos: [], mergeado: true, parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
-  const [i] = montaDD([docF('F1', { etapa: 'execucao', prs: [160, 171] })], dd)
-  expect(i!.prs).toEqual([160, 171])
-  expect(i!.deduzido!.prsAbertos).toEqual([171])
+test('F425: o PR gravado com a troca de etapa depois da batida entra como aberto; o que a batida descartou não volta', () => {
+  const dd = DD({ F1: { etapa: 'merge', prs: [170], prsAbertos: [170], parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
+  const antes = new Date(AGORA - 10 * 60_000).toISOString()
+  const depois = new Date(AGORA - 60_000).toISOString()
+  const reaberto = montaDD([docF('F1', { etapa: 'execucao', prs: [150, 170], historico: [{ etapa: 'execucao', em: antes }] })], dd)[0]!
+  expect(reaberto.prs, 'o PR que a batida descartou (item reaberto) não volta').toEqual([170])
+  expect(D.textoDoPr(reaberto)?.t).toBe('#170')
+  const ddSem = DD({ F1: { etapa: 'execucao', prs: [160], prsAbertos: [], mergeado: true, parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
+  const novo = montaDD([docF('F1', { etapa: 'merge', prs: [160, 171], historico: [{ etapa: 'merge', em: depois }] })], ddSem)[0]!
+  expect(novo.prs).toEqual([160, 171])
+  expect(novo.deduzido!.prsAbertos).toEqual([171])
+  expect(D.textoDoPr(novo)?.t).toBe('#171')
+})
+
+test('F425: sem o GitHub (PRs de fonte item), o chip do PR é o declarado', () => {
+  const dd = DD({ F1: { etapa: 'execucao', prs: [], prsAbertos: [], parado: false, fontes: { etapa: 'git', prs: 'item' } } })
+  const [i] = montaDD([docF('F1', { etapa: 'execucao', prs: [171] })], dd)
+  expect(i!.deduzido, 'a dedução existe').toBeDefined()
   expect(D.textoDoPr(i!)?.t).toBe('#171')
 })
 
