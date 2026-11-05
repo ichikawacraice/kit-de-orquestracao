@@ -456,6 +456,18 @@ describe('consertos do laudo da V1 (B1–B4 e os dois mutantes que sobreviveram)
   // vazia desde a F428: o kit roda em máquina nova, onde ninguém escreveu a lista ainda.
   remove('B1: protegidos.txt ausente vale lista vazia', (env) => rmSync(join(env.saida, 'protegidos.txt')));
   falhaFechada('B1: protegidos.txt ilegível', /protegidos/i, (env) => chmodSync(join(env.saida, 'protegidos.txt'), 0o000));
+  // F428: a lista do limpador antigo (outra pasta) conta junto, para a proteção não cair na troca de pasta
+  mantem('B1: protegidos.txt só na pasta do limpador antigo', 1, /protegid/i, (env, wt) => {
+    rmSync(join(env.saida, 'protegidos.txt'));
+    mkdirSync(join(env.T, 'base', 'limpador-de-worktrees'), { recursive: true });
+    writeFileSync(join(env.T, 'base', 'limpador-de-worktrees', 'protegidos.txt'), `${wt}\n`);
+  });
+  falhaFechada('B1: protegidos.txt antigo ilegível', /protegidos/i, (env) => {
+    mkdirSync(join(env.T, 'base', 'limpador-de-worktrees'), { recursive: true });
+    const p = join(env.T, 'base', 'limpador-de-worktrees', 'protegidos.txt');
+    writeFileSync(p, 'x\n');
+    chmodSync(p, 0o000);
+  });
 
   // B2: o git status confia no índice; skip-worktree e assume-unchanged escondem mudança.
   mantem('B2: arquivo modificado com skip-worktree', 4, /skip-worktree|assume-unchanged|marca/i, (env, wt) => {
@@ -815,6 +827,21 @@ describe('F428: passo builds', () => {
     const ap = rodar(env, ['--aplicar', ...PASSOS], { LIMPADOR_AGORA: String(env.A + 8 * 24 * H) });
     assert.equal(ap.status, 0, ap.stdout + ap.stderr);
     assert.deepEqual(ap.json.builds.liberados, []);
+    assert.ok(existsSync(join(wt, 'node_modules')));
+  });
+  it('worktree protegida ou com processo dentro: não mexe no build', () => {
+    const { env, wt } = montar();
+    const longe = { LIMPADOR_AGORA: String(env.A + 8 * 24 * H) };
+    writeFileSync(join(env.saida, 'protegidos.txt'), `${wt}\n`);
+    const p = rodar(env, ['--aplicar', ...PASSOS], longe);
+    assert.equal(p.status, 0, p.stdout + p.stderr);
+    assert.deepEqual(p.json.builds.liberados, []);
+    assert.ok(existsSync(join(wt, 'node_modules')));
+    writeFileSync(join(env.saida, 'protegidos.txt'), '# vazio\n');
+    setStub(env, 'lsof', [{ stdout: `p1\nfcwd\nn${env.T}/saida\np2\nfcwd\nn${wt}/node_modules\n` }]);
+    const q = rodar(env, ['--aplicar', ...PASSOS], longe);
+    assert.equal(q.status, 0, q.stdout + q.stderr);
+    assert.deepEqual(q.json.builds.liberados, []);
     assert.ok(existsSync(join(wt, 'node_modules')));
   });
   it('node_modules que é elo simbólico para fora fica', () => {

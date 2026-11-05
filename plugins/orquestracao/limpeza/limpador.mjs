@@ -130,8 +130,8 @@ function lerLsof() {
 }
 
 function lerPRs(repo) {
-  let url = E.LIMPADOR_GH_REPO;
-  if (!url) {
+  let url;
+  {
     const o = git(repo, ['config', '--get', 'remote.origin.url']);
     if (o.status === 1 && !o.stderr && !o.erro) throw new ForaDoGitHub('o repositório não tem origin');
     if (!o.ok) throw new FalhaFechada(`não li a origin do repositório: ${o.motivo}`);
@@ -173,20 +173,29 @@ function lerWorktrees(repo) {
   return lista;
 }
 
-function protegidos() {
-  // ausente vale lista vazia (máquina nova, kit recém-instalado); existir e não abrir é falha fechada:
-  // aí a lista existe e não sei o que ela protege
-  const arq = join(SAIDA, 'protegidos.txt');
-  if (!existsSync(arq)) return [];
-  let txt;
-  try { txt = readFileSync(arq, 'utf8'); } catch (e) { throw new FalhaFechada(`não consegui ler a lista de protegidos (${arq}): ${e.message}`); }
-  return txt.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).map(real);
+// A lista do limpador antigo (antes do F428 a saída era outra pasta): lida junto, para a proteção não depender
+// de alguém lembrar de copiar o arquivo na troca do agendamento.
+const PROTEGIDOS_ANTIGO = join(BASE_KIT, 'limpador-de-worktrees', 'protegidos.txt');
+
+function protegidos(avisos) {
+  // vale a união das duas listas; as duas ausentes valem lista vazia (máquina nova, kit recém-instalado);
+  // existir e não abrir é falha fechada: aí a lista existe e não sei o que ela protege
+  const novo = join(SAIDA, 'protegidos.txt');
+  const lista = [];
+  for (const arq of [...new Set([novo, PROTEGIDOS_ANTIGO])]) {
+    if (!existsSync(arq)) continue;
+    let txt;
+    try { txt = readFileSync(arq, 'utf8'); } catch (e) { throw new FalhaFechada(`não consegui ler a lista de protegidos (${arq}): ${e.message}`); }
+    if (arq === PROTEGIDOS_ANTIGO && arq !== novo) avisos.push(`Lista de protegidos do limpador antigo lida também: ${arq} (copie-a para ${novo}).`);
+    lista.push(...txt.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).map(real));
+  }
+  return lista;
 }
 
 // Os repositórios da rodada: os --repo dados, ou todo repositório que o app conhece (o `baseRepo` do registro de worktrees
 // e as pastas de todas as sessões), um por diretório git comum. Pasta que não existe ou não é git fica de fora em silêncio:
 // ela não tem worktree para limpar.
-function descobrirRepos(reservas, pastas) {
+function descobrirRepos(reservas, pastas, avisos) {
   const candidatos = new Set();
   for (const p of [...reservas.map((r) => r.baseRepo), ...pastas]) {
     if (typeof p !== 'string' || !p) continue;
@@ -197,7 +206,11 @@ function descobrirRepos(reservas, pastas) {
   for (const c of [...candidatos].sort()) {
     if (!existsSync(c)) continue;
     const r = git(c, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
-    if (!r.ok || !r.stdout.trim()) continue;
+    if (!r.ok || !r.stdout.trim()) {
+      // pasta que não é git é o comum (sessão aberta fora de repositório); a que é git e não respondeu, aviso
+      if (existsSync(join(c, '.git'))) avisos.push(`Repositório fora da rodada: ${c} (git rev-parse: ${r.motivo})`);
+      continue;
+    }
     const comum = real(r.stdout.trim());
     if (!porComum.has(comum)) porComum.set(comum, c);
   }
@@ -565,8 +578,8 @@ function rodada(args) {
     if (quer('worktrees') || quer('builds')) {
       const sess = lerSessoes();
       const reservas = lerReservas();
-      const ctx = { sessoes: sess.vivas, cwds: lerLsof(), reservas, protegidos: protegidos(), minHoras: args.horas, prs: [] };
-      const repos = args.repos.length ? args.repos : descobrirRepos(reservas, sess.pastas);
+      const ctx = { sessoes: sess.vivas, cwds: lerLsof(), reservas, protegidos: protegidos(rel.avisos), minHoras: args.horas, prs: [] };
+      const repos = args.repos.length ? args.repos : descobrirRepos(reservas, sess.pastas, rel.avisos);
       if (!args.repos.length) rel.avisos.push(`Repositórios descobertos pelo registro do app e pelas sessões: ${repos.length}.`);
       for (const r of repos) rodadaDoRepo(r, ctx, args, aplicar, rel, quer);
     }

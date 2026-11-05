@@ -28,7 +28,7 @@
   - o transcript da sessão cujo cwd é a worktree.
 
   O relatório diz qual dessas fontes decidiu.
-- **`protegidos.txt` ausente vale lista vazia.** Numa máquina nova ninguém o escreveu ainda. Se o arquivo existe e não abre, segue sendo falha fechada.
+- **`protegidos.txt`:** vale a união da lista da pasta nova com a do limpador antigo (`limpador-de-worktrees/protegidos.txt`), com um aviso que pede a cópia. Assim a proteção não cai na troca de pasta. As duas ausentes valem lista vazia, porque numa máquina nova ninguém escreveu a lista ainda. Se uma lista existe e não abre, segue sendo falha fechada.
 - **Passo builds:** a worktree parada há mais de 7 dias (`--dias-builds`) perde as pastas regeneráveis ignoradas (`node_modules`, `.next`, `.next-<n>`, `dist`, `.turbo`). A prova é a mesma do critério 6: o nome está na lista, a pasta-mãe tem `package.json` rastreado e uma sonda no mesmo lugar não é ignorada.
   - O passo não toca a principal, worktree travada, protegida, reservada pelo app, com sessão viva ou com processo dentro.
   - Elos simbólicos e pastas cujo caminho real sai da worktree também ficam.
@@ -51,5 +51,5 @@
 ## Consequências
 - Um `gc` não segura mais todas as worktrees por 2 h. As 9 que ficavam só pelo critério 9 voltam a ser candidatas.
 - O disco das worktrees que ficam é liberado aos poucos, sem mexer no trabalho.
-- O job antigo (`com.izanagi.limpador-de-worktrees`) segue rodando até o operador trocá-lo. A pasta de saída nova é outra: `protegidos.txt` e `aplicar-ligado` precisam ser copiados na troca.
+- O job antigo segue rodando até o operador trocá-lo. A pasta de saída nova é outra. O `aplicar-ligado` precisa ser copiado na troca de propósito: sem ele, o job novo só relata. O `protegidos.txt` antigo segue lido até ser copiado.
 - **Limite conhecido:** o transcript da sessão é achado pelo nome codificado do cwd. A sessão cujo cwd é uma subpasta da worktree não conta por esse caminho; conta pelos outros critérios (sessão viva, processo dentro).
