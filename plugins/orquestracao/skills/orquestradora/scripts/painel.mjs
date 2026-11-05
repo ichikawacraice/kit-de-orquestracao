@@ -20,12 +20,13 @@
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
 //   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_|apelido>   tira a sessão do `com` (o apelido vale se for um só no item)
+//   painel.mjs entregas [--desde <HH:MM|ISO>] [--projeto <nome> | --todos]   (F404, ADR 0024) os itens feitos desde a hora (HH:MM é São Paulo; padrão: 24 h), do projeto da pasta, com a `entrega` gravada pela dona → {desde, itens:[{id, titulo, feitoEm, prs, entrega|null}], semEntrega}
 //   painel.mjs custo <F> [--seco]   mede o custo do item nos transcripts das sessões dele e grava em `custo` (F348; o `mergear` grava ao fechar); --seco só mostra
 //   painel.mjs soltar <F> "<motivo>" [--so-dono]   solta o item: dono null, `com` vazio, `agora` = motivo; --so-dono deixa o `com` como está
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge; com `maisFatias: true` volta a `execucao` com a dona, F222); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); (F209) traz também `paraAplicar` (plugins do kit instalados depois que o app abriu) e `paraBaixar` (plugins do kit com versão publicada mais nova, por `git fetch` no clone do marketplace com cache de 30 min em batida/kit-publicado.json); exit 0 nos dois casos, 1 só em erro de leitura
 //   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--falha-de-infra "<padrão>"…|nenhuma] [--espera-de-infra <s>] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (sem `--gate`, o par gate/preparo do `config` gravado; sem config, `npm test`; vermelho com a saída casando um padrão de falha de infraestrutura (fábrica: "container is not ready"; `--falha-de-infra` troca, `nenhuma` desliga, e fica no `config`) → espera `--espera-de-infra` s (30) e roda de novo uma vez, e persistindo é erro da rodada (F398); vermelho comum → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), liga cada PR ao item vivo pelo `prs`, pelo `branch` do item ou pela branch do worktree da dona e o põe em `merge` (F221), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar; a rodada que não é --sem-turno grava o `config` {cwd, gate, preparar, falhaDeInfra?, esperaDeInfra?} do projeto
-//   painel.mjs fila-de-merge <PR:sha> [<PR:sha>…] --anotar   (F351) a entrega da dona: confere que a ponta de cada PR é o sha dado, só anota os PRs nos pendentes, grava a pasta do repositório e liga o item → {anotado, pendentes, aviso?}; não roda gate nem mergeia
+//   painel.mjs fila-de-merge <PR:sha> [<PR:sha>…] --anotar   (F351) a entrega da dona: confere que a ponta de cada PR é o sha dado, só anota os PRs nos pendentes, grava a pasta do repositório e liga o item → {anotado, pendentes, aviso?, avisoSemCodigo?, avisoSemEntrega?}; não roda gate nem mergeia
 //   painel.mjs fila-de-merge <PR:sha>… --gate "<cmd>" [--preparar "<cmd>"] --sem-turno   (F351) a rodada que a batida lança destacada: igual à da orquestradora, e grava o desfecho em `desfechos` do estado da fila
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga), lança a fila de merge anotada sem processo e entrega os desfechos dela (F351) → {mensagens, soltos, projetos, marcadoresApagados, filasLancadas?}; --seco não grava nem lança nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
@@ -404,6 +405,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     const ok = Array.isArray(novo.depois) && novo.depois.every((d) => d && typeof d === 'object' && textoNaoVazio(d.texto) && (d.item === undefined || /^F\d+$/.test(String(d.item))));
     if (!ok) throw new Error(`${chave}: depois é uma lista de {texto, item?}, texto não vazio e item no formato F<n>`);
   }
+  if (tem('entrega')) validarEntrega(chave, novo.entrega);
   if (tem('perguntas') && !(Array.isArray(novo.perguntas) && novo.perguntas.every((q) => /^Q\d+$/.test(String(q))))) {
     throw new Error(`${chave}: perguntas é uma lista de Q<n>`);
   }
@@ -489,6 +491,18 @@ function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom, ante
   }
 }
 
+// F404 (ADR 0024): a entrega do item é o que o operador vê do que saiu (pane, `painel entregas`, desfechos.log).
+const CAMPOS_DA_ENTREGA = ['resultado', 'medido', 'naoMedido', 'proximos'];
+function validarEntrega(chave, e) {
+  const forma = `${chave}: entrega é {resultado, medido?, naoMedido?, proximos?}`;
+  if (!e || typeof e !== 'object' || Array.isArray(e)) throw new Error(forma);
+  const estranho = Object.keys(e).find((k) => !CAMPOS_DA_ENTREGA.includes(k));
+  if (estranho) throw new Error(`${forma}; "${estranho}" não é campo dela`);
+  if (!textoNaoVazio(e.resultado)) throw new Error(`${chave}: entrega.resultado é o que mudou para quem usa, texto não vazio`);
+  for (const k of ['medido', 'naoMedido']) if (k in e && typeof e[k] !== 'string') throw new Error(`${chave}: entrega.${k} é texto`);
+  if ('proximos' in e && !(Array.isArray(e.proximos) && e.proximos.every(textoNaoVazio))) throw new Error(`${chave}: entrega.proximos é uma lista de texto não vazio`);
+}
+
 // F370: o item que fecha guarda a dona e o `com` em `donaAoFechar`; reaberto sem dona nova no mesmo update, volta com eles (o
 // item fechado por engano, como o PR só da SPEC sem `maisFatias`, não vira "sem dona" na batida). Só o painel grava o campo.
 function lembrarDona(chave, novo, base, antes, viaCom) {
@@ -530,6 +544,8 @@ function automaticosDaFila(base, novo, antes) {
   if (final) delete base.espera;
   if (final && !eraFinal && !('feitoEm' in novo)) base.feitoEm = new Date().toISOString();
   if (!final && eraFinal) delete base.feitoEm;
+  // F404: a entrega descreve o que fechou; o item reaberto entrega de novo (salvo a que vem no próprio update)
+  if (!final && eraFinal && !('entrega' in novo)) delete base.entrega;
   return { fechou: final && !eraFinal, reabriu: !final && eraFinal };
 }
 
@@ -902,6 +918,38 @@ function medirCusto(d) {
   } catch { return null; }
 }
 
+// F404: `HH:MM` é a hora de São Paulo de hoje (a de ontem, se ainda não chegou); o resto, data ISO.
+function horaDoCorte(v, agora = Date.now()) {
+  const hm = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(v));
+  if (!hm) {
+    const t = /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? Date.parse(v) : NaN;
+    if (Number.isNaN(t)) throw new Error(`entregas: --desde "${v}" não é HH:MM (São Paulo) nem data ISO`);
+    return t;
+  }
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(agora).map((x) => [x.type, x.value]));
+  const desvio = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) - Math.floor(agora / 60_000) * 60_000;
+  const t = Date.UTC(+p.year, +p.month - 1, +p.day, Number(hm[1]), Number(hm[2])) - desvio;
+  return t > agora ? t - 86_400_000 : t;
+}
+
+// `entregas [--desde <HH:MM|ISO>] [--projeto <nome> | --todos]` (F404): os itens feitos desde a hora (padrão: 24 h), com a entrega.
+function comandoEntregas(args) {
+  const todos = flag(args, '--todos', false);
+  const desdeArg = flag(args, '--desde');
+  const projetoArg = flag(args, '--projeto');
+  if (args.length) throw new Error('uso: painel.mjs entregas [--desde <HH:MM|ISO>] [--projeto <nome> | --todos]');
+  const projeto = todos ? null : (projetoArg ? projetoArg.toLowerCase() : projetoDoCwd().projeto);
+  if (!todos && !projeto) throw new Error('entregas: não achei o projeto (rode dentro do repositório, ou passe --projeto <nome> ou --todos)');
+  const desde = desdeArg ? horaDoCorte(desdeArg) : Date.now() - 86_400_000;
+  const itens = [...itensDaFila()]
+    .filter(([, d]) => d?.etapa === 'feito' && Date.parse(d.feitoEm) >= desde)
+    .filter(([, d]) => todos || String(d?.projeto ?? '').toLowerCase() === projeto)
+    .sort(([, a], [, b]) => Date.parse(b.feitoEm) - Date.parse(a.feitoEm))
+    .map(([id, d]) => ({ id, titulo: d.titulo ?? null, projeto: d.projeto ?? null, feitoEm: d.feitoEm, prs: Array.isArray(d.prs) ? d.prs : [], entrega: d.entrega ?? null }));
+  return { desde: new Date(desde).toISOString(), projeto: todos ? null : projeto, itens, semEntrega: itens.filter((i) => !i.entrega).map((i) => i.id) };
+}
+
 // `custo <F> [--seco]` (F348): mede de novo o custo de um item (o `mergear` mede ao fechar). Mede fora da trava, grava dentro.
 function comandoCusto(args) {
   const seco = flag(args, '--seco', false);
@@ -945,7 +993,8 @@ function comandoMergear(args) {
     let data;
     // F348: a dona e o `com` saem do item, mas ficam em `sessoes` (o `painel custo` mede de novo pelas mesmas sessões)
     if (fecha) data = { etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], sessoes: [...new Set(sessoesDoItem(atual.data).filter((s) => LOCAL_ID.test(s)))], agora: `mergeado, ponta ${curto}`, ...(custos.get(F) ? { custo: custos.get(F) } : {}) };
-    else if (fatia) data = { etapa: 'execucao', agora: `fatia mergeada (PR ${pr}, ponta ${curto}); a dona segue com a próxima` };
+    // F404: a entrega de uma fatia sai, para a trava cobrar a do PR que fecha o item
+    else if (fatia) data = { etapa: 'execucao', agora: `fatia mergeada (PR ${pr}, ponta ${curto}); a dona segue com a próxima`, entrega: null };
     else data = { com: [], agora: 'um PR entrou; falta outro' };
     efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data, [VIA_COM]: true }, undefined, new Map()));
     // a fatia volta à dona, que parou ao abrir o PR. F370: o aviso se grava no estado da fila agora, e a batida o entrega;
@@ -956,7 +1005,7 @@ function comandoMergear(args) {
     if (dona && process.env.BATIDA !== 'off') {
       try { gravarAviso(projeto, { tipo: 'fatia', pr, item: F, dona }); avisoGravado = true; } catch (e) { process.stderr.write(`painel.mjs: aviso: não gravei o aviso de fatia de ${F} (${e?.message || e}); avise a dona\n`); }
     }
-    return { item: F, fechado: fecha, ...(fatia ? { fatia, dona } : {}), ...(avisoGravado ? { avisoGravado } : {}), ...(data.custo ? { custo: data.custo.relativo } : {}), agora: data.agora };
+    return { item: F, fechado: fecha, ...(fatia ? { fatia, dona } : {}), ...(avisoGravado ? { avisoGravado } : {}), ...(data.custo ? { custo: data.custo.relativo } : {}), ...(fecha && textoNaoVazio(atual.data.entrega?.resultado) ? { entrega: atual.data.entrega.resultado } : {}), agora: data.agora };
   }));
   return { mergeado: true, pr, sha: c.sha, base: c.base, ...(c.aviso ? { aviso: c.aviso } : {}), itens };
 }
@@ -983,6 +1032,17 @@ function avisoSemCodigo(prs, projeto, cwd) {
     partes.push(`${meus.join(', ')}: o PR ${pr} só muda documentação e o merge fecha o item`);
   }
   return partes.length ? `${partes.join('; ')}: se o item ainda tem código a entregar, grave "maisFatias":true no item antes do merge (painel update fila <F> '{"maisFatias":true}')` : null;
+}
+
+// F404 (ADR 0024): o PR que fecha o item (sem `maisFatias: true`) e o item sem `entrega.resultado`: avisa, sem recusar.
+function avisoSemEntrega(prs, projeto) {
+  if (!projeto) return null;
+  const faltam = [...itensVivos()]
+    .filter(([, d]) => String(d?.projeto ?? '').toLowerCase() === projeto && d.maisFatias !== true && Array.isArray(d.prs) && prs.some((p) => d.prs.includes(p)))
+    .filter(([, d]) => !textoNaoVazio(d.entrega?.resultado))
+    .map(([F]) => F);
+  if (!faltam.length) return null;
+  return `${faltam.join(', ')}: o PR fecha o item e ele está sem a entrega, que é o que o operador vê do que saiu. Grave antes do merge: ${faltam.map((F) => `painel update fila ${F} '{"entrega":{"resultado":"…","medido":"…","naoMedido":"…","proximos":["…"]}}'`).join(' · ')}`;
 }
 
 // F370: avisos à dona gravados no estado da fila do projeto ({tipo, pr, item, dona, em}); a batida os entrega e os tira.
@@ -1173,7 +1233,8 @@ function filaDeMerge(args, { semTurno = false } = {}) {
     });
     const lig = ligarComAviso(branches, { projeto: projetoDoCwd(cwd).projeto, oQue: 'espera a batida lançar o gate' });
     const semCodigo = avisoSemCodigo(pedidos.map((p) => p.pr), projetoDoCwd(cwd).projeto, cwd);
-    return { ...r, ...lig, ...(semCodigo ? { avisoSemCodigo: semCodigo } : {}) };
+    const semEntrega = avisoSemEntrega(pedidos.map((p) => p.pr), projetoDoCwd(cwd).projeto);
+    return { ...r, ...lig, ...(semCodigo ? { avisoSemCodigo: semCodigo } : {}), ...(semEntrega ? { avisoSemEntrega: semEntrega } : {}) };
   }
   const entrada = comTrava(() => {
     const e = lerEstado();
@@ -1807,6 +1868,9 @@ function main(argv) {
     case 'mergear':
       saida = comandoMergear(resto);
       break;
+    case 'entregas':
+      saida = comandoEntregas(resto);
+      break;
     case 'custo':
       saida = comandoCusto(resto);
       break;
@@ -1826,7 +1890,7 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|perguntas|com|soltar|batida|mergear|custo|pode-reiniciar|fila-de-merge|handoffs … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|perguntas|com|soltar|batida|mergear|custo|entregas|pode-reiniciar|fila-de-merge|handoffs … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
   return cmd === 'mergear' && saida.recusado ? 1 : 0;

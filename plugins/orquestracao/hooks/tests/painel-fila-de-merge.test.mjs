@@ -842,6 +842,21 @@ test('F370: --anotar avisa quando o PR só muda documentação e o item fecharia
   } finally { limpar(c); }
 });
 
+// F404 (ADR 0024): o PR que fecha o item sem a entrega gravada: o --anotar avisa (a trava de fim de turno cobra)
+test('F404: --anotar avisa quando o PR fecha o item e ele não tem entrega; com entrega ou maisFatias, não', () => {
+  const c = montar();
+  try {
+    c.item('F2', 24);
+    const r = c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar');
+    assert.equal(r.exit, 0, r.err);
+    assert.match(JSON.parse(r.out).avisoSemEntrega ?? '', /F2.*entrega.*painel update fila F2/, r.out);
+    assert.equal(c.painel('update', 'fila', 'F2', '{"maisFatias":true}').exit, 0);
+    assert.equal(JSON.parse(c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar').out).avisoSemEntrega, undefined, 'maisFatias: true não avisa');
+    assert.equal(c.painel('update', 'fila', 'F2', '{"maisFatias":false,"entrega":{"resultado":"ok"}}').exit, 0);
+    assert.equal(JSON.parse(c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar').out).avisoSemEntrega, undefined, 'com entrega não avisa');
+  } finally { limpar(c); }
+});
+
 // F396: medido no WiControl em 04/11 — o relance da fila órfã sem `--gate` rodou `npm test` (o padrão) no lugar do gate
 // gravado do projeto, e os PRs voltaram vermelhos falsos (ENOENT package.json). A chamada sem `--gate`/`--preparar` usa o
 // par gravado no `config` da fila; o `npm test` fica para a fila que nunca gravou gate.

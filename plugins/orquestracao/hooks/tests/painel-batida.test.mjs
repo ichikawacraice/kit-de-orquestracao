@@ -511,6 +511,17 @@ test('F373: merge com o pós-merge em ordem não acorda a orquestradora; vai ao 
   assert.match(reg, /orquestracao 9\.9\.2/);
   assert.deepEqual(lerFila().desfechos, []);
 });
+test('F404: o item que fechou com entrega leva o resultado ao registro de desfechos', () => {
+  item('F1', { etapa: 'feito', atualizadoEm: iso(T) });
+  const comEntrega = [{ pr: 77, itens: [{ item: 'F1', fechado: true, entrega: 'a home caiu de 984 ms para 270 ms' }, { item: 'F2', fechado: true }] }];
+  fila({ ocupada: null, emVoo: [], pendentes: [], desfechos: [{ em: iso(T - MIN), mergeados: comEntrega, devolvidos: [], posMerge: { versao: { subiu: [] }, estado: { movidas: 0 } } }] });
+  const a = batida(ORQ());
+  assert.equal(a.exit, 0, a.err);
+  const reg = registroDeDesfechos();
+  assert.ok(reg.length > 0, 'o registro foi escrito');
+  assert.match(reg, /F1 fechou: "a home caiu de 984 ms para 270 ms"/);
+  assert.match(reg, /F2 fechou(?!:)/, 'sem entrega, como antes');
+});
 test('F373: o pós-merge pendente segura o desfecho (a dona já é avisada); pendente velho acorda a orquestradora', () => {
   item('F1', { etapa: 'execucao', atualizadoEm: iso(T) });
   const devolvido = { pr: 78, motivo: 'gate vermelho (exit 1)', itens: [{ item: 'F1', dona: lid(1) }] };

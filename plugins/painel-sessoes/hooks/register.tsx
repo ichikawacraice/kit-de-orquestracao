@@ -223,6 +223,15 @@ export function montarIndice(docs: Doc[], temas: Tema[]): ItemDoIndice[] {
 }
 
 /** Todos os itens montados; `antigo` marca o feito ou descartado de mais de 24 h, que a leitura não desenha mas o índice guarda. */
+/** F404: a entrega gravada pela dona (ADR 0024) vira o que o cartão mostra; sem `resultado` com texto, nada. */
+function entregaDoItem(e: unknown): LinhaItem['entrega'] {
+  if (!e || typeof e !== 'object' || Array.isArray(e)) return undefined
+  const r = (e as Record<string, unknown>).resultado
+  if (typeof r !== 'string' || !r.trim()) return undefined
+  const p = (e as Record<string, unknown>).proximos
+  return { resultado: r.trim(), proximos: Array.isArray(p) ? p.filter(x => typeof x === 'string' && x.trim()).length : 0 }
+}
+
 function montarTodos(
   docs: Doc[],
   temas: Tema[],
@@ -327,6 +336,8 @@ function montarTodos(
       paradoDesde: texto(historico[historico.length - 1]?.em) ?? texto(d.data.atualizadoEm),
       feitoEm,
       custo: final && typeof (d.data.custo as Record<string, unknown> | null | undefined)?.relativo === 'number' ? ((d.data.custo as Record<string, unknown>).relativo as number) : undefined,
+      // o descartado não entregou: a entrega gravada no PR que fechou sem merge não aparece
+      entrega: etapaCrua === 'feito' ? entregaDoItem(d.data.entrega) : undefined,
       foraDoContrato: motivos.length > 0 ? motivos.join('; ') : undefined,
     } })
   }
@@ -2984,7 +2995,11 @@ export const register: Register = on => {
             {i.trava && <Text color="error" wrap="wrap">{textoDaTrava(i.trava)}</Text>}
             {i.espera && <Text color={i.espera.motivo === 'operador' ? 'warning' : undefined} dimColor={i.espera.motivo !== 'operador'} wrap="wrap">{i.espera.texto}</Text>}
             {i.situacao === 'fila' && i.resumo && <Text dimColor wrap="wrap">{i.resumo}</Text>}
-            {i.situacao !== 'fila' && i.agora && <Text dimColor wrap="wrap">{i.agora}</Text>}
+            {i.entrega ? (
+              <Text dimColor wrap="wrap">{`Entregue: ${i.entrega.resultado}${i.entrega.proximos > 0 ? ` · próximos: ${i.entrega.proximos}` : ''}`}</Text>
+            ) : (
+              i.situacao !== 'fila' && i.agora && <Text dimColor wrap="wrap">{i.agora}</Text>
+            )}
             {i.foraDoContrato && <Text dimColor wrap="wrap">{`⚠ fora do contrato: ${i.foraDoContrato}`}</Text>}
           </Box>
         </Box>
