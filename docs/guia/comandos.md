@@ -59,6 +59,7 @@ O plugin `orquestracao` põe estes comandos no `PATH` das sessões. Fora de uma 
 | `esperar-fundo [--arquivo <marcador>] [--max <s>]` | Segura o turno até os subagentes da sessão terminarem (ou o marcador existir), até 9 min; sai 3 se o tempo passou | A dona, esperando o validador sem terminar o turno |
 | `subir-versao` | Sobe a versão dos plugins mudados num commit só, depois de um lote de merges. Recusa com a árvore suja | Quem mantém o kit |
 | `atualizar-plugins [--seco] [--json]` | Atualiza o marketplace e os plugins do kit instalados na conta. Depois, reinicie o app | Você, ou o botão `Atualizar` do painel |
+| `limpar-disco [--aplicar] [--passos worktrees,builds,logs]` | Libera disco em todo repositório que o app conhece: remove a worktree parada que passa em todos os critérios, apaga o `node_modules`/`.next`/`dist` da worktree parada há mais de 7 dias (a worktree fica) e corta os logs do kit acima de 1 MB. Sem `--aplicar` só relata; `--plist` imprime o agendamento do launchd | Você, ou o launchd que você instalar |
 
 O gate tem os seus, em `scripts/kit/` do projeto: `npm test` é o gate completo (com `--trocar-test`) e `node scripts/kit/com-fichas.mjs -- <comando>` roda um comando de teste pelo teto de núcleos da máquina. Referência: [`gate/README.md`](../../gate/README.md).
 
