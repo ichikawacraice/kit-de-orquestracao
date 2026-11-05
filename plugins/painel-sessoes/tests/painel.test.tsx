@@ -3330,7 +3330,7 @@ test('F425: sem deduzido, velho ou fora do formato, vale o declarado', () => {
   const doc = docF('F1', { etapa: 'execucao', prs: [9] })
   const presente = montaDD([doc], DD({ F1: { etapa: 'merge', prs: [170], parado: false, minParado: 1, fontes: { etapa: 'gh', prs: 'gh' } } }))[0]!
   expect(presente.etapa, 'o deduzido fresco seria detectado').toBe('merge')
-  for (const dd of [null, DD({ F1: { etapa: 'merge', prs: [170] } }, 26), { em: 'x', itens: {} }, { itens: { F1: { etapa: 'merge' } } }, 'lixo']) {
+  for (const dd of [null, DD({ F1: { etapa: 'merge', prs: [170] } }, 26), DD({ F1: { etapa: 'merge', prs: [170] } }, -2), { em: 'x', itens: {} }, { itens: { F1: { etapa: 'merge' } } }, 'lixo']) {
     const [i] = montaDD([doc], dd)
     expect(i!.etapa).toBe('execucao')
     expect(i!.prs).toEqual([9])

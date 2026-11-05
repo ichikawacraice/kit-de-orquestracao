@@ -201,7 +201,7 @@ export function deduzidosValidos(v: unknown, agora: number): Map<string, Deduzid
   if (!v || typeof v !== 'object' || Array.isArray(v)) return vazio
   const { em, itens } = v as { em?: unknown; itens?: unknown }
   const quando = typeof em === 'string' ? Date.parse(em) : NaN
-  if (Number.isNaN(quando) || agora - quando > DEDUZIDO_VALE_MS || !itens || typeof itens !== 'object' || Array.isArray(itens)) return vazio
+  if (Number.isNaN(quando) || agora - quando > DEDUZIDO_VALE_MS || quando > agora + 60_000 || !itens || typeof itens !== 'object' || Array.isArray(itens)) return vazio
   const saida = new Map<string, DeduzidoDaBatida>()
   for (const [F, x] of Object.entries(itens as Record<string, unknown>)) if (/^F\d+$/.test(F) && x && typeof x === 'object' && !Array.isArray(x)) saida.set(F, { ...(x as DeduzidoDaBatida), em: em as string })
 
