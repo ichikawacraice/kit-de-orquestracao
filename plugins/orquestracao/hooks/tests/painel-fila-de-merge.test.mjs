@@ -901,7 +901,7 @@ test('F396: --seco sem --gate também usa o gate gravado', () => {
 // F398: gate vermelho cuja saída casa com um padrão de falha de infraestrutura (container do Docker/Supabase) roda de novo,
 // uma vez, depois da espera, antes da repetição por instável e da bisseção; persistindo, é erro da rodada, não devolução.
 // O gate conta as próprias rodadas num arquivo e falha com a mensagem dada nas rodadas listadas.
-const gateContado = (c, { infra = [], vermelho = [], msg = 'Error running container: exit 1', resto = 'true' }) => {
+const gateContado = (c, { infra = [], vermelho = [], msg = 'db container is not ready: unhealthy', resto = 'true' }) => {
   const conta = join(c.raiz, 'conta');
   const casos = [...infra.map((n) => `${n}) echo "${msg}"; exit 1;;`), ...vermelho.map((n) => `${n}) echo "assert falhou"; exit 1;;`)].join(' ');
   return { conta, gate: `n=$(( $(cat ${conta} 2>/dev/null || echo 0) + 1 )); echo $n > ${conta}; case $n in ${casos} *) ${resto};; esac` };
@@ -922,7 +922,7 @@ test('F398: falha de container no gate do lote roda de novo uma vez e mergeia, s
     assert.deepEqual(s.devolvidos, []);
     assert.equal(s.suspeitaDeInstavel, undefined, 'a nova tentativa por infraestrutura não é a repetição por instável');
     assert.equal(s.infraRepetida?.length, 1, JSON.stringify(s));
-    assert.match(s.infraRepetida[0], /error running container/i);
+    assert.match(s.infraRepetida[0], /container is not ready/i);
   } finally { limpar(c); }
 });
 
@@ -948,7 +948,10 @@ test('F398: vermelho comum (sem o padrão) segue direto para a repetição e a b
   const c = montar();
   try {
     c.item('F4', 24); c.item('F3', 23);
-    const g = gateContado(c, { resto: 'echo "assert falhou"; test ! -f c.txt' });
+    // o teste pgTAP vermelho do `supabase test db` também diz "error running container": não é falha de infraestrutura; e o
+    // "container is not ready" do primeiro `db reset`, que o gate do WiControl já repete sozinho, fica no começo do log
+    const corpo = Array.from({ length: 15 }, (_, i) => `echo "ok ${i + 1} - teste"`).join('; ');
+    const g = gateContado(c, { resto: `echo "supabase_storage container is not ready: unhealthy"; echo "Resetting local database..."; if [ -f c.txt ]; then ${corpo}; echo "Result: FAIL"; echo "error running container: exit 1"; exit 1; fi` });
     const r = c.painel('fila-de-merge', '24', '23', '--gate', g.gate, '--espera-de-infra', '0');
     assert.equal(r.exit, 0, r.err + r.out);
     const s = JSON.parse(r.out);
@@ -989,7 +992,7 @@ test('F398: os padrões e a espera ficam no config da fila; a rodada sem a flag 
     assert.deepEqual([e.config.falhaDeInfra, e.config.esperaDeInfra], [['banco de testes caiu', 'rede sumiu'], 0]);
     // a rodada seguinte, sem as flags: o gravado vale e fica; o padrão de fábrica saiu (o dado o substitui)
     rmSync(g.conta, { force: true });
-    g = gateContado(c, { infra: [1], msg: 'Error running container' });
+    g = gateContado(c, { infra: [1], msg: 'db container is not ready' });
     r = c.painel('fila-de-merge', `24:${c.shas[24]}`, '--gate', g.gate);
     assert.equal(r.exit, 0, r.err + r.out);
     let s = JSON.parse(r.out);
@@ -1011,12 +1014,13 @@ test('F398: os padrões e a espera ficam no config da fila; a rodada sem a flag 
 
 test('F398: sem config, valem os padrões de fábrica e a espera de 30 s (lida do config, não esperada no teste)', async () => {
   const { padroesDeInfra, ESPERA_DE_INFRA_S, casaInfra } = await import(join(SCRIPTS, 'fila-de-merge.mjs'));
-  assert.deepEqual(padroesDeInfra(undefined), ['error running container', 'container is not ready']);
+  assert.deepEqual(padroesDeInfra(undefined), ['container is not ready']);
   assert.deepEqual(padroesDeInfra([]), []);
   assert.equal(ESPERA_DE_INFRA_S, 30);
-  assert.equal(casaInfra('...\nERROR RUNNING CONTAINER: failed\n', padroesDeInfra(undefined)), 'error running container');
+  assert.equal(casaInfra('...\nSUPABASE_DB CONTAINER IS NOT READY: unhealthy\n', padroesDeInfra(undefined)), 'container is not ready');
   assert.equal(casaInfra('assert falhou\n', padroesDeInfra(undefined)), null);
-  assert.equal(casaInfra('error running container', []), null);
+  assert.equal(casaInfra('Result: FAIL\nerror running container: exit 1\n', padroesDeInfra(undefined)), null, 'o pgTAP vermelho não é infraestrutura');
+  assert.equal(casaInfra('container is not ready', []), null);
 });
 
 test('F398: --anotar recusa as flags de infraestrutura (o config é da rodada da orquestradora)', () => {

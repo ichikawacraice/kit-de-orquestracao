@@ -15,15 +15,20 @@ import { join } from 'node:path';
 const LIMITE_GIT_MS = 120_000;
 const LIMITE_GATE_MS = Number(process.env.KIT_FILA_GATE_TIMEOUT_MS) || 60 * 60_000;
 export const GATE_PADRAO = 'npm test';
-// F398: os padrões de fábrica da falha de infraestrutura (Docker/Supabase: o `supabase db reset` do gate do WiControl) e a
-// espera antes da nova tentativa. O `config` da fila troca os dois; a lista vazia desliga.
-const PADROES_DE_INFRA = ['error running container', 'container is not ready'];
+// F398: os padrões de fábrica da falha de infraestrutura (Docker/Supabase: o container que não ficou saudável) e a espera antes
+// da nova tentativa. O `config` da fila troca os dois; a lista vazia desliga. `error running container` fica de fora: o
+// `supabase test db` imprime `error running container: exit N` também quando um teste pgTAP falha de verdade, e com ele na
+// fábrica o PR que quebra teste do banco travaria a fila (erro da rodada) em vez de voltar à dona pela bisseção.
+const PADROES_DE_INFRA = ['container is not ready'];
 export const ESPERA_DE_INFRA_S = 30;
 export const padroesDeInfra = (gravado) => (Array.isArray(gravado) ? gravado.filter((p) => typeof p === 'string' && p.trim()) : [...PADROES_DE_INFRA]);
 // o padrão que casa (sem diferença de caixa) com o texto, ou null
 export const casaInfra = (texto, padroes) => padroes.find((p) => String(texto).toLowerCase().includes(p.toLowerCase())) ?? null;
-const FIM_DO_LOG = 256 * 1024;
-// o fim do log (o erro do container fica no fim; um log de gate longo não entra inteiro na memória)
+const FIM_DO_LOG = 64 * 1024;
+export const LINHAS_DE_INFRA = 10;
+// as últimas linhas não vazias do log: o erro que derrubou o gate fica no fim. O log inteiro não serve: o gate do WiControl
+// repete o `supabase db reset` sozinho, e o "container is not ready" do primeiro reset, que se recuperou, ficaria no começo do
+// log de um teste pgTAP vermelho de verdade, travando a fila em vez de devolver o PR pela bisseção.
 function fimDoLog(log) {
   let fd;
   try {
@@ -32,7 +37,7 @@ function fimDoLog(log) {
     const n = Math.min(tam, FIM_DO_LOG);
     const buf = Buffer.alloc(n);
     readSync(fd, buf, 0, n, tam - n);
-    return buf.toString('utf8');
+    return buf.toString('utf8').split('\n').filter((l) => l.trim()).slice(-LINHAS_DE_INFRA).join('\n');
   } catch { return ''; } finally { if (fd !== undefined) closeSync(fd); }
 }
 const dormir = (ms) => { if (ms > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); };
@@ -117,7 +122,7 @@ export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null
     dormir(esperaDeInfra * 1000);
     const nova = umaVez(`${nome}-infra`);
     const persiste = nova.ok ? null : casaInfra(fimDoLog(nova.log), falhaDeInfra);
-    if (persiste) throw new Error(`falha de infraestrutura: ${passo} (${nome}) saiu com "${persiste}" também na nova tentativa, ${esperaDeInfra} s depois (exit ${nova.status}); veja ${nova.log}`);
+    if (persiste) throw new Error(`falha de infraestrutura: ${passo} (${nome}) saiu com "${persiste}" também na nova tentativa, ${esperaDeInfra} s depois (exit ${nova.status}); veja ${nova.log}${infraRepetida.length ? ` (antes, nesta rodada, ${infraRepetida.length} nova(s) tentativa(s) por infraestrutura; logs em ${pasta})` : ''}`);
     infraRepetida.push(`${passo} (${nome}) saiu com "${padrao}" (exit ${r.status}) e ${nova.ok ? 'passou' : `ficou vermelho sem o padrão (exit ${nova.status})`} na nova tentativa; logs ${r.log} e ${nova.log}`);
     return nova;
   };
