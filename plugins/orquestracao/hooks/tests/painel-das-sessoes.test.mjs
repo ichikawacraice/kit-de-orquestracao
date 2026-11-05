@@ -37,9 +37,9 @@ function transcript(textoDoTurno, comandos = [], { origem = { origin: { kind: 'p
   writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
   return f;
 }
-function rodar(tp, envExtra = {}) {
+function rodar(tp, envExtra = {}, entradaExtra = {}) {
   const out = execFileSync('node', [join(HOOKS, 'painel-das-sessoes.mjs')], {
-    input: JSON.stringify({ session_id: SID, transcript_path: tp, cwd: dir('repo'), stop_hook_active: false }),
+    input: JSON.stringify({ session_id: SID, transcript_path: tp, cwd: dir('repo'), stop_hook_active: false, ...entradaExtra }),
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
     env: { ...process.env, HOME: dir('home'), PAINEL_DIR: dir('painel'), POOL_APP_SESSOES_DIR: dir('app'), HOOKS_CREWAI_BASE: dir('home', '.claude', 'orquestracao'), ...envExtra },
   });
@@ -152,6 +152,188 @@ caso('F27-3h: sessão sem item (ou com item feito / de outro dono): a mensagem d
   const r = rodar(transcript('F7 para você', ['gh pr create --fill']));
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
   ok(r.reason.includes('painel update sessoes <sessionId>') && !r.reason.includes('update fila'), `mensagem: ${r.reason}`);
+});
+
+// ---- F400: decisão marcada "assumida, a confirmar" (ou "Q-ID não reservado") na mensagem final sem a pergunta assumida no painel ----
+// O turno: a mensagem do operador, os comandos (cada um com o tool_result) e, por último, o texto final do assistente.
+function turnoComFinal(final, comandos = [], { antes = '', abertura = 'F9 para você' } = {}) {
+  const f = dir('t.jsonl');
+  const linhas = [{ type: 'user', timestamp: '2026-10-24T12:00:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: abertura } }];
+  if (antes) linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: antes }] } });
+  for (const c of comandos) {
+    linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Bash', input: { command: c } }] } });
+    linhas.push({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: 'ok' }] } });
+  }
+  linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: final }] } });
+  writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
+  return f;
+}
+const assumidaNoPainel = (id, sessaoId, atualizadoEm = '2026-10-24T11:00:00.000Z', estado = 'assumida') =>
+  writeFileSync(dir('painel', 'perguntas', `${id}.json`), JSON.stringify({ id, version: 1, data: { estado, sessaoId, atualizadoEm } }));
+// A forma real do F385 (num projeto, 05/11): marca no masculino, em itálico, e o "(Q-ID não reservado)" na linha da decisão.
+const FINAL_REAL = 'PR 1662 na fila.\n\nO que falta você confirmar:\n- **(Q-ID não reservado) Só lote encerrado?** Recomendo manter. *assumido, a confirmar*';
+const GRAVA_ASSUMIDA_REAL = `Q2=$(proxima-pergunta); S=${LOCAL}\npainel set perguntas Q986 "$(cat <<EOF\n{"id":"Q986","sessaoId":"$S","item":"F385","estado":"assumida","titulo":"x","caso":"y","recomendacao":"z"}\nEOF\n)"`;
+
+caso('F400-a: mensagem final sem a marca, sem gravar nada: passa (e a mesma com a marca bloqueia)', () => {
+  ok(rodar(turnoComFinal('PR 12 na fila. Testes verdes.')) === null, 'sem a marca devia passar');
+  ok(rodar(turnoComFinal('Usei o nome curto (*assumida, a confirmar*).'))?.decision === 'block', 'precondição: a marca seria detectada');
+});
+caso('F400-b: a forma real de um projeto ("assumido", "Q-ID não reservado") sem gravar: bloqueia e diz o comando', () => {
+  const r = rodar(turnoComFinal(FINAL_REAL));
+  ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
+  ok(r.reason.includes('proxima-pergunta') && r.reason.includes('painel set perguntas') && r.reason.includes('"estado":"assumida"'), `o motivo devia dar o comando: ${r.reason}`);
+  ok(r.reason.includes(LOCAL), `o comando devia trazer o sessaoId desta sessão: ${r.reason}`);
+});
+caso('F400-c: só "Q-ID não reservado", sem a palavra assumida: bloqueia', () => {
+  const r = rodar(turnoComFinal('- (Q-ID não reservado) troquei o nome da coluna.'));
+  ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
+});
+caso('F400-d: o turno gravou a pergunta assumida (o arquivo no painel, com atualizadoEm no turno): passa', () => {
+  assumidaNoPainel('Q986', LOCAL, '2026-10-24T12:01:00.000Z');
+  ok(rodar(turnoComFinal(FINAL_REAL, [GRAVA_ASSUMIDA_REAL])) === null, 'heredoc com o arquivo gravado devia passar');
+  assumidaNoPainel('Q7', LOCAL, '2026-10-24T12:02:00.000Z');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*, Q7).')) === null, 'citando o Q-ID gravado devia passar');
+});
+caso('F400-d2: o comando de gravar rodou mas o arquivo não existe (comando falhou): bloqueia', () => {
+  ok(rodar(turnoComFinal(FINAL_REAL, [GRAVA_ASSUMIDA_REAL]))?.decision === 'block', 'sem arquivo, o comando não basta');
+});
+caso('F400-d3: sem registro da sessão (local desconhecido), o comando de gravar é o que vale', () => {
+  rmSync(dir('app', 'conta', `${LOCAL}.json`));
+  const escapado = `painel set perguntas Q7 "{\\"sessaoId\\":\\"x\\",\\"estado\\":\\"assumida\\"}"`;
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', [escapado])) === null, 'aspas escapadas deviam passar');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'))?.decision === 'block', 'precondição: sem o comando bloqueia');
+});
+caso('F400-e: gravar pergunta aberta (não assumida) ou outra coisa no painel não basta', () => {
+  const aberta = `painel set perguntas Q8 '{"sessaoId":"${LOCAL}","estado":"aberta"}'`;
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', [aberta]))?.decision === 'block', 'pergunta aberta não é a assumida');
+  const fila = `painel update fila F9 '{"agora":"x"}'`;
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', [fila]))?.decision === 'block', 'gravar o item não é gravar a assumida');
+});
+caso('F400-f: a mensagem que só cita a regra, entre crases ou aspas: passa', () => {
+  for (const t of ['A regra manda marcar `assumida, a confirmar` e gravar a pergunta.', 'O protocolo pede "assumida, a confirmar" no PR.', 'Ela pediu para tirar o “assumido, a confirmar”.', '```\n- (Q-ID não reservado) exemplo\n```']) {
+    const r = rodar(turnoComFinal(t));
+    ok(r === null, `citação devia passar: ${t} → ${JSON.stringify(r)}`);
+  }
+});
+caso('F400-g: a assumida gravada num turno anterior, citada pelo Q-ID na linha da marca: passa; Q-ID de outra sessão não', () => {
+  assumidaNoPainel('Q50', LOCAL);
+  ok(rodar(turnoComFinal('- Nome curto (Q50, *assumida, a confirmar*).')) === null, 'Q50 é assumida desta sessão');
+  assumidaNoPainel('Q51', LOCAL, '2026-10-24T11:00:00.000Z', 'respondida');
+  ok(rodar(turnoComFinal('- Nome curto (Q51, *assumida, a confirmar*).')) === null, 'Q51 desta sessão já confirmada também conta');
+  assumidaNoPainel('Q60', 'local_OUTRA');
+  ok(rodar(turnoComFinal('- Nome curto (Q60, *assumida, a confirmar*).'))?.decision === 'block', 'Q60 é de outra sessão');
+  ok(rodar(turnoComFinal('- Nome curto (Q50, *assumida, a confirmar*).\n- Coluna nova (*assumida, a confirmar*).'))?.decision === 'block', 'a segunda linha não tem Q-ID');
+});
+caso('F400-h: assumida desta sessão gravada no turno por outro caminho (atualizadoEm depois do início do turno): passa; antes do turno, não', () => {
+  assumidaNoPainel('Q70', LOCAL, '2026-10-24T11:59:00.000Z');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'))?.decision === 'block', 'gravada antes do turno e não citada: bloqueia');
+  assumidaNoPainel('Q71', LOCAL, '2026-10-24T12:00:30.000Z');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).')) === null, 'gravada no turno: passa');
+});
+caso('F400-i: a marca numa mensagem do meio do turno, não na final: passa', () => {
+  ok(rodar(turnoComFinal('PR na fila.', ['ls'], { antes: 'Vou usar o nome curto (*assumida, a confirmar*).' })) === null, 'só a mensagem final conta');
+});
+caso('F400-j: junto com outro motivo (abriu PR sem gravar), um bloqueio só com os dois', () => {
+  const r = rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', ['gh pr create --fill']));
+  ok(r?.decision === 'block' && r.reason.includes('abriu PR') && r.reason.includes('proxima-pergunta'), `esperava os dois motivos: ${JSON.stringify(r)}`);
+});
+caso('F400-l: o Q-ID na linha seguinte do mesmo item, ou o cabeçalho marcado com a lista abaixo: passa', () => {
+  assumidaNoPainel('Q50', LOCAL); assumidaNoPainel('Q51', LOCAL);
+  ok(rodar(turnoComFinal('- Nome curto, *assumida, a confirmar*.\n  No painel: Q50.')) === null, 'Q-ID na continuação do item');
+  ok(rodar(turnoComFinal('Decisões *assumidas, a confirmar*:\n\n- Nome curto (Q50).\n- Coluna nova (Q51).')) === null, 'cabeçalho com itens citando Q-ID');
+  ok(rodar(turnoComFinal('Decisões *assumidas, a confirmar*:\n- Nome curto (Q50).\n- Coluna nova.'))?.decision === 'block', 'item sem Q-ID sob o cabeçalho bloqueia');
+});
+caso('F400-m: uma assumida gravada no turno não cobre duas decisões soltas, nem a "Q-ID não reservado"', () => {
+  assumidaNoPainel('Q80', LOCAL, '2026-10-24T12:01:00.000Z');
+  ok(rodar(turnoComFinal('- Nome curto (*assumida, a confirmar*).\n- Coluna nova (*assumida, a confirmar*).'))?.decision === 'block', 'duas soltas, uma gravada');
+  ok(rodar(turnoComFinal('- Nome curto (Q80, *assumida, a confirmar*).\n- Coluna nova (Q-ID não reservado).'))?.decision === 'block', 'Q80 já citada não cobre a outra');
+  assumidaNoPainel('Q81', LOCAL, '2026-10-24T12:01:30.000Z');
+  ok(rodar(turnoComFinal('- Nome curto (*assumida, a confirmar*).\n- Coluna nova (*assumida, a confirmar*).')) === null, 'duas soltas, duas gravadas');
+});
+caso('F400-n: depois da recusa de outra trava (stop_hook_active), cobra uma vez por turno', () => {
+  const tp = turnoComFinal('Nome curto (*assumida, a confirmar*).');
+  ok(rodar(tp, {}, { stop_hook_active: true })?.decision === 'block', 'primeira cobrança no turno, mesmo com stop_hook_active');
+  ok(rodar(tp, {}, { stop_hook_active: true }) === null, 'segunda vez no mesmo turno passa');
+});
+caso('F400-o: o Stop de subagente (agent_id) fica de fora; last_assistant_message é a mensagem final', () => {
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'), {}, { agent_id: 'a1' }) === null, 'subagente não é cobrado');
+  ok(rodar(turnoComFinal('PR na fila.'), {}, { last_assistant_message: 'Nome curto (*assumida, a confirmar*).' })?.decision === 'block', 'lê last_assistant_message');
+  ok(rodar(turnoComFinal('Nome curto, _assumida, a confirmar_.'))?.decision === 'block', 'marca em itálico com sublinhado');
+});
+caso('F400-p: fora de lista, a unidade é a linha marcada: tabela e parágrafo de duas decisões não se cobrem', () => {
+  assumidaNoPainel('Q50', LOCAL);
+  ok(rodar(turnoComFinal('| Nome curto | *assumida, a confirmar* | Q50 |\n| Coluna nova | *assumida, a confirmar* | — |'))?.decision === 'block', 'linha de tabela sem Q-ID');
+  ok(rodar(turnoComFinal('Nome curto (Q50, *assumida, a confirmar*).\nColuna nova (*assumida, a confirmar*).'))?.decision === 'block', 'parágrafo: a segunda linha marcada é outra decisão');
+  ok(rodar(turnoComFinal('| Nome curto | *assumida, a confirmar* | Q50 |')) === null, 'precondição: a linha de tabela com Q-ID passa');
+  assumidaNoPainel('Q80', LOCAL, '2026-10-24T12:01:00.000Z');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).\nColuna nova (*assumida, a confirmar*).'))?.decision === 'block', 'duas no parágrafo, uma gravada');
+});
+caso('F400-q: cabeçalho com # ou em negrito, e item pai terminado em ":" com subitens: passam a marca', () => {
+  assumidaNoPainel('Q50', LOCAL); assumidaNoPainel('Q51', LOCAL);
+  for (const cab of ['## Decisões assumidas, a confirmar', '**Decisões assumidas, a confirmar**', 'Decisões *assumidas, a confirmar*:']) {
+    ok(rodar(turnoComFinal(`${cab}\n- Nome curto (Q50).\n- Coluna nova (Q51).`)) === null, `cabeçalho ${cab}`);
+    ok(rodar(turnoComFinal(`${cab}\n- Nome curto (Q50).\n- Coluna nova.`))?.decision === 'block', `item sem Q-ID sob ${cab}`);
+  }
+  ok(rodar(turnoComFinal('- Nome curto, *assumida, a confirmar*:\n  - motivo (Q50)')) === null, 'subitem cita o Q-ID');
+  ok(rodar(turnoComFinal('- Nome curto, *assumida, a confirmar*:\n  - motivo'))?.decision === 'block', 'subitem sem Q-ID');
+  ok(rodar(turnoComFinal('**Nome curto, assumida, a confirmar**'))?.decision === 'block', 'linha em negrito sem lista abaixo é decisão');
+});
+caso('F400-r: sem como gravar a marca do turno, não recusa de novo depois de uma recusa (sem laço)', () => {
+  const tp = turnoComFinal('Nome curto (*assumida, a confirmar*).');
+  const sem = { HOOKS_CREWAI_BASE: dir('nao', 'existe') };
+  writeFileSync(dir('nao'), 'arquivo, não pasta');
+  ok(rodar(tp, sem)?.decision === 'block', 'precondição: a primeira recusa acontece');
+  ok(rodar(tp, sem, { stop_hook_active: true }) === null, 'com stop_hook_active e sem estado gravável, passa');
+});
+caso('F400-s: a trava antiga não recusa duas vezes (stop_hook_active); last_assistant_message vazio cai no transcript', () => {
+  ok(rodar(turnoComFinal('PR na fila.', ['gh pr create --fill']), {}, { stop_hook_active: true }) === null, 'trava antiga presa a stop_hook_active');
+  ok(rodar(turnoComFinal('PR na fila.', ['gh pr create --fill']))?.decision === 'block', 'precondição: sem stop_hook_active recusa');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'), {}, { last_assistant_message: '' })?.decision === 'block', 'string vazia não esconde a marca');
+});
+const contador = (n) => writeFileSync(dir('home', '.claude', 'orquestracao', 'contador-de-perguntas'), `${n}\n`);
+caso('F400-t: a mensagem final cita um Q-ID recente (reservado pelo contador) que não existe no painel: bloqueia e manda gravar', () => {
+  contador(990);
+  const final = 'PR 9 na fila.\n\nQ984 — Nome curto ou longo? Caso: … Recomendo o curto.';
+  const r = rodar(turnoComFinal(final));
+  ok(r?.decision === 'block' && r.reason.includes('Q984') && r.reason.includes('painel set perguntas Q984'), `esperava cobrar Q984: ${JSON.stringify(r)}`);
+  ok(rodar(turnoComFinal('Decidido em `Q985`, ver painel.'))?.decision === 'block', 'entre crases também é citação de Q-ID');
+  pergunta('Q984', 'local_OUTRA'); pergunta('Q985', LOCAL);
+  ok(rodar(turnoComFinal(final)) === null, 'Q984 existe (de qualquer sessão): passa');
+  ok(rodar(turnoComFinal('Decidido em `Q985`, ver painel.')) === null, 'Q985 existe: passa');
+});
+caso('F400-u: Q-ID fora da faixa recente do contador, já citado na abertura do turno ou só em bloco de código: não cobra', () => {
+  contador(990);
+  ok(rodar(turnoComFinal('Q986 — Nome curto? Recomendo o curto.'))?.decision === 'block', 'precondição: Q986 recente sem arquivo bloqueia');
+  ok(rodar(turnoComFinal('A campanha entra no Q4 e o teste usa Q12.')) === null, 'Q4 trimestre e Q12 de exemplo: antigos demais');
+  ok(rodar(turnoComFinal('Ver Q2026 do roadmap.')) === null, 'acima do contador não foi reservado');
+  ok(rodar(turnoComFinal('Ok, sigo o que a Q986 decidiu.', [], { abertura: 'A Q986 já decidiu isso.' })) === null, 'repetido da abertura do turno');
+  ok(rodar(turnoComFinal('```\nQ=$(proxima-pergunta) # ex.: Q986\n```\n~~~\nQ987\n~~~\nPR na fila.')) === null, 'só em bloco de código');
+  rmSync(dir('home', '.claude', 'orquestracao', 'contador-de-perguntas'));
+  ok(rodar(turnoComFinal('Q986 — Nome curto? Recomendo o curto.')) === null, 'sem contador não cobra');
+});
+caso('F400-v: só a chamada de `proxima-pergunta` (com ou sem .sh) conta como tirar ID; citar o nome em grep, cat ou commit não', () => {
+  const r = rodar(turnoComFinal('PR na fila.', ['Q=$(proxima-pergunta)']));
+  ok(r?.decision === 'block' && r.reason.includes('tirou ID de pergunta'), `esperava o motivo: ${JSON.stringify(r)}`);
+  ok(rodar(turnoComFinal('PR na fila.', ['bash ~/.claude/plugins/x/bin/proxima-pergunta.sh']))?.decision === 'block', 'chamada pelo caminho com bash');
+  ok(rodar(turnoComFinal('PR na fila.', ['cd /tmp && proxima-pergunta']))?.decision === 'block', 'chamada depois de &&');
+  for (const c of ['grep -rn proxima-pergunta plugins/', 'cat plugins/orquestracao/bin/proxima-pergunta', 'git commit -m "fix: o wrapper proxima-pergunta"', 'which proxima-pergunta']) {
+    ok(rodar(turnoComFinal('PR na fila.', [c])) === null, `só cita o nome: ${c}`);
+  }
+});
+caso('F400-w: a faixa do contador tem borda exata, e a cobrança do Q-ID não gasta a da decisão assumida', () => {
+  contador(990);
+  ok(rodar(turnoComFinal('Ver Q941.'))?.decision === 'block', 'Q941 está na faixa (990−50 < 941)');
+  ok(rodar(turnoComFinal('Ver Q940.')) === null, 'Q940 fica de fora');
+  const tp = turnoComFinal('Reservei Q986.');
+  ok(rodar(tp)?.decision === 'block', 'primeira recusa: Q-ID sem pergunta');
+  ok(rodar(tp, {}, { stop_hook_active: true }) === null, 'o mesmo Q-ID de novo no turno passa (sem laço)');
+  pergunta('Q986', LOCAL);
+  ok(rodar(tp, {}, { stop_hook_active: true, last_assistant_message: 'Nome curto (*assumida, a confirmar*).' })?.decision === 'block', 'a decisão assumida ainda é cobrada no mesmo turno');
+  ok(rodar(tp, {}, { stop_hook_active: true, last_assistant_message: 'Nome curto (*assumida, a confirmar*).' }) === null, 'e só uma vez');
+});
+caso('F400-k: a orquestradora (marcador próprio em ativas/) fica de fora', () => {
+  writeFileSync(dir('home', '.claude', 'orquestracao', 'ativas', SID), 'x\n');
+  ok(rodar(turnoComFinal('Q50 e Q51 seguem *assumidas, a confirmar*.')) === null, 'a orquestradora tem o hook dela');
 });
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

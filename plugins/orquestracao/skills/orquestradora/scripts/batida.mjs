@@ -254,6 +254,7 @@ export function resumoDoDesfecho(df) {
   if (df.mergeados?.length) partes.push(`mergeados ${df.mergeados.map((m) => `#${m.pr}${itensDe(m) ? ` (${itensDe(m)})` : ''}`).join(', ')}`);
   if (df.devolvidos?.length) partes.push(`devolvidos ${df.devolvidos.map((d) => `#${d.pr}${(d.itens ?? []).length ? ` (${d.itens.map((i) => i.item).join(', ')}, dona avisada)` : ''}: ${String(d.motivo ?? '').slice(0, 160)}`).join('; ')}`);
   if (df.suspeitaDeInstavel) partes.push(`suspeita de teste instável: ${df.suspeitaDeInstavel}`);
+  if (df.infraRepetida?.length) partes.push(`gate repetido por falha de infraestrutura: ${[].concat(df.infraRepetida).join('; ')}`);
   for (const e of [df.erro, ...(df.erros ?? [])].filter(Boolean)) partes.push(`erro: ${e}`);
   const pm = df.posMerge;
   if (pm?.versao?.subiu?.length) partes.push(`versão: ${pm.versao.subiu.map((x) => `${x.nome} ${x.depois}`).join(', ')}${pm.versao.empurrou ? ' (empurrada)' : ''}`);

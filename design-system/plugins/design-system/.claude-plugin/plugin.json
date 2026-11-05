@@ -1,6 +1,6 @@
 {
   "name": "design-system",
-  "version": "0.1.26",
+  "version": "0.1.28",
   "description": "Design system para apps React: a base (direção de design, anatomia, convenções), o processo de decisão de tela (designer → crítico com nota → guarda que cobra a crítica) e as skills de projeto novo, auditoria, padronização, peça do kit, atualização e migração. A marca vem de um plugin de tema (tema-<id>).",
   "author": {
     "name": "Wicomm"

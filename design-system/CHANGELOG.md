@@ -4,6 +4,41 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.24.0 · 05/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **A espera tem a forma do que vai chegar** (ARQ-01): a regra que era só da Mesa com abas vale para toda tela com mais de uma vista. A lista corrida espera em linhas (`EsperaDaLista`), a lista agrupada em grupos (`EsperaDosGrupos`, nova, na `linha-do-grupo`) e o quadro em colunas (`EsperaDoQuadro`); a troca de vista troca a espera junto. A `EsperaDosGrupos` usa o degrau, o ar, o recuo e o vão da `LinhaDoGrupo` (o `0` é grupo fechado), e a `alturaDaLinha` é a da linha com o conteúdo real, para a lista não pular quando chega.
+- **A lista agrupada por período** (PECA-01): uma `LinhaDoGrupo` por período, na ordem do tempo, com a quantidade com unidade (*3 entregas*); o período vazio fica no lugar e diz a causa, e os vazios em sequência viram um grupo só.
+- **A `LinhaDoGrupo` conta sem fração:** a `contagem` aceita a quantidade com a unidade (`{ total, unidade: { um, varios } }`), sem trilha (com `progresso`, guarda o lugar dela), o número numa caixa fixa para a coluna não dançar. O grupo vazio diz a causa (`semLinhas`) também sem `contagem`; a causa longa trunca, com a frase inteira no `title`, e não passa por cima do nome.
+- **O `IntervaloDeCampos`** (peça nova): o intervalo de dois valores (de, até), num `fieldset` com a legenda e um campo por linha, as pontas amarradas no seletor e o erro do lado abaixo do campo; cabe no popover.
+- **O `Label` ganha a voz `coluna`**, para o rótulo que se repete (o *De* e o *Até* do intervalo, no instrumento).
+- **O `Popover` ganha a `largura`** (`padrao`, `larga`, `conteudo`) e nunca passa da tela; o conteúdo mais largo que ele é cortado, sem rolagem lateral. A `EscolhaNaCelula` abre na largura do conteúdo, sem mudança visual.
+
+### Migração
+- `npx shadcn add <registro>/popover.json <registro>/label.json <registro>/linha-do-grupo.json <registro>/escolha-na-celula.json <registro>/intervalo-de-campos.json`.
+- Troque o `className="w-72"`, `"w-80"` ou `"w-auto"` do `PopoverContent` pela prop `largura` (`padrao`, `larga`, `conteudo`).
+- Troque o intervalo montado à mão (dois campos lado a lado, `fieldset` sem `min-w-0`) pelo `IntervaloDeCampos`.
+- Apague o `contagem={{ feitas: 0, total: 0 }}` fingido no grupo vazio e passe `{ total, unidade }` onde a contagem é quantidade.
+- Troque a espera da lista agrupada montada à mão pela `EsperaDosGrupos`.
+- Atenção: o grupo vazio sem `contagem` passa a mostrar *Sem linhas*; passe a causa em `semLinhas`.
+
+## 0.23.0 · 05/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **Os recortes contados no topo da Lista** (ARQ-05, nova; CASCO-01, ARQ-01, PECA-01): quando o que pede atenção se divide em situações que se sobrepõem (atrasado, sem responsável, parado), o `TopoDaPagina` ganha o slot `resumo`, **abaixo dos filtros**, com uma fileira de recortes contados. A peça recebe os dados (`rotulo`, `recortes`, `valor`, `onTrocar`) e monta a `BarraDeModos` em `modos`. O rótulo visível e o nome do grupo saem da mesma string. É um recorte por vez, e clicar no recorte ativo chama `onTrocar(null)`. Abaixo de `sm`, o rótulo sobe e só a barra rola. A regra diz o que cada número conta: o que os filtros mostram e cai no recorte, pelo mesmo predicado que recorta a lista. Não há total, cartão de indicador, número grande nem gráfico.
+- **O gráfico desenha a forma que o dado tem** (PECA-03, nova): contagens que se sobrepõem não viram pizza nem barra empilhada, e tendência só se desenha com o histórico gravado.
+- **A vista que deixa itens de fora diz quantos** (EST-06, nova): uma linha da `Faixa` no assunto `escopo`, com a saída para a vista que mostra todos, sem desfazer o recorte.
+- A `BarraDeModos` muda só a documentação: `abas` quando as situações repartem o conjunto; `modos` troca o desenho e, dentro do `resumo`, serve aos recortes que se sobrepõem. A EST-04 e o comentário de `numero` passam a escrever o não contado como `‒`, o travessão numérico que a peça já desenhava.
+
+### Migração
+- `npx shadcn add <registro>/topo-da-pagina.json` (traz o `seletor-de-vista` junto).
+- Troque a fileira de recortes montada à mão no topo (o `span` do rótulo com a `BarraDeModos` ao lado) pelo `resumo` do `TopoDaPagina`: `resumo={{ rotulo, recortes, valor, onTrocar }}`, em que `onTrocar` recebe a chave ou `null`. Apague a alternância local (`k === valor ? null : k`).
+- A fileira passa para baixo dos filtros: confira que cada número conta o que os filtros mostram.
+
 ## 0.22.0 · 05/11/2026
 
 Camadas: base, registro

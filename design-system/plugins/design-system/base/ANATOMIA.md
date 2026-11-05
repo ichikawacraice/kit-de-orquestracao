@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.22.0
+versao: 0.24.0
 description: A anatomia dos apps React do sistema — o que vai onde na tela, com a regra, o porquê e como cada regra se confere.
 ---
 
@@ -59,7 +59,7 @@ O casco é o que faz dois apps da mesma empresa parecerem um só: é a primeira 
   | região | o que mora | o que NÃO mora |
   |---|---|---|
   | **Barra lateral** (esquerda, recolhível) | o logotipo do tema, os destinos do app (item com ícone **e** rótulo), a conta e o tema ao pé | ação de tela, aviso, filtro |
-  | **Topo da página** | a trilha (em tela de detalhe), o título (`h1`, um só), o estado do objeto quando a tela é de um objeto, os valores que o classificam (na linha de baixo, CASCO-04), o primário da tela | ação rara (vai ao `⋯`) |
+  | **Topo da página** | a trilha (em tela de detalhe), o título (`h1`, um só), o estado do objeto quando a tela é de um objeto, os valores que o classificam (na linha de baixo, CASCO-04), o primário da tela; na Lista, os filtros que valem para a tela inteira e, abaixo deles, os recortes contados (ARQ-05) | ação rara (vai ao `⋯`) |
   | **Conteúdo** | o arquétipo da tela, em superfície | conteúdo solto no fundo |
   O **cabeçalho**, grudado acima do topo, é opcional e só leva o que vale **igual em todas as telas** e muda o app inteiro: a troca de contexto, a busca global, a conexão com um serviço de fora — nunca título, primário, conta ou tema. O **topo da página** leva o que muda quando a tela muda. Para um caso novo, o teste é: *a coisa continua valendo depois de trocar de destino?* Se sim, é do cabeçalho; se não, é do topo. O topo não rola (LAY-01). Os arquétipos **Entrada e Editor ficam fora do casco**; no Editor, a barra (ARQ-03) faz o papel dele e leva a volta, o nome do objeto e a conta.
 - **Por quê.** Navegação, título e primário no mesmo lugar em todo app é o que o cliente reconhece como "a mesma empresa".
@@ -89,14 +89,15 @@ O casco é o que faz dois apps da mesma empresa parecerem um só: é a primeira 
 - **Regra.** Toda tela é um destes arquétipos. A que não cabe em nenhum vira **arquétipo novo, aqui, antes do código** (proposta à base, não exceção local).
   | Arquétipo | Pergunta | Exemplos | Regiões |
   |---|---|---|---|
-  | **Lista** | *o que pede a minha atenção?* | a fila de pedidos, os clientes, as novidades | topo (título + filtro global + primário) · lista ou quadro (no quadro, a coluna mora no chão e o cartão é a peça; a coluna vazia recolhe) · vazio |
+  | **Lista** | *o que pede a minha atenção?* | a fila de pedidos, os clientes, as novidades | topo (título + filtro global + primário; os recortes contados abaixo dos filtros, quando a atenção se divide em situações que se sobrepõem, ARQ-05) · lista ou quadro (no quadro, a coluna mora no chão e o cartão é a peça; a coluna vazia recolhe) · vazio |
   | **Mesa** | *em que pé está isto, e o que eu faço agora?* | o detalhe de um pedido, uma conferência | topo (nome + estado + primário) · trilho do percurso · conteúdo da etapa |
   | **Editor** | *como fica se eu mudar isto?* | editor de página, construtor de formulário | barra · estrutura · canvas · inspector ou conversa |
   | **Entrada** | *qual é o único passo?* | login, senha nova, conectar uma conta | cartão sozinho no fundo, uma ação (`xl`) |
   | **Formulário** | *o que eu preciso dizer para disparar?* | novo pedido, nova conferência | casco de formulário (largura de LAY-02) · um `Bloco` por grupo de campos (`fieldset`/`legend` por dentro, como semântica) · um primário no fim |
-  A **Mesa pode não ter primário** quando a tela é de leitura e o gesto mora noutra: o topo é só nome + estado, e o caminho de ação é uma linha com link, nunca um segundo lugar para o mesmo gesto. A **Mesa com abas** põe as abas no lugar do trilho, sem apoio à direita, e o esqueleto de carregamento dela desenha abas, não colunas que a tela não tem.
-- **Por quê.** Cinco formas conhecidas deixam a pessoa saber onde está o primário antes de ler a tela.
-- **Confere.** Revisão de arquitetura (declara o arquétipo) · auditoria de projeto (classifica cada rota) · `crítica:hierarquia`.
+  A **Mesa pode não ter primário** quando a tela é de leitura e o gesto mora noutra: o topo é só nome + estado, e o caminho de ação é uma linha com link, nunca um segundo lugar para o mesmo gesto. A **Mesa com abas** põe as abas no lugar do trilho, sem apoio à direita.
+  **A espera tem a forma do que vai chegar** (EST-01): a tela com mais de uma vista (abas, `BarraDeModos`) espera na forma da vista que está aberta, não na de outra — a Mesa com abas espera em abas; a lista corrida, em linhas (`EsperaDaLista`); a lista agrupada, em grupos (`EsperaDosGrupos`); o quadro, em colunas (`EsperaDoQuadro`). A troca de vista troca a espera junto. Em toda espera, a altura da linha é a da linha real com o conteúdo de verdade; na lista agrupada, o degrau, o ar, o recuo e o vão também são os da peça que vem e saem dela (`EsperaDosGrupos`), não da tela, com o grupo fechado esperando fechado.
+- **Por quê.** Cinco formas conhecidas deixam a pessoa saber onde está o primário antes de ler a tela. A espera de outra forma promete uma tela que não vem, e a de medidas escritas à mão faz a lista pular quando os dados chegam.
+- **Confere.** Revisão de arquitetura (declara o arquétipo) · auditoria de projeto (classifica cada rota) · `crítica:hierarquia` · `crítica:aderência` (a espera de cada vista, no ateliê, contra a vista que chega).
 
 ### ARQ-02 · Painel de análise é Lista com medidores
 - **Regra.** Tela de análise (custo, uso, cota) é **Lista**: filtros globais no topo valendo para a tela inteira; cada medidor com largura pelo peso da pergunta, não por grade igual.
@@ -121,6 +122,11 @@ O casco é o que faz dois apps da mesma empresa parecerem um só: é a primeira 
 - **Regra.** A linha começa pelo botão de selecionar (ícone + nome); a alça de arrastar fica **no fim**, à esquerda do `⋯`, com `gap-1`, aparece no hover, no foco e na linha ativa, e tem a dica *Arrastar para mudar a ordem*.
 - **Por quê.** No início, a alça fica sob o ícone do trilho quando a lista abre por cima dele, e o clique vira arrasto.
 - **Confere.** `crítica:clareza da ação`.
+
+### ARQ-05 · O que pede atenção em situações que se sobrepõem é uma fileira de recortes contados
+- **Regra.** Quando a pergunta da Lista se responde por situações que **se sobrepõem** (atrasado, sem responsável, parado: um item pode estar em várias), o topo leva uma fileira de recortes contados no `resumo` do `TopoDaPagina`, **abaixo dos filtros**: o nome da fileira e um botão por situação, com o nome e a contagem. É **um recorte por vez**: clicar de novo desliga, e sem recorte a lista mostra tudo o que os filtros mostram. O recorte vale junto com os filtros, mora no endereço (CONV-06) e conta como filtro ativo: o *limpar* o leva, e a lista vazia diz `filtro` (EST-02); chave desconhecida no endereço vale como sem recorte. Cada número conta o que os filtros mostram e cai no recorte, pelo **mesmo predicado** que recorta a lista (CONV-15), e não muda com o recorte ativo. Todos os recortes do papel aparecem, o zero inclusive (EST-04), e o nome do recorte não muda no zero: aqui o zero informa. O recorte ativo que cai a zero continua ativo. **Não há total:** as partes se sobrepõem e não somam. O tom do número é a voz que a situação pede (COR-03), só acima de zero, e `ok` não entra. A linha mostra, numa célula dela (o prazo, a pessoa, o estado), o sinal de cada recorte em que entra. A situação que **reparte** o conjunto é a `BarraDeModos` em `abas` dos filtros, e o recorte que coincide com uma aba não se repete. O peso vem da posição e da voz do número, não do tamanho: nada de cartão de indicador, número grande ou gráfico (PRIN-04, COR-10), e *quanto* e *como evoluiu* são de outra tela (ARQ-02). A fileira cabe numa linha na largura de referência com a barra lateral aberta; se não cabe, são recortes demais.
+- **Por quê.** Sem lugar na base, a fileira é montada à mão, com o rótulo à vista e o nome do grupo em duas strings que podem divergir. O número fora do predicado da lista promete uma quantidade e entrega outra; o total de situações que se sobrepõem conta o mesmo item duas vezes; e o cartão de indicador dá peso de análise a um gesto que só recorta.
+- **Confere.** Peça `TopoDaPagina` (registro, slot `resumo`: a alternância, o zero, o `‒` e o nome do grupo em teste) · `crítica:hierarquia` · `crítica:aderência`.
 
 ---
 
@@ -209,12 +215,14 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | O percurso de um objeto (na Mesa) | `TrilhoDoPercurso`: as etapas em ordem, só a atual com `Estado` e `tom`, a feita com o ícone de feito, a que vem sem ponto; a cor de etapa, quando o projeto a declara, entra como `PontoDaEtapa` dentro da estação | `Estado` com `tom` em toda etapa, cor da etapa à mão, `Passos` ou `Progress` para o percurso |
   | Região sem itens | `Vazio`, declarando a causa (`nada-ainda`, `filtro`, `nao-se-aplica`, `nao-informado`) e a saída quando há | ✓ sobre nada, cartão de voz, texto solto |
   | Lista de objetos | `Table`, que declara a `densidade`: a linha cresce com o conteúdo e guarda o ar da DESIGN (SUP-03); o filete-guia entre linhas e a régua do cabeçalho são da peça; cabeçalho `t-coluna` de 40px, grudado, sem fundo; a linha inteira abre por `LinkDaLinha`; o hover tem a forma do foco e apaga o filete; a coluna que some no celular é `esconderNoCelular`; mora numa superfície (`Painel`, `Card`) | linha escrita pela tela (`divide-y`, `border-b` na linha), filete de ponta a ponta, zebra, fundo no cabeçalho, borda em volta da tabela, altura fixa na célula que espreme a segunda linha, grade de `div` à mão |
-  | Grupo de linhas numa lista (etapa, semana, assunto) | `LinhaDoGrupo`: o próprio `<tbody>`, com a linha do grupo em `th scope="rowgroup"` no degrau de tinta e raio de agrupador, o vão antes do grupo (grande só depois de grupo aberto, curto entre fechados) e o ar curto depois do topo, que só existe com o grupo aberto (SUP-03), o nome um degrau acima do corpo (TIPO-02), as linhas recuadas até o nome do grupo (e, quando algum grupo da tabela tem identidade, até depois do ponto: todo grupo reserva o lugar dele), com o filete delas começando no recuo e nenhum entre o topo e a primeira linha nem depois da última, 8px (12 no site) da régua do cabeçalho ao primeiro grupo, a contagem (*7 de 10*) em `t-medida`, a trilha compacta da marca ou o `Medidor compacto` opcionais encostados no fim, em lugar fixo (as barras de uma coluna começam no mesmo x), e as células alinhadas às colunas, que esvaziam no celular quando a coluna some (`esconderNoCelular`, a mesma prop do `TableHead` e da `TableCell`); no estreito o nome fica e o fim cede; o grupo vazio fica inerte sem opacidade; a linha do grupo não acende no hover | linha de grupo à mão em cada tela, `tr` com fundo e `colSpan` à mão, filete entre grupos, opacidade no grupo vazio, barra que começa logo depois do nome, classe de coluna escondida copiada à mão, zebra, recuo à mão nas linhas, linha acesa com a mesma silhueta do degrau |
+  | Grupo de linhas numa lista (etapa, semana, assunto) | `LinhaDoGrupo`: o próprio `<tbody>`, com a linha do grupo em `th scope="rowgroup"` no degrau de tinta e raio de agrupador, o vão antes do grupo (grande só depois de grupo aberto, curto entre fechados) e o ar curto depois do topo, que só existe com o grupo aberto (SUP-03), o nome um degrau acima do corpo (TIPO-02), as linhas recuadas até o nome do grupo (e, quando algum grupo da tabela tem identidade, até depois do ponto: todo grupo reserva o lugar dele), com o filete delas começando no recuo e nenhum entre o topo e a primeira linha nem depois da última, 8px (12 no site) da régua do cabeçalho ao primeiro grupo, a contagem em `t-medida` — a fração (*7 de 10*) ou a quantidade com a unidade (*3 entregas*), esta sem trilha —, a trilha compacta da marca ou o `Medidor compacto` opcionais encostados no fim, em lugar fixo (as barras de uma coluna começam no mesmo x), e as células alinhadas às colunas, que esvaziam no celular quando a coluna some (`esconderNoCelular`, a mesma prop do `TableHead` e da `TableCell`); no estreito o nome fica e o fim cede; o grupo vazio fica inerte sem opacidade e diz a causa (`semLinhas`), com ou sem contagem; a linha do grupo não acende no hover | linha de grupo à mão em cada tela, `tr` com fundo e `colSpan` à mão, filete entre grupos, opacidade no grupo vazio, barra que começa logo depois do nome, classe de coluna escondida copiada à mão, zebra, recuo à mão nas linhas, linha acesa com a mesma silhueta do degrau, fração fingida (*0 de 0*) para dizer que o grupo está vazio |
+  | Lista agrupada por período (semana, mês) | `Table` com uma `LinhaDoGrupo` por período, na ordem do tempo: o nome do grupo é o período por extenso (o atual pode levar o nome relativo antes: *Esta semana · 2 a 8 de nov*), a contagem é a quantidade com a unidade (*3 entregas*); o período sem itens fica no lugar, como grupo vazio que diz a causa (*Nenhuma entrega*); períodos vazios em sequência viram um grupo só, com o intervalo no nome (*7 de dez a 10 de jan*) e a extensão na causa (*Nenhuma entrega em 5 semanas*); o período atual nunca se junta e abre de início; a espera é a `EsperaDosGrupos` | período vazio que some, um degrau por período vazio em sequência, fração no lugar da quantidade, a data repetida em cada linha no lugar do grupo, cabeçalho de período escrito à mão |
   | Quadro de tarefas (colunas de etapa com cartões que se movem) | `Quadro`, `ColunaDoQuadro` (com `CabecalhoDaColuna`, `ContagemDaColuna` e `PilhaDaColuna`), `FitaDaColuna`, `CartaoDoQuadro` com as duas zonas, o pedido (`PedidoDoCartao`: `CabecaDoCartao`, `TituloDoCartao`, `MiniaturaDoCartao`, `IdentidadeDoCartao`) e a vida (`VidaDoCartao`, a bandeja, com o `InformativoDoCartao`), `VagaDoCartao`, `EsperaDoQuadro`: a coluna mora no chão (sem superfície) e o cartão é a peça (`superficie`, `rounded-cartao`); a bandeja no pé do cartão aparece sempre, cinza em repouso e tingida pela voz só quando o item pede algo; o alvo de soltar na tinta da marca com o tracejado; a coluna vazia recolhe na fita; as medidas do frontmatter `quadro`; o arrastar é do app | `Painel` como coluna, `BlocoDeTinta` como cartão, fundo colorido no cartão inteiro, `div` com `role="button"` como cartão, coluna vazia com o `Vazio` alto |
   | Prioridade de um item | `Prioridade`: o carimbo neutro com o glifo de barras e a palavra, o glifo e a palavra na cor declarada do nível (COR-09); só a urgente fala, na voz de espera; o nível comum não se mostra; com `onAbrir`, o carimbo aplica o recorte pelo nível, com o gesto do `ChipQueAbre` (o sublinhado do link, o anel de foco, o alvo de 24px) e a palavra visível como nome; na contagem, quem chama escreve o número e a palavra (*3 altas*), e o zero é `zerada`: a forma do nível, sem a cor e sem gesto | tinta do carimbo por nível, filete colorido, cor de nível fora da `Prioridade`, prioridade em texto corrido, `button` à mão em volta da `Prioridade`, `nivel={0}` para a contagem zero, `aria-label` que diga outra coisa que a palavra, `onAbrir` dentro da linha ou do cartão que já abre o item |
   | A pessoa numa linha | `Pessoa`: o `Monograma` de 20px na cor da pessoa pelo id (COR-09) e o nome na tinta de texto, o papel na legenda; a ausência no círculo tracejado com a frase de quem chama; o id sem nome é *Pessoa sem nome*; várias pessoas, `PilhaDePessoas` (até 3 monogramas e *+N*; com uma a mais que o limite, a pessoa no lugar do *+1*; a frase inteira na dica e no nome acessível) | a cor da pessoa pelo nome ou passada à mão, o nome na cor da pessoa fora da conversa, a cor da pessoa no fundo da linha (COR-09), o id cru no lugar do nome, pilha sem a frase inteira |
   | Conversa entre pessoas (comentários, mensagens de um item) | `Conversa` (rotulada por quem chama) com `BalaoDaConversa`: o meu à direita na tinta da marca, o do outro à esquerda no `muted`, `rounded-xl` e, no primeiro do grupo, o canto de quem fala menos redondo; a frase inteira (quem, de onde, quando) escondida para o leitor de tela, e nome, selo (`AutorDaConversa`) e hora (`<time>`) como enfeite; o dia em `DiaDaConversa`; só o balão que chegou com a conversa aberta entra com o fade, e o anúncio dele é do app, numa região `role="status"` que já existe (ACES-05), porque só o app sabe que a mensagem é de outra pessoa. O corpo em `TextoComLinks`: o `http(s)` vira link em nova aba, tinta com sublinhado (MARCA-02), e o resto segue texto. A cor da pessoa (COR-09) no monograma, como em todo lugar, e no nome do autor (`AutorDaConversa`, pela mesma chave); a `PilhaDePessoas` `decorativa` quando a frase ao lado já diz os nomes | o corpo como HTML cru, balão com tinta de voz (o erro de envio é texto abaixo do campo), balão na cor da pessoa, rabicho desenhado, a conversa com a IA (essa é a coluna do Editor) |
   | Prazo numa linha | `Prazo`: a data ou o intervalo em `t-medida` (o intervalo de um dia escreve o dia uma vez) e a legenda relativa embaixo (*em 12 dias*), ou ao lado (`emLinha`); só a data (`relativo={false}`) onde quem lê não deve ver a contagem; a voz só com o `tom` que quem chama declara (o limiar é do projeto); `forma="chip"` quando o prazo é o estado do objeto da linha; *Sem data* quando não há | data crua sem legenda, prazo que se pinta sozinho, uma célula de prazo diferente por tela |
+  | Intervalo de dois valores (de, até: datas, valores) | `IntervaloDeCampos`: o `fieldset` com a legenda da grandeza (e a unidade) e um campo por linha, com o rótulo visível à esquerda (*De*, *Até*); as pontas amarradas no seletor; o erro abaixo do campo do lado; cabe no popover | dois campos lado a lado com *e* no meio, `fieldset` sem `min-w-0`, `aria-label` no lugar do rótulo visível, intervalo montado à mão |
   | Trocar um valor na própria célula | `EscolhaNaCelula`: a leitura no peso dela e o chevron de 14px sempre à vista; o menu (a escolha é a ação) ou o popover com o formulário (*Salvar* e Enter gravam, *Cancelar* fecha; o que impede salvar fica escrito no formulário, ligado ao *Salvar*); sem valor, a leitura vazia da peça com o chevron; gravando inerte com o valor novo na hora, a recusa desfaz e diz *Não mudou*; quem não pode trocar vê só a leitura | `Select` com contorno na célula, controle que só aparece no hover, gatilho que esconde o valor, chevron sozinho na célula vazia, *Salvar* que fecha o que o formulário recusou |
   | Coluna que rola | `RolagemDoPainel`, numa das densidades da LAY-06 | `ScrollArea`, `overflow-y-auto` com respiro à mão |
   | O topo da tela dentro do casco | `PaginaDoApp` + `TopoDaPagina` (o único que escreve o `h1`; os valores que classificam o objeto no slot `valores`, CASCO-04) | `h1` e linha de ações à mão em cada tela, `Badge` no `estado` ou ao lado do título |
@@ -226,7 +234,8 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | Número contra teto | `Medidor` (o número em `t-medida` primeiro, a barra neutra depois; `tom` pinta só o número; sem teto, `—` e sem barra), `Medidas` | `Progress` para cota, porcentagem sozinha, barra pintada pela voz |
   | Progresso de etapa | `Progress`, com o valor escrito (`3 de 8`) e o indicador no gradiente; `LinhaDeAndamento` para espera de uma linha só, sem etapas conhecidas | indicador girando sem texto, `Progress` sem valor escrito ou pintado pela voz |
   | Escolha com mais de dois desfechos e estado no servidor | `DialogLongo` (com `icone`) com o fato num parágrafo e a consequência de cada saída numa lista curta acima do rodapé (`Consequencias`), cada item encabeçado pelo termo do botão; as saídas lado a lado no rodapé (`AcoesDoDialogo`), o terciário como link | `useConfirm` com alternativa |
-  | Troca de vista | `BarraDeModos` / `TrilhaDoSeletor` (`seletor-de-vista`) | botões `secondary`/`ghost` alternados, `Tabs`, `ToggleGroup` |
+  | Troca de vista | `BarraDeModos` / `TrilhaDoSeletor` (`seletor-de-vista`; `abas` quando reparte o conjunto; o recorte que se sobrepõe é a linha abaixo) | botões `secondary`/`ghost` alternados, `Tabs`, `ToggleGroup` |
+  | Recortes contados da lista (situações que se sobrepõem) | `resumo` do `TopoDaPagina` (a peça monta a `BarraDeModos` em `modos`, com `numero` e `tom`, e o clicar de novo que desliga; ARQ-05) | cartão de indicador, número grande, gráfico, total, `BarraDeModos` com recortes solta no topo ou no corpo, chip clicável à mão |
   | Escolha com imagem | `EscolhaVisual` | radio com imagem à mão |
   | Marcar itens de uma lista, ou o sim/não de um formulário que se grava com *Salvar* | `Checkbox`; com o texto ao lado, `OpcaoDeMarcar`; na lista, a primeira coluna, com *Marcar todos* indeterminado no cabeçalho | caixa à mão, botão que alterna com ✓, `Select` sim/não |
   | Escolher um valor de uma lista num formulário (vale com *Salvar*) | `Select` | `Command` (a escolha com busca ainda não tem regra) |
@@ -241,7 +250,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | A tela inteira mente se a pessoa não souber (versão, escopo, prévia, conexão) | `Faixa`, uma por tela: uma linha por assunto, na ordem da MSG-06, cada uma com `tom` e a saída; no casco, entre o `TopoDaPagina` e a região que rola; no Editor, entre a `BarraDoEditor` e as colunas | faixas empilhadas, parágrafo vermelho solto, aviso com X, faixa dentro da região que rola ou sobre o canvas |
   | Ícone de IA | `IconeDaIa`; em botão com cor, `IconeDaIa sobrePreenchido` (branco, sem disco) | ícone cru, disco atrás do ícone, `✦` escrito |
   | Instrução numerada | `Passos` / `Passo`, com a falha dentro do passo | `ol` à mão |
-  | Detalhe sob demanda | `Popover` | faixa permanente, `HoverCard` |
+  | Detalhe sob demanda | `Popover`, numa das três larguras (`largura`: padrão, larga, a do conteúdo) | faixa permanente, `HoverCard`, largura à mão no conteúdo (`className="w-…"`), conteúdo mais largo que o popover (ele corta, sem rolagem lateral) |
   | Coluna lateral sob demanda (consultar ao lado do trabalho) | `DialogLateral`; clicar fora não fecha, salvo com `fechaAoClicarFora` (o que abre a coluna, menu, outro diálogo e o rascunho digitado nela a seguram) | painel `fixed` à mão, `Sheet` (o trabalho que pede janela é `DialogLongo`), fechar ao clicar fora à mão |
   | Conteúdo alto em janela | `DialogLongo`; tela cheia é `DialogLongo` com `tamanho="tela"` | imagem com teto de altura; camada `fixed inset-0` à mão |
   | Confirmação | `useConfirm` (`confirm-dialog`); com `onConfirmar`, a ação roda com o diálogo aberto e a falha aparece nele | `window.confirm`, rodar a ação depois de fechar sem dizer a falha, segundo diálogo para o erro |
@@ -249,7 +258,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
   | Rota sem o que mostrar (erro, não encontrado, sem permissão) | `TelaDeErro` (`error.tsx`, `not-found.tsx`), com a saída de quem chama | cartão tracejado |
   | Uma região que falhou, com a tela de pé | `TelaDeErro escala="bloco"` dentro do bloco: sem título nem saída, *Tentar de novo* em `outline sm` | cartão tracejado (tracejada é ausência), a tela de erro de rota no meio da tela |
   | Desfecho depois que o bloco sumiu | `useToast` | toast para erro de formulário |
-  | Carregando | `Skeleton` (lugar), `CarregandoPorCima` (troca de contexto: cobre a região que mente, nunca o casco) | indicador solto, véu `fixed inset-0` à mão |
+  | Carregando | `Skeleton` (lugar), na espera da vista aberta (`EsperaDaLista`, `EsperaDosGrupos`, `EsperaDoQuadro`, ARQ-01); `CarregandoPorCima` (troca de contexto: cobre a região que mente, nunca o casco) | indicador solto, véu `fixed inset-0` à mão, esqueleto de outra vista, degrau ou recuo de esqueleto à mão |
 - **Por quê.** Uma função com duas peças é a origem de toda deriva visual medida no produto de origem.
 - **Confere.** `crítica:consistência` · `guarda:componente-que-ninguem-monta` · `guarda:o-irreversivel-pede-confirmacao`.
 
@@ -257,6 +266,11 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Regra.** Peça nova parte do componente equivalente do **shadcn oficial** quando existe (menu ← `DropdownMenu`, botão dividido ← `ButtonGroup`, faixa ← `Alert`, colunas ← `Resizable`; as colunas do Editor são a exceção: `ColunasDoEditor` mede a regra da ARQ-03 e não se redimensiona à mão até um projeto pedir), adaptada aos tokens e à escala da DESIGN e à forma do kit (nome em português, `tom`, motivo no desabilitado). Entra pelo **registro do sistema**; o projeto a instala com `shadcn add @wicomm/<peça>` (o prefixo é o do tema). As peças que o kit já tem não são trocadas pelas do catálogo oficial: já são shadcn por baixo e estão ajustadas à escala. Catálogo de terceiros serve só de referência visual: não se copia nem se instala. O crítico julga a peça antes de ela chegar a uma tela.
 - **Por quê.** O shadcn já resolveu acessibilidade e comportamento; o que é do sistema é a forma. Peça de catálogo de terceiros traz outra marca, outra fonte e padrão de landing page.
 - **Confere.** Revisão de arquitetura · `crítica:consistência`.
+
+### PECA-03 · O gráfico desenha a forma que o dado tem
+- **Regra.** O gráfico entra só quando responde uma pergunta que o número escrito não responde (comparar muitas partes de um todo, ver uma tendência) e quando o dado tem a forma que o desenho afirma. Contagens que se sobrepõem não viram pizza nem barra empilhada: as partes não somam o todo. Tendência só se desenha com o histórico gravado; a série não se reconstrói para trás a partir do estado de hoje. Número contra teto é o `Medidor`. O kit ainda não tem peça de gráfico: o primeiro entra pelo registro (PECA-02), julgado por esta regra.
+- **Por quê.** A pizza de partes sobrepostas passa de 100% ou esconde a sobreposição, e a curva reconstruída inventa o passado. Os dois desenhos parecem dado e não são.
+- **Confere.** Revisão de arquitetura · `crítica:aderência`.
 
 ---
 
@@ -309,7 +323,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Confere.** `crítica:aderência` · guarda por projeto (quem dispara observa).
 
 ### EST-04 · Todos os contadores, e o zero é número
-- **Regra.** Uma fileira de contadores mostra **todos** os da fonte, inclusive os zerados. O zero é sempre o número `0`: quando ele não informa nada, sai em `neutro` e o **rótulo** muda para a frase que diz o que o zero quer dizer. O não contado é `—`, também em `neutro`. O tom é do número que pede ação.
+- **Regra.** Uma fileira de contadores mostra **todos** os da fonte, inclusive os zerados. O zero é sempre o número `0`: quando ele não informa nada, sai em `neutro` e o **rótulo** muda para a frase que diz o que o zero quer dizer. O não contado é `‒` (o travessão numérico, da largura de um algarismo), também em `neutro`. O tom é do número que pede ação.
 - **Por quê.** Mostrar só os diferentes de zero faz a linha mentir por omissão.
 - **Confere.** `crítica:aderência`.
 
@@ -317,6 +331,11 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 - **Regra.** Números que pertencem a pessoas ou causas diferentes não se resumem numa porcentagem só; cada um aparece com o seu dono.
 - **Por quê.** A porcentagem única esconde de quem é a próxima ação.
 - **Confere.** `crítica:hierarquia`.
+
+### EST-06 · A vista que deixa itens de fora diz quantos
+- **Regra.** Quando a vista escolhida não consegue desenhar parte do conjunto que os filtros e o recorte mostram (o calendário, os itens sem data; o mapa, os sem endereço), a tela diz **quantos ficaram de fora** numa linha da `Faixa` (assunto `escopo`, `neutro`, MSG-01), com a saída para a vista que mostra todos **sem desfazer o recorte nem os filtros** (MSG-06). Com zero de fora, a linha não existe. A paginação, que já diz a parte, não conta.
+- **Por quê.** A vista que omite em silêncio mente como o contador que some no zero (EST-04): o topo diz 7, o calendário mostra 4, e a pessoa conclui que os outros 3 não existem. Na vista que mostra todos, o vazio dos sem data diz a causa (EST-02).
+- **Confere.** `crítica:aderência`.
 
 ---
 
@@ -348,6 +367,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 | ARQ-02 | Análise é Lista com medidores | crítica |
 | ARQ-03 | O Editor, região por região | registro, crítica |
 | ARQ-04 | Linha que se reordena | crítica |
+| ARQ-05 | Recortes contados no topo da Lista | registro, crítica |
 | MSG-01 | A matriz das mensagens | crítica |
 | MSG-02 | No máximo uma faixa | crítica |
 | MSG-03 | O técnico não chega a quem usa | crítica |
@@ -359,6 +379,7 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 | MSG-09 | O erro diz o que fazer agora | crítica, skill |
 | PECA-01 | A peça de cada função | crítica, guarda |
 | PECA-02 | De onde a peça nova parte | revisão, crítica |
+| PECA-03 | O gráfico tem a forma do dado | revisão, crítica |
 | PESO-01 | Um primário | crítica |
 | PESO-02 | O peso cresce com a gravidade | guarda, crítica |
 | PESO-03 | Recusado não aparece; bloqueado é linha | crítica |
@@ -369,4 +390,5 @@ A pergunta que decide o lugar: **a quem a mensagem diz respeito, e por quanto te
 | EST-03 | Ação assíncrona visível | crítica, guarda |
 | EST-04 | Todos os contadores, zero é número | crítica |
 | EST-05 | Sem porcentagem única | crítica |
+| EST-06 | A vista diz quantos deixou de fora | crítica |
 | MOVA-01 | O que entra se move | guarda, crítica |

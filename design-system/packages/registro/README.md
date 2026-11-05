@@ -69,7 +69,7 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `prioridade` | — | o carimbo com o glifo de barras e a palavra; só a urgente fala, na voz de espera; com `onAbrir`, aplica o recorte pelo nível; `zerada` é a contagem zero, na forma do nível e sem a cor |
 | `ponto-da-etapa` | — | `criarPontoDaEtapa(mapa)`: o ponto de 6px com a cor de etapa que o projeto declara |
 | `tela-de-erro` | — | a rota ou o bloco que não deu para mostrar |
-| `topo-da-pagina` | — | `PaginaDoApp` e `TopoDaPagina`: o `h1` único, o estado, o primário, o ⋯, a linha dos valores (CASCO-04), o desfecho, os filtros |
+| `topo-da-pagina` | — | `PaginaDoApp` e `TopoDaPagina`: o `h1` único, o estado, o primário, o ⋯, a linha dos valores (CASCO-04), o desfecho, os filtros e os recortes contados (ARQ-05) |
 | `seletor-de-vista` | tabs/toggle-group | `BarraDeModos`: abas e modos, a pílula que desliza |
 | `table` | table | a tabela com o filete-guia e a régua do cabeçalho, a linha inteira que abre |
 | `linha-do-grupo` | table/collapsible | o grupo de linhas: o `tbody` com a linha do grupo no degrau de tinta, a contagem e as células alinhadas |
