@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // PreToolUse (F181, Q473): start_session cujo prompt é de dona ("Você é a dona do F<n>") só passa com título que começa por `F<n> · `.
 // O ID primeiro dá ao operador a referência do item; a regra só no texto da skill foi violada (F140, F172, F174).
+// F419 (ADR 0025): e só com `model` e `effort` explícitos, em sessão `fresh` (o fork herda modelo e contexto de quem abre);
+// Sonnet é o padrão, Opus só com a linha `Gatilho do Opus: <gatilho>` no prompt, de uma lista fechada. Nuvem passa sem modelo.
+// Cada dona que passa vai ao log (`abriu-sonnet`, `abriu-opus` com o gatilho, `abriu-nuvem`): é a contagem do roteamento.
 // A recusa traz o título certo. Sem título nem prompt (`proposal_id` sozinho) passa: o cartão já foi checado ao nascer.
 // Erro do próprio hook vai para o log e DEIXA PASSAR: a trava não pode derrubar as sessões.
 import { resolve } from 'node:path';
@@ -15,6 +18,43 @@ const MARCA_DE_DONA = /\b(?:você|voce)\s+é\s+a\s+dona\s+do\s+`?(F\d+)\b/i;
 // Um ID solto no começo do título (`F180 · `, `F181 - `, `F181: `) sai da sugestão: o certo entra no lugar dele.
 const ID_NO_COMECO = /^\s*F\d+\b\s*[·:\-–—]?\s*/i;
 
+// Os gatilhos do Opus (ADR 0025, protocolo#modelo-e-esforco). Fora deles, a dona nasce em Sonnet.
+export const GATILHOS_DO_OPUS = ['decisao', 'contrato', 'estado', 'seguranca', 'producao', 'devolvido'];
+const SEM_ACENTO = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+// Linha própria (pode vir em item de lista, citação ou negrito); a menção em prosa ("não há gatilho do Opus: estado") não conta.
+const LINHA_DO_GATILHO = /^[\s>*_`-]*gatilho do opus[*_`]*:[*_`]*\s*[`*_]*([a-z]+)/m;
+
+/** O gatilho do Opus nomeado no prompt, ou null. */
+export function gatilhoDoOpus(prompt) {
+  const m = LINHA_DO_GATILHO.exec(SEM_ACENTO(String(prompt ?? '')));
+  return m && GATILHOS_DO_OPUS.includes(m[1]) ? m[1] : null;
+}
+
+const PADRAO = 'Padrão: `model: "sonnet"`, `effort: "medium"`; Opus (`effort: "high"`) só com a linha `Gatilho do Opus: <gatilho>` no prompt, um de: '
+  + GATILHOS_DO_OPUS.join(', ') + ' (skill papeis-e-modelos).';
+
+/** A recusa pelo modelo, ou null quando passa. Só para prompt de dona. */
+export function recusaDoModelo(id, input) {
+  if (input?.target === 'cloud') return null;
+  if (input?.context === 'fork') return `sessão dona do ${id} aberta por fork: o fork herda o modelo e a conversa inteira de quem abre. Abra com context "fresh" e \`model\`/\`effort\` explícitos. ${PADRAO}`;
+  const model = typeof input?.model === 'string' ? input.model.trim().toLowerCase() : '';
+  const effort = typeof input?.effort === 'string' ? input.effort.trim() : '';
+  if (!model || !effort) return `sessão dona do ${id} sem ${!model ? '`model`' : ''}${!model && !effort ? ' nem ' : ''}${!effort ? '`effort`' : ''}: sem eles a dona herda o Opus de quem abre. ${PADRAO}`;
+  if (model.includes('haiku')) return `sessão dona do ${id} em Haiku: Haiku só lê, e a dona escreve. ${PADRAO}`;
+  if (model.includes('sonnet')) return null;
+  if (!model.includes('opus')) return `sessão dona do ${id} com modelo desconhecido ("${input.model}"). ${PADRAO}`;
+  if (gatilhoDoOpus(input?.prompt)) return null;
+  return `sessão dona do ${id} em Opus sem gatilho nomeado. ${PADRAO}`;
+}
+
+/** O que vai ao log quando a dona passa. */
+export function desfechoDoModelo(input) {
+  if (input?.target === 'cloud') return ['abriu-nuvem', ''];
+  const model = String(input?.model ?? '').toLowerCase();
+  if (model.includes('opus')) return ['abriu-opus', `${gatilhoDoOpus(input?.prompt)} effort=${input?.effort}`];
+  return ['abriu-sonnet', `effort=${input?.effort}`];
+}
+
 export function tituloSugerido(id, titulo) {
   const tema = String(titulo ?? '').replace(ID_NO_COMECO, '').trim();
   return `${id} · ${tema || '<tema em palavras do produto>'}`;
@@ -28,7 +68,7 @@ export function decidir(tool, input) {
   if (!m) return null;
   const id = m[1].toUpperCase();
   const titulo = typeof input?.title === 'string' ? input.title : '';
-  if (titulo.startsWith(`${id} · `) && titulo.slice(id.length + 3).trim() !== '') return null;
+  if (titulo.startsWith(`${id} · `) && titulo.slice(id.length + 3).trim() !== '') return recusaDoModelo(id, input);
   const certo = tituloSugerido(id, titulo);
   return `sessão dona do ${id} com título fora do padrão ("${titulo}"): o título começa pelo ID do item. Abra de novo com o título "${certo}".`;
 }
@@ -36,7 +76,11 @@ export function decidir(tool, input) {
 function main() {
   const e = lerEntrada();
   const motivo = decidir(e.tool_name, e.tool_input);
-  if (!motivo) return;
+  if (!motivo) {
+    const dona = e.tool_name === TOOL && MARCA_DE_DONA.exec(typeof e.tool_input?.prompt === 'string' ? e.tool_input.prompt : '');
+    if (dona) { const [desfecho, detalhe] = desfechoDoModelo(e.tool_input); registrar(e.session_id, HOOK, desfecho, `${dona[1].toUpperCase()} ${detalhe}`.trim()); }
+    return;
+  }
   registrar(e.session_id, HOOK, 'recusou', motivo);
   process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motivo } }));
 }

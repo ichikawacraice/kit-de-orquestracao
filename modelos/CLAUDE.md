@@ -19,7 +19,7 @@ Lidos de `.claude/kit.json`:
 
 <!-- kit:regras-de-operacao v3 -->
 ## Regras de operação
-- **Uma sessão dona por item, do plano ao PR:** ela planeja, escreve, testa, revisa e abre o PR. Título da sessão: `F<n> · <tema em palavras do produto>`. Modelo pelo risco: Opus para item com decisão, contrato, estado gravado, segurança ou produção; Sonnet para item mecânico com o plano escrito.
+- **Uma sessão dona por item, do plano ao PR:** ela planeja, escreve, testa, revisa e abre o PR. Título da sessão: `F<n> · <tema em palavras do produto>`. Modelo: Sonnet por padrão para o item com o plano escrito; Opus só por gatilho (decisão, contrato, estado gravado, segurança, produção, item devolvido).
 - **Revisão por subagente** `orquestracao:validador` de contexto limpo antes do PR: só achados que afetam correção; o leve vai ao PR ou ao `depois` do item, nunca vira item. Item pequeno dentro do corte do `via-rapida.mjs` se autorrevisa pelo roteiro, com o laudo no PR (`protocolo.md#via-rapida-da-revisao`).
 - **Durante o trabalho, só os testes afetados;** o gate completo roda uma vez, na fila de merge da orquestradora. Um gate por vez; gate verde sobre a mesma árvore não se repete (o verde é guardado pela árvore exata).
 - **A dona mantém o próprio item no painel** a cada passo (`agora`, etapa, PR); a orquestradora grava ao abrir a dona e ao mergear.

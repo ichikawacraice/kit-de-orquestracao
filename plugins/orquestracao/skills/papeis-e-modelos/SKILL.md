@@ -1,11 +1,11 @@
 ---
 name: papeis-e-modelos
-description: Qual modelo e qual papel cada sessão e cada subagente usa — a sessão dona do item em Opus (risco ou decisão) ou Sonnet (mecânico), revisão pelo subagente `orquestracao:validador` de contexto limpo, `orquestracao:explorador` em Haiku só para ler, orquestradora em Opus. Use ANTES de abrir sessão nova (start_session) ou lançar subagente (Agent), ao escrever o briefing de uma sessão dona ou de um subagente, e quando o operador perguntar "qual modelo usar", "abre uma sessão para fazer isto", "manda um agente revisar". Vale em todo projeto; a qualidade vem antes da economia.
+description: Qual modelo e qual papel cada sessão e cada subagente usa — a sessão dona do item em Sonnet por padrão ou em Opus por gatilho nomeado (decisão, contrato, estado, segurança, produção, devolvido), revisão pelo subagente `orquestracao:validador` de contexto limpo, `orquestracao:explorador` em Haiku só para ler, orquestradora em Opus. Use ANTES de abrir sessão nova (start_session) ou lançar subagente (Agent), ao escrever o briefing de uma sessão dona ou de um subagente, e quando o operador perguntar "qual modelo usar", "abre uma sessão para fazer isto", "manda um agente revisar". Vale em todo projeto; a qualidade vem antes da economia.
 ---
 
 # Papéis e modelos
 
-O modelo é função do **que a sessão ou o agente vai decidir**, não do gosto de quem abre. Quem decide usa o modelo mais forte; quem cumpre um plano que já decidiu tudo usa o intermediário; quem só lê usa o mais leve. **Qualidade vem antes de economia**: na dúvida, o modelo de cima.
+O modelo é função do **que a sessão ou o agente vai decidir**, não do gosto de quem abre. Quem decide usa o modelo mais forte; quem cumpre um plano que já decidiu tudo usa o intermediário; quem só lê usa o mais leve. **Qualidade vem antes de economia**: a dona nasce em Sonnet só quando nenhum [gatilho do Opus](#gatilhos-do-opus) vale, e na dúvida sobre um gatilho, o Opus.
 
 <a id="modelo-da-dona"></a>
 ## Os papéis
@@ -13,15 +13,15 @@ O modelo é função do **que a sessão ou o agente vai decidir**, não do gosto
 | Papel | Onde roda | Modelo | Esforço | Faz | Não faz |
 |---|---|---|---|---|---|
 | **Orquestradora** | sessão `🎛 orquestradora — <projeto>` | Opus 5.5 | alto | abre uma sessão dona por item, é a fila de merge, faz o release, reserva números de documento (skill `orquestradora`) | escrever código de item |
-| **Dona do item, com risco** | sessão `F<n> · <tema>` | Opus 5.5 | alto | o item inteiro, do plano ao PR, quando ele decide algo, mexe em contrato (spec, ADR, schema, API, migration), grava estado, toca segurança, produção ou dinheiro, ou já voltou da fila | mergear, subir versão dos plugins |
-| **Dona do item, mecânico** | sessão `F<n> · <tema>` | Sonnet 5.5 | médio | o item inteiro quando o plano já está escrito ([as cinco coisas](#plano-pronto)) | decidir o que o plano não decidiu (devolve à orquestradora) |
+| **Dona do item, por gatilho** | sessão `F<n> · <tema>` | Opus 5.5 | alto | o item inteiro, do plano ao PR, quando um [gatilho do Opus](#gatilhos-do-opus) vale | mergear, subir versão dos plugins |
+| **Dona do item, padrão** | sessão `F<n> · <tema>` | Sonnet 5.5 | médio | o item inteiro quando o plano já está escrito ([as cinco coisas](#plano-pronto)) e nenhum gatilho do Opus vale | decidir o que o plano não decidiu (devolve à orquestradora) |
 | **Revisor** | subagente `orquestracao:validador` | Sonnet 5.5 ou Opus 5.5, pelo risco declarado do item e pelo diff (hook `modelo-do-validador.mjs`) | alto | revisa o diff contra o plano, tenta derrubar cada afirmação, roda o teste, abre o artefato final | editar (devolve achados) |
 | **Explorador** | subagente `orquestracao:explorador` | Haiku 5.5 | baixo | busca e leitura: onde está X, quem chama Y, resumir um log ou uma página | escrever arquivo, concluir causa |
 | **Design** (item com tela) | subagentes `design-system:revisao-de-arquitetura-de-ui` e `design-system:critico-de-ui` | o do agente | — | a revisão de arquitetura antes do código e a crítica depois | escrever código de tela |
 
 - **Uma sessão dona por item, do plano ao PR.** A dona mede, decide, escreve, testa, revisa por subagente e abre o PR; o manual é `${CLAUDE_PLUGIN_ROOT}/pool/dona.md`, a regra comum `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`. Título da sessão: `F<n> · <tema em palavras do produto>`.
 - **Quem abre a dona escolhe o modelo** pela classificação do item (a sessão não troca o próprio modelo); a dona escolhe o de cada subagente pelo risco do que ele revisa. Critérios no protocolo, âncora `modelo-e-esforco`; skills de cada etapa, âncora `skills-da-etapa`.
-- **Item que muda de classe no meio** (o mecânico que vira decisão): a dona Sonnet devolve à orquestradora, que abre uma dona Opus com o handoff do item.
+- **Item que muda de classe no meio** (o mecânico que vira decisão): a dona Sonnet devolve à orquestradora, que abre uma dona Opus com o handoff do item e o gatilho `devolvido`. Escala uma vez; nenhuma sessão troca o próprio modelo (perderia o cache).
 - **Testes:** só os afetados durante o trabalho (`testes-afetados -- <comando>`); o gate completo roda uma vez, na fila de merge da orquestradora.
 
 Ids: Opus 5.5 `claude-opus-5-5` (alias `opus`), Sonnet 5.5 `claude-sonnet-5-5` (`sonnet`), Haiku 5.5 `claude-haiku-5-5` (`haiku`).
@@ -40,6 +40,21 @@ O subagente não aparece na lista de sessões nem no painel, não pode ser condu
 - **Só lê, mede ou devolve achados → subagente** pode, com o resultado consumido no mesmo turno: `orquestracao:explorador`, `orquestracao:validador`, os agentes de design.
 - **Briefing de subagente diz que ele não edita.** Quem lança escreve no prompt *"não grave arquivo; devolva no relatório"*. Se no meio aparecer a necessidade de gravar, ele para e devolve.
 - **A trava.** O hook `PreToolUse` `${CLAUDE_PLUGIN_ROOT}/hooks/subagente-nao-edita.mjs` **recusa** (`deny`, também em bypass) `Edit`/`Write`/`MultiEdit`/`NotebookEdit` de subagente (evento com `agent_id`) fora de `~/.claude/`, do rascunho (scratchpad, `/tmp`, `/var/folders`) e das notas entre sessões. Exceção por agente em `~/.claude/orquestracao/subagente-pode-escrever.txt` (um `subagent_type` por linha, `*` no fim casa prefixo; casa o tipo com ou sem o prefixo de um plugin do kit). Sem lista, o `designer` do kit grava só na pasta de revisões do projeto (`design.revisoes` do `.claude/kit.json`, padrão `docs/design/revisoes`) e registra `liberado-por-papel`; o designer de outro plugin ganha a mesma pasta, com a mesma cerca, quando o projeto o declara pelo tipo exato em `design.designers` do `.claude/kit.json` (ex.: `"designers": ["acme:designer"]`; `*` não vale, para não liberar todo plugin instalado). A configuração das travas fica fechada para todo subagente, inclusive o tipo liberado (senão ele se libera): as listas `subagente-pode-escrever.txt` e `trava-edicao-repos.txt`, os marcadores `ativas/` e a `batida/` que os recria, o `painel/` e o `limpeza/` (respostas e clique do operador), a bandeira `operador-ausente.json`, o estado `hooks-crewai-estado.json`, o cache `pool-registro-cache.json`, o `settings.json` (e o `.local`) de qualquer `.claude/`, os transcripts (`~/.claude/projects/**/*.jsonl`) e `~/.claude/plugins/` (fora `plugins/data/`). Bash fica de fora, como no `orquestradora-nao-edita`, salvo o comando que cita um desses arquivos pelo nome e grava (cerca contra deslize: nome por variável, `claude plugin` e os transcripts passam). Cada recusa vai para `~/.claude/orquestracao/hooks-crewai.log` (`recusou`, `recusou-trava`, `recusou-symlink`, `liberado-por-tipo`, `liberado-por-papel`, `erro`).
+
+<a id="gatilhos-do-opus"></a>
+## Os gatilhos do Opus
+A dona nasce em **Sonnet 5.5, esforço médio**, salvo quando um destes vale; aí, **Opus 5.5, esforço alto**, e o prompt da dona leva a linha `Gatilho do Opus: <gatilho> — <motivo em uma frase>` ([ADR 0025](../../../../docs/adr/0025-a-dona-nasce-em-sonnet-e-o-opus-pede-gatilho.md)). Cada um se confere antes de abrir a dona, no pedido e no plano:
+
+| Gatilho | Vale quando |
+|---|---|
+| `decisao` | o plano não tem [as cinco coisas](#plano-pronto): o item pede investigar, escolher, medir a causa |
+| `contrato` | o item cria ou muda spec, ADR, schema, API, migration ou o formato de um arquivo que outro programa lê |
+| `estado` | o item grava estado: banco, arquivo de estado vivo (`~/.claude/orquestracao/`), dados de usuário |
+| `seguranca` | o item toca segredo, permissão ou autenticação |
+| `producao` | o item toca deploy, release, dados de produção ou dinheiro |
+| `devolvido` | o item voltou da fila de merge ou de uma dona Sonnet |
+
+**A trava** (`titulo-da-dona.mjs`) recusa o `start_session` de dona sem `model` ou sem `effort`, aberto por `fork`, em Haiku, ou em Opus sem a linha do gatilho (ou com gatilho fora da lista). Cada dona que passa vai ao `hooks-crewai.log` (`abriu-sonnet`, `abriu-opus` com o gatilho), a contagem que a medida da semana lê.
 
 <a id="plano-pronto"></a>
 ## O plano está pronto para o Sonnet?
@@ -94,7 +109,7 @@ O critério de pronto não depende do relato. O hook `${CLAUDE_PLUGIN_ROOT}/hook
 
 ## Ao abrir
 
-- **Sessão dona** (`start_session`): `model` e `effort` pela classificação do item — dona de risco sem `model` (herda Opus) e `effort: "high"`; dona mecânica `model: "claude-sonnet-5-5"`, `effort: "medium"`. Título `F<n> · <tema>`; o prompt diz "Você é a dona do F<n>" e aponta o manual `pool/dona.md`.
+- **Sessão dona** (`start_session`, `context: "fresh"`): **sempre** `model` e `effort` explícitos — sem `model` a dona herda o Opus de quem abre. Padrão `model: "claude-sonnet-5-5"`, `effort: "medium"`; com [gatilho do Opus](#gatilhos-do-opus), `model: "claude-opus-5-5"`, `effort: "high"` e a linha `Gatilho do Opus: <gatilho> — <motivo>` no prompt. Título `F<n> · <tema>`; o prompt diz "Você é a dona do F<n>" e aponta o manual `pool/dona.md`.
 - **Subagente** (`Agent`): `subagent_type: "orquestracao:validador" | "orquestracao:explorador"` ou um agente de design, só para trabalho que não grava. Só passe `model` à mão quando o padrão do agente não servir; no validador, o risco se declara no item (`"risco":true`), não a cada chamada.
 - **Briefing**: o da dona traz o item, o que já se sabe e o critério de pronto; o do validador, o da [revisão](#a-revisao); o do explorador, a pergunta e o teto da resposta.
 
