@@ -1,9 +1,29 @@
 "use client"
 
+import * as React from "react"
+
 import { ChipDeEstado, ChipQueAbre } from "@/components/ui/chip-de-estado"
 import { Prioridade } from "@/components/ui/prioridade"
 
 import { Amostra, Amostras } from "./_amostra"
+
+/** O recorte por nível: um por vez; o clique no que está ligado desliga; o ligado que caiu a zero segue apertado (ARQ-05). */
+function ContagemQueLiga() {
+  const [nivel, setNivel] = React.useState<1 | 2 | 3 | null>(2)
+  return (
+    <div role="group" aria-label="Por prioridade" className="flex items-center gap-1.5">
+      <Prioridade nivel={3} ativo={nivel === 3} onAbrir={() => setNivel(3)} onDesligar={() => setNivel(null)}>
+        3 altas
+      </Prioridade>
+      <Prioridade nivel={2} ativo={nivel === 2} zerada onAbrir={() => setNivel(2)} onDesligar={() => setNivel(null)}>
+        0 médias
+      </Prioridade>
+      <Prioridade nivel={1} ativo={nivel === 1} onAbrir={() => setNivel(1)} onDesligar={() => setNivel(null)}>
+        7 baixas
+      </Prioridade>
+    </div>
+  )
+}
 
 export default function DemoDaPrioridade() {
   return (
@@ -31,6 +51,9 @@ export default function DemoDaPrioridade() {
             7 baixas
           </Prioridade>
         </div>
+      </Amostra>
+      <Amostra titulo="O recorte ligado: apertado e com o sublinhado cheio; clicar de novo desliga">
+        <ContagemQueLiga />
       </Amostra>
     </Amostras>
   )

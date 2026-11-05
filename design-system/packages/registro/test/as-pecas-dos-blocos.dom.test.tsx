@@ -291,6 +291,16 @@ describe("o topo da página (CASCO-01, TIPO-04, PESO-01)", () => {
     expect(within(resumo).getAllByRole("button").map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "false"])
   })
 
+  it("o slot dos filtros deixa os filhos encolherem na fileira estreita, sem div de contorno na tela", () => {
+    const { container } = render(<TopoDaPagina titulo="Pedidos" filtros={<input aria-label="Buscar" />} />)
+    const slot = container.querySelector<HTMLElement>('[data-slot="filtros-do-topo"]')
+    expect(slot).not.toBeNull()
+    expect(classes(slot!)).toContain("[&>*]:min-w-0")
+    // A barra de abas não encolhe por cima da busca: quem cede é o resto da fileira.
+    expect(classes(slot!)).toContain("[&>[data-slot=seletor-de-vista]]:shrink-0")
+    expect(classes(slot!)).toContain("[&>[data-slot=button]]:shrink-0")
+  })
+
   it("um recorte por vez: o inativo liga, o ativo desliga com null", () => {
     const onTrocar = vi.fn()
     render(<TopoDaPagina titulo="Pedidos" resumo={{ rotulo: "Pedem atenção", recortes, valor: "atrasados", onTrocar }} />)

@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 
 import { COR_DO_TOM_DENSO, type Tom } from "@/registry/design-system/lib/idioma-de-cor"
@@ -188,7 +190,7 @@ function TopoDaPagina<R extends string = string>({
         </p>
       ) : null}
       {filtros ? (
-        <div data-slot="filtros-do-topo" className="mt-1.5 flex items-center gap-3">
+        <div data-slot="filtros-do-topo" className="mt-1.5 flex items-center gap-3 [&>*]:min-w-0 [&>[data-slot=seletor-de-vista]]:shrink-0 [&>[data-slot=button]]:shrink-0">
           {filtros}
         </div>
       ) : null}
