@@ -13,13 +13,14 @@ export default function DemoDoMenuDaConta() {
     <Amostras>
       <Amostra titulo="O menu da conta" primeira>
         <MenuDaConta
+          id="pessoa-ana"
           nome="Ana Souza"
           email="ana.souza@exemplo.com.br"
           onAbrirConta={() => setDesfecho("Abrir a conta.")}
           onSair={() => setDesfecho("Sair.")}
         >
           <Button variant="ghost">
-            <Monograma nome="Ana Souza" />
+            <Monograma nome="Ana Souza" chave="pessoa-ana" />
             Ana Souza
           </Button>
         </MenuDaConta>

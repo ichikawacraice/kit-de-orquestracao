@@ -57,7 +57,7 @@ const ICONE_DA_SECAO: Record<TipoDeSecao, React.ComponentType<{ className?: stri
   assinatura: FileSignatureIcon,
 }
 
-type Conta = { nome: string; email: string; onSair: () => void }
+type Conta = { id: string | null; nome: string; email: string; onSair: () => void }
 type Publicacao = "parada" | "publicando" | "publicada" | "falhou"
 type Campo = "titulo" | "subtitulo" | "alinhamento" | "fundo"
 

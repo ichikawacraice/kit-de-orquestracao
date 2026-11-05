@@ -22,8 +22,8 @@ A base (`plugins/wicomm/base/`) fala só da Wicomm (regra do operador, 30/10/202
 | COR-05 | DESIGN.md | ADR 0102 · SPEC-065. O mapa `TEXTO_SOBRE_A_TINTA` e o mapa de etapas do `PontoDaEtapa` como exceção declarada · revisão do quadro de tarefas, F378 (`docs/design/revisoes/2026-11-04-F378-quadro.md`), 04/11/2026. |
 | COR-06 | DESIGN.md | ADR 0102 · SPEC-065 · ADR 0425. |
 | COR-07 | DESIGN.md | SPEC-065. |
-| COR-08 | DESIGN.md | SPEC-080 · ADR 0130. A exceção do glifo da prioridade: Q939. |
-| COR-09 | DESIGN.md | ADR 0130 · ADR 0420 · SPEC-080 (substituída nesse ponto pelo ADR 0130). O nível da prioridade como identidade declarada, que pinta a palavra: Q939, 04/11/2026, com o contraste medido na F379. A cor da pessoa, só no monograma e no nome de quem fala na conversa: Q942, 04/11/2026, com o contraste medido na F380 e levado ao kit na F379. |
+| COR-08 | DESIGN.md | SPEC-080 · ADR 0130. A exceção do glifo da prioridade: Q939. A exceção da cor da pessoa em todo monograma: F390, 04/11/2026. |
+| COR-09 | DESIGN.md | ADR 0130 · ADR 0420 · SPEC-080 (substituída nesse ponto pelo ADR 0130). O nível da prioridade como identidade declarada, que pinta a palavra: Q939, 04/11/2026, com o contraste medido na F379. A cor da pessoa no monograma e no nome de quem fala na conversa: Q942, 04/11/2026, com o contraste medido na F380 e levado ao kit na F379. Levada a todo monograma, pela chave dentro da peça, com o nome fora da conversa neutro e a separação entre identidades pela forma: pedido do operador de 04/11/2026, revisão F390 (`docs/design/revisoes/2026-11-04-F390-cor-da-pessoa-no-monograma.md`). |
 | COR-10 | DESIGN.md | ADR 0064. |
 | COR-11 | DESIGN.md | ADR 0126 · SPEC-080. |
 | COR-12 | DESIGN.md | Convenção "par de cor opaco tem teste que calcula" · ADR 0126. |

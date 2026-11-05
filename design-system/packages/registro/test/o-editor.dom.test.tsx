@@ -25,7 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/registry/design-syste
 import { CascoDoEditor, EditorDeDocumento } from "@/registry/design-system/blocks/editor/editor-de-documento"
 import { cargaDoEditor, pendenciasDe } from "@/registry/design-system/blocks/editor/dados-do-editor"
 
-const conta = { nome: "Ana Souza", email: "ana@exemplo.com.br", onSair: () => {} }
+const conta = { id: "pessoa-ana", nome: "Ana Souza", email: "ana@exemplo.com.br", onSair: () => {} }
 const editor = (estado?: string) => (
   <CascoDoEditor>
     <EditorDeDocumento carga={cargaDoEditor("7", estado)} conta={conta} />

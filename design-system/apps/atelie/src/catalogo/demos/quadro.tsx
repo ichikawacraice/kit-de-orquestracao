@@ -27,6 +27,7 @@ import { Vazio } from "@/components/ui/vazio"
 import { PontoDaEtapa } from "../etapas-de-exemplo"
 
 import { Amostra, Amostras } from "./_amostra"
+import { pessoaDaDemo } from "./_pessoas"
 
 const COLUNAS = ["Entrada", "Em andamento", "Revisão", "Feito"]
 
@@ -75,6 +76,7 @@ function Cartao({
   titulo,
   prioridade = 2,
   local = "Loja centro",
+  dono = "Ana Souza",
   ativo,
   origem,
   arrastando,
@@ -86,10 +88,12 @@ function Cartao({
   titulo: string
   prioridade?: NivelDaPrioridade
   local?: string
+  /** O dono do cartão: o monograma leva a cor dele, pelo id (COR-09). */
+  dono?: string
   ativo?: boolean
   origem?: boolean
   arrastando?: boolean
-  tom?: "neutro" | "espera" | "ruim"
+  tom?: "neutro" | "espera" | "ruim" | "alheio"
   frase?: string
   girando?: boolean
   acao?: React.ReactNode
@@ -110,7 +114,7 @@ function Cartao({
                   <CalendarIcon className="size-3.5" aria-hidden="true" />
                   até <span className="t-medida">12/11</span>
                 </span>
-                <Pessoa pessoa={{ nome: "Ana Souza" }} soMonograma />
+                <Pessoa pessoa={pessoaDaDemo(dono)} soMonograma />
               </>
             }
           />
@@ -161,10 +165,11 @@ export default function DemoDoQuadro() {
               <Cartao
                 titulo="Conferir o fechamento do mês antes do envio ao financeiro"
                 prioridade="urgente"
+                dono="Helena Prado"
                 tom="espera"
                 frase="Aguarda você: aprovar o valor"
               />
-              <Cartao titulo="Trocar a foto de capa da vitrine" prioridade={1} ativo />
+              <Cartao titulo="Trocar a foto de capa da vitrine" prioridade={1} dono="Eva Reis" ativo />
               {MAIS_DA_ENTRADA.map((titulo, i) => (
                 <Cartao key={titulo} titulo={titulo} prioridade={i % 3 === 0 ? 3 : 2} local={i % 2 ? "Loja norte" : "Loja centro"} />
               ))}
@@ -188,6 +193,7 @@ export default function DemoDoQuadro() {
                 <VagaDoCartao altura={120} />
               </li>
               <Cartao titulo="Ajustar o frete da região sul" origem />
+              <Cartao titulo="Revisar o texto da vitrine de verão" dono="Igor Matos" tom="alheio" frase="Igor Matos está editando" />
             </PilhaDaColuna>
           </ColunaDoQuadro>
           <ColunaDoQuadro recusa motivoDaRecusa="Só a revisão move para Revisão">

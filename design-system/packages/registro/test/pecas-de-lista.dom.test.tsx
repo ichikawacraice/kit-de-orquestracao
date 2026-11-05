@@ -290,7 +290,7 @@ describe('LinhaDoGrupo', () => {
         <tbody>
           <TableRow>
             <TableCell>
-              <Pessoa pessoa={{ nome: 'Ana Souza' }} />
+              <Pessoa pessoa={{ id: 'pessoa-ana', nome: 'Ana Souza' }} />
             </TableCell>
             <TableCell>
               <Prazo periodo="2026-07-24" hoje={new Date('2026-07-12T15:00:00-03:00')} />
@@ -332,18 +332,19 @@ describe('LinhaDoGrupo', () => {
 })
 
 describe('Monograma', () => {
-  it('as iniciais, em tinta neutra e aria-hidden; a ausência é tracejada', () => {
+  it('as iniciais, aria-hidden; sem id, tinta neutra; a ausência é tracejada', () => {
     expect(iniciais('Ana Maria Souza')).toBe('AS')
     expect(iniciais('')).toBe('?')
     const { container } = render(
       <>
-        <Monograma nome="Ana Souza" />
+        <Monograma nome="Ana Souza" chave={null} />
         <MonogramaAusente />
       </>
     )
     const [m, a] = Array.from(container.children) as [HTMLElement, HTMLElement]
     expect(m.textContent).toBe('AS')
     expect(m.getAttribute('aria-hidden')).toBe('true')
+    expect(m.className).toContain('bg-foreground/[0.07]')
     expect(a.className).toContain('border-dashed')
   })
 
@@ -355,19 +356,19 @@ describe('Monograma', () => {
 
 describe('Pessoa e PilhaDePessoas', () => {
   it('com pessoa, sem pessoa (tracejado e o texto de quem chama) e sem nome', () => {
-    const { rerender, container } = render(<Pessoa pessoa={{ nome: 'Ana Souza' }} papel="Gerente" />)
+    const { rerender, container } = render(<Pessoa pessoa={{ id: 'pessoa-ana', nome: 'Ana Souza' }} papel="Gerente" />)
     expect(screen.getByText('Ana Souza').className).toContain('truncate')
     expect(screen.getByText('Gerente').className).toContain('text-muted-foreground')
     rerender(<Pessoa pessoa={null} semPessoa="Sem gerente" />)
     expect(screen.getByText('Sem gerente').className).toContain('text-muted-foreground')
     expect(container.querySelector('[data-slot=monograma-ausente]')).toBeTruthy()
-    rerender(<Pessoa pessoa={{ nome: null }} />)
+    rerender(<Pessoa pessoa={{ id: 'pessoa-ana', nome: null }} />)
     expect(screen.getByText('Pessoa sem nome')).toBeTruthy()
     expect(container.querySelector('[data-slot=monograma]')?.textContent).toBe('?')
   })
 
   it('soMonograma é focável e leva o nome acessível; carregando é esqueleto', () => {
-    const { rerender } = render(<Pessoa pessoa={{ nome: 'Ana Souza' }} soMonograma />)
+    const { rerender } = render(<Pessoa pessoa={{ id: 'pessoa-ana', nome: 'Ana Souza' }} soMonograma />)
     const alvo = screen.getByRole('img', { name: 'Ana Souza' })
     expect(alvo.tabIndex).toBe(0)
     rerender(<Pessoa pessoa={null} carregando />)
@@ -375,17 +376,19 @@ describe('Pessoa e PilhaDePessoas', () => {
   })
 
   it('a pilha mostra até max, +N em medida, a frase inteira no nome acessível', () => {
-    const pessoas = ['Ana Souza', 'Bruno Lima', 'Carla Dias', 'Davi Melo', 'Eva Reis'].map((nome) => ({ nome }))
+    const pessoas = ['Ana Souza', 'Bruno Lima', 'Carla Dias', 'Davi Melo', 'Eva Reis'].map((nome, i) => ({ id: `pessoa-${i}`, nome }))
     render(<PilhaDePessoas pessoas={pessoas} sobre="muted" />)
     const pilha = screen.getByRole('img', { name: 'Ana Souza, Bruno Lima, Carla Dias, Davi Melo e Eva Reis' })
     expect(pilha.querySelectorAll('[data-slot=monograma]')).toHaveLength(3)
     expect(screen.getByText('+2').className).toContain('t-medida')
     expect(pilha.querySelector('.ring-muted')).toBeTruthy()
-    expect(pilha.innerHTML).not.toMatch(/bg-(rose|emerald|amber|violet|sky|blue)/)
+    // A cor da pessoa nunca empresta as vozes (COR-04).
+    expect(pilha.innerHTML).toMatch(/bg-(?:lime|teal|cyan|sky|blue|indigo|purple|fuchsia)-100/)
+    expect(pilha.innerHTML).not.toMatch(/bg-(?:rose|emerald|amber|violet)-/)
   })
 
   it('um a mais que o limite mostra a pessoa, não +1; vazia não desenha', () => {
-    const { rerender, container } = render(<PilhaDePessoas pessoas={['A B', 'C D', 'E F', 'G H'].map((nome) => ({ nome }))} />)
+    const { rerender, container } = render(<PilhaDePessoas pessoas={['A B', 'C D', 'E F', 'G H'].map((nome) => ({ id: nome, nome }))} />)
     expect(container.querySelectorAll('[data-slot=monograma]')).toHaveLength(4)
     expect(screen.queryByText('+1')).toBeNull()
     rerender(<PilhaDePessoas pessoas={[]} />)

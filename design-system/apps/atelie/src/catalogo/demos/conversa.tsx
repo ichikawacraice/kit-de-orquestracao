@@ -1,5 +1,4 @@
 import { AutorDaConversa, BalaoDaConversa, Conversa, DiaDaConversa, TextoComLinks } from "@/components/ui/conversa"
-import { corDaPessoa } from "@/components/ui/monograma"
 
 import { Amostra, Amostras } from "./_amostra"
 
@@ -16,7 +15,7 @@ export default function DemoDaConversa() {
             <BalaoDaConversa
               lado="outro"
               primeira
-              autor={<AutorDaConversa nome={ANA.nome} selo="Cliente" cor={corDaPessoa(ANA.id)} />}
+              autor={<AutorDaConversa nome={ANA.nome} selo="Cliente" chave={ANA.id} />}
               paraLeitor="Ana Souza, cliente, ontem às 16:05:"
               hora="16:05"
               instante="2026-11-03T19:05:00.000Z"
@@ -45,7 +44,7 @@ export default function DemoDaConversa() {
             <BalaoDaConversa
               lado="outro"
               primeira
-              autor={<AutorDaConversa nome={BRUNO.nome} cor={corDaPessoa(BRUNO.id)} />}
+              autor={<AutorDaConversa nome={BRUNO.nome} chave={BRUNO.id} />}
               paraLeitor="Bruno Lima, hoje às 09:20:"
               hora="09:20"
               instante="2026-11-04T12:20:00.000Z"

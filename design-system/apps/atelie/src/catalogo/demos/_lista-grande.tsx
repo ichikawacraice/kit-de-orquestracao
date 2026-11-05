@@ -11,6 +11,7 @@ import { LinkDaLinha, Table, TableCell, TableHead, TableHeader, TableRow } from 
 import { ProvedorDeLink } from "@/lib/link-do-app"
 
 import { LinkDoPalco } from "./_tela"
+import { pessoaDaDemo } from "./_pessoas"
 
 const HOJE = new Date("2026-07-12T12:00:00-03:00")
 const PESSOAS = ["Ana Souza", "Bruno Lima", "Carla Dias", "Diego Rocha", null]
@@ -99,7 +100,7 @@ export function ListaGrande({
         </TableHeader>
         {DADOS.map((g, gi) => {
           const feitas = g.tarefas.filter((t) => t.etapa.tom === "ok").length
-          const pessoas = [...new Set(g.tarefas.map((t) => t.quem).filter(Boolean))].map((nome) => ({ nome: nome! }))
+          const pessoas = [...new Set(g.tarefas.map((t) => t.quem).filter(Boolean))].map((nome) => pessoaDaDemo(nome!)!)
           const prazos = g.tarefas.map((t) => t.prazo).sort()
           return (
             <LinhaDoGrupo
@@ -139,7 +140,7 @@ export function ListaGrande({
                     </div>
                   </TableCell>
                   <TableCell esconderNoCelular>
-                    <Pessoa pessoa={t.quem ? { nome: t.quem } : null} />
+                    <Pessoa pessoa={pessoaDaDemo(t.quem)} />
                   </TableCell>
                   <TableCell>
                     <Prazo periodo={t.prazo} concluido={t.etapa.tom === "ok"} hoje={HOJE} />

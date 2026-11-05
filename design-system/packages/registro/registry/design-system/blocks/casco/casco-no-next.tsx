@@ -32,7 +32,7 @@ export function CascoNoNext({ children }: { children: React.ReactNode }) {
         grupos={DESTINOS}
         useNavegacao={useNavegacao}
         link={Link}
-        conta={{ nome: "Ana Souza", email: "ana.souza@exemplo.com.br", onSair: () => {} }}
+        conta={{ id: "pessoa-ana", nome: "Ana Souza", email: "ana.souza@exemplo.com.br", onSair: () => {} }}
         cabecalho={<CabecalhoDoApp contexto={<MenuDoContexto />} />}
       >
         {children}

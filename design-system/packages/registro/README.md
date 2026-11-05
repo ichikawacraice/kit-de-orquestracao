@@ -80,7 +80,7 @@ A versão vai **no caminho da URL** (o item do shadcn não tem campo de versão)
 | `logotipo` | — | a marca Wicomm (provisória até o desenho oficial) |
 | `menu-do-tema` | — | claro, escuro ou do sistema; `useTema`, `ScriptDoTema` |
 | `menu-da-conta` | — | o monograma, a conta e Sair |
-| `monograma` | avatar | o círculo das iniciais, em tinta neutra; o tracejado da pessoa que não há; `cor` e `corDaPessoa(id)`, a cor da pessoa só na conversa |
+| `monograma` | avatar | o círculo das iniciais, na cor da pessoa pelo id (`chave`), neutro sem id; o tracejado da pessoa que não há |
 | `pessoa` | avatar group | `Pessoa` (monograma, nome, papel; ausente, sem nome) e `PilhaDePessoas` (+N, a frase na dica; `decorativa`) |
 | `conversa` | chat bubbles | a conversa entre pessoas: o meu balão e o do outro, o autor, o dia, a frase para o leitor de tela e a hora |
 | `checkbox` | checkbox | a caixa de marcar e a `OpcaoDeMarcar` (a caixa com o texto) |

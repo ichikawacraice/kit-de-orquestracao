@@ -12,6 +12,7 @@ import { LinkDaLinha, Table, TableBody, TableCell, TableHead, TableHeader, Table
 import { ProvedorDeLink } from "@/lib/link-do-app"
 
 import { Amostra, Amostras } from "./_amostra"
+import { pessoaDaDemo } from "./_pessoas"
 import { LinkDoPalco } from "./_tela"
 
 const HOJE = new Date("2026-07-12T12:00:00-03:00")
@@ -121,7 +122,7 @@ export default function DemoDaEscolhaNaCelula() {
                 <TableCell>
                   <EscolhaNaCelula
                     rotulo="Responsável"
-                    valor={<Pessoa pessoa={quem.valor ? { nome: quem.valor } : null} />}
+                    valor={<Pessoa pessoa={pessoaDaDemo(quem.valor)} />}
                     gravando={quem.gravando}
                     recusado={quem.recusado}
                     aoTentarDeNovo={quem.tentarDeNovo}
@@ -163,7 +164,7 @@ export default function DemoDaEscolhaNaCelula() {
         </EscolhaNaCelula>
       </Amostra>
       <Amostra titulo="Sem permissão: só a leitura">
-        <EscolhaNaCelula rotulo="Responsável" editavel={false} valor={<Pessoa pessoa={{ nome: "Ana Souza" }} />}>
+        <EscolhaNaCelula rotulo="Responsável" editavel={false} valor={<Pessoa pessoa={pessoaDaDemo("Ana Souza")} />}>
           {null}
         </EscolhaNaCelula>
         <EscolhaNaCelula rotulo="Prazo" editavel={false} valor={<Prazo periodo="2026-07-24" hoje={HOJE} />}>

@@ -374,7 +374,7 @@ export const PECAS = [
   peca({
     name: 'monograma',
     title: 'Monograma',
-    description: 'avatar — o círculo de 20px com as iniciais, em tinta neutra, e o círculo tracejado da pessoa que não há; a cor da pessoa (`corDaPessoa(id)`) só na conversa entre pessoas.',
+    description: 'avatar — o círculo de 20px com as iniciais, na cor da pessoa pelo id (`chave`), neutro sem id, e o círculo tracejado da pessoa que não há.',
     files: [ui('monograma')],
   }),
   peca({
