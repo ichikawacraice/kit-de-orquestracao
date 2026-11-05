@@ -1,6 +1,6 @@
 ---
 name: design-system
-versao: 0.24.0
+versao: 0.25.0
 description: As convenções de engenharia do front dos apps React do sistema — o que o código faz para a direção de design e a anatomia se manterem verdadeiras.
 ---
 
@@ -55,6 +55,11 @@ description: As convenções de engenharia do front dos apps React do sistema �
 - **Regra.** Gesto que grava pode mostrar o efeito na hora (otimista); se o servidor recusa, a tela **desfaz** e diz o motivo no bloco do gesto. Efeito otimista sem caminho de recusa é defeito.
 - **Por quê.** O efeito que fica na tela depois da recusa afirma um estado que o banco não tem.
 - **Confere.** Auditoria de clique · revisão de código.
+
+### CONV-26 · O filtro da Lista lembrado no navegador volta como a pessoa deixou
+- **Regra.** A Lista pode lembrar no navegador o recorte que a pessoa escolheu, e então: (1) a chave tem versão e dono: a tela, o registro pai quando há (o id dele, nunca token, sessão ou e-mail) e quem vê, porque o mesmo navegador abre como perfis diferentes; sem como dizer quem vê, não grava; (2) grava só no gesto da pessoa (mudar um filtro, o chip que filtra, *Limpar filtros*); ler o gravado não grava, e o recorte igual ao padrão apaga a chave; (3) grava só o recorte durável (estado, prioridade, lugar, responsável); busca de texto e data fixa nunca; (4) ao ler, confere campo a campo: o inválido volta ao padrão e os outros ficam, o gravado ilegível é apagado, e o valor que não teria gatilho à vista (opção que saiu, filtro que este perfil não vê) é descartado; (5) a volta não se anuncia, sem faixa nem toast: cada gatilho mostra o próprio valor, *Limpar filtros* aparece com o recorte fora do padrão e apaga a chave, e o vazio por filtro (EST-02) traz a mesma saída (MSG-06); (6) sem armazenamento (aba privada, cota cheia), o filtro vale só na memória, sem aviso (MSG-03); (7) enquanto não leu, a região está em *carregando*: a lista nunca aparece sem filtro para ser filtrada logo depois; a leitura é depois da hidratação (LAY-01); (8) o filtro no URL (CONV-06) vence o lembrado: a tela abre no padrão mais o do URL, sem ler nem gravar a chave, e só o gesto seguinte grava o recorte que a pessoa vê; não há sincronia entre abas.
+- **Por quê.** Quem volta à fila refaz o mesmo recorte várias vezes por dia, e lembrar o recorte tira esse trabalho. Mas o que se lembra errado custa mais que o que se esquece: a data de ontem escondendo a lista de hoje parece tela travada, o filtro sem gatilho esconde itens sem dizer por quê, e o perfil que herda o recorte de outro vê uma fila que não é a dele.
+- **Confere.** Testes do `filtro-lembrado` no registro (os casos de borda) · revisão de código (grava só no gesto; nada fora do esquema) · `navegador` (F5 com filtro; aba privada; dois perfis no mesmo navegador).
 
 <a id="formulario"></a>
 ## 3. Formulário
@@ -204,6 +209,7 @@ O contraste, o anel de foco e o escape do movimento já são regra da DESIGN (CO
 | CONV-06 | Estado de vista no URL, sem servidor | guarda |
 | CONV-07 | Ação assíncrona visível | guarda |
 | CONV-08 | Efeito na hora, recusa desfaz | auditoria, revisão |
+| CONV-26 | Filtro lembrado volta como a pessoa deixou | testes, revisão, navegador |
 | CONV-09 | Erro de submissão alcança os olhos | guarda |
 | CONV-10 | Confirmação e dica nunca nativas | guarda |
 | CONV-11 | Texto não cita documento | guarda, revisão |

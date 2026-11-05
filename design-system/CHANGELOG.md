@@ -4,6 +4,19 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.25.0 · 05/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **O filtro da Lista lembrado no navegador** (CONV-26): a Lista pode lembrar o recorte que a pessoa escolheu e voltar como ela o deixou. A chave tem versão e dono (a tela, o registro pai quando há, quem vê); grava só no gesto, nunca ao ler; o recorte igual ao padrão e o *Limpar filtros* apagam a chave; busca de texto e data fixa não se gravam; ao ler, cada campo é conferido e o inválido volta ao padrão. A volta não se anuncia, e sem armazenamento o filtro vale só na memória. O filtro no URL vence o lembrado, sem ler nem gravar a chave.
+- **A peça `filtro-lembrado`** (lib): `useFiltroLembrado` com o esquema da tela e o `doUrl` para o filtro que veio no URL (`umaDas`, `algumasDas`, `verdadeiroOuFalso`), mais as funções puras (`chaveDoFiltro`, `lerFiltros`, `gravarFiltros`, `apagarFiltros`, `sanearFiltros`, `igualAoPadrao`). A chave é `wicomm-filtros:<app>:<tela>:v<versão>:<quem vê>[:<registro>]`.
+
+### Migração
+- Nada a migrar: a regra vale para a Lista que passar a lembrar o filtro.
+- Para adotar: `npx shadcn add <registro>/filtro-lembrado.json`, declare o padrão e o esquema da tela, mostre a região em *carregando* enquanto `lido` for falso ligue *Limpar filtros* a `limpar` e passe em `doUrl` o filtro que veio no URL.
+- Quem já grava o filtro com chave própria troca pela do `chaveDoFiltro`; a chave velha deixa de ser lida (a pessoa refaz o recorte uma vez).
+
 ## 0.24.0 · 05/11/2026
 
 Camadas: base, registro

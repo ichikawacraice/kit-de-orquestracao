@@ -235,6 +235,11 @@
       "components/ui/ficha.tsx": "52526f5c5e84fe6ffc1ff7356ddf04538c9fe6b48bf8fab49e53f08a76f70111",
       "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
     },
+    "filtro-lembrado": {
+      "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
+      "lib/filtro-lembrado.ts": "69380556d3fdf520b8567c9f38d4ccf6107616481ed17a739cca5ceaa74c0a20",
+      "lib/utils.ts": "3dc81c9c82f1a1a827490ecfe85bee2b53fecc322106f128e84df086ee68327b"
+    },
     "idioma-de-cor": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "lib/idioma-de-cor.ts": "db6d5fb5f025ba555883e39cf40fcf750f57cedb65c3dd5e612140a097e61e77",

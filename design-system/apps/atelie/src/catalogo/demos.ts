@@ -25,6 +25,7 @@ import Ficha from "./demos/ficha"
 import IdiomaDeCor from "./demos/idioma-de-cor"
 import Input from "./demos/input"
 import Label from "./demos/label"
+import FiltroLembrado from "./demos/filtro-lembrado"
 import LinkDoApp from "./demos/link-do-app"
 import Lista from "./demos/lista"
 import Logotipo from "./demos/logotipo"
@@ -103,6 +104,7 @@ export const DEMOS: Record<string, ComponentType> = {
   "idioma-de-cor": IdiomaDeCor,
   "input": Input,
   "label": Label,
+  "filtro-lembrado": FiltroLembrado,
   "link-do-app": LinkDoApp,
   "lista": Lista,
   "logotipo": Logotipo,

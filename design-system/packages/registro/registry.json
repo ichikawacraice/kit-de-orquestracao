@@ -741,6 +741,21 @@
       ]
     },
     {
+      "name": "filtro-lembrado",
+      "type": "registry:lib",
+      "title": "Filtro lembrado",
+      "description": "persisted filters — o filtro da Lista lembrado no navegador por tela e por quem vê (CONV-26): chave com versão e dono, grava só no gesto, saneia campo a campo ao ler, Limpar apaga a chave.",
+      "registryDependencies": [
+        "@wicomm/estilo"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/lib/filtro-lembrado.ts",
+          "type": "registry:lib"
+        }
+      ]
+    },
+    {
       "name": "chip-de-estado",
       "type": "registry:ui",
       "title": "Chip de estado",
