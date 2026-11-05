@@ -1239,12 +1239,21 @@ function filaDeMerge(args, { semTurno = false } = {}) {
     // F427: com a fila livre (nenhum gate do projeto vivo), o próprio `--anotar` a lança destacada, pelo julgamento e pelo
     // lançador da batida: a marca `lancada` gravada aqui, dentro da trava, segura a batida (e outro `--anotar`) por RELANCE_MIN.
     // Com gate rodando, só anota: a rodada viva leva os pendentes como lote seguinte. A batida segue como rede (fila órfã).
+    // Os avisos (F370, F404) pedem conserto do item antes do merge: com algum deles, não lança; o próximo `--anotar` lança.
+    const projetoDaAnotacao = projetoDoCwd(cwd).projeto;
+    const semCodigo = avisoSemCodigo(pedidos.map((p) => p.pr), projetoDaAnotacao, cwd);
+    const semEntrega = avisoSemEntrega(pedidos.map((p) => p.pr), projetoDaAnotacao);
+    const comAviso = semCodigo || semEntrega
+      ? { motivo: `corrija o aviso (${[semCodigo && 'avisoSemCodigo', semEntrega && 'avisoSemEntrega'].filter(Boolean).join(', ')}) e anote de novo: o próximo --anotar lança a fila` }
+      : null;
     const r = comTrava(() => {
       const e = lerEstado();
       const pendentes = juntarPedidos(e.pendentes, pedidos);
       const novo = { ...e, pendentes, config: { ...(e.config ?? {}), cwd: raizDoRepo(cwd) } };
       const orfa = filaOrfa(novo);
-      const j = orfa ? julgarLancamento(novo, orfa, Date.now()) : { motivo: 'há um gate da fila rodando: o PR entra no lote seguinte', vivo: true };
+      const julgado = orfa ? julgarLancamento(novo, orfa, Date.now()) : { motivo: 'há um gate da fila rodando: o PR entra no lote seguinte', vivo: true };
+      // o aviso só segura o que lançaria: o motivo de fundo (desligada, sem gate, gate rodando) diz mais à dona
+      const j = julgado.lancada && comAviso ? comAviso : julgado;
       gravarJson(arquivo, j.lancada ? { ...novo, lancada: j.lancada } : novo);
       return {
         anotado: true, pendentes, lancou: !!j.lancada, ...(j.motivo ? { naoLancou: j.motivo } : {}),
@@ -1252,17 +1261,18 @@ function filaDeMerge(args, { semTurno = false } = {}) {
         ...(e.config?.gate ? {} : { aviso: 'a fila deste projeto ainda não tem gate gravado: nem o --anotar nem a batida a lançam até a orquestradora rodar a fila uma vez' }),
       };
     });
-    // o processo sobe fora da trava (a fila também a toma); falhar aqui deixa a fila para a batida, que relança depois de RELANCE_MIN
+    // o item vai a `etapa: merge` antes de o processo subir: a rodada lançada pode devolver o PR em segundos, e a ligação
+    // depois dela apagaria a devolução. O processo sobe fora da trava (a fila também a toma); falhar aqui deixa a fila para a
+    // batida, que relança depois de RELANCE_MIN.
     const { lancar, vivo, ...saidaDaTrava } = r;
+    const oQue = (lancado) => (lancado ? 'a fila foi lançada: o gate roda' : vivo ? 'espera a vez' : 'espera a batida lançar o gate');
+    let lig = ligarComAviso(branches, { projeto: projetoDaAnotacao, oQue: oQue(!!lancar) });
     if (lancar) {
       try { Object.assign(saidaDaTrava, lancarFilaSemTurno(lancar)); } catch (err) {
         Object.assign(saidaDaTrava, { lancou: false, naoLancou: `não consegui lançar a fila (${String(err?.message || err).split('\n')[0]}): a batida relança` });
+        lig = ligarComAviso(branches, { projeto: projetoDaAnotacao, oQue: oQue(false) });
       }
     }
-    const oQue = saidaDaTrava.lancou ? 'a fila foi lançada: o gate roda' : vivo ? 'espera a vez' : 'espera a batida lançar o gate';
-    const lig = ligarComAviso(branches, { projeto: projetoDoCwd(cwd).projeto, oQue });
-    const semCodigo = avisoSemCodigo(pedidos.map((p) => p.pr), projetoDoCwd(cwd).projeto, cwd);
-    const semEntrega = avisoSemEntrega(pedidos.map((p) => p.pr), projetoDoCwd(cwd).projeto);
     return { ...saidaDaTrava, ...lig, ...(semCodigo ? { avisoSemCodigo: semCodigo } : {}), ...(semEntrega ? { avisoSemEntrega: semEntrega } : {}) };
   }
   const entrada = comTrava(() => {
@@ -1504,7 +1514,7 @@ const RELANCE_MIN = 5;
 const LANCAMENTOS = 3; // lançada tantas vezes sem nunca se gravar dona: volta ao relatório da orquestradora
 function lancarFilaSemTurno({ orfa, config, arquivo }) {
   const log = arquivo.replace(/\.json$/, '.sem-turno.log');
-  const fd = openSync(log, 'w');
+  const fd = openSync(log, 'a'); // em 'a': uma rodada anterior ainda pode escrever nele
   try {
     const args = [fileURLToPath(import.meta.url), 'fila-de-merge', ...orfa.prs.map((p) => `${p.pr}:${p.sha}`), '--gate', config.gate, ...(config.preparar ? ['--preparar', config.preparar] : []), '--sem-turno'];
     // sem a id da sessão que rodou a batida: a fila não é dela

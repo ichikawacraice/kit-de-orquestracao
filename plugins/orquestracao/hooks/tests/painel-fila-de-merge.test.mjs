@@ -844,6 +844,8 @@ test('F427: --anotar com gate gravado e fila livre lança a rodada sem turno, qu
   const c = montar();
   try {
     c.item('F1', 21); c.item('F2', 24);
+    // com a entrega gravada: sem ela o --anotar avisa e não lança (teste abaixo)
+    assert.equal(c.painel('update', 'fila', 'F2', JSON.stringify({ entrega: { resultado: 'r', medido: 'm', naoMedido: 'n', proximos: [] } })).exit, 0);
     c.envExtra = { KIT_POS_MERGE: 'off' };
     const orq = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', 'true');
     assert.equal(orq.exit, 0, orq.err + orq.out);
@@ -867,6 +869,7 @@ test('F427: --anotar não lança com gate rodando nem com lançamento recente; s
   const c = montar();
   try {
     c.item('F2', 24);
+    assert.equal(c.painel('update', 'fila', 'F2', JSON.stringify({ entrega: { resultado: 'r' } })).exit, 0, 'sem aviso pendente');
     const config = { cwd: c.clone, gate: 'true', preparar: null };
     mkdirSync(dirname(c.estadoDaFila), { recursive: true });
     // um dono vivo: o próprio processo do teste, gravado agora (começou antes do `desde`)
@@ -890,6 +893,28 @@ test('F427: --anotar não lança com gate rodando nem com lançamento recente; s
     const esgotada = JSON.parse(c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar').out);
     assert.equal(esgotada.lancou, false);
     assert.match(esgotada.naoLancou, /lançamentos/);
+  } finally { limpar(c); }
+});
+
+// F427: o aviso do --anotar (PR só de doc que fecharia o item, item sem entrega) pede conserto antes do merge: não lança
+test('F427: --anotar com aviso pendente não lança a fila, mesmo livre e com gate gravado', () => {
+  const c = montar();
+  try {
+    c.item('F1', 28);
+    const config = { cwd: c.clone, gate: 'true', preparar: null };
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [], config }));
+    const r = c.painel('fila-de-merge', `28:${c.shas[28]}`, '--anotar');
+    assert.equal(r.exit, 0, r.err);
+    const s = JSON.parse(r.out);
+    assert.match(s.avisoSemCodigo ?? '', /só muda documentação/, r.out);
+    assert.equal(s.lancou, false, r.out);
+    assert.match(s.naoLancou ?? '', /corrija o aviso.*avisoSemCodigo.*avisoSemEntrega/, r.out);
+    assert.equal(s.pid, undefined);
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.pendentes.map((p) => p.pr), [28], 'fica anotado');
+    assert.equal(e.lancada, undefined, 'não marca lançamento');
+    assert.match(c.dado('F1').agora, /espera a batida/);
   } finally { limpar(c); }
 });
 
