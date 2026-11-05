@@ -299,8 +299,15 @@ function montarTodos(
     const final = etapaCrua === 'feito' || etapaCrua === 'descartado'
     // F425: no item vivo, a etapa e os PRs deduzidos valem mais que os gravados; `feito` deduzido não fecha aqui (a batida fecha)
     const dd = final || !etapaOk ? undefined : deduzidos.get(d.id)
-    const etapaDeduzida = dd && typeof dd.etapa === 'string' && ETAPAS.includes(dd.etapa) && dd.etapa !== 'feito' && dd.etapa !== 'descartado' ? dd.etapa : undefined
-    const prsDeduzidos = dd && dd.fontes?.prs === 'gh' ? inteiros(dd.prs) : undefined
+    // a etapa de fonte `item` é só a declarada da hora da batida, e a gravação depois da batida vence; `feito` deduzido aparece como merge
+    const gravadoDepois = dd ? Date.parse(texto(d.data.atualizadoEm) ?? '') > Date.parse(dd.em as string) : false
+    const etapaBruta = dd && !gravadoDepois && dd.fontes?.etapa !== 'item' && typeof dd.etapa === 'string' ? (dd.etapa === 'feito' ? 'merge' : dd.etapa) : undefined
+    const etapaDeduzida = etapaBruta && ETAPAS.includes(etapaBruta) && etapaBruta !== 'descartado' ? etapaBruta : undefined
+    // os PRs que a dona gravou e a batida não viu entram como abertos (o PR aberto depois da batida)
+    const prsGravados = inteiros(d.data.prs)
+    const prsDaBatida = dd && dd.fontes?.prs === 'gh' ? inteiros(dd.prs) : undefined
+    const prsNovos = prsDaBatida ? prsGravados.filter(n => !prsDaBatida.includes(n)) : []
+    const prsDeduzidos = prsDaBatida ? [...prsDaBatida, ...prsNovos] : undefined
     let situacao: Situacao
     let trava: LinhaItem['trava']
     const donoVivo = donoLocalId !== undefined && vivos !== null && vivos.has(donoLocalId)
@@ -338,7 +345,7 @@ function montarTodos(
       // Sem dona no item há tempo: some quando o item está final ou travado (a trava já diz o que o prende).
       esperando: final || situacao === 'travado' ? undefined : (s => (s ? { desde: s.desde } : undefined))(semDona(d.data, agora)),
       semDonoDesde: (t => (t === null ? undefined : t))(semDonoDesde(d.data)),
-      prs: prsDeduzidos ?? inteiros(d.data.prs),
+      prs: prsDeduzidos ?? prsGravados,
       depois: Array.isArray(d.data.depois)
         ? d.data.depois.flatMap(x => {
             const o = x as Record<string, unknown> | null
@@ -369,7 +376,7 @@ function montarTodos(
             em: dd.em as string,
             etapaDeclarada: etapaCrua as string,
             fontes: { ...(dd.fontes ?? {}) },
-            prsAbertos: inteiros(dd.prsAbertos),
+            prsAbertos: [...inteiros(dd.prsAbertos), ...prsNovos],
             mergeado: dd.mergeado === true || dd.fatiaMergeada === true,
           }
         : undefined,
@@ -2997,23 +3004,33 @@ export const register: Register = on => {
     const linhaItem = (i: LinhaItem) => {
       const cor = i.situacao === 'travado' ? 'error' : i.situacao === 'fila' ? 'inactive' : (COR_ETAPA_TERMINAL[i.etapa] ?? 'inactive')
       const etapa = ROTULO_ETAPA_TERMINAL[i.etapa] ?? i.etapa
-      const info = [
-        i.situacao === 'fila' ? `espera ${etapa}` : etapa,
-        paradoDoCartao(i, agora, situacao, atividade),
+      // o parado deduzido sai em negrito, fora do apagado, como no canto do cartão
+      const parado = paradoDoCartao(i, agora, situacao, atividade)
+      const cabeca = i.situacao === 'fila' ? `espera ${etapa}` : etapa
+      const resto = [
         tituloDoTema(i),
         i.perguntas[0] ? `aguarda você · ${i.perguntas[0]}` : undefined,
         seloDaEspera(i),
         ...quemDoItem(i).map(q => q.t),
         textoDoPr(i)?.t,
         ...quemSaiu(i).map(q => q.t),
-      ].filter(Boolean).join(' · ')
+      ].filter(Boolean)
+      const info = [cabeca, ...resto].join(' · ')
 
       return (
         <Box key={`item:${i.id}`} flexDirection="row" columnGap={1}>
           <Text color={cor}>●</Text>
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">{`${i.id} · ${i.titulo}`}</Text>
-            <Text dimColor wrap="wrap">{info}</Text>
+            {parado ? (
+              <Text wrap="wrap">
+                <Text dimColor>{`${cabeca} · `}</Text>
+                <Text bold>{parado}</Text>
+                {resto.length > 0 && <Text dimColor>{` · ${resto.join(' · ')}`}</Text>}
+              </Text>
+            ) : (
+              <Text dimColor wrap="wrap">{info}</Text>
+            )}
             {(() => {
               const c = i.situacao === 'fila' ? citadosDaFila(i) : citadosDoCartao(i)
 

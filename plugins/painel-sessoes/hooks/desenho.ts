@@ -543,10 +543,12 @@ export function textoDoPr(item: LinhaItem): { t: string; mergeado: boolean } | u
   const mais = item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''
   const dd = item.deduzido
   if (!dd) return { t: `#${item.prs[item.prs.length - 1]}${mais}`, mergeado: false }
+  // com dedução, o `+M` conta só os outros abertos; o mergeado sem saber qual (a batida não grava) só leva número se o PR é um só
   const abertos = item.prs.filter(n => dd.prsAbertos.includes(n))
-  if (abertos.length > 0) return { t: `#${abertos[abertos.length - 1]}${mais}`, mergeado: false }
+  if (abertos.length > 0) return { t: `#${abertos[abertos.length - 1]}${abertos.length > 1 ? ` +${abertos.length - 1}` : ''}`, mergeado: false }
+  if (!dd.mergeado) return undefined
 
-  return dd.mergeado ? { t: `#${item.prs[item.prs.length - 1]} mergeado`, mergeado: true } : undefined
+  return { t: item.prs.length === 1 ? `#${item.prs[0]} mergeado` : 'PR mergeado', mergeado: true }
 }
 
 const chipDoPr = (item: LinhaItem): Chip[] => {
