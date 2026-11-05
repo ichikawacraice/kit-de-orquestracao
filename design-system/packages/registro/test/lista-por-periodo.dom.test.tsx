@@ -232,7 +232,7 @@ describe('K3 · a contagem da LinhaDoGrupo', () => {
     render(<Grupo contagem={{ total: 12, unidade }} />)
     const lugar = document.querySelector('[data-slot=quantidade-do-grupo]')!
     expect(lugar).toBeTruthy()
-    expect(classes(lugar)).toContain('min-w-24')
+    expect(classes(lugar)).toEqual(expect.arrayContaining(['min-w-24', 'justify-end']))
     expect(classes(screen.getByText('12'))).toEqual(expect.arrayContaining(['min-w-[3ch]', 'text-right']))
   })
 
@@ -252,15 +252,14 @@ describe('K3 · a contagem da LinhaDoGrupo', () => {
   })
 
   // O jsdom não mede caixas: o teste prova a classe que impede a frase de transbordar sobre o nome.
-  it('a causa longa encolhe e trunca, com a frase inteira no title, e não some no estreito', () => {
+  it('a causa longa encolhe e trunca, com a frase inteira no title, com piso legível e saindo inteira no muito estreito', () => {
     const frase = 'Nenhuma entrega em 3 semanas'
     render(<Grupo linhas={[]} semLinhas={frase} />)
     const causa = document.querySelector('[data-slot=sem-linhas]')!
     expect(causa.textContent).toBe(frase)
     expect(causa.getAttribute('title')).toBe(frase)
-    expect(classes(causa)).toEqual(expect.arrayContaining(['min-w-0', 'truncate']))
+    expect(classes(causa)).toEqual(expect.arrayContaining(['min-w-[6ch]', 'truncate', '@max-[4rem]:hidden']))
     expect(classes(causa)).not.toContain('shrink-0')
-    expect(classes(causa).some((c) => c.includes(':hidden'))).toBe(false)
   })
 
   it('com linhas e sem contagem, nada no fim', () => {
@@ -279,6 +278,9 @@ describe('K5 · EsperaDosGrupos', () => {
     expect(status.querySelectorAll('[data-slot=espera-do-degrau]')).toHaveLength(2)
     expect(status.querySelectorAll('[data-slot=espera-da-linha]')).toHaveLength(3)
     expect(status.querySelector('[data-slot=espera-do-cabecalho]')).toBeTruthy()
+    // A espera não cede altura ao recipiente: a régua e os grupos não encolhem numa caixa de altura fixa.
+    expect(classes(status.querySelector('[data-slot=espera-do-cabecalho]')!)).toContain('shrink-0')
+    for (const g of status.querySelectorAll('[data-slot=espera-do-grupo]')) expect(classes(g)).toContain('shrink-0')
   })
 
   it('sem cabecalho, sem a faixa da régua', () => {

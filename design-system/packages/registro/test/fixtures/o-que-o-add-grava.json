@@ -263,7 +263,7 @@
     "linha-do-grupo": {
       "app/globals.css": "684e5862675822e7e0ea590a6f7b114996035e26567c20083407e181f2faccc9",
       "components/ui/chip-de-estado.tsx": "8e5a11bbbbef0e0b5b3b54c23c186e6de49dee9bdc816c53ec76a2ea4335b8dc",
-      "components/ui/linha-do-grupo.tsx": "bd6c13be081505c01c7cefe9a7ba8efb05622ac0fe82a84a3f2e552e06ef2b59",
+      "components/ui/linha-do-grupo.tsx": "1c652196450c837d7b1ce6d28c7206d6570fe6349ae2b8e9420cdb4ccbc867c1",
       "components/ui/progress.tsx": "891effbd859afe0f830f59b4fa3494254d0d4c04540e681dc0ef7103354cab4d",
       "components/ui/skeleton.tsx": "814243725b8bbac6a9ddf5f275f6017f51b4863237473a83a46267274d07b89a",
       "components/ui/table.tsx": "6b3a8cfa47a523f7e212027d9fd8287300d208877a831e8a25c4d8ff26c3d0e4",

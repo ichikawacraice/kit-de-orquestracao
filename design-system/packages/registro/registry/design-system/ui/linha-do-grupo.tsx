@@ -251,7 +251,7 @@ function LinhaDoGrupo({
               {diz === "contagem" && quantidade ? (
                 // A palavra pede mais lugar que a fração: cede antes, em 5rem. O número mora numa caixa de 3
                 // algarismos à direita e a palavra num lugar de piso fixo: entre grupos, os números ficam no mesmo x.
-                <span data-slot="quantidade-do-grupo" className="flex min-w-24 shrink-0 items-baseline gap-1 text-foreground-2 @max-[5rem]:hidden">
+                <span data-slot="quantidade-do-grupo" className="flex min-w-24 shrink-0 items-baseline justify-end gap-1 text-foreground-2 @max-[5rem]:hidden">
                   <span className="t-medida min-w-[3ch] text-right">{quantidade.total}</span>{" "}
                   <span className="t-denso">{quantidade.total === 1 ? quantidade.unidade.um : quantidade.unidade.varios}</span>
                 </span>
@@ -261,8 +261,9 @@ function LinhaDoGrupo({
                 </span>
               ) : diz === "vazio" ? (
                 // Zero de zero não é progresso parado: é grupo sem linhas, e a frase diz isso (EST-02, EST-04).
-                // Encolhe e trunca (com a frase inteira no title): a causa longa nunca passa por cima do nome.
-                <span data-slot="sem-linhas" title={semLinhas} className="t-denso min-w-0 truncate text-muted-foreground">
+                // Encolhe e trunca (com a frase inteira no title): a causa longa nunca passa por cima do nome. Com
+                // piso de 6ch: ou cabe o começo legível, ou sai inteira abaixo de 4rem, nunca uma lasca.
+                <span data-slot="sem-linhas" title={semLinhas} className="t-denso min-w-[6ch] truncate text-muted-foreground @max-[4rem]:hidden">
                   {semLinhas}
                 </span>
               ) : null}
@@ -336,13 +337,13 @@ function EsperaDosGrupos({
     <div role="status" aria-busy="true" data-slot="espera-dos-grupos" className={cn("flex flex-col", className)}>
       <span className="sr-only">{rotulo}</span>
       {/* A régua do cabeçalho, sem nome de coluna fingido. */}
-      {cabecalho ? <div aria-hidden="true" data-slot="espera-do-cabecalho" className="h-10 border-b border-border" /> : null}
+      {cabecalho ? <div aria-hidden="true" data-slot="espera-do-cabecalho" className="h-10 shrink-0 border-b border-border" /> : null}
       {grupos.map((linhas, i) => (
         <div
           key={i}
           aria-hidden="true"
           data-slot="espera-do-grupo"
-          className={cn(i > 0 ? (grupos[i - 1]! > 0 ? medida.vao : medida.curto) : cabecalho && medida.primeiro)}
+          className={cn("shrink-0", i > 0 ? (grupos[i - 1]! > 0 ? medida.vao : medida.curto) : cabecalho && medida.primeiro)}
         >
           <div className={cn(linhas > 0 && medida.ar)}>
             <Skeleton data-slot="espera-do-degrau" className={cn("rounded-xl", ALTURA[densidade])} />

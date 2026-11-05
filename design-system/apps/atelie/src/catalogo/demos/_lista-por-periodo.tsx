@@ -64,8 +64,9 @@ function Cabecalho() {
 }
 
 function Linha({ e }: { e: Entrega }) {
+  // Toda linha na altura da de duas linhas: o prazo concluído (uma linha só) não encolhe a linha, e a espera em h-12 é verdade.
   return (
-    <TableRow>
+    <TableRow className="h-12">
       <TableCell className="truncate">{e.nome}</TableCell>
       <TableCell>
         <Prazo periodo={e.prazo} concluido={e.situacao === "Feita"} hoje={HOJE} />
@@ -187,7 +188,7 @@ export function EsperaSobreALista() {
           </LinhaDoGrupo>
         ))}
       </Table>
-      <EsperaDosGrupos grupos={[3, 2]} alturaDaLinha="h-12" rotulo="As entregas por semana" className="pointer-events-none absolute inset-0 opacity-50" />
+      <EsperaDosGrupos grupos={[3, 2]} alturaDaLinha="h-12" rotulo="As entregas por semana" className="pointer-events-none absolute inset-x-0 top-0 opacity-50" />
     </div>
   )
 }

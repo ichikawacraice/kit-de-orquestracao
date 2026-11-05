@@ -169,7 +169,7 @@ export default function DemoDaLinhaDoGrupo() {
           </Table>
         </div>
       </Amostra>
-      <Amostra titulo="Contagem: a quantidade e a fração terminam no mesmo x (com progresso, a quantidade guarda o lugar da trilha); o total sem linhas e o vazio sem contagem">
+      <Amostra titulo="Contagem: com progresso em todos os grupos, a quantidade, a fração e a causa do vazio terminam no mesmo x">
         <div className="w-full">
           <Table className="table-fixed">
             <TableHeader>
@@ -202,10 +202,11 @@ export default function DemoDaLinhaDoGrupo() {
               nome="9 a 15 de nov"
               colunas={2}
               abertoDeInicio={false}
+              progresso
               contagem={{ total: 2, unidade: { um: "entrega", varios: "entregas" } }}
             />
-            <LinhaDoGrupo nome="16 a 22 de nov" colunas={2} semLinhas="Nenhuma entrega" />
-            <LinhaDoGrupo nome="Sem causa declarada" colunas={2} />
+            <LinhaDoGrupo nome="16 a 22 de nov" colunas={2} progresso semLinhas="Nenhuma entrega" />
+            <LinhaDoGrupo nome="Sem causa declarada" colunas={2} progresso />
           </Table>
         </div>
       </Amostra>
