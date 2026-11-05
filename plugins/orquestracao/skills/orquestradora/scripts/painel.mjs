@@ -1595,6 +1595,9 @@ function comandoBatida(args) {
   if (process.env.KIT_ESTADO_DEDUZIDO !== 'off') {
     try { deduzidos = coletarDeduzidos({ itens: itensVivos(), linhas, projetoDe: projetoDeUmaLinha(), slug: (p) => arq.slugDoProjeto(p), agoraMs, prazoMin }); } catch (e) { process.stderr.write(`batida: não deduzi o estado dos itens: ${e?.message || e}\n`); }
   }
+  // o custo lê transcripts: mede-se fora da trava (F348), só para o item que a dedução viu mergeado
+  const custos = new Map();
+  if (!seco) for (const [F, dd] of deduzidos) if (dd?.mergeado) { const it = ler('fila', F); if (it) { try { custos.set(F, medirCusto(it.data)); } catch { /* sem custo */ } } }
   const rodar = () => {
     const itens = itensVivos();
     const filas = filasDaBatida({ seco, agoraMs });
@@ -1618,7 +1621,7 @@ function comandoBatida(args) {
       const atual = ler('fila', F);
       if (!atual || ETAPAS_FINAIS.has(atual.data?.etapa) || atual.data?.maisFatias === true) continue;
       try {
-        efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: dadosDoFechamento(atual.data, `mergeado (PR ${prs.join(', ')}), visto pela batida`, medirCusto(atual.data)), [VIA_COM]: true }, undefined, new Map()));
+        efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: dadosDoFechamento(atual.data, `mergeado (PR ${prs.join(', ')}), visto pela batida`, custos.get(F)), [VIA_COM]: true }, undefined, new Map()));
         fechados.push(F);
       } catch (e) { process.stderr.write(`batida: não fechei ${F}: ${e?.message || e}\n`); }
     }

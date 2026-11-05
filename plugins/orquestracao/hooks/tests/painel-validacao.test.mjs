@@ -7,6 +7,8 @@ import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// F423: "feito" não se declara (painel.mjs recusa); o caso que exercita o fechamento por update liga a escotilha só na chamada que o declara
+const fechaDeclarado = (args) => (args.some((a) => /"etapa"\s*:\s*"feito"/.test(String(a))) ? { KIT_FECHAR_DECLARADO: '1' } : {});
 
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 let base;
@@ -25,7 +27,7 @@ function painel(...args) { return painelComo({}, ...args); }
 function painelComo(env, ...args) {
   const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
     encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL',
-    env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), ...env },
+    env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), ...env },
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -165,7 +167,7 @@ caso('5b (h) sem CLAUDE_CODE_SESSION_ID → grava como hoje; env sem registro �
 function rodarPainel(env, cwd, ...args) {
   const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', cwd,
-    env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), KIT_HOOKS_DIR: '', ...env },
+    env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), KIT_HOOKS_DIR: '', ...env },
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };

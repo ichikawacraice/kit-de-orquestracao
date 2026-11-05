@@ -14,13 +14,17 @@
 <a id="decisao"></a>
 ## Decisão
 - **A batida deduz o estado** (`estado-deduzido.mjs`) a cada rodada, fora da trava:
-  - **PRs do item:** os de `prs` e os da branch da dona (a `branch` do item ou a do worktree dela). O PR da branch só conta se foi criado ou mergeado depois do item nascer: o worktree reaproveitado não herda o merge do item anterior. A branch de base (`main`, `master`, `develop`) não liga PR.
+  - **PRs do item:** os de `prs` e os da branch da dona (a `branch` do item ou a do worktree dela, lida pelo `git rev-parse`; a da lista do app é a branch com que o app criou a sessão e só vale sem o git).
+    - O PR da branch só conta se foi criado depois do item nascer: o worktree reaproveitado não herda o PR do item anterior.
+    - O PR que a branch liga a mais de um item vivo, ou que outro item já lista em `prs`, não liga pela branch.
+    - O PR mergeado antes da última reabertura do item não conta: o item reaberto não refecha pelo merge que já o fechou.
+    - A branch de base (`main`, `master`, `develop`) não liga PR.
   - **Etapa:**
     - todos os PRs válidos mergeados → `feito`;
     - PR aberto → `merge`;
     - fatia mergeada (`maisFatias`) → `execucao`;
-    - commit à frente da base ou mudança sem commit → `execucao` (`design` e `validacao` declarados ficam);
-    - `merge` sem PR aberto, com todos os PRs lidos → `execucao`.
+    - `merge` sem PR aberto, com todos os PRs ligados lidos → `execucao`;
+    - commit à frente da base ou mudança sem commit → `execucao` (`design`, `validacao` e `merge` declarados ficam: o git não rebaixa o item em merge quando o `gh` caiu ou o PR está em outro repositório).
   - **Dona viva:** sessão não arquivada na lista do app.
   - **Parado:** a dona não está num turno, o item não está em espera nem travado, e a última atividade passou do prazo. Conta como atividade a gravação no item, a atividade da sessão viva, o último commit ou a atualização de um PR ligado.
   - O PR fechado sem merge não conta. O PR que o `gh` não leu segura o fechamento e conta como aberto, para a cobrança do `--anotar`.
@@ -37,9 +41,10 @@
 - **Fechar só pelo `painel mergear` da fila:** deixa preso o item cujo PR mergeou fora da fila (app, GitHub). A batida fechar também cobre esse caminho, sem alterar a fila.
 - **Gravar a etapa deduzida de volta no item:** dois escritores da mesma etapa brigariam. A dedução é uma projeção, e só o fechamento grava.
 - **Ligar PR só pela branch, sem a data:** o worktree reaproveitado ligaria ao item novo o PR mergeado do anterior e o fecharia na hora.
+- **Limpar `prs` na reabertura:** apagaria o registro do que já entrou; descontar o PR mergeado antes da reabertura dá o mesmo efeito sem perder o histórico.
 
 <a id="consequencias"></a>
 ## Consequências
-- A batida chama o `gh` uma vez por projeto com item vivo (`gh pr list --state all --limit 200`), mais um `gh pr view` por PR do item que a lista não trouxe, e o `git` uma vez por dona viva. O tempo limite é o `KIT_GH_TIMEOUT_MS` (20 s). A falha cai no declarado e não derruba a batida.
+- A batida chama o `gh` uma vez por projeto com item vivo (`gh pr list --state all --limit 200`), mais um `gh pr view` por PR do item que a lista não trouxe, e o `git` uma vez por dona viva. O repositório do projeto é o de uma sessão viva do próprio projeto. Cada chamada tem o limite `KIT_GH_TIMEOUT_MS` (10 s) e a coleta inteira o orçamento `KIT_DEDUCAO_ORCAMENTO_MS` (25 s), abaixo dos 60 s que o mod dá à batida. A falha ou o orçamento estourado cai no declarado e não derruba a batida.
 - O operador e a orquestradora não fecham mais item por `update`. O item entregue em outro repositório, sem sessão viva no projeto, fecha pelo `painel mergear` ou sai por `descartado`.
 - Tirar o `agora` obrigatório e as travas `fila-do-item` e `painel-das-sessoes` fica para o F424. O pane ler `deduzido.json` fica para o F425.

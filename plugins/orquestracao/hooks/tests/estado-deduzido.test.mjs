@@ -10,7 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPTS = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
-const { deduzir, prsDoItem, prsDoRepositorio, gitDoWorktree, coletar } = await import(join(SCRIPTS, 'estado-deduzido.mjs'));
+const { deduzir, prsDoItem, prsDoRepositorio, gitDoWorktree, coletar, reabertoEm } = await import(join(SCRIPTS, 'estado-deduzido.mjs'));
 
 const MIN = 60_000;
 const T = Date.parse('2026-11-05T15:00:00Z');
@@ -106,6 +106,62 @@ test('prsDoItem: o item sem historico aceita o PR da branch (não há data para 
   assert.deepEqual(prsDoItem({ branch: 'f1-x' }, { prs: [pr(7, 'OPEN')] }).map((p) => p.number), [7]);
 });
 
+// ---- achados do validador ----
+test('item reaberto: o merge que já o tinha fechado não o fecha de novo; o PR novo, mergeado depois da reabertura, fecha', () => {
+  const historico = [{ em: iso(T - 300 * MIN), etapa: 'execucao' }, { em: iso(T - 100 * MIN), etapa: 'feito' }, { em: iso(T - 50 * MIN), etapa: 'execucao' }];
+  assert.equal(reabertoEm({ historico }), T - 50 * MIN);
+  const velho = pr(7, 'MERGED', { createdAt: iso(T - 200 * MIN), mergedAt: iso(T - 110 * MIN) });
+  const d = ded({ item: item({ prs: [7], historico }), linha: linha(), prs: [velho], git: null });
+  assert.deepEqual(d.prs, [], 'o PR do fechamento anterior sai da conta');
+  assert.equal(d.mergeado, false);
+  const novo = pr(8, 'MERGED', { createdAt: iso(T - 30 * MIN), mergedAt: iso(T - 5 * MIN) });
+  const e = ded({ item: item({ prs: [7, 8], historico }), linha: linha(), prs: [velho, novo], git: null });
+  assert.deepEqual(e.prs, [8]);
+  assert.equal(e.mergeado, true);
+  assert.equal(reabertoEm(item()), null, 'item nunca fechado: sem reabertura');
+});
+test('merge declarado com o gh caído e a branch à frente da base: fica em merge (o git não rebaixa)', () => {
+  const git = { aFrente: 3, sujo: false, ultimoCommitMs: T - 50 * MIN };
+  const caido = ded({ item: item({ etapa: 'merge', prs: [7] }), linha: linha(), prs: null, git });
+  assert.equal(caido.etapa, 'merge');
+  assert.deepEqual(caido.prsAbertos, [7]);
+  const outroRepo = ded({ item: item({ etapa: 'merge', prs: [7] }), linha: linha(), prs: [pr(9, 'OPEN', { headRefName: 'z' })], git });
+  assert.equal(outroRepo.etapa, 'merge', 'PR de outro repositório: o gh não o leu, vale o declarado');
+  const semPrs = ded({ item: item({ etapa: 'merge' }), linha: linha(), prs: [], git });
+  assert.equal(semPrs.etapa, 'merge', 'merge declarado sem prs: o git também não rebaixa');
+  assert.equal(ded({ item: item({ etapa: 'planejamento' }), linha: linha(), prs: null, git }).etapa, 'execucao', 'o git ainda promove quem não começou');
+});
+test('a branch da dona vem do git do worktree, não da lista do app (a branch com que o app criou a sessão)', () => {
+  const d = ded({ item: item(), linha: linha({ branch: 'claude/unruffled-pascal' }), prs: [pr(7, 'OPEN')], git: { branch: 'f1-x', aFrente: 1, sujo: false, ultimoCommitMs: null } });
+  assert.deepEqual(d.prs, [7]);
+  assert.equal(d.etapa, 'merge');
+  const semGit = ded({ item: item(), linha: linha({ branch: 'claude/unruffled-pascal' }), prs: [pr(7, 'OPEN')], git: null });
+  assert.deepEqual(semGit.prs, [], 'sem o git, a branch do app não acha o PR da branch renomeada');
+});
+test('o PR criado antes do item nascer e mergeado depois não liga pela branch (o segundo item da mesma dona)', () => {
+  const p = pr(7, 'MERGED', { createdAt: iso(T - 120 * MIN), mergedAt: iso(T - 10 * MIN) });
+  const d = ded({ item: item(), linha: linha(), prs: [p], git: null });
+  assert.deepEqual(d.prs, []);
+  assert.equal(d.mergeado, false);
+});
+test('coletar: o PR que a branch liga a dois itens vivos não liga nenhum; o de `prs` continua ligado', () => {
+  const ler = { prsDoRepositorio: () => [pr(7, 'MERGED')], gitDoWorktree: () => ({ branch: 'f1-x', aFrente: 1, sujo: false, ultimoCommitMs: null }) };
+  const itens = new Map([['F1', item()], ['F2', item()]]);
+  const m = coletar({ itens, linhas: [linha({ cwd: '/repo/kit' })], projetoDe: () => 'kit', agoraMs: T, prazoMin: 15, ler });
+  assert.equal(m.size, 2);
+  for (const F of ['F1', 'F2']) { assert.deepEqual(m.get(F).prs, [], F); assert.equal(m.get(F).mergeado, false, F); }
+  const n = coletar({ itens: new Map([['F1', item({ prs: [7] })], ['F2', item()]]), linhas: [linha({ cwd: '/repo/kit' })], projetoDe: () => 'kit', agoraMs: T, prazoMin: 15, ler });
+  assert.equal(n.get('F1').mergeado, true, 'ligado por prs: não é ambíguo');
+  assert.deepEqual(n.get('F2').prs, []);
+});
+test('coletar: a dona que trabalha no repositório de outro projeto não dá o repositório do item', () => {
+  const lidos = [];
+  const ler = { prsDoRepositorio: (cwd) => { lidos.push(cwd); return []; }, gitDoWorktree: () => null };
+  const linhas = [linha({ cwd: '/repo/outro' }), { sessionId: 'local_k', title: 'K', cwd: '/repo/kit', isArchived: false }];
+  coletar({ itens: new Map([['F1', item()]]), linhas, projetoDe: (r) => (r.cwd === '/repo/kit' ? 'kit' : 'outro'), agoraMs: T, prazoMin: 15, ler });
+  assert.deepEqual(lidos, ['/repo/kit']);
+});
+
 // ---- coleta: gh falso e git real ----
 let base;
 beforeEach(() => { base = mkdtempSync(join(tmpdir(), 'estado-deduzido-')); });
@@ -114,6 +170,7 @@ afterEach(() => { rmSync(base, { recursive: true, force: true }); });
 const GH_FALSO = `#!/usr/bin/env node
 const { readFileSync, appendFileSync } = require('node:fs');
 appendFileSync(process.env.GH_LOG, process.argv.slice(2).join(' ') + '\\n');
+if (process.env.GH_DORME) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.GH_DORME));
 const prs = JSON.parse(readFileSync(process.env.GH_PRS, 'utf8'));
 const [cmd, sub, n] = process.argv.slice(2);
 if (cmd === 'pr' && sub === 'list') process.stdout.write(JSON.stringify(prs.filter((p) => !p.soView)));
@@ -149,7 +206,8 @@ test('gitDoWorktree: commits à frente da origin, mudança sem commit e a hora d
   git(base, 'clone', '-q', origem, clone);
   writeFileSync(join(clone, 'a.txt'), '1'); git(clone, 'add', 'a.txt'); git(clone, 'commit', '-q', '-m', 'a'); git(clone, 'push', '-q', 'origin', 'HEAD:main');
   git(clone, 'fetch', '-q'); git(clone, 'remote', 'set-head', 'origin', 'main');
-  assert.deepEqual({ ...gitDoWorktree(clone), ultimoCommitMs: 'x' }, { aFrente: 0, sujo: false, ultimoCommitMs: 'x' });
+  git(clone, 'checkout', '-q', '-b', 'f1-x');
+  assert.deepEqual({ ...gitDoWorktree(clone), ultimoCommitMs: 'x' }, { branch: 'f1-x', aFrente: 0, sujo: false, ultimoCommitMs: 'x' });
   writeFileSync(join(clone, 'a.txt'), '2'); git(clone, 'commit', '-q', '-am', 'b');
   writeFileSync(join(clone, 'a.txt'), '3');
   const g = gitDoWorktree(clone);
@@ -170,6 +228,23 @@ test('coletar: o repositório vem da dona viva; a dona arquivada não lê git; p
   assert.equal(m.get('F1').mergeado, true);
   assert.equal(m.get('F2').fontes.prs, 'item', 'outro: nenhuma sessão viva, o gh não foi chamado');
   assert.deepEqual(lidos, [['gh', '/repo/kit', [7]], ['git', '/repo/kit']]);
+});
+
+test('coletar: o orçamento total corta o gh travado; o projeto seguinte nem chama o gh e fica no declarado', () => {
+  const antes = { a: process.env.KIT_DEDUCAO_ORCAMENTO_MS, b: process.env.KIT_GH_TIMEOUT_MS, c: process.env.GH_DORME };
+  Object.assign(process.env, { KIT_DEDUCAO_ORCAMENTO_MS: '800', KIT_GH_TIMEOUT_MS: '10000', GH_DORME: '3000' });
+  try {
+    const m = comGh([pr(7, 'MERGED')], () => coletar({
+      itens: new Map([['F1', item({ prs: [7] })], ['F2', item({ projeto: 'outro', donoLocalId: 'local_y', prs: [7] })]]),
+      linhas: [linha({ cwd: base }), { sessionId: 'local_y', title: 'F2', cwd: base, isArchived: false }],
+      projetoDe: (r) => (r.sessionId === DONA ? 'kit' : 'outro'), agoraMs: T, prazoMin: 15,
+      ler: { prsDoRepositorio, gitDoWorktree: () => null },
+    }));
+    assert.equal(m.size, 2);
+    for (const F of ['F1', 'F2']) { assert.equal(m.get(F).mergeado, false, F); assert.equal(m.get(F).fontes.prs, 'item', F); }
+    const log = readFileSync(join(base, 'gh.log'), 'utf8').trim().split('\n');
+    assert.equal(log.length, 1, `uma chamada só: ${log.join(' | ')}`);
+  } finally { for (const [k, v] of Object.entries({ KIT_DEDUCAO_ORCAMENTO_MS: antes.a, KIT_GH_TIMEOUT_MS: antes.b, GH_DORME: antes.c })) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
 });
 
 // ---- a recusa do `feito` declarado ----

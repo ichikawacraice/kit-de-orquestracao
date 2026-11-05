@@ -7,6 +7,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, utimesSync, 
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// F423: "feito" não se declara (painel.mjs recusa); o caso que exercita o fechamento por update liga a escotilha só na chamada que o declara
+const fechaDeclarado = (args) => (args.some((a) => /"etapa"\s*:\s*"feito"/.test(String(a))) ? { KIT_FECHAR_DECLARADO: '1' } : {});
 
 const TEMAS = JSON.stringify([{ id: 'editor', rotulo: 'Editor' }, { id: 'motor', rotulo: 'Motor' }]);
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
@@ -24,7 +26,7 @@ function novoBase() {
 function run(cmd, args, extraEnv = {}, prazo = 30000) {
   const r = spawnSync(cmd, args, {
     encoding: 'utf8', timeout: prazo, killSignal: 'SIGKILL',
-    env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", CLAUDE_CODE_HOST_SESSION_ID: "", HOME: join(base, "home"), ...extraEnv },
+    env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", CLAUDE_CODE_HOST_SESSION_ID: "", HOME: join(base, "home"), ...extraEnv },
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -39,7 +41,7 @@ function caso(nome, fn) {
 }
 function runAsync(cmd, args) {
   return new Promise((resolve, reject) => {
-    const c = spawn(cmd, args, { env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home") } });
+    const c = spawn(cmd, args, { env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home") } });
     let out = ''; let err = '';
     const t = setTimeout(() => c.kill('SIGKILL'), 20000);
     c.stdout.on('data', (d) => { out += d; }); c.stderr.on('data', (d) => { err += d; });
@@ -278,7 +280,7 @@ await casoAsync('trava tomada por outra execução no meio do comando: a minha n
   const trava = join(base, 'painel', '.trava');
   const p = new Promise((resolve, reject) => {
     const c = spawn('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], {
-      env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), PAINEL_PAUSA_MS: '1500' },
+      env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), PAINEL_PAUSA_MS: '1500' },
     });
     let err = ''; c.stderr.on('data', (d) => { err += d; });
     const t = setTimeout(() => c.kill('SIGKILL'), 20000);
@@ -346,7 +348,7 @@ caso('B2 proximo-item.sh: trava antiga com dono VIVO não é tomada; com dono mo
 // a sonda olha `.trava` durante a pausa: ausente (ainda só o temporário, com dono) é o certo; existir vazia é o defeito.
 await casoAsync('C2 painel: durante a publicação a .trava não existe vazia (o temporário já tem o dono)', async () => {
   const pdir = join(base, 'painel');
-  const c = spawn('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: pdir, HOME: join(base, 'home'), PAINEL_PAUSA_PUBLICAR_MS: '1500' } });
+  const c = spawn('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { env: { ...process.env, PAINEL_DIR: pdir, HOME: join(base, 'home'), PAINEL_PAUSA_PUBLICAR_MS: '1500' } });
   const fim = new Promise((r) => c.on('close', r));
   let temporarioComDono = false; let vazia = false;
   for (let i = 0; i < 20; i++) {
@@ -364,7 +366,7 @@ await casoAsync('C2 painel: durante a publicação a .trava não existe vazia (o
 // de pausa entre o julgamento e o rename; exatamente um rouba, o outro não toca a trava (o dono final é o de quem tomou).
 const orfaSemeada = (trava, extra = '') => { mkdirSync(trava); writeFileSync(join(trava, 'dono'), `${pidMorto()}-morto${extra}`); antigo(trava); };
 const spawnComEnv = (cmd, args, env) => {
-  const c = spawn(cmd, args, { env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), ...env } });
+  const c = spawn(cmd, args, { env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home"), ...env } });
   const r = { out: '', err: '', exit: null, pid: c.pid }; c.stdout.on('data', (d) => { r.out += d; }); c.stderr.on('data', (d) => { r.err += d; });
   r.fim = new Promise((res) => c.on('close', (code) => { r.exit = code; res(r); }));
   return r;
@@ -436,7 +438,7 @@ function repoGit(nome) {
 const painelEm = (cwd, ...args) => {
   const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
     cwd, encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL',
-    env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home") },
+    env: { ...process.env, PAINEL_DIR: join(base, "painel"), CLAUDE_CODE_SESSION_ID: "", HOME: join(base, "home") },
   });
   return { exit: r.status, out: r.stdout, err: r.stderr };
 };
@@ -474,7 +476,7 @@ caso('list --projeto filtra; sem flag e com --todos trazem tudo', () => {
 });
 caso('PAINEL_DIR manda onde o painel grava', () => {
   const novo = join(base, 'novo'); mkdirSync(novo); writeFileSync(join(novo, 'temas.json'), TEMAS);
-  const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: novo, HOME: join(base, 'home') } });
+  const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), 'set', 'fila', 'F1', ITEM], { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', env: { ...process.env, PAINEL_DIR: novo, HOME: join(base, 'home') } });
   igual(r.status, 0, r.stderr);
   ok(existsSync(join(novo, 'fila', 'F1.json')), 'PAINEL_DIR não mandou');
 });
