@@ -37,9 +37,9 @@ function transcript(textoDoTurno, comandos = [], { origem = { origin: { kind: 'p
   writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
   return f;
 }
-function rodar(tp, envExtra = {}) {
+function rodar(tp, envExtra = {}, entradaExtra = {}) {
   const out = execFileSync('node', [join(HOOKS, 'painel-das-sessoes.mjs')], {
-    input: JSON.stringify({ session_id: SID, transcript_path: tp, cwd: dir('repo'), stop_hook_active: false }),
+    input: JSON.stringify({ session_id: SID, transcript_path: tp, cwd: dir('repo'), stop_hook_active: false, ...entradaExtra }),
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
     env: { ...process.env, HOME: dir('home'), PAINEL_DIR: dir('painel'), POOL_APP_SESSOES_DIR: dir('app'), HOOKS_CREWAI_BASE: dir('home', '.claude', 'orquestracao'), ...envExtra },
   });
@@ -188,10 +188,20 @@ caso('F400-c: só "Q-ID não reservado", sem a palavra assumida: bloqueia', () =
   const r = rodar(turnoComFinal('- (Q-ID não reservado) troquei o nome da coluna.'));
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
 });
-caso('F400-d: o turno gravou a pergunta assumida (forma real do heredoc e a de aspas escapadas): passa', () => {
-  ok(rodar(turnoComFinal(FINAL_IZANAGI, [GRAVA_ASSUMIDA_REAL])) === null, 'heredoc devia passar');
-  const escapado = `painel set perguntas Q7 "{\\"sessaoId\\":\\"${LOCAL}\\",\\"estado\\":\\"assumida\\"}"`;
-  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*, Q7).', [escapado])) === null, 'aspas escapadas deviam passar');
+caso('F400-d: o turno gravou a pergunta assumida (o arquivo no painel, com atualizadoEm no turno): passa', () => {
+  assumidaNoPainel('Q986', LOCAL, '2026-10-24T12:01:00.000Z');
+  ok(rodar(turnoComFinal(FINAL_IZANAGI, [GRAVA_ASSUMIDA_REAL])) === null, 'heredoc com o arquivo gravado devia passar');
+  assumidaNoPainel('Q7', LOCAL, '2026-10-24T12:02:00.000Z');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*, Q7).')) === null, 'citando o Q-ID gravado devia passar');
+});
+caso('F400-d2: o comando de gravar rodou mas o arquivo não existe (comando falhou): bloqueia', () => {
+  ok(rodar(turnoComFinal(FINAL_IZANAGI, [GRAVA_ASSUMIDA_REAL]))?.decision === 'block', 'sem arquivo, o comando não basta');
+});
+caso('F400-d3: sem registro da sessão (local desconhecido), o comando de gravar é o que vale', () => {
+  rmSync(dir('app', 'conta', `${LOCAL}.json`));
+  const escapado = `painel set perguntas Q7 "{\\"sessaoId\\":\\"x\\",\\"estado\\":\\"assumida\\"}"`;
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', [escapado])) === null, 'aspas escapadas deviam passar');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'))?.decision === 'block', 'precondição: sem o comando bloqueia');
 });
 caso('F400-e: gravar pergunta aberta (não assumida) ou outra coisa no painel não basta', () => {
   const aberta = `painel set perguntas Q8 '{"sessaoId":"${LOCAL}","estado":"aberta"}'`;
@@ -226,6 +236,59 @@ caso('F400-i: a marca numa mensagem do meio do turno, não na final: passa', () 
 caso('F400-j: junto com outro motivo (abriu PR sem gravar), um bloqueio só com os dois', () => {
   const r = rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', ['gh pr create --fill']));
   ok(r?.decision === 'block' && r.reason.includes('abriu PR') && r.reason.includes('proxima-pergunta'), `esperava os dois motivos: ${JSON.stringify(r)}`);
+});
+caso('F400-l: o Q-ID na linha seguinte do mesmo item, ou o cabeçalho marcado com a lista abaixo: passa', () => {
+  assumidaNoPainel('Q50', LOCAL); assumidaNoPainel('Q51', LOCAL);
+  ok(rodar(turnoComFinal('- Nome curto, *assumida, a confirmar*.\n  No painel: Q50.')) === null, 'Q-ID na continuação do item');
+  ok(rodar(turnoComFinal('Decisões *assumidas, a confirmar*:\n\n- Nome curto (Q50).\n- Coluna nova (Q51).')) === null, 'cabeçalho com itens citando Q-ID');
+  ok(rodar(turnoComFinal('Decisões *assumidas, a confirmar*:\n- Nome curto (Q50).\n- Coluna nova.'))?.decision === 'block', 'item sem Q-ID sob o cabeçalho bloqueia');
+});
+caso('F400-m: uma assumida gravada no turno não cobre duas decisões soltas, nem a "Q-ID não reservado"', () => {
+  assumidaNoPainel('Q80', LOCAL, '2026-10-24T12:01:00.000Z');
+  ok(rodar(turnoComFinal('- Nome curto (*assumida, a confirmar*).\n- Coluna nova (*assumida, a confirmar*).'))?.decision === 'block', 'duas soltas, uma gravada');
+  ok(rodar(turnoComFinal('- Nome curto (Q80, *assumida, a confirmar*).\n- Coluna nova (Q-ID não reservado).'))?.decision === 'block', 'Q80 já citada não cobre a outra');
+  assumidaNoPainel('Q81', LOCAL, '2026-10-24T12:01:30.000Z');
+  ok(rodar(turnoComFinal('- Nome curto (*assumida, a confirmar*).\n- Coluna nova (*assumida, a confirmar*).')) === null, 'duas soltas, duas gravadas');
+});
+caso('F400-n: depois da recusa de outra trava (stop_hook_active), cobra uma vez por turno', () => {
+  const tp = turnoComFinal('Nome curto (*assumida, a confirmar*).');
+  ok(rodar(tp, {}, { stop_hook_active: true })?.decision === 'block', 'primeira cobrança no turno, mesmo com stop_hook_active');
+  ok(rodar(tp, {}, { stop_hook_active: true }) === null, 'segunda vez no mesmo turno passa');
+});
+caso('F400-o: o Stop de subagente (agent_id) fica de fora; last_assistant_message é a mensagem final', () => {
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'), {}, { agent_id: 'a1' }) === null, 'subagente não é cobrado');
+  ok(rodar(turnoComFinal('PR na fila.'), {}, { last_assistant_message: 'Nome curto (*assumida, a confirmar*).' })?.decision === 'block', 'lê last_assistant_message');
+  ok(rodar(turnoComFinal('Nome curto, _assumida, a confirmar_.'))?.decision === 'block', 'marca em itálico com sublinhado');
+});
+caso('F400-p: fora de lista, a unidade é a linha marcada: tabela e parágrafo de duas decisões não se cobrem', () => {
+  assumidaNoPainel('Q50', LOCAL);
+  ok(rodar(turnoComFinal('| Nome curto | *assumida, a confirmar* | Q50 |\n| Coluna nova | *assumida, a confirmar* | — |'))?.decision === 'block', 'linha de tabela sem Q-ID');
+  ok(rodar(turnoComFinal('Nome curto (Q50, *assumida, a confirmar*).\nColuna nova (*assumida, a confirmar*).'))?.decision === 'block', 'parágrafo: a segunda linha marcada é outra decisão');
+  ok(rodar(turnoComFinal('| Nome curto | *assumida, a confirmar* | Q50 |')) === null, 'precondição: a linha de tabela com Q-ID passa');
+  assumidaNoPainel('Q80', LOCAL, '2026-10-24T12:01:00.000Z');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).\nColuna nova (*assumida, a confirmar*).'))?.decision === 'block', 'duas no parágrafo, uma gravada');
+});
+caso('F400-q: cabeçalho com # ou em negrito, e item pai terminado em ":" com subitens: passam a marca', () => {
+  assumidaNoPainel('Q50', LOCAL); assumidaNoPainel('Q51', LOCAL);
+  for (const cab of ['## Decisões assumidas, a confirmar', '**Decisões assumidas, a confirmar**', 'Decisões *assumidas, a confirmar*:']) {
+    ok(rodar(turnoComFinal(`${cab}\n- Nome curto (Q50).\n- Coluna nova (Q51).`)) === null, `cabeçalho ${cab}`);
+    ok(rodar(turnoComFinal(`${cab}\n- Nome curto (Q50).\n- Coluna nova.`))?.decision === 'block', `item sem Q-ID sob ${cab}`);
+  }
+  ok(rodar(turnoComFinal('- Nome curto, *assumida, a confirmar*:\n  - motivo (Q50)')) === null, 'subitem cita o Q-ID');
+  ok(rodar(turnoComFinal('- Nome curto, *assumida, a confirmar*:\n  - motivo'))?.decision === 'block', 'subitem sem Q-ID');
+  ok(rodar(turnoComFinal('**Nome curto, assumida, a confirmar**'))?.decision === 'block', 'linha em negrito sem lista abaixo é decisão');
+});
+caso('F400-r: sem como gravar a marca do turno, não recusa de novo depois de uma recusa (sem laço)', () => {
+  const tp = turnoComFinal('Nome curto (*assumida, a confirmar*).');
+  const sem = { HOOKS_CREWAI_BASE: dir('nao', 'existe') };
+  writeFileSync(dir('nao'), 'arquivo, não pasta');
+  ok(rodar(tp, sem)?.decision === 'block', 'precondição: a primeira recusa acontece');
+  ok(rodar(tp, sem, { stop_hook_active: true }) === null, 'com stop_hook_active e sem estado gravável, passa');
+});
+caso('F400-s: a trava antiga não recusa duas vezes (stop_hook_active); last_assistant_message vazio cai no transcript', () => {
+  ok(rodar(turnoComFinal('PR na fila.', ['gh pr create --fill']), {}, { stop_hook_active: true }) === null, 'trava antiga presa a stop_hook_active');
+  ok(rodar(turnoComFinal('PR na fila.', ['gh pr create --fill']))?.decision === 'block', 'precondição: sem stop_hook_active recusa');
+  ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'), {}, { last_assistant_message: '' })?.decision === 'block', 'string vazia não esconde a marca');
 });
 caso('F400-k: a orquestradora (marcador próprio em ativas/) fica de fora', () => {
   writeFileSync(dir('home', '.claude', 'orquestracao', 'ativas', SID), 'x\n');

@@ -17,7 +17,7 @@ import { readFileSync, existsSync, appendFileSync, writeFileSync, mkdirSync, rea
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { gravaNoPainel } from './hooks-crewai-comum.mjs';
+import { gravaNoPainel, BASE as BASE_CREWAI, lerEstadoDe, gravarEstadoDe } from './hooks-crewai-comum.mjs';
 import { BASE as BASE_DO_POOL, registroDaSessao, gitCommonDir } from './pool-comum.mjs';
 import { acharPergunta } from '../skills/orquestradora/scripts/perguntas-arquivo.mjs';
 
@@ -100,10 +100,13 @@ function inicioDoTurno(entradas) {
 
 // ---- F400: a decisão assumida da mensagem final precisa da pergunta assumida no painel ----
 // A marca: "assumida, a confirmar" em qualquer gênero e número, ou "Q-ID não reservado" (a sessão admitindo que não gravou).
-const MARCA_ASSUMIDA = /\bassumid[oa]s?\s*,\s*a\s+confirmar\b|\bQ-?IDs?\s+n[ãa]o\s+reservad[oa]s?\b/i;
-const NAO_RESERVADO = /\bQ-?IDs?\s+n[ãa]o\s+reservad[oa]s?\b/i;
-// Gravar a assumida pelo comando: escrita no painel, na coleção perguntas, com `"estado":"assumida"` (aspas escapadas ou não).
+// Borda por letra/dígito (não `\b`): `_assumida, a confirmar_` também é marca.
+const MARCA_ASSUMIDA = /(?<![\p{L}\d])(?:assumid[oa]s?\s*,\s*a\s+confirmar|Q-?IDs?\s+n[ãa]o\s+reservad[oa]s?)(?![\p{L}\d])/iu;
+const NAO_RESERVADO = /(?<![\p{L}\d])Q-?IDs?\s+n[ãa]o\s+reservad[oa]s?(?![\p{L}\d])/iu;
+// Sem o local_… da sessão, a gravação só se vê pelo comando: escrita no painel, coleção perguntas, `"estado":"assumida"`.
 const ESTADO_ASSUMIDA = /estado\\?"\s*:\s*\\?"assumida\\?"/;
+const ITEM_DE_LISTA = /^\s*(?:[-*+]|\d+[.)])\s/;
+const ESTADO_HOOKS = join(BASE_CREWAI, 'hooks-crewai-estado.json');
 
 // A mensagem final do turno: o texto do assistente depois da última chamada de ferramenta (ou da última linha `user`).
 function mensagemFinal(entradas, inicio) {
@@ -129,43 +132,108 @@ function semCitacao(t) {
     .replace(/«[^»\n]*»/g, ' ');
 }
 
+// As decisões marcadas da mensagem. Item de lista: o item com as linhas que o continuam (a decisão e o Q-ID dela podem estar em
+// linhas diferentes). Fora de lista, a linha marcada é a unidade: a linha seguinte sem marca a continua, a marcada abre outra
+// decisão; linha de tabela vale sempre sozinha. Cabeçalho marcado (`#…`, linha toda em negrito ou terminada em ":") seguido de
+// lista não é decisão: passa a marca aos itens abaixo, como o item terminado em ":" passa aos subitens dele.
+const CABECALHO = /^\s*#{1,6}\s|:\s*[*_]*\s*$|^\s*(\*\*|__).*\1\s*$/;
+function decisoesMarcadas(texto) {
+  const unidades = [];
+  let atual = null;
+  for (const linha of texto.split('\n')) {
+    if (!linha.trim()) { atual = null; continue; }
+    const lista = ITEM_DE_LISTA.test(linha);
+    const tabela = /^\s*\|/.test(linha);
+    if (lista || tabela || !atual || atual.tabela || (!atual.lista && MARCA_ASSUMIDA.test(linha))) {
+      atual = { linhas: [], lista, tabela, recuo: linha.match(/^\s*/)[0].length };
+      unidades.push(atual);
+    }
+    atual.linhas.push(linha);
+  }
+  const marcadas = [];
+  let herda = false;
+  const pais = [];
+  unidades.forEach((u, i) => {
+    const t = u.linhas.join('\n');
+    const marca = MARCA_ASSUMIDA.test(t);
+    const prox = unidades[i + 1];
+    if (u.tabela) { if (marca) marcadas.push(t); return; }
+    if (!u.lista) {
+      pais.length = 0;
+      if (u.linhas.length === 1 && CABECALHO.test(t) && prox?.lista) { herda = marca; return; }
+      herda = false;
+      if (marca) marcadas.push(t);
+      return;
+    }
+    while (pais.length && pais.at(-1).recuo >= u.recuo) pais.pop();
+    const herdada = herda || pais.some((p) => p.marca);
+    const temFilhos = Boolean(prox?.lista && prox.recuo > u.recuo);
+    if (temFilhos && /:\s*[*_]*\s*$/.test(u.linhas[0])) { pais.push({ recuo: u.recuo, marca: marca || herdada }); return; }
+    if (temFilhos) pais.push({ recuo: u.recuo, marca: false });
+    if (marca || herdada) marcadas.push(t);
+  });
+  return marcadas;
+}
+
 function perguntaDaSessao(painel, q, local) {
   try { const f = acharPergunta(join(painel, 'perguntas'), q); return Boolean(f) && JSON.parse(readFileSync(f, 'utf8')).data?.sessaoId === local; } catch { return false; }
 }
 
-// Assumida desta sessão gravada no turno por qualquer caminho (batch de arquivo, script): `atualizadoEm` desde o início do turno.
-function gravouAssumidaNoTurno(painel, local, desdeIso) {
+// Assumidas desta sessão gravadas no turno, pelo arquivo (o comando que falhou não conta): `atualizadoEm` desde o início do turno.
+function assumidasGravadasNoTurno(painel, local, desdeIso) {
+  const ids = new Set();
   const desde = Date.parse(desdeIso ?? '');
   const dir = join(painel, 'perguntas');
-  if (Number.isNaN(desde) || !existsSync(dir)) return false;
+  if (Number.isNaN(desde) || !existsSync(dir)) return ids;
   for (const nome of readdirSync(dir)) {
     if (!nome.endsWith('.json')) continue;
     try {
-      const d = JSON.parse(readFileSync(join(dir, nome), 'utf8')).data;
-      if (d?.sessaoId === local && d.estado === 'assumida' && Date.parse(d.atualizadoEm ?? '') >= desde) return true;
+      const doc = JSON.parse(readFileSync(join(dir, nome), 'utf8'));
+      const d = doc?.data;
+      if (d?.sessaoId === local && d.estado === 'assumida' && Date.parse(d.atualizadoEm ?? '') >= desde) ids.add(doc.id ?? nome.replace(/\.json$/, ''));
     } catch { /* ilegível: ignora */ }
   }
-  return false;
+  return ids;
 }
 
-// Devolve as linhas marcadas que ficaram sem pergunta no painel ([] = nada a cobrar). A linha marcada se resolve sozinha quando cita
-// um Qnn que é pergunta desta sessão (assumida de turno anterior, já confirmada ou não), salvo a que diz "Q-ID não reservado"; as
-// demais se resolvem se o turno gravou uma assumida (pelo comando ou pelo `atualizadoEm`).
-function assumidasSemPergunta(entradas, inicio, comandos, local) {
-  const linhas = semCitacao(mensagemFinal(entradas, inicio)).split('\n').filter((l) => MARCA_ASSUMIDA.test(l));
-  if (linhas.length === 0) return [];
+// Devolve as decisões marcadas que ficaram sem pergunta no painel ([] = nada a cobrar). A decisão se resolve quando o bloco dela
+// cita um Qnn que é pergunta desta sessão (gravada agora ou num turno anterior, confirmada ou não), salvo o bloco que diz "Q-ID
+// não reservado". As que sobram precisam, cada uma, de uma assumida gravada no turno e não citada por outro bloco.
+function assumidasSemPergunta(mensagem, inicioIso, comandos, local) {
+  const marcadas = decisoesMarcadas(semCitacao(mensagem));
+  if (marcadas.length === 0) return [];
   const painel = process.env.PAINEL_DIR || join(BASE, 'painel');
-  const soltas = linhas.filter((l) => NAO_RESERVADO.test(l) || !local || !(l.match(/\bQ\d+\b/g) ?? []).some((q) => perguntaDaSessao(painel, q, local)));
+  const citadas = new Set();
+  const soltas = [];
+  for (const t of marcadas) {
+    const daSessao = local ? (t.match(/\bQ\d+\b/g) ?? []).filter((q) => perguntaDaSessao(painel, q, local)) : [];
+    if (daSessao.length && !NAO_RESERVADO.test(t)) daSessao.forEach((q) => citadas.add(q));
+    else soltas.push(t);
+  }
   if (soltas.length === 0) return [];
-  const peloComando = comandos.some((c) => GRAVA_NO_PAINEL.test(c) && /\bperguntas\b/.test(c) && ESTADO_ASSUMIDA.test(c));
-  if (peloComando || (local && gravouAssumidaNoTurno(painel, local, entradas[inicio]?.timestamp))) return [];
-  return soltas;
+  const gravadas = local
+    ? [...assumidasGravadasNoTurno(painel, local, inicioIso)].filter((q) => !citadas.has(q)).length
+    : comandos.filter((c) => GRAVA_NO_PAINEL.test(c) && /\bperguntas\b/.test(c) && ESTADO_ASSUMIDA.test(c)).length;
+  return gravadas >= soltas.length ? [] : soltas;
+}
+
+// Uma cobrança por turno: o Stop que vem depois de uma recusa (de qualquer trava) traz `stop_hook_active`, e é nele que costuma
+// estar o relatório final; a trava o lê, mas não recusa duas vezes o mesmo turno.
+function jaCobrouNoTurno(sessionId, turno) {
+  return lerEstadoDe(ESTADO_HOOKS)[`${sessionId}:assumida`]?.turno === turno;
+}
+// Devolve se gravou: sem a marca, a recusa seguinte não se distingue da primeira e a sessão entraria em laço.
+function marcarCobranca(sessionId, turno) {
+  try { gravarEstadoDe(ESTADO_HOOKS, (s) => { s[`${sessionId}:assumida`] = { turno, em: Date.now() }; }); return true; } catch (err) {
+    try { appendFileSync(LOG, `${new Date().toISOString()} F400: marca do turno não gravada (${err?.code || err}); ${sessionId} não é cobrado de novo\n`); } catch { /* sem log */ }
+    return false;
+  }
 }
 
 function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id, transcript_path, stop_hook_active, cwd } = input;
-  if (stop_hook_active || !session_id || !transcript_path) return;
+  if (!session_id || !transcript_path) return;
   if (existsSync(join(ATIVAS, session_id))) return; // é a orquestradora: outro hook
 
   const meuRepo = gitCommonDir(cwd);
@@ -210,9 +278,18 @@ function main() {
       if (it.name.endsWith('archive_session')) motivos.add('arquivou sessão');
     }
   }
-  const local = registroDaSessao(session_id)?.localId;
-  const soltas = assumidasSemPergunta(entradas, inicio, comandos, local);
-  const cobraPainel = !gravou && motivos.size > 0;
+  // A trava antiga recusa uma vez (stop_hook_active); a da assumida tem a marca própria por turno (F400).
+  const cobraPainel = !stop_hook_active && !gravou && motivos.size > 0;
+  const turno = String(entradas[inicio].uuid ?? entradas[inicio].timestamp ?? inicio);
+  let soltas = [];
+  let local;
+  if (!input.agent_id && !(stop_hook_active && jaCobrouNoTurno(session_id, turno))) {
+    local = registroDaSessao(session_id)?.localId;
+    const mensagem = input.last_assistant_message || mensagemFinal(entradas, inicio);
+    soltas = assumidasSemPergunta(String(mensagem ?? ''), entradas[inicio].timestamp, comandos, local);
+  }
+  // Depois de uma recusa (stop_hook_active), sem a marca gravada não se recusa de novo: é o que impede o laço.
+  if (soltas.length && !marcarCobranca(session_id, turno) && stop_hook_active) soltas = [];
   if (!cobraPainel && soltas.length === 0) return;
 
   const partes = [];
@@ -227,7 +304,8 @@ function motivoDaAssumida(soltas, local, itens) {
   return `A mensagem final marca ${soltas.length} decisão(ões) como "assumida, a confirmar" ou "Q-ID não reservado"${exemplo}, ` +
     'e o turno não gravou a pergunta assumida no painel: sem ela o operador não vê a decisão (protocolo.md#nunca-travar). Para cada uma: ' +
     `\`Q=$(proxima-pergunta) && painel set perguntas "$Q" '{"sessaoId":"${local ?? '<seu local_…>'}"${item},"estado":"assumida","titulo":"…","caso":"…","recomendacao":"o que você assumiu"}'\` ` +
-    'e cite o Q-ID na linha da decisão. Se a mensagem só cita a regra, ponha a expressão entre crases. Depois encerre o turno.';
+    'e cite o Q-ID junto da decisão. A que já está no painel não se grava de novo: só cite o Q-ID dela no mesmo item. ' +
+    'Se a mensagem só cita a regra, ponha a expressão entre crases. Depois encerre o turno.';
 }
 
 const umaLinha = (s) => String(s).replace(/\s+/g, ' ').trim();
