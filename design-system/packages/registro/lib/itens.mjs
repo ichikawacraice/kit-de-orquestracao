@@ -189,6 +189,12 @@ export const PECAS = [
     files: [lib('link-do-app', 'tsx')],
   }),
   peca({
+    name: 'filtro-lembrado',
+    title: 'Filtro lembrado',
+    description: 'persisted filters — o filtro da Lista lembrado no navegador por tela e por quem vê (CONV-26): chave com versão e dono, grava só no gesto, saneia campo a campo ao ler, Limpar apaga a chave.',
+    files: [lib('filtro-lembrado')],
+  }),
+  peca({
     name: 'chip-de-estado',
     title: 'Chip de estado',
     description: 'badge/status — o estado em uma palavra, com a forma única do carimbo e a voz declarada em tom; o neutro abre com o ponto que o Badge não tem (CTRL-05); o ChipQueAbre abre o detalhe.',
