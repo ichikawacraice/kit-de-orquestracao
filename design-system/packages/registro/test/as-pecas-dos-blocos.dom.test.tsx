@@ -261,6 +261,68 @@ describe("o topo da página (CASCO-01, TIPO-04, PESO-01)", () => {
     for (const espera of esperas) expect(classes(espera)).toEqual(expect.arrayContaining(["inline-flex", "py-[3px]", "text-[11px]", "leading-[1.4]"]))
   })
 
+  const recortes = [
+    { chave: "atrasados", rotulo: "Atrasados", numero: 2, tom: "espera" as const },
+    { chave: "parados", rotulo: "Parados", numero: 0, tom: "ruim" as const },
+    { chave: "sem-dono", rotulo: "Sem responsável", numero: null },
+  ]
+
+  it("os recortes contados moram abaixo dos filtros, com o rótulo à vista e o mesmo texto no nome do grupo (CASCO-01, ARQ-05)", () => {
+    const { container } = render(
+      <TopoDaPagina
+        titulo="Pedidos"
+        desfecho={{ tom: "ok", texto: "Feito." }}
+        filtros={<input aria-label="Buscar" />}
+        resumo={{ rotulo: "Pedem atenção", recortes, valor: null, onTrocar: () => {} }}
+      />
+    )
+    const ordem = Array.from(container.querySelector("header")!.children).map((el) => el.getAttribute("data-slot") ?? "titulo")
+    expect(ordem).toEqual(["titulo", "desfecho-do-topo", "filtros-do-topo", "resumo-do-topo"])
+    const resumo = container.querySelector<HTMLElement>('[data-slot="resumo-do-topo"]')!
+    expect(classes(resumo)).toEqual(expect.arrayContaining(["flex", "min-w-0", "items-center", "max-sm:flex-col"]))
+    const rotulo = resumo.firstElementChild!
+    expect(rotulo.textContent).toBe("Pedem atenção")
+    expect(rotulo.getAttribute("aria-hidden")).toBe("true")
+    expect(classes(rotulo)).toEqual(expect.arrayContaining(["t-rotulo", "shrink-0"]))
+    const grupo = within(resumo).getByRole("group", { name: "Pedem atenção" })
+    // Só a barra rola no estreito; o rótulo fica fora da rolagem.
+    expect(classes(grupo.parentElement!)).toContain("overflow-x-auto")
+    expect(grupo.parentElement!.contains(rotulo)).toBe(false)
+    expect(within(resumo).getAllByRole("button").map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "false"])
+  })
+
+  it("um recorte por vez: o inativo liga, o ativo desliga com null", () => {
+    const onTrocar = vi.fn()
+    render(<TopoDaPagina titulo="Pedidos" resumo={{ rotulo: "Pedem atenção", recortes, valor: "atrasados", onTrocar }} />)
+    const [atrasados, parados] = screen.getAllByRole("button")
+    expect(atrasados!.getAttribute("aria-pressed")).toBe("true")
+    fireEvent.click(parados!)
+    expect(onTrocar).toHaveBeenLastCalledWith("parados")
+    fireEvent.click(atrasados!)
+    expect(onTrocar).toHaveBeenLastCalledWith(null)
+  })
+
+  it("o zero é número sem voz, mesmo com tom; o não contado é ‒ (EST-04)", () => {
+    render(<TopoDaPagina titulo="Pedidos" resumo={{ rotulo: "Pedem atenção", recortes, valor: null, onTrocar: () => {} }} />)
+    const parados = screen.getByRole("button", { name: "Parados, 0" })
+    expect(parados.textContent).toContain("0")
+    // A voz se detecta (o 2 com tom pinta)…
+    expect(screen.getByRole("button", { name: "Atrasados, 2" }).innerHTML).toMatch(/text-amber-800/)
+    // …e o zero com tom não pinta.
+    expect(parados.innerHTML).not.toMatch(/text-rose-700/)
+    const semDono = screen.getByRole("button", { name: "Sem responsável, sem contagem" })
+    expect(semDono.textContent).toContain("‒")
+  })
+
+  it("sem resumo a fileira não existe", () => {
+    const { container, rerender } = render(<TopoDaPagina titulo="X" resumo={{ rotulo: "R", recortes, valor: null, onTrocar: () => {} }} />)
+    expect(container.querySelector('[data-slot="resumo-do-topo"]')).not.toBeNull()
+    rerender(<TopoDaPagina titulo="X" />)
+    expect(container.querySelector('[data-slot="resumo-do-topo"]')).toBeNull()
+    rerender(<TopoDaPagina titulo="X" resumo={null} />)
+    expect(container.querySelector('[data-slot="resumo-do-topo"]')).toBeNull()
+  })
+
   it("a página é o contêiner de largura da LAY-02", () => {
     const { container } = render(<PaginaDoApp>x</PaginaDoApp>)
     expect(classes(container.firstElementChild!)).toEqual(expect.arrayContaining(["max-w-[100rem]", "px-6"]))

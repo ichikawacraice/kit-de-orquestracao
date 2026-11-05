@@ -258,8 +258,8 @@ export const PECAS = [
   peca({
     name: 'topo-da-pagina',
     title: 'Topo da página',
-    description: 'page header — a página dentro do casco (largura e respiro) e o topo dela: trilha, o h1 único, o estado, o primário, o ⋯, a linha dos valores, o desfecho e os filtros (CASCO-01, CASCO-04).',
-    pecas: ['idioma-de-cor', 'chip-de-estado', 'skeleton'],
+    description: 'page header — a página dentro do casco (largura e respiro) e o topo dela: trilha, o h1 único, o estado, o primário, o ⋯, a linha dos valores, o desfecho, os filtros e os recortes contados (CASCO-01, CASCO-04, ARQ-05).',
+    pecas: ['idioma-de-cor', 'chip-de-estado', 'seletor-de-vista', 'skeleton'],
     files: [ui('topo-da-pagina')],
   }),
   peca({

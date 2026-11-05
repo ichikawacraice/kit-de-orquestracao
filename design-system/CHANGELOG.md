@@ -4,6 +4,21 @@ Uma entrada por versão da base (`versao` no frontmatter de `plugins/design-syst
 
 Formato de cada entrada: `## <versão> · <data, DD/MM/AAAA>`, uma linha `Camadas:` e as seções `### O que muda` e `### Migração`.
 
+## 0.23.0 · 05/11/2026
+
+Camadas: base, registro
+
+### O que muda
+- **Os recortes contados no topo da Lista** (ARQ-05, nova; CASCO-01, ARQ-01, PECA-01): quando o que pede atenção se divide em situações que se sobrepõem (atrasado, sem responsável, parado), o `TopoDaPagina` ganha o slot `resumo`, **abaixo dos filtros**, com uma fileira de recortes contados. A peça recebe os dados (`rotulo`, `recortes`, `valor`, `onTrocar`) e monta a `BarraDeModos` em `modos`. O rótulo visível e o nome do grupo saem da mesma string. É um recorte por vez, e clicar no recorte ativo chama `onTrocar(null)`. Abaixo de `sm`, o rótulo sobe e só a barra rola. A regra diz o que cada número conta: o que os filtros mostram e cai no recorte, pelo mesmo predicado que recorta a lista. Não há total, cartão de indicador, número grande nem gráfico.
+- **O gráfico desenha a forma que o dado tem** (PECA-03, nova): contagens que se sobrepõem não viram pizza nem barra empilhada, e tendência só se desenha com o histórico gravado.
+- **A vista que deixa itens de fora diz quantos** (EST-06, nova): uma linha da `Faixa` no assunto `escopo`, com a saída para a vista que mostra todos, sem desfazer o recorte.
+- A `BarraDeModos` muda só a documentação: `abas` quando as situações repartem o conjunto; `modos` troca o desenho e, dentro do `resumo`, serve aos recortes que se sobrepõem. A EST-04 e o comentário de `numero` passam a escrever o não contado como `‒`, o travessão numérico que a peça já desenhava.
+
+### Migração
+- `npx shadcn add <registro>/topo-da-pagina.json` (traz o `seletor-de-vista` junto).
+- Troque a fileira de recortes montada à mão no topo (o `span` do rótulo com a `BarraDeModos` ao lado) pelo `resumo` do `TopoDaPagina`: `resumo={{ rotulo, recortes, valor, onTrocar }}`, em que `onTrocar` recebe a chave ou `null`. Apague a alternância local (`k === valor ? null : k`).
+- A fileira passa para baixo dos filtros: confira que cada número conta o que os filtros mostram.
+
 ## 0.22.0 · 05/11/2026
 
 Camadas: base, registro
