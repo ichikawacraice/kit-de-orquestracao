@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
- * **A demanda de design passa pelo designer e pelo crítico — e quem esquece é cobrado.**
+ * **A demanda de design passa pelo designer e pelo crítico — e quem esquece é cobrado ao abrir o PR.**
  *
  * Hook do plugin `design-system`, registrado em `hooks/hooks.json`. É a trava do processo da base
  * (`base/CONVENCOES.md`, CONV-19 e CONV-20). O `hook_event_name` do JSON no stdin decide o que roda; o papel vem do
  * `agent_type` do payload (agent de plugin não carrega `hooks` no frontmatter), ou de `--papel` quando a linha de
  * comando o passa.
  *
- *   - `UserPromptSubmit` — guarda a FOTO do trabalho visual no começo do turno
- *     e, se o pedido fala de design, injeta o lembrete de chamar o `designer`.
+ *   - `UserPromptSubmit` — se o pedido fala de design, injeta o lembrete de chamar o `designer`. Não roda o git.
  *   - `PostToolUse` (`Agent|Task`) — quando o subagente `critico-de-ui` é
  *     chamado, guarda a foto DAQUELE momento: a crítica vale para o trabalho que
- *     ela viu. A skill `critica-de-ui` no mesmo contexto NÃO conta: quem desenhou
+ *     ela viu, neste turno e nos seguintes. A skill `critica-de-ui` no mesmo contexto NÃO conta: quem desenhou
  *     já acredita no desenho.
- *   - `Stop` — se o trabalho visual mudou no turno e não há crítica da foto
- *     atual, **recusa o fim do turno uma vez**. A segunda parada passa: lembrete
- *     com peso, não prisão (`stop_hook_active` e `cobrado`).
+ *   - `PreToolUse` (`Bash` com `gh pr create`) — a crítica é exigida no fim do item (F420): se o trabalho
+ *     visual da branch não é vazio e não há crítica da foto atual, **nega a abertura do PR uma vez por foto**.
+ *     A segunda tentativa com a mesma foto passa: lembrete com peso, não prisão (`cobradoFoto`). O `Stop` da
+ *     sessão não cobra mais: cobrar a cada turno que mexe no visual era turno extra sem correção.
  *   - `PreToolUse` do `designer` — especifica e não implementa: `Edit`/`Write`
  *     em código de tela (`negadoAoDesigner`) é negado com o motivo.
  *   - `SubagentStop` do `critico-de-ui` — a crítica tem forma: no máximo cinco
@@ -31,8 +31,7 @@
  * linhas que entram e saem (sem `index`, `@@` nem contexto), mais o conteúdo dos
  * arquivos visuais não rastreados. Rebase, pull, merge do tronco e commitar o que
  * já estava sujo não mudam a foto; edição de subagente, commit no meio do turno
- * e `--amend` mudam. Foto vazia no fim (tudo descartado) não cobra; Stop noutro
- * worktree não cobra.
+ * e `--amend` mudam. Foto vazia ao abrir o PR (tudo descartado) não cobra.
  *
  * **Onde mora o estado.** No diretório comum do git (um só para todos os
  * worktrees), pasta `design-system`. `DESIGN_SYSTEM_ESTADO` aponta outro lugar — é o ponto de injeção do teste.
@@ -62,8 +61,19 @@ const TESTES_FORA = ["*.test.*", "*.spec.*", "__tests__/**"];
 
 const BASES_PADRAO = ["origin/main"];
 
-/** Muda quando a forma do estado muda: o estado de outra versão não cobra. */
-const VERSAO_DO_ESTADO = 1;
+/** Muda quando a forma do estado muda: o estado de outra versão não vale como crítica. */
+const VERSAO_DO_ESTADO = 2;
+
+/** O comando que abre o PR: é nele que a crítica do item é exigida. */
+const ABRE_PR = /(?:^|[;&|(\s])gh\s+(?:(?:-R|--repo)(?:\s+|=)\S+\s+)?pr\s+create\b/;
+
+/**
+ * As fotos já criticadas valem para o repositório: a sessão que limpa o contexto volta com outro
+ * id, e a crítica feita antes da limpeza continua julgando a mesma foto. Guardadas num estado
+ * à parte, com teto, ao lado do estado de cada sessão.
+ */
+const FOTOS_CRITICADAS = "_fotos-criticadas";
+const TETO_DE_FOTOS = 50;
 
 /** A crítica foi chamada, mas a foto daquele momento falhou: conta como crítica (erro nunca prende). */
 const CRITICA_SEM_FOTO = "sem-foto";
@@ -310,6 +320,11 @@ export function formaDaCritica(texto) {
  * que vai ao stdout, ou `null` para "siga". `papelArg` é o `--papel` da linha de
  * comando; sem ele vale o `agent_type` do payload.
  */
+/** O estado desta versão da guarda, ou o inicial: o de outra versão não vale como crítica. */
+function estadoValido(estado) {
+  return estado?.versao === VERSAO_DO_ESTADO ? estado : { versao: VERSAO_DO_ESTADO, criticada: null, cobradoFoto: null };
+}
+
 export function decidir(evento, papelArg, ctx) {
   const nome = evento?.hook_event_name;
   const sessao = evento?.session_id;
@@ -344,6 +359,36 @@ export function decidir(evento, papelArg, ctx) {
     return { decision: "block", reason: `A crítica não tem a forma combinada: ${defeitos.join("; ")}.` };
   }
 
+  // O PR aberto por um subagente também é o fim do item: a cobrança vem antes do corte dos subagentes.
+  if (nome === "PreToolUse") {
+    if (config.cobrarCritica === false || evento?.tool_name !== "Bash" || !sessao) return null;
+    if (!ABRE_PR.test(String(evento?.tool_input?.command ?? ""))) return null;
+    const estado = estadoValido(ctx.ler(cwd, sessao));
+    if (estado.criticada === CRITICA_SEM_FOTO) {
+      // A crítica cuja foto falhou livra este PR, e só ele: o visual mudado depois volta a ser cobrado.
+      ctx.gravar(cwd, sessao, { ...estado, criticada: null });
+      return null;
+    }
+    const agora = ctx.foto(cwd, config);
+    if (agora.vazia || agora.hash === estado.criticada || agora.hash === estado.cobradoFoto) return null;
+    const fotos = ctx.ler(cwd, FOTOS_CRITICADAS)?.fotos ?? [];
+    if (fotos.includes(agora.hash)) return null;
+    ctx.gravar(cwd, sessao, { ...estado, cobradoFoto: agora.hash });
+    const oQue = estado.criticada
+      ? "O visual do front mudou depois da crítica: ela julgou o trabalho de antes."
+      : "O visual do front mudou nesta branch e o crítico não rodou.";
+    return {
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          `${oQue} Antes de abrir o PR, chame o subagente ` +
+          "`critico-de-ui` sobre o que mudou (ou diga em uma linha por que esta mudança não pede crítica — " +
+          "ex.: só renomeou um identificador — e tente de novo: a segunda tentativa com o mesmo visual passa).",
+      },
+    };
+  }
+
   // Os eventos da sessão do turno: quem tem `agent_id` é subagente. O `agent_type` sozinho
   // também aparece na sessão aberta com `--agent`, que é sessão e é cobrada.
   if (!sessao || evento?.agent_id) return null;
@@ -352,30 +397,12 @@ export function decidir(evento, papelArg, ctx) {
     const lembrete = PEDIDO_DE_DESIGN.test(String(evento?.prompt ?? ""))
       ? { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: textoDoLembrete(config.temArquivo === true) } }
       : null;
-    if (config.cobrarCritica === false) return lembrete; // sem cobrança não há foto do começo do turno a guardar
-    try {
-      ctx.gravar(cwd, sessao, {
-        versao: VERSAO_DO_ESTADO,
-        raiz: ctx.raiz(cwd),
-        foto: ctx.foto(cwd, config).hash,
-        criticada: null,
-        cobrado: false,
-      });
-    } catch (e) {
-      ctx.avisar?.(`foto do começo do turno: ${e?.message ?? e}`);
-      try {
-        ctx.gravar(cwd, sessao, { versao: VERSAO_DO_ESTADO, raiz: null, foto: null, criticada: null, cobrado: true });
-      } catch (e2) {
-        ctx.avisar?.(`estado inerte do turno: ${e2?.message ?? e2}`);
-      }
-    }
     return lembrete;
   }
 
   if (nome === "PostToolUse") {
     if (config.cobrarCritica === false || !eCritica(evento)) return null;
-    const estado = ctx.ler(cwd, sessao);
-    if (!estado) return null;
+    const estado = estadoValido(ctx.ler(cwd, sessao));
     let criticada = CRITICA_SEM_FOTO;
     try {
       criticada = ctx.foto(cwd, config).hash;
@@ -383,28 +410,11 @@ export function decidir(evento, papelArg, ctx) {
       ctx.avisar?.(`foto da crítica: ${e?.message ?? e}`);
     }
     ctx.gravar(cwd, sessao, { ...estado, criticada });
+    if (criticada !== CRITICA_SEM_FOTO) {
+      const fotos = (ctx.ler(cwd, FOTOS_CRITICADAS)?.fotos ?? []).filter((f) => f !== criticada);
+      ctx.gravar(cwd, FOTOS_CRITICADAS, { versao: VERSAO_DO_ESTADO, fotos: [...fotos, criticada].slice(-TETO_DE_FOTOS) });
+    }
     return null;
-  }
-
-  if (nome === "Stop") {
-    if (config.cobrarCritica === false || evento?.stop_hook_active) return null;
-    const estado = ctx.ler(cwd, sessao);
-    if (!estado || estado.versao !== VERSAO_DO_ESTADO || estado.cobrado) return null;
-    if (estado.criticada === CRITICA_SEM_FOTO) return null;
-    if (ctx.raiz(cwd) !== estado.raiz) return null;
-    const agora = ctx.foto(cwd, config);
-    if (agora.vazia || agora.hash === estado.foto || agora.hash === estado.criticada) return null;
-    ctx.gravar(cwd, sessao, { ...estado, cobrado: true });
-    const oQue = estado.criticada
-      ? "O visual do front mudou depois da crítica deste turno: ela julgou o trabalho de antes."
-      : "O visual do front mudou neste turno e o crítico não rodou.";
-    return {
-      decision: "block",
-      reason:
-        `${oQue} Antes de encerrar, chame o subagente ` +
-        "`critico-de-ui` sobre o que mudou (ou diga em uma linha por que esta mudança não pede crítica — " +
-        "ex.: só renomeou um identificador). Esta cobrança vem uma vez por turno.",
-    };
   }
 
   return null;

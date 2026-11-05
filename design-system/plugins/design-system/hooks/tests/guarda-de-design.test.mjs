@@ -280,14 +280,17 @@ describe('decidir — a crítica tem forma', () => {
     const { ctx: c, estados } = ctxDuble('f1');
     estados.set('s1', { ...INICIO });
     assert.equal(decidir({ hook_event_name: 'Stop', session_id: 's1', agent_type: 'design:critico-de-ui', last_assistant_message: CRITICA_BOA }, null, c), null);
-    assert.equal(estados.get('s1').cobrado, false);
+    assert.deepEqual(estados.get('s1'), INICIO);
   });
 });
 
-describe('decidir — o turno que mexe no visual chama o crítico', () => {
+describe('decidir — a crítica é exigida no fim do item, ao abrir o PR (F420)', () => {
   const prompt = (t) => ({ hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: t });
   const parar = (ativo = false) => ({ hook_event_name: 'Stop', session_id: 's1', stop_hook_active: ativo });
   const usar = (tool_name, tool_input, tool_response) => ({ hook_event_name: 'PostToolUse', session_id: 's1', tool_name, tool_input, tool_response });
+  const bash = (command, extra = {}) => ({ hook_event_name: 'PreToolUse', session_id: 's1', tool_name: 'Bash', tool_input: { command }, ...extra });
+  const abrirPr = (extra) => bash('git push -u origin f1 && gh pr create --base main --title "feat: x" --body-file /tmp/b.md', extra);
+  const negou = (x) => x?.hookSpecificOutput?.permissionDecision === 'deny';
   const quebrado = (ctx) => ({ ...ctx, foto: () => { throw new Error('git pendurou'); } });
 
   it('pedido de design ganha o lembrete; pedido de outra coisa, não', () => {
@@ -304,132 +307,128 @@ describe('decidir — o turno que mexe no visual chama o crítico', () => {
     assert.doesNotMatch(texto(ctx), /sem elas, a base do plugin/);
     assert.match(texto(ctx), /não é a norma dele até ele entrar no sistema/);
   });
-  it('o pedido grava a foto do começo do turno', () => {
-    const { ctx, estados } = ctxDuble();
-    decidir(prompt('roda o gate'), null, ctx);
-    assert.deepEqual(estados.get('s1'), INICIO);
+  it('o pedido não tira foto nem zera o estado: a crítica de um turno vale nos seguintes', () => {
+    const { ctx, estados } = ctxDuble('f1');
+    let fotos = 0;
+    const contando = { ...ctx, foto: (...a) => { fotos += 1; return ctx.foto(...a); } };
+    decidir(usar('Agent', { subagent_type: 'critico-de-ui' }), null, contando);
+    assert.equal(fotos, 1, 'controle: a crítica tira a foto');
+    const depois = estados.get('s1');
+    assert.equal(depois.criticada, 'f1');
+    decidir(prompt('roda o gate'), null, contando);
+    assert.equal(fotos, 1, 'o pedido não roda o git');
+    assert.deepEqual(estados.get('s1'), depois);
+    assert.equal(decidir(abrirPr(), null, contando), null);
   });
-  it('K14: cobrar_critica desligada não cobra o Stop nem guarda foto, e o lembrete de design continua', () => {
-    const { ctx, estados, duble } = ctxDuble('f0');
+  it('o Stop da sessão não cobra mais o visual mudado sem crítica, e o mesmo caso é negado ao abrir o PR', () => {
+    const { ctx } = ctxDuble('f1');
+    assert.equal(decidir(prompt('ajusta o espaçamento do card'), null, ctx)?.hookSpecificOutput?.additionalContext ? true : false, true);
+    assert.equal(decidir(parar(), null, ctx), null, 'o turno que mexe no visual termina sem turno extra');
+    assert.equal(negou(decidir(abrirPr(), null, ctx)), true, 'a presença: o mesmo visual sem crítica é cobrado no PR');
+  });
+  it('visual sem crítica: o gh pr create é negado uma vez, com o motivo, e a segunda tentativa com a mesma foto passa', () => {
+    const { ctx, estados } = ctxDuble('f1');
+    const d = decidir(abrirPr(), null, ctx);
+    assert.equal(negou(d), true);
+    assert.match(d.hookSpecificOutput.permissionDecisionReason, /critico-de-ui/);
+    assert.equal(estados.get('s1').cobradoFoto, 'f1');
+    assert.equal(decidir(abrirPr(), null, ctx), null);
+  });
+  it('a foto que mudou depois da cobrança é cobrada de novo', () => {
+    const { ctx, duble } = ctxDuble('f1');
+    assert.equal(negou(decidir(abrirPr(), null, ctx)), true);
+    duble.foto = 'f2';
+    assert.equal(negou(decidir(abrirPr(), null, ctx)), true);
+  });
+  it('só o gh pr create é o gatilho: push, teste e gh pr view passam', () => {
+    const { ctx } = ctxDuble('f1');
+    for (const c of ['git push -u origin f1', 'npm test', 'gh pr view 12 --json url', 'echo "gh pr create é o gatilho"']) {
+      assert.equal(decidir(bash(c), null, ctx), null, c);
+    }
+    assert.equal(negou(decidir(bash('gh pr create --fill'), null, ctx)), true, 'controle: o gatilho sozinho nega');
+  });
+  it('outra ferramenta no PreToolUse da sessão não é o gatilho', () => {
+    const { ctx } = ctxDuble('f1');
+    assert.equal(decidir({ hook_event_name: 'PreToolUse', session_id: 's1', tool_name: 'Edit', tool_input: { file_path: '/repo/web/src/a.tsx' } }, null, ctx), null);
+  });
+  it('K14: cobrar_critica desligada não nega o PR e o lembrete de design continua', () => {
+    const { ctx } = ctxDuble('f1');
     const sem = { ...ctx, config: () => ({ ...CONFIG, cobrarCritica: false }) };
-    decidir(prompt('roda o gate'), null, ctx); // controle: com a cobrança ligada o começo do turno é guardado
-    assert.deepEqual(estados.get('s1'), INICIO);
-    duble.foto = 'f1';
-    assert.equal(decidir(parar(), null, ctx)?.decision, 'block'); // e o visual que mudou é cobrado
-    estados.clear(); duble.foto = 'f0';
     assert.match(decidir(prompt('redesenha a barra do builder'), null, sem).hookSpecificOutput.additionalContext, /designer/);
-    assert.equal(estados.size, 0, 'sem cobrança não há foto a guardar');
-    estados.set('s1', { ...INICIO }); duble.foto = 'f1';
-    assert.equal(decidir(parar(), null, sem), null);
-  });
-  it('a foto que falha não leva o lembrete junto', () => {
-    const { ctx } = ctxDuble();
-    assert.match(decidir(prompt('redesenha a barra'), null, quebrado(ctx)).hookSpecificOutput.additionalContext, /designer/);
-  });
-  it('a foto do começo que falha não herda a crítica do turno anterior', () => {
-    const { ctx, estados, duble } = ctxDuble('f0');
-    estados.set('s1', { ...INICIO, criticada: 'f0' });
-    decidir(prompt('roda o gate'), null, quebrado(ctx));
-    duble.foto = 'f1';
-    assert.equal(decidir(parar(), null, ctx), null);
-  });
-  it('a foto do começo que falha grava o estado inerte, não o cobrado velho', () => {
-    const { ctx, estados } = ctxDuble('f0');
-    estados.set('s1', { ...INICIO, cobrado: true });
-    decidir(prompt('roda o gate'), null, quebrado(ctx));
-    assert.deepEqual(estados.get('s1'), { versao: 1, raiz: null, foto: null, criticada: null, cobrado: true });
-  });
-  it('visual mudou e o crítico não rodou: cobra uma vez, e a segunda parada passa', () => {
-    const { ctx, estados } = ctxDuble('f1');
-    estados.set('s1', { ...INICIO });
-    assert.equal(falha(decidir(parar(), null, ctx)), true);
-    assert.equal(estados.get('s1').cobrado, true);
-    assert.equal(decidir(parar(), null, ctx), null);
-  });
-  it('com stop_hook_active, não cobra', () => {
-    const { ctx, estados } = ctxDuble('f1');
-    estados.set('s1', { ...INICIO });
-    assert.equal(decidir(parar(true), null, ctx), null);
+    assert.equal(decidir(abrirPr(), null, sem), null);
+    assert.equal(negou(decidir(abrirPr(), null, ctx)), true, 'controle: com a cobrança ligada nega');
   });
   it('descartou todo o trabalho visual: foto vazia, passa', () => {
-    const { ctx, estados } = ctxDuble({ foto: 'vazia', vazia: true });
-    estados.set('s1', { ...INICIO });
-    assert.equal(decidir(parar(), null, ctx), null);
-  });
-  it('o Stop rodou noutro worktree: não cobra', () => {
-    const { ctx, estados } = ctxDuble({ foto: 'f1', raiz: '/outro-worktree' });
-    estados.set('s1', { ...INICIO });
-    assert.equal(decidir(parar(), null, ctx), null);
-  });
-  it('estado gravado por outra versão da guarda: não cobra', () => {
-    const { ctx, estados } = ctxDuble('f1');
-    estados.set('s1', { versao: 0, raiz: RAIZ, foto: 'f0', criticada: null, cobrado: false });
-    assert.equal(decidir(parar(), null, ctx), null);
+    const { ctx } = ctxDuble({ foto: 'vazia', vazia: true });
+    assert.equal(decidir(abrirPr(), null, ctx), null);
   });
   it('a skill do crítico no mesmo contexto não livra da cobrança', () => {
-    const { ctx, estados } = ctxDuble('f1');
-    estados.set('s1', { ...INICIO });
+    const { ctx } = ctxDuble('f1');
     decidir(usar('Skill', { skill: 'critica-de-ui' }), null, ctx);
-    assert.equal(falha(decidir(parar(), null, ctx)), true);
+    assert.equal(negou(decidir(abrirPr(), null, ctx)), true);
   });
   it('o crítico em background livra: ele roda depois, em contexto separado', () => {
-    const { ctx, estados } = ctxDuble('f1');
-    estados.set('s1', { ...INICIO });
+    const { ctx } = ctxDuble('f1');
     decidir(usar('Agent', { subagent_type: 'design:critico-de-ui', run_in_background: true }, { status: 'async_launched' }), null, ctx);
-    assert.equal(decidir(parar(), null, ctx), null);
+    assert.equal(decidir(abrirPr(), null, ctx), null);
   });
-  it('visual mudou e o crítico rodou: passa, e a crítica guarda a foto que viu', () => {
-    const { ctx, estados } = ctxDuble('f1');
-    estados.set('s1', { ...INICIO });
+  it('crítico antes da última edição: o PR é negado dizendo que a crítica julgou o trabalho de antes', () => {
+    const { ctx, duble } = ctxDuble('f0');
     decidir(usar('Agent', { subagent_type: 'critico-de-ui' }), null, ctx);
-    assert.equal(estados.get('s1').criticada, 'f1');
-    assert.equal(decidir(parar(), null, ctx), null);
-  });
-  it('crítico antes da edição (revisa e implementa): a mudança depois dele é cobrada', () => {
-    const { ctx, estados, duble } = ctxDuble('f0');
-    estados.set('s1', { ...INICIO });
-    decidir(usar('Agent', { subagent_type: 'critico-de-ui' }), null, ctx);
-    assert.equal(estados.get('s1').criticada, 'f0');
     duble.foto = 'f1';
-    const c = decidir(parar(), null, ctx);
-    assert.equal(falha(c), true);
-    assert.match(c.reason, /depois da crítica/);
+    const d = decidir(abrirPr(), null, ctx);
+    assert.equal(negou(d), true);
+    assert.match(d.hookSpecificOutput.permissionDecisionReason, /depois da crítica/);
   });
   it('crítico chamado de novo depois da edição: passa', () => {
-    const { ctx, estados, duble } = ctxDuble('f0');
-    estados.set('s1', { ...INICIO });
+    const { ctx, duble } = ctxDuble('f0');
     decidir(usar('Agent', { subagent_type: 'critico-de-ui' }), null, ctx);
     duble.foto = 'f1';
     decidir(usar('Agent', { subagent_type: 'critico-de-ui' }), null, ctx);
-    assert.equal(estados.get('s1').criticada, 'f1');
-    assert.equal(decidir(parar(), null, ctx), null);
+    assert.equal(decidir(abrirPr(), null, ctx), null);
   });
   it('a foto da crítica que falha conta como crítica: erro não prende', () => {
     const { ctx, estados } = ctxDuble('f1');
-    estados.set('s1', { ...INICIO });
     decidir(usar('Agent', { subagent_type: 'critico-de-ui' }), null, quebrado(ctx));
     assert.equal(estados.get('s1').criticada, 'sem-foto');
-    assert.equal(decidir(parar(), null, ctx), null);
+    assert.equal(decidir(abrirPr(), null, ctx), null);
   });
-  it('visual igual à foto: passa sem cobrar', () => {
-    const { ctx, estados } = ctxDuble();
-    estados.set('s1', { ...INICIO });
-    assert.equal(decidir(parar(), null, ctx), null);
-  });
-  it('sessão aberta com --agent (agent_type sem agent_id) é sessão, não subagente: cobra', () => {
-    const { ctx, estados } = ctxDuble('f1');
-    estados.set('s1', { ...INICIO });
-    assert.equal(falha(decidir({ hook_event_name: 'Stop', session_id: 's1', agent_type: 'orquestracao:executor' }, null, ctx)), true);
-  });
-  it('dentro de subagente (agent_id), o Stop da sessão não roda: não cobra nem grava', () => {
-    const { ctx, estados } = ctxDuble('f1');
-    estados.set('s1', { ...INICIO });
-    assert.equal(decidir({ hook_event_name: 'Stop', session_id: 's1', agent_type: 'general-purpose', agent_id: 'a1' }, null, ctx), null);
-    assert.equal(estados.get('s1').cobrado, false);
-  });
-  it('sem estado (hook instalado no meio do turno): passa', () => {
+  it('validador F420: a crítica vale para o repositório, não só para a sessão que a chamou (sessão limpa volta com outro id)', () => {
     const { ctx } = ctxDuble('f1');
-    assert.equal(decidir(parar(), null, ctx), null);
+    decidir(usar('Agent', { subagent_type: 'critico-de-ui' }), null, ctx);
+    assert.equal(decidir({ ...abrirPr(), session_id: 's2' }, null, ctx), null, 'outra sessão, mesma foto criticada');
+    assert.equal(negou(decidir({ ...abrirPr(), session_id: 's3' }, null, { ...ctx, foto: () => ({ hash: 'f9', vazia: false }) })), true, 'controle: foto não criticada nega');
+  });
+  it('validador F420: a crítica sem foto livra um PR só, não a sessão inteira', () => {
+    const { ctx, duble } = ctxDuble('f1');
+    decidir(usar('Agent', { subagent_type: 'critico-de-ui' }), null, quebrado(ctx));
+    assert.equal(decidir(abrirPr(), null, ctx), null, 'o PR logo depois passa');
+    duble.foto = 'f2';
+    assert.equal(negou(decidir(abrirPr(), null, ctx)), true, 'o visual mudado depois volta a ser cobrado');
+  });
+  it('validador F420: gh -R / --repo antes do pr create também é o gatilho', () => {
+    for (const c of ['gh -R dono/repo pr create --fill', 'gh --repo dono/repo pr create --fill', 'gh --repo=dono/repo pr create --fill']) {
+      const { ctx } = ctxDuble('f1');
+      assert.equal(negou(decidir(bash(c), null, ctx)), true, c);
+    }
+  });
+  it('validador F420: o gh pr create de um subagente também é cobrado', () => {
+    const { ctx } = ctxDuble('f1');
+    assert.equal(negou(decidir(abrirPr({ agent_id: 'a1', agent_type: 'general-purpose' }), null, ctx)), true);
+  });
+  it('estado gravado por outra versão da guarda não conta como crítica', () => {
+    const { ctx, estados } = ctxDuble('f1');
+    estados.set('s1', { versao: 1, raiz: RAIZ, foto: 'f0', criticada: 'f1', cobrado: false });
+    assert.equal(negou(decidir(abrirPr(), null, ctx)), true);
+  });
+  it('dentro de subagente (agent_id), o gatilho do PR roda; o lembrete do pedido, não', () => {
+    const { ctx } = ctxDuble('f1');
+    assert.equal(decidir({ ...prompt('redesenha a barra'), agent_id: 'a1' }, null, ctx), null);
+    assert.equal(negou(decidir(abrirPr({ agent_type: 'orquestracao:executor' }), null, ctx)), true, 'sessão aberta com --agent é sessão: nega');
+  });
+  it('com stop_hook_active, o Stop também não age', () => {
+    const { ctx } = ctxDuble('f1');
+    assert.equal(decidir(parar(true), null, ctx), null);
   });
 });
 
@@ -612,15 +611,17 @@ describe('o hook de ponta a ponta: um projeto de rascunho com design/wicomm.json
   sh(proj, 'commit', '-qm', 'base');
   sh(proj, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
 
-  it('o Stop recusa uma vez a tela editada sem crítico, e o segundo passa', () => {
+  it('F420: o Stop deixa passar a tela editada sem crítico; o gh pr create é negado uma vez, e o segundo passa', () => {
     assert.match(hook({ hook_event_name: 'UserPromptSubmit', prompt: 'cria uma tela' }).hookSpecificOutput.additionalContext, /designer/);
     mkdirSync(join(proj, 'web', 'src'), { recursive: true });
     writeFileSync(join(proj, 'web', 'src', 'Tela.tsx'), 'export const T = () => null;\n');
-    const primeiro = hook({ hook_event_name: 'Stop' });
-    console.log('Stop 1:', JSON.stringify(primeiro));
-    assert.equal(primeiro?.decision, 'block');
-    const segundo = hook({ hook_event_name: 'Stop' });
-    console.log('Stop 2:', JSON.stringify(segundo));
+    assert.equal(hook({ hook_event_name: 'Stop' }), null);
+    const pr = { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'gh pr create --fill' } };
+    const primeiro = hook(pr);
+    console.log('PR 1:', JSON.stringify(primeiro));
+    assert.equal(primeiro?.hookSpecificOutput?.permissionDecision, 'deny');
+    const segundo = hook(pr);
+    console.log('PR 2:', JSON.stringify(segundo));
     assert.equal(segundo, null);
   });
   it('o designer tem o Write em tela negado pelo script, e a revisão passa', () => {
@@ -692,7 +693,7 @@ describe('os arquivos do plugin concordam entre si', () => {
     const daGuarda = (ev) => h[ev].filter((g) => /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/guarda-de-design\.mjs/.test(g.hooks[0].command));
     for (const ev of Object.keys(h)) assert.equal(daGuarda(ev).length, 1, ev);
     assert.deepEqual(daGuarda('PostToolUse')[0].matcher.split('|').sort(), ['Agent', 'Task']);
-    assert.deepEqual(daGuarda('PreToolUse')[0].matcher.split('|').sort(), ['Edit', 'MultiEdit', 'NotebookEdit', 'Write']);
+    assert.deepEqual(daGuarda('PreToolUse')[0].matcher.split('|').sort(), ['Bash', 'Edit', 'MultiEdit', 'NotebookEdit', 'Write']);
     const aviso = h.PreToolUse.filter((g) => /\/hooks\/valor-solto\.mjs/.test(g.hooks[0].command));
     assert.equal(aviso.length, 1, 'o aviso de valor solto roda na hora da escrita');
     assert.deepEqual(aviso[0].matcher.split('|').sort(), ['Edit', 'MultiEdit', 'Write']);
@@ -783,14 +784,13 @@ describe('F60: o hook de ponta a ponta pelo .claude/kit.json (compatibilidade) c
   sh(proj, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
   mkdirSync(join(proj, 'web'), { recursive: true });
 
-  it('a cerca: um turno que só grava web/LEIAME.md não é cobrado', () => {
-    hook({ hook_event_name: 'UserPromptSubmit', prompt: 'cria uma tela' });
+  const pr = { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'gh pr create --fill' } };
+  it('a cerca: um item que só grava web/LEIAME.md abre o PR sem cobrança', () => {
     writeFileSync(join(proj, 'web', 'LEIAME.md'), 'x\n');
-    assert.equal(hook({ hook_event_name: 'Stop' }), null);
+    assert.equal(hook(pr), null);
   });
-  it('só web/index.html mudou e o Stop cobra a crítica', () => {
-    hook({ hook_event_name: 'UserPromptSubmit', prompt: 'cria uma tela' });
+  it('só web/index.html mudou e o PR cobra a crítica', () => {
     writeFileSync(join(proj, 'web', 'index.html'), '<!doctype html><title>x</title>\n');
-    assert.equal(hook({ hook_event_name: 'Stop' })?.decision, 'block');
+    assert.equal(hook(pr)?.hookSpecificOutput?.permissionDecision, 'deny');
   });
 });

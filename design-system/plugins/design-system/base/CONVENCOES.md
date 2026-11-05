@@ -133,7 +133,7 @@ As guardas do pacote (`@wicomm/guardas`) e as de cada projeto seguem estas regra
 ### CONV-19 · Quem desenha não julga
 - **Regra.** Toda criação ou mudança de interface começa no agente `designer`, que escreve a **revisão de arquitetura** (tarefa, inventário com a decisão que cada dado gera, arquétipo, hierarquia, lugar de cada mensagem, peças do kit, estados, movimento, o que sai) e **não edita código de tela**. O `critico-de-ui` julga em contexto separado, com no máximo 5 problemas, cada um com *Onde* e *Correção*. Depois do código, nova crítica.
 - **Por quê.** Quem desenhou defende o desenho; o julgamento precisa de outro contexto.
-- **Confere.** Hook do plugin (nega edição de tela ao designer; cobra a crítica uma vez no turno que mudou o visual).
+- **Confere.** Hook do plugin (nega edição de tela ao designer; ao abrir o PR, cobra uma vez a crítica do visual que mudou na branch).
 
 ### CONV-20 · A nota é a porta
 - **Regra.** A crítica dá nota em seis eixos de 0 a 5 — hierarquia, densidade, consistência com o design system, ruído visual, clareza da ação primária, aderência à DESIGN e à ANATOMIA. **24/30 sem ressalva alta** libera o PR da tela; no máximo duas recríticas. Em densidade site, entra o sétimo eixo, *cara de site*, e o teto vira 28/35 (80%).

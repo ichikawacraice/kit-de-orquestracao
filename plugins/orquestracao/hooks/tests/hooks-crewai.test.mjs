@@ -183,16 +183,102 @@ const subStop = (f, relatorio, { chave = 'a77', ...extra } = {}) => ({
   last_assistant_message: relatorio, background_tasks: [], ...extra,
 });
 const bloqueou = (r) => r?.decision === 'block';
+// F420: a saída só não colada vira aviso ao operador (systemMessage), sem turno extra.
+const avisou = (r) => !!r && r.decision === undefined && /saída real/.test(String(r.systemMessage || ''));
+const agiu = (r) => bloqueou(r) || avisou(r);
+// Turno que editou e só leu (sem teste): base dos casos de "afirma sucesso sem ter rodado teste".
+const semTeste = () => [abertura('Plano: edite a.ts; critério: vitest run a.test.ts'),
+  usa('Edit', { file_path: '/r/a.ts', old_string: 'a', new_string: 'b' }, 't1'), resultado('t1', 'ok'),
+  usa('Bash', { command: 'git status' }, 't2'), resultado('t2', 'nothing to commit')];
 
-caso('2.1 dona: relatório sem saída é cobrado', () => {
+caso('2.1 F420: teste rodado no turno e relatório sem a saída colada viram aviso, sem turno extra (casos reais)', () => {
+  let i = 0;
+  for (const rel of [
+    'Pronto, editei a.ts e os testes passaram.',
+    'O validador está revisando a fatia 1; aguardo o laudo para abrir o PR.',
+    'Gravei o estado no painel. A fatia 2b1 está commitada e empurrada.',
+    'Runner verde (7046 testes) e typecheck verde. Falta o validador.',
+    'Teste do PR verde (`shared` 3934/3934) e typecheck limpo.',
+  ]) {
+    const r = rc(subStop(transcript(trabalho()), rel, { chave: `av${i++}` }));
+    if (bloqueou(r)) throw new Error(`ainda força turno extra: ${rel}`);
+    if (!avisou(r)) throw new Error(`não avisou: ${rel} → ${JSON.stringify(r)}`);
+  }
+  igual(log().map((l) => l[3]).join(','), Array(5).fill('avisou-sem-saida').join(','), 'log');
+});
+caso('2.1b o aviso sai uma vez por turno: a parada seguinte do mesmo turno passa calada', () => {
   const f = transcript(trabalho());
-  const r = rc(subStop(f, 'Pronto, editei a.ts e os testes passaram.'));
-  if (!bloqueou(r)) throw new Error('não cobrou');
+  const ev = subStop(f, 'Pronto, testes passaram.');
+  if (!avisou(rc(ev))) throw new Error('1ª não avisou');
+  igual(rc(ev), null, '2ª parada do mesmo turno');
+  igual(log().map((l) => l[3]).join(','), 'avisou-sem-saida', 'log');
+});
+caso('2.1c afirmar sucesso sem ter rodado teste no turno continua bloqueando', () => {
+  const r = rc(subStop(transcript(semTeste()), 'Pronto, editei a.ts e os testes passaram.'));
+  if (!bloqueou(r)) throw new Error(`não bloqueou: ${JSON.stringify(r)}`);
   if (!r.reason.includes('cobrança 1 de 2')) throw new Error(`motivo: ${r.reason}`);
+  if (!/nenhum teste rodou/.test(r.reason)) throw new Error(`motivo não diz que o teste não rodou: ${r.reason}`);
   igual(log()[0][3], 'cobrou-1', 'log');
+  // Sem afirmar sucesso, o mesmo turno só avisa.
+  if (!avisou(rc(subStop(transcript(semTeste()), 'Editei a.ts; falta rodar o teste.', { chave: 'av9' })))) throw new Error('sem afirmação não avisou');
+});
+// Validador do F420: a falha escondida em formato que não é o do vitest continua bloqueando.
+const comSaida = (comando, saida) => [abertura('Plano: edite a.ts; critério: o teste'),
+  usa('Edit', { file_path: '/r/a.ts', old_string: 'a', new_string: 'b' }, 't1'), resultado('t1', 'ok'),
+  usa('Bash', { command: comando }, 't2'), resultado('t2', saida)];
+caso('2.1d falha na saída do node:test, do TAP e do tsc, contra relatório de sucesso, bloqueia', () => {
+  let i = 0;
+  for (const [cmd, saida, rel] of [
+    ['node gate/com-fichas.mjs -- node --test; echo exit=$?', 'ℹ tests 12\nℹ pass 10\nℹ fail 2\nexit=1', 'Pronto, os testes passaram.'],
+    ['node --test a.test.mjs; echo exit=$?', '1..12\n# pass 10\n# fail 2\nexit=1', 'Gate verde, pode abrir o PR.'],
+    ['npx tsc --noEmit; echo exit=$?', "src/a.ts(3,7): error TS2322: Type 'string' is not assignable to type 'number'.\nexit=2", 'Pronto, typecheck limpo.'],
+  ]) {
+    const r = rc(subStop(transcript(comSaida(cmd, saida)), rel, { chave: `fe${i++}` }));
+    if (!bloqueou(r) || !/falha que o relatório não cita/.test(r.reason)) throw new Error(`não bloqueou: ${cmd} → ${JSON.stringify(r)}`);
+  }
+  // Controles: a mesma falha admitida não bloqueia; a saída verde só avisa.
+  if (bloqueou(rc(subStop(transcript(comSaida('node --test; echo exit=$?', 'ℹ pass 10\nℹ fail 2\nexit=1')), '2 testes falharam; corrijo no próximo turno.', { chave: 'fe8' })))) throw new Error('falha admitida bloqueou');
+  if (bloqueou(rc(subStop(transcript(comSaida('npx tsc --noEmit; echo exit=$?', "error TS2322: x\nexit=2")), 'O typecheck acusa erro de tipo em a.ts; sigo nele.', { chave: 'fe9' })))) throw new Error('erro de tipo admitido bloqueou');
+  if (!avisou(rc(subStop(transcript(comSaida('node --test; echo exit=$?', 'ℹ pass 12\nℹ fail 0\nexit=0')), 'Pronto, os testes passaram.', { chave: 'fe10' })))) throw new Error('saída verde não avisou');
+  // Controles: "exit=1" ou "error TS…" no NOME de um teste verde não é falha (só a linha do status e o diagnóstico do tsc contam).
+  for (const [cmd, saida, rel, k] of [
+    ['node --test; echo exit=$?', 'ok 1 - 2.24c o "exit=1" do relatório não conta\nok 2 - outro\n1..2\n# pass 2\n# fail 0\nexit=0', 'Gate verde: exit=0, 2 testes verdes.', 'fe11'],
+    ['npx vitest run; echo exit=$?', ' ✓ reconhece error TS2322 na saída\n Tests  20 passed (20)\nexit=0', 'exit=0, 20 testes verdes.', 'fe12'],
+    ['node --test; echo exit=$?', 'ℹ tests 3\n  ✔ acusa exit=1 no fim (2ms)\n  ✔ error TS2322: o tipo\nexit=0', 'Pronto, os testes passaram: exit=0.', 'fe13'],
+  ]) {
+    const r = rc(subStop(transcript(comSaida(cmd, saida)), rel, { chave: k }));
+    if (bloqueou(r)) throw new Error(`nome de teste virou falha: ${k} → ${JSON.stringify(r)}`);
+  }
+});
+caso('2.1e comando que só cita teste (git add, ls, cat, grep) ou log velho não é teste rodado', () => {
+  let i = 0;
+  for (const cmd of ['git add src/a.ts tests/a.test.mjs && git commit -m "feat: x"', 'ls tests/', 'cat vitest.config.ts', 'grep -rn "test" src', 'pnpm add -D vitest']) {
+    const r = rc(subStop(transcript(comSaida(cmd, 'ok')), 'Pronto, editei a.ts e os testes passaram.', { chave: `nt${i++}` }));
+    if (!bloqueou(r) || !/nenhum teste rodou/.test(r.reason)) throw new Error(`não bloqueou: ${cmd} → ${JSON.stringify(r)}`);
+  }
+  const velho = [...comSaida('git status', 'ok'), usa('Read', { file_path: '/tmp/x/gate.log' }, 't3'), resultado('t3', 'tudo ok')];
+  if (!bloqueou(rc(subStop(transcript(velho), 'Pronto, os testes passaram.', { chave: 'nt9' })))) throw new Error('log velho contou como teste');
+  // Controles: os executores reais contam, e o .output do fundo lançado no turno também.
+  for (const cmd of ['node gate/com-fichas.mjs -- node --test', 'npm run test:unit', 'CI=1 npx vitest run a.test.ts', 'pnpm -C web typecheck', 'cd web && npx tsc --noEmit', 'testes-afetados -- node --test', 'pytest -q']) {
+    const r = rc(subStop(transcript(comSaida(cmd, 'ok')), 'Pronto, editei a.ts e os testes passaram.', { chave: `nt${i++}` }));
+    if (!avisou(r)) throw new Error(`executor real não contou: ${cmd} → ${JSON.stringify(r)}`);
+  }
+  const doTurno = [...comSaida('npm test > /tmp/x/tasks/b1.output 2>&1', 'Command running in background with ID: b1. Output is being written to: /tmp/x/tasks/b1.output'),
+    usa('Read', { file_path: '/tmp/x/tasks/b1.output' }, 't3'), resultado('t3', 'tudo ok')];
+  if (!avisou(rc(subStop(transcript(doTurno), 'Pronto, os testes passaram.', { chave: 'nt30' })))) throw new Error('.output do turno não contou');
+  // Executor que o hook não conhece pelo nome conta pela saída com resultado (node:test, TAP, tsc, vitest).
+  for (const [cmd, saida] of [
+    ['bash scripts/test.sh', 'ℹ tests 12\nℹ pass 12\nℹ fail 0'],
+    ['claude plugin test plugins/painel-sessoes', '1..4\n# pass 4\n# fail 0'],
+    ['turbo run test', 'Found 0 errors. Watching for file changes.'],
+    ['python -m pytest', '12 passed in 0.31s'],
+  ]) {
+    const r = rc(subStop(transcript(comSaida(cmd, saida)), 'Pronto, os testes passaram.', { chave: `nt${i++}` }));
+    if (!avisou(r)) throw new Error(`saída com resultado não contou: ${cmd} → ${JSON.stringify(r)}`);
+  }
 });
 caso('2.2 no máximo 2 cobranças; a terceira deixa passar e registra', () => {
-  const f = transcript(trabalho());
+  const f = transcript(semTeste());
   const ev = subStop(f, 'Pronto, testes passaram.');
   if (!bloqueou(rc(ev))) throw new Error('1ª não cobrou');
   if (!bloqueou(rc({ ...ev, stop_hook_active: true }))) throw new Error('2ª não cobrou');
@@ -236,7 +322,7 @@ caso('2.10 a dona em execução, validação ou merge é cobrada; em planejament
   const f = transcript([...trabalho(), fala('Pronto, tudo verde.')]);
   const ev = (sid) => ({ session_id: sid, transcript_path: f, cwd: '/r', hook_event_name: 'Stop', stop_hook_active: false, background_tasks: [] });
   for (const etapa of ['execucao', 'validacao', 'merge']) {
-    if (!bloqueou(rc(ev(dona(sidDe(etapa), etapa))))) throw new Error(`dona em ${etapa} não cobrada`);
+    if (!agiu(rc(ev(dona(sidDe(etapa), etapa))))) throw new Error(`dona em ${etapa} não cobrada`);
   }
   for (const etapa of ['planejamento', 'design', 'feito']) igual(rc(ev(dona(sidDe(etapa), etapa))), null, `dona em ${etapa}`);
   igual(rc(ev('ffffffff-0000-0000-0000-000000000000')), null, 'sessão sem item');
@@ -246,10 +332,10 @@ caso('2.10 a dona em execução, validação ou merge é cobrada; em planejament
 });
 caso('2.12 Stop vindo de dentro de subagente (agent_id) é ignorado', () => {
   const f = transcript([...trabalho(), fala('Pronto.')]);
-  if (!bloqueou(rc(stop(f)))) throw new Error('precondição: a dona é cobrada');
+  if (!agiu(rc(stop(f)))) throw new Error('precondição: a dona é cobrada');
   igual(rc(stop(f, { agent_id: 'a1', agent_type: 'validador' })), null, 'saída');
 });
-caso('2.13 turno que para esperando background adia; o turno da notificação cobra', () => {
+caso('2.13 turno que para esperando background adia; o turno da notificação avisa uma vez', () => {
   const t1 = [...trabalho(), usa('Bash', { command: 'pnpm test', run_in_background: true }, 't9'), resultado('t9', 'Command running in background'), fala('Gate rodando; aviso quando terminar.')];
   const f1 = transcript(t1);
   igual(rc(stop(f1, { background_tasks: [{ id: 'b1', status: 'running' }] })), null, 'turno 1');
@@ -257,14 +343,29 @@ caso('2.13 turno que para esperando background adia; o turno da notificação co
   // Formato real (2.1.308): a notificação de Bash traz só o status, não a saída.
   const notif = abertura('<task-notification>\n<task-id>brdkei6q1</task-id>\n<tool-use-id>t9</tool-use-id>\n<output-file>/tmp/x/tasks/brdkei6q1.output</output-file>\n<status>completed</status>\n<summary>Background command "Run full gate" completed (exit code 0)</summary>\n</task-notification>', { origin: { kind: 'task-notification' } });
   const f2 = transcript([...t1, notif, fala('O gate terminou e passou.')]);
-  if (!bloqueou(rc(stop(f2)))) throw new Error('turno da notificação não cobrou');
+  if (!avisou(rc(stop(f2)))) throw new Error('turno da notificação não avisou');
   const f3 = transcript([...t1, notif, fala('Gate completed (exit code 0).')]);
-  igual(rc(stop(f3, { stop_hook_active: true })), null, 'com a saída da notificação');
-  igual(log().map((l) => l[3]).join(','), 'adiou-esperando-fundo,cobrou-1,corrigiu-apos-cobranca', 'log');
+  igual(rc(stop(f3, { stop_hook_active: true })), null, 'parada seguinte do mesmo turno');
+  igual(log().map((l) => l[3]).join(','), 'adiou-esperando-fundo,avisou-sem-saida', 'log');
+});
+caso('2.13b o status da notificação vale como saída real: o relatório que o cita passa com saída', () => {
+  const t1 = [...trabalho(), usa('Bash', { command: 'pnpm test', run_in_background: true }, 't9'), resultado('t9', 'Command running in background'), fala('Gate rodando.')];
+  const ev = (f, extra = {}) => subStop(f, undefined, { chave: 'n13', ...extra });
+  igual(rc({ ...ev(transcript(t1)), background_tasks: [{ id: 'b1', status: 'running' }] }), null, 'turno 1');
+  const notif = abertura('<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>t9</tool-use-id>\n<status>completed</status>\n<summary>Background command "Run full gate" completed (exit code 0)</summary>\n</task-notification>', { origin: { kind: 'task-notification' } });
+  igual(rc({ ...ev(transcript([...t1, notif])), last_assistant_message: 'Gate completed (exit code 0).' }), null, 'com o status da notificação');
+  igual(log().map((l) => l[3]).join(','), 'adiou-esperando-fundo,passou-com-saida', 'log');
+});
+caso('2.13c cobrado por número inventado e corrigido com a saída colada: corrigiu-apos-cobranca', () => {
+  const f = transcript(trabalho());
+  const ev = subStop(f, 'Pronto, 99 testes verdes.', { chave: 'c13' });
+  if (!bloqueou(rc(ev))) throw new Error('1ª não cobrou');
+  igual(rc({ ...ev, stop_hook_active: true, last_assistant_message: 'Corrigindo:\n```\n      Tests  98 passed (98)\n```' }), null, 'corrigido');
+  igual(log().map((l) => l[3]).join(','), 'cobrou-1,corrigiu-apos-cobranca', 'log');
 });
 caso('2.14 feedback do próprio Stop (isMeta) não abre turno novo', () => {
   const f = transcript([...trabalho(), fala('Pronto.'), { type: 'user', isMeta: true, uuid: id(), message: { role: 'user', content: 'Stop hook feedback:\nRelatório sem a saída' } }, fala('Pronto de novo.')]);
-  if (!bloqueou(rc(stop(f, { stop_hook_active: true })))) throw new Error('perdeu o turno (não viu o Edit)');
+  if (!agiu(rc(stop(f, { stop_hook_active: true })))) throw new Error('perdeu o turno (não viu o Edit)');
 });
 caso('2.15 entrada quebrada: sai 0, sem saída, erro no log', () => {
   igual(rc('{'), null, 'saída');
@@ -274,7 +375,7 @@ caso('2.15 entrada quebrada: sai 0, sem saída, erro no log', () => {
 caso('2.17 edição por Bash conta como edição; Bash que só lê não conta', () => {
   for (const [i, cmd] of ["python3 - <<'EOF'\nopen('a.ts','w').write('x')\nEOF", "sed -i '' 's/a/b/' a.ts", 'cat >> b.md <<EOF\nx\nEOF', 'echo x | tee c.ts'].entries()) {
     const f = transcript([abertura('Plano'), usa('Bash', { command: cmd }, 't1'), resultado('t1', '')]);
-    if (!bloqueou(rc(subStop(f, 'Feito.', { chave: `b${i}` })))) throw new Error(`não viu edição em: ${cmd}`);
+    if (!agiu(rc(subStop(f, 'Feito.', { chave: `b${i}` })))) throw new Error(`não viu edição em: ${cmd}`);
   }
   for (const [i, cmd] of ['git status 2>&1 | head', 'node -e "[1].map((x)=>x)" > /dev/null', 'grep -n "a->b" x.ts']. entries()) {
     const f = transcript([abertura('Plano'), usa('Bash', { command: cmd }, 't1'), resultado('t1', '')]);
@@ -284,7 +385,7 @@ caso('2.17 edição por Bash conta como edição; Bash que só lê não conta', 
 caso('2.18 resumo de compactação não abre turno novo (a edição de antes vale)', () => {
   const compacta = { type: 'user', uuid: id(), isCompactSummary: true, message: { role: 'user', content: 'This session is being continued from a previous conversation…' } };
   const f = transcript([...trabalho(), compacta, fala('Pronto.')]);
-  if (!bloqueou(rc(subStop(f, 'Pronto.')))) throw new Error('perdeu a edição de antes da compactação');
+  if (!agiu(rc(subStop(f, 'Pronto.')))) throw new Error('perdeu a edição de antes da compactação');
 });
 caso('2.19 status inventado (fora da saída real) é cobrado', () => {
   const f = transcript([abertura('Plano'), usa('Edit', { file_path: '/r/a.ts' }, 't1'), resultado('t1', 'ok'), usa('Bash', { command: 'git status' }, 't2'), resultado('t2', 'nothing to commit')]);
@@ -298,8 +399,8 @@ caso('2.20 saída com falha e relatório que só cita os que passaram é cobrado
   if (!bloqueou(rc(subStop(f, 'Gate: 96 testes passaram, nenhuma falha nova.', { chave: 'a85' })))) throw new Error('"nenhuma falha" escondeu as 2');
 });
 caso('2.21 "Q62" solto e "$?" dentro de bloco de código não são dúvida', () => {
-  if (!bloqueou(rc(subStop(transcript(trabalho()), 'Implementei a Q62 conforme o plano.')))) throw new Error('Q62 virou dúvida');
-  if (!bloqueou(rc(subStop(transcript(trabalho()), 'Rodei:\n```\npnpm test; echo exit=$?\n```', { chave: 'a83' })))) throw new Error('$? virou dúvida');
+  if (!agiu(rc(subStop(transcript(trabalho()), 'Implementei a Q62 conforme o plano.')))) throw new Error('Q62 virou dúvida');
+  if (!agiu(rc(subStop(transcript(trabalho()), 'Rodei:\n```\npnpm test; echo exit=$?\n```', { chave: 'a83' })))) throw new Error('$? virou dúvida');
 });
 caso('2.22 saída lida do .output (Read) ou do Monitor conta como saída real', () => {
   const lido = transcript([abertura('Plano'), usa('Edit', { file_path: '/r/a.ts' }, 't1'), resultado('t1', 'ok'),
@@ -345,8 +446,8 @@ caso('2.24d relatório com milhares de linhas em branco termina rápido (sem bac
 });
 caso('2.25 "Bloqueado:" abrindo a linha é dúvida; título markdown com "?" não é', () => {
   igual(rc(subStop(transcript(trabalho()), 'Bloqueado: falta o token da loja.')), null, 'Bloqueado:');
-  if (!bloqueou(rc(subStop(transcript(trabalho()), 'Pronto.\n\n## O que ficou de fora?\n\nNada.', { chave: 'a86' })))) throw new Error('título com ? virou dúvida');
-  if (!bloqueou(rc(subStop(transcript(trabalho()), 'Bloqueado: nada.', { chave: 'a88' })))) throw new Error('"Bloqueado: nada." isentou');
+  if (!agiu(rc(subStop(transcript(trabalho()), 'Pronto.\n\n## O que ficou de fora?\n\nNada.', { chave: 'a86' })))) throw new Error('título com ? virou dúvida');
+  if (!agiu(rc(subStop(transcript(trabalho()), 'Bloqueado: nada.', { chave: 'a88' })))) throw new Error('"Bloqueado: nada." isentou');
 });
 caso('2.26 "exit=1" no relatório não casa com "exit=10" na saída', () => {
   const f = transcript(trabalho('rodou\nexit=10'));
@@ -358,8 +459,8 @@ caso('2.27 fio principal com background que nunca termina: no 3º turno adiado, 
   const ev = stop(f, { background_tasks: [{ id: 'b1', type: 'local_bash', status: 'running' }] });
   igual(rc(ev), null, '1º');
   igual(rc(ev), null, '2º');
-  if (!bloqueou(rc(ev))) throw new Error('3º adiou de novo');
-  igual(log().map((l) => l[3]).join(','), 'adiou-esperando-fundo,adiou-esperando-fundo,cobrou-1', 'log');
+  if (!agiu(rc(ev))) throw new Error('3º adiou de novo');
+  igual(log().map((l) => l[3]).join(','), 'adiou-esperando-fundo,adiou-esperando-fundo,avisou-sem-saida', 'log');
 });
 
 // ---------- Q66: laço de comandos parecidos ----------
@@ -846,13 +947,15 @@ caso('F322.7 projeto aninhado fora da revisão segue com a própria raiz e a pr�
   igual(decisao(rodar(SN, editar(join(b, 'src', 'a.ts'), sub('kit-design:designer')))), 'deny', 'e não no código de b');
 }));
 caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1, 2, passa, passa', () => {
-  const f = transcript([...trabalho(), fala('Pronto, editei.')]);
+  // Contagem que não confere com a saída (99 × 98): correção, então trava.
+  const rel = 'Pronto, 99 testes verdes.';
+  const f = transcript([...trabalho(), fala(rel)]);
   const cresce = (...es) => writeFileSync(f, readFileSync(f, 'utf8') + es.map((e) => JSON.stringify(e)).join('\n') + '\n');
   const seq = [];
   for (let i = 1; i <= 4; i++) {
-    const r = rc(stop(f, { stop_hook_active: i > 1, last_assistant_message: 'Pronto, editei.' }));
+    const r = rc(stop(f, { stop_hook_active: i > 1, last_assistant_message: rel }));
     seq.push(r?.reason?.match(/cobrança \d de 2/)?.[0] ?? 'passou');
-    cresce(abertura('Stop hook feedback:\ncobrança', { isMeta: true }), fala('Pronto, editei.'));
+    cresce(abertura('Stop hook feedback:\ncobrança', { isMeta: true }), fala(rel));
   }
   igual(seq.join(','), 'cobrança 1 de 2,cobrança 2 de 2,passou,passou', 'paradas');
   igual(log().map((l) => l[3]).join(','), 'cobrou-1,cobrou-2,deixou-passar-apos-2,passou-esgotado', 'log');
@@ -860,7 +963,7 @@ caso('2.28 esgotado vale pelo turno: 4 paradas com o transcript crescendo dão 1
 caso('2.29 estado malformado ({"x":null}) não derruba o hook e é limpo na gravação', () => {
   const arq = join(base, 'hooks-crewai-estado.json');
   writeFileSync(arq, JSON.stringify({ x: null, y: 5 }));
-  if (!bloqueou(rc(stop(transcript([...trabalho(), fala('Pronto.')]))))) throw new Error('não cobrou');
+  if (!agiu(rc(stop(transcript([...trabalho(), fala('Pronto.')]))))) throw new Error('não cobrou');
   igual(log().some((l) => l[3] === 'erro'), false, 'erro no log');
   igual(Object.keys(JSON.parse(readFileSync(arq, 'utf8'))).length, 1, 'só a chave desta sessão sobra');
 });
@@ -916,10 +1019,10 @@ caso('2.31 registro de teste editado por Bash: conta o alvo da escrita', () => {
   igual(conta('cat src/k.test.ts | grep x'), 0, 'cat de teste');
   // Conserto 2: R1 (não cobra o que não escreve teste) e R2 (aspas, branch com nome de teste).
   const cobra = (cmd, id) => rc(subStop(transcript([abertura('Plano'), usa('Bash', { command: cmd }, id)]), 'feito', { chave: id }));
-  igual(cobra('git checkout develop', 'r1a')?.decision ?? null, null, 'R1: git checkout develop não cobra');
-  igual(cobra('rm -rf /tmp/x', 'r1b')?.decision ?? null, null, 'R1: rm -rf /tmp/x não cobra');
-  igual(cobra('cp a /tmp/b', 'r1c')?.decision ?? null, null, 'R1: cp a /tmp/b não cobra');
-  igual(cobra('rm tests/a.test.mjs', 'r1d')?.decision, 'block', 'R1: rm de teste cobra');
+  igual(cobra('git checkout develop', 'r1a'), null, 'R1: git checkout develop não cobra');
+  igual(cobra('rm -rf /tmp/x', 'r1b'), null, 'R1: rm -rf /tmp/x não cobra');
+  igual(cobra('cp a /tmp/b', 'r1c'), null, 'R1: cp a /tmp/b não cobra');
+  igual(agiu(cobra('rm tests/a.test.mjs', 'r1d')), true, 'R1: rm de teste cobra (aviso, F420)');
   igual(log().some((l) => l[3] === 'editou-teste' && l[4].includes('tests/a.test.mjs')), true, 'R1: rm de teste registra');
   igual(conta("sed -i 's/x/y/; s/z/w/' a.test.ts"), 1, 'R2: ; dentro de aspas não corta, registra');
   igual(conta('git checkout -b test/foo'), 0, 'R2: git checkout -b test/foo não registra');

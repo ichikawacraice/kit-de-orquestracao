@@ -20,8 +20,8 @@
     },
     "cobrar_critica": {
       "type": "boolean",
-      "title": "Cobrar a crítica ao encerrar",
-      "description": "Quando o visual do front muda no turno, o Stop pede o crítico de UI uma vez. Para o time, use `cobrarCritica` no design/design-system.json.",
+      "title": "Cobrar a crítica ao abrir o PR",
+      "description": "Quando o visual do front mudou na branch e o crítico não o julgou, o `gh pr create` é negado uma vez pedindo o crítico de UI. Para o time, use `cobrarCritica` no design/design-system.json.",
       "default": true
     },
     "pasta_do_front": {

@@ -11,6 +11,9 @@
 // Não cobra quem devolve dúvida (pergunta fora de bloco de código que não é título markdown,
 // "Bloqueado: <motivo>" abrindo a linha, "devolvo", "parei", "estou bloqueado").
 // Saída com "N failed" exige o relatório citar o N junto da falha.
+// Trava só para correção (F420): o turno extra vem quando o relatório afirma o que a saída real contradiz (status ou
+// contagem que não confere, falha escondida) ou afirma sucesso ("testes passaram", "gate verde") sem nenhum teste rodado
+// no turno. Saída só não colada vira aviso ao operador (systemMessage), uma vez por turno, sem turno extra.
 // No máximo 2 cobranças por turno; depois deixa passar e registra. Erro vai para o log e o turno termina.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -137,6 +140,28 @@ export function testesEscritosPor(comando) {
   return [...achados];
 }
 const SAIDA_DE_TOOL = new Set(['Bash', 'Monitor', 'TaskOutput', 'BashOutput']);
+// Bash que roda teste, typecheck, lint, build ou gate: o que dá base a "os testes passaram". Casa o
+// executor no início de cada trecho do comando, não a palavra solta: `git add tests/a.test.mjs`,
+// `ls tests/` e `cat vitest.config.ts` citam teste sem rodar nenhum.
+const ALVO_DE_TESTE = /(?:^|\s)(?:test|tests|lint|build|typecheck|check|vitest|jest|tsc|eslint|playwright)(?::\S*)?(?=\s|$)/;
+const EXECUTOR_DIRETO = /^(?:\S*\/)?(?:vitest|jest|pytest|tsc|eslint|playwright|testes-afetados)$/;
+function rodaTeste(comando) {
+  for (const bruto of comando.split(/&&|\|\||[;|\n()]/)) {
+    const t = bruto.trim().replace(/^(?:\w+=\S*\s+|(?:env|time|nice)\s+|timeout\s+\S+\s+)+/, '');
+    const primeira = t.split(/\s+/)[0] || '';
+    if (/^(?:npx|pnpm|npm|yarn|bun|bunx)$/.test(primeira)) {
+      // `pnpm add -D vitest` instala; não roda.
+      if (!/^\S+\s+(?:add|install|i|remove|uninstall)\b/.test(t) && ALVO_DE_TESTE.test(t.slice(primeira.length))) return true;
+    } else if (EXECUTOR_DIRETO.test(primeira)) return true;
+    else if (/^node$/.test(primeira) && /(?:\s--test\b|com-fichas|testes-afetados)/.test(t)) return true;
+    else if (/^(?:cargo|go|deno)\s+test\b|^make\s+(?:test|check|lint)\b/.test(t)) return true;
+    else if (/com-fichas(?:\.mjs)?$/.test(primeira)) return true;
+  }
+  return false;
+}
+// Relatório que afirma sucesso de teste, typecheck, lint, build ou gate.
+const AFIRMA_SUCESSO = /(\bexit\s*[=:]?\s*0\b|\b\d+\s+(passed|passaram|verdes|passando)\b|\btudo verde\b|\b(testes?|gate|typecheck|lint|build|afetados|su[ií]te)\b[^\n.]{0,40}\b(verdes?|passa|passam|passou|passaram|limpos?)\b|\b(verdes?|passaram|passou)\b[^\n.]{0,20}\b(testes?|gate|typecheck|afetados))/i;
+const CONTAGEM = /(\d+)\s+(?:testes?\s+|casos?\s+)?(passaram|verdes|passou|passed|falharam|falhou|vermelhos?|failed)\b/i;
 
 // Status de comando, normalizado para comparar com a saída real.
 const STATUS = /\b(?:exit(?:\s*code|\s*status)?\s*[=:]?\s*-?\d+|\w+_EXIT\s*=\s*\d+|(?:test|tests|typecheck|gate|lint|build)\s*=\s*\d+|Found\s+\d+\s+errors?)\b/gi;
@@ -150,6 +175,17 @@ function turnoAtual(entradas) {
   const testes = new Set();
   const fundo = new Set();
   let ultimoTexto = '';
+  let rodouTeste = false;
+  // O que o turno cita (comandos e saídas): o .output/.log lido só conta se o turno o lançou ou o citou.
+  const citados = [];
+  for (const e of turno) {
+    if (!Array.isArray(e.message?.content)) continue;
+    for (const c of e.message.content) {
+      if (c.type === 'tool_use' && c.name === 'Bash') citados.push(String(c.input?.command || ''));
+      if (c.type === 'tool_result') citados.push(conteudoDe(c.content));
+    }
+  }
+  const citado = citados.join('\n');
   for (const e of turno) {
     if (e.type !== 'assistant' || !Array.isArray(e.message?.content)) continue;
     for (const c of e.message.content) {
@@ -165,6 +201,7 @@ function turnoAtual(entradas) {
       if (BASH_GRAVA.some((r) => r.test(comando)) || escritos.length) editou = true;
       for (const alvo of escritos) testes.add(alvo);
       if (c.name === 'Monitor' || c.input?.run_in_background === true) fundo.add(c.id);
+      if ((comando && rodaTeste(comando)) || (c.name !== 'Bash' && SAIDA_DE_TOOL.has(c.name))) rodouTeste = true;
     }
     const t = textoDe(e.message);
     if (t.trim()) ultimoTexto = t;
@@ -180,8 +217,11 @@ function turnoAtual(entradas) {
       const uso = usos.get(c.tool_use_id);
       const lido = uso?.name === 'Read' && /\.(output|log)$/.test(String(uso.input?.file_path || ''));
       if (!uso || !(SAIDA_DE_TOOL.has(uso.name) || lido)) continue;
-      saidas.push(conteudoDe(c.content));
+      const texto = conteudoDe(c.content);
+      saidas.push(texto);
       rodou = true;
+      const arquivo = String(uso.input?.file_path || '');
+      if ((lido && citado.includes(arquivo)) || RESULTADO.test(texto)) rodouTeste = true;
     }
   }
   // Notificação dentro do turno (no subagente chega como queued_command): traz o status e
@@ -193,7 +233,9 @@ function turnoAtual(entradas) {
     rodou = true;
     for (const m of t.matchAll(/<tool-use-id>([^<]+)<\/tool-use-id>/g)) fundo.delete(m[1]);
   }
-  return { chave: abertura?.uuid || 'inicio', editou, testes: [...testes], esperaFundo: fundo.size > 0, rodou, saidas: saidas.join("\n"), lista: saidas, ultimoTexto };
+  // A notificação (a que abriu o turno ou uma dentro dele) é de trabalho em background: conta como teste rodado.
+  if (saidas.length && (abertura?.origin?.kind === 'task-notification' || saidas.some((s) => s.includes('<task-notification>')))) rodouTeste = true;
+  return { chave: abertura?.uuid || 'inicio', editou, rodouTeste, testes: [...testes], esperaFundo: fundo.size > 0, rodou, saidas: saidas.join("\n"), lista: saidas, ultimoTexto };
 }
 
 // Status do relatório ("exit=0", "Found 0 errors") que aparece igual numa saída do turno.
@@ -216,6 +258,8 @@ function resumoConfere(relatorio, saidas) {
   for (const m of relatorio.matchAll(re)) {
     const palavra = /^(falh|verm|fail)/i.test(m[2]) ? 'failed' : 'passed';
     if (new RegExp(`(^|\\D)${m[1]}\\s+${palavra}\\b`).test(saidas)) return true;
+    // node:test e TAP dizem "ℹ pass 12" / "# fail 2": o mesmo número, na ordem inversa.
+    if (new RegExp(`^\\s*[ℹ#]\\s*${palavra === 'failed' ? 'fail' : 'pass'}\\s+${m[1]}(?!\\d)`, 'm').test(saidas)) return true;
   }
   return false;
 }
@@ -224,12 +268,28 @@ function resumoConfere(relatorio, saidas) {
 // ("2 testes falharam", "falharam 2", "Tests  2 failed" colado): "nenhuma falha nova" usa a palavra e
 // esconde o número. Todos os N contam — o vitest diz "Test Files  1 failed" antes de "Tests  2 failed".
 // Resíduo aceito: um número qualquer a até 30 caracteres da palavra ("2 dias sem falha") libera.
+// Além do "N failed" do vitest/jest: "ℹ fail N" (node:test), "# fail N" (TAP), "Found N errors" (tsc --build).
+// Saída sem contagem com erro de tipo ou exit diferente de zero conta contra o relatório que afirma sucesso
+// sem citar falha nem erro.
+// O erro do tsc só no formato de diagnóstico (no começo da linha, ou depois de "arquivo(l,c):"/"arquivo:l:c -"),
+// e o exit só na linha do status ("exit=1", a do `echo "exit=$?"`): o nome de um teste verde que cita
+// "exit=1" ou "error TS2322" não é falha.
+const ERRO_TS = /^(?:\S[^\n]*?(?:\(\d+,\d+\)|:\d+:\d+)\s*[:-]?\s*)?error\s+TS\d+/m;
+const EXIT_FALHO = /^\s*(?:error:\s*)?exit(?:\s*code|\s*status)?\s*[=:]?\s*[1-9]\d*\s*$/im;
+const RESULTADO = new RegExp(`\\d+\\s+(?:passed|failed)\\b|^\\s*[ℹ#]\\s*(?:pass|fail)\\s+\\d+|Found\\s+\\d+\\s+errors?|${ERRO_TS.source}`, 'm');
 const escondeFalha = (relatorio, lista) => {
-  const ultima = [...lista].reverse().find((s) => /\d+\s+(passed|failed)\b/.test(s)) ?? '';
-  const ns = [...ultima.matchAll(/(?:^|\D)([1-9]\d*)\s+failed\b/g)].map((m) => m[1]);
-  if (!ns.length) return false;
+  const ultima = [...lista].reverse().find((s) => RESULTADO.test(s)) ?? '';
+  const ns = [
+    ...ultima.matchAll(/(?:^|\D)([1-9]\d*)\s+failed\b/g),
+    ...ultima.matchAll(/^\s*[ℹ#]\s*fail\s+([1-9]\d*)/gm),
+    ...ultima.matchAll(/Found\s+([1-9]\d*)\s+errors?/g),
+  ].map((m) => m[1]);
   // O status ("exit=1") sai do texto antes: o 1 dele não é o número de falhas.
   const texto = relatorio.replace(STATUS, ' ');
+  if (!ns.length) {
+    const falhou = ERRO_TS.test(ultima) || EXIT_FALHO.test(ultima);
+    return falhou && AFIRMA_SUCESSO.test(relatorio) && !/(falh|fail|vermelh|erro)/i.test(texto);
+  }
   return !ns.some((n) => new RegExp(
     `(^|\\D)${n}(?!\\d)[^\\n]{0,30}?(falh|fail|vermelh)|(falh|fail|vermelh)[^\\n]{0,15}?(^|\\D)${n}(?!\\d)`, 'i').test(texto));
 };
@@ -294,6 +354,21 @@ function main() {
     encerrar();
     return;
   }
+  // O que é correção trava; o resto é anotação e vira aviso.
+  const falhaEscondida = escondeFalha(relatorio, turno.lista);
+  const inventou = new RegExp(STATUS.source, 'i').test(relatorio) || CONTAGEM.test(relatorio);
+  const semTeste = AFIRMA_SUCESSO.test(relatorio) && !turno.rodouTeste;
+  if (!falhaEscondida && !inventou && !semTeste) {
+    const avisado = `${chave}:aviso`;
+    if (estado[avisado]) return;
+    gravarEstadoDe(ESTADO, (s) => { delete s[pendente]; s[avisado] = { n: 1, em: Date.now() }; });
+    registrar(sessao, HOOK, 'avisou-sem-saida', `${quem} rodou=${turno.rodou}`);
+    process.stdout.write(JSON.stringify({
+      systemMessage: 'Critério da dona: o relatório não traz a saída real do comando de critério. ' +
+        'Na próxima entrega, cole as últimas linhas da saída num bloco de código (com o `exit=N`).',
+    }));
+    return;
+  }
   if (cobrancas >= MAX_COBRANCAS) {
     // Esgotado vale pelo TURNO, não pela sequência: apagar a chave faria a parada seguinte (outro hook
     // mantendo o turno vivo) recomeçar em 1 e a sessão não sairia nunca.
@@ -303,11 +378,14 @@ function main() {
   }
 
   gravarEstadoDe(ESTADO, (s) => { s[chave] = { n: cobrancas + 1, em: Date.now() }; });
-  registrar(sessao, HOOK, `cobrou-${cobrancas + 1}`, `${quem} rodou=${turno.rodou}`);
+  const motivo = falhaEscondida ? 'a saída real tem falha que o relatório não cita'
+    : semTeste ? 'o relatório afirma sucesso, mas nenhum teste rodou neste turno'
+    : 'o status ou a contagem do relatório não aparece na saída real';
+  registrar(sessao, HOOK, `cobrou-${cobrancas + 1}`, `${quem} rodou=${turno.rodou} ${falhaEscondida ? 'falha-escondida' : semTeste ? 'sem-teste' : 'nao-confere'}`);
   process.stdout.write(JSON.stringify({
     decision: 'block',
     reason:
-      `Relatório sem a saída real do comando de critério (cobrança ${cobrancas + 1} de ${MAX_COBRANCAS}). ` +
+      `Relatório não confere com a saída real: ${motivo} (cobrança ${cobrancas + 1} de ${MAX_COBRANCAS}). ` +
       'Rode o comando de critério do plano terminando em `; echo "exit=$?"` e cole as últimas linhas da saída ' +
       'num bloco de código (inclusive o `exit=N`), mesmo se falhou — o status e os números têm de estar na saída. ' +
       'Se você parou por dúvida, escreva a pergunta inteira, terminando em "?".',

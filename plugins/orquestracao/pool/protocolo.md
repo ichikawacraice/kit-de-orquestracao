@@ -15,7 +15,7 @@ Todo trabalho do projeto é um **item** (`F<n>`) na fila do painel. Uma **sessã
 - **A dona** grava o próprio item a cada passo: dono e `com` no primeiro turno, o `agora` a cada passo, a `etapa` quando muda, os `prs` ao abrir o PR, o motivo no `agora` quando a fila devolve. Manual: [dona.md](dona.md#painel-em-dia).
 - **A orquestradora** grava ao criar o item, ao abrir a dona (`agora` = "dona aberta"; o dono e o `com` quando já tem o `local_…` que o `start_session` devolveu) e ao mergear (`painel mergear` e `painel fila-de-merge` fecham o item; o devolvido volta a `execucao` com o motivo).
 - **A batida** só confere: cutuca a dona do item parado, solta o item cuja dona sumiu, cobra da dona viva o PR pronto fora da fila (F373) e relata à orquestradora o `merge` parado sem dona viva e o item sem dona ([batida](#batida)). Ela não grava `agora` por ninguém.
-- **As travas:** `fila-do-item.mjs` recusa o fim do turno da dona que mudou algo (editou arquivo, commitou, empurrou, abriu ou editou PR) sem gravar o item no turno; `criterio-da-dona.mjs` recusa o turno que editou em `execucao`, `validacao` ou `merge` sem a saída real do comando de teste no relatório.
+- **As travas:** `fila-do-item.mjs` recusa o fim do turno da dona que mudou algo (editou arquivo, commitou, empurrou, abriu ou editou PR) sem gravar o item no turno; `criterio-da-dona.mjs`, no turno que editou em `execucao`, `validacao` ou `merge`, recusa o relatório que a saída real contradiz ou que afirma sucesso sem teste rodado, e avisa (sem turno extra) o que só não traz a saída colada.
 
 <a id="skills-da-etapa"></a>
 ## Skills por etapa

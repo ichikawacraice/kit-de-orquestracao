@@ -254,3 +254,44 @@ test('dona: a mesma sessão sem item vivo não é medida; com o item em feito ta
   rmSync(join(b, 'painel', 'fila', 'F7.json'));
   assert.equal(rodar(b, 'P', transcript(b, { tokens: 360_000 })), null, 'sem item');
 }));
+
+// F420: um aviso por limiar cruzado, não um por turno. O nível já cobrado fica no estado (`<sid>:contexto`); só um limiar
+// acima cobra de novo, e o nível cai (limpeza ou compactação) rearma.
+const estado = (b) => { const p = join(b, 'orq', 'hooks-crewai-estado.json'); return existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : {}; };
+test('F420-1. a dona a 360 mil: o 1º turno cobra, os seguintes no mesmo limiar passam (ja-avisado); 510 mil cobra de novo', () => com((b) => {
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
+  assert.equal(estado(b)[`${ID.P}:contexto`]?.nivel, 2, 'precondição: o nível cobrado foi gravado');
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 370_000 })), null, '2º turno no mesmo limiar');
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 380_000 })), null, '3º turno no mesmo limiar');
+  assert.equal((log(b).match(/\tcobrou-200\t/g) || []).length, 1, 'uma cobrança só');
+  assert.equal((log(b).match(/\tja-avisado\t/g) || []).length, 2, 'os outros registram ja-avisado');
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 510_000 })), /Não pegue trabalho novo/);
+  assert.match(log(b), /\tcobrou-300\t/);
+}));
+test('F420-2. a dona a 260 mil terminando com pergunta: cobra uma vez, não a cada pergunta', () => com((b) => {
+  const P2 = 'plano pronto.\n\nSigo para a execução?';
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 260_000, texto: P2 })), /esperando resposta/);
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 265_000, texto: P2 })), null);
+  assert.equal((log(b).match(/\tcobrou-150-espera\t/g) || []).length, 1);
+}));
+test('F420-3. o contexto que cai abaixo do nível cobrado (limpeza, compactação) rearma o aviso', () => com((b) => {
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 90_000 })), null, 'depois de limpar');
+  assert.equal(estado(b)[`${ID.P}:contexto`], undefined, 'o nível sai do estado');
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
+  assert.equal((log(b).match(/\tcobrou-200\t/g) || []).length, 2);
+}));
+test('F420-4. a linha "Contexto: sigo — …" responde ao limiar: o turno seguinte no mesmo limiar não cobra', () => com((b) => {
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 360_000, texto: 'Contexto: sigo — falta o passo 3 do plano' })), null);
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 370_000 })), null);
+  assert.doesNotMatch(log(b), /\tcontexto-do-papel\tcobrou-/);
+}));
+test('F420-5. o turno que deixou passar (stop_hook_active) não conta como avisado', () => com((b) => {
+  assert.equal(rodar(b, 'P', transcript(b, { tokens: 360_000 }), { stop_hook_active: true }), null);
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
+}));
+test('F420-6. o nível é por sessão: a ORQ em modo ausente não herda o aviso da dona', () => com((b) => {
+  ligar(b);
+  cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
+  cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /360 mil/);
+}));

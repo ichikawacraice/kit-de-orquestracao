@@ -65,7 +65,7 @@ Toda tela nova ou que muda de visual passa por quatro passos. Você só pede a t
 1. **Designer** (subagente `design-system:designer`) escreve a revisão de arquitetura: o arquétipo da tela, o que vai onde, que peças usar. Ele não escreve código. A revisão fica em `docs/design/revisoes/`.
 2. **Código**, feito como a revisão aprovou, com as peças do kit e os tokens.
 3. **Crítico** (subagente `design-system:critico-de-ui`, em contexto separado de quem desenhou) dá a nota: seis eixos de 0 a 5 (sete nas telas de densidade *site*, as de quem usa de vez em quando), até 5 problemas, cada um com onde e a correção. **24/30 sem ressalva alta libera** (28/35 em *site*). Abaixo do teto, ou com ressalva alta mesmo acima dele, volta para conserto. Depois de duas recríticas, o que ainda ficar abaixo vai a quem pediu a crítica, para decidir.
-4. **Guarda.** No fim do turno que mudou o visual, a guarda cobra a crítica se ela não aconteceu. Na escrita de tela, avisa de valor solto (`#hex`, `text-[15px]`, `duration-200`, paleta crua). No CI, as guardas de `@wicomm/guardas` (`npm test`) reprovam o que foge da norma.
+4. **Guarda.** Ao abrir o PR (`gh pr create`), a guarda cobra uma vez a crítica do visual que mudou na branch, se ela não aconteceu depois da última mudança. Na escrita de tela, avisa de valor solto (`#hex`, `text-[15px]`, `duration-200`, paleta crua). No CI, as guardas de `@wicomm/guardas` (`npm test`) reprovam o que foge da norma.
 
 A nota de cada tela fica gravada no fim da revisão, e o `/design-system:estado` mostra a média.
 
@@ -77,7 +77,7 @@ A nota de cada tela fica gravada no fim da revisão, e o `/design-system:estado`
 |---|---|---|
 | O plugin inteiro | ligado | `claude plugin disable design-system@ichikawa-kit` (ou `enable`). Num projeto que não é da Wicomm, desligue só lá: `claude plugin disable design-system@ichikawa-kit --scope project`. |
 | A guarda (lembra o designer, impede o designer de escrever tela, cobra a crítica) | ligada | Só para você: `/plugin configure design-system@ichikawa-kit` → `guarda`. Para o time: `"guarda": false` no `design/design-system.json` do projeto. Desligar a guarda também cala o aviso de valor solto. Para parar só a cobrança da crítica, use a linha de baixo. |
-| A cobrança da crítica no fim do turno | ligada | Só para você: opção `cobrar_critica`. Para o time: `"cobrarCritica": false` no `design/design-system.json`. |
+| A cobrança da crítica ao abrir o PR | ligada | Só para você: opção `cobrar_critica`. Para o time: `"cobrarCritica": false` no `design/design-system.json`. |
 | O aviso de valor solto | ligado | `"valorSolto": false` no `design/design-system.json`, ou `{ "ignorar": ["<glob>"] }` para uma exceção com motivo. |
 | Uma guarda do CI | todas ligadas | Na chave `guardas` do `design/design-system.json`, desligada **com o motivo** (ex.: o app ainda não tem formulário). Volta quando o assunto chegar. |
 
