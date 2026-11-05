@@ -73,7 +73,7 @@ export const PECAS = [
   peca({
     name: 'label',
     title: 'Rótulo',
-    description: 'label — o rótulo de campo nas duas vozes: rotulo (maiúsculas espaçadas) e campo (13px, para rótulo que é conteúdo).',
+    description: 'label — o rótulo de campo em três vozes: rotulo (o conjunto, maiúsculas espaçadas), coluna (o valor que se repete, mais leve) e campo (13px, para rótulo que é conteúdo).',
     npm: [NPM.radix, NPM.cva],
     files: [ui('label')],
   }),
@@ -165,7 +165,7 @@ export const PECAS = [
   peca({
     name: 'skeleton',
     title: 'Esqueleto',
-    description: 'skeleton — a caixa da espera, parada sob movimento reduzido, e a espera de uma lista.',
+    description: 'skeleton — a caixa da espera, parada sob movimento reduzido, e a espera de uma lista corrida (a dos grupos está na linha-do-grupo, e a do quadro, no quadro).',
     files: [ui('skeleton')],
   }),
   peca({
@@ -367,7 +367,7 @@ export const PECAS = [
   peca({
     name: 'popover',
     title: 'Popover',
-    description: 'popover — o detalhe sob demanda, colado ao carimbo ou ao controle que o abre no clique, na superfície flutuante.',
+    description: 'popover — o detalhe sob demanda, colado ao carimbo ou ao controle que o abre no clique, na superfície flutuante, numa das três larguras (padrão, larga, a do conteúdo).',
     npm: [NPM.radix],
     files: [ui('popover')],
   }),
@@ -394,10 +394,17 @@ export const PECAS = [
   peca({
     name: 'linha-do-grupo',
     title: 'Linha do grupo',
-    description: 'table/collapsible — o grupo de linhas de uma tabela: o próprio tbody, a linha do grupo no degrau de tinta que abre e fecha, a contagem e a trilha encostadas no fim (as barras no mesmo x), e as células alinhadas às colunas, que esvaziam no celular quando a coluna some.',
+    description: 'table/collapsible — o grupo de linhas de uma tabela: o próprio tbody, a linha do grupo no degrau de tinta que abre e fecha, a contagem (a fração ou a quantidade com unidade) e a trilha encostadas no fim (as barras no mesmo x), o grupo vazio que diz a causa, as células alinhadas às colunas, que esvaziam no celular quando a coluna some, e a espera dos grupos.',
     npm: [NPM.lucide],
-    pecas: ['table', 'progress', 'chip-de-estado'],
+    pecas: ['table', 'progress', 'chip-de-estado', 'skeleton'],
     files: [ui('linha-do-grupo')],
+  }),
+  peca({
+    name: 'intervalo-de-campos',
+    title: 'Intervalo de campos',
+    description: 'fieldset range — o intervalo de dois valores (de, até): a legenda com a grandeza, um campo por linha com o rótulo visível à esquerda, as pontas amarradas no seletor e o erro do lado abaixo do campo; cabe no popover.',
+    pecas: ['label', 'input', 'table', 'idioma-de-cor'],
+    files: [ui('intervalo-de-campos')],
   }),
   peca({
     name: 'prazo',

@@ -47,7 +47,7 @@ export function LadrilhoDeCor({ d }: { d: DadosDoLadrilho }) {
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="flex w-80 flex-col gap-3">
+      <PopoverContent largura="larga" className="flex flex-col gap-3">
         <p className="t-titulo">{d.variavel.slice(2)}</p>
         <Ficha>
           <ParDaFicha rotulo="Papel">{d.papel}</ParDaFicha>

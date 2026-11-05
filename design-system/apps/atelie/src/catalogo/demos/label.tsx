@@ -14,6 +14,18 @@ export default function DemoDoRotulo() {
           <Input id="demo-rotulo-prazo" placeholder="dd/mm/aaaa" />
         </div>
       </Amostra>
+      <Amostra titulo="Voz coluna: o rótulo que se repete">
+        <div className="grid w-64 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1.5">
+          <Label voz="coluna" htmlFor="demo-rotulo-de">
+            De
+          </Label>
+          <Input id="demo-rotulo-de" type="date" />
+          <Label voz="coluna" htmlFor="demo-rotulo-ate">
+            Até
+          </Label>
+          <Input id="demo-rotulo-ate" type="date" />
+        </div>
+      </Amostra>
       <Amostra titulo="Voz campo">
         <div className="flex w-64 flex-col gap-1.5">
           <Label voz="campo" htmlFor="demo-rotulo-pergunta">

@@ -13,6 +13,7 @@ import { ProvedorDeLink } from "@/lib/link-do-app"
 import { Amostra, Amostras } from "./_amostra"
 import { pessoaDaDemo } from "./_pessoas"
 import { ListaGrande } from "./_lista-grande"
+import { ListaPorPeriodo } from "./_lista-por-periodo"
 import { LinkDoPalco } from "./_tela"
 
 const HOJE = new Date("2026-07-12T12:00:00-03:00")
@@ -166,6 +167,62 @@ export default function DemoDaLinhaDoGrupo() {
               </TableRow>
             </LinhaDoGrupo>
           </Table>
+        </div>
+      </Amostra>
+      <Amostra titulo="Contagem: a quantidade com unidade e a fração no mesmo x; o total sem linhas e o vazio sem contagem">
+        <div className="w-full">
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Entrega</TableHead>
+                <TableHead className="w-32">Prazo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <LinhaDoGrupo nome="Esta semana · 2 a 8 de nov" colunas={2} contagem={{ total: 3, unidade: { um: "entrega", varios: "entregas" } }}>
+              {["Revisão do contrato", "Painel de vendas", "Página de produto"].map((n) => (
+                <TableRow key={n}>
+                  <TableCell>{n}</TableCell>
+                  <TableCell>
+                    <Prazo periodo="2026-11-06" hoje={new Date("2026-11-03T12:00:00-03:00")} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </LinhaDoGrupo>
+            <LinhaDoGrupo nome="Desenho" colunas={2} contagem={{ feitas: 1, total: 2 }} progresso>
+              <TableRow>
+                <TableCell>Protótipo navegável</TableCell>
+                <TableCell />
+              </TableRow>
+              <TableRow>
+                <TableCell>Teste com cinco pessoas</TableCell>
+                <TableCell />
+              </TableRow>
+            </LinhaDoGrupo>
+            <LinhaDoGrupo
+              nome="9 a 15 de nov"
+              colunas={2}
+              abertoDeInicio={false}
+              contagem={{ total: 2, unidade: { um: "entrega", varios: "entregas" } }}
+            />
+            <LinhaDoGrupo nome="16 a 22 de nov" colunas={2} semLinhas="Nenhuma entrega" />
+            <LinhaDoGrupo nome="Sem causa declarada" colunas={2} />
+          </Table>
+        </div>
+      </Amostra>
+      <Amostra titulo="Contagem no estreito: o nome fica e a quantidade cede">
+        <div className="w-full max-w-[260px]">
+          <Table className="table-fixed">
+            <LinhaDoGrupo nome="Esta semana · 2 a 8 de nov" colunas={1} contagem={{ total: 3, unidade: { um: "entrega", varios: "entregas" } }}>
+              <TableRow>
+                <TableCell>Revisão do contrato</TableCell>
+              </TableRow>
+            </LinhaDoGrupo>
+          </Table>
+        </div>
+      </Amostra>
+      <Amostra titulo="Lista agrupada por semana, com as três vistas e a espera de cada uma">
+        <div className="w-full">
+          <ListaPorPeriodo />
         </div>
       </Amostra>
       <Amostra titulo="Com medida e fechado">

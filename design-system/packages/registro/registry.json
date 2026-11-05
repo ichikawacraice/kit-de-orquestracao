@@ -446,7 +446,7 @@
       "name": "label",
       "type": "registry:ui",
       "title": "Rótulo",
-      "description": "label — o rótulo de campo nas duas vozes: rotulo (maiúsculas espaçadas) e campo (13px, para rótulo que é conteúdo).",
+      "description": "label — o rótulo de campo em três vozes: rotulo (o conjunto, maiúsculas espaçadas), coluna (o valor que se repete, mais leve) e campo (13px, para rótulo que é conteúdo).",
       "dependencies": [
         "radix-ui@1.8.1",
         "class-variance-authority@0.7.1"
@@ -677,7 +677,7 @@
       "name": "skeleton",
       "type": "registry:ui",
       "title": "Esqueleto",
-      "description": "skeleton — a caixa da espera, parada sob movimento reduzido, e a espera de uma lista.",
+      "description": "skeleton — a caixa da espera, parada sob movimento reduzido, e a espera de uma lista corrida (a dos grupos está na linha-do-grupo, e a do quadro, no quadro).",
       "registryDependencies": [
         "@wicomm/estilo"
       ],
@@ -1177,7 +1177,7 @@
       "name": "popover",
       "type": "registry:ui",
       "title": "Popover",
-      "description": "popover — o detalhe sob demanda, colado ao carimbo ou ao controle que o abre no clique, na superfície flutuante.",
+      "description": "popover — o detalhe sob demanda, colado ao carimbo ou ao controle que o abre no clique, na superfície flutuante, numa das três larguras (padrão, larga, a do conteúdo).",
       "dependencies": [
         "radix-ui@1.8.1"
       ],
@@ -1250,7 +1250,7 @@
       "name": "linha-do-grupo",
       "type": "registry:ui",
       "title": "Linha do grupo",
-      "description": "table/collapsible — o grupo de linhas de uma tabela: o próprio tbody, a linha do grupo no degrau de tinta que abre e fecha, a contagem e a trilha encostadas no fim (as barras no mesmo x), e as células alinhadas às colunas, que esvaziam no celular quando a coluna some.",
+      "description": "table/collapsible — o grupo de linhas de uma tabela: o próprio tbody, a linha do grupo no degrau de tinta que abre e fecha, a contagem (a fração ou a quantidade com unidade) e a trilha encostadas no fim (as barras no mesmo x), o grupo vazio que diz a causa, as células alinhadas às colunas, que esvaziam no celular quando a coluna some, e a espera dos grupos.",
       "dependencies": [
         "lucide-react@1.57.0"
       ],
@@ -1258,11 +1258,31 @@
         "@wicomm/estilo",
         "@wicomm/table",
         "@wicomm/progress",
-        "@wicomm/chip-de-estado"
+        "@wicomm/chip-de-estado",
+        "@wicomm/skeleton"
       ],
       "files": [
         {
           "path": "registry/design-system/ui/linha-do-grupo.tsx",
+          "type": "registry:ui"
+        }
+      ]
+    },
+    {
+      "name": "intervalo-de-campos",
+      "type": "registry:ui",
+      "title": "Intervalo de campos",
+      "description": "fieldset range — o intervalo de dois valores (de, até): a legenda com a grandeza, um campo por linha com o rótulo visível à esquerda, as pontas amarradas no seletor e o erro do lado abaixo do campo; cabe no popover.",
+      "registryDependencies": [
+        "@wicomm/estilo",
+        "@wicomm/label",
+        "@wicomm/input",
+        "@wicomm/table",
+        "@wicomm/idioma-de-cor"
+      ],
+      "files": [
+        {
+          "path": "registry/design-system/ui/intervalo-de-campos.tsx",
           "type": "registry:ui"
         }
       ]

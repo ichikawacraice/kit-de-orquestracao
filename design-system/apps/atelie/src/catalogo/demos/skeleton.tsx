@@ -2,6 +2,8 @@
 
 import { EsperaDaLista, Skeleton } from "@/components/ui/skeleton"
 
+import { EsperaSobreALista } from "./_lista-por-periodo"
+
 import { Amostra, Amostras } from "./_amostra"
 
 export default function DemoDoEsqueleto() {
@@ -14,8 +16,11 @@ export default function DemoDoEsqueleto() {
           <Skeleton className="h-4 w-4/5" />
         </div>
       </Amostra>
-      <Amostra titulo="A espera de uma lista">
+      <Amostra titulo="A espera de uma lista corrida">
         <EsperaDaLista linhas={3} alturaDaLinha="h-10" rotulo="Os pedidos da semana" className="w-full max-w-sm" />
+      </Amostra>
+      <Amostra titulo="A espera dos grupos sobre a lista que chega: o degrau, o recuo e o vão batem">
+        <EsperaSobreALista />
       </Amostra>
     </Amostras>
   )
