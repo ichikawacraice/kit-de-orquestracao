@@ -31,7 +31,7 @@ O `claude plugin install` liga o plugin na conta, para todo projeto. Quase todas
 | `injecao-entre-sessoes` | Mensagem de outra sessão com cara de injeção ganha uma linha de aviso |
 | `laco-de-comandos` | Quatro comandos iguais seguidos com a mesma saída ganham um aviso |
 | `titulo-da-dona` | Abrir sessão com prompt de dona exige o título `F<n> · …` |
-| `painel-das-sessoes` | Em repositório git, o turno que abriu ou mergeou PR (`gh pr create`, `gh pr merge`), abriu ou arquivou sessão é parado uma vez pedindo para gravar o painel |
+| `painel-das-sessoes` | Em repositório git, o turno que abriu ou mergeou PR (`gh pr create`, `gh pr merge`), abriu ou arquivou sessão é parado uma vez pedindo para gravar o painel; também o que fecha marcando decisão *assumida, a confirmar* (ou "Q-ID não reservado") sem a pergunta assumida no painel |
 
 Para não sentir o kit num projeto, desligue o `orquestracao` nele (`enabledPlugins` com `false` no `.claude/settings.local.json`). Para não sentir em nenhum, `claude plugin disable` e ligue só nos projetos que usam o kit.
 
@@ -52,7 +52,7 @@ Para não sentir o kit num projeto, desligue o `orquestracao` nele (`enabledPlug
 | `contexto-do-papel` | Fim de turno de dona ou orquestradora com contexto alto | A dona: aos 250 mil cobra limpar se o turno termina esperando você; aos 350 mil, limpar ou dizer o que falta; aos 500 mil, limpar. A orquestradora: só registra; quem limpa é você, pelo botão `Limpar` | Raramente | — |
 | `espera-no-turno` | Fim de turno da dona com teste ou subagente ainda rodando em segundo plano | Stop uma vez: diz o que roda e como esperar no turno (`esperar-fundo`, teste em primeiro plano), para o aviso de fim de turno não acordar a orquestradora só para ler "aguardo" | Espera longa de verdade (horas) | A segunda tentativa de parar passa; o turno que termina perguntando a você passa direto |
 | `modelo-do-validador` | A dona lança o `orquestracao:validador` sem `model` | Item declarado sem risco (`"risco":false` no painel) e diff sem contrato nem trava (ADR, spec, migration, hook, gate, CI, manifesto, protocolo, agentes, removido): põe o validador em Sonnet. Item de risco ou diff com risco: deixa o Opus. Risco não declarado: `deny` pedindo a declaração | Uma vez por item, até a dona declarar o risco | `model` passado à mão vale sempre |
-| `painel-das-sessoes` | Fim de turno de qualquer sessão em repositório git (com ou sem orquestradora) | Stop, uma vez, se a sessão mudou de estado (abriu PR, perguntou, recebeu resposta) e não gravou o painel | Quando a sessão esquece | — |
+| `painel-das-sessoes` | Fim de turno de qualquer sessão em repositório git (com ou sem orquestradora) | Stop, uma vez, se a sessão mudou de estado (abriu PR, perguntou, recebeu resposta) e não gravou o painel, ou se a mensagem final marca decisão assumida sem a pergunta `estado:"assumida"` no painel | Quando a sessão esquece | — |
 | `orquestradora-ritual` | Fim de turno da orquestradora | Stop até ela tratar o item sem dona (abrir a dona, até o teto), o resumo do modo ausente e a batida parada | Raramente | Teto de donas: variável `KIT_TETO_DE_DONAS` (padrão 4) no `env` do `settings.json` |
 | `orquestradora-de-volta` | Início da orquestradora depois de limpar (roda dentro do `sessao-inicio`) | Devolve o papel e as travas à sessão nova e, se a fila de merge foi interrompida, põe no contexto o comando que a retoma | Nunca | — |
 | `sessao-inicio` | Início de toda sessão | Injeta o resumo das regras e as perguntas que a sessão abriu antes de se limpar | Contexto a mais em projeto sem o kit | — |
