@@ -26,7 +26,7 @@
 //   painel.mjs mergear <PR> <sha> [--seco]   o merge de um PR: confere que a ponta é o <sha> (7 a 40 hex) e que o merge-tree não tem conflito, faz `gh pr merge --squash --match-head-commit <40 hex>` e fecha o item da fila que tem o PR (só com todos os `prs` MERGED; senão fica em merge; com `maisFatias: true` volta a `execucao` com a dona, F222); recusa → {recusado, motivo} e exit 1; PR que sobe a `version` de um plugin passa e a saída ganha `aviso` (a versão é da orquestradora, F173); --seco só confere
 //   painel.mjs pode-reiniciar [--sessoes <arquivo do list_sessions>] [--lista-em <ISO>] [--json]   (F152) dá para reiniciar o app agora? Conta sessão com turno rodando (menos a própria), teste rodando (fichas do teto e processos soltos) e merge/rebase no meio; sem --sessoes lê batida/sessoes.json e diz a idade; não manda mensagem a ninguém; grava batida/pode-reiniciar.json (todos os motivos, a própria sessão incluída, com `em` e `listaEm`); (F209) traz também `paraAplicar` (plugins do kit instalados depois que o app abriu) e `paraBaixar` (plugins do kit com versão publicada mais nova, por `git fetch` no clone do marketplace com cache de 30 min em batida/kit-publicado.json); exit 0 nos dois casos, 1 só em erro de leitura
 //   painel.mjs fila-de-merge <PR[:sha]> [<PR[:sha]>…] [--gate "<cmd>"] [--preparar "<cmd>"] [--falha-de-infra "<padrão>"…|nenhuma] [--espera-de-infra <s>] [--seco]   a fila de merge: monta os PRs na ordem dada sobre a base num worktree temporário (squash), roda o gate UMA vez na combinação (sem `--gate`, o par gate/preparo do `config` gravado; sem config, `npm test`; vermelho com a saída casando um padrão de falha de infraestrutura (fábrica: "container is not ready"; `--falha-de-infra` troca, `nenhuma` desliga, e fica no `config`) → espera `--espera-de-infra` s (30) e roda de novo uma vez, e persistindo é erro da rodada (F398); vermelho comum → repete uma vez, depois bisseção para achar quem quebra; com a fila do projeto ocupada, só anota o PR nos pendentes → {pendente:true}, e quem roda leva os pendentes como o lote seguinte → `rodadas`), liga cada PR ao item vivo pelo `prs`, pelo `branch` do item ou pela branch do worktree da dona e o põe em `merge` (F221), mergeia na ordem o que passou (como o `mergear`) e devolve o que conflitou ou ficou vermelho: o item volta a `execucao` com o motivo no `agora` → {mergeados, devolvidos:[{pr, motivo, item, dona}], gates, logs}; --seco monta e testa sem mergear nem gravar; a rodada que não é --sem-turno grava o `config` {cwd, gate, preparar, falhaDeInfra?, esperaDeInfra?} do projeto
-//   painel.mjs fila-de-merge <PR:sha> [<PR:sha>…] --anotar   (F351) a entrega da dona: confere que a ponta de cada PR é o sha dado, só anota os PRs nos pendentes, grava a pasta do repositório e liga o item → {anotado, pendentes, aviso?, avisoSemCodigo?, avisoSemEntrega?}; não roda gate nem mergeia
+//   painel.mjs fila-de-merge <PR:sha> [<PR:sha>…] --anotar   (F351) a entrega da dona: confere que a ponta de cada PR é o sha dado, só anota os PRs nos pendentes, grava a pasta do repositório e liga o item e, com a fila livre e o gate gravado, lança a rodada sem turno destacada (F427; o julgamento e a marca `lancada` da batida) → {anotado, pendentes, lancou, pid?, log?, naoLancou?, aviso?, avisoSemCodigo?, avisoSemEntrega?}; ele mesmo não roda gate nem mergeia
 //   painel.mjs fila-de-merge <PR:sha>… --gate "<cmd>" [--preparar "<cmd>"] --sem-turno   (F351) a rodada que a batida lança destacada: igual à da orquestradora, e grava o desfecho em `desfechos` do estado da fila
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga), lança a fila de merge anotada sem processo e entrega os desfechos dela (F351) → {mensagens, soltos, projetos, marcadoresApagados, filasLancadas?}; --seco não grava nem lança nada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
@@ -1236,16 +1236,34 @@ function filaDeMerge(args, { semTurno = false } = {}) {
   }
   if (seco) return rodadaDaFila(pedidos, { seco, gate, preparar, falhaDeInfra, esperaDeInfra, cwd });
   if (anotar) {
+    // F427: com a fila livre (nenhum gate do projeto vivo), o próprio `--anotar` a lança destacada, pelo julgamento e pelo
+    // lançador da batida: a marca `lancada` gravada aqui, dentro da trava, segura a batida (e outro `--anotar`) por RELANCE_MIN.
+    // Com gate rodando, só anota: a rodada viva leva os pendentes como lote seguinte. A batida segue como rede (fila órfã).
     const r = comTrava(() => {
       const e = lerEstado();
       const pendentes = juntarPedidos(e.pendentes, pedidos);
-      gravarJson(arquivo, { ...e, pendentes, config: { ...(e.config ?? {}), cwd: raizDoRepo(cwd) } });
-      return { anotado: true, pendentes, ...(e.config?.gate ? {} : { aviso: 'a fila deste projeto ainda não tem gate gravado: a batida não a lança até a orquestradora rodar a fila uma vez' }) };
+      const novo = { ...e, pendentes, config: { ...(e.config ?? {}), cwd: raizDoRepo(cwd) } };
+      const orfa = filaOrfa(novo);
+      const j = orfa ? julgarLancamento(novo, orfa, Date.now()) : { motivo: 'há um gate da fila rodando: o PR entra no lote seguinte', vivo: true };
+      gravarJson(arquivo, j.lancada ? { ...novo, lancada: j.lancada } : novo);
+      return {
+        anotado: true, pendentes, lancou: !!j.lancada, ...(j.motivo ? { naoLancou: j.motivo } : {}),
+        ...(j.lancada ? { lancar: { orfa, config: j.config, arquivo } } : {}), ...(j.vivo ? { vivo: true } : {}),
+        ...(e.config?.gate ? {} : { aviso: 'a fila deste projeto ainda não tem gate gravado: nem o --anotar nem a batida a lançam até a orquestradora rodar a fila uma vez' }),
+      };
     });
-    const lig = ligarComAviso(branches, { projeto: projetoDoCwd(cwd).projeto, oQue: 'espera a batida lançar o gate' });
+    // o processo sobe fora da trava (a fila também a toma); falhar aqui deixa a fila para a batida, que relança depois de RELANCE_MIN
+    const { lancar, vivo, ...saidaDaTrava } = r;
+    if (lancar) {
+      try { Object.assign(saidaDaTrava, lancarFilaSemTurno(lancar)); } catch (err) {
+        Object.assign(saidaDaTrava, { lancou: false, naoLancou: `não consegui lançar a fila (${String(err?.message || err).split('\n')[0]}): a batida relança` });
+      }
+    }
+    const oQue = saidaDaTrava.lancou ? 'a fila foi lançada: o gate roda' : vivo ? 'espera a vez' : 'espera a batida lançar o gate';
+    const lig = ligarComAviso(branches, { projeto: projetoDoCwd(cwd).projeto, oQue });
     const semCodigo = avisoSemCodigo(pedidos.map((p) => p.pr), projetoDoCwd(cwd).projeto, cwd);
     const semEntrega = avisoSemEntrega(pedidos.map((p) => p.pr), projetoDoCwd(cwd).projeto);
-    return { ...r, ...lig, ...(semCodigo ? { avisoSemCodigo: semCodigo } : {}), ...(semEntrega ? { avisoSemEntrega: semEntrega } : {}) };
+    return { ...saidaDaTrava, ...lig, ...(semCodigo ? { avisoSemCodigo: semCodigo } : {}), ...(semEntrega ? { avisoSemEntrega: semEntrega } : {}) };
   }
   const entrada = comTrava(() => {
     const e = lerEstado();
@@ -1496,12 +1514,24 @@ function lancarFilaSemTurno({ orfa, config, arquivo }) {
     return { pid: filho.pid ?? null, log };
   } finally { closeSync(fd); }
 }
+// O julgamento de lançar a fila órfã, o mesmo na batida e no `--anotar` (F427). → {lancada, config} para lançar agora, ou
+// {motivo} para não lançar; `recente: true` quando o motivo é um lançamento de há pouco (a fila conta como viva).
+function julgarLancamento(e, orfa, agoraMs) {
+  const c = e?.config && typeof e.config === 'object' ? e.config : {};
+  const recente = Date.parse(e?.lancada?.em) > agoraMs - RELANCE_MIN * 60_000;
+  const tentativas = Number.isInteger(e?.lancada?.tentativas) ? e.lancada.tentativas : 0;
+  if (process.env.KIT_FILA_SEM_TURNO === 'off') return { motivo: 'o lançamento sem turno está desligado (KIT_FILA_SEM_TURNO=off)' };
+  if (!orfa.prs.every((p) => p.sha)) return { motivo: 'há PR anotado sem o sha da dona' };
+  if (!textoNaoVazio(c.gate) || !textoNaoVazio(c.cwd) || !existsSync(c.cwd)) return { motivo: 'a fila não tem gate e pasta gravados pela orquestradora' };
+  if (recente) return { recente, motivo: `a fila foi lançada há pouco (${e.lancada.em}); a rodada lançada leva o PR` };
+  if (tentativas >= LANCAMENTOS) return { motivo: `${tentativas} lançamentos sem a fila se gravar dona: fica com a orquestradora` };
+  return { config: c, lancada: { em: new Date(agoraMs).toISOString(), tentativas: tentativas + 1 } };
+}
 function filasDaBatida({ seco, agoraMs }) {
   const dir = dirname(ESTADO_DA_FILA('x'));
   let nomes = [];
   try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return { orfas: {}, vivas: {}, desfechos: {}, avisos: {}, lancadas: {} }; }
   const orfas = {}; const vivas = {}; const desfechos = {}; const avisos = {}; const lancadas = {};
-  const desligada = process.env.KIT_FILA_SEM_TURNO === 'off';
   for (const n of nomes.sort()) {
     const nome = n.slice(0, -'.json'.length);
     const arquivo = join(dir, n);
@@ -1512,15 +1542,12 @@ function filasDaBatida({ seco, agoraMs }) {
     const prsDe = (l) => (Array.isArray(l) ? l.map((p) => p?.pr).filter(Number.isInteger) : []);
     const orfa = filaOrfa(e);
     if (!orfa) { const prs = [...prsDe(e.emVoo), ...prsDe(e.pendentes)]; if (prs.length) vivas[nome] = prs; continue; }
-    const c = e.config ?? {};
-    const recente = Date.parse(e.lancada?.em) > agoraMs - RELANCE_MIN * 60_000;
-    const tentativas = Number.isInteger(e.lancada?.tentativas) ? e.lancada.tentativas : 0;
-    const pode = (recente || tentativas < LANCAMENTOS) && !desligada && orfa.prs.every((p) => p.sha) && textoNaoVazio(c.gate) && textoNaoVazio(c.cwd) && existsSync(c.cwd);
-    if (!pode) { orfas[nome] = orfa; continue; }
+    const j = julgarLancamento(e, orfa, agoraMs);
+    if (j.motivo && !j.recente) { orfas[nome] = orfa; continue; }
     vivas[nome] = orfa.prs.map((p) => p.pr);
-    if (recente) continue;
-    if (!seco) gravarJson(arquivo, { ...e, lancada: { em: new Date(agoraMs).toISOString(), tentativas: tentativas + 1 } });
-    lancadas[nome] = { prs: vivas[nome], orfa, config: c, arquivo };
+    if (j.recente) continue;
+    if (!seco) gravarJson(arquivo, { ...e, lancada: j.lancada });
+    lancadas[nome] = { prs: vivas[nome], orfa, config: j.config, arquivo };
   }
   return { orfas, vivas, desfechos, avisos, lancadas };
 }
