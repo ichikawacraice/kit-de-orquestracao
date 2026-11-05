@@ -39,17 +39,17 @@ O resto chega a quem é: a fila sobe a versão, atualiza os plugins e gira o seu
 <a id="ritual-de-cada-turno"></a>
 ## Ritual de cada turno (antes de responder)
 Todo turno (do operador, de notificação, de mensagem de sessão) começa por estes passos, menos o aberto pelo [aviso de fim de turno](#aviso-de-fim-de-turno). A **batida** (`painel batida` a cada 10 min, pelo mod) cuida do mecânico; a mensagem dela pode vir de sessão de outro projeto, e não se responde ao remetente.
-1. **Ler a batida:** `batida/<projeto>.json` (`merge` parado, `vagas` de `dona`, `em`); `list_sessions` só para decidir arquivar ou mergear. Ler `~/.claude/orquestracao/limpador-de-worktrees/ultimo-relatorio.md`: o que está em Mantidos há mais de 3 dias com commit sem push vira linha para o operador.
-2. **Arquivar quem terminou** (as condições de "Arquivar sessão que terminou"): com o modo ausente desligado, sozinha e sem perguntar, a sessão que não está no `com` nem é dona de item vivo; com ele ligado, nada se arquiva fora do turno do operador.
+1. **Ler a batida:** `batida/<projeto>.json` (`merge` parado, `vagas` de `dona`, `em`); `list_sessions` só para decidir arquivar ou mergear. Ler `~/.claude/orquestracao/limpador-de-worktrees/ultimo-relatorio.md`: o que está em Mantidos há mais de 3 dias com commit sem push ou ignorado fora da lista vira linha para o operador.
+2. **Arquivar quem terminou** (as condições de "Arquivar sessão que terminou"): com o modo ausente desligado, sozinha e sem perguntar, a sessão que não está no `com` nem é dona de item vivo; com ele ligado, nada se arquiva fora do turno do operador. Commits sem push de merges locais de validação não contam como trabalho perdido.
 3. **Item parado é da batida** (cutuca em 30 min, solta 20 min depois); o item em `merge` parado é seu.
 4. **Gravar só o que é seu** (a própria linha, as perguntas, o item que você solta ou fecha).
 
 **As travas:** o Stop `orquestradora-ritual.mjs` recusa o fim do turno com item sem dona há `ESPERA_MIN` min abaixo do teto, com o resumo da ausência pendente ou com a batida parada (sem `batida/<projeto>.json` ou com `em` de mais de 30 min: confira se o mod painel-sessoes está ligado) ([por dentro](referencia.md#trava-do-ritual)). O `painel-das-sessoes.mjs` cobra das outras sessões a gravação no painel e a decisão *assumida, a confirmar* sem pergunta ([por dentro](referencia.md#trava-das-outras-sessoes)).
 
 <a id="plano-sem-executora"></a>
-**Plano sem dona vira pergunta no painel.** No passo 1, e ao arquivar, confira se a sessão parada ou arquivada deixou plano com etapa que ninguém executa. Para cada um: pergunta (Q-ID de `proxima-pergunta`) com título `iniciar · <plano ou fatia>`, `caso`, `seNaoDecidir` (fica parado) e `recomendacao`, o `sessaoId` de quem planejou (ou o seu) e o ID na seção Adiados do estado; *"Qnn sim"* faz você criar o item e abrir a dona. Se o operador já pediu para implementar, abra direto.
+**Plano sem dona vira pergunta no painel.** No passo 1, e ao arquivar, confira se a sessão parada ou arquivada deixou plano com etapa que ninguém executa. Para cada um: pergunta (Q-ID de `proxima-pergunta`) com título `iniciar · <plano ou fatia>`, `caso`, `seNaoDecidir` (fica parado) e `recomendacao`, o `sessaoId` de quem planejou (ou o seu), o ID em `perguntas` da linha (que fica `aguarda-voce`, com a etapa *plano pronto, sem dona*) e na seção Adiados do estado; *"Qnn sim"* faz você criar o item e abrir a dona; quando a sessão sobe, a pergunta vira `respondida` com a sessão aberta na resposta. Se o operador já pediu para implementar, abra direto.
 
-**`aguarda-voce` só com pergunta aberta.** Cartão de sessão para clicar **não é pergunta** (sem Q-ID): vai para a coleção `cartoes` e o pane o mostra em "Sessões para abrir". O `painel` recusa `aguarda-voce` sem pergunta aberta.
+**`aguarda-voce` só com pergunta aberta.** Cartão de sessão para clicar **não é pergunta** (sem Q-ID): vai para a coleção `cartoes` e o pane o mostra em "Sessões para abrir". Com cartão pendente e sem Q aberta, a sessão está `parada`. O `painel` recusa `aguarda-voce` sem pergunta aberta.
 
 <a id="vaga-pelo-painel"></a>
 **Pedido de sessão vindo do painel** (*"Pedido do operador pelo painel (HH:MM): abra a sessão dona de cada item sem dona em <projeto> — …"*):
@@ -63,7 +63,7 @@ Todo turno (do operador, de notificação, de mensagem de sessão) começa por e
 - **"Posso reiniciar o app?"** rode `painel pode-reiniciar`, não responda de cabeça ([o que ele confere](referencia.md#pode-reiniciar)).
 - **Notas antes do PR de release:** com `docs/releases/` (ou pedido do operador), a skill `notas-de-release` sobre o que está na integração e não na produção, levada por PR antes do release; hotfix ganha as notas logo depois do merge (`--pr <n>`).
 - **Números de documento** (ADR, SPEC): a sessão pede antes de escrever o arquivo.
-- <a id="o-que-saiu"></a>**O que saiu:** a `entrega` de cada item ([ADR 0024](../../../../docs/adr/0024-a-dona-grava-a-entrega-no-item.md)); pergunta do operador se responde com `painel entregas` (`--desde HH:MM`, `--todos`), não relendo PR ou transcript.
+- <a id="o-que-saiu"></a>**O que saiu:** a `entrega` de cada item ([ADR 0024](../../../../docs/adr/0024-a-dona-grava-a-entrega-no-item.md)); pergunta do operador se responde com `painel entregas` (`--desde HH:MM`, `--todos`), não relendo PR ou transcript. Os `proximos` são sugestão: o que vira item você decide com o operador.
 - Responde por qualquer sessão nova do projeto e se limita a ele. Traz a entrega e as decisões das sessões num relatório só.
 
 **A forma de TODA mensagem ao operador** (relatório e resposta curta):
@@ -79,7 +79,7 @@ Todo turno (do operador, de notificação, de mensagem de sessão) começa por e
 - ela não está fixada nem aberta na tela;
 - ela está parada (`isRunning` falso).
 
-**Frente nova vira sessão — a orquestradora não executa.** Trabalho que vira frente (feature, estudo, SPEC, correção com PR de produto) vira item com a sua dona, nem por subagente seu. Ela faz só o trabalho da orquestração: conferir e mergear PR, gate na base combinada, notas e release, medir produção só lendo, arquivar. Pedido misto se divide: a medição curta ela faz; o conserto vira item. A trava `orquestradora-nao-edita.mjs` PERGUNTA (não recusa) antes de cada edição dela ([por dentro](referencia.md#trava-da-edicao)); a resposta quase sempre é *sessão nova*.
+**Frente nova vira sessão — a orquestradora não executa.** Trabalho que vira frente (feature, estudo, SPEC, correção com PR de produto) vira item com a sua dona, nem por subagente seu. Ela faz só o trabalho da orquestração: conferir e mergear PR, gate na base combinada, notas e release, medir produção só lendo, ligar ou desligar o que o operador autorizou, arquivar. Pedido misto se divide: a medição curta ela faz; o conserto vira item. Na dúvida, item com dona: o subagente da orquestradora gasta o contexto dela. A trava `orquestradora-nao-edita.mjs` PERGUNTA (não recusa) antes de cada edição dela ([por dentro](referencia.md#trava-da-edicao)); a resposta quase sempre é *sessão nova*.
 
 **Sugestão de sessão nova.** A sessão com algo fora do escopo manda à orquestradora título, motivo e prompt, e ela decide: **abrir agora** (não repete trabalho nem disputa arquivo com sessão viva), **adiar** (no estado, com o motivo) ou **descartar** (dizendo o porquê). Sessão que consome produção ou gasta job pede o ok do operador antes.
 

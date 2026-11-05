@@ -89,7 +89,7 @@ Ao fechar o item, `painel mergear` grava em `custo` o gasto das sessões que tra
 - **Conflito devolvido:** a dona traz a base pelo `sync_with_base_branch` do app ou, sem ele, rebaseia sobre `origin/<base>` ([dona](dona.md), passo 7); o merge commit do app fica só na branch dela, porque a fila mergeia por squash.
 - <a id="falha-de-infra"></a>**Falha de infraestrutura** (saída que casa com um padrão, de fábrica `container is not ready`) roda de novo uma vez antes de culpar um PR ([padrões](referencia.md#falha-de-infra)).
 - **Sinais de entrega:** o PR anotado é o caminho principal; `PR N pronto, HEAD <sha>` é o de reserva; o aviso de fim de turno do app não é sinal de entrega, porque a dona desligada (`detach_session`) não o gera e o que chegar abre na orquestradora um turno sem leitura. PR pronto e não anotado a batida cobra da dona.
-- **Depois do lote** a versão dos plugins sobe num commit só, pela própria rodada (`subir-versao --empurrar --destacado`; [ADR 0023](../../../docs/adr/0023-o-pos-merge-roda-sem-turno-da-orquestradora.md)); `KIT_POS_MERGE=off` devolve o pós-merge à orquestradora. A dona do PR que fecha o item liga `auto_archive_on_close` ([dona](dona.md) passo 6).
+- **Depois do lote** a versão dos plugins sobe num commit só; na rodada sem turno, o pós-merge é da própria rodada (`subir-versao --empurrar --destacado`; [ADR 0023](../../../docs/adr/0023-o-pos-merge-roda-sem-turno-da-orquestradora.md)); `KIT_POS_MERGE=off` devolve o pós-merge à orquestradora. A dona do PR que fecha o item liga `auto_archive_on_close` ([dona](dona.md) passo 6).
 
 <a id="ci-so-na-producao"></a>
 ## CI só no PR para a produção
