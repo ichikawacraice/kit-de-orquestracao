@@ -3312,3 +3312,47 @@ test('F404: o item feito com entrega mostra "Entregue:" no lugar do agora, e os 
   expect(linha.alt).toMatch(/Entregue: a home caiu de 984 ms para 270 ms · próximos: 2/)
   expect(D.itemSvg(360, por.F2!, AGORA).source, 'sem entrega, a linha como antes').toMatch(/mergeado, ponta def5678/)
 })
+
+// F425 (ADR 0027): o pane lê `batida/deduzido.json`; fresco, a etapa e os PRs do cartão são os deduzidos, e o parado vem junto.
+const DD = (itens: Record<string, Record<string, unknown>>, minAtras = 5) => ({ em: new Date(AGORA - minAtras * 60_000).toISOString(), itens })
+const montaDD = (docs: ReturnType<typeof docF>[], dd: unknown) => montarItens(docs, TEMAS_T, [], undefined, [], AGORA, R.deduzidosValidos(dd, AGORA))
+
+test('F425: deduzido fresco troca a etapa e os PRs e traz o parado', () => {
+  const dd = DD({ F1: { etapa: 'merge', prs: [170], prsAbertos: [170], parado: true, minParado: 47, fontes: { etapa: 'gh', prs: 'gh', dona: 'item' } } })
+  const [i] = montaDD([docF('F1', { etapa: 'execucao', prs: [] })], dd)
+  expect(i, 'a montagem não pode vir vazia').toBeDefined()
+  expect(i!.etapa).toBe('merge')
+  expect(i!.prs).toEqual([170])
+  expect(i!.deduzido).toEqual({ parado: true, minParado: 47, etapaDeclarada: 'execucao', fontes: { etapa: 'gh', prs: 'gh', dona: 'item' }, prsAbertos: [170] })
+})
+
+test('F425: sem deduzido, velho ou fora do formato, vale o declarado', () => {
+  const doc = docF('F1', { etapa: 'execucao', prs: [9] })
+  const presente = montaDD([doc], DD({ F1: { etapa: 'merge', prs: [170], parado: false, minParado: 1, fontes: { etapa: 'gh', prs: 'gh' } } }))[0]!
+  expect(presente.etapa, 'o deduzido fresco seria detectado').toBe('merge')
+  for (const dd of [null, DD({ F1: { etapa: 'merge', prs: [170] } }, 26), { em: 'x', itens: {} }, { itens: { F1: { etapa: 'merge' } } }, 'lixo']) {
+    const [i] = montaDD([doc], dd)
+    expect(i!.etapa).toBe('execucao')
+    expect(i!.prs).toEqual([9])
+    expect(i!.deduzido).toBeUndefined()
+  }
+})
+
+test('F425: a etapa deduzida feito não fecha o item no pane; etapa fora da lista é ignorada; PRs de fonte item ficam os declarados', () => {
+  const dd = DD({
+    F1: { etapa: 'feito', prs: [5], parado: false, minParado: 0, fontes: { etapa: 'gh', prs: 'gh' } },
+    F2: { etapa: 'voando', prs: [6], parado: false, minParado: 0, fontes: { etapa: 'item', prs: 'item' } },
+  })
+  const por = Object.fromEntries(montaDD([docF('F1', { etapa: 'merge', prs: [5] }), docF('F2', { etapa: 'execucao', prs: [7] })], dd).map(i => [i.id, i]))
+  expect(por.F1!.etapa).toBe('merge')
+  expect(por.F1!.situacao).not.toBe('feito')
+  expect(por.F2!.etapa).toBe('execucao')
+  expect(por.F2!.prs).toEqual([7])
+})
+
+test('F425: item final não usa o deduzido', () => {
+  const [i] = montaDD([docF('F1', { etapa: 'feito', feitoEm: new Date(AGORA).toISOString(), prs: [5] })], DD({ F1: { etapa: 'merge', prs: [8], parado: true, minParado: 99, fontes: { etapa: 'gh', prs: 'gh' } } }))
+  expect(i!.etapa).toBe('feito')
+  expect(i!.prs).toEqual([5])
+  expect(i!.deduzido).toBeUndefined()
+})

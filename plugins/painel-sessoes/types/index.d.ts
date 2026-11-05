@@ -47,6 +47,30 @@ export type LinhaItem = {
   /** F404: o que o item fechado entregou (o `resultado`) e quantos próximos passos a dona viu; só no item final. */
   entrega?: { resultado: string; proximos: number }
   foraDoContrato?: string
+  /**
+   * F425 (ADR 0027): o que a batida deduziu do git, do GitHub e das sessões, quando o `deduzido.json` está fresco e o item vivo.
+   * A `etapa` e os `prs` do item já vêm trocados pelos deduzidos; aqui fica o resto: o parado, de onde veio cada fato e a etapa
+   * que a dona tinha gravado (para o texto alternativo).
+   */
+  deduzido?: Deduzido
+}
+
+export type Deduzido = {
+  parado: boolean
+  minParado: number | null
+  etapaDeclarada: string
+  fontes: { etapa?: string; prs?: string; dona?: string }
+  prsAbertos: number[]
+}
+
+/** Um item de `batida/deduzido.json`, como `estado-deduzido.mjs#deduzir` o grava (só os campos que o pane lê). */
+export type DeduzidoDaBatida = {
+  etapa?: string | null
+  prs?: number[]
+  prsAbertos?: number[]
+  parado?: boolean
+  minParado?: number | null
+  fontes?: { etapa?: string; prs?: string; dona?: string }
 }
 
 /** Um item de qualquer etapa e idade, para resolver número citado e listar todos os itens. */
