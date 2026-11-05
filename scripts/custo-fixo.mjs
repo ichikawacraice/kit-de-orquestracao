@@ -66,7 +66,7 @@ const textoDe = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((b)
 
 const ORQ = 'Você é a orquestradora deste projeto';
 
-function* transcripts(dir) {
+export function* transcripts(dir) {
   if (!existsSync(dir)) return;
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
@@ -75,7 +75,7 @@ function* transcripts(dir) {
   }
 }
 
-function linhas(f) {
+export function linhas(f) {
   const out = [];
   const bruto = readFileSync(f, 'utf8');
   out.orq = bruto.includes(ORQ);
@@ -86,7 +86,7 @@ function linhas(f) {
   return out;
 }
 
-function tipoDoSubagente(f) {
+export function tipoDoSubagente(f) {
   const meta = join(dirname(f), basename(f, '.jsonl') + '.meta.json');
   try { return JSON.parse(readFileSync(meta, 'utf8')).agentType || 'desconhecido'; } catch { return 'desconhecido'; }
 }
