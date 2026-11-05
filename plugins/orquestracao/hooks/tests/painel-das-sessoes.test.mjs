@@ -170,16 +170,16 @@ function turnoComFinal(final, comandos = [], { antes = '', abertura = 'F9 para v
 }
 const assumidaNoPainel = (id, sessaoId, atualizadoEm = '2026-10-24T11:00:00.000Z', estado = 'assumida') =>
   writeFileSync(dir('painel', 'perguntas', `${id}.json`), JSON.stringify({ id, version: 1, data: { estado, sessaoId, atualizadoEm } }));
-// A forma real do F385 (izanagi, 05/11): marca no masculino, em itálico, e o "(Q-ID não reservado)" na linha da decisão.
-const FINAL_IZANAGI = 'PR 1662 na fila.\n\nO que falta você confirmar:\n- **(Q-ID não reservado) Só lote encerrado?** Recomendo manter. *assumido, a confirmar*';
+// A forma real do F385 (num projeto, 05/11): marca no masculino, em itálico, e o "(Q-ID não reservado)" na linha da decisão.
+const FINAL_REAL = 'PR 1662 na fila.\n\nO que falta você confirmar:\n- **(Q-ID não reservado) Só lote encerrado?** Recomendo manter. *assumido, a confirmar*';
 const GRAVA_ASSUMIDA_REAL = `Q2=$(proxima-pergunta); S=${LOCAL}\npainel set perguntas Q986 "$(cat <<EOF\n{"id":"Q986","sessaoId":"$S","item":"F385","estado":"assumida","titulo":"x","caso":"y","recomendacao":"z"}\nEOF\n)"`;
 
 caso('F400-a: mensagem final sem a marca, sem gravar nada: passa (e a mesma com a marca bloqueia)', () => {
   ok(rodar(turnoComFinal('PR 12 na fila. Testes verdes.')) === null, 'sem a marca devia passar');
   ok(rodar(turnoComFinal('Usei o nome curto (*assumida, a confirmar*).'))?.decision === 'block', 'precondição: a marca seria detectada');
 });
-caso('F400-b: a forma real do izanagi ("assumido", "Q-ID não reservado") sem gravar: bloqueia e diz o comando', () => {
-  const r = rodar(turnoComFinal(FINAL_IZANAGI));
+caso('F400-b: a forma real de um projeto ("assumido", "Q-ID não reservado") sem gravar: bloqueia e diz o comando', () => {
+  const r = rodar(turnoComFinal(FINAL_REAL));
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
   ok(r.reason.includes('proxima-pergunta') && r.reason.includes('painel set perguntas') && r.reason.includes('"estado":"assumida"'), `o motivo devia dar o comando: ${r.reason}`);
   ok(r.reason.includes(LOCAL), `o comando devia trazer o sessaoId desta sessão: ${r.reason}`);
@@ -190,12 +190,12 @@ caso('F400-c: só "Q-ID não reservado", sem a palavra assumida: bloqueia', () =
 });
 caso('F400-d: o turno gravou a pergunta assumida (o arquivo no painel, com atualizadoEm no turno): passa', () => {
   assumidaNoPainel('Q986', LOCAL, '2026-10-24T12:01:00.000Z');
-  ok(rodar(turnoComFinal(FINAL_IZANAGI, [GRAVA_ASSUMIDA_REAL])) === null, 'heredoc com o arquivo gravado devia passar');
+  ok(rodar(turnoComFinal(FINAL_REAL, [GRAVA_ASSUMIDA_REAL])) === null, 'heredoc com o arquivo gravado devia passar');
   assumidaNoPainel('Q7', LOCAL, '2026-10-24T12:02:00.000Z');
   ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*, Q7).')) === null, 'citando o Q-ID gravado devia passar');
 });
 caso('F400-d2: o comando de gravar rodou mas o arquivo não existe (comando falhou): bloqueia', () => {
-  ok(rodar(turnoComFinal(FINAL_IZANAGI, [GRAVA_ASSUMIDA_REAL]))?.decision === 'block', 'sem arquivo, o comando não basta');
+  ok(rodar(turnoComFinal(FINAL_REAL, [GRAVA_ASSUMIDA_REAL]))?.decision === 'block', 'sem arquivo, o comando não basta');
 });
 caso('F400-d3: sem registro da sessão (local desconhecido), o comando de gravar é o que vale', () => {
   rmSync(dir('app', 'conta', `${LOCAL}.json`));
