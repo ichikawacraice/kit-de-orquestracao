@@ -11,7 +11,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { BASE, registroDaSessao, gitCommonDir, projetoDaSessao } from './pool-comum.mjs';
-import { comandoDeRelance, lerFilaOrfa } from '../skills/orquestradora/scripts/fila-orfa.mjs';
+import { avisoSemGate, comandoDeRelance, lerFilaOrfa } from '../skills/orquestradora/scripts/fila-orfa.mjs';
 import { girarArquivo } from '../skills/orquestradora/scripts/estado-girar.mjs';
 
 const ID_SEGURO = /^[\w-]+$/; // o session_id vira nome de arquivo em ativas/
@@ -35,7 +35,7 @@ function avisoDaFila(reg) {
     if (!orfa) return '';
     return [
       `**A fila de merge deste projeto está sem processo** (ocupada desde ${orfa.desde ?? '?'}; a limpeza de contexto mata a fila que roda em segundo plano): ${orfa.prs.map((p) => `#${p.pr}`).join(', ')} ficaram anotados e ninguém os leva.`,
-      `Depois de carregar a skill, relance em segundo plano (run_in_background): \`${comandoDeRelance(orfa)}\`.`,
+      `Depois de carregar a skill, relance em segundo plano (run_in_background): \`${comandoDeRelance(orfa)}\`${avisoSemGate(orfa)}.`,
     ].join(' ');
   } catch { return ''; }
 }

@@ -224,8 +224,21 @@ test('batida: fila de merge sem processo vivo → os itens dela vão ao merge na
   assert.equal(rel[0].para, lid(30));
   assert.match(rel[0].texto, /fila de merge sem processo/);
   assert.ok(rel[0].texto.includes(`painel fila-de-merge 7:${SHA} 8 --gate 'pnpm test'`), rel[0].texto);
+  assert.doesNotMatch(rel[0].texto, /nunca gravou gate/, 'com gate conhecido, sem o alerta');
   assert.deepEqual(JSON.parse(readFileSync(join(pastaOrq(), 'batida', 'kit.json'), 'utf8')).filaParada?.prs, [7, 8], 'o relatório gravado diz a fila parada');
   assert.deepEqual(msgs(batida(arq, T + 6 * MIN), 'relatorio'), [], 'o mesmo relatório não repete');
+});
+
+test('F396 batida: fila órfã que nunca gravou gate → o relatório diz que falta o --gate, em vez de um comando que parece pronto', () => {
+  item('F1', { etapa: 'merge', prs: [7], atualizadoEm: iso(T - 5 * MIN) });
+  const arq = sessoes(sessao(1, 'F1 · a'), sessao(30, '🎛 orquestradora — kit'));
+  fila({ config: { cwd: '/x' }, ocupada: null, pendentes: [{ pr: 7, sha: SHA }] });
+  const a = batida(arq);
+  assert.equal(a.exit, 0, a.err);
+  const rel = msgs(a, 'relatorio');
+  assert.equal(rel.length, 1, a.out);
+  assert.ok(rel[0].texto.includes(`painel fila-de-merge 7:${SHA}`), rel[0].texto);
+  assert.match(rel[0].texto, /nunca gravou gate: acrescente `--gate/);
 });
 
 test('batida: fila com o dono vivo não é parada (e o item gravado há 5 min segue fora do merge parado)', () => {

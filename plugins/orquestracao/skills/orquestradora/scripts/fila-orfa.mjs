@@ -70,6 +70,13 @@ export function lerFilaOrfa(arquivo, deps) {
 const aspas = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 
 // A chamada que retoma a fila órfã, com o gate e o preparo de quem rodava (ou os gravados no `config`, F396).
+// F396: a fila que nunca gravou gate (só o `--anotar`, que grava o cwd) não tem par para o relance; o comando sairia sem
+// `--gate` e rodaria `npm test`, que então ficaria gravado como o gate do projeto. O aviso diz o que falta, em vez de
+// entregar um comando que parece pronto. O comando segue sem placeholder, para nunca rodar `<gate>` no shell.
+export function avisoSemGate(orfa) {
+  return orfa?.gate ? '' : ' — a fila deste projeto nunca gravou gate: acrescente `--gate "<o gate do projeto>"` (e `--preparar`, se ele precisa) antes de rodar; sem isso a rodada usa `npm test` e o grava como gate do projeto';
+}
+
 export function comandoDeRelance(orfa) {
   const prs = orfa.prs.map((p) => (p.sha ? `${p.pr}:${p.sha}` : String(p.pr))).join(' ');
   return `painel fila-de-merge ${prs}${orfa.gate ? ` --gate ${aspas(orfa.gate)}` : ''}${orfa.preparar ? ` --preparar ${aspas(orfa.preparar)}` : ''}`;
