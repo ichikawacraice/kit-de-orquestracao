@@ -40,7 +40,9 @@ const GATILHOS_BASH = [
   [/\bgh\s+pr\s+create\b/, 'abriu PR'],
   [/\bgh\s+pr\s+merge\b/, 'mergeou PR'],
   [/\bgh\s+pr\s+(ready|close)\b/, 'mudou o estado de um PR'],
-  [/proxima-pergunta\.sh/, 'tirou ID de pergunta'],
+  // Só a chamada (início do comando, depois de ; & | ( ou $(, com caminho e `bash` opcionais): grep, cat ou commit que
+  // citam o nome não tiram ID.
+  [/(?:^|[;&|(\n]|\$\()\s*(?:(?:ba)?sh\s+)?(?:[^\s;&|()]*\/)?proxima-pergunta(?:\.sh)?(?![\w.-])/, 'tirou ID de pergunta'],
 ];
 
 // Só conta o Qnn que é pergunta DESTA sessão: existe perguntas/<Qnn>.json no painel com `sessaoId` igual ao
@@ -217,14 +219,36 @@ function assumidasSemPergunta(mensagem, inicioIso, comandos, local) {
   return gravadas >= soltas.length ? [] : soltas;
 }
 
+// O Q-ID que a mensagem final cita e que não existe no painel (nem na pasta quente, nem no arquivo): reservado com
+// `proxima-pergunta` e não gravado, o operador lê a pergunta no chat e não a vê no painel. Só conta o Q-ID da faixa recente
+// do contador (os últimos JANELA_QID tirados): `Q4` de trimestre, `Q12` de exemplo e o Q-ID antigo que o arquivo já não
+// guarda ficam de fora, e o acima do contador nunca foi reservado. Sem contador ou sem pasta de perguntas, não cobra.
+// Conta o Q-ID entre crases; o bloco de código (``` ou ~~~) e o Q-ID que já vinha na mensagem que abriu o turno, não.
+const JANELA_QID = 50;
+const CONTADOR = join(BASE, 'contador-de-perguntas');
+const SEM_BLOCO = /(```|~~~)[\s\S]*?(?:\1|$)/g;
+const qidsDe = (t) => new Set(String(t ?? '').replace(SEM_BLOCO, ' ').match(/\bQ\d+\b/g) ?? []);
+function qidsSemPergunta(mensagem, abertura) {
+  const dir = join(process.env.PAINEL_DIR || join(BASE, 'painel'), 'perguntas');
+  let teto;
+  try { teto = parseInt(readFileSync(CONTADOR, 'utf8'), 10); } catch { return []; }
+  if (!Number.isInteger(teto) || !existsSync(dir)) return [];
+  const daAbertura = qidsDe(abertura);
+  return [...qidsDe(mensagem)].filter((q) => {
+    const n = Number(q.slice(1));
+    return n > teto - JANELA_QID && n <= teto && !daAbertura.has(q) && !acharPergunta(dir, q);
+  });
+}
+
 // Uma cobrança por turno: o Stop que vem depois de uma recusa (de qualquer trava) traz `stop_hook_active`, e é nele que costuma
 // estar o relatório final; a trava o lê, mas não recusa duas vezes o mesmo turno.
-function jaCobrouNoTurno(sessionId, turno) {
-  return lerEstadoDe(ESTADO_HOOKS)[`${sessionId}:assumida`]?.turno === turno;
+// Cada cobrança (`assumida`, `qid`) tem a sua marca: recusar o Q-ID não gasta a da decisão assumida.
+function jaCobrouNoTurno(sessionId, turno, tipo) {
+  return lerEstadoDe(ESTADO_HOOKS)[`${sessionId}:${tipo}`]?.turno === turno;
 }
 // Devolve se gravou: sem a marca, a recusa seguinte não se distingue da primeira e a sessão entraria em laço.
-function marcarCobranca(sessionId, turno) {
-  try { gravarEstadoDe(ESTADO_HOOKS, (s) => { s[`${sessionId}:assumida`] = { turno, em: Date.now() }; }); return true; } catch (err) {
+function marcarCobranca(sessionId, turno, tipos) {
+  try { gravarEstadoDe(ESTADO_HOOKS, (s) => { for (const t of tipos) s[`${sessionId}:${t}`] = { turno, em: Date.now() }; }); return true; } catch (err) {
     try { appendFileSync(LOG, `${new Date().toISOString()} F400: marca do turno não gravada (${err?.code || err}); ${sessionId} não é cobrado de novo\n`); } catch { /* sem log */ }
     return false;
   }
@@ -282,19 +306,27 @@ function main() {
   const cobraPainel = !stop_hook_active && !gravou && motivos.size > 0;
   const turno = String(entradas[inicio].uuid ?? entradas[inicio].timestamp ?? inicio);
   let soltas = [];
+  let fantasmas = [];
   let local;
-  if (!input.agent_id && !(stop_hook_active && jaCobrouNoTurno(session_id, turno))) {
+  if (!input.agent_id) {
     local = registroDaSessao(session_id)?.localId;
-    const mensagem = input.last_assistant_message || mensagemFinal(entradas, inicio);
-    soltas = assumidasSemPergunta(String(mensagem ?? ''), entradas[inicio].timestamp, comandos, local);
+    const mensagem = String(input.last_assistant_message || mensagemFinal(entradas, inicio) || '');
+    if (!(stop_hook_active && jaCobrouNoTurno(session_id, turno, 'assumida'))) {
+      soltas = assumidasSemPergunta(mensagem, entradas[inicio].timestamp, comandos, local);
+    }
+    if (!(stop_hook_active && jaCobrouNoTurno(session_id, turno, 'qid'))) {
+      fantasmas = qidsSemPergunta(mensagem, textoDe(entradas[inicio].message));
+    }
   }
   // Depois de uma recusa (stop_hook_active), sem a marca gravada não se recusa de novo: é o que impede o laço.
-  if (soltas.length && !marcarCobranca(session_id, turno) && stop_hook_active) soltas = [];
-  if (!cobraPainel && soltas.length === 0) return;
+  const tipos = [...(soltas.length ? ['assumida'] : []), ...(fantasmas.length ? ['qid'] : [])];
+  if (tipos.length && !marcarCobranca(session_id, turno, tipos) && stop_hook_active) { soltas = []; fantasmas = []; }
+  if (!cobraPainel && soltas.length === 0 && fantasmas.length === 0) return;
 
   const partes = [];
   if (cobraPainel) partes.push(motivoDoPainel(session_id, motivos));
   if (soltas.length) partes.push(motivoDaAssumida(soltas, local, itensDaSessao(session_id)));
+  if (fantasmas.length) partes.push(motivoDoQidSemPergunta(fantasmas, local, itensDaSessao(session_id)));
   process.stdout.write(JSON.stringify({ decision: 'block', reason: partes.join('\n\n') }));
 }
 
@@ -306,6 +338,14 @@ function motivoDaAssumida(soltas, local, itens) {
     `\`Q=$(proxima-pergunta) && painel set perguntas "$Q" '{"sessaoId":"${local ?? '<seu local_…>'}"${item},"estado":"assumida","titulo":"…","caso":"…","recomendacao":"o que você assumiu"}'\` ` +
     'e cite o Q-ID junto da decisão. A que já está no painel não se grava de novo: só cite o Q-ID dela no mesmo item. ' +
     'Se a mensagem só cita a regra, ponha a expressão entre crases. Depois encerre o turno.';
+}
+
+function motivoDoQidSemPergunta(ids, local, itens) {
+  const item = itens.length === 1 ? `,"item":"${itens[0]}"` : '';
+  return `A mensagem final cita ${ids.join(', ')}, número recente do contador de perguntas que não está no painel: ` +
+    'se é um Q-ID que você reservou, a pergunta não foi gravada e o operador não a vê. Para cada um: ' +
+    ids.map((q) => `\`painel set perguntas ${q} '{"sessaoId":"${local ?? '<seu local_…>'}"${item},"estado":"aberta","titulo":"…","caso":"…","recomendacao":"…"}'\``).join(' · ') +
+    ' (`"estado":"assumida"` se você já seguiu com a recomendação). Se não é Q-ID de pergunta (trimestre, exemplo, número errado), reescreva a mensagem sem ele. Depois encerre o turno.';
 }
 
 const umaLinha = (s) => String(s).replace(/\s+/g, ' ').trim();

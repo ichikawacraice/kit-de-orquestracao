@@ -156,9 +156,9 @@ caso('F27-3h: sessão sem item (ou com item feito / de outro dono): a mensagem d
 
 // ---- F400: decisão marcada "assumida, a confirmar" (ou "Q-ID não reservado") na mensagem final sem a pergunta assumida no painel ----
 // O turno: a mensagem do operador, os comandos (cada um com o tool_result) e, por último, o texto final do assistente.
-function turnoComFinal(final, comandos = [], { antes = '' } = {}) {
+function turnoComFinal(final, comandos = [], { antes = '', abertura = 'F9 para você' } = {}) {
   const f = dir('t.jsonl');
-  const linhas = [{ type: 'user', timestamp: '2026-10-24T12:00:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'F9 para você' } }];
+  const linhas = [{ type: 'user', timestamp: '2026-10-24T12:00:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: abertura } }];
   if (antes) linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: antes }] } });
   for (const c of comandos) {
     linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Bash', input: { command: c } }] } });
@@ -289,6 +289,47 @@ caso('F400-s: a trava antiga não recusa duas vezes (stop_hook_active); last_ass
   ok(rodar(turnoComFinal('PR na fila.', ['gh pr create --fill']), {}, { stop_hook_active: true }) === null, 'trava antiga presa a stop_hook_active');
   ok(rodar(turnoComFinal('PR na fila.', ['gh pr create --fill']))?.decision === 'block', 'precondição: sem stop_hook_active recusa');
   ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'), {}, { last_assistant_message: '' })?.decision === 'block', 'string vazia não esconde a marca');
+});
+const contador = (n) => writeFileSync(dir('home', '.claude', 'orquestracao', 'contador-de-perguntas'), `${n}\n`);
+caso('F400-t: a mensagem final cita um Q-ID recente (reservado pelo contador) que não existe no painel: bloqueia e manda gravar', () => {
+  contador(990);
+  const final = 'PR 9 na fila.\n\nQ984 — Nome curto ou longo? Caso: … Recomendo o curto.';
+  const r = rodar(turnoComFinal(final));
+  ok(r?.decision === 'block' && r.reason.includes('Q984') && r.reason.includes('painel set perguntas Q984'), `esperava cobrar Q984: ${JSON.stringify(r)}`);
+  ok(rodar(turnoComFinal('Decidido em `Q985`, ver painel.'))?.decision === 'block', 'entre crases também é citação de Q-ID');
+  pergunta('Q984', 'local_OUTRA'); pergunta('Q985', LOCAL);
+  ok(rodar(turnoComFinal(final)) === null, 'Q984 existe (de qualquer sessão): passa');
+  ok(rodar(turnoComFinal('Decidido em `Q985`, ver painel.')) === null, 'Q985 existe: passa');
+});
+caso('F400-u: Q-ID fora da faixa recente do contador, já citado na abertura do turno ou só em bloco de código: não cobra', () => {
+  contador(990);
+  ok(rodar(turnoComFinal('Q986 — Nome curto? Recomendo o curto.'))?.decision === 'block', 'precondição: Q986 recente sem arquivo bloqueia');
+  ok(rodar(turnoComFinal('A campanha entra no Q4 e o teste usa Q12.')) === null, 'Q4 trimestre e Q12 de exemplo: antigos demais');
+  ok(rodar(turnoComFinal('Ver Q2026 do roadmap.')) === null, 'acima do contador não foi reservado');
+  ok(rodar(turnoComFinal('Ok, sigo o que a Q986 decidiu.', [], { abertura: 'A Q986 já decidiu isso.' })) === null, 'repetido da abertura do turno');
+  ok(rodar(turnoComFinal('```\nQ=$(proxima-pergunta) # ex.: Q986\n```\n~~~\nQ987\n~~~\nPR na fila.')) === null, 'só em bloco de código');
+  rmSync(dir('home', '.claude', 'orquestracao', 'contador-de-perguntas'));
+  ok(rodar(turnoComFinal('Q986 — Nome curto? Recomendo o curto.')) === null, 'sem contador não cobra');
+});
+caso('F400-v: só a chamada de `proxima-pergunta` (com ou sem .sh) conta como tirar ID; citar o nome em grep, cat ou commit não', () => {
+  const r = rodar(turnoComFinal('PR na fila.', ['Q=$(proxima-pergunta)']));
+  ok(r?.decision === 'block' && r.reason.includes('tirou ID de pergunta'), `esperava o motivo: ${JSON.stringify(r)}`);
+  ok(rodar(turnoComFinal('PR na fila.', ['bash ~/.claude/plugins/x/bin/proxima-pergunta.sh']))?.decision === 'block', 'chamada pelo caminho com bash');
+  ok(rodar(turnoComFinal('PR na fila.', ['cd /tmp && proxima-pergunta']))?.decision === 'block', 'chamada depois de &&');
+  for (const c of ['grep -rn proxima-pergunta plugins/', 'cat plugins/orquestracao/bin/proxima-pergunta', 'git commit -m "fix: o wrapper proxima-pergunta"', 'which proxima-pergunta']) {
+    ok(rodar(turnoComFinal('PR na fila.', [c])) === null, `só cita o nome: ${c}`);
+  }
+});
+caso('F400-w: a faixa do contador tem borda exata, e a cobrança do Q-ID não gasta a da decisão assumida', () => {
+  contador(990);
+  ok(rodar(turnoComFinal('Ver Q941.'))?.decision === 'block', 'Q941 está na faixa (990−50 < 941)');
+  ok(rodar(turnoComFinal('Ver Q940.')) === null, 'Q940 fica de fora');
+  const tp = turnoComFinal('Reservei Q986.');
+  ok(rodar(tp)?.decision === 'block', 'primeira recusa: Q-ID sem pergunta');
+  ok(rodar(tp, {}, { stop_hook_active: true }) === null, 'o mesmo Q-ID de novo no turno passa (sem laço)');
+  pergunta('Q986', LOCAL);
+  ok(rodar(tp, {}, { stop_hook_active: true, last_assistant_message: 'Nome curto (*assumida, a confirmar*).' })?.decision === 'block', 'a decisão assumida ainda é cobrada no mesmo turno');
+  ok(rodar(tp, {}, { stop_hook_active: true, last_assistant_message: 'Nome curto (*assumida, a confirmar*).' }) === null, 'e só uma vez');
 });
 caso('F400-k: a orquestradora (marcador próprio em ativas/) fica de fora', () => {
   writeFileSync(dir('home', '.claude', 'orquestracao', 'ativas', SID), 'x\n');
