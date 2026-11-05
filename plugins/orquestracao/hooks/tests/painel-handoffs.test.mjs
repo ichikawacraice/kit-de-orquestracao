@@ -24,7 +24,7 @@ function novoBase() {
 function painel(...args) {
   const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
     encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL',
-    env: { ...process.env, PAINEL_DIR: join(base, 'painel'), PAINEL_HANDOFFS_DIR: semEnvDaPasta ? '' : hand, CLAUDE_CODE_SESSION_ID: '', HOME: join(base, 'home') },
+    env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: join(base, 'painel'), PAINEL_HANDOFFS_DIR: semEnvDaPasta ? '' : hand, CLAUDE_CODE_SESSION_ID: '', HOME: join(base, 'home') },
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };

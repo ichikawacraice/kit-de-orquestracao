@@ -60,6 +60,7 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
+import { coletar as coletarDeduzidos } from './estado-deduzido.mjs';
 import { MOTIVO_DO_FORK, SHA_VALIDADO, arquivosDoPr, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub, soDocumentacao } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote, motivoDeConflito, padroesDeInfra, ESPERA_DE_INFRA_S } from './fila-de-merge.mjs';
@@ -336,6 +337,12 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   }
   if (tem('etapa') && !ETAPAS.includes(novo.etapa)) {
     throw new Error(`${chave}: etapa "${novo.etapa}" fora da lista (${ETAPAS.join(' · ')})`);
+  }
+  // F423 (ADR 0027): o item fecha pelo merge do PR ligado a ele (o `mergear` da fila, ou a batida que vê o merge), nunca por
+  // declaração. O item que não entrega PR sai por `descartado`, com o motivo no `agora`.
+  // Criar um item já fechado (importação, fixture) passa; KIT_FECHAR_DECLARADO=1 é a escotilha dos testes que exercitam o fechamento.
+  if (!viaCom && existia && novo.etapa === 'feito' && antes?.etapa !== 'feito' && process.env.KIT_FECHAR_DECLARADO !== '1') {
+    throw new Error(`${chave}: "feito" não se declara: o item fecha sozinho quando o PR ligado a ele mergeia (a fila, ou a batida que vê o merge). Sem PR a entregar, use "etapa":"descartado" com o motivo no "agora"`);
   }
   if (tem('tema')) {
     const projeto = base?.projeto ? String(base.projeto).toLowerCase() : null;
@@ -964,6 +971,10 @@ function comandoCusto(args) {
   return { item: F, custo };
 }
 
+// O item que fecha pelo merge (o `mergear` e a batida, F423): a dona e o `com` saem do item, mas ficam em `sessoes` (o
+// `painel custo` mede de novo pelas mesmas sessões, F348).
+const dadosDoFechamento = (d, agora, custo) => ({ etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], sessoes: [...new Set(sessoesDoItem(d).filter((s) => LOCAL_ID.test(s)))], agora, ...(custo ? { custo } : {}) });
+
 // `mergear <PR> <sha> [--seco]`. O GitHub fica FORA da trava (é lento); a escrita no painel, dentro dela.
 function comandoMergear(args) {
   const seco = flag(args, '--seco', false);
@@ -992,7 +1003,7 @@ function comandoMergear(args) {
     if (!atual || ETAPAS_FINAIS.has(atual.data?.etapa)) return { item: F, fechado: false, agora: null };
     let data;
     // F348: a dona e o `com` saem do item, mas ficam em `sessoes` (o `painel custo` mede de novo pelas mesmas sessões)
-    if (fecha) data = { etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], sessoes: [...new Set(sessoesDoItem(atual.data).filter((s) => LOCAL_ID.test(s)))], agora: `mergeado, ponta ${curto}`, ...(custos.get(F) ? { custo: custos.get(F) } : {}) };
+    if (fecha) data = dadosDoFechamento(atual.data, `mergeado, ponta ${curto}`, custos.get(F));
     // F404: a entrega de uma fatia sai, para a trava cobrar a do PR que fecha o item
     else if (fatia) data = { etapa: 'execucao', agora: `fatia mergeada (PR ${pr}, ponta ${curto}); a dona segue com a próxima`, entrega: null };
     else data = { com: [], agora: 'um PR entrou; falta outro' };
@@ -1577,6 +1588,13 @@ function comandoBatida(args) {
   const linhas = lerSessoes(arquivo);
   const pasta = join(ORQ(), 'batida');
   const solta = Number(process.env.BATIDA_SOLTA_MIN);
+  const prazoMin = prazoEmMin([]);
+  // F423 (ADR 0027): o estado deduzido do git, do gh e das sessões se coleta fora da trava (o gh é lento); KIT_ESTADO_DEDUZIDO=off
+  // volta ao declarado. Falhar aqui não derruba a batida: sem dedução, cada item segue pelo que declara.
+  let deduzidos = new Map();
+  if (process.env.KIT_ESTADO_DEDUZIDO !== 'off') {
+    try { deduzidos = coletarDeduzidos({ itens: itensVivos(), linhas, projetoDe: projetoDeUmaLinha(), slug: (p) => arq.slugDoProjeto(p), agoraMs, prazoMin }); } catch (e) { process.stderr.write(`batida: não deduzi o estado dos itens: ${e?.message || e}\n`); }
+  }
   const rodar = () => {
     const itens = itensVivos();
     const filas = filasDaBatida({ seco, agoraMs });
@@ -1587,13 +1605,27 @@ function comandoBatida(args) {
       semDona, donaACaminho, cartoes: cartoesDoPainel().map((c) => c.data),
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
       caminhoDoRelatorio: (nome) => join(pasta, `${nome}.json`),
-      prazoMin: prazoEmMin([]), soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
-      limites, handoffDe: handoffDoItem,
+      prazoMin, soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
+      limites, handoffDe: handoffDoItem, deduzidos,
     });
     const marcadoresApagados = marcadoresMortos(new Map(linhas.map((r) => [r.sessionId, r])), agoraMs);
     const cartoesApagados = cartoesResolvidos({ cartoes: cartoesDoPainel(), linhas, projetoDe: projetoDeUmaLinha(), agoraMs, itens: new Map(itens) });
-    const saida = { cartoesApagados, ...(Object.keys(filas.lancadas).length ? { filasLancadas: Object.fromEntries(Object.entries(filas.lancadas).map(([n, l]) => [n, l.prs])) } : {}), mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), ...(Object.keys(limites).length ? { limites: Object.fromEntries(Object.entries(limites).map(([id, l]) => [id, new Date(l.resetsAtMs).toISOString()])) } : {}), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
+    const saida = { cartoesApagados, ...(julgado.fechar.length ? { fechados: julgado.fechar.map((x) => x.F) } : {}), ...(Object.keys(filas.lancadas).length ? { filasLancadas: Object.fromEntries(Object.entries(filas.lancadas).map(([n, l]) => [n, l.prs])) } : {}), mensagens: julgado.mensagens, soltos: julgado.soltar.map((s) => s.F), ...(Object.keys(limites).length ? { limites: Object.fromEntries(Object.entries(limites).map(([id, l]) => [id, new Date(l.resetsAtMs).toISOString()])) } : {}), projetos: Object.fromEntries(Object.entries(julgado.projetos).map(([n, p]) => { const { mudou, ...resto } = p; return [n, resto]; })), marcadoresApagados };
     if (seco) return saida;
+    // F423: o item cujos PRs ligados mergearam (pela fila, pelo app ou à mão no GitHub) fecha aqui; a fila que mergeou já o fechou
+    const fechados = [];
+    for (const { F, prs } of julgado.fechar) {
+      const atual = ler('fila', F);
+      if (!atual || ETAPAS_FINAIS.has(atual.data?.etapa) || atual.data?.maisFatias === true) continue;
+      try {
+        efetivar(planejar({ op: 'update', colecao: 'fila', id: F, data: dadosDoFechamento(atual.data, `mergeado (PR ${prs.join(', ')}), visto pela batida`, medirCusto(atual.data)), [VIA_COM]: true }, undefined, new Map()));
+        fechados.push(F);
+      } catch (e) { process.stderr.write(`batida: não fechei ${F}: ${e?.message || e}\n`); }
+    }
+    if (fechados.length) saida.fechados = fechados; else delete saida.fechados;
+    if (deduzidos.size) {
+      try { gravarJson(join(pasta, 'deduzido.json'), { em: new Date(agoraMs).toISOString(), itens: Object.fromEntries(deduzidos) }); } catch (e) { process.stderr.write(`batida: não gravei deduzido.json: ${e?.message || e}\n`); }
+    }
     const soltos = [];
     for (const { F, motivo } of julgado.soltar) {
       try { soltarSemTrava(F, motivo, false); soltos.push(F); } catch (e) { process.stderr.write(`batida: não soltei ${F}: ${e?.message || e}\n`); }

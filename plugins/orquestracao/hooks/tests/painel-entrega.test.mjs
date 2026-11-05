@@ -19,7 +19,7 @@ function montar() {
   const painel = (...args) => {
     const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
       cwd: raiz, encoding: 'utf8', timeout: 20000, killSignal: 'SIGKILL',
-      env: { ...process.env, PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(raiz, 'appsess'), BATIDA: 'off' },
+      env: { ...process.env, KIT_FECHAR_DECLARADO: '1', PAINEL_DIR: join(raiz, 'painel'), HOME: join(raiz, 'home'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(raiz, 'appsess'), BATIDA: 'off' },
     });
     assert.ok(!r.error, String(r.error));
     return { exit: r.status, out: r.stdout, err: r.stderr };

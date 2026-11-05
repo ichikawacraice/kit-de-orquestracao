@@ -67,13 +67,16 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs, itens =
 // F371: `limites` { <local_…>: { resetsAtMs } } são as donas paradas no limite de uso (limite-de-uso.mjs, lido do transcript). Antes do
 // reset o item dela não é cutucado nem solto (a cutucada só bate de novo no limite); passado o reset, a dona parada recebe uma vez
 // por reset (estado `limites`) a mensagem de retomar, com o handoff de cada item (`handoffDe(F)` → caminho ou null).
-export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, filasVivas = {}, desfechos = {}, avisos = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN, limites = {}, handoffDe = () => null }) {
+// F423 (ADR 0027): `deduzidos` (Map F → estado-deduzido.mjs#deduzir) troca o declarado pelo deduzido: a etapa, os PRs e o "parado"
+// (pela última atividade da sessão, do commit, do PR ou do item) saem dele. O item cujos PRs ligados estão todos mergeados (sem
+// `maisFatias`) vai em `fechar`: fecha pelo merge, nunca por declaração. Item sem dedução segue pelo declarado (o item antigo).
+export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, filasVivas = {}, desfechos = {}, avisos = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN, limites = {}, handoffDe = () => null, deduzidos = new Map() }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
   // a hora do reset já avisada, por dona; sai 24 h depois do reset
   const avisados = Object.fromEntries(Object.entries(estado?.limites ?? {}).filter(([, em]) => (ms(em) ?? 0) > agoraMs - LIMITE_VELHO_MS));
   const retomar = new Map(); // dona → { resetsAtMs, itens: [F] }
-  const mensagens = []; const soltar = [];
+  const mensagens = []; const soltar = []; const fechar = [];
   const projetos = new Map();
   const projeto = (nome) => {
     if (!projetos.has(nome)) projetos.set(nome, { orquestradora: null, merge: [], vagas: [] });
@@ -94,14 +97,18 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     if (!nome) continue;
     const proj = projeto(nome);
     vistos.add(F);
+    const dd = deduzidos.get(F) ?? null;
+    if (dd?.mergeado) { fechar.push({ F, prs: dd.prs }); delete cutucadas[F]; continue; }
+    const etapa = dd?.etapa ?? d.etapa;
+    const prsDoItem = dd ? dd.prs : d.prs;
     const gente = [...new Set([d.donoLocalId, ...(Array.isArray(d.com) ? d.com.map((c) => c?.localId) : [])].filter(texto))];
-    const t = ms(d.atualizadoEm);
-    const parado = !d.espera && !d.trava && (t === null || agoraMs - t >= prazoMin * 60_000);
+    const t = dd ? ms(dd.ultimaAtividade) : ms(d.atualizadoEm);
+    const parado = dd ? dd.parado : !d.espera && !d.trava && (t === null || agoraMs - t >= prazoMin * 60_000);
     const minParado = t === null ? null : Math.floor((agoraMs - t) / 60_000);
 
     // a recusa cujo reset passou há mais de 24 h é velha (a batida não a viu a tempo, ou a mensagem não mudou o transcript): fluxo
     // normal, para a retomada não sair em laço nem segurar o item; dona arquivada também segue o fluxo normal (o item é solto)
-    const lim = d.etapa !== 'merge' && texto(d.donoLocalId) && viva(d.donoLocalId) ? limites[d.donoLocalId] : null;
+    const lim = etapa !== 'merge' && texto(d.donoLocalId) && viva(d.donoLocalId) ? limites[d.donoLocalId] : null;
     if (lim && Number.isFinite(lim.resetsAtMs) && agoraMs - lim.resetsAtMs < LIMITE_VELHO_MS) {
       if (agoraMs < lim.resetsAtMs) { delete cutucadas[F]; continue; } // espera o reset: nem cutuca nem solta
       const r = porId.get(d.donoLocalId);
@@ -113,15 +120,15 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
       }
     }
 
-    if (d.etapa === 'merge') {
-      if (Array.isArray(d.prs) && d.prs.some((p) => (filasVivas[nome] ?? []).includes(p))) continue;
-      const naFilaOrfa = Array.isArray(d.prs) && (filasOrfas[nome]?.prs ?? []).some((p) => d.prs.includes(p.pr));
+    if (etapa === 'merge') {
+      if (Array.isArray(prsDoItem) && prsDoItem.some((p) => (filasVivas[nome] ?? []).includes(p))) continue;
+      const naFilaOrfa = Array.isArray(prsDoItem) && (filasOrfas[nome]?.prs ?? []).some((p) => prsDoItem.includes(p.pr));
       if (naFilaOrfa) { proj.merge.push(F); continue; }
       if (!parado) continue;
       // F373: o PR fora da fila é da dona viva: a batida cobra o `--anotar` dela, uma vez por parada; a orquestradora só recebe o
       // item sem dona viva, sem PR em `prs`, cuja dona não respondeu à cobrança em `soltaMin`, ou já cobrado ANOTAR_MAX vezes pelos
       // mesmos PRs (a rodada da fila que dá erro tira o PR da fila e deixa o item em merge: sem o teto, anotar e errar viraria laço)
-      const prs = (Array.isArray(d.prs) ? d.prs : []).filter((p) => Number.isInteger(p) && p > 0);
+      const prs = (dd ? dd.prsAbertos : Array.isArray(d.prs) ? d.prs : []).filter((p) => Number.isInteger(p) && p > 0);
       if (prs.length && texto(d.donoLocalId) && viva(d.donoLocalId)) {
         if (porId.get(d.donoLocalId)?.isRunning === true) continue; // a dona está num turno: cobra-se quando ela parar
         const cut = cutucadas[F];
@@ -235,7 +242,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
       nova(proj.orquestradora, `Batida ${hora}: ${partes.join('; ')}. Relatório: ${caminhoDoRelatorio(nome)}.`, null, 'relatorio');
     }
   }
-  return { mensagens, soltar, projetos: relatorios, desfechos: entregas, registros, estado: { cutucadas, ...(Object.keys(avisados).length ? { limites: avisados } : {}), ultima: new Date(agoraMs).toISOString() } };
+  return { mensagens, soltar, fechar, projetos: relatorios, desfechos: entregas, registros, estado: { cutucadas, ...(Object.keys(avisados).length ? { limites: avisados } : {}), ultima: new Date(agoraMs).toISOString() } };
 }
 
 const hhmm = (iso) => { const t = ms(iso); return t === null ? '?' : new Date(t).toTimeString().slice(0, 5); };
