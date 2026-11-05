@@ -1,6 +1,6 @@
 # A sessão dona do item
 
-Modelo: Opus 5.5 para item com risco ou decisão, Sonnet 5.5 para item mecânico com o plano escrito ([modelo e esforço](protocolo.md#modelo-e-esforco)).
+Modelo: Sonnet 5.5 por padrão, Opus 5.5 só por gatilho nomeado ([modelo e esforço](protocolo.md#modelo-e-esforco)). Dona Sonnet que topa com decisão fora do plano devolve o item à orquestradora.
 
 Leia este arquivo ao começar e depois de cada limpeza de contexto. Regra geral: [protocolo](protocolo.md#modelo-da-dona) ([ADR 0011](../../../docs/adr/0011-uma-sessao-dona-do-item-do-plano-ao-pr.md)). Depois de uma limpeza, as perguntas que você abriu continuam suas: [protocolo](protocolo.md#perguntas-proprias).
 
