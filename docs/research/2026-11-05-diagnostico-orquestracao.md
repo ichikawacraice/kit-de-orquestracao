@@ -12,7 +12,7 @@ Autora: sessão avulsa aberta pela orquestradora do kit. Proposta, não decisão
 - **A fila de merge não é o gargalo de entrega.** Do PR aberto ao merge: mediana de **4 min** no kit, **11 min** no Izanagi, **1 min** no WiControl. O tempo está dentro da dona, antes do PR.
 - **O painel sai do compasso porque o estado é declarado, não derivado.** Doze passos do ciclo de um item dependem de o modelo lembrar de gravar; cada esquecimento vira um status falso, e cada trava que cobra o esquecimento vira um turno caro.
 - **O kit consome o que tenta economizar.** O próprio repositório do kit gastou ~1,2 bi de tokens na semana (~10% do total), teve 144 commits (53 só de subir versão) e tem ~13 mil linhas de código de orquestração com ~28 mil de testes.
-- **Recomendação: manter a orquestradora, mas fina; tornar o painel uma projeção derivada; tirar as travas que cobram bookkeeping; rotear modelo de verdade.** Não adotar ORCA nem Claude Flow como plataforma; copiar três ideias do ORCA e duas do artigo de ferramentas da Anthropic. Plano em quatro fases em [Plano](#plano).
+- **Recomendação: manter a orquestradora, mas fina; tornar o painel uma projeção derivada; tirar as travas que cobram bookkeeping; rotear modelo de verdade.** Não adotar ORCA (agora) nem Claude Flow como plataforma; copiar três ideias do ORCA ([adendo](#adendo-orca)) e duas do artigo de ferramentas da Anthropic. Plano em quatro fases em [Plano](#plano).
 
 <a id="como-foi-medido"></a>
 ## Como foi medido
@@ -178,7 +178,7 @@ WiControl                    58              1 min       4 min  10 min
 | **Claude Flow** (PDF, Analytics Vidhya, "beginner", mar/2026; produto hoje "ruflo") | Nada. Swarm "queen/worker" sem fila de merge nem verificação. | Nada novo: estado em SQLite nós já temos em arquivo. | Marketing sem número verificável; admite que mais agentes = mais custo. Já analisado em `2026-10-25-ruflo*.md`. |
 | **Model Routing Playbook** (Notion) | Nada; valida o desenho. | Fixar **esforço** junto com o modelo; cascata "escala uma vez"; medir **custo por item resolvido** e p90; nunca trocar de modelo no meio da sessão (perde o cache); linha de base em tarefas reais. | Roteadores automáticos de API (LiteLLM, OpenRouter); números de GPT. |
 | **Advanced tool use** (Anthropic, nov/2025) | Parte do piso de ferramentas: o app já difere ferramentas (`ToolSearch`). | Ideia do *programmatic tool calling*: scripts que agregam o estado e devolvem só o resumo ao modelo (o `painel.mjs batida` já é isso; estender para o relatório da orquestradora). | `betas`, `allowed_callers`, `input_examples` são da API: o app não expõe. |
-| **ORCA IDE** (onorca.dev) | Em parte, a visão do operador e os worktrees — mas é **outro app**, concorrente do desktop. Perderíamos o mod, as ferramentas `ccd_*` (sessões, PR, auto-fix), Artifacts. | Três ideias: **estado derivado de eventos** (colunas "Precisa de você / Trabalhando / Concluído / Ocioso" vindas de hook, não declaradas); **conclusão presa ao despacho** (`taskId` + `dispatchId`); **`precheck` barato** antes de acordar uma sessão. | Adotar inteiro: sem fila de merge, sem gate combinado, sem perguntas ao operador; orquestração experimental. |
+| **ORCA IDE** (onorca.dev) | Em parte, a visão do operador e os worktrees. É **outro app**: o mod e os Artifacts não vão, mas há equivalente para quase todo o resto (ver [adendo](#adendo-orca)). | Três ideias: **estado derivado de eventos** (colunas "Precisa de você / Trabalhando / Concluído / Ocioso" vindas de hook, não declaradas); **conclusão presa ao despacho** (`taskId` + `dispatchId`); **`precheck` barato** antes de acordar uma sessão. | Adotar inteiro agora: a orquestração dele é experimental e o kit teria de trocar o canal de sessões; reavaliar depois das fases 0 e 1 ([adendo](#adendo-orca)). |
 
 <a id="perguntas"></a>
 ## 7. As perguntas do operador
@@ -199,7 +199,7 @@ WiControl                    58              1 min       4 min  10 min
 | **A. Manter como está** | Funciona; F373/F404 já cortaram a orquestradora. | Donas em Opus, travas de ritual, estado declarado que desalinha, kit pesado. | Não. |
 | **B. Ajustar com corte** (recomendada) | Mantém o que funciona (dona única, fila e pós-merge sem turno, mod); ataca as três alavancas medidas; reversível por fase. | Exige disciplina para **apagar** código e regra, não só acrescentar. | **Sim.** |
 | **C. Sem orquestradora** (operador abre donas por cartão; fila e pós-merge já são script) | Zera os 11%. | Operador vira o despachante; perde o relatório consolidado e o briefing bom; mais cartões esperando clique. | Não agora; possível depois da fase 2 se o uso dela cair. |
-| **D. ORCA + nossas skills** | Visão por agente pronta, multi-provedor, automações com `precheck`. | Troca o app; perde mod, `ccd_*`, Artifacts, auto-fix de PR; sem fila de merge; orquestração experimental. | Não como plataforma; copiar ideias. |
+| **D. ORCA + nossas skills** | Visão por agente pronta, multi-provedor, automações com `precheck`. | Troca o app; o mod, os Artifacts e o auto-fix automático não vão; as travas e o canal de sessões teriam de ganhar outro adaptador; orquestração experimental. | Agora não; copiar ideias e reavaliar com piloto ([adendo](#adendo-orca)). |
 | **E. Claude Flow / ruflo** | Swarm pronto. | Modelo oposto ao nosso (paralelo sem verificação), mais custo, sem evidência. | Não. |
 | **F. Sem painel** | Menos código (5 mil linhas). | Perguntas ao operador ficam espalhadas no chat; sem visão de parado. | Não; encolher em vez de tirar. |
 | **G. Refazer do zero** | Desenho limpo. | Joga fora a fila sem turno, o pós-merge e o teto de núcleos, que funcionam e foram medidos. | Não; cortar por dentro. |
@@ -228,3 +228,33 @@ WiControl                    58              1 min       4 min  10 min
 - Revisar a cada duas semanas com o `medir-semana`: o que não baixou custo por item ou tempo até o merge, sai.
 
 **Meta medível (proposta):** custo por item fechado −40% e tempo item→merge p50 −30% em 3 semanas, com a mesma taxa de gate verde.
+
+<a id="adendo-orca"></a>
+## Adendo: o ORCA revisto (05/11, depois da conversa com o operador)
+
+O laudo acima subestimou o ORCA. Corrigido com o operador; **o plano (fases 0 a 3) não muda** e segue primeiro. O estudo fica aqui para decidir, depois, se o kit ganha um modo que funcione lá.
+
+**O que o ORCA tem, segundo a documentação lida (não testado):**
+
+| No kit hoje | No ORCA |
+|---|---|
+| Mod `painel-sessoes` e batida de 10 min | Visão por agente com estados derivados de hook; heartbeat de 1 a 60 min (padrão 5). Substitui, e melhor. |
+| `start_session`, `send_message`, `list_sessions` | Run, Task e Dispatch; `worker-start --agent claude --model --effort`; `send`, `ask` e decision gates; `worker_done` com `taskId` + `dispatchId`. |
+| `ccd_pr` e auto-fix | PR ligado ao worktree, checks e comentários, botão manual "Fix broken checks", auto-merge, merge queue do GitHub, PRs empilhados. Falta o conserto automático acordado pelo CI. |
+| Busca em transcript | `orca search`. |
+| Artifacts | Não há; o relatório viraria arquivo ou página local. |
+| Fila de merge sem turno | Não há nativa, mas a do kit é script (`painel.mjs`) e portável; muda só o canal de aviso para o `send` do ORCA. |
+
+**O kit carrega no ORCA sem instalar nada?** Sim, em boa parte. O ORCA roda a CLI do Claude Code com o mesmo `~/.claude`, e os plugins do kit estão ligados no nível do usuário (`enabledPlugins` em `~/.claude/settings.json`). Entram a injeção do SessionStart, os hooks (travas de Stop, guarda, `laco-de-comandos`, `contexto-do-papel`), as skills, os subagentes e o `painel.mjs`, que grava em `~/.claude/orquestracao/`.
+
+**Funcionaria?** Só pela metade:
+- não entram o mod, a batida nem as ferramentas `ccd_*`: a orquestradora não abre donas nem acorda ninguém;
+- as travas que cobram `com add`, `detach self`, painel e fila do item cobram passos impossíveis lá e geram turnos extras;
+- as sessões do ORCA gravariam no mesmo estado vivo que a orquestradora e a fila do app leem.
+
+**Para testar o ORCA sem o kit** (recomendado, nesta ordem; nenhuma testada dentro do ORCA):
+1. Nos argumentos do agente Claude nas configurações do ORCA, `--bare`: desliga hooks, plugins e auto-memória e mantém o login.
+2. `--settings` com JSON que põe `false` nos plugins do kit em `enabledPlugins`: desliga só o kit; conferir com `/plugin` ou `/status`.
+3. `CLAUDE_CONFIG_DIR` apontando para outra pasta: isolamento total, mas pede login de novo e fica sem memória.
+
+**Se um dia o kit for para o ORCA:** um adaptador de canal (abrir, avisar, listar sessões) com duas pontas, app e ORCA; travas que só cobram o que o canal da sessão consegue fazer; e o estado derivado da fase 2, que já tira a anotação manual. Piloto num projeto pequeno (WiControl), depois das fases 0 e 1. Ainda não verificado: se o chat estruturado do ORCA respeita todos os hooks de Stop, o piso de contexto lá e como ficaria o modo ausente.

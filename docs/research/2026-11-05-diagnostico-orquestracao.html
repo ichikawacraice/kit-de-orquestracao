@@ -210,7 +210,7 @@ td.r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;
   <h2><span class="n">06</span>Fontes externas</h2>
   <div class="tbl"><table>
     <tr><th>Fonte</th><th>Substituiria</th><th>Melhoria a copiar</th><th>Não serve</th></tr>
-    <tr><td><b>ORCA IDE</b><br><span class="meta">onorca.dev, código aberto</span></td><td>Em parte, a visão do operador e os worktrees. Mas é <b>outro app</b>, concorrente do desktop: perderíamos o mod, as ferramentas de sessão e de PR do app, o auto-fix e os Artifacts.</td><td>Estado derivado de eventos ("Precisa de você / Trabalhando / Concluído / Ocioso"). Conclusão presa ao despacho (<code>taskId</code> + <code>dispatchId</code>). Um <code>precheck</code> barato antes de acordar uma sessão.</td><td>Adotar inteiro: não tem fila de merge, gate combinado nem perguntas ao operador, e a orquestração dele é experimental.</td></tr>
+    <tr><td><b>ORCA IDE</b><br><span class="meta">onorca.dev, código aberto</span></td><td>Em parte, a visão do operador e os worktrees. É <b>outro app</b>: o mod e os Artifacts não vão, mas há equivalente para quase todo o resto (ver <a href="#adendo-orca">09</a>).</td><td>Estado derivado de eventos ("Precisa de você / Trabalhando / Concluído / Ocioso"). Conclusão presa ao despacho (<code>taskId</code> + <code>dispatchId</code>). Um <code>precheck</code> barato antes de acordar uma sessão.</td><td>Adotar inteiro agora: a orquestração dele é experimental e o kit teria de trocar o canal de sessões. Reavaliar depois das fases 0 e 1.</td></tr>
     <tr><td><b>Model Routing Playbook</b><br><span class="meta">Notion; seções recolhidas não abertas</span></td><td>Nada. Ele confirma o nosso desenho.</td><td>Fixar o <b>esforço</b> junto com o modelo. Escalar para o modelo de cima uma vez só. Medir o custo por item resolvido e o p90. Não trocar de modelo no meio da sessão, porque isso perde o cache.</td><td>Roteadores automáticos de API e os números do GPT.</td></tr>
     <tr><td><b>Advanced tool use</b><br><span class="meta">Anthropic, nov/2025</span></td><td>Parte do piso de ferramentas, mas o app já adia ferramentas pelo <code>ToolSearch</code>.</td><td>A ideia do <i>programmatic tool calling</i>: um script agrega o estado e devolve só o resumo ao modelo. O <code>painel.mjs batida</code> já faz isso, e dá para estender ao relatório da orquestradora.</td><td><code>betas</code>, <code>allowed_callers</code> e <code>input_examples</code> são recursos da API, e o app não os expõe.</td></tr>
     <tr><td><b>Claude Flow</b><br><span class="meta">PDF da Analytics Vidhya, nível iniciante</span></td><td>Nada. É um enxame "rainha/operárias" sem fila nem verificação.</td><td>Nada de novo.</td><td>Material de divulgação sem número verificável, e o próprio texto admite que mais agentes custam mais.</td></tr>
@@ -224,7 +224,7 @@ td.r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;
     <tr><td><b>Manter como está</b></td><td>Funciona, e o F373 e o F404 já cortaram o custo da orquestradora.</td><td>Donas em Opus, travas de ritual, estado declarado e um kit pesado.</td><td><span class="pill bad">não</span></td></tr>
     <tr><td><b>Ajustar com corte</b></td><td>Mantém o que foi medido e funciona: dona única, fila e pós-merge sem turno, mod. Ataca as três alavancas, e cada fase pode ser revertida.</td><td>Pede disciplina para apagar código e regra, e não só acrescentar.</td><td><span class="pill ok">recomendada</span></td></tr>
     <tr><td><b>Sem orquestradora</b></td><td>Zera os 11% dela.</td><td>O operador vira o despachante, perde o relatório e os briefings, e ganha mais cartões esperando clique.</td><td><span class="pill warn">depois, talvez</span></td></tr>
-    <tr><td><b>ORCA + skills</b></td><td>Visão por agente pronta, vários provedores, automações com <code>precheck</code>.</td><td>Troca de app: perde o mod, as ferramentas de sessão e de PR e os Artifacts, e fica sem fila de merge.</td><td><span class="pill bad">não</span> · copiar ideias</td></tr>
+    <tr><td><b>ORCA + skills</b></td><td>Visão por agente pronta, vários provedores, automações com <code>precheck</code>.</td><td>Troca de app: o mod, os Artifacts e o auto-fix automático não vão, e as travas e o canal de sessões precisam de outro adaptador.</td><td><span class="pill warn">depois</span> · piloto</td></tr>
     <tr><td><b>Claude Flow / ruflo</b></td><td>Enxame pronto.</td><td>Modelo oposto ao nosso, mais custo e nenhuma evidência.</td><td><span class="pill bad">não</span></td></tr>
     <tr><td><b>Sem painel</b></td><td>Cerca de 5 mil linhas a menos.</td><td>As perguntas se espalham pelo chat e some a visão do que está parado.</td><td><span class="pill bad">não</span> · encolher</td></tr>
     <tr><td><b>Refazer do zero</b></td><td>Desenho limpo.</td><td>Joga fora a fila, o pós-merge e o teto de núcleos, que funcionam.</td><td><span class="pill bad">não</span></td></tr>
@@ -256,6 +256,39 @@ td.r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;
     </ul></div></div>
   </div>
   <div class="verdict prose"><span class="eyebrow">Meta proposta</span><p>Em três semanas, custo por item fechado <b>−40%</b> e tempo do item ao merge (p50) <b>−30%</b>, com a mesma taxa de gate verde.</p></div>
+</section>
+
+<section id="adendo-orca">
+  <h2><span class="n">09</span>O ORCA, revisto</h2>
+  <div class="prose">
+    <p>O laudo subestimou o ORCA. O plano acima não muda e segue primeiro; este estudo fica para decidir depois se o kit ganha um modo que funcione lá. Tudo aqui vem da documentação, sem teste.</p>
+  </div>
+  <div class="tbl"><table>
+    <tr><th>No kit hoje</th><th>No ORCA</th></tr>
+    <tr><td>Mod do painel e batida de 10 min</td><td>Visão por agente com estado vindo de hook; heartbeat de 1 a 60 min. Substitui, e melhor.</td></tr>
+    <tr><td>Abrir, avisar e listar sessões</td><td>Run, Task e Dispatch; <code>worker-start</code> com modelo e esforço; <code>send</code>, <code>ask</code> e decision gates; <code>worker_done</code> preso ao despacho.</td></tr>
+    <tr><td>PR e auto-fix</td><td>PR ligado ao worktree, checks, comentários, "Fix broken checks" manual, auto-merge e merge queue do GitHub. Falta o conserto acordado pelo CI.</td></tr>
+    <tr><td>Artifacts</td><td>Não há; o relatório vira arquivo local.</td></tr>
+    <tr><td>Fila de merge sem turno</td><td>Não há nativa, mas a do kit é script e vai junto; muda só o canal de aviso.</td></tr>
+  </table></div>
+  <div class="prose">
+    <h3>O kit carrega lá sem instalar nada?</h3>
+    <p>Sim, em boa parte. O ORCA roda a CLI do Claude Code com o mesmo <code>~/.claude</code>, onde os plugins do kit estão ligados. Entram as regras do início da sessão, as travas, a guarda, as skills, os subagentes e os scripts do painel.</p>
+    <h3>Funcionaria?</h3>
+    <ul>
+      <li>Pela metade: sem o mod e sem as ferramentas de sessão do app, a orquestradora não abre donas nem acorda ninguém.</li>
+      <li>As travas cobrariam passos impossíveis lá e gerariam turnos extras.</li>
+      <li>As sessões do ORCA gravariam no mesmo estado que a orquestradora do app lê.</li>
+    </ul>
+    <h3>Para testar o ORCA sem o kit</h3>
+    <ul>
+      <li><b>Recomendado:</b> <code>--bare</code> nos argumentos do agente Claude, nas configurações do ORCA. Desliga hooks, plugins e memória e mantém o login.</li>
+      <li><code>--settings</code> com os plugins do kit em <code>false</code>: desliga só o kit.</li>
+      <li><code>CLAUDE_CONFIG_DIR</code> em outra pasta: isola tudo, mas pede login de novo.</li>
+    </ul>
+    <h3>Se o kit for para lá</h3>
+    <p>Um adaptador de canal com duas pontas (app e ORCA), travas que só cobram o que o canal permite e o estado derivado da fase 2. Piloto num projeto pequeno, depois das fases 0 e 1.</p>
+  </div>
 </section>
 
 <p class="foot prose">Como foi medido: script avulso sobre os transcripts dos três projetos (janela de 29/10 00:00 a 05/11, horário de SP), <code>custo-fixo.mjs</code>, <code>piso-da-sessao.mjs</code>, <code>gh pr list</code> em cada repositório e a leitura do estado em <code>~/.claude/orquestracao</code>, sem nenhuma gravação. A pesquisa completa, com as saídas, está em <code>docs/research/2026-11-05-diagnostico-orquestracao.md</code>. As estimativas estão marcadas como estimativa.</p>
