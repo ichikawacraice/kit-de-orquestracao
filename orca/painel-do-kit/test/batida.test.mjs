@@ -67,3 +67,18 @@ test('o ambiente da batida: roda como Node no binário do Orca e grava onde a ab
   assert.equal(ambienteDaBatida({ PAINEL_DIR: '/t/painel', HOOKS_CREWAI_BASE: '/b' }).HOOKS_CREWAI_BASE, '/b', 'o já dado vale');
   assert.equal(ambienteDaBatida({}).HOOKS_CREWAI_BASE, undefined, 'sem nada trocado, os padrões do painel.mjs');
 });
+
+// O validador do F460 mediu: com o relógio de 10 min e o limiar de 10 min, o `em` gravado nasce uns ms depois do toque, o
+// toque seguinte acha o arquivo com pouco menos de 10 min e pula: a cadência vira 20 min, e o aviso de 5 min aparecia
+// 3/4 do tempo. O relógio confere a cada minuto, e o aviso só aparece depois de uma batida perdida.
+test('o relógio confere a cada minuto e o aviso de estado velho só sai depois de uma batida perdida', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { TOQUE_MS } = await import('../src/nucleo/batida.mjs');
+  assert.equal(TOQUE_MS, 60_000);
+  const raiz = new URL('../src/', import.meta.url);
+  const worker = readFileSync(new URL('worker.ts', raiz), 'utf8');
+  assert.match(worker, /setInterval\(\(\) => \{ void rodarBatida\(\) \}, TOQUE_MS\)/, 'o worker usa o toque de 1 min');
+  const velha = readFileSync(new URL('panel.tsx', raiz), 'utf8').match(/const BATIDA_VELHA_MS = (\d+) \* 60_000/);
+  assert.ok(velha, 'achei o limiar do aviso na aba');
+  assert.ok(Number(velha[1]) > BATIDA_MIN + TOQUE_MS / MIN, `aviso aos ${velha[1]} min tem de passar da cadência (${BATIDA_MIN} min + 1 toque)`);
+});

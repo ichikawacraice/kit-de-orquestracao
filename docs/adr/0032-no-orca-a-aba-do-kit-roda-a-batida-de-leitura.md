@@ -32,7 +32,7 @@
 <a id="decisao"></a>
 ## Decisão
 1. **No Orca, o worker da aba roda a batida de leitura a cada 10 min:** `painel.mjs batida --leitura`, uma vez ao ativar e depois de 10 em 10 min.
-   - Roda só quando `batida/deduzido.json` falta, está ilegível ou tem 10 min ou mais.
+   - Roda só quando `batida/deduzido.json` falta, está ilegível ou tem 10 min ou mais. O relógio confere isso a cada minuto: com um relógio de 10 min, o arquivo gravado no toque anterior teria pouco menos de 10 min no seguinte (o `em` nasce uns ms depois do toque), e a cadência real viraria 20 min.
    - Roda uma por vez.
    - O script é o `painel.mjs` do plugin `orquestracao` instalado no escopo do usuário, achado em `installed_plugins.json` como o mod acha o dele.
    - O binário é o do próprio Orca, com `ELECTRON_RUN_AS_NODE=1`, e o prazo é de 60 s.
@@ -43,25 +43,28 @@
    - Não grava `estado.json`, os relatórios nem o `pode-reiniciar.json`.
    - Não apaga marcador nem cartão e não arquiva pergunta.
    - Não usa `--sessoes`: a batida monta as linhas a partir da própria lista de workers do Orca, que ela já lê, sem arquivo intermediário. Cada worker com pasta que existe vira uma linha, que só serve para achar o repositório de cada projeto para o `gh`.
-3. **Sem a lista do app, a dona `local_` fica fora da vista** (`donaViva: null`), nunca morta. É o mesmo tratamento que o ADR 0030 deu à dona do Orca sem a lista dele. A seção Sessões já mostra `null` com dona como "fora da vista".
+3. **Sem a lista do app, a dona `local_` fica fora da vista** (`donaViva: null`), nunca morta. É o mesmo tratamento que o ADR 0030 deu à dona do Orca sem a lista dele.
+   - Sem a linha dela, a leitura não lê o git da dona nem acha os PRs pela branch: o parado sai só das gravações do item e dos PRs já anotados, e a seção Sessões pode mostrá-la como parada. Com o app desktop fechado, a sessão `local_` de fato não anda.
 4. **As duas batidas não correm uma sobre a outra.**
    - A de leitura pula logo no início se o `deduzido.json` tem menos de 10 min.
    - Dentro da trava do painel, logo antes de gravar, ela confere de novo. Se outra batida gravou nesse meio-tempo, ela não sobrescreve e devolve `pulou`. A batida completa grava o `deduzido.json` dentro da mesma trava.
    - A de leitura não grava `vez.json`, então nunca adia a batida completa do app desktop.
    - Com o app desktop aberto e a batida dele em dia, a da aba pula.
+5. **O aviso de estado velho da seção Sessões passa de 5 para 15 min.** Com a batida de 10 em 10 min (a do app e a da aba), o limiar de 5 min acendia o aviso em metade do tempo mesmo com tudo em dia; com 15 min, ele só aparece depois de uma batida perdida.
 
 <a id="alternativas"></a>
 ## Alternativas consideradas
 - **Rodar a batida completa no worker da aba**, com a lista do Orca no lugar da do app, como o briefing sugeria. Ela soltaria o item de toda dona `local_`, porque a dona sem linha é dada como morta. Também cutucaria sem ter por onde mandar a mensagem: um terminal por envio, cada um acordando uma sessão. E fecharia e lançaria fila por um processo que o operador não vê. Descartada: a leitura dá o que falta (a seção Sessões em dia) sem nenhuma ação mecânica.
 - **O worker montar `--sessoes` em TypeScript a partir do `worker-list`**, como o briefing pedia. Seria uma segunda leitura da mesma lista em outra linguagem, que o `painel.mjs` já faz (F444), e duas implementações a manter em acordo. Descartada: o `--leitura` reaproveita a `listaDoOrca()`.
+- **Bater mais vezes (a cada 4 ou 5 min) e manter o aviso aos 5 min.** Dobraria o custo de processo e, com o app desktop aberto, a leitura passaria a sobrescrever a batida completa a cada poucos minutos, e a dona `local_` ficaria sem o git dela a maior parte do tempo. Descartada: o aviso deve dizer que uma batida falhou, e com 15 min ele diz.
 - **Usar a `vez.json` do mod como trava entre as duas.** A `vez.json` serve para as janelas do app revezarem, e ocupá-la adiaria a batida completa, que é a que cutuca e solta. Descartada: a dupla conferência do `deduzido.json` (antes de coletar e dentro da trava) basta, porque a leitura só grava esse arquivo.
 - **Incluir na leitura as ações mecânicas que não dependem da lista do app**: fechar o item pelo merge, relançar a fila órfã, arquivar as perguntas fechadas. No Orca elas já têm dono: o fechamento vem do `mergear` da fila no turno da orquestradora, e o lançamento vem do `--anotar` (ADR 0028). Descartada por ora. Fechar pelo merge é a candidata mais forte a voltar, se se medir item mergeado à mão que ficou aberto no Orca.
 - **Deixar como está** (o 0030: batida só no app desktop). A seção Sessões fica velha o dia todo no Orca, que é onde o operador mais trabalha agora. Descartada.
 
 <a id="consequencias"></a>
 ## Consequências
-- No Orca, a seção Sessões recebe o estado deduzido a cada 10 min (etapa e PRs pelo `gh`, vida da dona do Orca, parado), e o aviso de estado velho só aparece se a batida falhar.
-- Com o app desktop e o Orca abertos juntos, as duas batidas se alternam no `deduzido.json`. Quando vale a da leitura, a dona `local_` aparece "fora da vista" na aba do Orca. O pane do app desktop usa a etapa e os PRs do arquivo e desmente o parado pela própria lista ao vivo, mas não lê `donaViva`.
+- No Orca, a seção Sessões recebe o estado deduzido a cada 10 min (etapa e PRs pelo `gh`, vida da dona do Orca, parado), e o aviso de estado velho só aparece depois de uma batida perdida (15 min).
+- Com o app desktop e o Orca abertos juntos, as duas batidas se alternam no `deduzido.json`. Quando vale a da leitura, a dona `local_` sai com `donaViva: null` e sem o git dela, e a aba do Orca pode mostrá-la parada até a batida completa seguinte; os PRs dela que só se acham pela branch somem nessa janela, e o `fila-do-item` deixa de cobrar a entrega deles. O pane do app desktop usa a etapa e os PRs do arquivo e desmente o parado pela própria lista ao vivo, mas não lê `donaViva`.
 - O `fila-do-item` (a cobrança da entrega) passa a ter no Orca a etapa e os PRs deduzidos em dia.
 - Com `KIT_ESTADO_DEDUZIDO=off` no app desktop, a batida dele não grava o `deduzido.json`, e a do Orca passa a gravá-lo. Quem desliga a dedução precisa desligá-la também na aba.
 - Cada rodada custa cerca de 3 s de processo (medido em 06/11 com 9 itens vivos: o `gh pr list` de cada projeto e o `git` de cada dona). A trava do painel fica com a rodada só o tempo de gravar um arquivo.

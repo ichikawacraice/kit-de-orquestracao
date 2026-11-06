@@ -15,7 +15,7 @@ import { entregasDoPainel, entregasDoOrca, juntarEntregas } from './nucleo/entre
 import { prepararEnvio, lerResultado, destinoValido, destinoDoSeguimento } from './nucleo/envio.mjs'
 import { criarFilaDeEntrega } from './nucleo/fila-de-entrega.mjs'
 import { sessoesDoKit } from './nucleo/sessoes.mjs'
-import { precisaDaBatida, scriptDaBatida, ambienteDaBatida, BATIDA_MIN } from './nucleo/batida.mjs'
+import { precisaDaBatida, scriptDaBatida, ambienteDaBatida, TOQUE_MS } from './nucleo/batida.mjs'
 import { inicioDoDiaSP } from './vista'
 import type { Leitura, Resultado, Entrega, EstadoDaEntrega, VistaDasSessoes } from './protocol'
 import { ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, LIMITE_DA_CAIXA } from './protocol'
@@ -88,7 +88,7 @@ export default function activate(orca: OrcaWorkerApi): void {
 
   const avisarPaineis = () => { void atualizarBarra(); orca.panels.post('kit.mudou', { em: Date.now() }) }
 
-  // A batida de leitura (F460): ao ativar e a cada 10 min, só se o deduzido tem 10 min ou mais (o app desktop pode estar
+  // A batida de leitura (F460): ao ativar e, conferindo a cada minuto, quando o deduzido tem 10 min ou mais (o app desktop pode estar
   // rodando a dele); uma por vez. O binário do Orca roda o painel.mjs como Node. Falhar só vai ao log: a seção Sessões
   // segue avisando que o estado está velho.
   let batendo = false
@@ -110,7 +110,7 @@ export default function activate(orca: OrcaWorkerApi): void {
     } finally { batendo = false }
   }
   void rodarBatida()
-  const relogioDaBatida = setInterval(() => { void rodarBatida() }, BATIDA_MIN * 60_000)
+  const relogioDaBatida = setInterval(() => { void rodarBatida() }, TOQUE_MS)
   relogioDaBatida.unref?.()
 
   // Envio por terminal criado pelo worker: o worker do plugin não tem remetente próprio (`no_active_sender_terminal`).
