@@ -6,6 +6,7 @@ Todo trabalho do projeto é um **item** (`F<n>`) na fila do painel. Uma **sessã
 ## O item e a dona
 - **Um item, uma sessão dona, do plano ao PR.** A dona mede, decide, escreve código e doc, testa, revisa por subagente, abre o PR e conserta o que a fila de merge devolver. Sem sessões separadas por papel, sem handoff entre papéis.
 - **Quem abre a dona é a orquestradora** ([a fila](#a-fila)), com `start_session` e o modelo pelo risco ([modelo e esforço](#modelo-e-esforco)). Título: `F<n> · <tema em palavras do produto>` (a trava `titulo-da-dona.mjs` recusa outro).
+- **No Orca:** a coordenadora abre a dona com `orca orchestration worker-start` (a trava do `orca` recusa sem `--model`/`--effort` e na pasta de quem chama), e a dona se grava com o `orca_session_id:<id>` no lugar do `local_…`. Tabela completa: [anfitriao-orca.md](anfitriao-orca.md).
 - **No primeiro turno a dona** grava a si mesma (`painel update fila F<n> '{"donoLocalId":"<seu local_…>","donoApelido":"dona"}'` e `painel com add`) e se desliga da orquestradora (`detach_session` com `"self"`; [ADR 0022](../../../docs/adr/0022-a-orquestradora-so-acorda-quando-precisa.md)). Troca a `etapa` (`planejamento` → `design`, só com tela → `execucao` → `validacao`) num `update` curto, sem o `agora`; a `merge` e o PR o `--anotar` grava.
 
 <a id="painel-em-dia"></a>
@@ -88,6 +89,7 @@ Ao fechar o item, `painel mergear` grava em `custo` o gasto das sessões que tra
 - **A fila** combina os PRs sobre a base por squash, roda o gate **uma vez**, mergeia o que passou e devolve o que conflitou ou ficou vermelho, achando por bisseção o PR que quebra ([por dentro](referencia.md#fila-de-merge)).
 - <a id="fila-sem-turno"></a>**Sem turno da orquestradora:** o `--anotar` da dona lança a fila na hora quando nenhum gate do projeto roda, a [batida](#batida) lança a que ficou parada e entrega o desfecho à dona; à orquestradora vai só o que é dela ([fila sem turno](referencia.md#fila-sem-turno)). <a id="aviso-de-fatia"></a>Fatia mergeada (`maisFatias: true`) devolve o item à dona com o aviso `fatia PR N mergeada (F<n>): siga com a próxima.`
 - **Conflito devolvido:** a dona traz a base pelo `sync_with_base_branch` do app ou, sem ele, rebaseia sobre `origin/<base>` ([dona](dona.md), passo 7); o merge commit do app fica só na branch dela, porque a fila mergeia por squash.
+  No Orca: a dona faz `git merge origin/main` na própria branch (o merge commit fica só nela; a fila mergeia por squash); não há `sync_with_base_branch`.
 - <a id="falha-de-infra"></a>**Falha de infraestrutura** (saída que casa com um padrão, de fábrica `container is not ready`) roda de novo uma vez antes de culpar um PR ([padrões](referencia.md#falha-de-infra)).
 - **Sinais de entrega:** o PR anotado é o caminho principal; `PR N pronto, HEAD <sha>` é o de reserva; o aviso de fim de turno do app não é sinal de entrega, porque a dona desligada (`detach_session`) não o gera e o que chegar abre na orquestradora um turno sem leitura. PR pronto e não anotado a batida cobra da dona.
 - <a id="corte-do-item"></a>**Corte do item:** o que prevê mais de ~1 dia de dona nasce em fatias, cada uma com o próprio PR (`maisFatias: true` até a última; [dona](dona.md) passo 7b); fatia pequena fecha mais cedo e custa menos.
@@ -123,6 +125,7 @@ Abaixo, `main` é a branch de produção e `develop` a de integração (os nomes
 - **O arquivo se limpa.** Arquivo de item fechado há mais de **30 dias** (pelo `feitoEm` do item; sem item na fila, pela data do arquivo) é apagado do `arquivo/`. Roda sozinho a cada item que fecha, e à mão com `painel handoffs limpar [--dias N] [--seco]` (`--seco` só lista).
 <!-- regra-do-handoff-do-item: fim -->
 - **Achar o próprio `local_…`:** `get_session` com `"self"` (campo `sessionId`).
+- **No Orca:** não há `get_session`; o id é o `orca_session_id:<ORCA_AGENT_SESSION_ID>` (`quemSou()` do `anfitriao.mjs`; o preâmbulo do worker também o traz).
 
 <a id="batida"></a>
 ## A batida

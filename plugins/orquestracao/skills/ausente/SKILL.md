@@ -16,6 +16,7 @@ Argumento: `$ARGUMENTS`.
 - **`on`:** os passos abaixo.
 
 O operador digitou `/ausente on`: vai ficar fora ou dormir. Este turno é dele, então `start_session` abre sessão. Depois dele, só sai cartão. Regra em `${CLAUDE_PLUGIN_ROOT}/pool/protocolo.md`, âncora `nunca-travar`.
+No Orca: `orca orchestration worker-start` no lugar de `start_session` e `worker-list --json` no lugar de `list_sessions` ([tabela](../../pool/anfitriao-orca.md)). No terminal não há sessão a abrir: o modo ausente só vale onde o anfitrião abre sessão.
 
 **Fora da orquestradora:** se esta sessão não é a orquestradora (título sem `🎛 orquestradora`), diga isso numa linha e não faça nada.
 

@@ -55,6 +55,7 @@ CI em todo PR de trabalho é espera e minuto pagos para repetir o que o gate da 
 ## Item sem dona: a regra e o pedido pelo painel
 - A regra é uma função só, `hooks/sem-dona.mjs` (o pane tem a cópia `sem-dona.ts`, e um teste compara as duas); `painel list fila` devolve `semDona` ({desde, minutos}) fora de `data` em todo documento, e `painel list fila sem-dona` filtra os que estão sem dona.
 - **Pedido pelo painel:** o pane tem o botão "Pedir dona" no item sem dona (e "Pedir n sessões" na seção, com 2 ou mais). O pedido vai à orquestradora do projeto do item: a que o app lista como viva e é a única do projeto (sem ela, ou com várias, o pane avisa e não envia). Pane aberto na própria orquestradora → o texto vai ao campo do prompt e o operador aperta Enter (turno dele, em que ela abre as sessões); em outra sessão → `send_message`, e ela responde com um cartão por item que o operador inicia. A orquestradora atende pela [âncora `vaga-pelo-painel`](../skills/orquestradora/SKILL.md#vaga-pelo-painel).
+- **No Orca:** o pane, a batida e a barra são do mod do app desktop e não rodam lá; o `painel` se usa como arquivo (comandos), e as ferramentas de sessão do app (`send_message`, `list_sessions`) têm equivalente em [anfitriao-orca.md](anfitriao-orca.md).
 
 <a id="a-fila"></a>
 ## O documento do item

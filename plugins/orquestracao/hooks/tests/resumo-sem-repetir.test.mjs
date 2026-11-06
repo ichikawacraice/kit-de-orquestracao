@@ -19,7 +19,7 @@ function inicio(cwd) {
   try {
     const out = execFileSync('node', [join(HOOKS, 'sessao-inicio.mjs')], {
       input: JSON.stringify({ cwd }), encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL',
-      env: { ...process.env, HOME: vazio, PAINEL_DIR: vazio, CLAUDE_CODE_HOST_SESSION_ID: '' },
+      env: { ...process.env, HOME: vazio, PAINEL_DIR: vazio, CLAUDE_CODE_HOST_SESSION_ID: '', ORCA_AGENT_SESSION_ID: '', ORCA_STRUCTURED_SESSION: '', KIT_ANFITRIAO: 'claude-desktop' }, // F443: o resumo muda pelo anfitrião; fixa a variante do app
     });
     return JSON.parse(out).hookSpecificOutput.additionalContext;
   } finally { rmSync(vazio, { recursive: true, force: true }); }

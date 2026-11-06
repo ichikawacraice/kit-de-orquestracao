@@ -6,7 +6,20 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+const VARIANTE = /\s*<!--\s*so:\s*([\w, -]+?)\s*-->/;
 const MARCA = /\s*<!--\s*coberta-por:\s*kit:([\w-]+)\s+v(\d+)\s*-->/;
+
+/**
+ * F443 (ADR 0030, item 4): a linha que termina em `<!-- so: orca -->` (ou `so: claude-desktop, terminal`) vale só nesses anfitriões;
+ * a sem marca vale em todos. O comentário nunca chega à sessão. Anfitrião fora dos três descarta as linhas marcadas (o `sessao-inicio` só passa um dos três).
+ */
+export function filtrarPorAnfitriao(regras, anfitriao) {
+  return regras.split('\n').flatMap((l) => {
+    const m = VARIANTE.exec(l);
+    if (!m) return [l];
+    return m[1].split(',').map((x) => x.trim()).includes(anfitriao) ? [l.replace(VARIANTE, '')] : [];
+  }).join('\n');
+}
 
 /** As marcas do resumo: [{ bloco, versao }] de cada regra coberta. */
 export function blocosQueCobrem(regras) {
@@ -35,7 +48,7 @@ export function resumoParaOProjeto(regras, cwd) {
   const linhas = regras.split('\n').flatMap((l) => {
     const m = MARCA.exec(l);
     if (m && versao(m[1]) >= Number(m[2])) { tiradas.push(/^- \*\*([^*]+?):?\*\*/.exec(l)?.[1] ?? m[1]); return []; }
-    return [l.replace(MARCA, '')];
+    return [l.replace(MARCA, '').replace(VARIANTE, '')];
   });
   if (tiradas.length) linhas.push(`- Estas regras do kit estão nos blocos \`kit:\` do CLAUDE.md deste projeto: ${tiradas.join('; ')}.`);
   return linhas.join('\n').trim();

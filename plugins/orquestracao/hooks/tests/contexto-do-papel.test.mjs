@@ -36,10 +36,11 @@ function transcript(base, { tokens, texto = 'feito', ferramentas = [], anterior 
   L.push(...extra);
   const f = join(base, 't.jsonl'); writeFileSync(f, L.map((x) => JSON.stringify(x)).join('\n') + '\n'); return f;
 }
-function rodar(base, quem, f, extra = {}) {
+// F443: o anfitrião é fixado por teste (KIT_ANFITRIAO): o padrão é o app, como antes, e o teste não herda os sinais de quem roda (o Orca).
+function rodar(base, quem, f, extra = {}, env = {}) {
   const out = execFileSync('node', [HOOK], {
     input: JSON.stringify({ session_id: ID[quem], transcript_path: f, hook_event_name: 'Stop', ...extra }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
-    env: { ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'), PAINEL_DIR: join(base, 'painel') },
+    env: { ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'), PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_HOST_SESSION_ID: '', ORCA_AGENT_SESSION_ID: '', ORCA_STRUCTURED_SESSION: '', KIT_ANFITRIAO: 'claude-desktop', ...env },
   });
   return out ? JSON.parse(out) : null;
 }
@@ -294,4 +295,54 @@ test('F420-6. o nível é por sessão: a ORQ em modo ausente não herda o aviso 
   ligar(b);
   cobrou(rodar(b, 'P', transcript(b, { tokens: 360_000 })), /360 mil/);
   cobrou(rodar(b, 'ORQ', transcript(b, { tokens: 360_000 })), /360 mil/);
+}));
+
+// ── F443: a cobrança pelo anfitrião (ADR 0030, item 4): nenhuma instrução impossível ─────────────────────────────────────────
+// No Orca a dona é achada pelo arquivo de orca-sessoes/ e pelo `donoLocalId` com o `orca_session_id:`; no terminal, pelo `local_`.
+const ORCA_ID = 'e953a7bc-918d-43c5-ba93-34016337a5f0';
+function comDonaDoOrca(b) {
+  mkdirSync(join(b, 'orq', 'orca-sessoes'), { recursive: true });
+  writeFileSync(join(b, 'orq', 'orca-sessoes', `${ORCA_ID}.json`), JSON.stringify({ orcaId: `orca_session_id:${ORCA_ID}`, cliAtual: ID.P, cliIds: [ID.P], terminal: 'term_1', enderecoDoSend: `orca_session_id:${ORCA_ID}`, cwd: b, em: new Date().toISOString() }));
+  writeFileSync(join(b, 'painel', 'fila', 'F7.json'), JSON.stringify({ id: 'F7', version: 1, data: { titulo: 'plano do editor', etapa: 'execucao', donoLocalId: `orca_session_id:${ORCA_ID}` } }));
+  return { ORCA_AGENT_SESSION_ID: ORCA_ID, ORCA_STRUCTURED_SESSION: '1', KIT_ANFITRIAO: '' };
+}
+const IMPOSSIVEL = /clear_session|get_usage|list_sessions|mcp__ccd_/;
+
+test('F443-1. no app a cobrança do teto segue pedindo clear_session "self" (como hoje)', () => com((b) => {
+  const r = rodar(b, 'P', transcript(b, { tokens: 510_000 }));
+  cobrou(r, /clear_session "self"/);
+}));
+test('F443-2. no orca a dona a 510 mil: a cobrança pede o handoff e o worker_done, sem ferramenta que não existe', () => com((b) => {
+  const env = comDonaDoOrca(b);
+  const r = rodar(b, 'P', transcript(b, { tokens: 510_000 }), {}, env);
+  cobrou(r, /510 mil/);
+  assert.match(r.reason, /handoff/);
+  assert.match(r.reason, /worker_done/);
+  assert.doesNotMatch(r.reason, IMPOSSIVEL);
+  assert.match(log(b), /\tcobrou-300\t/);
+}));
+test('F443-3. no orca a dona a 360 mil sem a linha de escape: a cobrança pede o handoff e o worker_done e mantém a linha `Contexto: sigo`', () => com((b) => {
+  const env = comDonaDoOrca(b);
+  const r = rodar(b, 'P', transcript(b, { tokens: 360_000 }), {}, env);
+  cobrou(r, /360 mil/);
+  assert.match(r.reason, /handoff/); assert.match(r.reason, /worker_done/); assert.match(r.reason, /Contexto: sigo/);
+  assert.doesNotMatch(r.reason, IMPOSSIVEL);
+}));
+test('F443-4. no orca a dona a 260 mil esperando resposta: a cobrança não manda limpar com ferramenta do app', () => com((b) => {
+  const env = comDonaDoOrca(b);
+  const r = rodar(b, 'P', transcript(b, { tokens: 260_000, texto: 'plano pronto.\n\nSigo para a execução?' }), {}, env);
+  cobrou(r, /260 mil/);
+  assert.doesNotMatch(r.reason, IMPOSSIVEL);
+}));
+test('F443-5. no terminal a cobrança pede o handoff e o /clear, sem ferramenta do app nem worker_done', () => com((b) => {
+  const r = rodar(b, 'P', transcript(b, { tokens: 510_000 }), {}, { KIT_ANFITRIAO: 'terminal' });
+  cobrou(r, /510 mil/);
+  assert.match(r.reason, /handoff/); assert.match(r.reason, /\/clear/);
+  assert.doesNotMatch(r.reason, IMPOSSIVEL); assert.doesNotMatch(r.reason, /worker_done/);
+}));
+test('F443-6. o handoff gravado na troca de sessão no orca não depende de clear_session: nada no turno satisfaz a cobrança do teto', () => com((b) => {
+  const env = comDonaDoOrca(b);
+  // chamar clear_session (que não existe lá) no turno não vale como limpeza; o teto cobra
+  const r = rodar(b, 'P', transcript(b, { tokens: 510_000, ferramentas: [LIMPA] }), {}, env);
+  cobrou(r, /510 mil/);
 }));

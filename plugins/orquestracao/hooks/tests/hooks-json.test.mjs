@@ -65,7 +65,7 @@ caso('todo script do hooks.json existe, e todo hook de hooks/ (fora os comuns) e
 // A1 (F51): o hook lê o painel real pelo id da sessão hospedeira; os casos antigos isolam HOME, PAINEL_DIR e esse id.
 const VAZIO = mkdtempSync(join(tmpdir(), 'sessao-inicio-vazio-'));
 process.on('exit', () => rmSync(VAZIO, { recursive: true, force: true }));
-const semPainel = (dir) => ({ ...process.env, HOME: dir, PAINEL_DIR: dir, CLAUDE_CODE_HOST_SESSION_ID: '' });
+const semPainel = (dir) => ({ ...process.env, HOME: dir, PAINEL_DIR: dir, CLAUDE_CODE_HOST_SESSION_ID: '', ORCA_AGENT_SESSION_ID: '', ORCA_STRUCTURED_SESSION: '', KIT_ANFITRIAO: 'claude-desktop' }); // F443: o resumo muda pelo anfitrião; este teste mede a variante do app
 caso('SessionStart injeta as regras globais (Q-ID, papéis e modelos, achar a orquestradora) e termina em 0', () => {
   const out = execFileSync('node', [join(HOOKS, 'sessao-inicio.mjs')], { input: JSON.stringify({ session_id: 'x', hook_event_name: 'SessionStart', source: 'startup' }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: semPainel(VAZIO) });
   const r = JSON.parse(out).hookSpecificOutput;
