@@ -850,7 +850,7 @@ const BATIDA_DECLARADA_MS = 25 * 60_000
 const SEM_ITEM_NO_TITULO = /^F\d+\s*·\s*/
 
 type Tom = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
-// O Badge só tem tom (5): o selo agrupa os estados por sentido, sem emoji e sem outro sinal de cor. Destaque anda (Executando, Planejando,
+// Só 5 tons: o selo agrupa os estados por sentido, sem emoji e sem outro sinal de cor. Destaque anda (Executando, Planejando,
 // No design, Validando, Mergeando); âmbar espera algo ou alguém (Espera você, PR aberto, Na fila); verde terminou; vermelho quebrou
 // ou travou; neutro está parado sem causa. O texto sempre diz o estado: a cor nunca é a única pista.
 export const SELOS: Record<string, { texto: string; tom: Tom }> = {
@@ -906,7 +906,16 @@ const vivasDe = (g: GrupoDeSessoes) => g.sessoes.filter((s) => s.estado !== 'ent
 
 function SeloDoEstado(props: { s: Sessao }) {
   const selo = seloDe(props.s)
-  return <Badge tone={selo.tom}>{selo.texto}</Badge>
+  // O Badge do Orca pinta cheio em neutral, accent e danger e só contorna success e warning: aqui todo selo é a mesma pílula
+  // (contorno + bolinha ● no tom do sentido + o texto). O Text não tem o tom neutral: o neutro usa a bolinha muted.
+  return (
+    <Box border="neutral" radius="full" paddingX="sm" shrink={false}>
+      <Row align="center" gap="xs">
+        {selo.tom === 'neutral' ? <Text size="xs" muted>●</Text> : <Text size="xs" tone={selo.tom}>●</Text>}
+        <Text size="xs" weight="semibold">{selo.texto}</Text>
+      </Row>
+    </Box>
+  )
 }
 
 function LinhaDoEstado(props: { s: Sessao }) {
