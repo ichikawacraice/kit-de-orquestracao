@@ -50,7 +50,9 @@ describe('workersDoOrca', () => {
         worker('/Users/x/orca/workspaces/kit/f1', 'retained'),
         worker('/Users/x/orca/workspaces/kit/f2', 'released'),
         worker('/Users/x/orca/workspaces/kit/f3', 'active'),
+        // despacho só de contexto (sem terminal): não tem processo; vivo só enquanto o estado não é final (medido em 06/11)
         { dispatchId: 'ctx_so', taskId: 't', state: 'succeeded', liveness: 'unverifiable', workspace: 'r::/Users/x/orca/workspaces/kit/f4' },
+        { dispatchId: 'ctx_so2', taskId: 't', state: 'running', liveness: 'unverifiable', workspace: 'r::/Users/x/orca/workspaces/kit/f5' },
       ]),
     });
     const r = workersDoOrca({ env: { ...process.env, ...o.env } });
@@ -59,7 +61,8 @@ describe('workersDoOrca', () => {
       ['/Users/x/orca/workspaces/kit/f1', true],
       ['/Users/x/orca/workspaces/kit/f2', false],
       ['/Users/x/orca/workspaces/kit/f3', true],
-      ['/Users/x/orca/workspaces/kit/f4', true],
+      ['/Users/x/orca/workspaces/kit/f4', false],
+      ['/Users/x/orca/workspaces/kit/f5', true],
     ]);
     assert.equal(r.workers[0].repoId, 'repo-uuid');
     assert.match(r.workers[0].terminal, /^structworker_/);
@@ -97,6 +100,11 @@ describe('vidaDoRegistro', () => {
   });
   it('encerrada só quando a lista mostra o terminal dela e todos liberados', () => {
     assert.equal(vidaDoRegistro(reg, lista(w('structworker_1', '/w/f1', false))), false);
+  });
+  it('a prova da morte ganha da pasta compartilhada: outro worker vivo na pasta-mãe não a ressuscita', () => {
+    // a prova de que a pasta compartilhada contaria: sem o terminal dela na lista, ela fica viva pela pasta
+    assert.equal(vidaDoRegistro(reg, lista(w('structworker_9', '/w', true))), true);
+    assert.equal(vidaDoRegistro(reg, lista(w('structworker_9', '/w', true), w('structworker_1', '/w/f1', false))), false);
   });
   it('fora da vista (null), nunca morta, sem a lista, com a lista com erro, sem registro ou sem o terminal na lista', () => {
     assert.equal(vidaDoRegistro(reg, null), null);

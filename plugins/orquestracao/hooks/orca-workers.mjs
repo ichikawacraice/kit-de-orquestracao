@@ -34,21 +34,26 @@ export function binarioDoOrca(env = process.env) {
 }
 
 const texto = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+// Estados finais do despacho. O despacho só de contexto (sem terminal) não tem processo dele: vivo só enquanto o estado não é
+// um destes (medido em 06/11: a linha `succeeded` sem terminal fica na lista para sempre, e nunca vira `released`).
+const ESTADOS_FINAIS = new Set(['succeeded', 'failed', 'cancelled', 'canceled', 'completed', 'done', 'expired']);
 
 function normalizar(w) {
   const ws = texto(w?.workspace);
   const i = ws ? ws.indexOf('::') : -1;
   const terminalState = texto(w?.terminalState);
+  const terminal = texto(w?.terminal);
+  const state = texto(w?.state);
   return {
-    terminal: texto(w?.terminal),
+    terminal,
     terminalState,
-    // vivo é tudo que não está `released`: na dúvida (sem o campo), conta como vivo
-    vivo: terminalState !== 'released',
+    // com terminal, vivo é tudo que não está `released` (na dúvida, sem o campo, conta como vivo); sem terminal, pelo estado
+    vivo: terminal || terminalState ? terminalState !== 'released' : !ESTADOS_FINAIS.has(String(state).toLowerCase()),
     pasta: ws ? (i >= 0 ? ws.slice(i + 2) : ws) || null : null,
     repoId: ws && i >= 0 ? ws.slice(0, i) || null : null,
     dispatchId: texto(w?.dispatchId),
     taskId: texto(w?.taskId),
-    state: texto(w?.state),
+    state,
     liveness: texto(w?.liveness),
   };
 }
@@ -98,14 +103,15 @@ export function dentroDe(cwd, pasta) {
 
 /**
  * A vida da sessão do Orca registrada em `orca-sessoes/` (`reg`: { terminal, cwd }), pela lista. true: há worker vivo com o
- * terminal dela, ou na pasta dela; false: a lista mostra o terminal dela e todas as linhas dele estão `released`; null: fora da
- * vista (sem a lista, lista com erro, sem registro, ou o terminal dela não está na lista). Nunca false sem a prova.
+ * terminal dela, ou (o terminal dela fora da lista) worker vivo cuja pasta contém o cwd dela; false: a lista mostra o terminal
+ * dela e todas as linhas dele estão `released` (a prova ganha da pasta compartilhada); null: fora da vista (sem a lista, lista
+ * com erro, sem registro, ou nem o terminal nem a pasta dela na lista). Nunca false sem a prova.
  */
 export function vidaDoRegistro(reg, lista) {
   if (!reg || !lista || lista.erro || !Array.isArray(lista.workers)) return null;
   const meus = reg.terminal ? lista.workers.filter((w) => w.terminal === reg.terminal) : [];
   if (meus.some((w) => w.vivo)) return true;
+  if (meus.length) return false; // todas as linhas do terminal dela liberadas
   if (texto(reg.cwd) && lista.workers.some((w) => w.vivo && dentroDe(reg.cwd, w.pasta))) return true;
-  if (meus.length && meus.every((w) => !w.vivo)) return false;
   return null;
 }

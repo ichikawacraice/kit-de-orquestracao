@@ -30,7 +30,7 @@ afterEach(() => { rmSync(base, { recursive: true, force: true }); });
 function painel(args) {
   const r = spawnSync('node', [PAINEL, ...args], {
     encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', cwd: repo,
-    env: { ...process.env, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'appsess'), KIT_CARGA_1MIN: '0', KIT_NUCLEOS_DIR: join(base, 'nuc'), KIT_NUCLEOS_DE_TESTE: '4' },
+    env: { ...process.env, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'appsess'), KIT_CARGA_1MIN: '0', KIT_NUCLEOS_DIR: join(base, 'nuc'), KIT_NUCLEOS_DE_TESTE: '4', KIT_ORCA_BIN: 'off' }, // F444: nunca o orca real
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr, json: () => JSON.parse(r.stdout) };

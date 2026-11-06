@@ -987,6 +987,20 @@ describe('F444: critério 11, sessão do Orca', () => {
     assert.ok(existsSync(viva) && existsSync(fora), 'o da sessão viva e o da que a lista não mostra ficam');
     assert.match(ap.stdout + readFileSync(join(env.saida, 'historico.log'), 'utf8'), /orca-sessoes=1/);
   });
+  it('registro regravado no meio da rodada (terminal novo) não sai: o limpador reconfere o arquivo antes de apagar', () => {
+    const env = ambiente();
+    novoWt(env, 'base'); // a worktree removível faz a rodada reler a lista antes de remover
+    const arq = regDoOrca(env, 'fim', { cwd: join(env.T, 'wt-fim'), terminal: 'structworker_fim' });
+    const regravado = JSON.stringify({ ...JSON.parse(readFileSync(arq, 'utf8')), terminal: 'structworker_novo' });
+    const liberado = worker(join(env.T, 'wt-fim'), 'released', { terminal: 'structworker_fim' });
+    env.orca = orcaFalso([{ '': recibo([liberado]) }, { '': { ...recibo([liberado]), escrever: { arquivo: arq, conteudo: regravado } } }]);
+    const ap = rodar(env, ['--aplicar']);
+    assert.equal(ap.status, 0, ap.stdout + ap.stderr);
+    assert.equal(env.orca.chamadas().length, 2, 'precondição: a lista foi relida (e o arquivo regravado) antes do passo dos registros');
+    assert.ok(existsSync(arq), 'o registro regravado fica');
+    assert.equal(readFileSync(arq, 'utf8'), regravado);
+    assert.deepEqual(ap.json.orcaSessoes.apagados, []);
+  });
   it('sem a lista (orca ausente), nenhum registro sai', () => {
     const env = ambiente();
     const arq = regDoOrca(env, 'fim', { cwd: join(env.T, 'wt-fim'), terminal: 'structworker_fim' });

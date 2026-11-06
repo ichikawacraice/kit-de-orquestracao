@@ -17,7 +17,11 @@ const paginas = Array.isArray(todas) ? todas[Math.min(n, todas.length) - 1] : to
 const i = process.argv.indexOf('--cursor');
 const r = paginas[i >= 0 ? process.argv[i + 1] : ''];
 if (!r) { process.stderr.write('cursor desconhecido'); process.exitCode = 3; }
-else { process.stdout.write(typeof r.stdout === 'string' ? r.stdout : JSON.stringify(r.stdout)); process.exitCode = r.exit || 0; }
+else {
+  // escrever: o falso grava um arquivo ao responder (o teste simula algo que muda no meio da rodada)
+  if (r.escrever) fs.writeFileSync(r.escrever.arquivo, r.escrever.conteudo);
+  process.stdout.write(typeof r.stdout === 'string' ? r.stdout : JSON.stringify(r.stdout)); process.exitCode = r.exit || 0;
+}
 `;
 
 /**

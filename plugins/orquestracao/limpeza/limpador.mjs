@@ -190,10 +190,10 @@ function lerOrca() {
   }
   for (const n of nomes) {
     const arquivo = join(ORCA_SESSOES, n);
-    let reg;
-    try { reg = JSON.parse(readFileSync(arquivo, 'utf8')); } catch (e) { throw new FalhaFechada(`registro de orca-sessoes ilegível: ${arquivo} (${e.message})`); }
+    let bruto; let reg;
+    try { bruto = readFileSync(arquivo, 'utf8'); reg = JSON.parse(bruto); } catch (e) { throw new FalhaFechada(`registro de orca-sessoes ilegível: ${arquivo} (${e.message})`); }
     if (!reg || typeof reg !== 'object') throw new FalhaFechada(`registro de orca-sessoes ilegível: ${arquivo} (não é um objeto)`);
-    registros.push({ arquivo, reg });
+    registros.push({ arquivo, reg, bruto });
   }
   return { lista, registros };
 }
@@ -208,10 +208,14 @@ function c11(wt, orca) {
 }
 function passoOrcaSessoes(orca, aplicar, rel) {
   if (!orca.lista) return;
-  for (const { arquivo, reg } of orca.registros) {
+  for (const { arquivo, reg, bruto } of orca.registros) {
     if (vidaDoRegistro(reg, orca.lista) !== false) continue;
     const item = { arquivo, orcaId: reg.orcaId ?? null, cwd: reg.cwd ?? null };
     if (!aplicar) { rel.orcaSessoes.seriamApagados.push(item); continue; }
+    // a lista tem a idade da rodada: o arquivo que mudou desde a leitura (a sessão regravou o registro) fica para a próxima
+    let agoraBruto = null;
+    try { agoraBruto = readFileSync(arquivo, 'utf8'); } catch { /* sumiu: nada a apagar */ }
+    if (agoraBruto !== bruto) continue;
     try { rmSync(arquivo); rel.orcaSessoes.apagados.push(item); } catch (e) { rel.erros.push({ caminho: arquivo, mensagem: `orca-sessoes: não consegui apagar: ${e.message}` }); }
   }
 }
