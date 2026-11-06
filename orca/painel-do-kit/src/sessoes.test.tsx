@@ -58,6 +58,23 @@ async function montar(ler: () => Leitura) {
   }
   return { v, nos, doCartao, caixaDo }
 }
+/** O selo do cartão: a pílula (Box) com a bolinha ● e o texto do estado. `tom` é o do Text da bolinha; `forma` é o caminho dela sem a chave do cartão. */
+const BOLINHA = '●'
+/** O Text não tem o tom `neutral`: o selo neutro usa `muted`. */
+const TOM_DO_TEXTO: Record<string, string> = { neutral: 'muted', accent: 'accent', success: 'success', warning: 'warning', danger: 'danger' }
+function seloDoCartao(doCartao: (item: string, q: Record<string, unknown>) => No[], item: string) {
+  const bolinhas = doCartao(item, { type: 'Text', text: BOLINHA })
+  assert.equal(bolinhas.length, 1, `${item}: uma bolinha no selo`)
+  const { tone, muted, ...bolinha } = bolinhas[0].props
+  // A pílula é o Box mais fundo que contém a bolinha; o rótulo é o Text do estado ao lado dela.
+  const caixas = doCartao(item, { type: 'Box' }).filter((b) => bolinhas[0].path.startsWith(`${b.path}/`))
+  const pilula = caixas.sort((a, b) => b.path.length - a.path.length)[0]
+  assert.ok(pilula, `${item}: a bolinha está dentro de uma pílula`)
+  const rotulo = doCartao(item, { type: 'Text' }).find((t) => t.text !== BOLINHA && t.path.startsWith(pilula.path.replace(/\/[^/]*$/, '')) && t.path.startsWith(`${pilula.path}/`))
+  assert.ok(rotulo, `${item}: o rótulo está dentro da pílula`)
+  const props = JSON.stringify({ pilula: pilula.props, bolinha, rotulo: rotulo.props })
+  return { tom: muted ? 'muted' : tone ?? null, props, forma: bolinhas[0].path.replace(`.s-${item}:s-${item}`, '') }
+}
 const semErros = (v: { errors: unknown[]; warnings: unknown[]; refusals: unknown[] }) => {
   assert.deepEqual(v.errors, [])
   assert.deepEqual(v.warnings, [])
@@ -125,13 +142,12 @@ teste('cada estado tem o seu selo, o seu tom e a sua frase; nenhum cartão tem b
   ]
   const { v, doCartao, caixaDo } = await montar(() => leitura(vista([grupo('kit', casos.map((c) => c[0]))])))
   for (const [s, texto, tom, frase] of casos) {
-    const selos = doCartao(s.item, { type: 'Badge' })
-    assert.equal(selos.length, 1, `${s.item}: um selo`)
-    assert.equal(selos[0].text, texto, `${s.item}: o texto do selo é só o estado, sem emoji`)
-    assert.equal(selos[0].props.tone, tom, `${s.item}: o tom do selo`)
+    assert.equal(doCartao(s.item, { type: 'Badge' }).length, 0, `${s.item}: o selo não é Badge (o Badge pinta cheio em 3 dos 5 tons)`)
+    assert.equal(doCartao(s.item, { text: texto }).length, 1, `${s.item}: o texto do selo é só o estado, sem emoji`)
+    assert.equal(seloDoCartao(doCartao, s.item).tom, TOM_DO_TEXTO[tom], `${s.item}: o tom da bolinha`)
     if (frase) assert.equal(doCartao(s.item, { text: frase }).length, 1, `${s.item}: a frase "${frase}"`)
     // Sem nota nem motivo, a frase não repete o selo: a linha fica só com o selo e o tempo.
-    else assert.deepEqual(doCartao(s.item, { type: 'Text' }).map((t) => t.text), [s.nome, 'há 12 min'], `${s.item}: sem frase`)
+    else assert.deepEqual(doCartao(s.item, { type: 'Text' }).map((t) => t.text), [s.nome, BOLINHA, texto, 'há 12 min'], `${s.item}: sem frase`)
     const caixa = caixaDo(s.item)
     assert.equal(caixa?.props?.border, true, `${s.item}: a borda é a comum: o selo já diz a cor`)
     assert.equal(doCartao(s.item, { type: 'Spinner' }).length, s.estado === 'mergeando' ? 1 : 0, `${s.item}: o Spinner`)
@@ -175,6 +191,46 @@ teste('o mapa selo × tom cobre todo estado do núcleo e usa só os 5 tons do Or
   assert.deepEqual(porTom('danger'), ['falhou', 'gate-vermelho', 'travada'])
   assert.deepEqual(porTom('neutral'), ['sem-dona', 'sem-movimento'])
   assert.ok(Object.values(SELOS).every((v) => !/\p{Extended_Pictographic}/u.test(v.texto)), 'sem emoji no selo')
+})
+
+teste('todo selo passa pelo mesmo desenho: pílula com contorno, bolinha no tom do sentido e o texto; só o tom muda', async () => {
+  const chaves = Object.keys(SELOS)
+  const sessoes = chaves.map((chave, i) => {
+    const base = { estado: 'trabalhando', subEtapa: null } as Partial<Sessao>
+    const porChave: Record<string, Partial<Sessao>> = {
+      esperando: { estado: 'parada', tipoDeParada: 'esperando' }, travada: { estado: 'parada', tipoDeParada: 'travada' },
+      'gate-vermelho': { estado: 'parada', tipoDeParada: 'gate-vermelho' }, 'sem-movimento': { estado: 'parada', tipoDeParada: 'sem-movimento' },
+      falhou: { estado: 'parada', tipoDeParada: 'falhou' }, 'sem-dona': { estado: 'parada', tipoDeParada: 'sem-dona' },
+      mergeando: { estado: 'mergeando' }, 'na-fila': { estado: 'na-fila', foraDaFila: false }, 'pr-aberto': { estado: 'na-fila', foraDaFila: true },
+      validando: { estado: 'validando' }, planejamento: { subEtapa: 'planejamento' }, design: { subEtapa: 'design' }, execucao: { subEtapa: 'execucao' },
+      entregue: { estado: 'entregue' },
+    }
+    return sessao(`F${i + 1}`, { ...base, ...porChave[chave] })
+  })
+  assert.ok(chaves.length >= 14, 'o mapa tem os selos: sem eles o teste não mede nada')
+  sessoes.forEach((s, i) => assert.equal(chaveDoSelo(s), chaves[i], `${s.item}: a sessão de teste cai no selo ${chaves[i]}`))
+  const { v, doCartao } = await montar(() => leitura(vista([grupo('kit', sessoes)])))
+  const formas = new Set<string>()
+  const desenhos = new Set<string>()
+  const tons = new Set<string>()
+  chaves.forEach((chave, i) => {
+    if (chave === 'entregue') return // o entregue mora na seção recolhida "Entregues hoje": não tem cartão aberto
+    const item = sessoes[i].item
+    const { tom, forma, props } = seloDoCartao(doCartao, item)
+    formas.add(forma)
+    desenhos.add(props)
+    tons.add(String(tom))
+    assert.equal(tom, TOM_DO_TEXTO[SELOS[chave].tom], `${chave}: a bolinha leva o tom do sentido`)
+    assert.equal(doCartao(item, { type: 'Badge' }).length, 0, `${chave}: nenhum Badge no cartão`)
+    assert.equal(doCartao(item, { text: SELOS[chave].texto }).length, 1, `${chave}: o texto diz o estado`)
+  })
+  assert.equal(formas.size, 1, `um desenho só: ${[...formas].join(' | ')}`)
+  assert.deepEqual([...tons].sort(), ['accent', 'danger', 'muted', 'warning'], 'os sentidos dos cartões abertos aparecem (o verde é só do Entregue, recolhido)')
+  assert.equal(desenhos.size, 1, `as props da pílula, da bolinha (sem o tom) e do rótulo são as mesmas em todo selo: ${[...desenhos].join(' | ')}`)
+  const [{ pilula }] = [...desenhos].map((d) => JSON.parse(d))
+  assert.equal(pilula.border, 'neutral', 'a pílula tem contorno')
+  assert.equal(pilula.radius, 'full', 'a pílula tem cantos redondos')
+  semErros(v)
 })
 
 teste('abrir mostra o nome inteiro e os blocos; continua aberto depois de uma releitura que muda o estado e a ordem', async () => {
@@ -342,7 +398,7 @@ teste('a fila de merge ilegível num projeto: a linha sob o cabeçalho e o cart�
   const s = sessao('F439', { estado: 'na-fila', prNaFila: 173, foraDaFila: true, etapa: 'merge' })
   const { v, doCartao } = await montar(() => leitura(vista([grupo('kit', [s], { filaIlegivel: true }), grupo('izanagi', [sessao('F1')])])))
   assert.equal(v.findAll({ text: 'Não li a fila de merge deste projeto.' }).length, 1)
-  assert.equal(doCartao('F439', { type: 'Badge' })[0].text, 'PR aberto')
+  assert.equal(doCartao('F439', { text: 'PR aberto' }).length, 1)
   semErros(v)
 })
 
