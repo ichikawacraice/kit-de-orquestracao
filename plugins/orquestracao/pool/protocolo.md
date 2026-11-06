@@ -106,13 +106,13 @@ Abaixo, `main` é a branch de produção e `develop` a de integração (os nomes
 
 <a id="teto-de-donas"></a>
 ## Quantas donas ao mesmo tempo
-- **No máximo 4 donas trabalhando** por projeto (`KIT_TETO_DE_DONAS`, padrão 4), **3 com a máquina cheia** ([teto de núcleos](#teto-de-nucleos)). Conta o item com dona ou `com` em `planejamento`, `design`, `execucao` ou `validacao`; `merge` não conta. Item além do teto espera na fila sem pedir sessão.
+- **Não há teto de donas trabalhando** ([ADR 0033](../../../docs/adr/0033-sem-teto-de-donas-simultaneas.md)). O limite de concorrência é o dos **testes**: o [teto de núcleos](#teto-de-nucleos), que faz o teste esperar a ficha. A orquestradora pode manter dona em espera ou parada sem contá-la contra nada; `KIT_TETO_DE_DONAS`, se alguém a definiu, é ignorada sem erro.
 - **Despacho por evento:** a orquestradora abre a dona quando o item nasce e quando uma dona termina (o recado `PR N pronto` e o item devolvido são os eventos).
 
 <a id="sem-dona"></a>
 ## Item sem dona
 - Item numa etapa de trabalho **sem dona e sem ninguém no `com`**, sem `espera` nem `trava`, está *sem dona* desde que entrou na etapa (`painel list fila sem-dona`).
-- **A cobrança:** o ritual da orquestradora (`orquestradora-ritual.mjs`) recusa o fim do turno com item sem dona há `ESPERA_MIN` (padrão 5) minutos, abaixo do teto de donas, sem `start_session` no turno; gravar o dono ou mandar mensagem que o cite também satisfaz. Com o modo ausente ligado não se cobra. O pane tem o botão "Pedir dona" ([a regra e o pedido](referencia.md#sem-dona)).
+- **A cobrança:** o ritual da orquestradora (`orquestradora-ritual.mjs`) recusa o fim do turno com item sem dona há `ESPERA_MIN` (padrão 5) minutos, sem `start_session` no turno; gravar o dono ou mandar mensagem que o cite também satisfaz. Com o modo ausente ligado não se cobra. O pane tem o botão "Pedir dona" ([a regra e o pedido](referencia.md#sem-dona)).
 
 <a id="a-fila"></a>
 ## A fila
@@ -151,7 +151,7 @@ A limpeza apaga a lembrança, não as perguntas: elas ficam no painel com `sessa
 ## Teto de núcleos da máquina
 - **O teto soma tudo:** todo teste de todas as sessões e projetos da máquina divide um teto de núcleos, uma **ficha** por núcleo em `~/.claude/orquestracao/nucleos-de-teste/` (`KIT_NUCLEOS_DIR` troca a pasta, para os testes). O teto é 2/3 dos núcleos por padrão (`KIT_NUCLEOS_DE_TESTE` absoluto, `KIT_FRACAO_DE_TESTE`); o gate usa a faixa de 70% dele (`KIT_FRACAO_DO_GATE`), e **um gate por vez na máquina** (a vez em `<pasta>/gate`) ([faixas e configuração](referencia.md#teto-de-nucleos)).
 - **Três caminhos para rodar teste, e só eles:** `npm test` (o gate), `npm test <pacote>` (o gate pela fila do conserto) e `node scripts/kit/com-fichas.mjs -- <comando>` (teste isolado: toma as fichas, troca `{fichas}` nos argumentos e passa `KIT_FICHAS_TOMADAS` ao filho). A guarda **recusa** (`deny`, também em bypass) `vitest`, `node --test` e `jest` chamados direto fora do CI.
-- **Máquina cheia:** o teto de donas cai para 3 ([quantas donas](#teto-de-donas)). No modo ausente nada afrouxa, e ninguém pergunta nada ao operador sobre o teto.
+- **Máquina cheia:** o teste espera a ficha ([ADR 0005](../../../docs/adr/0005-os-testes-da-maquina-dividem-um-teto-de-nucleos.md)); a máquina cheia não baixa mais o número de donas ([quantas donas](#teto-de-donas)). No modo ausente nada afrouxa, e ninguém pergunta nada ao operador sobre o teto.
 
 <a id="analise-do-pedido"></a>
 ## O pedido é ponto de partida, não ordem

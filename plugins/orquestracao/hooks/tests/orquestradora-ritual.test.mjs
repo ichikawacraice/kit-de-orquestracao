@@ -64,7 +64,7 @@ test('projeto que não resolve não cobra; stop_hook_active não prende em laço
   assert.equal(cenario({ bandeira: off() }).rodar({ stop_hook_active: true }), '');
 });
 
-// O ritual cobra abrir a sessão dona do item sem dona, até o teto de donas trabalhando, junto das outras razões.
+// O ritual cobra abrir a sessão dona do item sem dona (sem teto de donas, ADR 0033), junto das outras razões.
 {
 const SID = 'cli-orq';
 let base; let repoA; let repoB;
@@ -127,33 +127,33 @@ function rodar(ferramentas, { extra = {}, env = {}, orca = false } = {}) {
   return r.stdout ? JSON.parse(r.stdout) : null;
 }
 
-test('(dona-1) item sem dona há 10 min: pede abrir a dona com a conta do teto; start_session, gravar o dono ou citar o item satisfaz', () => {
+test('(dona-1) item sem dona há 10 min: pede abrir a dona; start_session, gravar o dono ou citar o item satisfaz', () => {
   semDona('F7');
   const r = rodar([LIST, GRAVA]);
   assert.equal(r?.decision, 'block');
-  assert.match(r.reason, /F7 sem dona há 10 min \(0 de 4 donas trabalhando\): abra a sessão dona/);
+  assert.match(r.reason, /F7 sem dona há 10 min: abra a sessão dona/);
   assert.match(r.reason, /protocolo\.md#sem-dona/);
   assert.equal(rodar([LIST, GRAVA, START]), null);
   assert.equal(rodar([LIST, GRAVA, DONO('F7')]), null);
   assert.equal(rodar([LIST, GRAVA, MSG('F7')]), null);
   assert.equal(rodar([LIST, GRAVA, DONO('F8')])?.decision, 'block', 'gravar o dono de outro item não satisfaz');
 });
-test('(dona-2) teto: com 4 donas trabalhando o item sem dona espera calado; com 3, cobra; a máquina cheia baixa o teto a 3', () => {
-  for (const F of ['F1', 'F2', 'F3']) comDona(F);
+test('(dona-2) sem teto: com 4 ou mais donas trabalhando o item sem dona é cobrado; KIT_TETO_DE_DONAS e a máquina cheia não mudam nada', () => {
+  for (const F of ['F1', 'F2', 'F3', 'F4', 'F5']) comDona(F);
   semDona('F9');
-  assert.match(rodar([LIST, GRAVA])?.reason ?? '', /3 de 4 donas/, 'prova: abaixo do teto cobra');
-  comDona('F4');
-  assert.equal(rodar([LIST, GRAVA]), null);
-  assert.equal(rodar([LIST, GRAVA], { env: { KIT_TETO_DE_DONAS: '5' } })?.decision, 'block', 'prova: teto 5 cobra');
-  assert.equal(rodar([LIST, GRAVA], { env: { KIT_TETO_DE_DONAS: '5', KIT_CARGA_1MIN: '999' } }), null, 'cheia: teto 3');
+  const r = rodar([LIST, GRAVA]);
+  assert.equal(r?.decision, 'block', 'prova: cinco donas e o item sem dona é cobrado');
+  assert.match(r.reason, /F9 sem dona há 10 min: abra/);
+  assert.doesNotMatch(r.reason, /donas trabalhando/, 'sem a conta do teto');
+  assert.match(rodar([LIST, GRAVA], { env: { KIT_TETO_DE_DONAS: '2' } })?.reason ?? '', /F9 sem dona/, 'variável antiga ignorada, sem erro');
+  assert.match(rodar([LIST, GRAVA], { env: { KIT_TETO_DE_DONAS: 'lixo', KIT_CARGA_1MIN: '999' } })?.reason ?? '', /F9 sem dona/, 'máquina cheia não baixa mais nada');
 });
-test('(dona-3) item em merge não conta para o teto; a cobrança respeita a vaga que sobra', () => {
+test('(dona-3) todo item sem dona é cobrado, não só os que cabem numa vaga', () => {
   for (const F of ['F1', 'F2', 'F3']) comDona(F);
   comDona('F4', { etapa: 'merge' });
   semDona('F8'); semDona('F9');
   const r = rodar([LIST, GRAVA]);
-  assert.match(r?.reason ?? '', /3 de 4 donas/);
-  assert.equal((r.reason.match(/sem dona há/g) ?? []).length, 1, 'uma vaga, uma cobrança');
+  assert.equal((r?.reason.match(/sem dona há/g) ?? []).length, 2, 'dois itens, duas cobranças');
 });
 test('(dona-4) não cobra: menos de ESPERA_MIN, outro projeto, espera ou trava, modo ausente ligado', () => {
   semDona('F7', { historico: [{ em: minAtras(2), etapa: 'planejamento', dono: null }] });
@@ -215,15 +215,14 @@ test('(dona-5) F218: com cartão de sessão dona esperando o clique, não cobra 
   cartao('F7', 13 * 60);
   assert.equal(rodar([LIST, GRAVA])?.decision, 'block', 'cartão de 13 h venceu');
 });
-test('(dona-6) F218: o item com cartão esperando o clique ocupa a vaga dele no teto de donas', () => {
+test('(dona-6) F218: o item com cartão esperando o clique não é cobrado de novo; o outro item sem dona é', () => {
   for (const F of ['F1', 'F2', 'F3']) comDona(F);
   semDona('F7'); semDona('F8');
   mkdirSync(join(base, 'painel', 'cartoes'), { recursive: true });
   writeFileSync(join(base, 'painel', 'cartoes', 'task_x.json'), JSON.stringify({ id: 'task_x', version: 1, data: { projeto: 'proj-a', apelido: 'dona', papel: 'dona', itens: ['F7'], orquestradoraId: 'local_ORQ', propostoEm: minAtras(5) } }));
-  assert.equal(rodar([LIST, GRAVA]), null, '3 trabalhando + 1 a caminho = teto 4: o F8 espera');
-  const r = rodar([LIST, GRAVA], { env: { KIT_TETO_DE_DONAS: '5' } });
-  assert.match(r?.reason ?? '', /F8 sem dona há 10 min \(3 de 5 donas trabalhando, 1 a caminho\)/, 'prova: com vaga, cobra o F8 e conta o F7 a caminho');
-  assert.doesNotMatch(r.reason, /F7 sem dona/);
+  const r = rodar([LIST, GRAVA]);
+  assert.match(r?.reason ?? '', /F8 sem dona há 10 min/, 'prova: cobra o F8');
+  assert.doesNotMatch(r.reason, /F7 sem dona/, 'o F7 já tem cartão esperando o clique');
 });
 
 // F447 (ADR 0030, item 7): a orquestradora no Orca. O turno começa no `turnOrigin` (o Orca não grava `origin`), a dona abre por
@@ -234,7 +233,7 @@ test('(orca-1) no Orca o turno sem `origin` é lido: o item sem dona é cobrado 
   semDona('F7');
   const r = rodar([], { orca: true });
   assert.equal(r?.decision, 'block', 'o turno do Orca (turnOrigin) conta como turno');
-  assert.match(r.reason, /F7 sem dona há 10 min \(0 de 4 donas trabalhando\)/);
+  assert.match(r.reason, /F7 sem dona há 10 min: abra/);
   assert.match(r.reason, /orca orchestration worker-start/);
   assert.match(r.reason, /anfitriao-orca\.md/);
   assert.doesNotMatch(r.reason, /start_session|cartão/);

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { semDona, donaACaminho, donaTrabalhando, tetoDeDonas, ETAPAS_DE_TRABALHO } from '../sem-dona.mjs';
+import * as semDonaMod from '../sem-dona.mjs';
+import { semDona, donaACaminho, ETAPAS_DE_TRABALHO } from '../sem-dona.mjs';
 import { CASOS, CASOS_A_CAMINHO, AGORA } from './sem-dona.casos.mjs';
 
 test('semDona responde à tabela inteira', () => {
@@ -18,22 +19,11 @@ test('ETAPAS_DE_TRABALHO são as quatro etapas em que alguém trabalha', () => {
   assert.deepEqual(ETAPAS_DE_TRABALHO, ['planejamento', 'design', 'execucao', 'validacao']);
 });
 
-test('donaTrabalhando conta dona ou com em etapa de trabalho, nunca merge nem final', () => {
-  assert.equal(donaTrabalhando({ etapa: 'execucao', donoLocalId: 'local_a' }), true);
-  assert.equal(donaTrabalhando({ etapa: 'design', com: [{ localId: 'local_a' }] }), true);
-  assert.equal(donaTrabalhando({ etapa: 'execucao', com: [] }), false);
-  assert.equal(donaTrabalhando({ etapa: 'merge', donoLocalId: 'local_a' }), false);
-  assert.equal(donaTrabalhando({ etapa: 'feito', donoLocalId: 'local_a' }), false);
-  assert.equal(donaTrabalhando(null), false);
+test('ADR 0033: o teto de donas não existe mais no módulo', () => {
+  assert.ok(Object.keys(semDonaMod).length > 0, 'prova: o módulo exporta algo');
+  assert.equal(semDonaMod.tetoDeDonas, undefined);
+  assert.equal(semDonaMod.donaTrabalhando, undefined);
 });
-
-test('tetoDeDonas: KIT_TETO_DE_DONAS inteiro positivo, senão 4', () => {
-  assert.equal(tetoDeDonas({}), 4);
-  assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: '2' }), 2);
-  assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: '0' }), 4);
-  assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: 'x' }), 4);
-});
-
 test('donaACaminho responde à tabela inteira (F218)', () => {
   assert.ok(CASOS_A_CAMINHO.some((c) => c.esperado) && CASOS_A_CAMINHO.some((c) => !c.esperado), 'a tabela precisa dos dois desfechos');
   for (const c of CASOS_A_CAMINHO) assert.equal(donaACaminho(c.F, c.data, { cartoes: c.cartoes, agoraMs: AGORA }), c.esperado, c.nome);

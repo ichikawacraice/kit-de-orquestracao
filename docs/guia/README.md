@@ -15,7 +15,7 @@ Para quem vai usar o kit num projeto e nunca o viu. Comece pelo primeiro dia; as
 ## O kit em um minuto
 
 - **Você conversa com uma sessão só, a orquestradora.** Pede o trabalho a ela em palavras suas; ela registra um item (`F12`), abre uma sessão dona para ele e cuida do merge.
-- **A dona faz o item inteiro:** mede, decide, escreve, testa, pede revisão a um subagente de contexto limpo e abre o PR. Até 4 donas trabalham ao mesmo tempo (3 com a máquina cheia).
+- **A dona faz o item inteiro:** mede, decide, escreve, testa, pede revisão a um subagente de contexto limpo e abre o PR. Não há teto de donas ao mesmo tempo: o limite é o dos testes.
 - **A fila de merge** junta os PRs prontos, roda os testes completos uma vez sobre a combinação e mergeia o que passou. O que conflitou ou ficou vermelho volta para a dona.
 - **Tudo o que precisa de você chega com um ID (`Q12`),** com o caso, o que acontece se você não decidir e a recomendação. Você responde no chat ("Q12 sim") ou no botão do painel.
 - **As regras que não podem depender de memória são travas** (hooks): a orquestradora não edita código, subagente não edita, segredo não sai para outra sessão, teste não roda fora do teto de núcleos, e assim por diante. [O que ligar e desligar](ligar-e-desligar.md) lista todas.

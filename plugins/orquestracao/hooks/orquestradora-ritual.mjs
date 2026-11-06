@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Stop hook: numa sessão orquestradora, o turno só termina depois do que a batida não resolve: o item sem dona (abrir a sessão
-// dona, até o teto de donas trabalhando), o resumo do modo ausente e a batida parada. O estado mecânico das sessões e o item
+// dona), o resumo do modo ausente e a batida parada. O estado mecânico das sessões e o item
 // parado são da batida (mod painel-sessoes); a orquestradora só lê o relatório dela.
 // O resumo do modo ausente: havendo período desligado (≤ 7 dias) sem entrega registrada para o projeto
 // (skills/orquestradora/scripts/ausencia.mjs, seção `resumo-da-ausencia`).
-// O teto: `KIT_TETO_DE_DONAS` (padrão 4), 3 com a máquina cheia; acima dele o item espera sem cobrança.
+// Não há teto de donas (ADR 0033): o limite de concorrência é o dos testes (teto de núcleos). `KIT_TETO_DE_DONAS` é ignorada.
 // A sessão é orquestradora quando existe ~/.claude/orquestracao/ativas/<session_id>.
 // F447 (ADR 0030, item 7): no Orca o turno começa no `turnOrigin` (o Orca não grava `origin`), a dona abre por
 // `orca orchestration worker-start` (sem `--terminal`, que é a devolução) e o `orca orchestration send` que cita o item vale como a
@@ -15,8 +15,8 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BASE, modoAusente } from './hooks-crewai-comum.mjs';
-import { semDona, donaACaminho, tetoDeDonas, donaTrabalhando } from './sem-dona.mjs';
-import { filaDir, maquinaCheia } from './pool-comum.mjs';
+import { semDona, donaACaminho } from './sem-dona.mjs';
+import { filaDir } from './pool-comum.mjs';
 import { pendente, projetoDoRepo } from '../skills/orquestradora/scripts/ausencia.mjs';
 import { anfitriao } from './anfitriao.mjs';
 import { invocacoesDoOrca } from './trava-do-orca.mjs';
@@ -39,7 +39,7 @@ function cartoes() {
 }
 
 // Itens do projeto da orquestradora sem dona há ESPERA_MIN ou mais, menos os que já têm a dona a caminho (cartão esperando o
-// clique), que só contam para o teto: cobrar de novo abre a segunda dona do item (F218). → { itens, aCaminho }
+// clique): cobrar de novo abre a segunda dona do item (F218). → { itens, aCaminho }
 function itensSemDona(nomeProjeto) {
   const dir = filaDir();
   if (!nomeProjeto || !existsSync(dir)) return { itens: [], aCaminho: 0 };
@@ -62,38 +62,18 @@ function itensSemDona(nomeProjeto) {
   return { itens, aCaminho };
 }
 
-// Donas trabalhando agora no projeto (item com dona ou `com` numa etapa de trabalho; `merge` não conta).
-function donasTrabalhando(nomeProjeto) {
-  const dir = filaDir();
-  if (!nomeProjeto || !existsSync(dir)) return 0;
-  let n = 0;
-  for (const nome of readdirSync(dir)) {
-    if (!nome.endsWith('.json')) continue;
-    try {
-      const d = JSON.parse(readFileSync(join(dir, nome), 'utf8'))?.data;
-      if (String(d?.projeto ?? '').toLowerCase() === nomeProjeto && donaTrabalhando(d)) n++;
-    } catch { /* item ilegível: ignora */ }
-  }
-  return n;
-}
-
-// O item sem dona pede a sessão dona, até o teto de donas trabalhando; acima do teto, espera sem cobrança. Satisfaz: um
-// `start_session` no turno, o modo ausente ligado (ninguém para abrir), gravar o dono do item ou mandar mensagem que o cite.
+// O item sem dona pede a sessão dona, sem teto. Satisfaz: um `start_session` no turno, o modo ausente ligado (ninguém para
+// abrir), gravar o dono do item ou mandar mensagem que o cite. O item com cartão esperando o clique já tem dona a caminho.
 function cobrancaDeDona(nomeProjeto, comandos, usadas, mensagens, noOrca) {
-  const { itens, aCaminho } = itensSemDona(nomeProjeto);
+  const { itens } = itensSemDona(nomeProjeto);
   if (itens.length === 0) return [];
   if ([...usadas].some((n) => n.endsWith('start_session')) || modoAusente()) return [];
-  const teto = maquinaCheia().cheia ? Math.min(3, tetoDeDonas()) : tetoDeDonas();
-  // a dona a caminho (cartão esperando o clique) já ocupa a vaga dela no teto
-  const ocupadas = donasTrabalhando(nomeProjeto) + aCaminho;
-  if (ocupadas >= teto) return [];
-  const conta = aCaminho > 0 ? `${ocupadas - aCaminho} de ${teto} donas trabalhando, ${aCaminho} a caminho` : `${ocupadas} de ${teto} donas trabalhando`;
   const cita = (id, x) => new RegExp(`\\b${id}\\b`).test(x);
   const faltam = itens.filter((it) => !comandos.some((c) => cita(it.id, c) && /donoLocalId/.test(c)) && !mensagens.some((m) => cita(it.id, m)));
   const como = noOrca
     ? 'orca orchestration worker-start; pool/anfitriao-orca.md#tabela'
     : 'start_session; fora do turno do operador, cartão';
-  return faltam.slice(0, teto - ocupadas).map((it) => `${it.id} sem dona há ${it.minutos} min (${conta}): abra a sessão dona do item (${como})`);
+  return faltam.map((it) => `${it.id} sem dona há ${it.minutos} min: abra a sessão dona do item (${como})`);
 }
 
 // A batida escreve `batida/<projeto>.json` a cada rodada; sem ele, ou velho, o mod não a está rodando.

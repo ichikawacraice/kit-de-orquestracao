@@ -42,7 +42,7 @@ Antes de sair por horas (dormir, reunião longa), diga na orquestradora:
 /ausente on
 ```
 
-- Naquele turno ela abre as donas que faltam para os itens sem dona, até o teto. Depois dele, **nenhuma sessão abre sessão nova sozinha**: o que nascer fica na fila, e o que precisa de sessão vira cartão para você iniciar.
+- Naquele turno ela abre as donas que faltam para os itens sem dona. Depois dele, **nenhuma sessão abre sessão nova sozinha**: o que nascer fica na fila, e o que precisa de sessão vira cartão para você iniciar.
 - As decisões de baixo risco seguem assumidas e marcadas; nada se arquiva.
 - Só o comando liga e desliga. Frase solta ("vou dormir") não mexe, e você pode dar ordens no meio sem desligar o modo.
 - O botão `Ficar ausente` da barra liga a mesma bandeira, mas não abre as donas que faltam: para isso, o comando.

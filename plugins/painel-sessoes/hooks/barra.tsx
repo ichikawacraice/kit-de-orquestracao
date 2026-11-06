@@ -222,7 +222,7 @@ export function meuItem(docs: Doc[], localId: string): { id: string; titulo: str
 
 const ETAPAS_DE_TRABALHO = ['planejamento', 'design', 'execucao', 'validacao']
 
-/** Donas trabalhando no projeto: itens numa etapa de trabalho com dona ou alguém no `com` (a mesma conta do teto de donas). */
+/** Donas trabalhando no projeto: itens numa etapa de trabalho com dona ou alguém no `com` (só para mostrar: não há teto de donas, ADR 0033). */
 export function contarDonas(docs: Doc[], projeto: string | null): number {
   return docs.filter(d => {
     if (!mesmoProjeto(d.data.projeto, projeto) || !ETAPAS_DE_TRABALHO.includes(texto(d.data.etapa) ?? '')) return false

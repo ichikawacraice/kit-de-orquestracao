@@ -1,4 +1,4 @@
-// Regra "item sem dona" e teto de donas: puro, sem I/O. Usada por `painel list fila`, pela batida, pelo ritual da orquestradora
+// Regra "item sem dona": puro, sem I/O. Usada por `painel list fila`, pela batida, pelo ritual da orquestradora
 // e pelo fila-do-item. O pane (plugin painel-sessoes) tem a cópia de `semDona` em `hooks/sem-dona.ts`; o teste
 // `sem-dona-concorda.test.mjs` compara as duas.
 
@@ -32,15 +32,6 @@ export function semDona(data, agoraMs) {
   if (desde === null) return null;
   return { desde: new Date(desde).toISOString(), minutos: Math.max(0, Math.floor((agoraMs - desde) / 60000)) };
 }
-
-// Teto de donas trabalhando ao mesmo tempo no projeto: `KIT_TETO_DE_DONAS`, padrão 4.
-export function tetoDeDonas(env = process.env) {
-  const n = Number(env.KIT_TETO_DE_DONAS);
-  return Number.isInteger(n) && n > 0 ? n : 4;
-}
-
-// Item com alguém trabalhando nele (a dona ou quem está no `com`), numa etapa que conta para o teto.
-export const donaTrabalhando = (d) => ETAPAS_DE_TRABALHO.includes(d?.etapa) && temGente(d);
 
 // Prazo do cartão de sessão dona que espera o clique (o mesmo da batida e do pane): depois dele, a orquestradora repropõe.
 export const CARTAO_VALIDADE_MS = 12 * 3_600_000;
