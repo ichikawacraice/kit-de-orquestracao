@@ -2,9 +2,12 @@
 // estado, da ordem e das bolinhas é do núcleo (`test/sessoes.test.mjs`); aqui, o que o painel desenha com a vista pronta.
 import { assert, mount, mockHost, test } from 'orca/testing'
 import * as painel from './panel'
+import { SELOS, chaveDoSelo } from './panel'
+import { ORDEM_DOS_ESTADOS } from './nucleo/sessoes.mjs'
 import type { GrupoDeSessoes, Leitura, Pergunta, Sessao, VistaDasSessoes } from './protocol'
 import { inicioDoDiaSP, tempoDaSessao } from './vista'
 
+const PONTOS: Record<string, string> = {'Espera você': '🟡', 'Travada': '🛑', 'Gate vermelho': '🔴', 'Parada': '⚫', 'Sessão falhou': '❌', 'Sem sessão': '🟤', 'Mergeando': '🟦', 'Na fila': '⚪', 'PR aberto': '🟠', 'Validando': '🔎', 'Planejando': '🟣', 'No design': '🎨', 'Executando': '🔵', 'Entregue': '🟢'}
 const AGORA = Date.now()
 const MIN = 60_000
 const iso = (msAtras: number) => new Date(AGORA - msAtras).toISOString()
@@ -19,7 +22,7 @@ const grupo = (projeto: string | null, sessoes: Sessao[], extra: Partial<GrupoDe
 const vista = (projetos: GrupoDeSessoes[], extra: Partial<VistaDasSessoes> = {}): VistaDasSessoes =>
   ({ projetos, paradas: 0, ilegiveis: 0, batidaEm: iso(MIN), erro: null, lidoEm: AGORA, ...extra })
 const leitura = (sessoes: VistaDasSessoes, l: Partial<Leitura> = {}): Leitura =>
-  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes, lidoEm: AGORA, ...l })
+  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes, atualizacao: [], lidoEm: AGORA, ...l })
 const pergunta = (id: string, item: string): Pergunta => ({
   id, versao: 1, estado: 'aberta', titulo: `${item} · pergunta ${id}`, caso: null, seNaoDecidir: null, recomendacao: null,
   item, projeto: 'kit', sessaoId: null, atualizadoEm: iso(MIN), endereco: null, opcoes: null,
@@ -104,28 +107,29 @@ teste('cada estado tem o seu selo, o seu tom e a sua frase; só Espera você tem
   const casos: [Sessao, string, string, string | null][] = [
     [sessao('F1', { estado: 'esperando', perguntas: [{ id: 'Q1060', titulo: 'F1 · Mergear?' }], desdeEm: iso(5 * 60 * MIN) }), 'Espera você', 'warning', 'Q1060 · Mergear?'],
     [sessao('F2', { estado: 'esperando', motivo: 'pausado pelo operador para trocar de conta' }), 'Espera você', 'warning', 'pausado pelo operador para trocar de conta'],
-    [sessao('F3', { estado: 'parada', tipoDeParada: 'conflito', motivo: 'conflito com a main' }), 'Travada', 'neutral', 'conflito com a main'],
+    [sessao('F3', { estado: 'parada', tipoDeParada: 'conflito', motivo: 'conflito com a main' }), 'Travada', 'danger', 'conflito com a main'],
     [sessao('F4', { estado: 'parada', tipoDeParada: 'gate-vermelho', motivo: '2 testes vermelhos' }), 'Gate vermelho', 'danger', '2 testes vermelhos'],
     [sessao('F5', { estado: 'parada', tipoDeParada: 'sem-movimento', desdeEm: iso(45 * MIN) }), 'Parada', 'neutral', 'sem atividade'],
     [sessao('F6', { estado: 'parada', tipoDeParada: 'sem-movimento', dependeDe: ['F441'] }), 'Parada', 'neutral', 'depende de F441'],
     [sessao('F7', { estado: 'parada', tipoDeParada: 'falhou' }), 'Sessão falhou', 'danger', 'a sessão no Orca terminou com falha'],
     [sessao('F8', { estado: 'parada', tipoDeParada: 'sem-dona' }), 'Sem sessão', 'neutral', 'esperando a orquestradora abrir uma'],
-    [sessao('F9', { estado: 'mergeando', prNaFila: 1716, desdeEm: iso(6 * MIN) }), 'Mergeando', 'neutral', 'PR 1716 · gate rodando'],
+    [sessao('F9', { estado: 'mergeando', prNaFila: 1716, desdeEm: iso(6 * MIN) }), 'Mergeando', 'accent', 'PR 1716 · gate rodando'],
     [sessao('F10', { estado: 'na-fila', prNaFila: 173, posicaoNaFila: 2 }), 'Na fila', 'neutral', 'PR 173 · 2º da fila'],
     [sessao('F11', { estado: 'na-fila', prNaFila: 174, foraDaFila: true }), 'PR aberto', 'neutral', 'PR 174 · fora da fila de merge'],
-    [sessao('F12', { estado: 'validando', agora: 'rodando o validador' }), 'Validando', 'neutral', 'rodando o validador'],
-    [sessao('F13', { subEtapa: 'planejamento', etapa: 'planejamento' }), 'Planejando', 'neutral', null],
-    [sessao('F14', { subEtapa: 'design', etapa: 'design' }), 'No design', 'neutral', null],
-    [sessao('F15', { fatia: { atual: 2, total: 4 }, agora: 'medindo a S6', rodando: true }), 'Executando', 'neutral', 'fatia 2 de 4 · medindo a S6'],
-    [sessao('F16', { fatia: { atual: 3, total: null } }), 'Executando', 'neutral', 'fatia 3'],
-    [sessao('F17', { estado: 'parada', tipoDeParada: 'conflito' }), 'Travada', 'neutral', null],
-    [sessao('F18'), 'Executando', 'neutral', null],
+    [sessao('F12', { estado: 'validando', agora: 'rodando o validador' }), 'Validando', 'accent', 'rodando o validador'],
+    [sessao('F13', { subEtapa: 'planejamento', etapa: 'planejamento' }), 'Planejando', 'accent', null],
+    [sessao('F14', { subEtapa: 'design', etapa: 'design' }), 'No design', 'accent', null],
+    [sessao('F15', { fatia: { atual: 2, total: 4 }, agora: 'medindo a S6', rodando: true }), 'Executando', 'accent', 'fatia 2 de 4 · medindo a S6'],
+    [sessao('F16', { fatia: { atual: 3, total: null } }), 'Executando', 'accent', 'fatia 3'],
+    [sessao('F17', { estado: 'parada', tipoDeParada: 'conflito' }), 'Travada', 'danger', null],
+    [sessao('F18'), 'Executando', 'accent', null],
   ]
   const { v, doCartao, caixaDo } = await montar(() => leitura(vista([grupo('kit', casos.map((c) => c[0]))])))
   for (const [s, texto, tom, frase] of casos) {
     const selos = doCartao(s.item, { type: 'Badge' })
     assert.equal(selos.length, 1, `${s.item}: um selo`)
-    assert.equal(selos[0].text, texto, `${s.item}: o texto do selo`)
+    assert.ok(selos[0].text?.endsWith(texto), `${s.item}: o texto do selo diz o estado (a cor só reforça)`)
+    assert.equal(selos[0].text, `${PONTOS[texto]} ${texto}`, `${s.item}: ponto colorido + texto`)
     assert.equal(selos[0].props.tone, tom, `${s.item}: o tom do selo`)
     if (frase) assert.equal(doCartao(s.item, { text: frase }).length, 1, `${s.item}: a frase "${frase}"`)
     // Sem nota nem motivo, a frase não repete o selo: a linha fica só com o selo e o tempo.
@@ -141,6 +145,43 @@ teste('cada estado tem o seu selo, o seu tom e a sua frase; só Espera você tem
   assert.equal(doCartao('F15', { text: 'agora' }).length, 1, 'a sessão do app rodando diz agora')
   assert.equal(doCartao('F12', { text: 'há 12 min' }).length, 1, 'sem rodando, o tempo')
   semErros(v)
+})
+
+teste('o mapa selo × tom cobre todo estado do núcleo e usa só os 5 tons do Orca; a cor nunca é a única pista (todo selo tem texto)', () => {
+  const TONS = ['neutral', 'accent', 'success', 'warning', 'danger']
+  // Os estados do núcleo × cada subtipo que ele pode dar (parada, etapa, fila): a chave de cada combinação tem selo.
+  const paradas = ['conflito', 'gate-vermelho', 'outra', 'sem-movimento', 'falhou', 'sem-dona']
+  const combinacoes: Sessao[] = ORDEM_DOS_ESTADOS.flatMap((estado: Sessao['estado']) => {
+    if (estado === 'parada') return paradas.map((tipoDeParada) => sessao('F1', { estado, tipoDeParada }))
+    if (estado === 'trabalhando') return [null, 'planejamento', 'design', 'execucao'].map((subEtapa) => sessao('F1', { estado, subEtapa }))
+    if (estado === 'na-fila') return [false, true].map((foraDaFila) => sessao('F1', { estado, foraDaFila }))
+    return [sessao('F1', { estado })]
+  })
+  assert.ok(ORDEM_DOS_ESTADOS.length === 7 && combinacoes.length >= 14, 'o núcleo dá os estados: sem eles o teste não mede nada')
+  const usadas = new Set<string>()
+  for (const s of combinacoes) {
+    const chave = chaveDoSelo(s)
+    usadas.add(chave)
+    assert.ok(SELOS[chave], `${s.estado}/${s.tipoDeParada ?? s.subEtapa ?? s.foraDaFila}: sem selo (${chave})`)
+  }
+  assert.deepEqual([...Object.keys(SELOS)].filter((k) => !usadas.has(k)), [], 'selo que nenhum estado do núcleo produz')
+  for (const [chave, { texto, tom }] of Object.entries(SELOS)) {
+    assert.ok(texto.length > 0, `${chave}: o texto diz o estado, a cor só reforça`)
+    assert.ok(TONS.includes(tom), `${chave}: tom fora dos 5 do Orca`)
+  }
+  // Nenhum estado repete a aparência de outro: o par tom + ponto é único (o ponto dá a cor que o Badge, que só tem tom, não dá).
+  const pares = Object.entries(SELOS).map(([k, v]) => `${v.tom}|${v.ponto}`)
+  assert.equal(new Set(pares).size, pares.length, 'dois estados com o mesmo tom e o mesmo ponto')
+  assert.ok(Object.values(SELOS).every((v) => v.ponto.length > 0), 'todo selo tem ponto')
+  assert.ok(Object.entries(SELOS).every(([, v]) => PONTOS[v.texto] === v.ponto), 'o teste e o mapa concordam nos pontos')
+  // Os que mais importam: Executando, PR aberto, Planejando, Validando, Na fila e Mergeando se distinguem entre si.
+  const vizinhos = ['execucao', 'pr-aberto', 'planejamento', 'validando', 'na-fila', 'mergeando'].map((k) => SELOS[k].ponto)
+  assert.equal(new Set(vizinhos).size, vizinhos.length, 'os estados vizinhos têm pontos diferentes')
+  assert.notEqual(SELOS['execucao'].tom, SELOS['pr-aberto'].tom, 'Executando e PR aberto nem no tom se parecem')
+  const porTom = (t: string) => Object.entries(SELOS).filter(([, v]) => v.tom === t).map(([k]) => k).sort()
+  assert.deepEqual(porTom('danger'), ['falhou', 'gate-vermelho', 'travada'])
+  assert.deepEqual(porTom('success'), ['entregue'])
+  assert.deepEqual(porTom('warning'), ['esperando'])
 })
 
 teste('abrir mostra o nome inteiro e os blocos; continua aberto depois de uma releitura que muda o estado e a ordem', async () => {
@@ -308,7 +349,7 @@ teste('a fila de merge ilegível num projeto: a linha sob o cabeçalho e o cart�
   const s = sessao('F439', { estado: 'na-fila', prNaFila: 173, foraDaFila: true, etapa: 'merge' })
   const { v, doCartao } = await montar(() => leitura(vista([grupo('kit', [s], { filaIlegivel: true }), grupo('izanagi', [sessao('F1')])])))
   assert.equal(v.findAll({ text: 'Não li a fila de merge deste projeto.' }).length, 1)
-  assert.equal(doCartao('F439', { type: 'Badge' })[0].text, 'PR aberto')
+  assert.equal(doCartao('F439', { type: 'Badge' })[0].text, '🟠 PR aberto')
   semErros(v)
 })
 

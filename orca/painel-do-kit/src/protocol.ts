@@ -106,6 +106,9 @@ export type VistaDasSessoes = {
   lidoEm: number
 }
 
+/** Um plugin do kit com versão publicada mais nova que a instalada (F463). */
+export type AtualizacaoDoKit = { nome: string; instalada: string; publicada: string }
+
 export type Leitura = {
   abertas: Pergunta[]
   assumidas: Pergunta[]
@@ -116,6 +119,8 @@ export type Leitura = {
   /** Quando a caixa do Orca passa do limite lido: a data da mensagem mais velha que entrou (as entregas do Orca vão até ela). */
   caixaAte: string | null
   sessoes: VistaDasSessoes
+  /** O que o kit publicou de mais novo que o instalado; vazio quando está em dia (ou sem como conferir). */
+  atualizacao: AtualizacaoDoKit[]
   lidoEm: number
   /** Só quando a aba pediu `acompanhar`: o estado gravado de cada id; `null` para a que sumiu. */
   acompanhadas?: Record<string, Acompanhada | null>

@@ -27,7 +27,7 @@ const entrega = (chave: string, extra: Partial<Entrega> = {}): Entrega => ({
   corpo: `mensagem ${chave}`, seguimento: { destino: 'run:run_a', quem: 'sessao' }, ...extra,
 })
 const leitura = (l: Partial<Leitura> = {}): Leitura =>
-  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: { projetos: [], paradas: 0, ilegiveis: 0, batidaEm: null, erro: null, lidoEm: AGORA }, lidoEm: AGORA, ...l })
+  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: { projetos: [], paradas: 0, ilegiveis: 0, batidaEm: null, erro: null, lidoEm: AGORA }, atualizacao: [], lidoEm: AGORA, ...l })
 
 /** Um worker de mentira: devolve as respostas dadas e anota cada pedido, com a entrada. */
 function worker(respostas: Record<string, unknown>) {
@@ -104,6 +104,7 @@ test('responder outra coisa: o texto vai byte a byte; o rascunho sobrevive à re
   await v.press({ role: 'button', text: 'Gravar resposta' })
   assert.equal((w.pedidos.find((p) => p.nome === 'kit.responder')?.input as { resposta: string }).resposta, PERIGOSO)
   assert.ok(v.find({ text: 'Só gravada' }), 'sem endereço nada vai sair: o selo não promete entrega')
+  assert.equal(v.find({ type: 'Badge', text: 'Só gravada' })?.props?.tone, 'neutral', 'F463: gravada sem sair é neutra')
   assert.equal(v.find({ text: 'Entrega pendente' }), null)
   semErros(v)
   await v.unmount()
@@ -470,7 +471,7 @@ test('F451: a entrega começa pelo projeto, perde o prefixo do item e põe o "N�
   await v.unmount()
 })
 
-test('F451: os números do trilho: âmbar só para a pergunta presa, o resto neutro', async () => {
+test('F463: os números do trilho têm cor pelo sentido: pergunta presa e parada âmbar, decisão e entrega nova em destaque', async () => {
   const w = worker({ 'kit.ler': leitura({ abertas: [pergunta('Q1')], assumidas: [decisao('Q7', 'F1')], entregas: [entrega('e1')] }) })
   const v = await mount(painel, { host: w.host })
   const tons = Object.fromEntries(v.findAll({ type: 'Badge' }).map((b: No) => [b.text, b.props?.tone]))
@@ -610,6 +611,7 @@ test('gravada e sem desfecho no arquivo depois do prazo: o cartão sai do spinne
     (v) => {
       assert.equal(entregando(v), false)
       assert.ok(v.find({ text: 'Sem confirmação' }), 'a aba não finge que chegou nem que falhou')
+      assert.equal(v.find({ type: 'Badge', text: 'Sem confirmação' })?.props?.tone, 'neutral', 'F463: incerto é neutro')
       assert.ok(v.find({ text: 'Gravada. A aba não soube se chegou a F435; confira na sessão.' }))
       assert.equal(v.find({ text: 'A entrega falhou' }), null)
     },
@@ -774,6 +776,31 @@ test('a reentrega que o Orca recusa na hora diz o motivo: não é "sem confirma�
     await v.press({ role: 'button', text: 'Tentar entregar de novo' })
     assert.ok(v.find({ text: 'Gravada, mas não chegou a F435: falta uma permissão ao plugin.' }), 'o motivo da recusa')
     assert.equal(v.find({ text: 'Sem confirmação' }), null)
+    semErros(v)
+  } finally {
+    await v.unmount()
+  }
+})
+
+// F463: o aviso de versão nova do kit: uma barra curta no topo, em qualquer seção; some quando o kit está em dia.
+const NOVA = [{ nome: 'orquestracao', instalada: '0.1.108', publicada: '0.1.109' }]
+test('F463: versão nova do kit: barra curta com o comando, em qualquer seção, sem lista de versões; sem versão nova não aparece', async () => {
+  let atualizacao: typeof NOVA = NOVA
+  const w = worker({ 'kit.ler': () => leitura({ atualizacao }) })
+  const v = await mount(painel, { host: w.host, persisted: { plugin: { secao: 'sessoes' } } })
+  try {
+    const barra = v.findAll({ type: 'Callout' }).find((c: No) => /Versão nova do kit/.test(JSON.stringify(c)))
+    assert.ok(barra, 'a barra existe')
+    assert.equal(barra.props?.tone, 'accent')
+    assert.ok(v.find({ type: 'Code', text: 'atualizar-plugins' }), 'o comando exato à vista')
+    assert.ok(v.find({ text: /Atualize/ }))
+    assert.equal(v.find({ text: /0\.1\.109/ }), null, 'sem versões nem plugins na barra')
+    assert.equal(v.findAll({ type: 'Button' }).filter((b: No) => /atualizar/i.test(b.text ?? '')).length, 0, 'a aba só tem terminal:send: não oferece botão que grava em ~/.claude')
+    await v.press({ label: /^Perguntas · / })
+    assert.ok(v.find({ type: 'Code', text: 'atualizar-plugins' }), 'também em Perguntas')
+    atualizacao = []
+    await v.press({ label: 'Reler agora' })
+    assert.equal(v.find({ type: 'Code', text: 'atualizar-plugins' }), null, 'em dia: a barra some')
     semErros(v)
   } finally {
     await v.unmount()
