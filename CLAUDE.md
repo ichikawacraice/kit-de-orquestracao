@@ -37,7 +37,7 @@ Lidos de `.claude/kit.json`:
 - Migration de banco só sai da branch de integração, quando a regra `migration-fora-do-tronco` da guarda estiver ligada.
 - **CI só no PR para a produção** (`protocolo.md#ci-so-na-producao`): o CI dispara só no `pull_request` contra a `main`; o PR para a integração roda só os testes afetados, com a saída colada no PR. Este repo não tem CI nem branch de integração: o gate é o local. O único workflow é o `publicar-pacotes`, que publica os pacotes de `design-system/packages/` no npm depois do merge ([guia](docs/guia/pacotes-npm.md)).
 - Commit em português, no formato convencional (`feat(escopo): …`).
-- A paridade plugin × `~/.claude` deixou de ser exigida: a K8 rodou em 2026-10-25T14:01 (backup `~/.claude/orquestracao/backups/K8-2026-10-25T14-01-55-715Z`), o `~/.claude/settings.json` não registra mais nenhum hook e o plugin é a cópia viva — conserto entra só nele. `scripts/paridade.mjs` e `scripts/k8/sincronizar.mjs` ficam para a migração de outra máquina.
+- A paridade plugin × `~/.claude` deixou de ser exigida: a K8 rodou em 2026-10-25T14:01 (backup `~/.claude/orquestracao/backups/K8-2026-10-25T14-01-55-715Z`), o `~/.claude/settings.json` não registra mais nenhum hook do kit (os que há lá são do Orca: telemetria de estado para a interface dele por `curl` local e, no `PreToolUse`, a decisão que o Orca devolver; fora do Orca saem na hora, e nenhum injeta contexto) e o plugin é a cópia viva — conserto entra só nele. `scripts/paridade.mjs` e `scripts/k8/sincronizar.mjs` ficam para a migração de outra máquina.
 <!-- /kit:regras-de-operacao -->
 
 <!-- kit:regras-de-trabalho v1 -->
