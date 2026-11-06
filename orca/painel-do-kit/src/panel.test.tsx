@@ -48,7 +48,7 @@ test('ler não pede nada além de kit.ler, com entrada sem undefined; a mais ant
   assert.deepEqual(w.nomes(), ['kit.ler'])
   assert.equal(JSON.stringify(w.pedidos[0].input).includes('undefined'), false)
   assert.deepEqual(w.pedidos[0].input, { forcar: false })
-  const titulos = v.findAll({ text: /^F435 · pergunta Q\d$/ }).map((n: { text?: string }) => JSON.stringify(n))
+  const titulos = v.findAll({ text: /^pergunta Q\d$/ }).map((n: { text?: string }) => JSON.stringify(n))
   assert.equal(titulos.length, 2)
   assert.ok(titulos[0].includes('Q1') && titulos[1].includes('Q2'), 'a que espera há mais tempo vem primeiro')
   assert.ok(v.find({ label: 'Perguntas · 2 abertas' }))
@@ -204,7 +204,9 @@ test('limpar uma entrega guarda as chaves no armazenamento do plugin, sem pedir 
   const lidas = v.persisted.storage.lidas as Record<string, number>
   assert.ok(lidas && Object.keys(lidas).length > 0)
   assert.deepEqual(Object.keys(lidas).sort(), ['e1', 'painel:F432'])
-  assert.ok(v.find({ text: 'Limpa: F432 · entrega e1' }), 'a linha fica no lugar até reler')
+  assert.ok(v.find({ text: 'Limpa: entrega e1' }), 'a linha fica no lugar até reler')
+  const limpa = v.findAll({ type: 'Text' }).map((n: No) => n.text)
+  assert.ok(limpa.indexOf('kit') >= 0 && limpa.indexOf('kit') < limpa.indexOf('Limpa: entrega e1'), 'a linha Limpa: começa pelo projeto')
   assert.ok(v.find({ label: 'Entregas · 1 nova' }))
   await v.press({ role: 'button', text: 'Desfazer' })
   assert.deepEqual(v.persisted.storage.lidas, {})
@@ -212,7 +214,7 @@ test('limpar uma entrega guarda as chaves no armazenamento do plugin, sem pedir 
   await v.press({ label: 'Reler agora' })
   assert.ok(v.find({ text: 'Nada novo para ver' }))
   await v.press({ role: 'button', text: 'Ver as limpas (2)' })
-  assert.ok(v.find({ text: 'F432 · entrega e2' }))
+  assert.ok(v.find({ text: 'entrega e2' }))
   assert.deepEqual([...new Set(w.nomes())], ['kit.ler'])
   semErros(v)
   await v.unmount()
@@ -295,6 +297,172 @@ test('caixa do Orca cortada no limite: Entregas diz até quando as do Orca vão'
   const w = worker({ 'kit.ler': leitura({ entregas: [entrega('e1')], caixaAte: iso(5 * 3_600_000) }) })
   const v = await mount(painel, { host: w.host, persisted: { plugin: { secao: 'entregas' } } })
   assert.ok(v.find({ text: /^As entregas do Orca vão só até .+: a caixa dele guarda as mensagens mais novas\.$/ }))
+  semErros(v)
+  await v.unmount()
+})
+
+// ── F451: projeto primeiro, detalhes no compacto, cor de estado ──────────────────────────────────────────────────
+type No = { type: string; text?: string; props?: Record<string, unknown>; path: string }
+type Arvore = { type?: string; props?: Record<string, unknown>; children?: unknown[] }
+/** As caixas com essa borda, lidas da árvore desenhada (o `findAll` não devolve a Box com `background="card"`). */
+const caixas = (v: { drawnTree: () => unknown }, border: string) => {
+  const achadas: Arvore[] = []
+  const anda = (n: unknown) => {
+    if (!n || typeof n !== 'object') return
+    const a = n as Arvore
+    if (a.type === 'Box' && a.props?.border === border) achadas.push(a)
+    a.children?.forEach(anda)
+  }
+  anda(v.drawnTree())
+  return achadas
+}
+const textos = (v: { findAll: (q: unknown) => No[] }) => v.findAll({ type: 'Text' }).map((n) => n.text)
+
+test('F451: o projeto abre todo cartão de pergunta, em destaque e sem tom; o título perde o prefixo; o estado fica na ponta', async () => {
+  const w = worker({ 'kit.ler': leitura({ abertas: [pergunta('Q1', { projeto: 'Izanagi' })] }) })
+  const v = await mount(painel, { host: w.host })
+  const selo = v.find({ text: 'Izanagi' })
+  assert.ok(selo, 'o selo do projeto existe')
+  assert.equal(selo.props.weight, 'semibold')
+  assert.equal(selo.props.size, 'sm')
+  assert.equal(selo.props.muted, undefined)
+  assert.equal(selo.props.tone, undefined, 'projeto não ganha tom: os tons dizem estado')
+  assert.ok(v.find({ text: '· F435' }))
+  const ordem = textos(v)
+  assert.ok(ordem.indexOf('Izanagi') >= 0 && ordem.indexOf('Izanagi') < ordem.indexOf('pergunta Q1'), 'o projeto vem antes do título')
+  assert.equal(v.find({ text: /^F435 · pergunta/ }), null, 'o item não se repete no título')
+  const estado = v.findAll({ type: 'Badge' }).find((b: No) => /^espera há /.test(String(b.text)))
+  assert.ok(estado)
+  assert.equal(estado.props?.tone, 'warning')
+  assert.ok(caixas(v, 'warning').length >= 1, 'a pergunta aberta tem borda âmbar')
+  semErros(v)
+  await v.unmount()
+})
+
+test('F451: pergunta sem projeto não inventa selo; o cartão começa pelo item', async () => {
+  const w = worker({ 'kit.ler': leitura({ abertas: [pergunta('Q1', { projeto: null })] }) })
+  const v = await mount(painel, { host: w.host })
+  assert.ok(v.find({ text: 'F435' }))
+  assert.equal(v.find({ text: /Sem projeto/ }), null)
+  semErros(v)
+  await v.unmount()
+})
+
+test('F451: a decisão confirmada abre os detalhes no lugar e fecha de novo; o rótulo leva o título', async () => {
+  const w = worker({
+    'kit.ler': leitura({ assumidas: [decisao('Q1', 'F2', { caso: 'porque o gate já passou', seNaoDecidir: 'segue como está' })] }),
+    'kit.confirmar': { confirmadas: ['Q1'], recusadas: [], versoes: { Q1: 2 } },
+  })
+  const v = await mount(painel, { host: w.host, persisted: { plugin: { secao: 'decisoes' } } })
+  await v.press({ label: 'Confirmar: decidi Q1' })
+  assert.ok(caixas(v, 'success').length >= 1, 'a linha confirmada tem borda verde')
+  assert.equal(v.find({ text: 'Decidiu: fiz Q1' }), null, 'fechada, não mostra os detalhes')
+  await v.press({ label: 'Ver detalhes: decidi Q1' })
+  assert.ok(v.find({ text: 'Decidiu: fiz Q1' }))
+  assert.ok(v.find({ text: 'porque o gate já passou' }))
+  assert.ok(v.find({ text: 'Se ninguém decidir: segue como está' }))
+  assert.ok(v.find({ text: /^Decidida pela sessão do F2 · (hoje|ontem), \d\d:\d\d · Q1$/ }))
+  assert.ok(v.find({ text: /^Confirmada por você às \d\d:\d\d\.$/ }))
+  assert.ok(v.find({ role: 'button', text: 'Desfazer' }), 'o Desfazer convive com o botão de detalhes')
+  await v.press({ label: 'Esconder detalhes: decidi Q1' })
+  assert.equal(v.find({ text: 'Decidiu: fiz Q1' }), null)
+  semErros(v)
+  await v.unmount()
+})
+
+test('F451: confirmada pelo grupo diz "com o grupo"; o detalhe aberto sobrevive à releitura', async () => {
+  const w = worker({
+    'kit.ler': leitura({ assumidas: [decisao('Q1', 'F2'), decisao('Q2', 'F2')] }),
+    'kit.confirmar': (i: { itens: { id: string }[] }) => ({ confirmadas: i.itens.map((x) => x.id), recusadas: [], versoes: { Q1: 2, Q2: 2 } }),
+  })
+  const v = await mount(painel, { host: w.host, persisted: { plugin: { secao: 'decisoes' } } })
+  await v.press({ role: 'button', text: 'Confirmar as 2 do F2' })
+  await v.press({ label: 'Ver detalhes: decidi Q1' })
+  assert.ok(v.find({ text: /^Confirmada por você às \d\d:\d\d, com o grupo\.$/ }))
+  v.emit('kit.mudou', {})
+  await v.settled?.()
+  assert.ok(v.find({ text: 'Decidiu: fiz Q1' }), 'a releitura automática não fecha o detalhe')
+  semErros(v)
+  await v.unmount()
+})
+
+test('F451: a pergunta respondida vira compacto verde, com o selo de estado na ponta, e abre o caso e a recomendação', async () => {
+  const w = worker({
+    'kit.ler': leitura({ abertas: [pergunta('Q1', { versao: 4 })] }),
+    'kit.responder': { gravou: true, entrega: { estado: 'entregue', via: 'orca', destino: 'dispatch:ctx_1', em: iso(0) } },
+  })
+  const v = await mount(painel, { host: w.host })
+  await v.press({ role: 'button', text: 'Aceitar a recomendação' })
+  assert.ok(caixas(v, 'success').length >= 1)
+  assert.equal(v.findAll({ type: 'Badge' }).find((b: No) => b.text === 'Entregue a F435')?.props?.tone, 'success')
+  assert.ok(v.find({ text: 'kit' }), 'o projeto continua à vista no compacto')
+  assert.equal(v.find({ text: 'caso de Q1' }), null)
+  await v.press({ label: 'Ver detalhes: pergunta Q1' })
+  assert.ok(v.find({ text: 'caso de Q1' }))
+  assert.ok(v.find({ text: 'Se ninguém decidir: sem decisão Q1' }))
+  assert.ok(v.find({ text: 'recomendo Q1' }))
+  assert.ok(v.find({ text: /^Perguntada pela sessão do F435 · (hoje|ontem), \d\d:\d\d$/ }))
+  semErros(v)
+  await v.unmount()
+})
+
+test('F451: decisões de dois projetos ficam em blocos separados; o F12 de um não confirma o F12 do outro', async () => {
+  const w = worker({
+    'kit.ler': leitura({ assumidas: [
+      decisao('Q1', 'F12', { projeto: 'kit', atualizadoEm: iso(1_000) }),
+      decisao('Q2', 'F12', { projeto: 'Izanagi', atualizadoEm: iso(9_000_000) }),
+    ] }),
+    'kit.confirmar': { confirmadas: ['Q1'], recusadas: [], versoes: { Q1: 2 } },
+  })
+  const v = await mount(painel, { host: w.host, persisted: { plugin: { secao: 'decisoes' } } })
+  const titulos = v.findAll({ type: 'Heading' }).map((h: No) => h.text)
+  assert.ok(titulos.includes('kit · 1') && titulos.includes('Izanagi · 1'), `blocos de projeto: ${titulos}`)
+  assert.ok(titulos.indexOf('kit · 1') < titulos.indexOf('Izanagi · 1'), 'o projeto da decisão mais recente primeiro')
+  await v.press({ role: 'button', text: 'Confirmar a decisão do F12' })
+  assert.deepEqual(w.pedidos.find((p) => p.nome === 'kit.confirmar')?.input, { itens: [{ id: 'Q1', versao: 1 }] })
+  const depois = v.findAll({ type: 'Heading' }).map((h: No) => h.text)
+  assert.ok(depois.includes('kit · 0') && depois.includes('Izanagi · 1'), `o bloco conta só o que falta confirmar: ${depois}`)
+  semErros(v)
+  await v.unmount()
+})
+
+test('F451: a entrega começa pelo projeto, perde o prefixo do item e põe o "Não medido" numa caixa âmbar', async () => {
+  const w = worker({ 'kit.ler': leitura({ entregas: [
+    entrega('e1', { projeto: 'Izanagi', entrega: { resultado: 'feito', naoMedido: 'a carga' } }),
+    entrega('e2', { titulo: 'F432 · sem não medido' }),
+  ] }) })
+  const v = await mount(painel, { host: w.host, persisted: { plugin: { secao: 'entregas' } } })
+  const ordem = textos(v)
+  assert.ok(ordem.indexOf('Izanagi') >= 0 && ordem.indexOf('Izanagi') < ordem.indexOf('entrega e1'))
+  assert.equal(v.find({ text: /^F432 · / }), null)
+  assert.equal(v.find({ text: 'Não medido' })?.props?.tone, 'warning')
+  assert.ok(v.find({ text: 'a carga' }))
+  assert.equal(caixas(v, 'warning').length, 1, 'só a entrega com "Não medido" ganha a caixa')
+  semErros(v)
+  await v.unmount()
+})
+
+test('F451: os números do trilho: âmbar só para a pergunta presa, o resto neutro', async () => {
+  const w = worker({ 'kit.ler': leitura({ abertas: [pergunta('Q1')], assumidas: [decisao('Q7', 'F1')], entregas: [entrega('e1')] }) })
+  const v = await mount(painel, { host: w.host })
+  const tons = Object.fromEntries(v.findAll({ type: 'Badge' }).map((b: No) => [b.text, b.props?.tone]))
+  assert.equal(tons['1'] !== undefined, true)
+  const dosTres = v.findAll({ type: 'Badge' }).map((b: No) => b.props?.tone)
+  assert.deepEqual(dosTres.slice(0, 3), ['warning', 'neutral', 'neutral'])
+  semErros(v)
+  await v.unmount()
+})
+
+test('F451: confirmação recusada deixa a linha da decisão com borda vermelha; o bloco sem projeto vem por último', async () => {
+  const w = worker({
+    'kit.ler': leitura({ assumidas: [decisao('Q1', 'F2', { projeto: null, atualizadoEm: iso(9_000_000) }), decisao('Q2', 'F3', { projeto: 'kit', atualizadoEm: iso(1_000) })] }),
+    'kit.confirmar': { confirmadas: [], recusadas: [{ id: 'Q2', motivo: 'mudou' }], versoes: {} },
+  })
+  const v = await mount(painel, { host: w.host, persisted: { plugin: { secao: 'decisoes' } } })
+  const blocos = v.findAll({ type: 'Heading' }).map((h: No) => h.text).filter((t: unknown) => String(t).includes(' · '))
+  assert.deepEqual(blocos, ['kit · 1', 'Sem projeto · 1'])
+  await v.press({ role: 'button', text: 'Confirmar a decisão do F3' })
+  assert.ok(caixas(v, 'danger').length >= 1, 'a linha cuja confirmação foi recusada tem borda danger')
   semErros(v)
   await v.unmount()
 })
