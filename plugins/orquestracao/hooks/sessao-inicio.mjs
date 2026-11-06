@@ -25,16 +25,19 @@ try { entrada = JSON.parse(readFileSync(0, 'utf8') || '{}') ?? {}; } catch { /* 
 // F439 (ADR 0030): quem é esta sessão — o `local_…` no app, o `orca_session_id:<id>` no Orca (null no terminal). No Orca, o
 // início grava `orca-sessoes/<id>.json` (o id do CLI, a pasta, a hora e o endereço do send) antes de tudo: é por ele que o
 // registro da sessão, a batida e as travas a reconhecem.
+// A gravação segue o endereço, não o anfitrião fixado: a sessão cujo endereço é do Orca grava, mesmo com a chave do projeto
+// fixando outro anfitrião. Falha na gravação não apaga o endereço.
 let quem = null;
 try {
-  const { anfitriao, quemSou } = await import('./anfitriao.mjs');
-  const cwd = entrada.cwd || process.cwd();
-  quem = quemSou({ env: process.env, cwd });
-  if (anfitriao({ env: process.env, cwd }).anfitriao === 'orca') {
-    const { gravarSessaoDoOrca } = await import('./orca-sessoes.mjs');
-    gravarSessaoDoOrca({ env: process.env, cliId: entrada.session_id, cwd });
-  }
+  const { quemSou } = await import('./anfitriao.mjs');
+  quem = quemSou({ env: process.env, cwd: entrada.cwd || process.cwd() });
 } catch { quem = process.env.CLAUDE_CODE_HOST_SESSION_ID || null; }
+if (quem?.startsWith('orca_session_id:')) {
+  try {
+    const { gravarSessaoDoOrca } = await import('./orca-sessoes.mjs');
+    gravarSessaoDoOrca({ env: process.env, cliId: entrada.session_id, cwd: entrada.cwd || process.cwd() });
+  } catch { /* sem o arquivo, o painel não acha a sessão pelo id do CLI; o início segue */ }
+}
 
 let papel = '';
 try {

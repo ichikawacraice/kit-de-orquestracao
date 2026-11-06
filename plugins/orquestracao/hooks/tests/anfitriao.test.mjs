@@ -121,6 +121,22 @@ test('quemSou: local_… no app, orca_session_id:<id> no Orca, null no terminal'
   });
 });
 
+// F439 (achado da revisão): o anfitrião fixado (chave ou KIT_ANFITRIAO) muda as regras, não a identidade. Quando o fixado
+// não tem endereço nesta sessão, o endereço vem dos sinais: a sessão do app com "anfitriao": "orca" segue sendo o local_ dela.
+test('quemSou: o anfitrião fixado que contradiz os sinais não apaga o endereço que os sinais dão', () => {
+  com({ anfitriao: 'orca' }, (cwd) => {
+    assert.equal(anfitriao({ env: APP, cwd }).anfitriao, 'orca'); // a prova de que o fixado vale
+    assert.equal(quemSou({ env: APP, cwd }), APP.CLAUDE_CODE_HOST_SESSION_ID);
+  });
+  com({ anfitriao: 'claude-desktop' }, (cwd) => {
+    assert.equal(quemSou({ env: ORCA_ID, cwd }), `orca_session_id:${ORCA_ID.ORCA_AGENT_SESSION_ID}`);
+  });
+  com(undefined, (cwd) => {
+    assert.equal(quemSou({ env: { ...APP, KIT_ANFITRIAO: 'terminal' }, cwd }), APP.CLAUDE_CODE_HOST_SESSION_ID);
+    assert.equal(quemSou({ env: { KIT_ANFITRIAO: 'orca' }, cwd }), null); // sem sinal nenhum, segue sem endereço
+  });
+});
+
 // F439: o painel aceita o endereço da sessão nos dois anfitriões que têm um; a regra mora aqui, uma vez.
 test('ehIdDeSessao: local_<uuid> do app e orca_session_id:<id> do Orca (worker e coordenadora); o resto não', () => {
   const validos = [

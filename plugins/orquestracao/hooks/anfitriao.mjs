@@ -60,13 +60,20 @@ export function anfitriao({ env = process.env, cwd = process.cwd() } = {}) {
   return { anfitriao: sinais, fonte: 'sinais', pelosSinais: sinais, contradicao: null, desconhecido };
 }
 
-/** O endereço desta sessão: `local_…` no app, `orca_session_id:<id>` no Orca, null no terminal (ou sem id legível). */
-export function quemSou({ env = process.env, cwd = process.cwd() } = {}) {
-  const a = anfitriao({ env, cwd }).anfitriao;
+function enderecoEm(a, env) {
   if (a === 'claude-desktop') return texto(env.CLAUDE_CODE_HOST_SESSION_ID) || null;
   if (a === 'orca') {
     const id = `orca_session_id:${texto(env.ORCA_AGENT_SESSION_ID)}`;
     return ID_DO_ORCA.test(id) ? id : null;
   }
   return null;
+}
+
+/**
+ * O endereço desta sessão: `local_…` no app, `orca_session_id:<id>` no Orca, null no terminal (ou sem id legível). O anfitrião
+ * fixado (chave ou KIT_ANFITRIAO) muda as regras, não a identidade: quando ele não dá endereço, vale o dos sinais.
+ */
+export function quemSou({ env = process.env, cwd = process.cwd() } = {}) {
+  const a = anfitriao({ env, cwd });
+  return enderecoEm(a.anfitriao, env) ?? (a.pelosSinais !== a.anfitriao ? enderecoEm(a.pelosSinais, env) : null);
 }

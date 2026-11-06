@@ -31,18 +31,27 @@ export function lerSessaoDoOrca(orcaId) {
   return cru && ID_CRU.test(cru) ? ler(arquivo(cru)) : null;
 }
 
-/** A sessão do Orca cujo id do CLI (atual ou anterior) é `cliId`; null quando nenhuma. A pasta é pequena: uma por sessão viva. */
+/**
+ * A sessão do Orca cujo id do CLI (atual ou anterior) é `cliId`; null quando nenhuma. O mesmo id do CLI pode estar em duas
+ * (a conversa retomada em outra sessão do Orca): vence quem o tem como atual, e entre iguais o gravado por último. A pasta é
+ * pequena: uma por sessão viva.
+ */
 export function sessaoDoOrcaPeloCli(cliId) {
   if (!texto(cliId)) return null;
   const dir = pastaDasSessoesDoOrca();
   if (!existsSync(dir)) return null;
   let nomes = [];
   try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return null; }
+  const peso = (d) => [d.cliAtual === cliId ? 1 : 0, Date.parse(d.em) || 0];
+  let melhor = null;
   for (const n of nomes) {
     const d = ler(join(dir, n));
-    if (d && (d.cliAtual === cliId || (Array.isArray(d.cliIds) && d.cliIds.includes(cliId)))) return d;
+    if (!d || !(d.cliAtual === cliId || (Array.isArray(d.cliIds) && d.cliIds.includes(cliId)))) continue;
+    if (!melhor) { melhor = d; continue; }
+    const [a1, a2] = peso(d); const [b1, b2] = peso(melhor);
+    if (a1 > b1 || (a1 === b1 && a2 > b2)) melhor = d;
   }
-  return null;
+  return melhor;
 }
 
 /**

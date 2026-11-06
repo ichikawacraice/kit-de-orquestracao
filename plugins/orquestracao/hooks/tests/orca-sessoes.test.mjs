@@ -69,6 +69,25 @@ test('a limpeza de contexto (id do CLI novo) regrava o arquivo e guarda os ids a
   assert.equal(sessaoDoOrcaPeloCli('cli-nenhum'), null);
 });
 
+test('sessaoDoOrcaPeloCli: o id do CLI atual vence o histórico, e entre dois atuais vence o gravado por último', () => {
+  // A ordem alfabética põe o arquivo velho primeiro: a prova de que a busca não devolve o primeiro que acha.
+  const velho = '0000aaaa-2222-4333-8444-555566667777';
+  const novo = '9999aaaa-2222-4333-8444-555566667777';
+  gravarSessaoDoOrca({ env: noOrca(velho), cliId: 'cli-dup', cwd: PROJ, agora: Date.parse('2026-11-06T10:00:00Z') });
+  gravarSessaoDoOrca({ env: noOrca(velho), cliId: 'cli-depois', cwd: PROJ, agora: Date.parse('2026-11-06T10:05:00Z') });
+  gravarSessaoDoOrca({ env: noOrca(novo), cliId: 'cli-dup', cwd: PROJ, agora: Date.parse('2026-11-06T11:00:00Z') });
+  assert.deepEqual(lerSessaoDoOrca(`orca_session_id:${velho}`).cliIds, ['cli-depois', 'cli-dup']);
+  assert.equal(sessaoDoOrcaPeloCli('cli-dup')?.orcaId, `orca_session_id:${novo}`);
+
+  const a = '0000bbbb-2222-4333-8444-555566667777';
+  const b = '9999bbbb-2222-4333-8444-555566667777';
+  gravarSessaoDoOrca({ env: noOrca(a), cliId: 'cli-dois', cwd: PROJ, agora: Date.parse('2026-11-06T09:00:00Z') });
+  gravarSessaoDoOrca({ env: noOrca(b), cliId: 'cli-dois', cwd: PROJ, agora: Date.parse('2026-11-06T12:00:00Z') });
+  assert.equal(sessaoDoOrcaPeloCli('cli-dois')?.orcaId, `orca_session_id:${b}`);
+  gravarSessaoDoOrca({ env: noOrca(a), cliId: 'cli-dois', cwd: PROJ, agora: Date.parse('2026-11-06T13:00:00Z') });
+  assert.equal(sessaoDoOrcaPeloCli('cli-dois')?.orcaId, `orca_session_id:${a}`);
+});
+
 test('sem id legível do Orca, ou sem o id do CLI, nada se grava', () => {
   const antes = existsSync(pasta()) ? readdirSync(pasta()).sort() : [];
   assert.equal(gravarSessaoDoOrca({ env: { ...SEM_SINAIS, ORCA_STRUCTURED_SESSION: '1' }, cliId: 'cli-x', cwd: PROJ }), null);
@@ -107,9 +126,9 @@ test('registroDaSessao: a sessão do app segue pelo registro do app', () => {
 });
 
 // ---- o início da sessão ----
-function inicio(sinais, sessionId) {
+function inicio(sinais, sessionId, cwd = PROJ) {
   const out = execFileSync(process.execPath, [join(HOOKS, 'sessao-inicio.mjs')], {
-    input: JSON.stringify({ session_id: sessionId, hook_event_name: 'SessionStart', source: 'startup', cwd: PROJ }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
+    input: JSON.stringify({ session_id: sessionId, hook_event_name: 'SessionStart', source: 'startup', cwd }), encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
     env: { ...process.env, ...SEM_SINAIS, ...sinais },
   });
   return out ? JSON.parse(out).hookSpecificOutput.additionalContext : '';
@@ -139,6 +158,32 @@ test('o início da sessão no Orca traz as perguntas que ela abriu com o id do O
   const ctx = inicio(noOrca(id), 'cli-q1');
   assert.match(ctx, /Q901/);
   assert.match(ctx, /pergunta do worker do Orca/);
+});
+
+// Achado da revisão: a chave do projeto que fixa outro anfitrião não tira da sessão as perguntas dela nem o arquivo do Orca.
+function projetoFixado(anf) {
+  const dir = join(base, `fixado-${anf}`);
+  mkdirSync(join(dir, '.git'), { recursive: true });
+  mkdirSync(join(dir, '.claude'), { recursive: true });
+  writeFileSync(join(dir, '.claude', 'kit.json'), JSON.stringify({ anfitriao: anf }));
+  return dir;
+}
+
+test('no app com o kit.json fixando "orca", o início ainda traz as perguntas da sessão (pelo local_ dela)', () => {
+  const local = 'local_00000000-0000-4000-8000-0000000000f1';
+  writeFileSync(join(base, 'painel', 'perguntas', 'Q903.json'), JSON.stringify({ id: 'Q903', version: 1, data: { estado: 'aberta', titulo: 'pergunta da sessão do app', sessaoId: local, criadaEm: new Date().toISOString() } }));
+  const ctx = inicio({ CLAUDE_CODE_HOST_SESSION_ID: local }, 'cli-fix-app', projetoFixado('orca'));
+  assert.match(ctx, /Anfitrião:/); // a prova de que o fixado valeu (o aviso de contradição saiu)
+  assert.match(ctx, /Q903/);
+});
+
+test('no Orca com o kit.json fixando "claude-desktop", o início ainda grava a sessão do Orca e traz as perguntas dela', () => {
+  const id = '56781111-2222-4333-8444-555566667777';
+  writeFileSync(join(base, 'painel', 'perguntas', 'Q904.json'), JSON.stringify({ id: 'Q904', version: 1, data: { estado: 'aberta', titulo: 'pergunta do Orca fixado', sessaoId: `orca_session_id:${id}`, criadaEm: new Date().toISOString() } }));
+  const ctx = inicio(noOrca(id), 'cli-fix-orca', projetoFixado('claude-desktop'));
+  assert.match(ctx, /Anfitrião:/);
+  assert.equal(lerSessaoDoOrca(`orca_session_id:${id}`)?.cliAtual, 'cli-fix-orca');
+  assert.match(ctx, /Q904/);
 });
 
 test.after(() => rmSync(base, { recursive: true, force: true }));
