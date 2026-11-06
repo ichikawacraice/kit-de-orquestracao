@@ -86,3 +86,70 @@ test('limpar some da lista sem apagar, desfazer volta; limpa todas as chaves do 
   const velhas = { x: 0, y: 10 * 86_400_000 };
   assert.deepEqual(podarLidas(velhas, 40 * 86_400_000, 35), { y: 10 * 86_400_000 });
 });
+
+// F461: caixa real do Orca (medida em 2026-11-06). O worker_done sem taskId é recusado e a caixa ganha "Rejected worker_done: <assunto>"
+// (mesmo from_handle e run, corpo "Orca rejected …\n\nOriginal body:\n<corpo>", payload com `_orcaLifecycleRejection`); o reenvio certo chega ~30 s depois.
+const HANDLE_F442 = 'structworker_53ce4b37-c6bb-47b5-a428-23a99dd195c5';
+const CORPO_F442 = 'PR 1725 pronto, HEAD 3a5e476fa9bb17b68b22bbae579c95350775c046. S7c rebaseada sobre o squash do #1724.';
+const rejeitada = (id, em, extra = {}) => ({
+  id, type: 'worker_done', run_id: 'run_26395036e57b', from_handle: HANDLE_F442, subject: 'Rejected worker_done: F442 pronto',
+  body: `Orca rejected this worker_done: worker_done requires taskId.\n\nOriginal body:\n${CORPO_F442}`,
+  payload: '{"outcome":"succeeded","_orcaLifecycleRejection":{"code":"missing_task_id","reason":"worker_done requires taskId."}}', created_at: em, ...extra,
+});
+const aceita = (id, em, extra = {}) => ({
+  id, type: 'worker_done', run_id: 'run_26395036e57b', from_handle: HANDLE_F442, subject: 'F442 pronto', body: CORPO_F442,
+  payload: '{"taskId":"task_f6be4ad20649","dispatchId":"ctx_0aa595dfd2a7","outcome":"succeeded"}', created_at: em, ...extra,
+});
+const caixa = (...messages) => ({ result: { messages } });
+
+test('rejeitada com o mesmo PR e HEAD aceito depois pelo mesmo worker some (as duas rejeições, só a aceita fica)', () => {
+  const r = entregasDoOrca(caixa(aceita('msg_ok', '2026-11-06T15:53:03Z'), rejeitada('msg_r2', '2026-11-06T15:52:50Z'), rejeitada('msg_r1', '2026-11-06T15:52:27Z')), WORKERS, { desdeMs: DESDE });
+  assert.deepEqual(r.map((e) => e.chave), ['orca:msg_ok']);
+  assert.equal(r[0].titulo, 'F442 pronto');
+});
+
+test('rejeitada pelo _orcaLifecycleRejection no payload, mesmo sem o prefixo no assunto, também some com o reenvio', () => {
+  const r = entregasDoOrca(caixa(aceita('msg_ok', '2026-11-06T15:53:03Z'), rejeitada('msg_r', '2026-11-06T15:52:50Z', { subject: 'F442 pronto' })), WORKERS, { desdeMs: DESDE });
+  assert.deepEqual(r.map((e) => e.chave), ['orca:msg_ok']);
+});
+
+test('rejeitada sem reenvio aceito continua, em português de quem está de fora, com o assunto original e o PR', () => {
+  const r = entregasDoOrca(caixa(rejeitada('msg_r', '2026-11-06T15:52:50Z')), WORKERS, { desdeMs: DESDE });
+  assert.equal(r.length, 1);
+  assert.equal(r[0].chave, 'orca:msg_r');
+  assert.equal(r[0].titulo, 'F442 pronto');
+  assert.equal(r[0].item, 'F442');
+  assert.match(r[0].corpo, /^A sessão avisou que terminou, mas o Orca não registrou o aviso; o PR 1725 está pronto\./);
+  assert.ok(!/Orca rejected|taskId/.test(r[0].corpo), 'o texto cru do Orca não aparece');
+  assert.ok(r[0].corpo.includes(CORPO_F442), 'o que a sessão escreveu segue nos detalhes');
+});
+
+test('reenvio de outro worker, de outro PR ou de outro HEAD não apaga a rejeitada', () => {
+  const outroWorker = aceita('msg_a', '2026-11-06T15:53:03Z', { from_handle: 'structworker_outro' });
+  const outroHead = aceita('msg_b', '2026-11-06T15:53:03Z', { body: CORPO_F442.replace('3a5e476', 'ffffff0') });
+  const outroPr = aceita('msg_c', '2026-11-06T15:53:03Z', { body: CORPO_F442.replace('PR 1725', 'PR 1726') });
+  const r = entregasDoOrca(caixa(outroWorker, outroHead, outroPr, rejeitada('msg_r', '2026-11-06T15:52:50Z')), WORKERS, { desdeMs: DESDE });
+  assert.ok(r.some((e) => e.chave === 'orca:msg_r'));
+  assert.equal(r.length, 4);
+});
+
+test('rejeitada sem PR no corpo: a frase não inventa PR, e o reenvio idêntico a apaga', () => {
+  const r0 = rejeitada('msg_r', '2026-11-06T15:52:50Z', { body: 'Orca rejected this worker_done: worker_done requires taskId.\n\nOriginal body:\ntroca de sessão por contexto cheio' });
+  const sozinha = entregasDoOrca(caixa(r0), WORKERS, { desdeMs: DESDE });
+  assert.match(sozinha[0].corpo, /^A sessão avisou que terminou, mas o Orca não registrou o aviso\./);
+  assert.ok(!/PR/.test(sozinha[0].corpo.split('\n')[0]));
+  const par = entregasDoOrca(caixa(aceita('msg_ok', '2026-11-06T15:53:03Z', { body: 'troca de sessão por contexto cheio' }), r0), WORKERS, { desdeMs: DESDE });
+  assert.deepEqual(par.map((e) => e.chave), ['orca:msg_ok']);
+});
+
+test('rejeitada de uma sessão que falhou não diz que o PR está pronto', () => {
+  const r0 = rejeitada('msg_r', '2026-11-06T15:52:50Z', {
+    body: 'Orca rejected this worker_done: worker_done requires taskId.\n\nOriginal body:\nPR 55 ficou com conflito, bloqueado.',
+    payload: '{"outcome":"failed","_orcaLifecycleRejection":{"code":"missing_task_id","reason":"worker_done requires taskId."}}',
+  });
+  const [e] = entregasDoOrca(caixa(r0), WORKERS, { desdeMs: DESDE });
+  assert.ok(e.corpo.length > 0);
+  assert.ok(!/está pronto/.test(e.corpo), e.corpo);
+  assert.match(e.corpo, /^A sessão avisou que parou, mas o Orca não registrou o aviso\./);
+  assert.ok(e.corpo.includes('PR 55 ficou com conflito'));
+});

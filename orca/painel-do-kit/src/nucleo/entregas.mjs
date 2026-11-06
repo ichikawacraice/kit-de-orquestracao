@@ -39,19 +39,39 @@ function ondeTrabalha(ws) {
 }
 const TERMINAIS = new Set(['succeeded', 'failed', 'cancelled', 'stopped']);
 
+// F461: o Orca recusa o worker_done sem taskId (ou com o par task/dispatch trocado) e põe na caixa "Rejected worker_done: <assunto>", do mesmo worker,
+// com o corpo "Orca rejected …\n\nOriginal body:\n<corpo>" e `_orcaLifecycleRejection` no payload. O reenvio certo chega logo depois como mensagem comum.
+const PREFIXO_REJEITADA = /^Rejected worker_done:\s*/;
+const eRejeitada = (m, p) => PREFIXO_REJEITADA.test(String(m.subject ?? '')) || Boolean(p._orcaLifecycleRejection);
+const corpoOriginal = (corpo) => { const i = String(corpo ?? '').indexOf('Original body:'); return i < 0 ? '' : String(corpo).slice(i + 'Original body:'.length).trim(); };
+const prEHead = (c) => ({ pr: c.match(/\bPR\s+#?(\d+)/)?.[1] ?? null, head: c.match(/\bHEAD\s+([0-9a-f]{7,40})/)?.[1] ?? null });
+// Mesmo PR e mesmo HEAD; sem os dois no texto, o corpo inteiro igual.
+function mesmoAviso(original, aceito) {
+  const a = prEHead(original); const b = prEHead(aceito);
+  return a.pr && a.head ? a.pr === b.pr && a.head === b.head : original === aceito.trim();
+}
+
 export function entregasDoOrca(inbox, workers, { desdeMs }) {
   const msgs = Array.isArray(inbox?.result?.messages) ? inbox.result.messages : [];
   const porDispatch = new Map((Array.isArray(workers?.result?.workers) ? workers.result.workers : []).map((w) => [w.dispatchId, w]));
+  const feitos = msgs.filter((m) => m?.type === 'worker_done').map((m) => ({ m, p: payloadDe(m) }));
+  const aceitos = feitos.filter(({ m, p }) => !eRejeitada(m, p));
   const saida = [];
-  for (const m of msgs) {
-    if (m?.type !== 'worker_done' || !(Date.parse(m.created_at) >= desdeMs)) continue;
-    const p = payloadDe(m);
+  for (const { m, p } of feitos) {
+    if (!(Date.parse(m.created_at) >= desdeMs)) continue;
+    const rej = eRejeitada(m, p);
+    const original = rej ? corpoOriginal(m.body) : '';
+    if (rej && aceitos.some((a) => a.m.from_handle === m.from_handle && mesmoAviso(original, String(a.m.body ?? '')))) continue;
     const w = porDispatch.get(p.dispatchId);
     const onde = ondeTrabalha(w?.workspace);
-    const titulo = texto(m.subject) ?? '(sem assunto)';
+    const titulo = (rej ? texto(String(m.subject ?? '').replace(PREFIXO_REJEITADA, '')) : texto(m.subject)) ?? '(sem assunto)';
+    const pr = rej ? prEHead(original).pr : null;
+    const corpo = rej
+      ? `${p.outcome === 'failed' ? 'A sessão avisou que parou' : 'A sessão avisou que terminou'}, mas o Orca não registrou o aviso${pr && p.outcome !== 'failed' ? `; o PR ${pr} está pronto` : ''}.${original ? `\n\nO que a sessão escreveu: ${original}` : ''}`
+      : texto(m.body) ?? '';
     saida.push({
       chave: `orca:${m.id}`, chaves: [`orca:${m.id}`], origem: 'orca', messageId: m.id, item: titulo.match(ITEM)?.[1] ?? null,
-      titulo, corpo: texto(m.body) ?? '', em: m.created_at, run: texto(m.run_id), dispatchId: texto(p.dispatchId), resultado: texto(p.outcome),
+      titulo, corpo, em: m.created_at, run: texto(m.run_id), dispatchId: texto(p.dispatchId), resultado: texto(p.outcome),
       vivo: Boolean(w && !TERMINAIS.has(w.state) && w.terminalState !== 'released'), sessao: onde.sessao ?? texto(m.from_handle), projeto: onde.projeto,
     });
   }
