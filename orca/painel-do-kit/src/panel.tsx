@@ -1,14 +1,14 @@
-// Aba do kit no Orca (F436): perguntas abertas, decisões assumidas e entregas das sessões, num trilho de seções.
+// Aba do kit no Orca (F436): perguntas abertas, decisões assumidas, entregas e o estado das sessões (F452), num trilho de seções.
 // Ler não aciona modelo: o painel só pede `kit.ler` ao worker (arquivos e o CLI do Orca em modo leitura). Só
 // responder, discordar e responder a uma entrega acordam uma sessão. Desenho: docs/design/revisoes/2026-11-06-aba-do-kit-no-orca.md.
 import {
   atom, read, set, update, plugin, storage,
   Badge, Box, Button, Callout, Collapsible, EmptyState, Heading, IconButton, Row, Skeleton, Spinner, Text, Textarea,
 } from 'orca'
-import { cortar, haQuanto, horaSP, itemDe, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem, quando, semPrefixoDoItem } from './vista'
+import { cortar, haQuanto, horaSP, itemDe, listaDePRs, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem, quando, semPrefixoDoItem, tempoDaSessao } from './vista'
 import { SeloDoProjeto, partesDoSelo } from './selo-do-projeto'
 import { separarLidas, limpar as limparLidas, desfazer as desfazerLidas, podarLidas } from './nucleo/lidas.mjs'
-import type { Acompanhada, Entrega, EstadoDaEntrega, Leitura, Pendente, Pergunta } from './protocol'
+import type { Acompanhada, Bolinha as BolinhaDaSessao, Entrega, EstadoDaEntrega, GrupoDeSessoes, Leitura, Pendente, Pergunta, Sessao, VistaDasSessoes } from './protocol'
 import { PRAZO_DO_ENVIO_MS } from './protocol'
 
 // O "Sim" do painel (o mesmo texto do pane do app): a sessão e a trava de limpeza o reconhecem.
@@ -36,7 +36,7 @@ const TOQUE_MS = 500
 const CASO_CURTO = 120
 const ORCA_CURTO = 280
 
-type Secao = 'perguntas' | 'decisoes' | 'entregas'
+type Secao = 'perguntas' | 'decisoes' | 'entregas' | 'sessoes'
 type Esperado = 'aberta' | 'assumida'
 /** O que a pessoa fez nesta visita, por pergunta: fica no lugar até ela reler ou sair da aba. */
 type Feito =
@@ -89,6 +89,8 @@ function gravarLidas(nova: Record<string, number>) {
 }
 const limpasAgora = atom<Record<string, number>>('limpasAgora', {})
 const verLimpas = atom('verLimpas', false)
+// Os cartões de sessão abertos, por item: sobrevivem à releitura e à troca de lugar; fecham ao sair da aba.
+const sessoesAbertas = atom<Record<string, boolean>>('sessoesAbertas', {})
 
 const sem = <T,>(o: Record<string, T>, k: string) => Object.fromEntries(Object.entries(o).filter(([c]) => c !== k)) as Record<string, T>
 const tocar = (ms: number) => setTimeout(() => set(tique, relogio.agora()), ms + 50)
@@ -145,7 +147,9 @@ async function reler(forcar: boolean) {
     const antes = read(leitura)
     // O que a aba mandou responder e ainda não viu voltar: o arquivo diz o desfecho, se a resposta do worker se perdeu.
     const acompanhar = Object.entries(read(feitos)).filter(([, x]) => seguida(x)).map(([id]) => id)
-    const l = await plugin.request('kit.ler', acompanhar.length ? { forcar, acompanhar } : { forcar })
+    const lida = await plugin.request('kit.ler', acompanhar.length ? { forcar, acompanhar } : { forcar })
+    // Sessões não lidas: o trilho guarda as paradas da última leitura boa em vez de dizer zero.
+    const l = lida.sessoes?.erro && antes?.sessoes ? { ...lida, sessoes: { ...lida.sessoes, paradas: antes.sessoes.paradas } } : lida
     set(leitura, l)
     const agora = relogio.agora()
     if (l.acompanhadas) {
@@ -843,6 +847,251 @@ function Entregas(props: { l: Leitura }) {
   )
 }
 
+// ── Sessões ──────────────────────────────────────────────────────────────────────────────────────────────────────
+// A conta (estado, ordem, bolinhas) vem pronta do worker; aqui só o selo, a frase e o tempo de cada cartão.
+const BATIDA_VELHA_MS = 5 * 60_000
+const BATIDA_DECLARADA_MS = 25 * 60_000
+const SEM_ITEM_NO_TITULO = /^F\d+\s*·\s*/
+
+type Tom = 'neutral' | 'warning' | 'danger'
+// Âmbar só no que espera você; vermelho só no que quebrou; o resto é palavra, não cor.
+const SELOS: Record<string, { texto: string; tom: Tom }> = {
+  esperando: { texto: 'Espera você', tom: 'warning' },
+  travada: { texto: 'Travada', tom: 'neutral' },
+  'gate-vermelho': { texto: 'Gate vermelho', tom: 'danger' },
+  'sem-movimento': { texto: 'Parada', tom: 'neutral' },
+  falhou: { texto: 'Sessão falhou', tom: 'danger' },
+  'sem-dona': { texto: 'Sem sessão', tom: 'neutral' },
+  mergeando: { texto: 'Mergeando', tom: 'neutral' },
+  'na-fila': { texto: 'Na fila', tom: 'neutral' },
+  'pr-aberto': { texto: 'PR aberto', tom: 'neutral' },
+  validando: { texto: 'Validando', tom: 'neutral' },
+  planejamento: { texto: 'Planejando', tom: 'neutral' },
+  design: { texto: 'No design', tom: 'neutral' },
+  execucao: { texto: 'Executando', tom: 'neutral' },
+  entregue: { texto: 'Entregue', tom: 'neutral' },
+}
+
+function chaveDoSelo(s: Sessao): string {
+  if (s.estado === 'parada') return s.tipoDeParada && s.tipoDeParada in SELOS ? s.tipoDeParada : 'travada'
+  if (s.estado === 'na-fila') return s.foraDaFila ? 'pr-aberto' : 'na-fila'
+  if (s.estado === 'trabalhando') return s.subEtapa === 'planejamento' || s.subEtapa === 'design' ? s.subEtapa : 'execucao'
+  return s.estado
+}
+const seloDe = (s: Sessao) => SELOS[chaveDoSelo(s)]
+const semItem = (titulo: string) => titulo.replace(SEM_ITEM_NO_TITULO, '')
+const dependencia = (s: Sessao) => (s.dependeDe.length ? `depende de ${s.dependeDe.join(' e ')}` : null)
+const fatiaDe = (s: Sessao) => (s.fatia ? (s.fatia.total ? `fatia ${s.fatia.atual} de ${s.fatia.total}` : `fatia ${s.fatia.atual}`) : null)
+
+/** A frase curta da 2ª linha: o que exatamente prende ou anda; vazia quando só repetiria o selo. */
+function fraseDaSessao(s: Sessao): string {
+  const q = s.perguntas[0]
+  switch (chaveDoSelo(s)) {
+    case 'esperando': return q ? `${q.id} · ${semItem(q.titulo)}` : s.motivo ?? ''
+    case 'travada': case 'gate-vermelho': return s.motivo ?? ''
+    case 'sem-movimento': return dependencia(s) ?? 'sem atividade'
+    case 'falhou': return 'a sessão no Orca terminou com falha'
+    case 'sem-dona': return dependencia(s) ?? 'esperando a orquestradora abrir uma'
+    case 'mergeando': return s.prNaFila ? `PR ${s.prNaFila} · gate rodando` : 'gate rodando'
+    case 'na-fila': return s.prNaFila && s.posicaoNaFila ? `PR ${s.prNaFila} · ${s.posicaoNaFila}º da fila` : 'esperando o gate'
+    case 'pr-aberto': return `PR ${s.prNaFila} · fora da fila de merge`
+    // Sem nota, a frase fica vazia: o selo já diz a etapa.
+    default: return [fatiaDe(s), s.agora].filter(Boolean).join(' · ')
+  }
+}
+
+const vivasDe = (g: GrupoDeSessoes) => g.sessoes.filter((s) => s.estado !== 'entregue')
+
+function SeloDoEstado(props: { s: Sessao }) {
+  const selo = seloDe(props.s)
+  return <Badge tone={selo.tom}>{selo.texto}</Badge>
+}
+
+function LinhaDoEstado(props: { s: Sessao }) {
+  const agora = read(tique) || relogio.agora()
+  const tempo = tempoDaSessao(props.s, agora)
+  const frase = fraseDaSessao(props.s)
+  return (
+    <Row align="center" gap="xs">
+      <SeloDoEstado s={props.s} />
+      {props.s.estado === 'mergeando' ? <Spinner label="Gate rodando" labelHidden /> : null}
+      <Box grow minWidth={0}>{frase ? <Text size="xs" truncate>{frase}</Text> : null}</Box>
+      {tempo ? <Box shrink={false}><Text size="xs" muted>{tempo}</Text></Box> : null}
+    </Row>
+  )
+}
+
+function Bolinha(props: { como: BolinhaDaSessao['estado'] }) {
+  if (props.como === 'feito') return <Box width={8} height={8} radius="full" background="success" shrink={false} />
+  if (props.como === 'agora') return <Box width={8} height={8} radius="full" background="accent" shrink={false} />
+  return <Box width={8} height={8} radius="full" border="neutral" shrink={false} />
+}
+
+/** O estado no rótulo da bolinha: no merge, o que falta (`2º da fila`), não a etapa de novo; a sigla PR fica maiúscula. */
+function estadoNaBolinha(s: Sessao): string {
+  switch (chaveDoSelo(s)) {
+    case 'mergeando': return 'gate rodando'
+    case 'na-fila': return s.posicaoNaFila ? `${s.posicaoNaFila}º da fila` : 'esperando o gate'
+    case 'pr-aberto': return 'fora da fila'
+    default: return seloDe(s).texto.toLowerCase()
+  }
+}
+
+/** O rótulo da bolinha de agora diz também o estado: `execução · travada`, `Lista de sessões — validando`. */
+function rotuloDaBolinha(s: Sessao, b: BolinhaDaSessao, comNomes: boolean): string {
+  if (b.estado !== 'agora') return b.nome
+  const selo = estadoNaBolinha(s)
+  if (comNomes) return `${b.nome} — ${selo}`
+  if (s.estado === 'trabalhando') {
+    if (s.subEtapa === 'design') return `${b.nome} · design`
+    return s.fatia && !s.fatia.total ? `${b.nome} · ${fatiaDe(s)}` : b.nome
+  }
+  return s.estado === 'validando' ? b.nome : `${b.nome} · ${selo}`
+}
+
+function Etapas(props: { s: Sessao }) {
+  const s = props.s
+  const comNomes = Boolean(s.fatia?.total)
+  return (
+    <Box gap="xs">
+      {s.feitasJuntas ? (
+        <Row align="center" gap="xs">
+          <Bolinha como="feito" />
+          <Text size="xs" muted>{s.feitasJuntas === 1 ? 'Fatia 1 feita' : `Fatias 1 a ${s.feitasJuntas} feitas`}</Text>
+        </Row>
+      ) : null}
+      {s.etapas.map((b, i) => (
+        <Row key={`b-${s.item}-${i}`} align="center" gap="xs">
+          <Bolinha como={b.estado} />
+          <Text size="xs" muted={b.estado === 'feito'} weight={b.estado === 'agora' ? 'semibold' : undefined}>{rotuloDaBolinha(s, b, comNomes)}</Text>
+        </Row>
+      ))}
+      {s.maisBolinhas ? <Text size="xs" muted>{`e mais ${s.maisBolinhas}`}</Text> : null}
+      {s.todasFeitas ? <Text size="xs">Todas as fatias têm PR mergeado; o item segue aberto.</Text> : null}
+    </Box>
+  )
+}
+
+/** `PR 173 aberto · PRs 168 e 165 mergeados`. */
+function linhaDosPRs(s: Sessao): string | null {
+  const { abertos } = s.prs
+  const mergeados = [...s.prs.mergeados].sort((a, b) => b - a)
+  const partes = [
+    abertos.length ? `${abertos.length === 1 ? 'PR' : 'PRs'} ${listaDePRs(abertos)} ${abertos.length === 1 ? 'aberto' : 'abertos'}` : null,
+    mergeados.length ? `${mergeados.length === 1 ? 'PR' : 'PRs'} ${listaDePRs(mergeados)} ${mergeados.length === 1 ? 'mergeado' : 'mergeados'}` : null,
+  ].filter(Boolean)
+  return partes.length ? partes.join(' · ') : null
+}
+
+function DetalheDaSessao(props: { s: Sessao }) {
+  const s = props.s
+  const agora = read(tique) || relogio.agora()
+  const prs = linhaDosPRs(s)
+  return (
+    <Box gap="sm">
+      {s.perguntas.length ? (
+        <Box gap="xs">
+          {s.perguntas.map((q) => <Text key={`sq-${s.item}-${q.id}`} size="sm">{`${q.id} · ${semItem(q.titulo)}`}</Text>)}
+          <Row><Button variant="ghost" size="sm" onPress={() => set(secao, 'perguntas')}>Responder em Perguntas</Button></Row>
+        </Box>
+      ) : s.motivo ? <Text size="sm">{`Motivo: ${s.motivo}`}</Text> : null}
+      {/* Espera sem pergunta não tem gesto em Perguntas: diz onde retomar. */}
+      {s.estado === 'esperando' && !s.perguntas.length ? <Text size="xs" muted>{`Retome na sessão do ${s.item}.`}</Text> : null}
+      {s.etapas.length ? <Etapas s={s} /> : null}
+      {prs ? <Text size="xs">{prs}</Text> : null}
+      {s.agora ? (
+        <Box gap="xs">
+          <Text size="xs" muted>{s.notaEm && ms(s.notaEm) ? `Nota da sessão · ${haQuanto(ms(s.notaEm), agora)}` : 'Nota da sessão'}</Text>
+          <Text size="sm">{s.agora}</Text>
+        </Box>
+      ) : null}
+      {s.dependeDe.length ? <Text size="xs">{`Depende de ${s.dependeDe.join(' e ')}, ainda ${s.dependeDe.length === 1 ? 'aberto' : 'abertos'}.`}</Text> : null}
+    </Box>
+  )
+}
+
+function CartaoDaSessao(props: { s: Sessao }) {
+  const s = props.s
+  const aberto = Boolean(read(sessoesAbertas)[s.item])
+  return (
+    <Box key={`s-${s.item}`} border={s.estado === 'esperando' ? 'warning' : true} radius="md" padding="sm" gap="xs">
+      <Row justify="between" align="center" gap="sm">
+        <Box grow minWidth={0}><Text size="sm" weight="semibold" truncate={!aberto}>{s.nome}</Text></Box>
+        <IconButton
+          variant="ghost" size="sm" icon={aberto ? 'collapse' : 'expand'} label={`${aberto ? 'Fechar' : 'Abrir'} ${s.item}`}
+          onPress={() => update(sessoesAbertas, (x) => (aberto ? sem(x, s.item) : { ...x, [s.item]: true }))}
+        />
+      </Row>
+      <LinhaDoEstado s={s} />
+      {aberto ? <DetalheDaSessao s={s} /> : null}
+    </Box>
+  )
+}
+
+function EntreguesHoje(props: { g: GrupoDeSessoes; entregues: Sessao[] }) {
+  return (
+    <Collapsible title={`Entregues hoje · ${props.entregues.length}`}>
+      <Box gap="sm">
+        {props.entregues.map((s) => (
+          <Box key={`h-${s.item}`} gap="xs">
+            <Text size="sm">{s.nome}</Text>
+            <Text size="xs" muted>{[s.desdeEm ? horaSP(ms(s.desdeEm)) : null, s.prs.mergeados.length ? `${s.prs.mergeados.length === 1 ? 'PR' : 'PRs'} ${listaDePRs(s.prs.mergeados)}` : null].filter(Boolean).join(' · ')}</Text>
+          </Box>
+        ))}
+        <Row><Button variant="ghost" size="sm" onPress={() => set(secao, 'entregas')}>Ver em Entregas</Button></Row>
+      </Box>
+    </Collapsible>
+  )
+}
+
+function GrupoDoProjeto(props: { g: GrupoDeSessoes }) {
+  const g = props.g
+  const vivas = vivasDe(g)
+  const entregues = g.sessoes.filter((s) => s.estado === 'entregue')
+  if (!vivas.length && !entregues.length) return null
+  return (
+    <Box gap="sm">
+      <Heading level={3}>{`${g.projeto ?? 'Sem projeto'} · ${vivas.length}`}</Heading>
+      {g.filaIlegivel ? <Text size="xs" muted>Não li a fila de merge deste projeto.</Text> : null}
+      {vivas.map((s) => <CartaoDaSessao key={`s-${s.item}`} s={s} />)}
+      {entregues.length ? <EntreguesHoje g={g} entregues={entregues} /> : null}
+    </Box>
+  )
+}
+
+/** A faixa do estado deduzido velho: a fila e as perguntas seguem em dia, porque o worker as lê a cada leitura. */
+function AvisoDasSessoes(props: { v: VistaDasSessoes }) {
+  const agora = read(tique) || relogio.agora()
+  const em = ms(props.v.batidaEm)
+  if (!em || agora - em <= BATIDA_VELHA_MS) return null
+  const texto = agora - em > BATIDA_DECLARADA_MS
+    ? `O estado das sessões não se atualiza ${haQuanto(em, agora)}. As etapas abaixo são as que as sessões gravaram.`
+    : `O estado das sessões não se atualiza ${haQuanto(em, agora)}. Etapa, PRs e paradas podem estar atrasados; a fila e as perguntas estão em dia.`
+  return <Callout tone="warning"><Text size="sm">{texto}</Text></Callout>
+}
+
+function Sessoes(props: { v: VistaDasSessoes }) {
+  const v = props.v
+  if (v.erro) {
+    return (
+      <Callout tone="danger">
+        <Box gap="sm">
+          <Text size="sm">{`Não li as sessões: ${v.erro}.`}</Text>
+          <Row><Button variant="outline" size="sm" onPress={() => void reler(true)}>Tentar de novo</Button></Row>
+        </Box>
+      </Callout>
+    )
+  }
+  const vivas = v.projetos.reduce((n, g) => n + vivasDe(g).length, 0)
+  return (
+    <Box gap="lg">
+      <AvisoDasSessoes v={v} />
+      {!vivas ? <EmptyState title="Nenhuma sessão trabalhando agora" description="Quando a orquestradora abrir uma sessão para um item, ela aparece aqui." icon="activity" /> : null}
+      {v.projetos.map((g) => <GrupoDoProjeto key={`g-${g.projeto ?? 'sem-projeto'}`} g={g} />)}
+    </Box>
+  )
+}
+
 // ── Casca ────────────────────────────────────────────────────────────────────────────────────────────────────────
 const SECOES: { id: Secao; nome: string; icone: string; rotulo: (l: Leitura | null) => string; numero: (l: Leitura | null) => number; tom: 'warning' | 'neutral' }[] = [
   { id: 'perguntas', nome: 'Perguntas', icone: 'bell', tom: 'warning',
@@ -854,6 +1103,14 @@ const SECOES: { id: Secao; nome: string; icone: string; rotulo: (l: Leitura | nu
   { id: 'entregas', nome: 'Entregas', icone: 'package', tom: 'neutral',
     numero: (l) => (l ? entregasVisiveis(l).lista.filter((e) => !(e.chave in read(limpasAgora))).length : 0),
     rotulo: (l) => { const n = l ? entregasVisiveis(l).lista.filter((e) => !(e.chave in read(limpasAgora))).length : 0; return `Entregas · ${n ? plural(n, 'nova', 'novas') : 'nenhuma nova'}` } },
+  // O número conta só o que nenhuma outra seção mostra: paradas e esperas sem pergunta aberta.
+  { id: 'sessoes', nome: 'Sessões', icone: 'activity', tom: 'neutral',
+    numero: (l) => l?.sessoes?.paradas ?? 0,
+    rotulo: (l) => {
+      if (l?.sessoes?.erro) return 'Sessões · não li as sessões'
+      const n = l?.sessoes?.paradas ?? 0
+      return `Sessões · ${n ? plural(n, 'parada', 'paradas') : 'nenhuma parada'}`
+    } },
 ]
 
 function Trilho(props: { l: Leitura | null; atual: Secao }) {
@@ -897,8 +1154,18 @@ function Cabecalho(props: { nome: string; l: Leitura | null }) {
 function Carregando(props: { atual: Secao }) {
   if (props.atual === 'perguntas') return <Skeleton shape="block" label="Lendo as perguntas" />
   if (props.atual === 'decisoes') return <Skeleton shape="text" lines={5} label="Lendo as decisões" />
+  if (props.atual === 'sessoes') {
+    return (
+      <Box gap="xs">
+        <Skeleton shape="text" lines={1} label="Lendo as sessões" />
+        <Skeleton shape="block" label="Lendo as sessões" /><Skeleton shape="block" label="Lendo as sessões" /><Skeleton shape="block" label="Lendo as sessões" />
+      </Box>
+    )
+  }
   return <Box gap="sm"><Skeleton shape="block" label="Lendo as entregas" /><Skeleton shape="block" label="Lendo as entregas" /><Skeleton shape="block" label="Lendo as entregas" /></Box>
 }
+
+const SEM_SESSOES: VistaDasSessoes = { projetos: [], paradas: 0, ilegiveis: 0, batidaEm: null, erro: null, lidoEm: 0 }
 
 export default function Painel() {
   const atual = read(secao)
@@ -919,6 +1186,7 @@ export default function Painel() {
   } else if (!l) corpo = <Carregando atual={atual} />
   else if (atual === 'perguntas') corpo = <Perguntas l={l} />
   else if (atual === 'decisoes') corpo = <Box gap="sm"><Text size="xs" muted>Confirmar só grava; ninguém é acordado.</Text><Decisoes l={l} /></Box>
+  else if (atual === 'sessoes') corpo = <Sessoes v={l.sessoes ?? SEM_SESSOES} />
   else corpo = <Entregas l={l} />
   return (
     <Box direction="row" gap="sm" padding="sm" align="start">

@@ -18,7 +18,7 @@ const entrega = (chave: string, extra: Partial<Entrega> = {}): Entrega => ({
   corpo: `mensagem ${chave}`, seguimento: { destino: 'run:run_a', quem: 'sessao' }, ...extra,
 })
 const leitura = (l: Partial<Leitura> = {}): Leitura =>
-  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, lidoEm: AGORA, ...l })
+  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: { projetos: [], paradas: 0, ilegiveis: 0, batidaEm: null, erro: null, lidoEm: AGORA }, lidoEm: AGORA, ...l })
 
 /** Um worker de mentira: devolve as respostas dadas e anota cada pedido, com a entrada. */
 function worker(respostas: Record<string, unknown>) {

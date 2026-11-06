@@ -12,7 +12,7 @@ const PERIGOSO = `sim, "aspas" 'simples' $(touch /tmp/f436-w-pwned) \`id\` $HOME
 
 type Ws = { id: string; kind: 'worktree' | 'folder'; name: string; path: string; branch: string | null; hostId: string | null }
 // `janelaMs`: a janela do lote de respostas (F448); 0 entrega na hora, para os casos que não medem o lote.
-function ambiente(opcoes: { workspaces?: (raiz: string) => Ws[]; mensagens?: object[]; janelaMs?: number } = {}) {
+function ambiente(opcoes: { workspaces?: (raiz: string) => Ws[]; mensagens?: object[]; janelaMs?: number; workers?: object[] } = {}) {
   const raiz = mkdtempSync(join(tmpdir(), 'f436-worker-'))
   const painel = join(raiz, 'painel')
   mkdirSync(join(painel, 'perguntas'), { recursive: true })
@@ -23,11 +23,13 @@ function ambiente(opcoes: { workspaces?: (raiz: string) => Ws[]; mensagens?: obj
   const mensagens = opcoes.mensagens ?? [{ id: 'msg_1', type: 'worker_done', run_id: 'run_a', subject: 'F9 · PR 1 pronto', body: 'feito', payload: '{"dispatchId":"ctx_1","outcome":"succeeded"}', created_at: new Date().toISOString() }]
   const caixa = join(raiz, 'caixa.json')
   writeFileSync(caixa, JSON.stringify(mensagens))
+  const workers = join(raiz, 'workers.json')
+  writeFileSync(workers, JSON.stringify({ result: { workers: opcoes.workers ?? [] } }))
   writeFileSync(orca, `#!/usr/bin/env node
 const fs = require('fs'); const a = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(log)}, a[1] + '\\n');
 if (a[1] === 'inbox') { const m = JSON.parse(fs.readFileSync(${JSON.stringify(caixa)}, 'utf8')); const i = a.indexOf('--limit'); console.log(JSON.stringify({ result: { messages: i < 0 ? m : m.slice(0, Number(a[i + 1])) } })); }
-else if (a[1] === 'worker-list') console.log('{"result":{"workers":[]}}');
+else if (a[1] === 'worker-list') console.log(fs.readFileSync(${JSON.stringify(workers)}, 'utf8'));
 else if (a[1] === 'send') { fs.writeFileSync(${JSON.stringify(args)}, JSON.stringify(a)); fs.appendFileSync(${JSON.stringify(args)} + 'l', JSON.stringify(a) + '\\n'); console.log('{"ok":true,"result":{"messageId":"msg_x"}}'); }
 `)
   chmodSync(orca, 0o755)
@@ -314,5 +316,31 @@ test('a resposta à pergunta da dona vai só ao endereço dela; título e orques
     assert.deepEqual(enviados.map((e) => e[3]).sort(), ['orca_session_id:dona-a', 'orca_session_id:dona-b'], 'uma mensagem a cada dona, nenhuma à Run nem à orquestradora')
     const paraA = enviados.find((e) => e[3] === 'orca_session_id:dona-a')!
     assert.ok(paraA[9].includes('para a dona A') && !paraA[9].includes('para a dona B'), paraA[9])
+  } finally { await w.deactivate() }
+})
+
+test('F452: a leitura traz as sessões por projeto, só de arquivos e do worker-list que a caixa já lê', async () => {
+  const a = ambiente({ workers: [{ terminal: 'structworker_f3', state: 'failed' }] })
+  const fila = (id: string, data: object) => writeFileSync(join(a.painel, 'fila', `${id}.json`), JSON.stringify({ id, version: 1, data }))
+  fila('F1', { titulo: 'Aba de sessões', projeto: 'kit', etapa: 'execucao', atualizadoEm: new Date().toISOString() })
+  fila('F2', { titulo: 'Outra', projeto: 'kit', etapa: 'execucao' })
+  fila('F3', { titulo: 'Caiu', projeto: 'kit', etapa: 'execucao', donoLocalId: 'orca_session_id:s-3' })
+  fila('F4', { titulo: 'Velha', projeto: 'kit', etapa: 'feito', feitoEm: '2020-01-01T00:00:00Z' })
+  const base = join(a.painel, '..')
+  mkdirSync(join(base, 'orca-sessoes'), { recursive: true })
+  writeFileSync(join(base, 'orca-sessoes', 's-3.json'), JSON.stringify({ terminal: 'structworker_f3' }))
+  a.pergunta('Q5', { estado: 'aberta', titulo: 'qual cor', item: 'F2' })
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    const r = await w.request('kit.ler', { forcar: true })
+    assert.ok(r.sessoes, 'a leitura tem sessoes')
+    assert.equal(r.sessoes.erro, null)
+    assert.deepEqual(r.sessoes.projetos.map((g: { projeto: string | null }) => g.projeto), ['kit'])
+    const s = r.sessoes.projetos[0].sessoes
+    assert.deepEqual(s.map((x: { item: string; estado: string }) => `${x.item}:${x.estado}`), ['F2:esperando', 'F3:parada', 'F1:trabalhando'])
+    assert.deepEqual(s[0].perguntas, [{ id: 'Q5', titulo: 'qual cor' }])
+    assert.equal(s[1].tipoDeParada, 'falhou', 'o worker do Orca que falhou chega à sessão')
+    assert.equal(r.sessoes.paradas, 1, 'a espera com pergunta não conta: Perguntas já a conta')
+    assert.deepEqual(a.chamadas().sort(), ['inbox', 'worker-list'])
   } finally { await w.deactivate() }
 })

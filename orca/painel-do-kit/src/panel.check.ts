@@ -1,7 +1,7 @@
 // Cenários do `orca plugin check` e do `orca plugin shot` da aba do kit (F436): cada seção cheia, as vazias, a falha
 // de leitura e o tema claro. Conteúdo de exemplo, no tom das perguntas reais do painel.
 import { defineCheck } from 'orca/testing'
-import type { Entrega, Leitura, Pergunta } from './protocol'
+import type { Entrega, GrupoDeSessoes, Leitura, Pergunta, Sessao, VistaDasSessoes } from './protocol'
 
 const AGORA = Date.now()
 const iso = (msAtras: number) => new Date(AGORA - msAtras).toISOString()
@@ -60,9 +60,45 @@ const doOutroProjeto: Pergunta[] = [
   { ...base, id: 'Q2012', estado: 'assumida', item: null, projeto: null, titulo: 'Troca do nome da tabela de logs', recomendacao: 'Manter o nome antigo até a próxima janela.', atualizadoEm: iso(30 * H) },
 ]
 const semProjeto: Pergunta = { ...abertas[1], id: 'Q1075', projeto: null, item: null, titulo: 'Qual fuso mostrar nos horários do relatório?', caso: 'Hoje sai em UTC e a equipe lê em São Paulo.', recomendacao: 'São Paulo.' }
+const sessao = (item: string, titulo: string, extra: Partial<Sessao> = {}): Sessao => ({
+  item, titulo, nome: `${item} · ${titulo}`, projeto: 'kit-de-orquestracao', etapa: 'execucao', estado: 'trabalhando', subEtapa: 'execucao',
+  tipoDeParada: null, motivo: null, prNaFila: null, posicaoNaFila: null, foraDaFila: false, desdeEm: iso(12 * MIN), agora: null, notaEm: null,
+  rodando: false, perguntas: [], prs: { abertos: [], mergeados: [] }, fatia: null, todasFeitas: false, etapas: [], feitasJuntas: 0, maisBolinhas: 0,
+  dependeDe: [], ...extra,
+})
+const esteira = (agora: number) => ['planejamento', 'execução', 'validação', 'merge', 'entregue']
+  .map((nome, i) => ({ nome, estado: i < agora ? 'feito' as const : i === agora ? 'agora' as const : 'falta' as const }))
+
+const izanagi: GrupoDeSessoes = {
+  projeto: 'izanagi', filaIlegivel: false, sessoes: [
+    sessao('F442', 'Izanagi 2.0 · S7: checkout e vale-troca na loja nova', {
+      projeto: 'izanagi', estado: 'esperando', motivo: 'pausado pelo operador para trocar de conta do gateway', desdeEm: iso(5 * H), etapas: esteira(1),
+    }),
+    sessao('F411', 'Izanagi 2.0: estudo e plano da troca de checkout', {
+      projeto: 'izanagi', estado: 'mergeando', etapa: 'merge', prNaFila: 1716, desdeEm: iso(6 * MIN), prs: { abertos: [1716], mergeados: [] }, etapas: esteira(3),
+    }),
+    sessao('F441', 'Izanagi 2.0 · S6: migração do status do pedido', {
+      projeto: 'izanagi', fatia: { atual: 3, total: 4 }, agora: 'medindo a S6 contra a base de ontem', notaEm: iso(2 * MIN), desdeEm: iso(2 * MIN),
+      prs: { abertos: [], mergeados: [1702, 1709] }, dependeDe: ['F440'],
+      etapas: [{ nome: 'Contrato do status', estado: 'feito' }, { nome: 'Leitura antiga', estado: 'feito' }, { nome: 'Migração', estado: 'agora' }, { nome: 'Limpeza', estado: 'falta' }],
+    }),
+    sessao('F430', 'Izanagi: frete por região no carrinho', { projeto: 'izanagi', estado: 'entregue', etapa: 'feito', desdeEm: iso(3 * H), prs: { abertos: [], mergeados: [1698] } }),
+  ],
+}
+const kit: GrupoDeSessoes = {
+  projeto: 'kit-de-orquestracao', filaIlegivel: false, sessoes: [
+    sessao('F445', 'Fila de merge: gate sobre a combinação', { estado: 'parada', tipoDeParada: 'gate-vermelho', motivo: '2 testes vermelhos em painel-mergear', desdeEm: iso(20 * MIN), etapas: esteira(3) }),
+    sessao('F453', 'Resumo da manhã com as sessões arquivadas', { estado: 'parada', tipoDeParada: 'sem-dona', etapa: 'planejamento', desdeEm: iso(40 * MIN), etapas: esteira(0) }),
+    sessao('F439', 'Modo Orca: a sessão do Orca no painel', { estado: 'na-fila', etapa: 'merge', prNaFila: 173, foraDaFila: true, desdeEm: iso(5 * H), prs: { abertos: [173], mergeados: [168, 165] }, etapas: esteira(3) }),
+    sessao('F452', 'Aba nova "Sessões" no Orca', { estado: 'validando', etapa: 'validacao', agora: 'rodando o validador', notaEm: iso(4 * MIN), desdeEm: iso(4 * MIN), etapas: esteira(2) }),
+  ],
+}
+const sessoes = (v: Partial<VistaDasSessoes> = {}): VistaDasSessoes =>
+  ({ projetos: [izanagi, kit], paradas: 3, ilegiveis: 0, batidaEm: iso(MIN), erro: null, lidoEm: AGORA - 20_000, ...v })
+const semSessoes = sessoes({ projetos: [], paradas: 0 })
 
 const leitura = (l: Partial<Leitura> = {}): Leitura =>
-  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, lidoEm: AGORA - 20_000, ...l })
+  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: semSessoes, lidoEm: AGORA - 20_000, ...l })
 const cheia = leitura({ abertas, assumidas, entregas })
 
 export default defineCheck({
@@ -77,5 +113,10 @@ export default defineCheck({
   'perguntas (sem projeto, claro)': { requests: { 'kit.ler': leitura({ abertas: [semProjeto, ...abertas] }) }, theme: 'light' },
   entregas: { requests: { 'kit.ler': leitura({ assumidas, entregas }) }, persisted: { plugin: { secao: 'entregas' } } },
   'entregas com a caixa fora': { requests: { 'kit.ler': leitura({ entregas: entregas.filter((e) => e.origem === 'painel'), erroDaCaixa: 'o Orca não respondeu à leitura da caixa' }) }, persisted: { plugin: { secao: 'entregas' } } },
+  sessoes: { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) }, persisted: { plugin: { secao: 'sessoes' } } },
+  'sessoes (claro)': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) }, persisted: { plugin: { secao: 'sessoes' } }, theme: 'light' },
+  'sessoes com o estado velho': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ batidaEm: iso(40 * MIN), projetos: [{ ...kit, filaIlegivel: true }] }) }) }, persisted: { plugin: { secao: 'sessoes' } } },
+  'sessoes vazias': { requests: { 'kit.ler': leitura() }, persisted: { plugin: { secao: 'sessoes' } } },
+  'sessoes nao lidas': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ projetos: [], erro: 'o worker não leu a pasta do painel' }) }) }, persisted: { plugin: { secao: 'sessoes' } } },
   'falha ao ler': { requests: { 'kit.ler': () => { throw new Error('worker parado') } } },
 })

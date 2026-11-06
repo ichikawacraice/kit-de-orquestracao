@@ -51,6 +51,60 @@ export type Acompanhada = {
   respondidaEm: string | null
   entregaDaResposta: EstadoDaEntrega | null
 }
+/** Uma sessão dona e o seu item, como a seção Sessões a mostra (F452). */
+export type EstadoDaSessao = 'esperando' | 'parada' | 'mergeando' | 'na-fila' | 'validando' | 'trabalhando' | 'entregue'
+export type Bolinha = { nome: string; estado: 'feito' | 'agora' | 'falta' }
+export type Sessao = {
+  item: string
+  titulo: string
+  nome: string
+  projeto: string | null
+  /** A etapa que vale: a deduzida, ou a declarada quando o estado deduzido falta ou passou de 25 min. */
+  etapa: string | null
+  estado: EstadoDaSessao
+  /** No trabalhando: planejamento, design ou execucao. */
+  subEtapa: string | null
+  /** Na parada: o motivo da trava (conflito, gate-vermelho, outra), falhou (a sessão do Orca), sem-dona ou sem-movimento. */
+  tipoDeParada: string | null
+  /** O texto da trava ou da espera. */
+  motivo: string | null
+  /** O PR do item que está na fila (ou fora dela, no merge). */
+  prNaFila: number | null
+  /** 1 é o próximo do gate: conta os em voo antes dos pendentes. */
+  posicaoNaFila: number | null
+  /** Na etapa merge, com PR aberto que ninguém anotou na fila. */
+  foraDaFila: boolean
+  /** Desde quando vale o estado: a pergunta, a trava, a última atividade ou o início do gate. O painel conta o tempo. */
+  desdeEm: string | null
+  agora: string | null
+  /** A idade da nota (`agora`). */
+  notaEm: string | null
+  /** A sessão do app está rodando agora (a do Orca não diz). */
+  rodando: boolean
+  perguntas: { id: string; titulo: string }[]
+  prs: { abertos: number[]; mergeados: number[] }
+  fatia: { atual: number; total: number | null } | null
+  /** Todas as fatias têm PR mergeado e o item segue aberto. */
+  todasFeitas: boolean
+  etapas: Bolinha[]
+  /** Com mais de 7 fatias: quantas feitas se juntam numa linha e quantas das que faltam não aparecem. */
+  feitasJuntas: number
+  maisBolinhas: number
+  /** Os itens de que este depende e que ainda não fecharam. */
+  dependeDe: string[]
+}
+export type GrupoDeSessoes = { projeto: string | null; filaIlegivel: boolean; sessoes: Sessao[] }
+export type VistaDasSessoes = {
+  projetos: GrupoDeSessoes[]
+  /** O número do trilho: paradas e esperas sem pergunta aberta (Perguntas já conta as outras). */
+  paradas: number
+  ilegiveis: number
+  /** Quando o estado deduzido foi gravado; null sem ele ou com a data no futuro. */
+  batidaEm: string | null
+  /** A leitura das sessões falhou, sem derrubar a aba. */
+  erro: string | null
+  lidoEm: number
+}
 
 export type Leitura = {
   abertas: Pergunta[]
@@ -61,6 +115,7 @@ export type Leitura = {
   erroDaCaixa: string | null
   /** Quando a caixa do Orca passa do limite lido: a data da mensagem mais velha que entrou (as entregas do Orca vão até ela). */
   caixaAte: string | null
+  sessoes: VistaDasSessoes
   lidoEm: number
   /** Só quando a aba pediu `acompanhar`: o estado gravado de cada id; `null` para a que sumiu. */
   acompanhadas?: Record<string, Acompanhada | null>
