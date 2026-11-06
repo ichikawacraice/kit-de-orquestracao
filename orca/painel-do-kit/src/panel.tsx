@@ -882,7 +882,7 @@ const SEM_ITEM_NO_TITULO = /^F\d+\s*·\s*/
 
 type Tom = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
 // Só 5 tons: o selo agrupa os estados por sentido, sem emoji e sem outro sinal de cor. Destaque anda (Executando, Planejando,
-// No design, Validando, Mergeando); âmbar espera algo ou alguém (Espera você, PR aberto, Na fila); verde terminou; vermelho quebrou
+// No design, Validando, Mergeando); âmbar espera algo ou alguém (Espera você, Esperando outro item, PR aberto, Na fila); verde terminou; vermelho quebrou
 // ou travou; neutro está parado sem causa. O texto sempre diz o estado: a cor nunca é a única pista.
 export const SELOS: Record<string, { texto: string; tom: Tom }> = {
   esperando: { texto: 'Espera você', tom: 'warning' },
