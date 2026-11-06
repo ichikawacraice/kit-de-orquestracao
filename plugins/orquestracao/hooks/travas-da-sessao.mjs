@@ -3,7 +3,9 @@
 // `🎛 orquestradora`) ou qualquer outra sessão. Evento de subagente usa o título da sessão-mãe (mesmo `session_id`).
 //   T3  start_session: com o modo ausente ligado (/ausente on), só abre sessão o turno em que o operador escreveu (inclusive a
 //       mensagem que ele digitou no meio do turno, F315); o cartão
-//       (initiation own_initiative) só propõe e passa.
+//       (initiation own_initiative) só propõe e passa. F445: vale também para o Bash que abre worker pelo `orca`
+//       (`orchestration worker-start` sem `--terminal`, `agent launch`, `worktree create --agent`), em qualquer anfitrião;
+//       no Orca, o turno do operador é o `sdk` sem envelope nem preâmbulo (pool-comum.mjs, operadorNoTurno).
 //   T5  Edit/Write em <BASE>/painel/ (só o painel.mjs grava) e em <BASE>/limpeza/ (o ok de limpar só nasce do clique na barra).
 //   T6  Bash `gh pr merge`, `painel mergear` ou `painel fila-de-merge` de quem não é a orquestradora, em repo com orquestradora ativa → ask.
 //   T7  clear_session da orquestradora sobre ela mesma: só com o ok do operador (turno humano, modo ausente, o botão de limpar
@@ -17,6 +19,8 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { registrar, lerEntrada, modoAusente, INICIO_DE_COMANDO, INVOCACAO_DO_PAINEL } from './hooks-crewai-comum.mjs';
+import { comandosDoOrca } from './trava-do-orca.mjs';
+import { anfitriao } from './anfitriao.mjs';
 import { BASE, registroDaSessao, ehOrquestradora, origemDoTurno, operadorNoTurno, gitCommonDir, projetoTemOrquestradora, perguntasDeLimpeza, okDoBotaoDeLimpar, gastarOkDoBotaoDeLimpar, marcarVoltaDaLimpeza, itensDonosDaSessao, handoffDoItem, janelasDeLimpeza, SIM_DA_JANELA_MS, semHeredoc, separadoresDeAspasNeutros } from './pool-comum.mjs';
 
 const HOOK = 'travas-da-sessao';
@@ -41,6 +45,10 @@ const OK_DO_PAINEL_MS = 30 * 60_000;
 const noPrazo = (iso) => { const t = Date.parse(iso); const d = Date.now() - t; return !Number.isNaN(t) && d >= 0 && d <= OK_DO_PAINEL_MS; };
 // Quem grava a prova do clique do operador numa pergunta: o pane do app (`painel`) e a aba do kit no Orca (`operador-orca`, F436).
 const ORIGENS_DO_CLIQUE = new Set(['painel', 'operador-orca']);
+
+// O comando do `orca` que abre um Claude novo: `worker-start` sem `--terminal`, `agent launch` e `worktree create --agent`; `--help` não abre.
+const abreWorker = (o) => o.bandeiras.help !== true && (o.sub === 'worker-start' ? o.bandeiras.terminal === undefined
+  : o.sub === 'agent-launch' || (o.sub === 'worktree-create' && typeof o.bandeiras.agent === 'string'));
 
 function main() {
   const e = lerEntrada();
@@ -67,6 +75,19 @@ function main() {
   }
 
   if (tool === 'Bash') {
+    // T3 no `orca` (F445): com o modo ausente, abrir worker é abrir sessão.
+    const b = typeof ti.command === 'string' && /orca|ORCA_CLI_COMMAND/.test(ti.command) ? modoAusente() : null;
+    if (b) {
+      const cwd = typeof e.cwd === 'string' && e.cwd ? e.cwd : process.cwd();
+      const abre = comandosDoOrca(ti.command, { cwd, env: process.env }).find(abreWorker);
+      if (abre) {
+        let operador = null;
+        try { operador = e.transcript_path ? operadorNoTurno(e.transcript_path, { orca: anfitriao({ env: process.env, cwd }).anfitriao === 'orca' }) : null; } catch { /* sem transcript */ }
+        if (operador !== true) {
+          return nega('T3', 'sessao', `orca ${abre.sub}`, `Modo ausente ligado desde ${b.desde} (/ausente on). O operador não escreveu neste turno: não abra worker pelo \`orca\` (${abre.sub}); deixe o item na fila do painel para a volta dele. Mandar mensagem a um worker que já existe (\`orca orchestration send\`, \`worker-start --terminal\`) segue valendo.`);
+        }
+      }
+    }
     const normal = separadoresDeAspasNeutros(semHeredoc(ti.command || ''));
     // F351: `fila-de-merge … --anotar` é a entrega da dona (põe o PR na fila e, com ela livre, lança a rodada sem turno
     // destacada, F427): passa. O pedaço de comando é cortado nos separadores, para o `--anotar` de um não liberar o `mergear` de outro.
