@@ -1,7 +1,9 @@
 // Fila de entrega das respostas no Orca (F448, fatia 9). Respostas dadas a poucos segundos uma da outra para a mesma
 // sessão saem juntas numa só mensagem: cada mensagem acorda a sessão e custa um turno do modelo. A janela conta da
 // primeira resposta do lote (uma resposta a cada poucos segundos não segura o lote para sempre); destinos diferentes
-// nunca se juntam; o que chega enquanto um envio ao mesmo destino está em voo vai no lote seguinte, depois dele.
+// nunca se juntam; o que chega enquanto um envio ao mesmo destino está em voo vai num lote próprio, que sai quando a
+// janela dele fecha, sem esperar o anterior: cada resposta espera no máximo a janela mais um envio (o prazo da tela é
+// por resposta, e um lote preso atrás de outro estouraria esse prazo com o Orca lento).
 // Sem import nenhum: o relógio (`agendar`) e o transporte (`enviarLote`) vêm de fora.
 
 /** Assunto e corpo de um lote. Uma resposta fica como era; várias viram uma lista numerada (cada texto já cita o Q-ID). */
@@ -20,18 +22,12 @@ export function montarLote(itens) {
  */
 export function criarFilaDeEntrega({ janelaMs, enviarLote, agendar = (fn, ms) => setTimeout(fn, ms) }) {
   const abertos = new Map(); // destino → { itens: [{ id, texto }], esperando: [resolve] }
-  const voos = new Map(); // destino → promessa do último envio (resolve sempre)
 
-  function despachar(destino, lote) {
-    const anterior = voos.get(destino) ?? Promise.resolve();
-    const voo = anterior.then(async () => {
-      let r;
-      try { r = await enviarLote(destino, montarLote(lote.itens)); } catch (e) { r = { ok: false, motivo: e instanceof Error ? e.message : String(e) }; }
-      const desfecho = r?.ok ? { ok: true } : { ok: false, motivo: r?.motivo ?? 'o envio não disse o motivo' };
-      for (const resolver of lote.esperando) resolver(desfecho);
-    });
-    voos.set(destino, voo);
-    void voo.then(() => { if (voos.get(destino) === voo) voos.delete(destino); });
+  async function despachar(destino, lote) {
+    let r;
+    try { r = await enviarLote(destino, montarLote(lote.itens)); } catch (e) { r = { ok: false, motivo: e instanceof Error ? e.message : String(e) }; }
+    const desfecho = r?.ok ? { ok: true } : { ok: false, motivo: r?.motivo ?? 'o envio não disse o motivo' };
+    for (const resolver of lote.esperando) resolver(desfecho);
   }
 
   function entregar(destino, { id, texto }) {
@@ -41,14 +37,14 @@ export function criarFilaDeEntrega({ janelaMs, enviarLote, agendar = (fn, ms) =>
         lote = { itens: [], esperando: [] };
         if (janelaMs > 0) {
           abertos.set(destino, lote);
-          agendar(() => { abertos.delete(destino); despachar(destino, lote); }, janelaMs);
+          agendar(() => { abertos.delete(destino); void despachar(destino, lote); }, janelaMs);
         }
       }
       const repetida = lote.itens.find((i) => i.id === id);
       if (repetida) repetida.texto = texto;
       else lote.itens.push({ id, texto });
       lote.esperando.push(resolver);
-      if (!(janelaMs > 0)) despachar(destino, lote);
+      if (!(janelaMs > 0)) void despachar(destino, lote);
     });
   }
 

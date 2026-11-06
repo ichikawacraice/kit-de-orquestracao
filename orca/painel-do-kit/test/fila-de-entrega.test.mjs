@@ -86,7 +86,7 @@ test('destinos diferentes nunca se juntam: cada sessão recebe só a resposta de
   assert.deepEqual(por['orca_session_id:bbb'].ids, ['Q2']);
 });
 
-test('o que chega durante um envio em voo vai no lote seguinte, depois que o primeiro termina', async () => {
+test('o que chega durante um envio em voo vai num lote próprio, que não espera o primeiro (o prazo da tela é por resposta)', async () => {
   let liberar;
   const travado = new Promise((r) => { liberar = r; });
   const ordem = [];
@@ -96,10 +96,11 @@ test('o que chega durante um envio em voo vai no lote seguinte, depois que o pri
   assert.deepEqual(ordem, ['começa Q1'], 'o primeiro lote está em voo');
   const p2 = a.fila.entregar('dispatch:ctx_1', { id: 'Q2', texto: 'dois' });
   await a.r.avancar(5000);
-  assert.deepEqual(ordem, ['começa Q1'], 'o segundo espera o primeiro terminar');
+  assert.deepEqual(await p2, { ok: true }, 'o segundo lote sai sem esperar o primeiro');
+  assert.deepEqual(ordem, ['começa Q1', 'começa Q2', 'termina Q2']);
   liberar();
-  await Promise.all([p1, p2]);
-  assert.deepEqual(ordem, ['começa Q1', 'termina Q1', 'começa Q2', 'termina Q2']);
+  assert.deepEqual(await p1, { ok: true });
+  assert.deepEqual(a.envios.map((e) => e.ids), [['Q1'], ['Q2']]);
 });
 
 test('a falha do envio chega a todas as respostas do lote, com o motivo; a exceção vira falha, não rejeição', async () => {

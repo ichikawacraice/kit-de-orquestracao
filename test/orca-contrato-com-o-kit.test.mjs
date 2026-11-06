@@ -1,12 +1,13 @@
 // F448 (fatia 9): o painel do kit e a aba do Orca guardam, cada um, uma cópia do contrato do endereço de entrega (o
-// plugin do Orca não importa o kit em tempo de execução). Este teste compara as duas cópias numa tabela de amostras, e a
+// plugin do Orca não importa o kit, nem o runner dele aceita import de fora do plugin: por isso este teste mora na raiz).
+// Compara as cópias numa tabela de amostras, a reserva do painel com a regra do kit, e a
 // origem do clique que a aba grava com as que a trava de limpeza aceita.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { destinoValido } from '../src/nucleo/envio.mjs';
-import { ORIGEM } from '../src/nucleo/painel.mjs';
-import { ehDestinoDoOrca, DESTINO_DO_ORCA } from '../../../plugins/orquestracao/hooks/anfitriao.mjs';
+import { destinoValido } from '../orca/painel-do-kit/src/nucleo/envio.mjs';
+import { ORIGEM } from '../orca/painel-do-kit/src/nucleo/painel.mjs';
+import { ehDestinoDoOrca, DESTINO_DO_ORCA } from '../plugins/orquestracao/hooks/anfitriao.mjs';
 
 const AMOSTRAS = [
   ['orca_session_id:880dae07-91e8-4aae-9a46-0e857a656849', true],
@@ -35,10 +36,19 @@ test('o endereço que o painel aceita é o mesmo que a aba envia (amostra por am
 });
 
 test('a origem do clique que a aba grava é uma das que a trava de limpeza aceita', () => {
-  const fonte = readFileSync(new URL('../../../plugins/orquestracao/hooks/travas-da-sessao.mjs', import.meta.url), 'utf8');
+  const fonte = readFileSync(new URL('../plugins/orquestracao/hooks/travas-da-sessao.mjs', import.meta.url), 'utf8');
   const linha = fonte.split('\n').find((l) => l.includes('const ORIGENS_DO_CLIQUE = new Set('));
   assert.ok(linha, 'a trava declara as origens do clique');
   const origens = [...linha.matchAll(/'([^']+)'/g)].map((m) => m[1]);
   assert.ok(origens.includes('painel'), `insumo: ${linha}`);
   assert.ok(origens.includes(ORIGEM), `a trava não aceita ${ORIGEM}: ${linha}`);
+});
+
+test('a regra de reserva do painel (quando o anfitriao.mjs não carrega) é a mesma do kit', () => {
+  const fonte = readFileSync(new URL('../plugins/orquestracao/skills/orquestradora/scripts/painel.mjs', import.meta.url), 'utf8');
+  const linha = fonte.split('\n').find((l) => l.includes('ehDestinoDoOrca = (v) =>'));
+  assert.ok(linha, 'o painel declara a reserva');
+  const m = linha.match(/&& \/(.+)\/\.test\(v\)/);
+  assert.ok(m, `insumo: ${linha}`);
+  assert.equal(m[1], DESTINO_DO_ORCA.source);
 });

@@ -493,8 +493,10 @@ function enderecoDaPergunta(chave, novo, base, antes) {
   const trocouSessao = 'sessaoId' in novo && novo.sessaoId !== antes?.sessaoId;
   if (trocouSessao && !('endereco' in novo) && antes?.endereco?.orca && antes.endereco.orca === antes.sessaoId) delete base.endereco;
   if (ESPERA_ENTREGA.has(base.estado) && !base.endereco && ehDoOrca(base.sessaoId)) base.endereco = { orca: base.sessaoId };
-  if ((!antes || trocouSessao) && ESPERA_ENTREGA.has(base.estado) && !base.endereco && base.sessaoId && ehDoOrca(quemSou())) {
-    throw new Error(`${chave}: pergunta ${base.estado} numa sessão do Orca sem endereço de entrega — grave sessaoId = o seu orca_session_id:… (ou endereco: {"orca": "dispatch:…"}); com ${JSON.stringify(base.sessaoId)} a resposta dada na aba do kit não teria aonde ir`);
+  // Recusa a pergunta que ENTRA em espera de entrega no Orca sem endereço: nasce, troca de sessaoId ou volta a aberta/assumida.
+  const entraEmEspera = !antes || trocouSessao || !ESPERA_ENTREGA.has(antes.estado);
+  if (entraEmEspera && ESPERA_ENTREGA.has(base.estado) && !base.endereco && ehDoOrca(quemSou())) {
+    throw new Error(`${chave}: pergunta ${base.estado} numa sessão do Orca sem endereço de entrega — grave sessaoId = o seu orca_session_id:… (ou endereco: {"orca": "dispatch:…"}); com sessaoId ${JSON.stringify(base.sessaoId ?? null)} a resposta dada na aba do kit não teria aonde ir`);
   }
 }
 

@@ -39,6 +39,8 @@ const passa = (r, msg) => assert.equal(r.exit, 0, `${msg}: ${r.err}`);
 const recusa = (r, trecho, msg) => { assert.equal(r.exit, 1, `${msg}: deveria recusar (${r.out})`); assert.ok(r.err.includes(trecho), `${msg}: stderr sem "${trecho}": ${r.err}`); };
 const pergunta = (Q) => JSON.parse(readFileSync(join(base, 'painel', 'perguntas', `${Q}.json`), 'utf8')).data;
 const set = (env, Q, data) => painel(env, 'set', 'perguntas', Q, JSON.stringify(data));
+// A respondida mora noutra pasta (arquivo): lida pelo próprio painel.
+const lida = (Q) => { const r = painel({}, 'get', 'perguntas', Q); passa(r, `get ${Q}`); const j = JSON.parse(r.out); return j.data ?? j; };
 
 test('a pergunta aberta ou assumida com sessaoId do Orca nasce com o endereço de entrega dela (worker e coordenadora)', () => {
   passa(set(NO_ORCA, 'Q1', { estado: 'aberta', titulo: 'do worker', sessaoId: WORKER }), 'aberta do worker');
@@ -73,6 +75,22 @@ test('no Orca, a pergunta que nasce sem endereço de entrega é recusada; no app
   passa(set(NO_ORCA, 'Q4', { estado: 'aberta', titulo: 'explícito', sessaoId: LOCAL, endereco: { orca: 'run:run_a' } }), 'com endereço explícito');
   // A pergunta respondida (ou cancelada) não espera entrega: nasce sem endereço também no Orca.
   passa(set(NO_ORCA, 'Q5', { estado: 'respondida', titulo: 'já resolvida', sessaoId: LOCAL, resposta: 'sim' }), 'respondida');
+});
+
+test('no Orca, toda pergunta que ENTRA em espera sem endereço é recusada: sem sessaoId, sem estado e depois aberta, reaberta', () => {
+  recusa(set(NO_ORCA, 'Q1', { estado: 'assumida', titulo: 'x', recomendacao: 'y' }), 'endereço de entrega', 'assumida sem sessaoId');
+  passa(set(NO_ORCA, 'Q2', { titulo: 'rascunho', sessaoId: LOCAL }), 'sem estado não espera entrega');
+  recusa(painel(NO_ORCA, 'update', 'perguntas', 'Q2', JSON.stringify({ estado: 'aberta' })), 'endereço de entrega', 'update para aberta');
+  passa(set(NO_ORCA, 'Q3', { estado: 'respondida', titulo: 'r', sessaoId: LOCAL, resposta: 'sim' }), 'respondida');
+  recusa(painel(NO_ORCA, 'update', 'perguntas', 'Q3', JSON.stringify({ estado: 'aberta' })), 'endereço de entrega', 'reaberta');
+  assert.equal(pergunta('Q2').estado, undefined, 'o update recusado não gravou');
+  assert.equal(lida('Q3').estado, 'respondida', 'o update recusado não gravou');
+  // Presença: com o sessaoId do Orca a mesma reabertura passa e ganha o endereço.
+  passa(set(NO_ORCA, 'Q4', { estado: 'respondida', titulo: 'r', sessaoId: WORKER, resposta: 'sim' }), 'respondida do Orca');
+  passa(painel(NO_ORCA, 'update', 'perguntas', 'Q4', JSON.stringify({ estado: 'aberta' })), 'reaberta do Orca');
+  assert.deepEqual(lida('Q4').endereco, { orca: WORKER });
+  // Fora do Orca, nada disso é recusado.
+  passa(set(NO_APP, 'Q5', { estado: 'assumida', titulo: 'x', recomendacao: 'y' }), 'assumida sem sessaoId no app');
 });
 
 test('no Orca, mexer numa pergunta do app que já existe não exige endereço (só o nascimento e a troca de sessaoId exigem)', () => {
