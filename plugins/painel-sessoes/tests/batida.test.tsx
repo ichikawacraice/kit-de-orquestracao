@@ -17,6 +17,8 @@ type Opc = {
   env?: Record<string, string>
   vez?: { localId: string; em: number }
   semPlugin?: boolean
+  /** O anfitrião não tem as ferramentas do app (Orca): toda `mcp__ccd_session_mgmt__*` lança como o Orca lança. */
+  semFerramentas?: boolean
   mensagens?: Array<{ para: string; texto: string; item: string | null; tipo: string }>
   envioFalha?: 'erro' | 'excecao'
   /** Outra sessão regrava a vez nesses ms depois da nossa (a corrida). */
@@ -60,6 +62,7 @@ async function iniciar($: Parameters<TestBody>[0], on: On, opc: Opc = {}) {
   const listas: Array<Record<string, unknown>> = []
   on('tool.call', (_, e) => {
     chamadas.push(e.tool)
+    if (opc.semFerramentas && e.tool.startsWith('mcp__ccd_session_mgmt__')) throw new Error(`$.tool.call: no tool named "${e.tool}" in this session`)
     const entrada = e as unknown as Record<string, unknown>
     if (e.tool === 'mcp__ccd_session_mgmt__get_session') return { result: {}, text: JSON.stringify({ sessionId: EU, title: 'eu', isRunning: true }) }
     if (e.tool === 'mcp__ccd_session_mgmt__list_sessions') {
@@ -188,4 +191,24 @@ test('BATIDA_MIN troca o intervalo', async ($, on) => {
   const m = await iniciar($, on, { env: { BATIDA_MIN: '30' }, vez: { localId: OUTRA, em: AGORA - 20 * MIN } })
   await m.rodarMinuto()
   expect(m.execucoes.length, '20 min < 30: espera').toBe(0)
+})
+
+for (const [nome, env] of [['ORCA_STRUCTURED_SESSION=1', { ORCA_STRUCTURED_SESSION: '1' }], ['ORCA_AGENT_SESSION_ID', { ORCA_AGENT_SESSION_ID: 'bda692d7-dda9-4f96-ad1d-4aff11ac038a' }]] as const) {
+  test(`no Orca (${nome}): a batida não chama o app, não grava nada e não escreve na conversa`, async ($, on) => {
+    const m = await iniciar($, on, { env, semFerramentas: true })
+    await m.rodarMinuto()
+    await m.rodarMinuto()
+    expect(m.logs.filter(l => l.includes('batida')), 'nada de batida na conversa').toEqual([])
+    expect(m.logs.filter(l => l.includes('no tool named')), 'nenhum erro de ferramenta ausente na conversa').toEqual([])
+    expect(m.chamadas.filter(c => c.startsWith('mcp__ccd_session_mgmt__')).length, 'a batida não toca a ferramenta do app').toBe(0)
+    expect(m.execucoes.length).toBe(0)
+    expect(m.escritas).not.toContain(VEZ)
+  })
+}
+
+test('no app desktop com a ferramenta presente a batida roda (prova do teste do Orca)', async ($, on) => {
+  const m = await iniciar($, on, { env: { CLAUDE_CODE_HOST_SESSION_ID: 'x' } })
+  await m.rodarMinuto()
+  expect(m.chamadas.some(c => c.endsWith('get_session'))).toBe(true)
+  expect(m.execucoes.length).toBeGreaterThan(0)
 })
