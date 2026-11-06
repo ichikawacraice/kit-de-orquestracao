@@ -81,7 +81,7 @@ function workersDoItem(base, d, workers) {
   const meus = terminal ? workers.filter((x) => x?.terminal === terminal) : [];
   return {
     falhou: meus.length > 0 && meus.every((w) => w.state === 'failed' || w.outcome === 'failed'),
-    entregou: meus.length > 0 && meus.every((w) => w.outcome === 'succeeded'),
+    entregou: meus.length > 0 && meus.every((w) => w.state === 'succeeded'),
   };
 }
 

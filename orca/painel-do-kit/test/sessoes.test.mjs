@@ -413,7 +413,7 @@ test('F474: PR do item na fila vale antes de dona encerrada e de parado, mesmo c
 test('F474: worker_done com sucesso e PR aberto fora da fila é "PR aberto", não "Sem sessão"; sem PR aberto continua parada', () => {
   const orcaSessoes = { 'abc-1': { terminal: 'term-1' } };
   const itens = { F1: item({ donoLocalId: 'orca_session_id:abc-1' }) };
-  const workers = [{ terminal: 'term-1', state: 'done', outcome: 'succeeded' }];
+  const workers = [{ terminal: 'term-1', state: 'succeeded' }];
   const com = montar({ itens, orcaSessoes, deduzido: { F1: ded({ donaViva: false, prsAbertos: [44] }) } });
   const s = so(ler(com, { workers }));
   assert.deepEqual([s.estado, s.foraDaFila, s.prNaFila], ['na-fila', true, 44]);
@@ -421,4 +421,7 @@ test('F474: worker_done com sucesso e PR aberto fora da fila é "PR aberto", nã
   assert.equal(so(ler(sem, { workers })).estado, 'parada', 'entregou sem PR aberto: não há o que esperar');
   // Sem o sinal de sucesso (worker falhou ou não há worker), o PR aberto sozinho não livra a dona sumida.
   assert.equal(so(ler(com)).estado, 'parada');
+  // Despacho de follow-up em andamento (a forma real: state ready, outcome in_progress): a dona segue, não entregou.
+  const seguindo = [...workers, { terminal: 'term-1', state: 'ready', outcome: 'in_progress' }];
+  assert.equal(so(ler(com, { workers: seguindo })).estado, 'parada');
 });
