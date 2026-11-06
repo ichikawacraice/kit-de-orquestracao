@@ -200,7 +200,7 @@ teste('todo selo passa pelo mesmo desenho: pílula com contorno, bolinha no tom 
   const sessoes = chaves.map((chave, i) => {
     const base = { estado: 'trabalhando', subEtapa: null } as Partial<Sessao>
     const porChave: Record<string, Partial<Sessao>> = {
-      esperando: { estado: 'parada', tipoDeParada: 'esperando' }, travada: { estado: 'parada', tipoDeParada: 'travada' },
+      esperando: { estado: 'parada', tipoDeParada: 'esperando' }, 'espera-item': { estado: 'esperando', tipoDeEspera: 'item' }, travada: { estado: 'parada', tipoDeParada: 'travada' },
       'gate-vermelho': { estado: 'parada', tipoDeParada: 'gate-vermelho' }, 'sem-movimento': { estado: 'parada', tipoDeParada: 'sem-movimento' },
       falhou: { estado: 'parada', tipoDeParada: 'falhou' }, 'sem-dona': { estado: 'parada', tipoDeParada: 'sem-dona' },
       mergeando: { estado: 'mergeando' }, 'na-fila': { estado: 'na-fila', foraDaFila: false }, 'pr-aberto': { estado: 'na-fila', foraDaFila: true },
