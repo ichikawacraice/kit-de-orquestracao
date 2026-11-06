@@ -88,7 +88,8 @@ export default function activate(orca: OrcaWorkerApi): void {
       dir = preparado.dir
       const { workspaces } = await orca.host.call('workspace.list', {})
       // O terminal lê o texto de um arquivo desta máquina: workspace de host remoto (SSH) não serve.
-      const locais = workspaces.filter((w) => !w.hostId)
+      // Pasta local vem sem hostId (antigo) ou com hostId "local" (Orca atual, F449).
+      const locais = workspaces.filter((w) => !w.hostId || w.hostId === 'local')
       const ws = locais.find((w) => w.kind === 'worktree') ?? locais[0]
       if (!ws) return { ok: false, motivo: 'nenhum workspace aberto nesta máquina para criar o terminal de envio' }
       await orca.host.call('terminal.create', { workspaceId: ws.id, title: 'Kit · enviando resposta', command: preparado.comando })
