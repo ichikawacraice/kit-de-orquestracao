@@ -24,6 +24,9 @@ export const ehDaOrquestradora = (titulo, projeto) => {
   return Boolean(m) && slugDoProjeto(m[1]) === projeto; // o mesmo slug do painel ("Meu Projeto" → meu-projeto)
 };
 const vivoNaLista = (row) => row && row.isArchived !== true;
+// F444 (ADR 0030, item 6): a dona do Orca não tem linha na lista do app; o formato fino do id mora em hooks/anfitriao.mjs, aqui
+// basta o prefixo. `vidaDoOrca(id)` → true (worker vivo), false (o terminal dela todo liberado) ou null (fora da vista).
+const ehDoOrca = (id) => typeof id === 'string' && id.startsWith('orca_session_id:');
 
 // A sessão aberta pelo cartão se chama `F<n> · …`, com o item do cartão.
 const tituloDoCartao = (titulo, c) => (/^(F\d+) · /.exec(titulo || '')?.[1] ?? null) === c.itens?.[0];
@@ -70,7 +73,7 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs, itens =
 // F423 (ADR 0027): `deduzidos` (Map F → estado-deduzido.mjs#deduzir) troca o declarado pelo deduzido: a etapa, os PRs e o "parado"
 // (pela última atividade da sessão, do commit, do PR ou do item) saem dele. O item cujos PRs ligados estão todos mergeados (sem
 // `maisFatias`) vai em `fechar`: fecha pelo merge, nunca por declaração. Item sem dedução segue pelo declarado (o item antigo).
-export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, filasVivas = {}, desfechos = {}, avisos = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN, limites = {}, handoffDe = () => null, deduzidos = new Map() }) {
+export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, filasOrfas = {}, filasVivas = {}, desfechos = {}, avisos = {}, donaACaminho = () => false, cartoes = [], ultimo = () => null, caminhoDoRelatorio = () => '', prazoMin = PRAZO_MIN, soltaMin = BATIDA_SOLTA_MIN, limites = {}, handoffDe = () => null, deduzidos = new Map(), vidaDoOrca = () => null }) {
   const porId = new Map(linhas.map((r) => [r.sessionId, r]));
   const cutucadas = { ...(estado?.cutucadas ?? {}) };
   // a hora do reset já avisada, por dona; sai 24 h depois do reset
@@ -147,9 +150,12 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     }
     if (parado && gente.length) {
       if (gente.some((id) => porId.get(id)?.isRunning === true && viva(id))) { delete cutucadas[F]; continue; }
+      // F444: a sessão do Orca não recebe a cutucada (o send_message do app não a alcança) e só sai do item quando a lista de
+      // workers do Orca prova que ela acabou; viva ou fora da vista, o item fica com ela
+      if (gente.some((id) => ehDoOrca(id) && vidaDoOrca(id) !== false)) { delete cutucadas[F]; continue; }
       const presentes = gente.filter(viva);
       if (!presentes.length) {
-        soltar.push({ F, motivo: 'a sessão do item foi arquivada ou sumiu' });
+        soltar.push({ F, motivo: gente.some(ehDoOrca) ? 'a sessão do Orca do item acabou (o terminal dela foi liberado)' : 'a sessão do item foi arquivada ou sumiu' });
         delete cutucadas[F];
         continue;
       }

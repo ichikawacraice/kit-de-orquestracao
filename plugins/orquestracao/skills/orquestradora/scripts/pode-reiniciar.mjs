@@ -206,10 +206,26 @@ export function lerParaBaixar({ home, cache, agoraMs = Date.now(), env = process
 }
 
 /** O texto da resposta. `idadeMin` só quando a lista é a da batida. As linhas do kit vêm por último e não são motivo. */
-export function textoDoReinicio({ pode, motivos, sessoesDe, idadeMin, paraAplicar, paraBaixar }) {
+/**
+ * F444 (ADR 0030, item 6): os workers do Orca na conta do reinício, da lista de `workersDoOrca` (hooks/orca-workers.mjs). Não são
+ * motivo: reiniciar o app do Claude não derruba o Orca, e o worker fica `retained` depois do worker_done (seguraria para sempre).
+ * → { vivos } | { erro } | null (sem orca na máquina).
+ */
+export function orcaNoReinicio(lista) {
+  if (!lista) return null;
+  if (lista.erro || !Array.isArray(lista.workers)) return { erro: lista.erro || 'lista sem workers' };
+  return { vivos: lista.workers.filter((w) => w.vivo).length };
+}
+const textoDoOrca = (orca) => {
+  if (orca?.erro) return `Workers do Orca: não consegui ler a lista (${orca.erro}).\n`;
+  if (!orca?.vivos) return '';
+  return `${orca.vivos} ${orca.vivos === 1 ? 'worker do Orca vivo' : 'workers do Orca vivos'}: reiniciar o app do Claude não os derruba; reiniciar o Orca, sim.\n`;
+};
+
+export function textoDoReinicio({ pode, motivos, sessoesDe, idadeMin, paraAplicar, paraBaixar, orca }) {
   const idade = sessoesDe === 'batida' && idadeMin !== undefined ? `(lista de há ${idadeMin} min)\n` : '';
   const aplicar = paraAplicar?.length ? `Plugins do kit instalados (${paraAplicar.map((p) => `${p.nome} ${p.versao}`).join(', ')}): reinicie o app para aplicar.\n` : '';
   const baixar = paraBaixar?.length ? `Atualização do kit para baixar (${paraBaixar.map((p) => `${p.nome} ${p.publicada}`).join(', ')}): rode atualizar-plugins.\n` : '';
-  const kit = `${aplicar}${baixar}`;
+  const kit = `${aplicar}${baixar}${textoDoOrca(orca)}`;
   return pode ? `Pode reiniciar.\n${kit}${idade}` : `Não reinicie agora:\n${motivos.map((m) => m.texto).join('\n')}\n${kit}${idade}`;
 }

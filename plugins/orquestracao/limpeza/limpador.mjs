@@ -7,6 +7,9 @@
 // Falhou uma medição global (sessões, lsof, registro do app, protegidos, trava): nada se apaga na rodada (saída 2). Falhou uma
 // medição de um repositório (git worktree list, origin ilegível, gh): só aquele repositório fica de fora do passo worktrees (saída 2).
 // Repositório sem origin ou fora do GitHub fica de fora do passo worktrees como aviso (foraDoPasso), sem saída 2.
+// F444 (critério 11): a worktree com sessão do Orca viva fica (worker não liberado com a pasta nela, ou registro de
+// `orca-sessoes/` com o cwd nela que a lista não dá por encerrado). Com o `orca` instalado, a lista ilegível é falha fechada;
+// o registro da sessão que a lista dá por encerrada sai junto com os passos worktrees/builds, só com --aplicar.
 // Uso: node limpador.mjs [--aplicar [--se-ligado]] [--repo <caminho>]… [--passos worktrees,builds,logs] [--horas <n>]
 //      [--dias-builds <n>] [--teto-log-mb <n>] [--json | --resumo] | --plist
 import { spawnSync } from 'node:child_process';
@@ -17,6 +20,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname, resolve, sep } from 'node:path';
+import { workersDoOrca, dentroDe, vidaDoRegistro } from '../hooks/orca-workers.mjs';
 
 const HOME = homedir();
 const E = process.env;
@@ -171,6 +175,49 @@ function lerWorktrees(repo) {
   }
   if (lista.length === 0) throw new FalhaFechada('git worktree list não devolveu nenhum worktree');
   return lista;
+}
+
+// A lista de workers do Orca e os registros de `orca-sessoes/`. Sem `orca` na máquina, a lista é null e só os registros
+// valem (nenhum sai: sem a lista, nenhuma sessão é dada por encerrada). Lista com erro ou registro ilegível: falha fechada.
+const ORCA_SESSOES = join(BASE_KIT, 'orca-sessoes');
+function lerOrca() {
+  const lista = workersDoOrca();
+  if (lista?.erro) throw new FalhaFechada(`não consegui ler a lista de workers do Orca: ${lista.erro}`);
+  const registros = [];
+  let nomes = [];
+  try { nomes = readdirSync(ORCA_SESSOES).filter((n) => n.endsWith('.json')).sort(); } catch (e) {
+    if (e.code !== 'ENOENT') throw new FalhaFechada(`não consegui ler a pasta orca-sessoes (${ORCA_SESSOES}): ${e.message}`);
+  }
+  for (const n of nomes) {
+    const arquivo = join(ORCA_SESSOES, n);
+    let bruto; let reg;
+    try { bruto = readFileSync(arquivo, 'utf8'); reg = JSON.parse(bruto); } catch (e) { throw new FalhaFechada(`registro de orca-sessoes ilegível: ${arquivo} (${e.message})`); }
+    if (!reg || typeof reg !== 'object') throw new FalhaFechada(`registro de orca-sessoes ilegível: ${arquivo} (não é um objeto)`);
+    registros.push({ arquivo, reg, bruto });
+  }
+  return { lista, registros };
+}
+// Critério 11: o motivo para a worktree ficar, ou null. O worker conta pela pasta DELE dentro da worktree (um worker no
+// checkout principal não segura a worktree que mora dentro dele); o registro, pelo cwd dentro dela e a vida não provada falsa.
+function c11(wt, orca) {
+  const vivos = (orca.lista?.workers ?? []).filter((w) => w.vivo && dentroDe(w.pasta, wt));
+  if (vivos.length) return `${vivos.length === 1 ? 'worker do Orca vivo' : `${vivos.length} workers do Orca vivos`} com a pasta aqui (${vivos.slice(0, 3).map((w) => w.terminal || w.dispatchId || '?').join(', ')})`;
+  const regs = orca.registros.filter(({ reg }) => dentroDe(reg.cwd, wt) && vidaDoRegistro(reg, orca.lista) !== false);
+  if (regs.length) return `sessão do Orca com o diretório de trabalho aqui, não encerrada pela lista (${regs.slice(0, 3).map(({ reg }) => reg.orcaId || '?').join(', ')})`;
+  return null;
+}
+function passoOrcaSessoes(orca, aplicar, rel) {
+  if (!orca.lista) return;
+  for (const { arquivo, reg, bruto } of orca.registros) {
+    if (vidaDoRegistro(reg, orca.lista) !== false) continue;
+    const item = { arquivo, orcaId: reg.orcaId ?? null, cwd: reg.cwd ?? null };
+    if (!aplicar) { rel.orcaSessoes.seriamApagados.push(item); continue; }
+    // a lista tem a idade da rodada: o arquivo que mudou desde a leitura (a sessão regravou o registro) fica para a próxima
+    let agoraBruto = null;
+    try { agoraBruto = readFileSync(arquivo, 'utf8'); } catch { /* sumiu: nada a apagar */ }
+    if (agoraBruto !== bruto) continue;
+    try { rmSync(arquivo); rel.orcaSessoes.apagados.push(item); } catch (e) { rel.erros.push({ caminho: arquivo, mensagem: `orca-sessoes: não consegui apagar: ${e.message}` }); }
+  }
 }
 
 // A lista do limpador antigo (antes do F428 a saída era outra pasta): lida junto, para a proteção não depender
@@ -425,6 +472,7 @@ function avaliar(w, ctx, { so } = {}) {
     const procs = ctx.cwds.filter((c) => dentro(c, wt));
     if (procs.length) add(3, `${procs.length} processo(s) com diretório de trabalho dentro`);
   }
+  if (quer(11) && ctx.orca) { const m = c11(wt, ctx.orca); if (m) add(11, m); }
   if (quer(9)) {
     const a = atividade(w);
     if (a.erro) add(9, a.erro);
@@ -488,6 +536,7 @@ function passoBuilds(repoRel, lista, ctx, args, aplicar, rel, jaSaem) {
     if (ctx.reservas.some((r) => r.path === w.caminho && !r.leasedBy)) continue; // pronta para a próxima sessão: fica inteira
     if (ctx.sessoes.some((s) => dentro(s.cwd, w.caminho))) continue;
     if (ctx.cwds.some((c) => dentro(c, w.caminho))) continue;
+    if (ctx.orca && c11(w.caminho, ctx.orca)) continue; // sessão do Orca viva aqui: o build é dela
     const a = atividade(w);
     if (a.erro) continue;
     const dias = (agora() - a.ms) / DIA;
@@ -501,6 +550,9 @@ function passoBuilds(repoRel, lista, ctx, args, aplicar, rel, jaSaem) {
     let cwds;
     try { cwds = lerLsof(); } catch (e) { rel.erros.push({ caminho: w.caminho, mensagem: `builds: reconferência antes de apagar falhou: ${e.message}` }); continue; }
     if (cwds.some((c) => dentro(c, w.caminho))) continue;
+    let orca;
+    try { orca = lerOrca(); } catch (e) { rel.erros.push({ caminho: w.caminho, mensagem: `builds: reconferência do Orca antes de apagar falhou: ${e.message}` }); continue; }
+    if (c11(w.caminho, orca)) continue;
     const feitos = [];
     for (const alvo of r.alvos) {
       try { rmSync(alvo.abs, { recursive: true }); feitos.push({ caminho: alvo.caminho, kb: alvo.kb }); } catch (e) { rel.erros.push({ caminho: alvo.abs, mensagem: `builds: não consegui apagar: ${e.message}` }); }
@@ -559,6 +611,7 @@ function novoRelatorio(args) {
     falhaFechada: null, avisos: [], repos: [],
     removidos: [], seriamRemovidos: [], mantidos: [], pastasSoltas: [], erros: [],
     builds: { liberados: [], seriamLiberados: [] }, logs: { cortados: [], seriamCortados: [] },
+    orca: null, orcaSessoes: { apagados: [], seriamApagados: [] },
   };
 }
 
@@ -578,10 +631,14 @@ function rodada(args) {
     if (quer('worktrees') || quer('builds')) {
       const sess = lerSessoes();
       const reservas = lerReservas();
-      const ctx = { sessoes: sess.vivas, cwds: lerLsof(), reservas, protegidos: protegidos(rel.avisos), minHoras: args.horas, prs: [] };
+      const orca = lerOrca();
+      rel.orca = orca.lista ? { workers: orca.lista.workers.length, vivos: orca.lista.workers.filter((w) => w.vivo).length, registros: orca.registros.length } : null;
+      if (!orca.lista) rel.avisos.push(`Sem o orca na máquina: só os registros de orca-sessoes (${orca.registros.length}) valem para o critério 11, e nenhum é apagado.`);
+      const ctx = { sessoes: sess.vivas, cwds: lerLsof(), reservas, protegidos: protegidos(rel.avisos), minHoras: args.horas, prs: [], orca };
       const repos = args.repos.length ? args.repos : descobrirRepos(reservas, sess.pastas, rel.avisos);
       if (!args.repos.length) rel.avisos.push(`Repositórios descobertos pelo registro do app e pelas sessões: ${repos.length}.`);
       for (const r of repos) rodadaDoRepo(r, ctx, args, aplicar, rel, quer);
+      passoOrcaSessoes(orca, aplicar, rel);
     }
     if (quer('logs')) passoLogs(args, aplicar, rel);
   } catch (e) {
@@ -664,10 +721,12 @@ function pegarTrava(rel) {
 }
 
 function removerUm(repo, w, base, rel) {
-  // a primeira passada pode ter minutos de idade: refaz 3 (nova chamada de lsof), 4, 6 e 7 para este worktree
+  // a primeira passada pode ter minutos de idade: refaz 3 (nova chamada de lsof), 4, 6, 7 e 11 (nova lista do Orca) para este worktree
   let cwds;
   try { cwds = lerLsof(); } catch (e) { rel.mantidos.push({ ...base, motivos: [{ criterio: 3, texto: `reconferência antes de remover falhou: ${e.message}` }] }); return; }
-  const motivos = avaliar(w, { cwds, sessoes: [], prs: [], reservas: [], protegidos: [], minHoras: 0 }, { so: [3, 4, 6, 7] });
+  let orca;
+  try { orca = lerOrca(); } catch (e) { rel.mantidos.push({ ...base, motivos: [{ criterio: 11, texto: `reconferência antes de remover falhou: ${e.message}` }] }); return; }
+  const motivos = avaliar(w, { cwds, sessoes: [], prs: [], reservas: [], protegidos: [], minHoras: 0, orca }, { so: [3, 4, 6, 7, 11] });
   if (motivos.length) { rel.mantidos.push({ ...base, motivos: motivos.map((m) => ({ ...m, texto: `na reconferência antes de remover: ${m.texto}` })) }); return; }
   const r = git(repo, ['worktree', 'remove', w.caminho]);
   if (!r.ok) {
@@ -734,6 +793,16 @@ function paraMarkdown(rel) {
       for (const l of rel.logs.seriamCortados) L.push(`- ${l.caminho} — ${l.kbAntes} KB → ${l.kbDepois} KB`);
     }
   }
+  if (rel.passos.includes('worktrees') || rel.passos.includes('builds')) {
+    L.push('', `## Orca: ${rel.orca ? `${rel.orca.vivos} worker(s) vivo(s) de ${rel.orca.workers} na lista, ${rel.orca.registros} registro(s) de sessão` : 'sem o orca na máquina'}`);
+    const { apagados, seriamApagados } = rel.orcaSessoes;
+    L.push('', `## Registros de sessão do Orca apagados (${apagados.length})`);
+    for (const x of apagados) L.push(`- ${x.arquivo} — ${x.orcaId ?? '?'} (terminal liberado)`);
+    if (seriamApagados.length || rel.modo !== 'aplicar') {
+      L.push('', `## Registros de sessão do Orca que seriam apagados com --aplicar (${seriamApagados.length})`);
+      for (const x of seriamApagados) L.push(`- ${x.arquivo} — ${x.orcaId ?? '?'} (terminal liberado)`);
+    }
+  }
   if (rel.erros.length) {
     L.push('', `## Erros (${rel.erros.length})`);
     for (const e of rel.erros) L.push(`- ${e.caminho}: ${e.mensagem}`);
@@ -746,7 +815,8 @@ function linhaDeResumo(rel) {
   const erro = falha || (rel.erros.length ? `${rel.erros.length} erro(s)` : '');
   return `${rel.quando} modo=${rel.modo} repos=${rel.repos.length} fora-do-github=${rel.repos.filter((r) => r.foraDoPasso).length} removidos=${rel.removidos.length} seriam=${rel.seriamRemovidos.length} mantidos=${rel.mantidos.length}`
     + ` builds=${gb(somaKb(rel.builds.liberados))} builds-seriam=${gb(somaKb(rel.builds.seriamLiberados))}`
-    + ` logs=${rel.logs.cortados.length} logs-seriam=${rel.logs.seriamCortados.length} erro=${erro || '-'}`;
+    + ` logs=${rel.logs.cortados.length} logs-seriam=${rel.logs.seriamCortados.length}`
+    + ` orca-sessoes=${rel.orcaSessoes.apagados.length} orca-sessoes-seriam=${rel.orcaSessoes.seriamApagados.length} erro=${erro || '-'}`;
 }
 
 // O plist do launchd: a cada 6 h roda o `limpar-disco` da versão mais nova do plugin no cache (o caminho muda a cada

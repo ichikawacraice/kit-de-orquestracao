@@ -53,14 +53,17 @@ const branchesDoItem = (d, branchDaDona) => [...new Set([d?.branch, branchDaDona
 
 // A branch da dona: a do worktree (o git) vale sobre a da lista do app, que é a branch com que o app criou a sessão.
 const branchDe = ({ linha, git }) => (texto(git?.branch) ? git.branch : linha?.branch ?? null);
+// F444 (ADR 0030, item 6): a dona do Orca não tem linha na lista do app; a vida dela vem da lista de workers do Orca
+const ehDoOrca = (id) => typeof id === 'string' && id.startsWith('orca_session_id:');
 
 // → { etapa, prs, prsAbertos, prsMergeados, prsDescartados, mergeado, fatiaMergeada, donaViva, rodando, ultimaAtividade, parado, minParado, fontes }
 // `linha`: a sessão da dona na lista do app (ou undefined); `git`: { aFrente, sujo, ultimoCommitMs } da branch dela, ou null;
 // `prs`: os PRs do repositório que o `gh` leu (null: o gh não leu, vale o declarado).
+// F444: `orca`: { viva } da dona do Orca (true, false, ou null = fora da vista: nunca morta); ela não tem `linha` nem turno visível.
 // F430: `prsMergeados` são os ligados que o gh leu mergeados (o pane mostra `#N mergeado` com o número certo); `prsDescartados`,
 // os gravados em `prs` que a batida tirou da conta (o merge de antes do item nascer ou da reabertura): o pane trata como novo o
 // PR gravado que não está em nenhum dos dois, sem adivinhar pelo número.
-export function deduzir({ item: d, linha = null, prs = null, git = null, agoraMs, prazoMin, ambiguos = null }) {
+export function deduzir({ item: d, linha = null, prs = null, git = null, agoraMs, prazoMin, ambiguos = null, orca = null }) {
   const ligados = prsDoItem(d, { prs, branchDaDona: branchDe({ linha, git }), ambiguos });
   const lidos = ligados.filter((p) => p.state); // os que o gh leu
   const abertos = lidos.filter((p) => p.state === 'OPEN');
@@ -68,7 +71,7 @@ export function deduzir({ item: d, linha = null, prs = null, git = null, agoraMs
   const todosMergeados = valendo.length > 0 && valendo.every((p) => p.state === 'MERGED')
     && ligados.every((p) => p.state); // um PR que o gh não leu segura o fechamento
   const fatia = d?.maisFatias === true;
-  const fontes = { prs: prs ? 'gh' : 'item', etapa: 'item', dona: linha ? 'sessoes' : 'item' };
+  const fontes = { prs: prs ? 'gh' : 'item', etapa: 'item', dona: linha ? 'sessoes' : orca ? 'orca' : 'item' };
 
   let etapa = d?.etapa ?? null;
   if (todosMergeados && !fatia) { etapa = 'feito'; fontes.etapa = 'gh'; }
@@ -80,7 +83,7 @@ export function deduzir({ item: d, linha = null, prs = null, git = null, agoraMs
   else if (git && (git.aFrente > 0 || git.sujo)) { if (!['design', 'execucao', 'validacao', 'merge'].includes(etapa)) etapa = 'execucao'; fontes.etapa = 'git'; }
 
   const temDona = texto(d?.donoLocalId);
-  const donaViva = temDona ? Boolean(linha && linha.isArchived !== true) : null;
+  const donaViva = !temDona ? null : orca && !linha ? (typeof orca.viva === 'boolean' ? orca.viva : null) : Boolean(linha && linha.isArchived !== true);
   const rodando = Boolean(donaViva && linha?.isRunning === true);
   const marcas = [ms(d?.atualizadoEm), donaViva ? ms(linha?.lastActivityAt) : null, git?.ultimoCommitMs ?? null, ...ligados.map((p) => ms(p.updatedAt))].filter((t) => t !== null);
   const ultimaAtividade = marcas.length ? Math.min(Math.max(...marcas), agoraMs) : null;
@@ -147,11 +150,14 @@ export function gitDoWorktree(cwd) {
 
 // Coleta e deduz cada item vivo. `itens`: Map F → data; `linhas`: list_sessions; `projetoDe(linha)` → slug.
 // O repositório do projeto é o cwd de uma sessão viva DELE (a da dona primeiro, se for do projeto). → Map F → deduzido
-export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? '').toLowerCase(), agoraMs, prazoMin, ler = { prsDoRepositorio, gitDoWorktree } }) {
+// F444: `donaDoOrca(id)` → { viva, cwd } da dona do Orca (o registro de orca-sessoes e a lista de workers); o git dela sai do cwd
+// registrado enquanto ela não está provada morta.
+export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? '').toLowerCase(), agoraMs, prazoMin, ler = { prsDoRepositorio, gitDoWorktree }, donaDoOrca = () => null }) {
   prazoFinal = Date.now() + ORCAMENTO_MS();
   try {
     const porId = new Map(linhas.map((r) => [r.sessionId, r]));
     const viva = (r) => Boolean(r && r.isArchived !== true && texto(r.cwd));
+    const orcaDe = (id) => { let o = null; try { o = donaDoOrca(id); } catch { /* fora da vista */ } return { viva: typeof o?.viva === 'boolean' ? o.viva : null, cwd: o?.cwd ?? null }; };
     const doProjeto = (r, p) => { try { return projetoDe(r) === p; } catch { return false; } };
     const repoDe = new Map(); // projeto → cwd
     for (const [, d] of itens) {
@@ -159,7 +165,8 @@ export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? ''
       if (!p || repoDe.has(p)) continue;
       const dona = porId.get(d?.donoLocalId);
       const r = (viva(dona) && doProjeto(dona, p) ? dona : null) ?? linhas.find((x) => viva(x) && doProjeto(x, p));
-      repoDe.set(p, r ? r.cwd : null);
+      const o = !r && ehDoOrca(d?.donoLocalId) ? orcaDe(d.donoLocalId) : null;
+      repoDe.set(p, r ? r.cwd : o && o.viva !== false && texto(o.cwd) ? o.cwd : null);
     }
     const prsPorProjeto = new Map();
     for (const [p, cwd] of repoDe) {
@@ -171,20 +178,21 @@ export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? ''
     const vezes = new Map(); // `projeto#número` → quantos itens a branch liga
     for (const [F, d] of itens) {
       const linha = porId.get(d?.donoLocalId) ?? null;
-      const git = viva(linha) ? ler.gitDoWorktree(linha.cwd) : null;
+      const orca = !linha && ehDoOrca(d?.donoLocalId) ? orcaDe(d.donoLocalId) : null;
+      const git = viva(linha) ? ler.gitDoWorktree(linha.cwd) : orca && orca.viva !== false && texto(orca.cwd) ? ler.gitDoWorktree(orca.cwd) : null;
       const prs = prsPorProjeto.get(slug(d?.projeto)) ?? null;
-      base.set(F, { linha, git, prs });
+      base.set(F, { linha, git, prs, orca });
       for (const pr of prsDoItem(d, { prs, branchDaDona: branchDe({ linha, git }) })) {
         if (pr.fonte === 'branch') { const k = `${slug(d?.projeto)}#${pr.number}`; vezes.set(k, (vezes.get(k) ?? 0) + 1); }
       }
     }
     const saida = new Map();
     for (const [F, d] of itens) {
-      const { linha, git, prs } = base.get(F);
+      const { linha, git, prs, orca } = base.get(F);
       // fora da branch: o PR que ela liga a mais de um item, e o que outro item do projeto já lista em `prs` (é dele)
       const ambiguos = new Set([...vezes].filter(([k, n]) => n > 1 && k.startsWith(`${slug(d?.projeto)}#`)).map(([k]) => Number(k.split('#').pop())));
       for (const [G, e] of itens) if (G !== F && slug(e?.projeto) === slug(d?.projeto)) for (const n of inteiros(e?.prs)) ambiguos.add(n);
-      saida.set(F, deduzir({ item: d, linha, prs, git, agoraMs, prazoMin, ambiguos }));
+      saida.set(F, deduzir({ item: d, linha, prs, git, agoraMs, prazoMin, ambiguos, orca }));
     }
     return saida;
   } finally { prazoFinal = Infinity; }

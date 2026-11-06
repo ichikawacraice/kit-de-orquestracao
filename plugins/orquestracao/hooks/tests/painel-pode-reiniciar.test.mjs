@@ -7,6 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { orcaFalso, recibo, worker } from './orca-falso.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
@@ -32,7 +33,7 @@ afterEach(() => { rmSync(base, { recursive: true, force: true }); });
 const ambiente = (extra = {}) => ({
   ...process.env, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', CLAUDE_CODE_HOST_SESSION_ID: '', HOME: join(base, 'home'),
   HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'appsess'), KIT_NUCLEOS_DIR: join(base, 'nuc'),
-  PODE_REINICIAR_PS: psCom([]), ...extra,
+  PODE_REINICIAR_PS: psCom([]), KIT_ORCA_BIN: 'off', ...extra, // F444: nunca o orca real; quem testa o Orca passa o falso
 });
 function painel(args, env = {}) {
   const r = spawnSync('node', [PAINEL, ...args], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', cwd: repo, env: ambiente(env) });
@@ -407,4 +408,22 @@ test('F209 (validador 4): o fetch falha (outro fetch segura o ref, ou sem rede) 
   const r = conferir();
   assert.equal(r.exit, 0, r.err);
   assert.deepEqual(r.json().paraBaixar, [{ nome: 'orquestracao', instalada: '0.1.40', publicada: '0.1.41' }]);
+});
+
+// F444 (ADR 0030, item 6): os workers vivos do Orca entram na conta como informação, não como motivo: reiniciar o app do Claude
+// não derruba o Orca, e o worker do Orca fica `retained` depois do worker_done (seguraria o reinício para sempre).
+test('pode-reiniciar: conta os workers vivos do Orca sem segurar o reinício; sem orca, nada; orca falhando, diz que não leu', () => {
+  const o = orcaFalso({ '': recibo([worker('/w/a', 'retained'), worker('/w/b', 'active'), worker('/w/c', 'released')]) });
+  const arq = sessoes(sessao(1, 'E1 · livre'));
+  const j = painel(['pode-reiniciar', '--sessoes', arq, '--json'], o.env).json();
+  assert.equal(j.pode, true, JSON.stringify(j));
+  assert.deepEqual(j.orca, { vivos: 2 });
+  assert.equal(lerArquivo().orca.vivos, 2);
+  assert.match(painel(['pode-reiniciar', '--sessoes', arq], o.env).out, /^Pode reiniciar\.\n2 workers do Orca vivos: reiniciar o app do Claude não os derruba; reiniciar o Orca, sim\.\n$/);
+  const sem = painel(['pode-reiniciar', '--sessoes', arq, '--json']).json();
+  assert.equal(sem.orca, undefined, 'sem orca, o campo não aparece');
+  const falha = orcaFalso({ '': { stdout: '', exit: 1 } });
+  const f = painel(['pode-reiniciar', '--sessoes', arq, '--json'], falha.env).json();
+  assert.equal(f.pode, true);
+  assert.ok(f.orca?.erro, JSON.stringify(f));
 });
