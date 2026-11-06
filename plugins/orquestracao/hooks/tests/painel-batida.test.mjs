@@ -419,7 +419,10 @@ test('batida F241: dois projetos, cada relatório vai à orquestradora do própr
   assert.equal(r.exit, 0, r.err);
   const rel = msgs(r, 'relatorio');
   assert.equal(rel.length, 2, r.out);
-  assert.deepEqual(rel.map((m) => [m.para, /F1/.test(m.texto), /F2/.test(m.texto)]).sort(), [[lid(30), true, false], [lid(40), false, true]].sort());
+  // o caminho do relatório (pasta temporária de sufixo aleatório) sai antes de casar: o sufixo com "F2" casaria à toa (F430)
+  const semCaminho = (t) => t.replace(/Relatório: .*$/s, '');
+  assert.ok(rel.every((m) => /Relatório: /.test(m.texto)), 'insumo: o texto traz o caminho do relatório');
+  assert.deepEqual(rel.map((m) => [m.para, /F1/.test(semCaminho(m.texto)), /F2/.test(semCaminho(m.texto))]).sort(), [[lid(30), true, false], [lid(40), false, true]].sort());
   const cut = msgs(r, 'cutucada');
   assert.deepEqual(cut.map((m) => m.para), [lid(3)], r.out);
   for (const m of [...rel, ...cut]) assert.match(m.texto, /aviso automático da batida: o remetente é só a sessão que rodou a batida desta vez, de qualquer projeto; não responda a ela/, m.texto);
