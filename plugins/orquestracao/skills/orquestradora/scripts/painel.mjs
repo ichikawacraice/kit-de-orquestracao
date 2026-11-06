@@ -1903,7 +1903,7 @@ function condicoesDeArquivar(dispatchId, itemPedido, lista) {
       condicoes.pr = pendentes.length === 0 && cobre;
     } catch (e) { condicoes.pr = false; faltam.push(`o gh não respondeu sobre os PRs da branch ${branch}: ${String(e?.stderr || e?.message || e).trim().slice(0, 200)}`); }
   }
-  // nenhuma pergunta do item esperando o operador: a que traz o item, a de quem trabalhou nele (o painel só exige o sessaoId
+  // nenhuma pergunta aberta do item esperando o operador (a assumida não segura o worker): a que traz o item, a de quem trabalhou nele (o painel só exige o sessaoId
   // na pergunta) e a que o título nomeia
   if (!item) { condicoes.perguntas = false; faltam.push('não achei o item da worktree: passe --item F<n>'); }
   else {
@@ -1915,7 +1915,8 @@ function condicoesDeArquivar(dispatchId, itemPedido, lista) {
       try {
         const d = JSON.parse(readFileSync(join(dir, n), 'utf8'));
         const p = d?.data ?? {};
-        if (arq.FECHADAS.has(p.estado ?? p.status)) return [];
+        // só a aberta espera o operador: a assumida já seguiu com a recomendação e a resposta vai à orquestradora
+        if ((p.estado ?? p.status) !== 'aberta') return [];
         const doItem = p.item ? p.item === item : (dela.has(p.sessaoId) || doTitulo.test(String(p.titulo ?? '').trim()));
         return doItem ? [d.id] : [];
       } catch { return []; }

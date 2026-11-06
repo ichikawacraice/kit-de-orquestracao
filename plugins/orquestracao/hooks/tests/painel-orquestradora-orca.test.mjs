@@ -229,6 +229,13 @@ for (const [nome, montar, motivo] of FALTAS) {
     assert.deepEqual(c.mutantes(), [], 'nenhum worker-release, worktree set nem worktree rm');
   });
 }
+test('(arquivar-6) a decisão assumida (a confirmar) não segura o worker: só a pergunta aberta trava', () => {
+  const c = cenario();
+  writeFileSync(join(base, 'painel', 'perguntas', 'Q5.json'), JSON.stringify({ id: 'Q5', version: 1, data: { item: 'F7', estado: 'assumida', sessaoId: ORCA_ID, projeto: 'kit' } }));
+  const r = arquivar(c, ['--seco']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.json?.condicoes?.perguntas, true, 'a assumida não conta');
+});
 test('(arquivar-falta) prova: o mesmo cenário sem a falta arquiva (o teste da falta mede a falta, não um cenário quebrado)', () => {
   const c = cenario();
   assert.equal(arquivar(c, ['--remover-worktree']).status, 0);
