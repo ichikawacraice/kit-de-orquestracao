@@ -98,7 +98,7 @@ const sessoes = (v: Partial<VistaDasSessoes> = {}): VistaDasSessoes =>
 const semSessoes = sessoes({ projetos: [], paradas: 0 })
 
 const leitura = (l: Partial<Leitura> = {}): Leitura =>
-  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: semSessoes, lidoEm: AGORA - 20_000, ...l })
+  ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: semSessoes, atualizacao: [], lidoEm: AGORA - 20_000, ...l })
 const cheia = leitura({ abertas, assumidas, entregas })
 
 // O cenário não aperta botão e a aba não grava a seção: só Sessões (a de abertura) e o vazio se desenham aqui; as
@@ -107,6 +107,7 @@ export default defineCheck({
   vazio: { requests: { 'kit.ler': leitura() } },
   'entregas com a caixa fora': { requests: { 'kit.ler': leitura({ entregas: entregas.filter((e) => e.origem === 'painel'), erroDaCaixa: 'o Orca não respondeu à leitura da caixa' }) }, persisted: { plugin: { secao: 'entregas' } } },
   sessoes: { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) } },
+  'sessoes com versao nova do kit': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes(), atualizacao: [{ nome: 'orquestracao', instalada: '0.1.108', publicada: '0.1.109' }, { nome: 'painel-sessoes', instalada: '0.9.20', publicada: '0.9.21' }] }) } },
   'sessoes (claro)': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) }, theme: 'light' },
   'sessoes com o estado velho': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ batidaEm: iso(40 * MIN), projetos: [{ ...kit, filaIlegivel: true }] }) }) } },
   'sessoes vazias': { requests: { 'kit.ler': leitura() } },

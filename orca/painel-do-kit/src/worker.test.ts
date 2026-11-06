@@ -4,7 +4,7 @@ import { assert, mountWorker, mockHost, test } from 'orca/testing'
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import * as main from './worker'
 import { ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, PRAZO_DO_ENVIO_MS, LIMITE_DA_CAIXA } from './protocol'
 
@@ -36,6 +36,7 @@ else if (a[1] === 'send') { fs.writeFileSync(${JSON.stringify(args)}, JSON.strin
 `)
   chmodSync(orca, 0o755)
   process.env.PAINEL_DIR = painel
+  process.env.HOME = raiz // nenhum teste lê o ~/.claude real nem faz git fetch no clone dele
   process.env.PAINEL_DO_KIT_ORCA = orca
   process.env.PAINEL_DO_KIT_JANELA_MS = String(opcoes.janelaMs ?? 0)
   const logDaBatida = join(raiz, 'batida.log')
@@ -84,6 +85,48 @@ test('ler não acorda ninguém: nenhum terminal, nenhum agente, nenhuma mensagem
   assert.ok(a.host.callsOf('statusBar.update').length >= 1)
   assert.deepEqual(w.refusals, [])
   await w.deactivate()
+})
+
+// F463: o aviso de versão nova sai do cache da conferência do kit; a rede só é tocada quando o prazo (30 min) vence, e em segundo plano.
+test('ler traz a atualização do kit: versão publicada mais nova que a instalada, lida do cache, sem esperar a rede', async () => {
+  const a = ambiente()
+  const casa = mkdtempSync(join(tmpdir(), 'f463-home-'))
+  mkdirSync(join(casa, '.claude', 'plugins'), { recursive: true })
+  writeFileSync(join(casa, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: {
+    'orquestracao@ichikawa-kit': [{ scope: 'user', version: '0.1.108' }], 'painel-sessoes@ichikawa-kit': [{ scope: 'user', version: '0.9.20' }],
+  } }))
+  const cache = join(dirname(a.painel), 'batida', 'kit-publicado.json')
+  mkdirSync(dirname(cache), { recursive: true })
+  writeFileSync(cache, JSON.stringify({ em: new Date().toISOString(), publicado: { orquestracao: '0.1.109', 'painel-sessoes': '0.9.20' } }))
+  const homeAntes = process.env.HOME
+  process.env.HOME = casa
+  try {
+    const w = await mountWorker(main, { host: a.host })
+    const r = await w.request('kit.ler', { forcar: true })
+    assert.deepEqual(r.atualizacao, [{ nome: 'orquestracao', instalada: '0.1.108', publicada: '0.1.109' }])
+    // em dia: a mesma leitura com o instalado já na publicada não traz nada
+    writeFileSync(join(casa, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ version: 2, plugins: { 'orquestracao@ichikawa-kit': [{ scope: 'user', version: '0.1.109' }] } }))
+    assert.deepEqual((await w.request('kit.ler', {})).atualizacao, [])
+    await w.deactivate()
+  } finally {
+    if (homeAntes === undefined) delete process.env.HOME; else process.env.HOME = homeAntes
+  }
+})
+
+test('ler sem plugin do kit instalado ou sem cache não quebra a leitura: atualizacao vazia', async () => {
+  const a = ambiente()
+  const casa = mkdtempSync(join(tmpdir(), 'f463-vazia-'))
+  const homeAntes = process.env.HOME
+  process.env.HOME = casa
+  try {
+    const w = await mountWorker(main, { host: a.host })
+    const r = await w.request('kit.ler', { forcar: true })
+    assert.deepEqual(r.atualizacao, [])
+    assert.deepEqual(w.refusals, [])
+    await w.deactivate()
+  } finally {
+    if (homeAntes === undefined) delete process.env.HOME; else process.env.HOME = homeAntes
+  }
 })
 
 // F450: a aba que não viu a resposta do `kit.responder` voltar pede o estado gravado das perguntas em voo.

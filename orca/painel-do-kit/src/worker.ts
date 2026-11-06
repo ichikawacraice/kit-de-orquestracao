@@ -7,7 +7,7 @@ import type { OrcaWorkerApi } from 'orca/worker'
 import { execFile } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   lerPerguntas, lerAcompanhadas, gravarResposta, confirmarTodas, desfazerConfirmacao, gravarEntregaDaResposta, RecusaDoPainel, textoDaEntrega, textoDaMudanca,
 } from './nucleo/painel.mjs'
@@ -16,8 +16,9 @@ import { prepararEnvio, lerResultado, destinoValido, destinoDoSeguimento } from 
 import { criarFilaDeEntrega } from './nucleo/fila-de-entrega.mjs'
 import { sessoesDoKit } from './nucleo/sessoes.mjs'
 import { precisaDaBatida, scriptDaBatida, ambienteDaBatida, TOQUE_MS } from './nucleo/batida.mjs'
+import { lerInstalados, publicadoDoCache, cacheVale, paraBaixar, atualizarCache, cloneDoMarketplace } from './nucleo/atualizacao.mjs'
 import { inicioDoDiaSP } from './vista'
-import type { Leitura, Resultado, Entrega, EstadoDaEntrega, VistaDasSessoes } from './protocol'
+import type { AtualizacaoDoKit, Leitura, Resultado, Entrega, EstadoDaEntrega, VistaDasSessoes } from './protocol'
 import { ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, LIMITE_DA_CAIXA } from './protocol'
 
 const DIAS = 7
@@ -66,6 +67,28 @@ export default function activate(orca: OrcaWorkerApi): void {
       caixa = { em: Date.now(), orca: caixa.orca, erro: `não consegui ler a caixa do Orca (${msg(e)})`, ate: caixa.ate, workers: caixa.workers }
     }
     return caixa
+  }
+
+  // Versão nova do kit (F463): lida do cache da conferência do kit; vencido o prazo (30 min), a conferência (`git fetch`) roda em
+  // segundo plano e a aba é avisada quando ela termina. Ler nunca espera a rede.
+  let conferindo = false
+  const lerAtualizacao = (): AtualizacaoDoKit[] => {
+    try {
+      const home = homedir()
+      const cache = join(dirname(pasta()), 'batida', 'kit-publicado.json')
+      const instalados = lerInstalados(home) as { nome: string; versao: string }[]
+      if (instalados.length && !conferindo && !cacheVale(cache)) {
+        conferindo = true
+        atualizarCache({ clone: cloneDoMarketplace(home), cache })
+          .then(() => orca.panels.post('kit.mudou', { em: Date.now() }))
+          .catch((e: unknown) => orca.log(`atualização: ${msg(e)}`))
+          .finally(() => { conferindo = false })
+      }
+      return paraBaixar(instalados, publicadoDoCache(cache)) as AtualizacaoDoKit[]
+    } catch (e) {
+      orca.log(`atualização: ${msg(e)}`)
+      return []
+    }
   }
 
   let ultimoTotal = -1
@@ -164,7 +187,7 @@ export default function activate(orca: OrcaWorkerApi): void {
       orca.log(`sessões: ${msg(e)}`)
       sessoes = { projetos: [], paradas: 0, ilegiveis: 0, batidaEm: null, erro: msg(e), lidoEm: agoraMs }
     }
-    return { ...perguntas, entregas, erroDaCaixa: c.erro, caixaAte: c.ate, sessoes, lidoEm: agoraMs, ...acompanhadas } as Leitura
+    return { ...perguntas, entregas, erroDaCaixa: c.erro, caixaAte: c.ate, sessoes, atualizacao: lerAtualizacao(), lidoEm: agoraMs, ...acompanhadas } as Leitura
   })
 
   // Responder uma aberta ou discordar de uma assumida: grava a prova do clique e entrega a quem perguntou, se há endereço.

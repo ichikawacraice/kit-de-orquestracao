@@ -3,12 +3,12 @@
 // responder, discordar e responder a uma entrega acordam uma sessão. Desenho: docs/design/revisoes/2026-11-06-aba-do-kit-no-orca.md.
 import {
   atom, read, set, update, plugin, storage,
-  Badge, Box, Button, Callout, Collapsible, EmptyState, Heading, IconButton, Row, Skeleton, Spinner, Text, Textarea,
+  Badge, Box, Button, Callout, Code, Collapsible, EmptyState, Heading, IconButton, Row, Skeleton, Spinner, Text, Textarea,
 } from 'orca'
 import { cortar, haQuanto, horaSP, itemDe, listaDePRs, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem, quando, semPrefixoDoItem, tempoDaSessao } from './vista'
 import { SeloDoProjeto, partesDoSelo } from './selo-do-projeto'
 import { separarLidas, limpar as limparLidas, desfazer as desfazerLidas, podarLidas } from './nucleo/lidas.mjs'
-import type { Acompanhada, Bolinha as BolinhaDaSessao, Entrega, EstadoDaEntrega, GrupoDeSessoes, Leitura, Pendente, Pergunta, Sessao, VistaDasSessoes } from './protocol'
+import type { Acompanhada, AtualizacaoDoKit, Bolinha as BolinhaDaSessao, Entrega, EstadoDaEntrega, GrupoDeSessoes, Leitura, Pendente, Pergunta, Sessao, VistaDasSessoes } from './protocol'
 import { PRAZO_DO_ENVIO_MS } from './protocol'
 
 // O "Sim" do painel (o mesmo texto do pane do app): a sessão e a trava de limpeza o reconhecem.
@@ -851,26 +851,28 @@ const BATIDA_VELHA_MS = 15 * 60_000
 const BATIDA_DECLARADA_MS = 25 * 60_000
 const SEM_ITEM_NO_TITULO = /^F\d+\s*·\s*/
 
-type Tom = 'neutral' | 'warning' | 'danger'
-// Âmbar só no que espera você; vermelho só no que quebrou; o resto é palavra, não cor.
-const SELOS: Record<string, { texto: string; tom: Tom }> = {
-  esperando: { texto: 'Espera você', tom: 'warning' },
-  travada: { texto: 'Travada', tom: 'neutral' },
-  'gate-vermelho': { texto: 'Gate vermelho', tom: 'danger' },
-  'sem-movimento': { texto: 'Parada', tom: 'neutral' },
-  falhou: { texto: 'Sessão falhou', tom: 'danger' },
-  'sem-dona': { texto: 'Sem sessão', tom: 'neutral' },
-  mergeando: { texto: 'Mergeando', tom: 'neutral' },
-  'na-fila': { texto: 'Na fila', tom: 'neutral' },
-  'pr-aberto': { texto: 'PR aberto', tom: 'neutral' },
-  validando: { texto: 'Validando', tom: 'neutral' },
-  planejamento: { texto: 'Planejando', tom: 'neutral' },
-  design: { texto: 'No design', tom: 'neutral' },
-  execucao: { texto: 'Executando', tom: 'neutral' },
-  entregue: { texto: 'Entregue', tom: 'neutral' },
+type Tom = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
+// O Badge só tem tom (5), então a distinção de relance vem de dois sinais: o tom pelo sentido (âmbar espera uma pessoa ou ninguém move,
+// vermelho quebrou ou travou, destaque anda, verde terminou, neutro espera a vez) e um ponto colorido no começo do texto. O par
+// tom + ponto é único por estado (o teste confere), e o texto sempre diz o estado: a cor nunca é a única pista.
+export const SELOS: Record<string, { texto: string; tom: Tom; ponto: string }> = {
+  esperando: { texto: 'Espera você', tom: 'warning', ponto: '🟡' },
+  travada: { texto: 'Travada', tom: 'danger', ponto: '🛑' },
+  'gate-vermelho': { texto: 'Gate vermelho', tom: 'danger', ponto: '🔴' },
+  'sem-movimento': { texto: 'Parada', tom: 'neutral', ponto: '⚫' },
+  falhou: { texto: 'Sessão falhou', tom: 'danger', ponto: '❌' },
+  'sem-dona': { texto: 'Sem sessão', tom: 'neutral', ponto: '🟤' },
+  mergeando: { texto: 'Mergeando', tom: 'accent', ponto: '🟦' },
+  'na-fila': { texto: 'Na fila', tom: 'neutral', ponto: '⚪' },
+  'pr-aberto': { texto: 'PR aberto', tom: 'neutral', ponto: '🟠' },
+  validando: { texto: 'Validando', tom: 'accent', ponto: '🔎' },
+  planejamento: { texto: 'Planejando', tom: 'accent', ponto: '🟣' },
+  design: { texto: 'No design', tom: 'accent', ponto: '🎨' },
+  execucao: { texto: 'Executando', tom: 'accent', ponto: '🔵' },
+  entregue: { texto: 'Entregue', tom: 'success', ponto: '🟢' },
 }
 
-function chaveDoSelo(s: Sessao): string {
+export function chaveDoSelo(s: Sessao): string {
   if (s.estado === 'parada') return s.tipoDeParada && s.tipoDeParada in SELOS ? s.tipoDeParada : 'travada'
   if (s.estado === 'na-fila') return s.foraDaFila ? 'pr-aberto' : 'na-fila'
   if (s.estado === 'trabalhando') return s.subEtapa === 'planejamento' || s.subEtapa === 'design' ? s.subEtapa : 'execucao'
@@ -906,7 +908,7 @@ const vivasDe = (g: GrupoDeSessoes) => g.sessoes.filter((s) => s.estado !== 'ent
 
 function SeloDoEstado(props: { s: Sessao }) {
   const selo = seloDe(props.s)
-  return <Badge tone={selo.tom}>{selo.texto}</Badge>
+  return <Badge tone={selo.tom}>{`${selo.ponto} ${selo.texto}`}</Badge>
 }
 
 function LinhaDoEstado(props: { s: Sessao }) {
@@ -1061,6 +1063,20 @@ function GrupoDoProjeto(props: { g: GrupoDeSessoes }) {
   )
 }
 
+/** O kit publicou versão mais nova que a instalada: uma barra curta com o comando. A aba não executa (só envia a terminais). */
+function AvisoDeAtualizacao(props: { novas: AtualizacaoDoKit[] }) {
+  if (!props.novas.length) return null
+  return (
+    <Callout tone="accent" title="Versão nova do kit">
+      <Row gap="xs" align="center" wrap>
+        <Text size="sm">Atualize: rode</Text>
+        <Code>atualizar-plugins</Code>
+        <Text size="sm">numa sessão</Text>
+      </Row>
+    </Callout>
+  )
+}
+
 /** A faixa do estado deduzido velho: a fila e as perguntas seguem em dia, porque o worker as lê a cada leitura. */
 function AvisoDasSessoes(props: { v: VistaDasSessoes }) {
   const agora = read(tique) || relogio.agora()
@@ -1095,7 +1111,7 @@ function Sessoes(props: { v: VistaDasSessoes }) {
 }
 
 // ── Casca ────────────────────────────────────────────────────────────────────────────────────────────────────────
-const SECOES: { id: Secao; nome: string; icone: string; rotulo: (l: Leitura | null) => string; numero: (l: Leitura | null) => number; tom: 'warning' | 'neutral' }[] = [
+const SECOES: { id: Secao; nome: string; icone: string; rotulo: (l: Leitura | null) => string; numero: (l: Leitura | null) => number; tom: Tom }[] = [
   // O número conta só o que nenhuma outra seção mostra: paradas e esperas sem pergunta aberta.
   { id: 'sessoes', nome: 'Sessões', icone: 'activity', tom: 'neutral',
     numero: (l) => l?.sessoes?.paradas ?? 0,
@@ -1203,6 +1219,7 @@ export default function Painel() {
             </Row>
           </Box>
         ) : null}
+        <AvisoDeAtualizacao novas={l?.atualizacao ?? []} />
         {corpo}
       </Box>
     </Box>
