@@ -58,7 +58,7 @@ caso('hooks.json lista cada evento, matcher e script de hoje (e só eles), com $
 caso('todo script do hooks.json existe, e todo hook de hooks/ (fora os comuns) está no hooks.json', () => {
   const doJson = new Set(Object.values(lerHooks()).flatMap((gs) => gs.flatMap((g) => g.hooks.map((c) => /\/hooks\/([\w-]+\.mjs)"/.exec(c.command)[1]))));
   for (const s of doJson) ok(existsSync(join(HOOKS, s)), `${s} não existe`);
-  const comuns = new Set(['hooks-crewai-comum.mjs', 'pool-comum.mjs', 'varredura-entre-sessoes.mjs', 'perguntas-da-sessao.mjs', 'sem-dona.mjs', 'orquestradora-de-volta.mjs', 'regras-do-inicio.mjs', 'anfitriao.mjs']);
+  const comuns = new Set(['hooks-crewai-comum.mjs', 'pool-comum.mjs', 'varredura-entre-sessoes.mjs', 'perguntas-da-sessao.mjs', 'sem-dona.mjs', 'orquestradora-de-volta.mjs', 'regras-do-inicio.mjs', 'anfitriao.mjs', 'orca-sessoes.mjs']);
   const soltos = readdirSync(HOOKS).filter((f) => f.endsWith('.mjs') && !comuns.has(f) && !doJson.has(f));
   ok(soltos.length === 0, `hooks sem entrada no hooks.json: ${soltos.join(', ')}`);
 });

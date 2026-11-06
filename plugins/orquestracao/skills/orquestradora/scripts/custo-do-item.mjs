@@ -78,9 +78,10 @@ export function custoDoItem(localIds, { registro, raiz = projetosDir(), agora = 
   return { relativo: Math.round(relativo(total) * 10) / 10, ...total, sessoes: { lidas, de: ids.length }, medidoEm: agora.toISOString() };
 }
 
-// As sessões de um item: as anotadas em `sessoes` (o `com add` as guarda), as do `com` e a dona.
+// As sessões de um item: as anotadas em `sessoes` (o `com add` as guarda), as do `com` e a dona. F439: as do Orca
+// (`orca_session_id:<id>`) também; o formato fino quem confere é o painel (hooks/anfitriao.mjs), aqui basta o prefixo.
 export const sessoesDoItem = (d) => [
   ...(Array.isArray(d?.sessoes) ? d.sessoes : []),
   ...(Array.isArray(d?.com) ? d.com.map((c) => c?.localId) : []),
   d?.donoLocalId,
-].filter((x) => typeof x === 'string' && x.startsWith('local_'));
+].filter((x) => typeof x === 'string' && (x.startsWith('local_') || x.startsWith('orca_session_id:')));

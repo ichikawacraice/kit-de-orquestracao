@@ -144,9 +144,19 @@ function mudouNoTurno(transcriptPath, inicio) {
   return false;
 }
 
+// F439 (ADR 0030): no Orca não há registro do app; a sessão é a do `orca-sessoes/<id>.json` que o início dela gravou, e a dona
+// é o `orca_session_id:<id>`. Sem o módulo (cópia solta do hook), segue como antes.
+async function resolverNoOrca(sessionId) {
+  try {
+    const { sessaoDoOrcaPeloCli } = await import('./orca-sessoes.mjs');
+    const d = sessaoDoOrcaPeloCli(sessionId);
+    return d ? { localId: d.orcaId, titulo: '' } : null;
+  } catch { return null; }
+}
+
 let sessaoAtual = '';
 
-function main() {
+async function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id: sid, transcript_path: tp, stop_hook_active: ativo } = input;
   sessaoAtual = sid ?? '';
@@ -157,7 +167,7 @@ function main() {
   const itens = itensComDono();
   if (itens.length === 0) return;
 
-  const reg = resolverLocalId(sid);
+  const reg = resolverLocalId(sid) ?? await resolverNoOrca(sid);
   const local = reg?.localId;
   if (!local) return registrar(sid, '', 'sem-local-id');
 
@@ -184,7 +194,7 @@ function main() {
 }
 
 try {
-  main();
+  await main();
 } catch (err) {
   registrar(sessaoAtual, '', 'erro', err?.stack || err);
 }

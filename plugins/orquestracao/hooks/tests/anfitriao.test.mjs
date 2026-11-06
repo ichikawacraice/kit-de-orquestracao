@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { anfitriao, quemSou, ANFITRIOES, ID_DO_ORCA } from '../anfitriao.mjs';
+import { anfitriao, quemSou, ANFITRIOES, ID_DO_ORCA, ID_DO_APP, ehIdDeSessao } from '../anfitriao.mjs';
 
 const APP = { CLAUDE_CODE_HOST_SESSION_ID: 'local_1b2c3d4e-0000-4000-8000-000000000001' };
 const ORCA_ID = { ORCA_AGENT_SESSION_ID: '233c0ce8-1111-4222-8333-444455556666' };
@@ -119,4 +119,19 @@ test('quemSou: local_… no app, orca_session_id:<id> no Orca, null no terminal'
     assert.equal(quemSou({ env: ORCA_ESTRUTURADA, cwd }), null);
     assert.equal(quemSou({ env: { ORCA_AGENT_SESSION_ID: 'a b;rm' }, cwd }), null);
   });
+});
+
+// F439: o painel aceita o endereço da sessão nos dois anfitriões que têm um; a regra mora aqui, uma vez.
+test('ehIdDeSessao: local_<uuid> do app e orca_session_id:<id> do Orca (worker e coordenadora); o resto não', () => {
+  const validos = [
+    'local_1b2c3d4e-0000-4000-8000-000000000001',
+    'orca_session_id:880dae07-91e8-4aae-9a46-0e857a656849',
+    'orca_session_id:claude_3c8ec4cb_1849_49ba_be37_f9215e9742a6',
+  ];
+  const invalidos = ['', 'local_', 'local_XYZ', 'local_a', 'orca_session_id:', 'orca_session_id:a b', 'orca_session_id:../x', '880dae07-91e8-4aae-9a46-0e857a656849', 'structworker_e67a56a6', null, undefined, 42];
+  assert.ok(validos.length > 0 && invalidos.length > 0);
+  for (const v of validos) assert.equal(ehIdDeSessao(v), true, String(v));
+  for (const v of invalidos) assert.equal(ehIdDeSessao(v), false, String(v));
+  assert.match(validos[0], ID_DO_APP);
+  assert.doesNotMatch(validos[1], ID_DO_APP);
 });

@@ -9,6 +9,9 @@ import { dirname, join, resolve } from 'node:path';
 export const ANFITRIOES = ['claude-desktop', 'orca', 'terminal'];
 // O endereço do Orca: a coordenadora tem sublinhados (`claude_<uuid>`), o worker tem hífens (uuid solto).
 export const ID_DO_ORCA = /^orca_session_id:[A-Za-z0-9_-]+$/;
+// O endereço do app (o `local_…` do registro). F439: o painel aceita os dois onde grava quem é a sessão (com, sessoes, donoLocalId).
+export const ID_DO_APP = /^local_[0-9a-f-]{36}$/;
+export const ehIdDeSessao = (v) => typeof v === 'string' && (ID_DO_APP.test(v) || ID_DO_ORCA.test(v));
 
 const texto = (v) => (typeof v === 'string' ? v.trim() : '');
 

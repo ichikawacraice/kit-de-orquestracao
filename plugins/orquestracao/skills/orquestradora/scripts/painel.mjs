@@ -4,7 +4,7 @@
 // sessões, por este script. Substitui o banco do artefato (23/10).
 //
 //   painel.mjs get    <colecao> <id>
-//   painel.mjs list   <colecao> [estado] [--projeto <nome> | --todos] [--sessao <local_…>]   (sem flag lista tudo; --sessao filtra pelo `sessaoId` do documento)
+//   painel.mjs list   <colecao> [estado] [--projeto <nome> | --todos] [--sessao <local_…|orca_session_id:…>]   (sem flag lista tudo; --sessao filtra pelo `sessaoId` do documento)
 //     (F183) `list perguntas` sem `--projeto`, `--todos` nem `--sessao` lista o projeto da pasta atual, e só a pasta quente (abertas e
 //     assumidas); `respondida`/`cancelada` ou `--arquivo` incluem o arquivo (`perguntas/arquivo/<projeto>/<AAAA-MM>/`)
 //   painel.mjs perguntas arquivar [--seco]   leva ao arquivo as fechadas que ficaram na pasta quente (a resposta do pane); a batida roda junto, só depois da migração (marca <PAINEL_DIR>/.migracao-F183) → {arquivadas:[…]}
@@ -18,7 +18,7 @@
 //   painel.mjs delete <colecao> <id>
 //   painel.mjs temas list [--projeto <nome>]   os temas do projeto (o da pasta atual); cada tema vale só no projeto dele
 //   painel.mjs temas add <id> "<rótulo>" [--projeto <nome>]   cria um tema do projeto, sem editar o JSON (projeto sem tema ganha `geral` na primeira gravação em fila)
-//   painel.mjs com add <F> <local_> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
+//   painel.mjs com add <F> <local_|orca_session_id:…> <apelido> "<oQue>"   põe a sessão em `com` (quem trabalha no item agora); repetir troca o oQue
 //   painel.mjs com del <F> <local_|apelido>   tira a sessão do `com` (o apelido vale se for um só no item)
 //   painel.mjs entregas [--desde <HH:MM|ISO>] [--projeto <nome> | --todos]   (F404, ADR 0024) os itens feitos desde a hora (HH:MM é São Paulo; padrão: 24 h), do projeto da pasta, com a `entrega` gravada pela dona → {desde, itens:[{id, titulo, feitoEm, prs, entrega|null}], semEntrega}
 //   painel.mjs custo <F> [--seco]   mede o custo do item nos transcripts das sessões dele e grava em `custo` (F348; o `mergear` grava ao fechar); --seco só mostra
@@ -208,6 +208,10 @@ const DONOS_ANTIGOS = ['dono', 'dona', 'membro', 'executora'];
 const VIA_COM = Symbol('via-com');
 const MOTIVOS_DA_ESPERA = ['operador', 'gate'];
 const LOCAL_ID = /^local_[0-9a-f-]{36}$/;
+// F439 (ADR 0030): o endereço da sessão é o `local_…` do app ou o `orca_session_id:<id>` do Orca; o formato mora em
+// hooks/anfitriao.mjs. Sem o módulo (a cópia do script solta numa pasta sem `hooks/`), só o do app.
+const { ehIdDeSessao = (v) => LOCAL_ID.test(String(v)) } = await import(pathToFileURL(join(HOOKS_DIR, 'anfitriao.mjs')).href).catch(() => ({}));
+const NAO_E_SESSAO = 'não é local_<uuid> nem orca_session_id:<id>';
 const CITA_NUMERO = /\bF\d+\b|#\d+/;
 // F43: o texto que o operador lê cita item como "F13 · <título>" na primeira menção; as seguintes podem ser só "F13".
 const CAMPOS_LIDOS_PELO_OPERADOR = ['titulo', 'caso', 'seNaoDecidir', 'recomendacao'];
@@ -367,7 +371,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     const vistos = new Set();
     for (const e of novo[k]) {
       if (!e || typeof e !== 'object' || Array.isArray(e)) throw new Error(`${chave}: ${k} é uma lista de {${campos.join(', ')}}`);
-      if (!LOCAL_ID.test(String(e.localId))) throw new Error(`${chave}: ${k}.localId "${e.localId}" não é local_<uuid>`);
+      if (!ehIdDeSessao(e.localId)) throw new Error(`${chave}: ${k}.localId "${e.localId}" ${NAO_E_SESSAO}`);
       if (!textoNaoVazio(e.apelido)) throw new Error(`${chave}: ${k}.apelido não pode ser vazio`);
       if (campos.includes('oQue')) {
         if (!textoNaoVazio(e.oQue)) throw new Error(`${chave}: ${k}.oQue não pode ser vazio`);
@@ -380,7 +384,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     }
   };
   lista('com', ['localId', 'apelido', 'oQue']);
-  if (tem('sessoes') && (!Array.isArray(novo.sessoes) || novo.sessoes.some((s) => !LOCAL_ID.test(String(s))))) throw new Error(`${chave}: sessoes é uma lista de local_<uuid>`);
+  if (tem('sessoes') && (!Array.isArray(novo.sessoes) || novo.sessoes.some((s) => !ehIdDeSessao(s)))) throw new Error(`${chave}: sessoes é uma lista de local_<uuid> ou orca_session_id:<id>`);
   if (tem('custo') && (typeof novo.custo !== 'object' || Array.isArray(novo.custo) || !Number.isFinite(novo.custo.relativo))) throw new Error(`${chave}: custo é {relativo, chamadas, …} (o \`painel custo\` e o \`mergear\` gravam)`);
   lista('fez', ['localId', 'apelido', 'oQue', 'em'], (e) => {
     if (typeof e.em !== 'string' || Number.isNaN(Date.parse(e.em))) throw new Error(`${chave}: fez.em "${e.em}" não é data ISO`);
@@ -422,12 +426,12 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   for (const k of DONOS_ANTIGOS) {
     if (!tem(k)) continue;
     // F370: a recusa traz o comando pronto (handoff antigo ensina o campo velho), com o local_ quando o valor já era um
-    const id = LOCAL_ID.test(String(novo[k])) ? novo[k] : '<seu local_…>';
+    const id = ehIdDeSessao(novo[k]) ? novo[k] : '<seu local_…>';
     const F = chave.replace(/^fila\//, '');
     throw new Error(`${chave}: o campo "${k}" saiu do contrato; use donoLocalId e donoApelido: painel update fila ${F} '{"donoLocalId":"${id}","donoApelido":"dona"}' (o local_ vem de get_session "self")`);
   }
-  if (tem('donoLocalId') && !/^local_[0-9a-f-]{36}$/.test(String(novo.donoLocalId))) {
-    throw new Error(`${chave}: donoLocalId "${novo.donoLocalId}" não é local_<uuid>`);
+  if (tem('donoLocalId') && !ehIdDeSessao(novo.donoLocalId)) {
+    throw new Error(`${chave}: donoLocalId "${novo.donoLocalId}" ${NAO_E_SESSAO}`);
   }
   // os dois andam juntos: tirar o dono é os dois null no MESMO update (senão fica um id sem apelido)
   if (textoNaoVazio(base.donoLocalId) && !textoNaoVazio(base.donoApelido)) {
@@ -528,11 +532,11 @@ function lembrarDona(chave, novo, base, antes, viaCom) {
   if (!lembranca || 'donoLocalId' in novo || 'donoApelido' in novo || textoNaoVazio(base.donoLocalId)) return;
   // a orquestradora arquiva a dona do item fechado: quem o registro do app diz arquivada não volta (o item vira vaga na hora)
   const viva = (id) => { try { return registroDoApp?.registroDaSessao(id, { fresco: true })?.arquivada !== true; } catch { return true; } };
-  if (LOCAL_ID.test(String(lembranca.donoLocalId)) && textoNaoVazio(lembranca.donoApelido) && viva(lembranca.donoLocalId)) {
+  if (ehIdDeSessao(lembranca.donoLocalId) && textoNaoVazio(lembranca.donoApelido) && viva(lembranca.donoLocalId)) {
     base.donoLocalId = lembranca.donoLocalId;
     base.donoApelido = lembranca.donoApelido;
   }
-  const com = Array.isArray(lembranca.com) ? lembranca.com.filter((x) => LOCAL_ID.test(String(x?.localId)) && viva(x.localId)) : [];
+  const com = Array.isArray(lembranca.com) ? lembranca.com.filter((x) => ehIdDeSessao(x?.localId) && viva(x.localId)) : [];
   if (com.length && !(Array.isArray(base.com) && base.com.length)) base.com = com;
 }
 
@@ -832,8 +836,8 @@ function comandoCom(args) {
   if (sub !== 'add' && sub !== 'del') throw new Error('uso: painel.mjs com add <F> <local_> <apelido> "<oQue>" | com del <F> <local_|apelido>');
   if (!ID.test(String(F))) throw new Error(`com: id de item inválido "${F}"`);
   // `com del` também aceita o apelido: resolvido no `com` do item, dentro da trava
-  const porApelido = sub === 'del' && !LOCAL_ID.test(String(quem0)) && textoNaoVazio(quem0) && !String(quem0).startsWith('local_');
-  if (!porApelido && !LOCAL_ID.test(String(localId))) throw new Error(`com: "${localId}" não é local_<uuid>`);
+  const porApelido = sub === 'del' && !ehIdDeSessao(quem0) && textoNaoVazio(quem0) && !/^(local_|orca_session_id:)/.test(String(quem0));
+  if (!porApelido && !ehIdDeSessao(localId)) throw new Error(`com: "${localId}" ${NAO_E_SESSAO}`);
   if (sub === 'del' && resto.length) throw new Error('uso: painel.mjs com del <F> <local_|apelido>');
   if (sub === 'add') conferirQuemTrabalha(localId, 'com add');
   return comTrava(() => {
@@ -973,7 +977,7 @@ function comandoCusto(args) {
 
 // O item que fecha pelo merge (o `mergear` e a batida, F423): a dona e o `com` saem do item, mas ficam em `sessoes` (o
 // `painel custo` mede de novo pelas mesmas sessões, F348).
-const dadosDoFechamento = (d, agora, custo) => ({ etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], sessoes: [...new Set(sessoesDoItem(d).filter((s) => LOCAL_ID.test(s)))], agora, ...(custo ? { custo } : {}) });
+const dadosDoFechamento = (d, agora, custo) => ({ etapa: 'feito', donoLocalId: null, donoApelido: null, com: [], sessoes: [...new Set(sessoesDoItem(d).filter((s) => ehIdDeSessao(s)))], agora, ...(custo ? { custo } : {}) });
 
 // `mergear <PR> <sha> [--seco]`. O GitHub fica FORA da trava (é lento); a escrita no painel, dentro dela.
 function comandoMergear(args) {
@@ -1795,7 +1799,7 @@ function migrarProjetos(seco) {
       const d = doc?.data ?? {};
       let novo = arq.slugDoProjeto(d.projeto);
       if (!novo && colecao === 'perguntas') {
-        const sid = [d.sessaoId, d.sessao].find((v) => LOCAL_ID.test(String(v ?? '')));
+        const sid = [d.sessaoId, d.sessao].find((v) => ehIdDeSessao(v));
         novo = (sid && (projetoDaSessao.get(sid) || doRegistro(sid))) || arq.SEM_PROJETO;
       }
       if (!novo && colecao === 'sessoes') novo = doRegistro(d.sessionId ?? doc.id) || arq.SEM_PROJETO;
@@ -1878,7 +1882,7 @@ function main(argv) {
       if (ip >= 0 && !projeto) throw new Error('--projeto pede o nome do projeto');
       const is = resto.indexOf('--sessao');
       const sessao = is >= 0 ? String(resto.splice(is, 2)[1] ?? '') : null;
-      if (is >= 0 && !sessao) throw new Error('--sessao pede o local_… da sessão');
+      if (is >= 0 && !sessao) throw new Error('--sessao pede o local_… da sessão (ou o orca_session_id:…)');
       const it = resto.indexOf('--todos'); if (it >= 0) resto.splice(it, 1);
       const ia = resto.indexOf('--arquivo'); if (ia >= 0) resto.splice(ia, 1);
       let prazoMin = null;

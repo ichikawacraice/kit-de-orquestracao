@@ -692,3 +692,24 @@ test('batida F423 --seco: deduz mas não fecha nem grava', () => {
   assert.equal(lerItem('F1').data.etapa, 'merge');
   assert.equal(existsSync(join(pastaOrq(), 'batida', 'deduzido.json')), false);
 });
+
+// F439: a sessão do Orca não tem linha no registro do app; o que diz que ela existe é `orca-sessoes/<id>.json`, gravado no início
+// dela. O marcador da id atual fica (mesmo velho); o da id que ela deixou para trás sai; sem o arquivo, a regra dos 10 min volta.
+test('batida: sessão do Orca registrada mantém o marcador da id atual e apaga o da anterior; sem o arquivo, o marcador velho sai', () => {
+  const orcaId = '880dae07-91e8-4aae-9a46-0e857a656849';
+  mkdirSync(join(pastaOrq(), 'orca-sessoes'), { recursive: true });
+  writeFileSync(join(pastaOrq(), 'orca-sessoes', `${orcaId}.json`), JSON.stringify({
+    orcaId: `orca_session_id:${orcaId}`, cliAtual: 'cli-orca-atual', cliIds: ['cli-orca-atual', 'cli-orca-antigo'], terminal: null,
+    enderecoDoSend: `orca_session_id:${orcaId}`, cwd: repo, em: iso(T - 60 * MIN),
+  }));
+  mkdirSync(join(pastaOrq(), 'ativas'), { recursive: true });
+  const onzeMin = new Date(T - 11 * MIN);
+  for (const m of ['cli-orca-atual', 'cli-orca-antigo', 'cli-sem-registro']) {
+    writeFileSync(join(pastaOrq(), 'ativas', m), `${repo}/.git\n`);
+    utimesSync(join(pastaOrq(), 'ativas', m), onzeMin, onzeMin);
+  }
+  const r = batida(sessoes(sessao(1, 'F1 · a')));
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().marcadoresApagados, ['cli-orca-antigo', 'cli-sem-registro'], r.out);
+  assert.ok(existsSync(join(pastaOrq(), 'ativas', 'cli-orca-atual')), 'o marcador da sessão do Orca viva saiu');
+});
