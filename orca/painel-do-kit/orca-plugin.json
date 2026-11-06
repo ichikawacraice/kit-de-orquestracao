@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "id": "painel-do-kit",
   "name": "Kit de orquestração",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Perguntas abertas, decisões assumidas e entregas das sessões do kit de orquestração, sem gastar modelo para ler.",
   "engines": { "orca": ">=1.4.248" },
   "execution": "trusted-worker",
