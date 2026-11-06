@@ -85,6 +85,11 @@ test('dona morta: sem linha ou arquivada → donaViva false, e a atividade dela 
   assert.equal(arq.parado, true);
   assert.equal(ded({ item: item({ donoLocalId: null }), linha: null, prs: [], git: null }).donaViva, null, 'sem dona: null');
 });
+test('F460: sem a lista do app (a batida de leitura do Orca), a dona local_ sem linha fica fora da vista, não morta', () => {
+  assert.equal(ded({ item: item(), linha: null, prs: [], git: null, semListaDoApp: true }).donaViva, null);
+  assert.equal(ded({ item: item(), linha: null, prs: [], git: null }).donaViva, false, 'com a lista do app, a mesma dona é morta');
+  assert.equal(ded({ item: item(), linha: linha({ isArchived: true }), prs: [], git: null, semListaDoApp: true }).donaViva, false, 'linha arquivada segue morta');
+});
 test('parado: passou do prazo sem atividade; rodando, espera ou trava não é parado', () => {
   const p = ded({ item: item(), linha: linha(), prs: [], git: null });
   assert.equal(p.parado, true);

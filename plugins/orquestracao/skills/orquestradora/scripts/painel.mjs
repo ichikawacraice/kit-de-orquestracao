@@ -29,6 +29,7 @@
 //   painel.mjs fila-de-merge <PR:sha> [<PR:sha>…] --anotar   (F351) a entrega da dona: confere que a ponta de cada PR é o sha dado, só anota os PRs nos pendentes, grava a pasta do repositório e liga o item e, com a fila livre e o gate gravado, lança a rodada sem turno destacada (F427; o julgamento e a marca `lancada` da batida) → {anotado, pendentes, lancou, pid?, log?, naoLancou?, aviso?, avisoSemCodigo?, avisoSemEntrega?}; ele mesmo não roda gate nem mergeia
 //   painel.mjs fila-de-merge <PR:sha>… --gate "<cmd>" [--preparar "<cmd>"] --sem-turno   (F351) a rodada que a batida lança destacada: igual à da orquestradora, e grava o desfecho em `desfechos` do estado da fila
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga), lança a fila de merge anotada sem processo e entrega os desfechos dela (F351) → {mensagens, soltos, projetos, marcadoresApagados, filasLancadas?}; --seco não grava nem lança nada
+//   painel.mjs batida --leitura [--agora <ISO>]   (F460) a batida de leitura que a aba do kit roda no Orca: sem a lista do app, só deduz o estado dos itens (git, gh, workers do Orca) e grava batida/deduzido.json com fonte "leitura"; não julga nem grava mais nada; pula se o deduzido tem menos de 10 min → {gravado, em?, itens?, pulou?}
 //   painel.mjs orquestradora assumir   (F447) declara esta sessão a orquestradora do projeto da pasta: grava <base>/ativas/<CLAUDE_CODE_SESSION_ID> com o git common dir e, no Orca, o orca_session_id na 2ª linha (as travas valem por ele; no Orca o título não se troca) → {marcador, repo, orcaId, outras}
 //   painel.mjs orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]   (F447) arquiva no Orca a dona do despacho: confere PR mergeado com o HEAD da worktree (ou nenhum PR e nenhum commit fora da base), nenhuma pergunta aberta do item (pelo item, por quem trabalhou nele ou pelo título), worktree ligada (nunca o checkout principal), limpa e empurrada e worker parado (todo despacho do mesmo terminal ou pasta em estado final); valendo, `orca orchestration worker-release` e `orca worktree set --workspace-status completed` (e `orca worktree rm`, nunca --force, com --remover-worktree) → {arquivado, condicoes, feitos}; faltando algo → {arquivado:false, faltam} e exit 1, sem chamar nada; --seco só confere
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
@@ -1731,11 +1732,58 @@ function limitesDasDonas(itens) {
 }
 const handoffDoItem = (F) => (/^F\d+$/.test(F) && existsSync(join(HANDOFFS, `${F}.md`)) ? join(HANDOFFS, `${F}.md`) : null);
 
+// F460 (ADR 0032): no Orca, o worker da aba do kit roda a batida de leitura a cada 10 min. Sem a lista do app, ela só coleta o
+// estado deduzido (git, gh, lista de workers do Orca) e grava `batida/deduzido.json` com `fonte: 'leitura'`: não julga, não
+// cutuca, não solta, não fecha pelo merge, não lança fila, não grava `estado.json` nem apaga marcador, cartão ou pergunta.
+// Não corre com outra batida: pula se o deduzido tem menos de 10 min, e confere de novo dentro da trava antes de gravar (a
+// batida completa grava o deduzido na mesma trava). Não grava `vez.json`: nunca adia a batida completa do app desktop.
+const LEITURA_MIN = 10;
+function deduzidoFresco(agoraMs) {
+  const em = Date.parse(arquivoJson(join(ORQ(), 'batida', 'deduzido.json'), null)?.em ?? '');
+  if (!Number.isFinite(em)) return null;
+  const min = (agoraMs - em) / 60_000; // negativo: outra batida que começou depois desta
+  return Math.abs(min) < LEITURA_MIN ? `o deduzido.json tem ${Math.max(0, Math.floor(min))} min` : null;
+}
+// As pastas dos workers do Orca como linhas da lista de sessões: servem só para achar o repositório de cada projeto (o gh).
+// Os vivos primeiro; a pasta que não existe mais fica fora. O id não casa com dona nenhuma (a dona do Orca vem da lista).
+function linhasDosWorkers(orca) {
+  const ws = Array.isArray(orca?.workers) ? orca.workers : [];
+  const vistas = new Set();
+  const linhas = [];
+  for (const w of [...ws.filter((x) => x.vivo), ...ws.filter((x) => !x.vivo)]) {
+    if (!textoNaoVazio(w?.pasta) || vistas.has(w.pasta) || !existsSync(w.pasta)) continue;
+    vistas.add(w.pasta);
+    linhas.push({ sessionId: `orca-worker:${w.terminal ?? w.dispatchId ?? w.pasta}`, title: '', cwd: w.pasta, isArchived: false, isRunning: false });
+  }
+  return linhas;
+}
+function comandoBatidaDeLeitura(args) {
+  const agoraIso = flag(args, '--agora');
+  if (args.length) throw new Error(`uso: painel.mjs batida --leitura [--agora <ISO>] (a leitura não aceita ${args[0]})`);
+  const agoraMs = agoraIso ? Date.parse(agoraIso) : Date.now();
+  if (Number.isNaN(agoraMs)) throw new Error(`--agora: "${agoraIso}" não é data ISO`);
+  if (process.env.KIT_ESTADO_DEDUZIDO === 'off') return { gravado: false, pulou: 'KIT_ESTADO_DEDUZIDO=off' };
+  const antes = deduzidoFresco(agoraMs);
+  if (antes) return { gravado: false, pulou: antes };
+  const orca = listaDoOrca();
+  if (orca?.erro) process.stderr.write(`batida --leitura: a lista de workers do Orca falhou; as donas do Orca ficam fora da vista: ${orca.erro}\n`);
+  const vidasDoOrca = vidaDasDonasDoOrca(itensVivos(), orca);
+  const deduzidos = coletarDeduzidos({ itens: itensVivos(), linhas: linhasDosWorkers(orca), projetoDe: projetoDeUmaLinha(), slug: (p) => arq.slugDoProjeto(p), agoraMs, prazoMin: prazoEmMin([]), donaDoOrca: (id) => vidasDoOrca.get(id) ?? null, semListaDoApp: true });
+  return comTrava(() => {
+    const depois = deduzidoFresco(agoraMs);
+    if (depois) return { gravado: false, pulou: `${depois}: outra batida gravou durante esta` };
+    const em = new Date(agoraMs).toISOString();
+    gravarJson(join(ORQ(), 'batida', 'deduzido.json'), { em, fonte: 'leitura', itens: Object.fromEntries(deduzidos) });
+    return { gravado: true, em, itens: deduzidos.size };
+  });
+}
+
 function comandoBatida(args) {
+  if (flag(args, '--leitura', false)) return comandoBatidaDeLeitura(args);
   const arquivo = flag(args, '--sessoes');
   const seco = flag(args, '--seco', false);
   const agoraIso = flag(args, '--agora');
-  if (!arquivo || args.length) throw new Error('uso: painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]');
+  if (!arquivo || args.length) throw new Error('uso: painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>] | batida --leitura [--agora <ISO>]');
   const agoraMs = agoraIso ? Date.parse(agoraIso) : Date.now();
   if (Number.isNaN(agoraMs)) throw new Error(`--agora: "${agoraIso}" não é data ISO`);
   const linhas = lerSessoes(arquivo);

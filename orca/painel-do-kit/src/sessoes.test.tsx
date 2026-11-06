@@ -266,15 +266,15 @@ teste('sem nenhuma sessão: o vazio da seção', async () => {
   semErros(v)
 })
 
-teste('a faixa do estado velho: nada com 4 min, o aviso com 6 min, o texto do declarado com 30 min', async () => {
-  let batida = 6 * MIN
+teste('a faixa do estado velho: nada com 12 min (a batida é de 10 em 10), o aviso com 16 min, o texto do declarado com 30 min', async () => {
+  let batida = 16 * MIN
   const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])], { batidaEm: iso(batida) })))
   const faixas = () => nos({ type: 'Callout' })
-  assert.equal(faixas().length, 1, 'com 6 min a faixa aparece')
-  assert.ok(v.find({ text: 'O estado das sessões não se atualiza há 6 min. Etapa, PRs e paradas podem estar atrasados; a fila e as perguntas estão em dia.' }))
-  batida = 4 * MIN
+  assert.equal(faixas().length, 1, 'com 16 min a faixa aparece')
+  assert.ok(v.find({ text: 'O estado das sessões não se atualiza há 16 min. Etapa, PRs e paradas podem estar atrasados; a fila e as perguntas estão em dia.' }))
+  batida = 12 * MIN
   await v.press({ label: 'Reler agora' })
-  assert.equal(faixas().length, 0, 'com 4 min, sem faixa')
+  assert.equal(faixas().length, 0, 'com 12 min, sem faixa')
   batida = 30 * MIN
   await v.press({ label: 'Reler agora' })
   assert.ok(v.find({ text: 'O estado das sessões não se atualiza há 30 min. As etapas abaixo são as que as sessões gravaram.' }))

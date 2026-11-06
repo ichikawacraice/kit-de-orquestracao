@@ -68,10 +68,11 @@ const ehDoOrca = (id) => typeof id === 'string' && id.startsWith('orca_session_i
 // `linha`: a sessão da dona na lista do app (ou undefined); `git`: { aFrente, sujo, ultimoCommitMs } da branch dela, ou null;
 // `prs`: os PRs do repositório que o `gh` leu (null: o gh não leu, vale o declarado).
 // F444: `orca`: { viva } da dona do Orca (true, false, ou null = fora da vista: nunca morta); ela não tem `linha` nem turno visível.
+// F460: `semListaDoApp`: a batida de leitura do Orca não tem a lista do app; a dona `local_` sem linha fica fora da vista (null).
 // F430: `prsMergeados` são os ligados que o gh leu mergeados (o pane mostra `#N mergeado` com o número certo); `prsDescartados`,
 // os gravados em `prs` que a batida tirou da conta (o merge de antes do item nascer ou da reabertura): o pane trata como novo o
 // PR gravado que não está em nenhum dos dois, sem adivinhar pelo número.
-export function deduzir({ id = null, item: d, linha = null, prs = null, git = null, agoraMs, prazoMin, ambiguos = null, orca = null }) {
+export function deduzir({ id = null, item: d, linha = null, prs = null, git = null, agoraMs, prazoMin, ambiguos = null, orca = null, semListaDoApp = false }) {
   const ligados = prsDoItem(d, { prs, branchDaDona: branchDe({ linha, git }), ambiguos, id });
   const lidos = ligados.filter((p) => p.state); // os que o gh leu
   const abertos = lidos.filter((p) => p.state === 'OPEN');
@@ -91,7 +92,8 @@ export function deduzir({ id = null, item: d, linha = null, prs = null, git = nu
   else if (git && (git.aFrente > 0 || git.sujo)) { if (!['design', 'execucao', 'validacao', 'merge'].includes(etapa)) etapa = 'execucao'; fontes.etapa = 'git'; }
 
   const temDona = texto(d?.donoLocalId);
-  const donaViva = !temDona ? null : orca && !linha ? (typeof orca.viva === 'boolean' ? orca.viva : null) : Boolean(linha && linha.isArchived !== true);
+  const donaViva = !temDona ? null : orca && !linha ? (typeof orca.viva === 'boolean' ? orca.viva : null)
+    : !linha && semListaDoApp ? null : Boolean(linha && linha.isArchived !== true);
   const rodando = Boolean(donaViva && linha?.isRunning === true);
   const marcas = [ms(d?.atualizadoEm), donaViva ? ms(linha?.lastActivityAt) : null, git?.ultimoCommitMs ?? null, ...ligados.map((p) => ms(p.updatedAt))].filter((t) => t !== null);
   const ultimaAtividade = marcas.length ? Math.min(Math.max(...marcas), agoraMs) : null;
@@ -159,8 +161,9 @@ export function gitDoWorktree(cwd) {
 // Coleta e deduz cada item vivo. `itens`: Map F → data; `linhas`: list_sessions; `projetoDe(linha)` → slug.
 // O repositório do projeto é o cwd de uma sessão viva DELE (a da dona primeiro, se for do projeto). → Map F → deduzido
 // F444: `donaDoOrca(id)` → { viva, cwd } da dona do Orca (o registro de orca-sessoes e a lista de workers); o git dela sai do cwd
-// registrado enquanto ela não está provada morta.
-export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? '').toLowerCase(), agoraMs, prazoMin, ler = { prsDoRepositorio, gitDoWorktree }, donaDoOrca = () => null }) {
+// registrado enquanto ela não está provada morta. F460: `semListaDoApp` (a batida de leitura do Orca): `linhas` são só as pastas dos
+// workers do Orca, para achar o repositório; a dona `local_` sai fora da vista (donaViva null), nunca morta.
+export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? '').toLowerCase(), agoraMs, prazoMin, ler = { prsDoRepositorio, gitDoWorktree }, donaDoOrca = () => null, semListaDoApp = false }) {
   prazoFinal = Date.now() + ORCAMENTO_MS();
   try {
     const porId = new Map(linhas.map((r) => [r.sessionId, r]));
@@ -201,7 +204,7 @@ export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? ''
       // e o que outro item do projeto já lista em `prs` (é dele)
       const ambiguos = new Set([...porBranch].filter(([k, quem]) => k.startsWith(`${slug(d?.projeto)}#`) && [...quem].some((G) => G !== F)).map(([k]) => Number(k.split('#').pop())));
       for (const [G, e] of itens) if (G !== F && slug(e?.projeto) === slug(d?.projeto)) for (const n of inteiros(e?.prs)) ambiguos.add(n);
-      saida.set(F, deduzir({ id: F, item: d, linha, prs, git, agoraMs, prazoMin, ambiguos, orca }));
+      saida.set(F, deduzir({ id: F, item: d, linha, prs, git, agoraMs, prazoMin, ambiguos, orca, semListaDoApp }));
     }
     return saida;
   } finally { prazoFinal = Infinity; }

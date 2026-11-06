@@ -10,6 +10,13 @@ A resposta vai só ao endereço gravado na pergunta (`endereco.orca`, que o pain
 
 Ler não aciona modelo: a aba lê os arquivos do painel (`~/.claude/orquestracao/`) e o CLI do Orca em modo leitura (`orchestration inbox` e `worker-list`, com cache de 60 s). Só responder, discordar e responder a uma entrega acordam uma sessão, e só a que precisa.
 
+**A batida de leitura.** No Orca, o mod do app desktop não roda, e a seção Sessões ficaria com o estado velho. Por isso o worker roda `painel.mjs batida --leitura` ao abrir e a cada 10 min: o relógio confere a cada minuto e roda quando `batida/deduzido.json` tem 10 min ou mais. O aviso de estado velho só aparece depois de 15 min, uma batida perdida.
+- O que ela faz: deduz o estado dos itens pelo git, pelo `gh` e pela lista de workers do Orca, e grava o `deduzido.json`.
+- O que ela não faz: não cutuca, não solta, não fecha nem lança fila; isso segue com a batida do app desktop e com a orquestradora.
+- O `painel.mjs` é o do plugin `orquestracao` instalado no escopo do usuário.
+- `PAINEL_DO_KIT_BATIDA=off` desliga.
+- Decisão: `docs/adr/0032-no-orca-a-aba-do-kit-roda-a-batida-de-leitura.md`.
+
 ## Instalar (pasta de desenvolvimento)
 
 ```sh
@@ -29,7 +36,7 @@ orca plugin check orca/painel-do-kit                                         # r
 ## Como está organizado
 
 - `src/nucleo/*.mjs`: leitura e gravação do painel, entregas, envio pelo Orca e as contas do "Limpar". Só módulos nativos; o painel importa apenas `lidas.mjs`, que não usa `node:fs`.
-- `src/worker.ts`: os pedidos que o painel faz (`kit.ler`, `kit.responder`, `kit.confirmar`, `kit.desfazer`, `kit.reentregar`, `kit.seguimento`) e o contador da barra de status.
+- `src/worker.ts`: os pedidos que o painel faz (`kit.ler`, `kit.responder`, `kit.confirmar`, `kit.desfazer`, `kit.reentregar`, `kit.seguimento`), o contador da barra de status e o relógio da batida de leitura (`src/nucleo/batida.mjs` diz quando e com que script).
 - `src/panel.tsx`: a aba. `src/vista.ts`: tempo em português, dia de São Paulo e agrupamentos.
 - O texto que você escreve nunca entra numa linha de shell: o worker o grava em arquivo e o comando fixo o lê de lá.
 

@@ -846,7 +846,8 @@ function Entregas(props: { l: Leitura }) {
 
 // ── Sessões ──────────────────────────────────────────────────────────────────────────────────────────────────────
 // A conta (estado, ordem, bolinhas) vem pronta do worker; aqui só o selo, a frase e o tempo de cada cartão.
-const BATIDA_VELHA_MS = 5 * 60_000
+// O aviso só sai depois de uma batida perdida: a batida roda a cada 10 min (a do app e a da aba no Orca, F460).
+const BATIDA_VELHA_MS = 15 * 60_000
 const BATIDA_DECLARADA_MS = 25 * 60_000
 const SEM_ITEM_NO_TITULO = /^F\d+\s*·\s*/
 
