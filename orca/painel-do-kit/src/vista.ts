@@ -37,14 +37,34 @@ const ITEM = /^(F\d+)\b/
 /** O item de uma pergunta: o campo `item`, senão o `F…` do início do título. */
 export const itemDe = (q: Pick<Pergunta, 'item' | 'titulo'>): string | null => q.item ?? q.titulo.match(ITEM)?.[1] ?? null
 
-export type Grupo<T> = { chave: string; titulo: string; itens: T[]; ultimaMs: number }
+export type Grupo<T> = { chave: string; titulo: string; itens: T[]; ultimaMs: number; projeto?: string | null; item?: string | null }
+
+/** O grupo de uma decisão: projeto + item (o `F12` de dois projetos são dois grupos). */
+export const chaveDoGrupo = (q: Pick<Pergunta, 'item' | 'titulo' | 'projeto'>): string => `${q.projeto ?? '—'}:${itemDe(q) ?? 'sem-item'}`
+
+const PROJETO_MAX = 28
+
+/** As duas metades do selo do projeto: o nome (forte) e o item (fraco). Nada a mostrar: `null`. */
+export function partesDoSelo(projeto: string | null | undefined, item: string | null | undefined): { forte: string | null; fraco: string | null } | null {
+  const forte = projeto ? cortar(projeto, PROJETO_MAX).curto : null
+  if (!forte && !item) return null
+  return { forte, fraco: item ? (forte ? `· ${item}` : item) : null }
+}
+
+/** O título sem o `F435 · ` (ou `F435: `, `F435 — `) do começo, quando o item é esse; se sobra vazio, o título inteiro. */
+export function semPrefixoDoItem(titulo: string, item: string | null | undefined): string {
+  if (!item) return titulo
+  const m = titulo.match(/^(F\d+)\s*(?:·|:|—|-)\s*(.+)$/s)
+  return m && m[1] === item && m[2].trim() ? m[2].trim() : titulo
+}
 
 /** Decisões assumidas por item, o grupo com a decisão mais recente primeiro. */
 export function porItem(assumidas: Pergunta[]): Grupo<Pergunta>[] {
   const mapa = new Map<string, Grupo<Pergunta>>()
   for (const q of assumidas) {
-    const chave = itemDe(q) ?? 'sem-item'
-    const g = mapa.get(chave) ?? { chave, titulo: chave === 'sem-item' ? 'Sem item' : chave, itens: [], ultimaMs: 0 }
+    const item = itemDe(q)
+    const chave = chaveDoGrupo(q)
+    const g = mapa.get(chave) ?? { chave, titulo: item ?? 'Sem item', itens: [], ultimaMs: 0, projeto: q.projeto ?? null, item }
     g.itens.push(q)
     g.ultimaMs = Math.max(g.ultimaMs, ms(q.atualizadoEm))
     mapa.set(chave, g)
@@ -80,3 +100,6 @@ export function cortar(texto: string, limite: number): { curto: string; cortou: 
   const espaco = corte.lastIndexOf(' ')
   return { curto: `${(espaco > limite * 0.6 ? corte.slice(0, espaco) : corte).trimEnd()}…`, cortou: true }
 }
+
+/** `hoje, 14:05`, `ontem, 09:30` ou `terça, 3 de nov, 14:05`, em São Paulo. */
+export const quando = (msEpoch: number, agoraMs: number) => `${nomeDoDia(msEpoch, agoraMs).toLowerCase()}, ${horaSP(msEpoch)}`

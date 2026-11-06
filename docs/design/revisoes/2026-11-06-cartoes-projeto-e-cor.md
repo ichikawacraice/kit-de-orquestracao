@@ -239,3 +239,10 @@ Nenhum novo. Tudo abre no lugar e sem rolar. O Orca cuida do `prefers-reduced-mo
 3. **Trilho (P3).** O selo de Entregas fica `neutral`; sai a linha de § O que sai e o critério 12 vira `warning`/`neutral`/`neutral`. O verde fica dentro dos cartões.
 4. **Densidade (P4).** O compacto cresce uma linha (o texto da § Hierarquia está errado nisso). Ordem do compacto: selo + estado, título, `Você respondeu: …`, linha `hora · Q-ID` com o botão de detalhes na ponta. Na linha confirmada: `Confirmada: <título>` sozinho em cima, na largura toda; embaixo `Row justify="end"` com `Desfazer` e o botão de detalhes; a altura é a mesma antes e depois dos 10 s (a linha de baixo fica, só o `Desfazer` some).
 5. **Rótulo (P5).** `IconButton` só com ícone (`expand`/`collapse`), `label` `Ver detalhes: <título>` / `Esconder detalhes: <título>`.
+
+<a id="critica-tela"></a>
+## Crítica da tela implementada (2026-11-06)
+Nota 24/30, aprovada com ressalvas. Sem captura de tela (o `plugin shot` não roda com a janela do Orca aberta): as larguras abaixo são estimativa.
+- **Aplicado:** o bloco de projeto conta só o que falta confirmar e o bloco sem projeto vai por último; linha de decisão com confirmação recusada ganha `border="danger"`; a linha `fora` abre os detalhes; a linha `Limpa:` começa pelo selo; o selo não quebra entre projeto e item e o cabeçalho alinha ao centro; cabeçalho sem selo e sem estado não desenha linha vazia; cenários `(sem projeto)` e `(dois projetos)` nos dois temas.
+- **Pendente (P1, a confirmar em captura de 320 px):** a primeira linha (projeto + item + selo de estado) pode quebrar em duas. Se quebrar, recomendação do crítico: voltar o selo de estado para a linha do título com o Q-ID e a hora. É decisão sobre o Ajuste 1, fica para o operador.
+- **Fora desta entrega:** cenários com compacto aberto (precisam de `--act`) e o `Reler agora` não fecha os detalhes abertos.

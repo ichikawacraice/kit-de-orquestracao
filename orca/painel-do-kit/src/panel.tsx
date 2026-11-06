@@ -5,7 +5,8 @@ import {
   atom, read, set, update, plugin, storage,
   Badge, Box, Button, Callout, Collapsible, EmptyState, Heading, IconButton, Row, Skeleton, Spinner, Text, Textarea,
 } from 'orca'
-import { cortar, haQuanto, horaSP, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem } from './vista'
+import { cortar, haQuanto, horaSP, itemDe, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem, quando, semPrefixoDoItem } from './vista'
+import { SeloDoProjeto, partesDoSelo } from './selo-do-projeto'
 import { separarLidas, limpar as limparLidas, desfazer as desfazerLidas, podarLidas } from './nucleo/lidas.mjs'
 import type { Entrega, EstadoDaEntrega, Leitura, Pendente, Pergunta } from './protocol'
 import { PRAZO_DO_ENVIO_MS } from './protocol'
@@ -29,11 +30,11 @@ type Esperado = 'aberta' | 'assumida'
 /** O que a pessoa fez nesta visita, por pergunta: fica no lugar até ela reler ou sair da aba. */
 type Feito =
   | { tipo: 'andando'; q: Pergunta; esperado: Esperado; texto: string }
-  | { tipo: 'feito'; q: Pergunta; esperado: Esperado; texto: string; mostrar?: string; entrega: EstadoDaEntrega }
+  | { tipo: 'feito'; q: Pergunta; esperado: Esperado; texto: string; mostrar?: string; entrega: EstadoDaEntrega; em: number }
   | { tipo: 'erro'; q: Pergunta; esperado: Esperado; motivo: string }
   | { tipo: 'fora'; q: Pergunta; esperado: Esperado }
   | { tipo: 'confirmando'; q: Pergunta; esperado: 'assumida' }
-  | { tipo: 'confirmada'; q: Pergunta; esperado: 'assumida'; versao: number; ate: number; lote: string | null }
+  | { tipo: 'confirmada'; q: Pergunta; esperado: 'assumida'; versao: number; ate: number; lote: string | null; em: number }
 type Lote = { texto: string; tom: 'success' | 'warning'; itens: { id: string; versao: number }[]; ate: number; erro?: string }
 type Envio = { tipo: 'andando' } | { tipo: 'ok'; texto: string } | { tipo: 'erro'; texto: string }
 
@@ -46,6 +47,7 @@ const rascunhos = atom<Record<string, string>>('rascunhos', {})
 const campos = atom<Record<string, boolean>>('campos', {})
 const feitos = atom<Record<string, Feito>>('feitos', {})
 const inteiros = atom<Record<string, boolean>>('inteiros', {})
+const detalhes = atom<Record<string, boolean>>('detalhes', {})
 const grupos = atom<Record<string, boolean>>('grupos', {})
 const armado = atom<number | null>('armado', null)
 const lotes = atom<Record<string, Lote>>('lotes', {})
@@ -147,7 +149,7 @@ async function responder(q: Pergunta, esperado: Esperado, texto: string, mostrar
   try {
     const r = await plugin.request('kit.responder', { id: q.id, versao: q.versao, esperado, resposta }, { timeoutMs: PRAZO_DO_ENVIO_MS })
     if (r.gravou) {
-      update(feitos, (f) => ({ ...f, [q.id]: { tipo: 'feito', q, esperado, texto: resposta, mostrar, entrega: r.entrega } }))
+      update(feitos, (f) => ({ ...f, [q.id]: { tipo: 'feito', q, esperado, texto: resposta, mostrar, entrega: r.entrega, em: relogio.agora() } }))
       update(rascunhos, (x) => sem(x, `${esperado}:${q.id}`))
       update(campos, (x) => sem(x, `${esperado}:${q.id}`))
       return
@@ -180,11 +182,12 @@ async function confirmar(qs: Pergunta[], lote: string | null) {
   update(feitos, (f) => ({ ...f, ...Object.fromEntries(qs.map((q) => [q.id, { tipo: 'confirmando', q, esperado: 'assumida' }])) }))
   try {
     const r = await plugin.request('kit.confirmar', { itens: qs.map((q) => ({ id: q.id, versao: q.versao })) })
-    const ate = relogio.agora() + DESFAZER_MS
+    const em = relogio.agora()
+    const ate = em + DESFAZER_MS
     const porId = new Map(qs.map((q) => [q.id, q]))
     update(feitos, (f) => {
       const n = { ...f }
-      for (const id of r.confirmadas) n[id] = { tipo: 'confirmada', q: porId.get(id)!, esperado: 'assumida', versao: r.versoes[id], ate, lote }
+      for (const id of r.confirmadas) n[id] = { tipo: 'confirmada', q: porId.get(id)!, esperado: 'assumida', versao: r.versoes[id], ate, lote, em }
       for (const x of r.recusadas) n[x.id] = { tipo: 'erro', q: porId.get(x.id)!, esperado: 'assumida', motivo: `Não confirmou: ${x.motivo}.` }
       return n
     })
@@ -194,6 +197,7 @@ async function confirmar(qs: Pergunta[], lote: string | null) {
         : `${plural(r.confirmadas.length, 'decisão confirmada', 'decisões confirmadas')}.`
       update(lotes, (x) => ({ ...x, [lote]: { texto, tom: r.recusadas.length ? 'warning' : 'success', itens: r.confirmadas.map((id) => ({ id, versao: r.versoes[id] })), ate } }))
     }
+    update(detalhes, (d) => ({ ...d, ...Object.fromEntries(r.confirmadas.filter((id) => read(inteiros)[id]).map((id) => [id, true])) }))
     tocar(DESFAZER_MS)
     if (r.recusadas.length) await reler(false)
   } catch (e) {
@@ -291,32 +295,54 @@ function Campo(props: { chave: string; rotulo: string; linhas: number; enviar: s
   )
 }
 
+// ── Peças comuns dos cartões ─────────────────────────────────────────────────────────────────────────────────────
+/** A primeira linha de todo cartão: o projeto (e o item) à esquerda, o estado do cartão na ponta. */
+function Cabeca(props: { projeto: string | null; item: string | null; estado?: unknown }) {
+  if (!props.estado && !partesDoSelo(props.projeto, props.item)) return null
+  return (
+    <Row justify="between" align="center" gap="sm" wrap>
+      <SeloDoProjeto projeto={props.projeto} item={props.item} />
+      {props.estado ?? null}
+    </Row>
+  )
+}
+
+/** Abre e fecha os detalhes de um compacto no lugar (o `Collapsible` não cabe dentro da dobra do grupo). */
+function BotaoDeDetalhes(props: { id: string; titulo: string }) {
+  const aberto = Boolean(read(detalhes)[props.id])
+  return (
+    <IconButton
+      variant="ghost" size="sm" icon={aberto ? 'collapse' : 'expand'} label={`${aberto ? 'Esconder' : 'Ver'} detalhes: ${props.titulo}`}
+      tooltip={aberto ? 'Esconder detalhes' : 'Ver detalhes'}
+      onPress={() => update(detalhes, (d) => ({ ...d, [props.id]: !aberto }))}
+    />
+  )
+}
+
+const bordaDaEntrega = (e: EstadoDaEntrega | undefined) => (e?.estado === 'entregue' ? 'success' : e?.estado === 'falhou' ? 'danger' : true)
+
 // ── Perguntas ────────────────────────────────────────────────────────────────────────────────────────────────────
 function CartaoDaPergunta(props: { q: Pergunta }) {
   const l = read(leitura)
   const q = l?.abertas.find((x) => x.id === props.q.id) ?? props.q
   const f = read(feitos)[q.id]
   const agora = read(tique) || relogio.agora()
-  if (f?.tipo === 'feito') return <Compacto q={q} texto={f.mostrar ?? `Você respondeu: ${f.texto}`} entrega={f.entrega} />
+  if (f?.tipo === 'feito') return <Compacto q={q} texto={f.mostrar ?? `Você respondeu: ${f.texto}`} entrega={f.entrega} em={f.em} />
   if (f?.tipo === 'fora') return <Compacto q={q} nota="Já foi respondida fora desta aba." />
   const chave = `aberta:${q.id}`
   const aberto = read(campos)[chave]
-  const meta = [q.projeto, `espera ${haQuanto(ms(q.atualizadoEm), agora)}`, q.id].filter(Boolean).join(' · ')
+  const item = itemDe(q)
   // Com opções, um botão por opção (a recomendada primeiro); `outra` só libera o campo livre, como no pane do app.
   const botoes = (q.opcoes ?? []).filter((o) => o.id !== 'outra')
   const livre = !q.opcoes || q.opcoes.some((o) => o.id === 'outra')
   return (
-    <Box key={`q-${q.id}`} background="card" border radius="lg" padding="md" gap="sm">
-      <Text size="sm" weight="semibold">{q.titulo}</Text>
-      <Text size="xs" muted>{meta}</Text>
+    <Box key={`q-${q.id}`} background="card" border="warning" radius="lg" padding="md" gap="sm">
+      <Cabeca projeto={q.projeto} item={item} estado={<Badge tone="warning">{`espera ${haQuanto(ms(q.atualizadoEm), agora)}`}</Badge>} />
+      <Text size="sm" weight="semibold">{semPrefixoDoItem(q.titulo, item)}</Text>
+      <Text size="xs" muted>{q.id}</Text>
       {q.caso ? <Text size="sm">{q.caso}</Text> : null}
       {q.seNaoDecidir ? <Text size="sm" muted>{`Se ninguém decidir: ${q.seNaoDecidir}`}</Text> : null}
-      {q.recomendacao ? (
-        <Box background="muted" border="accent" radius="md" padding="sm" gap="xs">
-          <Text size="xs" weight="semibold" tone="accent">Recomendação</Text>
-          <Text size="sm">{q.recomendacao}</Text>
-        </Box>
-      ) : null}
+      {q.recomendacao ? <Recomendacao texto={q.recomendacao} /> : null}
       {f?.tipo === 'andando' ? (
         <Spinner label={q.endereco ? `Entregando a ${nomeDoDestino(q)}…` : 'Gravando…'} />
       ) : aberto ? (
@@ -338,6 +364,15 @@ function CartaoDaPergunta(props: { q: Pergunta }) {
   )
 }
 
+function Recomendacao(props: { texto: string }) {
+  return (
+    <Box background="muted" border="accent" radius="md" padding="sm" gap="xs">
+      <Text size="xs" weight="semibold" tone="accent">Recomendação</Text>
+      <Text size="sm">{props.texto}</Text>
+    </Box>
+  )
+}
+
 function SeloDaEntrega(props: { q: Pick<Pergunta, 'item' | 'titulo'>; entrega: EstadoDaEntrega }) {
   const e = props.entrega
   if (e.estado === 'entregue') return <Badge tone="success">{`Entregue a ${nomeDoDestino(props.q)}`}</Badge>
@@ -345,16 +380,36 @@ function SeloDaEntrega(props: { q: Pick<Pergunta, 'item' | 'titulo'>; entrega: E
   return <Badge tone="danger">A entrega falhou</Badge>
 }
 
-function Compacto(props: { q: Pergunta; texto?: string; nota?: string; entrega?: EstadoDaEntrega }) {
+/** O cartão de uma pergunta já respondida: compacto, com o selo de estado na ponta e os detalhes a um toque. */
+function Compacto(props: { q: Pergunta; texto?: string; nota?: string; entrega?: EstadoDaEntrega; em?: number; children?: unknown }) {
+  const { q } = props
   const e = props.entrega
+  const agora = read(tique) || relogio.agora()
+  const item = itemDe(q)
+  const titulo = semPrefixoDoItem(q.titulo, item)
+  const aberto = Boolean(read(detalhes)[q.id])
+  const perguntada = ms(q.atualizadoEm)
   return (
-    <Box key={`q-${props.q.id}`} background="card" border radius="lg" padding="md" gap="xs">
-      <Text size="sm" weight="semibold">{props.q.titulo}</Text>
+    <Box key={`q-${q.id}`} background="card" border={bordaDaEntrega(e)} radius="lg" padding="md" gap="xs">
+      <Cabeca projeto={q.projeto} item={item} estado={e ? <SeloDaEntrega q={q} entrega={e} /> : null} />
+      <Text size="sm" weight="semibold">{titulo}</Text>
       {props.texto ? <Text size="sm">{props.texto}</Text> : null}
       {props.nota ? <Text size="sm" muted>{props.nota}</Text> : null}
-      {e ? <Row><SeloDaEntrega q={props.q} entrega={e} /></Row> : null}
       {e?.estado === 'pendente' ? <Text size="xs" muted>{SEM_ENDERECO}</Text> : null}
-      {e?.estado === 'falhou' ? <Text size="xs" tone="danger">{`Gravada, mas não chegou a ${nomeDoDestino(props.q)}: ${e.motivo ?? 'sem motivo'}.`}</Text> : null}
+      {e?.estado === 'falhou' ? <Text size="xs" tone="danger">{`Gravada, mas não chegou a ${nomeDoDestino(q)}: ${e.motivo ?? 'sem motivo'}.`}</Text> : null}
+      {props.children ?? null}
+      <Row justify="between" align="center" gap="sm">
+        <Text size="xs" muted>{[props.em ? horaSP(props.em) : null, q.id].filter(Boolean).join(' · ')}</Text>
+        <BotaoDeDetalhes id={q.id} titulo={titulo} />
+      </Row>
+      {aberto ? (
+        <Box gap="xs">
+          {q.caso ? <Text size="sm">{q.caso}</Text> : null}
+          {q.seNaoDecidir ? <Text size="sm" muted>{`Se ninguém decidir: ${q.seNaoDecidir}`}</Text> : null}
+          {q.recomendacao ? <Recomendacao texto={q.recomendacao} /> : null}
+          {perguntada ? <Text size="xs" muted>{`Perguntada pela ${item ? `sessão do ${item}` : 'sessão'} · ${quando(perguntada, agora)}`}</Text> : null}
+        </Box>
+      ) : null}
     </Box>
   )
 }
@@ -364,14 +419,10 @@ function CartaoPendente(props: { p: Pendente }) {
   const r = read(reentregas)[p.id]
   const entrega = r && r !== 'andando' ? r : p.entregaDaResposta
   return (
-    <Box key={`p-${p.id}`} background="card" border radius="lg" padding="md" gap="xs">
-      <Text size="sm" weight="semibold">{p.titulo}</Text>
-      <Text size="sm">{`Você respondeu: ${p.resposta}`}</Text>
-      <Row><SeloDaEntrega q={p} entrega={entrega} /></Row>
-      {entrega.estado === 'falhou' ? <Text size="xs" tone="danger">{`Gravada, mas não chegou a ${nomeDoDestino(p)}: ${entrega.motivo ?? 'sem motivo'}.`}</Text> : null}
+    <Compacto q={p} texto={`Você respondeu: ${p.resposta}`} entrega={entrega} em={ms(entrega.em) || undefined}>
       {r === 'andando' ? <Spinner label={`Entregando a ${nomeDoDestino(p)}…`} />
         : entrega.estado !== 'entregue' && p.endereco ? <Row><Button variant="outline" onPress={() => void reentregar(p.id)}>Tentar entregar de novo</Button></Row> : null}
-    </Box>
+    </Compacto>
   )
 }
 
@@ -399,34 +450,69 @@ function LinhaDaDecisao(props: { q: Pergunta }) {
   const q = l?.assumidas.find((x) => x.id === props.q.id) ?? props.q
   const f = read(feitos)[q.id]
   const agora = read(tique) || relogio.agora()
-  const caixa = (filhos: unknown) => <Box key={`d-${q.id}`} border radius="md" padding="sm" gap="xs">{filhos}</Box>
-  if (f?.tipo === 'confirmada') {
+  const item = itemDe(q)
+  const titulo = semPrefixoDoItem(q.titulo, item)
+  const caixa = (filhos: unknown, borda: unknown = true) => <Box key={`d-${q.id}`} border={borda} radius="md" padding="sm" gap="xs">{filhos}</Box>
+  const decidiu = q.recomendacao ?? q.caso ?? ''
+  const perguntada = ms(q.atualizadoEm)
+  const quem = `Decidida pela ${item ? `sessão do ${item}` : 'sessão'}`
+  const aberto = Boolean(read(detalhes)[q.id])
+  if (f?.tipo === 'confirmada' || f?.tipo === 'feito') {
+    const confirmada = f.tipo === 'confirmada'
+    const como = confirmada ? (f.lote === 'todas' ? ', com todas' : f.lote ? ', com o grupo' : '') : ''
     return caixa(
-      <Row justify="between" align="center" gap="sm">
-        <Text size="sm" tone="success">{`Confirmada: ${q.titulo}`}</Text>
-        {!f.lote && agora < f.ate ? <Button variant="ghost" size="sm" onPress={() => void desfazerConfirmacao([{ id: q.id, versao: f.versao }], null)}>Desfazer</Button> : null}
-      </Row>,
+      <Box gap="xs">
+        <Text size="sm" tone={confirmada ? 'success' : undefined}>{confirmada ? `Confirmada: ${titulo}` : `Você mudou: ${f.texto}`}</Text>
+        {f.tipo === 'feito' ? <Row><SeloDaEntrega q={q} entrega={f.entrega} /></Row> : null}
+        <Row justify="end" align="center" gap="xs">
+          {confirmada && !f.lote && agora < f.ate ? <Button variant="ghost" size="sm" onPress={() => void desfazerConfirmacao([{ id: q.id, versao: f.versao }], null)}>Desfazer</Button> : null}
+          <BotaoDeDetalhes id={q.id} titulo={titulo} />
+        </Row>
+        {aberto ? (
+          <Box gap="xs">
+            {decidiu ? <Text size="xs">{`Decidiu: ${decidiu}`}</Text> : null}
+            {q.caso && q.caso !== decidiu ? <Text size="xs" muted>{q.caso}</Text> : null}
+            {q.seNaoDecidir ? <Text size="xs" muted>{`Se ninguém decidir: ${q.seNaoDecidir}`}</Text> : null}
+            {perguntada ? <Text size="xs" muted>{`${quem} · ${quando(perguntada, agora)} · ${q.id}`}</Text> : null}
+            <Text size="xs" muted>{`${confirmada ? 'Confirmada' : 'Mudada'} por você às ${horaSP(f.em)}${como}.`}</Text>
+          </Box>
+        ) : null}
+      </Box>,
+      confirmada ? 'success' : bordaDaEntrega(f.tipo === 'feito' ? f.entrega : undefined),
     )
   }
-  if (f?.tipo === 'confirmando') return caixa(<Spinner label={`Gravando: ${q.titulo}`} />)
-  if (f?.tipo === 'feito') return caixa(<Box gap="xs"><Text size="sm">{`Você mudou: ${f.texto}`}</Text><Row><SeloDaEntrega q={q} entrega={f.entrega} /></Row></Box>)
-  if (f?.tipo === 'fora') return caixa(<Text size="sm" muted>{`${q.titulo}: já foi respondida fora desta aba.`}</Text>)
+  if (f?.tipo === 'confirmando') return caixa(<Spinner label={`Gravando: ${titulo}`} />)
+  if (f?.tipo === 'fora') {
+    return caixa(
+      <Box gap="xs">
+        <Text size="sm" muted>{`${titulo}: já foi respondida fora desta aba.`}</Text>
+        <Row justify="end" align="center"><BotaoDeDetalhes id={q.id} titulo={titulo} /></Row>
+        {aberto ? (
+          <Box gap="xs">
+            {decidiu ? <Text size="xs">{`Decidiu: ${decidiu}`}</Text> : null}
+            {q.caso && q.caso !== decidiu ? <Text size="xs" muted>{q.caso}</Text> : null}
+            {q.seNaoDecidir ? <Text size="xs" muted>{`Se ninguém decidir: ${q.seNaoDecidir}`}</Text> : null}
+            {perguntada ? <Text size="xs" muted>{`${quem} · ${quando(perguntada, agora)} · ${q.id}`}</Text> : null}
+          </Box>
+        ) : null}
+      </Box>,
+    )
+  }
   const chave = `assumida:${q.id}`
-  const decidiu = q.recomendacao ?? q.caso ?? ''
   const { curto, cortou } = cortar(decidiu, CASO_CURTO)
   const inteiro = read(inteiros)[q.id]
   return caixa(
     <Box gap="xs">
-      <Text size="sm" weight="semibold">{q.titulo}</Text>
+      <Text size="sm" weight="semibold">{titulo}</Text>
       {decidiu ? <Text size="xs">{`Decidiu: ${inteiro ? decidiu : curto}`}</Text> : null}
       {inteiro && q.caso && q.caso !== decidiu ? <Text size="xs" muted>{q.caso}</Text> : null}
       <Row justify="between" align="center" gap="sm">
-        <Text size="xs" muted>{`${q.id} · ${haQuanto(ms(q.atualizadoEm), agora)}`}</Text>
+        <Text size="xs" muted>{`${q.id} · ${haQuanto(perguntada, agora)}`}</Text>
         {f?.tipo === 'andando' ? <Spinner label={q.endereco ? `Entregando a ${nomeDoDestino(q)}…` : 'Gravando…'} labelHidden /> : (
           <Row gap="xs">
             {cortou ? <IconButton variant="ghost" size="sm" icon={inteiro ? 'collapse' : 'expand'} label={inteiro ? 'Encolher' : 'Ler inteiro'} onPress={() => update(inteiros, (x) => ({ ...x, [q.id]: !inteiro }))} /> : null}
             <IconButton variant="ghost" size="sm" icon="edit" label="Discordar…" onPress={() => update(campos, (x) => ({ ...x, [chave]: true }))} />
-            <IconButton variant="ghost" size="sm" icon="check" label={`Confirmar: ${q.titulo}`} tooltip="Só grava. Nenhuma sessão é acordada." onPress={() => void confirmar([q], null)} />
+            <IconButton variant="ghost" size="sm" icon="check" label={`Confirmar: ${titulo}`} tooltip="Só grava. Nenhuma sessão é acordada." onPress={() => void confirmar([q], null)} />
           </Row>
         )}
       </Row>
@@ -435,6 +521,7 @@ function LinhaDaDecisao(props: { q: Pergunta }) {
       ) : null}
       {f?.tipo === 'erro' ? <Text size="xs" tone="danger">{f.motivo}</Text> : null}
     </Box>,
+    f?.tipo === 'erro' ? 'danger' : true,
   )
 }
 
@@ -454,6 +541,7 @@ function DesfechoDoLote(props: { chave: string; lote: Lote }) {
 
 function ConfirmarTodas(props: { pendentes: Pergunta[] }) {
   const n = props.pendentes.length
+  const projetos = new Set(props.pendentes.map((q) => q.projeto ?? '—')).size
   const armadoEm = read(armado)
   const lote = read(lotes).todas
   if (lote) return <DesfechoDoLote chave="todas" lote={lote} />
@@ -474,14 +562,14 @@ function ConfirmarTodas(props: { pendentes: Pergunta[] }) {
         <Button variant="ghost" onPress={() => set(armado, null)}>Cancelar</Button>
         <Button variant="solid" tone="accent" onPress={() => { if (relogio.agora() - armadoEm >= TOQUE_MS) void confirmar(props.pendentes, 'todas') }}>{n === 1 ? 'Confirmar agora' : `Confirmar as ${n} agora`}</Button>
       </Row>
-      <Text size="xs" muted>Inclui as que você não abriu.</Text>
+      <Text size="xs" muted>{projetos > 1 ? `Inclui as que você não abriu, de ${projetos} projetos.` : 'Inclui as que você não abriu.'}</Text>
     </Box>
   )
 }
 
 /** "Confirmar as 12 do F435"; com uma só, "Confirmar a decisão do F435". */
-const confirmarGrupo = (n: number, chave: string) => {
-  const onde = chave === 'sem-item' ? 'sem item' : `do ${chave}`
+const confirmarGrupo = (n: number, item: string | null) => {
+  const onde = item ? `do ${item}` : 'sem item'
   return n === 1 ? `Confirmar a decisão ${onde}` : `Confirmar as ${n} ${onde}`
 }
 
@@ -489,33 +577,45 @@ function Decisoes(props: { l: Leitura }) {
   const lista = comFeitos(props.l.assumidas, 'assumida')
   if (!lista.length) return <EmptyState title="Nenhuma decisão para confirmar" description="Quando uma sessão decidir algo sozinha e seguir, aparece aqui." icon="check" />
   const gs = porItem(lista)
-  const projetos = new Set(lista.map((q) => q.projeto).filter(Boolean))
   const abertos = read(grupos)
   const agora = read(tique) || relogio.agora()
   const livres = (qs: Pergunta[]) => qs.filter((q) => !read(feitos)[q.id] || read(feitos)[q.id].tipo === 'erro')
+  // Blocos por projeto (o da decisão mais recente primeiro); dentro, um grupo por item.
+  const blocos: { projeto: string | null; grupos: typeof gs; total: number }[] = []
+  for (const g of gs) {
+    const b = blocos.find((x) => x.projeto === (g.projeto ?? null))
+    const aConfirmar = livres(g.itens).length
+    if (b) { b.grupos.push(g); b.total += aConfirmar } else blocos.push({ projeto: g.projeto ?? null, grupos: [g], total: aConfirmar })
+  }
+  blocos.sort((a, b) => Number(a.projeto === null) - Number(b.projeto === null))
   return (
-    <Box gap="sm">
-      {gs.map((g, i) => {
-        const pendentes = livres(g.itens)
-        const titulo = g.chave === 'sem-item' ? 'Sem item' : g.titulo
-        const descricao = [plural(g.itens.length, 'decisão', 'decisões'), haQuanto(g.ultimaMs, agora), projetos.size > 1 ? g.itens[0].projeto : null].filter(Boolean).join(' · ')
-        const lote = read(lotes)[`grupo:${g.chave}`]
-        return (
-          <Collapsible key={g.chave} title={cortar(titulo, 26).curto} description={descricao} open={abertos[g.chave] ?? i === 0} onChange={(v: boolean) => update(grupos, (x) => ({ ...x, [g.chave]: v }))}>
-            <Box gap="sm">
-              <Box gap="xs">{g.itens.map((q) => <LinhaDaDecisao key={q.id} q={q} />)}</Box>
-              {lote ? <DesfechoDoLote chave={`grupo:${g.chave}`} lote={lote} />
-                : pendentes.length ? (
-                  <Row>
-                    <Button variant="solid" tone="neutral" tooltip="Só grava. Nenhuma sessão é acordada." onPress={() => void confirmar(pendentes, `grupo:${g.chave}`)}>
-                      {confirmarGrupo(pendentes.length, g.chave)}
-                    </Button>
-                  </Row>
-                ) : null}
-            </Box>
-          </Collapsible>
-        )
-      })}
+    <Box gap="md">
+      {blocos.map((bl, bi) => (
+        <Box key={`p-${bl.projeto ?? '—'}`} gap="sm">
+          <Heading level={3}>{`${bl.projeto ? cortar(bl.projeto, 28).curto : 'Sem projeto'} · ${bl.total}`}</Heading>
+          {bl.grupos.map((g, i) => {
+            const pendentes = livres(g.itens)
+            const titulo = g.item ?? 'Sem item'
+            const descricao = [plural(g.itens.length, 'decisão', 'decisões'), haQuanto(g.ultimaMs, agora)].join(' · ')
+            const lote = read(lotes)[`grupo:${g.chave}`]
+            return (
+              <Collapsible key={g.chave} title={cortar(titulo, 26).curto} description={descricao} open={abertos[g.chave] ?? (bi === 0 && i === 0)} onChange={(v: boolean) => update(grupos, (x) => ({ ...x, [g.chave]: v }))}>
+                <Box gap="sm">
+                  <Box gap="xs">{g.itens.map((q) => <LinhaDaDecisao key={q.id} q={q} />)}</Box>
+                  {lote ? <DesfechoDoLote chave={`grupo:${g.chave}`} lote={lote} />
+                    : pendentes.length ? (
+                      <Row>
+                        <Button variant="solid" tone="neutral" tooltip="Só grava. Nenhuma sessão é acordada." onPress={() => void confirmar(pendentes, `grupo:${g.chave}`)}>
+                          {confirmarGrupo(pendentes.length, g.item ?? null)}
+                        </Button>
+                      </Row>
+                    ) : null}
+                </Box>
+              </Collapsible>
+            )
+          })}
+        </Box>
+      ))}
       <ConfirmarTodas pendentes={livres(props.l.assumidas)} />
     </Box>
   )
@@ -530,7 +630,10 @@ function CartaoDaEntrega(props: { e: Entrega }) {
     return (
       <Box key={`e-${e.chave}`} background="card" border radius="lg" padding="md">
         <Row justify="between" align="center" gap="sm">
-          <Text size="sm" muted>{`Limpa: ${e.titulo}`}</Text>
+          <Box gap="xs" shrink>
+            <SeloDoProjeto projeto={e.projeto} item={itemDe(e)} />
+            <Text size="sm" muted>{`Limpa: ${semPrefixoDoItem(e.titulo, itemDe(e))}`}</Text>
+          </Box>
           {agora < limpaAte ? <Button variant="ghost" size="sm" onPress={() => trazerDeVolta([e])}>Desfazer</Button> : null}
         </Row>
       </Box>
@@ -539,7 +642,7 @@ function CartaoDaEntrega(props: { e: Entrega }) {
   const corpo = e.corpo ?? e.orca?.corpo ?? null
   const resultado = e.entrega?.resultado ?? (corpo ? cortar(corpo, ORCA_CURTO).curto : e.resultado ?? null)
   const meta = [horaSP(ms(e.em)), ...(e.prs ?? []).map((n) => `PR ${n}`), e.sessao].filter(Boolean).join(' · ')
-  const detalhes = [e.entrega?.medido ? `Medido: ${e.entrega.medido}` : null, e.entrega?.proximos ? `Próximos: ${e.entrega.proximos}` : null].filter(Boolean) as string[]
+  const maisDetalhes = [e.entrega?.medido ? `Medido: ${e.entrega.medido}` : null, e.entrega?.proximos ? `Próximos: ${e.entrega.proximos}` : null].filter(Boolean) as string[]
   const mensagemInteira = corpo && (e.entrega?.resultado || cortar(corpo, ORCA_CURTO).cortou) ? corpo : null
   const s = e.seguimento
   const chave = `e:${e.chave}`
@@ -550,14 +653,20 @@ function CartaoDaEntrega(props: { e: Entrega }) {
     : e.item ? `A sessão do ${e.item} já fechou: vai para a orquestradora · acorda a orquestradora` : 'Vai para a orquestradora · acorda a orquestradora'
   return (
     <Box key={`e-${e.chave}`} background="card" border radius="lg" padding="md" gap="sm">
-      <Text size="sm" weight="semibold">{e.titulo}</Text>
+      <Cabeca projeto={e.projeto} item={itemDe(e)} />
+      <Text size="sm" weight="semibold">{semPrefixoDoItem(e.titulo, itemDe(e))}</Text>
       <Text size="xs" muted>{meta}</Text>
       {resultado ? <Text size="sm">{resultado}</Text> : null}
-      {e.entrega?.naoMedido ? <Text size="sm">{`Não medido: ${e.entrega.naoMedido}`}</Text> : null}
-      {detalhes.length || mensagemInteira ? (
+      {e.entrega?.naoMedido ? (
+        <Box border="warning" radius="md" padding="sm" gap="xs">
+          <Text size="xs" weight="semibold" tone="warning">Não medido</Text>
+          <Text size="sm">{e.entrega.naoMedido}</Text>
+        </Box>
+      ) : null}
+      {maisDetalhes.length || mensagemInteira ? (
         <Collapsible title="Detalhes">
           <Box gap="xs">
-            {detalhes.map((d) => <Text key={d} size="sm">{d}</Text>)}
+            {maisDetalhes.map((d) => <Text key={d} size="sm">{d}</Text>)}
             {mensagemInteira ? <Text size="xs" muted>Mensagem do Orca</Text> : null}
             {mensagemInteira ? <Text size="sm">{mensagemInteira}</Text> : null}
           </Box>
@@ -615,7 +724,8 @@ function Entregas(props: { l: Leitura }) {
             <Box key={`l-${e.chave}`} border radius="md" padding="sm">
               <Row justify="between" align="center" gap="sm">
                 <Box gap="xs" shrink>
-                  <Text size="sm">{e.titulo}</Text>
+                  <SeloDoProjeto projeto={e.projeto} item={itemDe(e)} />
+                  <Text size="sm">{semPrefixoDoItem(e.titulo, itemDe(e))}</Text>
                   <Text size="xs" muted>{`${nomeDoDia(ms(e.em), agora)} · ${horaSP(ms(e.em))}`}</Text>
                 </Box>
                 <Button variant="ghost" size="sm" onPress={() => trazerDeVolta([e])}>Trazer de volta</Button>

@@ -53,6 +53,14 @@ const entregas: Entrega[] = [
   },
 ]
 
+const doOutroProjeto: Pergunta[] = [
+  { ...base, id: 'Q2010', estado: 'assumida', item: 'F12', projeto: 'Izanagi', titulo: 'F12 · Carrinho guarda o CEP entre as visitas', recomendacao: 'Guardar o CEP por 30 dias no armazenamento local, sem cookie.', atualizadoEm: iso(5 * H) },
+  { ...base, id: 'Q2011', estado: 'assumida', item: 'F12', projeto: 'Izanagi', titulo: 'F12 · Frete grátis acima de R$ 299', recomendacao: 'Mostrar a barra de progresso no carrinho e na página do produto.', atualizadoEm: iso(5 * H) },
+  { ...base, id: 'Q2013', estado: 'assumida', item: 'F12', projeto: 'kit-de-orquestracao', titulo: 'F12 · Rodapé do painel com a versão', recomendacao: 'Mostrar só a versão do plugin, sem o hash.', atualizadoEm: iso(4 * H) },
+  { ...base, id: 'Q2012', estado: 'assumida', item: null, projeto: null, titulo: 'Troca do nome da tabela de logs', recomendacao: 'Manter o nome antigo até a próxima janela.', atualizadoEm: iso(30 * H) },
+]
+const semProjeto: Pergunta = { ...abertas[1], id: 'Q1075', projeto: null, item: null, titulo: 'Qual fuso mostrar nos horários do relatório?', caso: 'Hoje sai em UTC e a equipe lê em São Paulo.', recomendacao: 'São Paulo.' }
+
 const leitura = (l: Partial<Leitura> = {}): Leitura =>
   ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, lidoEm: AGORA - 20_000, ...l })
 const cheia = leitura({ abertas, assumidas, entregas })
@@ -63,6 +71,10 @@ export default defineCheck({
   'perguntas (claro)': { requests: { 'kit.ler': cheia }, theme: 'light' },
   decisoes: { requests: { 'kit.ler': leitura({ assumidas, entregas }) }, persisted: { plugin: { secao: 'decisoes' } } },
   'decisoes (claro)': { requests: { 'kit.ler': leitura({ assumidas, entregas }) }, persisted: { plugin: { secao: 'decisoes' } }, theme: 'light' },
+  'perguntas (sem projeto)': { requests: { 'kit.ler': leitura({ abertas: [semProjeto, ...abertas] }) } },
+  'decisoes (dois projetos)': { requests: { 'kit.ler': leitura({ assumidas: [...assumidas, ...doOutroProjeto] }) }, persisted: { plugin: { secao: 'decisoes' } } },
+  'decisoes (dois projetos, claro)': { requests: { 'kit.ler': leitura({ assumidas: [...assumidas, ...doOutroProjeto] }) }, persisted: { plugin: { secao: 'decisoes' } }, theme: 'light' },
+  'perguntas (sem projeto, claro)': { requests: { 'kit.ler': leitura({ abertas: [semProjeto, ...abertas] }) }, theme: 'light' },
   entregas: { requests: { 'kit.ler': leitura({ assumidas, entregas }) }, persisted: { plugin: { secao: 'entregas' } } },
   'entregas com a caixa fora': { requests: { 'kit.ler': leitura({ entregas: entregas.filter((e) => e.origem === 'painel'), erroDaCaixa: 'o Orca não respondeu à leitura da caixa' }) }, persisted: { plugin: { secao: 'entregas' } } },
   'falha ao ler': { requests: { 'kit.ler': () => { throw new Error('worker parado') } } },
