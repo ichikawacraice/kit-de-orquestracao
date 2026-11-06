@@ -236,7 +236,10 @@ const MOTIVOS_DA_ESPERA = ['operador', 'gate'];
 const LOCAL_ID = /^local_[0-9a-f-]{36}$/;
 // F439 (ADR 0030): o endereço da sessão é o `local_…` do app ou o `orca_session_id:<id>` do Orca; o formato mora em
 // hooks/anfitriao.mjs. Sem o módulo (a cópia do script solta numa pasta sem `hooks/`), só o do app.
-const { ehIdDeSessao = (v) => LOCAL_ID.test(String(v)), quemSou = () => null } = await import(pathToFileURL(join(HOOKS_DIR, 'anfitriao.mjs')).href).catch(() => ({}));
+const {
+  ehIdDeSessao = (v) => LOCAL_ID.test(String(v)), quemSou = () => null,
+  ehDestinoDoOrca = (v) => typeof v === 'string' && /^(?:run|dispatch|orca_session_id):[A-Za-z0-9_-]+$/.test(v),
+} = await import(pathToFileURL(join(HOOKS_DIR, 'anfitriao.mjs')).href).catch(() => ({}));
 const NAO_E_SESSAO = 'não é local_<uuid> nem orca_session_id:<id>';
 const CITA_NUMERO = /\bF\d+\b|#\d+/;
 // F43: o texto que o operador lê cita item como "F13 · <título>" na primeira menção; as seguintes podem ser só "F13".
@@ -474,6 +477,27 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
   }
 }
 
+// F448 (ADR 0030, fatia 9): o endereço de entrega da resposta, gravado no nascimento da pergunta. No Orca é
+// `endereco: {orca: <o --to do orca orchestration send>}`; a aba do kit no Orca entrega só nele (nunca pelo título da sessão
+// nem pela orquestradora ativa). A pergunta que espera resposta (aberta, assumida) com `sessaoId` do Orca ganha o endereço
+// dela; o explícito (`dispatch:`, `run:`) fica; o derivado acompanha a troca de `sessaoId`. Numa sessão do Orca, a pergunta
+// que nasce (ou troca de sessaoId) esperando resposta sem endereço é recusada: a resposta dada na aba não teria aonde ir.
+const ESPERA_ENTREGA = new Set(['aberta', 'assumida']);
+const ehDoOrca = (v) => typeof v === 'string' && v.startsWith('orca_session_id:') && ehDestinoDoOrca(v);
+function enderecoDaPergunta(chave, novo, base, antes) {
+  if ('endereco' in novo && novo.endereco !== null) {
+    const e = novo.endereco;
+    const ok = e && typeof e === 'object' && !Array.isArray(e) && Object.keys(e).length === 1 && ehDestinoDoOrca(e.orca);
+    if (!ok) throw new Error(`${chave}: endereco é {"orca": "<orca_session_id:…|dispatch:…|run:…>"} (o --to do orca orchestration send); veio ${JSON.stringify(e)}`);
+  }
+  const trocouSessao = 'sessaoId' in novo && novo.sessaoId !== antes?.sessaoId;
+  if (trocouSessao && !('endereco' in novo) && antes?.endereco?.orca && antes.endereco.orca === antes.sessaoId) delete base.endereco;
+  if (ESPERA_ENTREGA.has(base.estado) && !base.endereco && ehDoOrca(base.sessaoId)) base.endereco = { orca: base.sessaoId };
+  if ((!antes || trocouSessao) && ESPERA_ENTREGA.has(base.estado) && !base.endereco && base.sessaoId && ehDoOrca(quemSou())) {
+    throw new Error(`${chave}: pergunta ${base.estado} numa sessão do Orca sem endereço de entrega — grave sessaoId = o seu orca_session_id:… (ou endereco: {"orca": "dispatch:…"}); com ${JSON.stringify(base.sessaoId)} a resposta dada na aba do kit não teria aonde ir`);
+  }
+}
+
 // Cartão de sessão dona que espera o clique do operador (a coleção `cartoes`; id = o task_id do start_session): apelido e papel
 // `dona`, exatamente um item; a sessão aberta se chama `F<n> · <tema>`.
 // `propostoEm` é do painel: ausente vira agora; no futuro (além de 5 min de folga de relógio) a hora escrita à mão estava
@@ -620,6 +644,7 @@ function planejar(o, seVersao, vista) {
   if (colecao === 'perguntas' && ['resposta', 'estado', 'titulo', 'sessaoId'].some((k) => k in novo && novo[k] !== atual?.data?.[k])) {
     delete base.respondidaPor; delete base.respondidaEm;
   }
+  if (colecao === 'perguntas') enderecoDaPergunta(chave, novo, base, op === 'update' ? atual?.data : null);
   if (colecao === 'fila') lembrarDona(chave, novo, base, atual?.data, viaCom);
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.com) && atual.data.com.length) base.com = atual.data.com;
   if (colecao === 'fila' && op === 'set' && !viaCom && Array.isArray(atual?.data?.fez)) base.fez = atual.data.fez;

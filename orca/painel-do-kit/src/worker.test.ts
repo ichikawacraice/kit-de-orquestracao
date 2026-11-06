@@ -6,12 +6,13 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileS
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as main from './worker'
-import { ESPERA_ENVIO_MS, PRAZO_DO_ENVIO_MS, LIMITE_DA_CAIXA } from './protocol'
+import { ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, PRAZO_DO_ENVIO_MS, LIMITE_DA_CAIXA } from './protocol'
 
 const PERIGOSO = `sim, "aspas" 'simples' $(touch /tmp/f436-w-pwned) \`id\` $HOME; exit 3`
 
 type Ws = { id: string; kind: 'worktree' | 'folder'; name: string; path: string; branch: string | null; hostId: string | null }
-function ambiente(opcoes: { workspaces?: (raiz: string) => Ws[]; mensagens?: object[] } = {}) {
+// `janelaMs`: a janela do lote de respostas (F448); 0 entrega na hora, para os casos que não medem o lote.
+function ambiente(opcoes: { workspaces?: (raiz: string) => Ws[]; mensagens?: object[]; janelaMs?: number } = {}) {
   const raiz = mkdtempSync(join(tmpdir(), 'f436-worker-'))
   const painel = join(raiz, 'painel')
   mkdirSync(join(painel, 'perguntas'), { recursive: true })
@@ -27,11 +28,12 @@ const fs = require('fs'); const a = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(log)}, a[1] + '\\n');
 if (a[1] === 'inbox') { const m = JSON.parse(fs.readFileSync(${JSON.stringify(caixa)}, 'utf8')); const i = a.indexOf('--limit'); console.log(JSON.stringify({ result: { messages: i < 0 ? m : m.slice(0, Number(a[i + 1])) } })); }
 else if (a[1] === 'worker-list') console.log('{"result":{"workers":[]}}');
-else if (a[1] === 'send') { fs.writeFileSync(${JSON.stringify(args)}, JSON.stringify(a)); console.log('{"ok":true,"result":{"messageId":"msg_x"}}'); }
+else if (a[1] === 'send') { fs.writeFileSync(${JSON.stringify(args)}, JSON.stringify(a)); fs.appendFileSync(${JSON.stringify(args)} + 'l', JSON.stringify(a) + '\\n'); console.log('{"ok":true,"result":{"messageId":"msg_x"}}'); }
 `)
   chmodSync(orca, 0o755)
   process.env.PAINEL_DIR = painel
   process.env.PAINEL_DO_KIT_ORCA = orca
+  process.env.PAINEL_DO_KIT_JANELA_MS = String(opcoes.janelaMs ?? 0)
   const pergunta = (id: string, data: object, version = 1) =>
     writeFileSync(join(painel, 'perguntas', `${id}.json`), JSON.stringify({ id, version, data }))
   const doc = (id: string) => JSON.parse(readFileSync(join(painel, 'perguntas', `${id}.json`), 'utf8'))
@@ -46,7 +48,8 @@ else if (a[1] === 'send') { fs.writeFileSync(${JSON.stringify(args)}, JSON.strin
       },
     },
   })
-  return { painel, host, pergunta, doc, chamadas, enviados: () => JSON.parse(readFileSync(args, 'utf8')) }
+  const todosEnviados = () => (existsSync(args + 'l') ? readFileSync(args + 'l', 'utf8').trim().split('\n').map((l) => JSON.parse(l) as string[]) : [])
+  return { painel, host, pergunta, doc, chamadas, enviados: () => JSON.parse(readFileSync(args, 'utf8')), todosEnviados }
 }
 
 test('ler não acorda ninguém: nenhum terminal, nenhum agente, nenhuma mensagem; só inbox e worker-list do CLI', async () => {
@@ -217,7 +220,8 @@ test('caixa do Orca maior que o limite: a leitura diz até quando as entregas do
 
 test('o painel espera o envio inteiro: o prazo dos pedidos que enviam passa da espera do worker, e os três o usam', () => {
   assert.ok(ESPERA_ENVIO_MS > 0)
-  assert.ok(PRAZO_DO_ENVIO_MS >= ESPERA_ENVIO_MS + 30_000, 'folga para workspace.list, terminal.create e a gravação')
+  assert.ok(JANELA_DA_ENTREGA_MS > 0 && JANELA_DA_ENTREGA_MS <= 10_000, 'a janela do lote é de poucos segundos')
+  assert.ok(PRAZO_DO_ENVIO_MS >= JANELA_DA_ENTREGA_MS + ESPERA_ENVIO_MS + 30_000, 'folga para a janela do lote, workspace.list, terminal.create e a gravação')
   assert.ok(PRAZO_DO_ENVIO_MS <= 120_000, 'o Orca não aceita mais que 120 s')
   const painel = readFileSync(new URL('./panel.tsx', import.meta.url), 'utf8')
   for (const nome of ['kit.responder', 'kit.reentregar', 'kit.seguimento']) {
@@ -225,4 +229,59 @@ test('o painel espera o envio inteiro: o prazo dos pedidos que enviam passa da e
     assert.ok(linha, `achei a chamada de ${nome}`)
     assert.ok(linha.includes('{ timeoutMs: PRAZO_DO_ENVIO_MS }'), `${nome} passa o prazo do envio`)
   }
+})
+
+// F448 (fatia 9): duas respostas à mesma sessão a poucos segundos uma da outra saem numa mensagem; fora da janela, em duas.
+test('duas respostas à mesma sessão dentro da janela saem numa mensagem só; fora dela, em duas', async () => {
+  const a = ambiente({ janelaMs: 400 })
+  a.pergunta('Q1', { estado: 'aberta', titulo: 'qual pasta', endereco: { orca: 'orca_session_id:dona-a' } })
+  a.pergunta('Q2', { estado: 'assumida', titulo: 'usei a main', endereco: { orca: 'orca_session_id:dona-a' } })
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    const [r1, r2] = await Promise.all([
+      w.request('kit.responder', { id: 'Q1', versao: 1, esperado: 'aberta', resposta: 'a pasta de cima' }),
+      w.request('kit.responder', { id: 'Q2', versao: 1, esperado: 'assumida', resposta: 'use a develop' }),
+    ])
+    assert.equal(r1.entrega.estado, 'entregue')
+    assert.equal(r2.entrega.estado, 'entregue')
+    const enviados = a.todosEnviados()
+    assert.equal(enviados.length, 1, 'uma mensagem só')
+    assert.equal(enviados[0][3], 'orca_session_id:dona-a')
+    assert.equal(enviados[0][7], 'Respostas Q1, Q2')
+    assert.ok(enviados[0][9].includes('a pasta de cima') && enviados[0][9].includes('use a develop'), enviados[0][9])
+    for (const id of ['Q1', 'Q2']) assert.equal(a.doc(id).data.entregaDaResposta.estado, 'entregue', id)
+    assert.equal(a.host.callsOf('terminal.create').length, 1)
+  } finally { await w.deactivate() }
+
+  const b = ambiente({ janelaMs: 50 })
+  b.pergunta('Q1', { estado: 'aberta', titulo: 'um', endereco: { orca: 'orca_session_id:dona-a' } })
+  b.pergunta('Q2', { estado: 'aberta', titulo: 'dois', endereco: { orca: 'orca_session_id:dona-a' } })
+  const w2 = await mountWorker(main, { host: b.host })
+  try {
+    await w2.request('kit.responder', { id: 'Q1', versao: 1, esperado: 'aberta', resposta: 'sim' })
+    await new Promise((r) => setTimeout(r, 200))
+    await w2.request('kit.responder', { id: 'Q2', versao: 1, esperado: 'aberta', resposta: 'não' })
+    assert.deepEqual(b.todosEnviados().map((e) => e[7]), ['Resposta Q1', 'Resposta Q2'])
+  } finally { await w2.deactivate() }
+})
+
+// A rota usa só o endereço gravado: a resposta à dona não vai à Run (coordenadora) nem à orquestradora, mesmo com o
+// título de orquestradora na pergunta e uma orquestradora ativa marcada no painel.
+test('a resposta à pergunta da dona vai só ao endereço dela; título e orquestradora ativa não mudam o destino', async () => {
+  const a = ambiente({ janelaMs: 300 })
+  mkdirSync(join(a.painel, '..', 'ativas'), { recursive: true })
+  writeFileSync(join(a.painel, '..', 'ativas', 'cli-orq'), '/proj/.git\norca_session_id:claude_orq\n')
+  a.pergunta('Q1', { estado: 'aberta', titulo: 'qual pasta', sessao: '🎛 orquestradora — proj', sessaoId: 'orca_session_id:dona-a', endereco: { orca: 'orca_session_id:dona-a' } })
+  a.pergunta('Q2', { estado: 'aberta', titulo: 'outra coisa', sessao: 'F2 · outra', sessaoId: 'orca_session_id:dona-b', endereco: { orca: 'orca_session_id:dona-b' } })
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    await Promise.all([
+      w.request('kit.responder', { id: 'Q1', versao: 1, esperado: 'aberta', resposta: 'para a dona A' }),
+      w.request('kit.responder', { id: 'Q2', versao: 1, esperado: 'aberta', resposta: 'para a dona B' }),
+    ])
+    const enviados = a.todosEnviados()
+    assert.deepEqual(enviados.map((e) => e[3]).sort(), ['orca_session_id:dona-a', 'orca_session_id:dona-b'], 'uma mensagem a cada dona, nenhuma à Run nem à orquestradora')
+    const paraA = enviados.find((e) => e[3] === 'orca_session_id:dona-a')!
+    assert.ok(paraA[9].includes('para a dona A') && !paraA[9].includes('para a dona B'), paraA[9])
+  } finally { await w.deactivate() }
 })

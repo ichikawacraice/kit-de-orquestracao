@@ -12,6 +12,11 @@ export const ID_DO_ORCA = /^orca_session_id:[A-Za-z0-9_-]+$/;
 // O endereço do app (o `local_…` do registro). F439: o painel aceita os dois onde grava quem é a sessão (com, sessoes, donoLocalId).
 export const ID_DO_APP = /^local_[0-9a-f-]{36}$/;
 export const ehIdDeSessao = (v) => typeof v === 'string' && (ID_DO_APP.test(v) || ID_DO_ORCA.test(v));
+// F448 (fatia 9): o endereço de entrega no Orca, o `--to` que o `orca orchestration send` aceita: a sessão (`orca_session_id:`),
+// o despacho (`dispatch:`) ou a Run (`run:`). A aba do kit no Orca (orca/painel-do-kit, `envio.mjs`) valida com a mesma forma;
+// um teste compara as duas.
+export const DESTINO_DO_ORCA = /^(?:run|dispatch|orca_session_id):[A-Za-z0-9_-]+$/;
+export const ehDestinoDoOrca = (v) => typeof v === 'string' && DESTINO_DO_ORCA.test(v);
 
 const texto = (v) => (typeof v === 'string' ? v.trim() : '');
 
