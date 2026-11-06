@@ -42,6 +42,16 @@ export type Entrega = {
 /** Respondida por esta aba cuja entrega à sessão ainda não saiu. */
 export type Pendente = Pergunta & { resposta: string; estadoAnterior: 'aberta' | 'assumida'; entregaDaResposta: EstadoDaEntrega }
 
+/** O estado gravado de uma pergunta que a aba mandou responder (F450): a verdade quando a resposta do worker se perde. */
+export type Acompanhada = {
+  estado: string
+  versao: number
+  resposta: string | null
+  respondidaPor: string | null
+  respondidaEm: string | null
+  entregaDaResposta: EstadoDaEntrega | null
+}
+
 export type Leitura = {
   abertas: Pergunta[]
   assumidas: Pergunta[]
@@ -52,6 +62,8 @@ export type Leitura = {
   /** Quando a caixa do Orca passa do limite lido: a data da mensagem mais velha que entrou (as entregas do Orca vão até ela). */
   caixaAte: string | null
   lidoEm: number
+  /** Só quando a aba pediu `acompanhar`: o estado gravado de cada id; `null` para a que sumiu. */
+  acompanhadas?: Record<string, Acompanhada | null>
 }
 
 export type EstadoDaEntrega = { estado: 'entregue' | 'pendente' | 'falhou'; via: 'orca'; destino?: string; em: string; motivo?: string }
@@ -59,7 +71,7 @@ export type Resultado = { gravou: true; entrega: EstadoDaEntrega } | { gravou: f
 
 declare module 'orca' {
   interface PluginRequests {
-    'kit.ler': { input: { forcar?: boolean }; output: Leitura }
+    'kit.ler': { input: { forcar?: boolean; acompanhar?: string[] }; output: Leitura }
     'kit.responder': { input: { id: string; versao: number; esperado: 'aberta' | 'assumida'; resposta: string }; output: Resultado }
     'kit.confirmar': { input: { itens: { id: string; versao: number }[] }; output: { confirmadas: string[]; recusadas: { id: string; motivo: string }[]; versoes: Record<string, number> } }
     'kit.desfazer': { input: { itens: { id: string; versao: number }[] }; output: { desfeitas: string[]; recusadas: { id: string; motivo: string }[] } }

@@ -94,7 +94,8 @@ test('responder outra coisa: o texto vai byte a byte; o rascunho sobrevive à re
   assert.deepEqual(w.pedidos.filter((p) => p.nome === 'kit.ler').at(-1)?.input, { forcar: true }, 'o reler manual relê a caixa do Orca')
   await v.press({ role: 'button', text: 'Gravar resposta' })
   assert.equal((w.pedidos.find((p) => p.nome === 'kit.responder')?.input as { resposta: string }).resposta, PERIGOSO)
-  assert.ok(v.find({ text: 'Entrega pendente' }))
+  assert.ok(v.find({ text: 'Só gravada' }), 'sem endereço nada vai sair: o selo não promete entrega')
+  assert.equal(v.find({ text: 'Entrega pendente' }), null)
   semErros(v)
   await v.unmount()
 })
@@ -465,4 +466,289 @@ test('F451: confirmação recusada deixa a linha da decisão com borda vermelha;
   assert.ok(caixas(v, 'danger').length >= 1, 'a linha cuja confirmação foi recusada tem borda danger')
   semErros(v)
   await v.unmount()
+})
+
+// ── F450: a resposta do worker se perde e o arquivo diz o desfecho ──────────────────────────────────────────────────
+// Na troca do guest do painel (recarga), o estado da aba vai para o guest novo e a promessa do `kit.responder` morre
+// com o velho; o Orca também desiste dela no prazo. O arquivo da pergunta é a verdade: a releitura seguinte acompanha o
+// que a aba mandou responder e tira o cartão do "Entregando a …". O kit de teste espera todo pedido em voo a cada gesto,
+// então aqui o gesto não é aguardado até o caso soltar a promessa.
+const SIM = 'sim (segue a recomendação)'
+type Acompanhar = { forcar?: boolean; acompanhar?: string[] }
+type Vista = Awaited<ReturnType<typeof mount>>
+/** Hora relativa ao momento da leitura (não ao carregamento do arquivo): o caso não depende de quanto a suíte demora. */
+const ha = (msAtras: number) => new Date(Date.now() - msAtras).toISOString()
+const respondida = (extra: Record<string, unknown> = {}) =>
+  ({ estado: 'respondida', versao: 2, resposta: SIM, respondidaPor: 'operador-orca', respondidaEm: ha(5_000), entregaDaResposta: null, ...extra })
+/** A leitura depois da gravação: a pergunta saiu das abertas e, se a aba pediu, vem o estado gravado dela. */
+const depoisDeGravar = (i: Acompanhar, q1: unknown) =>
+  leitura(i?.acompanhar?.includes('Q1') ? ({ acompanhadas: { Q1: q1 } } as Partial<Leitura>) : {})
+const acompanhou = (w: ReturnType<typeof worker>) => w.pedidos.some((p) => (p.input as Acompanhar | undefined)?.acompanhar?.includes('Q1'))
+const entregando = (v: Vista) => JSON.stringify(v.tree()).includes('Entregando a F435…')
+const timeout = () => Object.assign(new Error('timeout'), { code: 'timeout' })
+async function ate(cond: () => boolean, oQue: string) {
+  for (let i = 0; i < 200 && !cond(); i++) await new Promise((r) => setTimeout(r, 5))
+  assert.ok(cond(), `não aconteceu: ${oQue}`)
+}
+
+/**
+ * O pedido que envia fica preso numa promessa que o caso solta quando quer. O caso aperta, a aba relê pelo aviso do
+ * worker e, só então, a promessa se resolve (ou falha); no fim desmonta sempre: o relógio da aba segura o processo.
+ */
+async function comPedidoPreso(
+  opcoes: { ler: (i: Acompanhar, depois: boolean) => Leitura; pedido: 'kit.responder' | 'kit.reentregar'; botao: string; antesDeReler?: () => void },
+  desfecho: { soltar?: unknown; falhar?: unknown },
+  verificar: (v: Vista) => void,
+) {
+  let soltar!: (x: unknown) => void
+  let falhar!: (e: unknown) => void
+  const promessa = new Promise((ok, erro) => { soltar = ok; falhar = erro })
+  let depois = false
+  const w = worker({
+    'kit.ler': (i: Acompanhar) => opcoes.ler(i, depois),
+    [opcoes.pedido]: () => { depois = true; return promessa },
+  })
+  let v: Vista | null = null
+  try {
+    v = await mount(painel, { host: w.host })
+    const apertou = v.press({ role: 'button', text: opcoes.botao })
+    await ate(() => w.nomes().includes(opcoes.pedido), opcoes.pedido)
+    opcoes.antesDeReler?.()
+    const lidas = w.nomes().filter((n) => n === 'kit.ler').length
+    const releu = v.post('kit.mudou', { em: Date.now() })
+    await ate(() => w.nomes().filter((n) => n === 'kit.ler').length > lidas, 'a releitura pelo aviso do worker')
+    if ('falhar' in desfecho) falhar(desfecho.falhar)
+    else soltar(desfecho.soltar)
+    await apertou
+    await releu
+    await v.settled()
+    verificar(v)
+    if (opcoes.pedido === 'kit.responder') assert.ok(acompanhou(w), 'a releitura pediu o estado gravado de Q1')
+    semErros(v)
+  } finally {
+    falhar(new Error('fim do caso'))
+    painel.relogio.agora = () => Date.now()
+    if (v) await v.unmount()
+  }
+}
+
+test('a resposta do worker não volta e o arquivo diz entregue: a releitura tira o cartão do "Entregando a …"', async () => {
+  const ent = () => ({ estado: 'entregue', via: 'orca', destino: 'dispatch:ctx_1', em: ha(1_000) })
+  await comPedidoPreso(
+    { pedido: 'kit.responder', botao: 'Aceitar a recomendação', ler: (i, depois) => depois ? depoisDeGravar(i, respondida({ entregaDaResposta: ent() })) : leitura({ abertas: [pergunta('Q1')] }) },
+    { falhar: timeout() },
+    (v) => {
+      assert.ok(v.find({ text: 'Entregue a F435' }), 'o selo vem do arquivo')
+      assert.ok(v.find({ text: 'Você aceitou a recomendação.' }))
+      assert.equal(entregando(v), false, 'o spinner saiu')
+      assert.equal(v.find({ text: /^Não gravou/ }), null, 'a desistência tardia do Orca não vira erro sobre a resposta entregue')
+      assert.equal(v.find({ role: 'button', text: 'Aceitar a recomendação' }), null)
+    },
+  )
+})
+
+test('a resposta do worker não volta e o arquivo diz que a entrega falhou: o cartão mostra a falha, sem spinner', async () => {
+  const ent = () => ({ estado: 'falhou', via: 'orca', destino: 'dispatch:ctx_1', em: ha(1_000), motivo: 'o terminal não abriu' })
+  await comPedidoPreso(
+    { pedido: 'kit.responder', botao: 'Aceitar a recomendação', ler: (i, depois) => depois ? depoisDeGravar(i, respondida({ entregaDaResposta: ent() })) : leitura({ abertas: [pergunta('Q1')] }) },
+    { falhar: timeout() },
+    (v) => {
+      assert.ok(v.find({ text: 'A entrega falhou' }))
+      assert.ok(v.find({ text: 'Gravada, mas não chegou a F435: o terminal não abriu.' }))
+      assert.equal(entregando(v), false)
+    },
+  )
+})
+
+test('a entrega anotada antes desta resposta não conta: o cartão espera a desta, que o worker devolve', async () => {
+  const velha = { estado: 'entregue', via: 'orca', destino: 'dispatch:ctx_1', em: iso(9_000_000) }
+  await comPedidoPreso(
+    { pedido: 'kit.responder', botao: 'Aceitar a recomendação', ler: (i, depois) => depois ? depoisDeGravar(i, respondida({ entregaDaResposta: velha })) : leitura({ abertas: [pergunta('Q1')] }) },
+    { soltar: { gravou: true, entrega: { estado: 'falhou', via: 'orca', destino: 'dispatch:ctx_1', em: iso(0), motivo: 'agora falhou' } } },
+    (v) => {
+      assert.ok(v.find({ text: 'Gravada, mas não chegou a F435: agora falhou.' }), 'vale a resposta do worker, não a entrega velha do arquivo')
+      assert.equal(v.find({ text: 'Entregue a F435' }), null)
+    },
+  )
+})
+
+test('gravada e sem desfecho no arquivo depois do prazo: o cartão sai do spinner e diz para conferir na sessão', async () => {
+  const depois = Date.now() + 10 * 60_000
+  await comPedidoPreso(
+    {
+      pedido: 'kit.responder', botao: 'Aceitar a recomendação', antesDeReler: () => { painel.relogio.agora = () => depois },
+      ler: (i, gravou) => gravou ? depoisDeGravar(i, respondida()) : leitura({ abertas: [pergunta('Q1')] }),
+    },
+    { falhar: timeout() },
+    (v) => {
+      assert.equal(entregando(v), false)
+      assert.ok(v.find({ text: 'Sem confirmação' }), 'a aba não finge que chegou nem que falhou')
+      assert.ok(v.find({ text: 'Gravada. A aba não soube se chegou a F435; confira na sessão.' }))
+      assert.equal(v.find({ text: 'A entrega falhou' }), null)
+    },
+  )
+})
+
+test('nada gravado e o prazo passou: o cartão volta aos botões, com o motivo, sem spinner', async () => {
+  const depois = Date.now() + 10 * 60_000
+  await comPedidoPreso(
+    {
+      pedido: 'kit.responder', botao: 'Aceitar a recomendação', antesDeReler: () => { painel.relogio.agora = () => depois },
+      ler: (i) => leitura({ abertas: [pergunta('Q1')], ...(i?.acompanhar ? { acompanhadas: { Q1: { ...respondida(), estado: 'aberta', resposta: null, respondidaPor: null, respondidaEm: null } } } : {}) } as Partial<Leitura>),
+    },
+    { falhar: timeout() },
+    (v) => {
+      assert.equal(entregando(v), false)
+      assert.ok(v.find({ text: 'Não gravou: a aba não recebeu resposta do worker. Tente de novo.' }))
+      assert.ok(v.find({ role: 'button', text: 'Aceitar a recomendação' }), 'a pessoa pode responder de novo')
+    },
+  )
+})
+
+test('a reentrega não volta e o arquivo anota outra tentativa: o cartão pendente mostra o desfecho novo, sem spinner', async () => {
+  const pend = (em: string, motivo: string) => ({
+    ...pergunta('Q1'), resposta: SIM, estadoAnterior: 'aberta' as const,
+    entregaDaResposta: { estado: 'falhou' as const, via: 'orca' as const, destino: 'dispatch:ctx_1', em, motivo },
+  })
+  await comPedidoPreso(
+    { pedido: 'kit.reentregar', botao: 'Tentar entregar de novo', ler: (_i, depois) => leitura({ pendentes: [depois ? pend(iso(1_000), 'falhou de novo') : pend(iso(600_000), 'primeira falha')] }) },
+    { falhar: timeout() },
+    (v) => {
+      assert.equal(entregando(v), false)
+      assert.ok(v.find({ text: 'Gravada, mas não chegou a F435: falhou de novo.' }), 'o desfecho é o que o arquivo anotou')
+      assert.ok(v.find({ role: 'button', text: 'Tentar entregar de novo' }))
+    },
+  )
+})
+
+test('o Orca desiste no prazo antes de o arquivo anotar a entrega: gravada, a aba não diz "não gravou"', async () => {
+  let n = 0
+  const w = worker({
+    'kit.ler': (i: Acompanhar) => (n++ === 0 ? leitura({ abertas: [pergunta('Q1')] }) : depoisDeGravar(i, respondida())),
+    'kit.responder': () => Promise.reject(timeout()),
+  })
+  const v = await mount(painel, { host: w.host })
+  try {
+    await v.press({ role: 'button', text: 'Aceitar a recomendação' })
+    assert.ok(acompanhou(w), 'o erro do pedido releu o arquivo antes de decidir')
+    assert.equal(v.find({ text: /^Não gravou/ }), null)
+    assert.ok(v.find({ text: 'Sem confirmação' }))
+    assert.ok(v.find({ text: 'Gravada. A aba não soube se chegou a F435; confira na sessão.' }))
+    semErros(v)
+  } finally {
+    await v.unmount()
+  }
+})
+
+test('sem confirmação não é final: a anotação que chega depois no arquivo vira o selo do cartão', async () => {
+  let n = 0
+  let anotou = false
+  const w = worker({
+    'kit.ler': (i: Acompanhar) => (n++ === 0 ? leitura({ abertas: [pergunta('Q1')] })
+      : depoisDeGravar(i, respondida(anotou ? { entregaDaResposta: { estado: 'entregue', via: 'orca', destino: 'dispatch:ctx_1', em: ha(0) } } : {}))),
+    'kit.responder': () => Promise.reject(timeout()),
+  })
+  const v = await mount(painel, { host: w.host })
+  try {
+    await v.press({ role: 'button', text: 'Aceitar a recomendação' })
+    assert.ok(v.find({ text: 'Sem confirmação' }))
+    anotou = true
+    const lidas = w.pedidos.length
+    await v.post('kit.mudou', { em: Date.now() })
+    await v.settled()
+    const novas = w.pedidos.slice(lidas).filter((p) => p.nome === 'kit.ler')
+    assert.ok(novas.length > 0)
+    assert.ok(novas.every((p) => (p.input as Acompanhar).acompanhar?.includes('Q1')), 'a aba segue acompanhando a resposta sem confirmação')
+    assert.ok(v.find({ text: 'Entregue a F435' }), 'o arquivo é a verdade, também depois do "sem confirmação"')
+    assert.equal(v.find({ text: 'Sem confirmação' }), null)
+    semErros(v)
+  } finally {
+    await v.unmount()
+  }
+})
+
+test('a reentrega sem resposta fica sem confirmação e segue o arquivo: a anotação nova aparece, com o botão', async () => {
+  const pend = (em: string, motivo: string) => ({
+    ...pergunta('Q1'), resposta: SIM, estadoAnterior: 'aberta' as const,
+    entregaDaResposta: { estado: 'falhou' as const, via: 'orca' as const, destino: 'dispatch:ctx_1', em, motivo },
+  })
+  let anotou = false
+  const w = worker({
+    'kit.ler': () => leitura({ pendentes: [anotou ? pend(ha(0), 'falhou de novo') : pend(iso(600_000), 'primeira falha')] }),
+    'kit.reentregar': () => Promise.reject(timeout()),
+  })
+  const v = await mount(painel, { host: w.host })
+  try {
+    await v.press({ role: 'button', text: 'Tentar entregar de novo' })
+    assert.ok(v.find({ text: 'Sem confirmação' }), 'sem resposta do worker a aba não diz que falhou')
+    assert.ok(v.find({ text: 'Gravada. A aba não soube se chegou a F435; confira na sessão.' }))
+    assert.ok(v.find({ role: 'button', text: 'Tentar entregar de novo' }))
+    anotou = true
+    await v.post('kit.mudou', { em: Date.now() })
+    await v.settled()
+    assert.ok(v.find({ text: 'Gravada, mas não chegou a F435: falhou de novo.' }), 'a anotação nova do arquivo')
+    assert.equal(v.find({ text: 'Sem confirmação' }), null)
+    semErros(v)
+  } finally {
+    await v.unmount()
+  }
+})
+
+// Q1100: a resposta sem endereço no Orca nunca sai pela aba. A sessão do app Claude só lê a resposta quando começa ou se
+// limpa, então a parada esperando precisa de aviso; o cartão diz isso, sem prometer entrega nem oferecer reentrega.
+test('respondida sem endereço no Orca: selo "Só gravada", o aviso certo para a sessão do app e para a do terminal, sem reentrega', async () => {
+  const pend = (id: string, sessaoId: string | null) => ({
+    ...pergunta(id, { endereco: null, sessaoId }), resposta: SIM, estadoAnterior: 'aberta' as const,
+    entregaDaResposta: { estado: 'pendente' as const, via: 'orca' as const, em: iso(60_000), motivo: 'a pergunta não tem endereço no Orca' },
+  })
+  const w = worker({ 'kit.ler': leitura({ pendentes: [pend('Q1', 'local_c678cc80-c166-4bed-bb88-3d3ac92cae77'), pend('Q2', null)] }) })
+  const v = await mount(painel, { host: w.host })
+  try {
+    await v.toggle({ type: 'Collapsible', label: 'Respondidas, entrega pendente · 2' })
+    assert.equal(v.findAll({ text: 'Só gravada' }).length, 2)
+    assert.equal(v.find({ text: 'Entrega pendente' }), null)
+    assert.ok(v.find({ text: 'A sessão é do app Claude e esta aba não a acorda: abra-a no app e avise que respondeu.' }), 'a do app')
+    assert.ok(v.find({ text: 'Sem endereço no Orca: a resposta fica gravada, mas não acorda a sessão. Se ela espera você, abra-a e avise.' }), 'a do terminal')
+    assert.equal(v.find({ role: 'button', text: 'Tentar entregar de novo' }), null, 'sem endereço, reentregar não tem para onde ir')
+    semErros(v)
+  } finally {
+    await v.unmount()
+  }
+})
+
+test('responder pela aba uma pergunta da sessão do app: o cartão compacto diz "Só gravada" e como avisar a sessão', async () => {
+  const w = worker({
+    'kit.ler': leitura({ abertas: [pergunta('Q1', { endereco: null, sessaoId: 'local_c678cc80-c166-4bed-bb88-3d3ac92cae77' })] }),
+    'kit.responder': { gravou: true, entrega: { estado: 'pendente', via: 'orca', em: iso(0), motivo: 'a pergunta não tem endereço no Orca' } },
+  })
+  const v = await mount(painel, { host: w.host })
+  try {
+    await v.press({ role: 'button', text: 'Aceitar a recomendação' })
+    assert.ok(v.find({ text: 'Você aceitou a recomendação.' }))
+    assert.ok(v.find({ text: 'Só gravada' }))
+    assert.ok(v.find({ text: 'A sessão é do app Claude e esta aba não a acorda: abra-a no app e avise que respondeu.' }))
+    semErros(v)
+  } finally {
+    await v.unmount()
+  }
+})
+
+test('a reentrega que o Orca recusa na hora diz o motivo: não é "sem confirmação"', async () => {
+  const p = {
+    ...pergunta('Q1'), resposta: SIM, estadoAnterior: 'aberta' as const,
+    entregaDaResposta: { estado: 'falhou' as const, via: 'orca' as const, destino: 'dispatch:ctx_1', em: iso(600_000), motivo: 'primeira falha' },
+  }
+  const w = worker({
+    'kit.ler': leitura({ pendentes: [p] }),
+    'kit.reentregar': () => Promise.reject(Object.assign(new Error('negado'), { code: 'capability_denied' })),
+  })
+  const v = await mount(painel, { host: w.host })
+  try {
+    await v.press({ role: 'button', text: 'Tentar entregar de novo' })
+    assert.ok(v.find({ text: 'Gravada, mas não chegou a F435: falta uma permissão ao plugin.' }), 'o motivo da recusa')
+    assert.equal(v.find({ text: 'Sem confirmação' }), null)
+    semErros(v)
+  } finally {
+    await v.unmount()
+  }
 })

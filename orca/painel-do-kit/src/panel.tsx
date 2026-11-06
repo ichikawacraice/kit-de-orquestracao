@@ -8,17 +8,28 @@ import {
 import { cortar, haQuanto, horaSP, itemDe, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem, quando, semPrefixoDoItem } from './vista'
 import { SeloDoProjeto, partesDoSelo } from './selo-do-projeto'
 import { separarLidas, limpar as limparLidas, desfazer as desfazerLidas, podarLidas } from './nucleo/lidas.mjs'
-import type { Entrega, EstadoDaEntrega, Leitura, Pendente, Pergunta } from './protocol'
+import type { Acompanhada, Entrega, EstadoDaEntrega, Leitura, Pendente, Pergunta } from './protocol'
 import { PRAZO_DO_ENVIO_MS } from './protocol'
 
 // O "Sim" do painel (o mesmo texto do pane do app): a sessão e a trava de limpeza o reconhecem.
 const SIM = 'sim (segue a recomendação)'
 const SEM_ENDERECO = 'Sem endereço no Orca: a resposta fica gravada, mas não acorda a sessão. Se ela espera você, abra-a e avise.'
+// A resposta que esta aba grava leva esta origem (a mesma do núcleo): é por ela que a aba reconhece a própria resposta no arquivo.
+const ORIGEM = 'operador-orca'
+// A sessão do app Claude só lê a resposta quando começa ou se limpa: parada esperando, alguém precisa avisá-la.
+const APP_SEM_ENDERECO = 'A sessão é do app Claude e esta aba não a acorda: abra-a no app e avise que respondeu.'
+const ehDoApp = (q: Pick<Pergunta, 'sessaoId'>) => /^local_/.test(q.sessaoId ?? '')
+const semEndereco = (q: Pick<Pergunta, 'sessaoId'>) => (ehDoApp(q) ? APP_SEM_ENDERECO : SEM_ENDERECO)
+const SEM_RESPOSTA = 'Não gravou: a aba não recebeu resposta do worker. Tente de novo.'
 
 /** O relógio da aba; os testes o trocam para provar as janelas de tempo. */
 export const relogio = { agora: () => Date.now() }
 
 const RELER_MS = 30_000
+/** Depois do prazo do envio, quanto a aba ainda espera o arquivo dizer o desfecho antes de desistir do "Entregando…". */
+const FOLGA_DO_DESFECHO_MS = 15_000
+/** A diferença tolerada entre o relógio da aba e a hora gravada no arquivo, para reconhecer a resposta desta vez. */
+const FOLGA_DO_RELOGIO_MS = 60_000
 const DESFAZER_MS = 10_000
 const ARMADO_MS = 8_000
 const TOQUE_MS = 500
@@ -29,14 +40,18 @@ type Secao = 'perguntas' | 'decisoes' | 'entregas'
 type Esperado = 'aberta' | 'assumida'
 /** O que a pessoa fez nesta visita, por pergunta: fica no lugar até ela reler ou sair da aba. */
 type Feito =
-  | { tipo: 'andando'; q: Pergunta; esperado: Esperado; texto: string }
+  | { tipo: 'andando'; q: Pergunta; esperado: Esperado; texto: string; mostrar?: string; desde: number }
   | { tipo: 'feito'; q: Pergunta; esperado: Esperado; texto: string; mostrar?: string; entrega: EstadoDaEntrega; em: number }
+  /** Gravada, sem o desfecho da entrega: a aba segue o arquivo até ele anotar. */
+  | { tipo: 'incerto'; q: Pergunta; esperado: Esperado; texto: string; mostrar?: string; desde: number }
   | { tipo: 'erro'; q: Pergunta; esperado: Esperado; motivo: string }
   | { tipo: 'fora'; q: Pergunta; esperado: Esperado }
   | { tipo: 'confirmando'; q: Pergunta; esperado: 'assumida' }
   | { tipo: 'confirmada'; q: Pergunta; esperado: 'assumida'; versao: number; ate: number; lote: string | null; em: number }
 type Lote = { texto: string; tom: 'success' | 'warning'; itens: { id: string; versao: number }[]; ate: number; erro?: string }
 type Envio = { tipo: 'andando' } | { tipo: 'ok'; texto: string } | { tipo: 'erro'; texto: string }
+/** A nova tentativa de entrega em voo guarda a anotação de antes: outra anotação no arquivo é o desfecho dela. */
+type Reentrega = { tipo: 'andando' | 'incerto'; desde: number; antes: string | null } | EstadoDaEntrega
 
 const secao = atom<Secao>('secao', 'perguntas', { persist: 'plugin' })
 const leitura = atom<Leitura | null>('leitura', null)
@@ -51,7 +66,7 @@ const detalhes = atom<Record<string, boolean>>('detalhes', {})
 const grupos = atom<Record<string, boolean>>('grupos', {})
 const armado = atom<number | null>('armado', null)
 const lotes = atom<Record<string, Lote>>('lotes', {})
-const reentregas = atom<Record<string, 'andando' | EstadoDaEntrega>>('reentregas', {})
+const reentregas = atom<Record<string, Reentrega>>('reentregas', {})
 const envios = atom<Record<string, Envio>>('envios', {})
 // As entregas limpas moram no armazenamento do plugin, gravadas à mão: o átomo `persist: 'storage'` do Orca relê o
 // armazenamento depois de cada gravação, e essa releitura, se chega depois de um "Desfazer" feito na janela de 400 ms
@@ -86,14 +101,61 @@ function motivoDe(e: unknown): string {
   return 'o worker do plugin não respondeu'
 }
 
+// ── O desfecho pelo arquivo (F450) ───────────────────────────────────────────────────────────────────────────────
+// A promessa do pedido que envia pode não voltar: o guest do painel trocado (recarga) leva o estado da aba, mas não a
+// promessa, e o Orca desiste dela no prazo. O arquivo da pergunta é a verdade: cada releitura confere o que está em voo.
+const passouDoPrazo = (desde: number, agora: number) => agora - desde > PRAZO_DO_ENVIO_MS + FOLGA_DO_DESFECHO_MS
+
+type Seguida = Extract<Feito, { tipo: 'andando' | 'incerto' }>
+/** O que a aba segue no arquivo: o que está em voo e o que ficou sem confirmação. */
+const seguida = (x: Feito): x is Seguida => x.tipo === 'andando' || x.tipo === 'incerto'
+// O cartão que veio de uma versão da aba sem `desde` (recarga no meio do envio) conta como antigo: decide já.
+const desdeDe = (x: Seguida) => (Number.isFinite(x.desde) ? x.desde : 0)
+/** O arquivo tem a resposta que este cartão mandou: gravada por esta aba, com o mesmo texto, nesta tentativa. */
+const ehDesta = (x: Seguida, a: Acompanhada | null | undefined): a is Acompanhada =>
+  a?.estado === 'respondida' && a.respondidaPor === ORIGEM && a.resposta === x.texto && ms(a.respondidaEm) >= desdeDe(x) - FOLGA_DO_RELOGIO_MS
+const semDesfecho = (x: Seguida): Feito => ({ tipo: 'incerto', q: x.q, esperado: x.esperado, texto: x.texto, mostrar: x.mostrar, desde: desdeDe(x) })
+
+/** O cartão em "Entregando…" ou sem confirmação segundo o arquivo; `null` deixa como está. */
+function desfechoDoArquivo(x: Feito, a: Acompanhada | null | undefined, agora: number): Feito | null {
+  if (!seguida(x)) return null
+  if (ehDesta(x, a)) {
+    // A anotação de uma resposta anterior (a pergunta reaberta guarda a velha) não é o desfecho desta.
+    const e = a.entregaDaResposta
+    if (e && ms(e.em) >= ms(a.respondidaEm)) return { tipo: 'feito', q: x.q, esperado: x.esperado, texto: x.texto, mostrar: x.mostrar, entrega: e, em: ms(a.respondidaEm) || desdeDe(x) }
+    return x.tipo === 'andando' && passouDoPrazo(desdeDe(x), agora) ? semDesfecho(x) : null
+  }
+  // Sem confirmação já se sabe gravada: o arquivo sem ela (reaberta, regravada) não a desfaz.
+  return x.tipo === 'andando' && passouDoPrazo(desdeDe(x), agora) ? { tipo: 'erro', q: x.q, esperado: x.esperado, motivo: SEM_RESPOSTA } : null
+}
+
+/** A reentrega em voo ou sem confirmação segundo a leitura: outra anotação é o desfecho; fora das pendentes, a entrega saiu. `null` apaga. */
+function desfechoDaReentrega(r: Reentrega, p: Pendente | undefined, agora: number): Reentrega | null {
+  if (!('tipo' in r)) return r
+  if (!p) return null
+  if ((p.entregaDaResposta?.em ?? null) !== r.antes) return p.entregaDaResposta
+  return r.tipo === 'andando' && passouDoPrazo(r.desde, agora) ? { ...r, tipo: 'incerto' } : r
+}
+
 // ── Leitura ──────────────────────────────────────────────────────────────────────────────────────────────────────
 let primeira = true
 async function reler(forcar: boolean) {
   set(lendo, true)
   try {
     const antes = read(leitura)
-    const l = await plugin.request('kit.ler', { forcar })
+    // O que a aba mandou responder e ainda não viu voltar: o arquivo diz o desfecho, se a resposta do worker se perdeu.
+    const acompanhar = Object.entries(read(feitos)).filter(([, x]) => seguida(x)).map(([id]) => id)
+    const l = await plugin.request('kit.ler', acompanhar.length ? { forcar, acompanhar } : { forcar })
     set(leitura, l)
+    const agora = relogio.agora()
+    if (l.acompanhadas) {
+      const a = l.acompanhadas
+      update(feitos, (f) => Object.fromEntries(Object.entries(f).map(([id, x]) => [id, desfechoDoArquivo(x, a[id], agora) ?? x])))
+    }
+    update(reentregas, (x) => Object.fromEntries(Object.entries(x).flatMap(([id, r]) => {
+      const d = desfechoDaReentrega(r, l.pendentes.find((p) => p.id === id), agora)
+      return d ? [[id, d]] : []
+    })))
     set(falha, null)
     if (primeira && l.abertas.length > 0) set(secao, 'perguntas')
     primeira = false
@@ -116,7 +178,7 @@ async function reler(forcar: boolean) {
 
 /** O reler da pessoa: força a caixa do Orca e tira o que ela já resolveu nesta visita. */
 async function relerAgora() {
-  const andando = new Set(['andando', 'confirmando', 'erro'])
+  const andando = new Set(['andando', 'incerto', 'confirmando', 'erro'])
   update(feitos, (f) => Object.fromEntries(Object.entries(f).filter(([, x]) => andando.has(x.tipo))))
   set(lotes, {})
   set(limpasAgora, {})
@@ -144,10 +206,14 @@ async function responder(q: Pergunta, esperado: Esperado, texto: string, mostrar
   const resposta = texto.trim()
   if (!resposta) return
   set(armado, null)
-  update(feitos, (f) => ({ ...f, [q.id]: { tipo: 'andando', q, esperado, texto: resposta } }))
+  const desde = relogio.agora()
+  update(feitos, (f) => ({ ...f, [q.id]: { tipo: 'andando', q, esperado, texto: resposta, mostrar, desde } }))
+  // A resposta só vale se o cartão ainda espera por ela: a releitura pode já ter posto o desfecho que o arquivo tem.
+  const esperando = () => { const x = read(feitos)[q.id]; return x?.tipo === 'andando' && x.desde === desde }
   let motivo: string
   try {
     const r = await plugin.request('kit.responder', { id: q.id, versao: q.versao, esperado, resposta }, { timeoutMs: PRAZO_DO_ENVIO_MS })
+    if (!esperando()) return
     if (r.gravou) {
       update(feitos, (f) => ({ ...f, [q.id]: { tipo: 'feito', q, esperado, texto: resposta, mostrar, entrega: r.entrega, em: relogio.agora() } }))
       update(rascunhos, (x) => sem(x, `${esperado}:${q.id}`))
@@ -161,17 +227,36 @@ async function responder(q: Pergunta, esperado: Esperado, texto: string, mostrar
     if (r.codigo === 'mudou' || r.codigo === 'sumiu') await reler(false)
   } catch (e) {
     motivo = `Não gravou: ${motivoDe(e)}. O que você escreveu continua no campo.`
-    update(feitos, (f) => ({ ...f, [q.id]: { tipo: 'erro', q, esperado, motivo } }))
+    // Sem resposta (o Orca desistiu no prazo) a gravação pode ter saído: o arquivo decide antes do erro.
+    if (!esperando()) return
+    await reler(false)
+    const x = read(feitos)[q.id]
+    if (x?.tipo !== 'andando' || x.desde !== desde) return
+    // Gravada, mas a entrega ainda sem anotação: não é erro de gravação, é desfecho que a aba não soube.
+    const gravada = ehDesta(x, read(leitura)?.acompanhadas?.[q.id])
+    update(feitos, (f) => ({ ...f, [q.id]: gravada ? semDesfecho(x) : { tipo: 'erro', q, esperado, motivo } }))
   }
 }
 
-async function reentregar(id: string) {
-  update(reentregas, (x) => ({ ...x, [id]: 'andando' }))
+async function reentregar(p: Pendente) {
+  const id = p.id
+  const desde = relogio.agora()
+  update(reentregas, (x) => ({ ...x, [id]: { tipo: 'andando', desde, antes: p.entregaDaResposta?.em ?? null } }))
+  // Como no responder: a releitura pode já ter posto o desfecho que o arquivo anotou.
+  const esperando = () => { const r = read(reentregas)[id]; return Boolean(r && 'tipo' in r && r.tipo === 'andando' && r.desde === desde) }
   try {
     const r = await plugin.request('kit.reentregar', { id }, { timeoutMs: PRAZO_DO_ENVIO_MS })
-    update(reentregas, (x) => ({ ...x, [id]: r }))
+    if (esperando()) update(reentregas, (x) => ({ ...x, [id]: r }))
   } catch (e) {
-    update(reentregas, (x) => ({ ...x, [id]: { estado: 'falhou', via: 'orca', em: new Date().toISOString(), motivo: motivoDe(e) } }))
+    // Sem resposta no prazo, o worker pode ainda estar entregando: o arquivo diz o desfecho na próxima releitura.
+    // A recusa na hora (permissão, worker fora) prova que nada saiu: diz o motivo.
+    const semResposta = (e as { code?: string } | null)?.code === 'timeout'
+    const motivo = motivoDe(e)
+    if (esperando()) {
+      update(reentregas, (x) => ({ ...x, [id]: semResposta
+        ? { tipo: 'incerto', desde, antes: p.entregaDaResposta?.em ?? null }
+        : { estado: 'falhou', via: 'orca', em: new Date().toISOString(), motivo } }))
+    }
   }
 }
 
@@ -328,6 +413,7 @@ function CartaoDaPergunta(props: { q: Pergunta }) {
   const f = read(feitos)[q.id]
   const agora = read(tique) || relogio.agora()
   if (f?.tipo === 'feito') return <Compacto q={q} texto={f.mostrar ?? `Você respondeu: ${f.texto}`} entrega={f.entrega} em={f.em} />
+  if (f?.tipo === 'incerto') return <Compacto q={q} texto={f.mostrar ?? `Você respondeu: ${f.texto}`} incerto em={f.desde || undefined} />
   if (f?.tipo === 'fora') return <Compacto q={q} nota="Já foi respondida fora desta aba." />
   const chave = `aberta:${q.id}`
   const aberto = read(campos)[chave]
@@ -373,17 +459,31 @@ function Recomendacao(props: { texto: string }) {
   )
 }
 
-function SeloDaEntrega(props: { q: Pick<Pergunta, 'item' | 'titulo'>; entrega: EstadoDaEntrega }) {
+/** O selo de estado da entrega, na ponta do cartão. `incerto`: gravada, sem o desfecho da entrega. */
+function SeloDaEntrega(props: { q: Pick<Pergunta, 'item' | 'titulo'>; entrega?: EstadoDaEntrega; incerto?: boolean }) {
   const e = props.entrega
+  if (props.incerto) return <Badge tone="neutral">Sem confirmação</Badge>
+  if (!e) return null
   if (e.estado === 'entregue') return <Badge tone="success">{`Entregue a ${nomeDoDestino(props.q)}`}</Badge>
-  if (e.estado === 'pendente') return <Badge tone="neutral">Entrega pendente</Badge>
+  if (e.estado === 'pendente') return <Badge tone="neutral">Só gravada</Badge>
   return <Badge tone="danger">A entrega falhou</Badge>
 }
 
-/** O cartão de uma pergunta já respondida: compacto, com o selo de estado na ponta e os detalhes a um toque. */
-function Compacto(props: { q: Pergunta; texto?: string; nota?: string; entrega?: EstadoDaEntrega; em?: number; children?: unknown }) {
-  const { q } = props
+/** A linha que explica o selo, quando ele precisa de explicação. */
+function LinhaDaEntrega(props: { q: Pick<Pergunta, 'item' | 'titulo' | 'sessaoId'>; entrega?: EstadoDaEntrega; incerto?: boolean }) {
   const e = props.entrega
+  const para = nomeDoDestino(props.q)
+  if (props.incerto) return <Text size="xs" muted>{`Gravada. A aba não soube se chegou a ${para}; confira na sessão.`}</Text>
+  if (e?.estado === 'pendente') return <Text size="xs" muted>{semEndereco(props.q)}</Text>
+  if (e?.estado === 'falhou') return <Text size="xs" tone="danger">{`Gravada, mas não chegou a ${para}: ${e.motivo ?? 'sem motivo'}.`}</Text>
+  return null
+}
+
+/** O cartão de uma pergunta já respondida: compacto, com o selo de estado na ponta e os detalhes a um toque. */
+function Compacto(props: { q: Pergunta; texto?: string; nota?: string; entrega?: EstadoDaEntrega; incerto?: boolean; em?: number; children?: unknown }) {
+  const { q } = props
+  // Sem confirmação vale mais que a anotação de antes: o selo é o do que a aba ainda não sabe.
+  const e = props.incerto ? undefined : props.entrega
   const agora = read(tique) || relogio.agora()
   const item = itemDe(q)
   const titulo = semPrefixoDoItem(q.titulo, item)
@@ -391,12 +491,11 @@ function Compacto(props: { q: Pergunta; texto?: string; nota?: string; entrega?:
   const perguntada = ms(q.atualizadoEm)
   return (
     <Box key={`q-${q.id}`} background="card" border={bordaDaEntrega(e)} radius="lg" padding="md" gap="xs">
-      <Cabeca projeto={q.projeto} item={item} estado={e ? <SeloDaEntrega q={q} entrega={e} /> : null} />
+      <Cabeca projeto={q.projeto} item={item} estado={e || props.incerto ? <SeloDaEntrega q={q} entrega={e} incerto={props.incerto} /> : null} />
       <Text size="sm" weight="semibold">{titulo}</Text>
       {props.texto ? <Text size="sm">{props.texto}</Text> : null}
       {props.nota ? <Text size="sm" muted>{props.nota}</Text> : null}
-      {e?.estado === 'pendente' ? <Text size="xs" muted>{SEM_ENDERECO}</Text> : null}
-      {e?.estado === 'falhou' ? <Text size="xs" tone="danger">{`Gravada, mas não chegou a ${nomeDoDestino(q)}: ${e.motivo ?? 'sem motivo'}.`}</Text> : null}
+      <LinhaDaEntrega q={q} entrega={e} incerto={props.incerto} />
       {props.children ?? null}
       <Row justify="between" align="center" gap="sm">
         <Text size="xs" muted>{[props.em ? horaSP(props.em) : null, q.id].filter(Boolean).join(' · ')}</Text>
@@ -417,11 +516,13 @@ function Compacto(props: { q: Pergunta; texto?: string; nota?: string; entrega?:
 function CartaoPendente(props: { p: Pendente }) {
   const p = props.p
   const r = read(reentregas)[p.id]
-  const entrega = r && r !== 'andando' ? r : p.entregaDaResposta
+  const emVoo = Boolean(r && 'tipo' in r && r.tipo === 'andando')
+  const incerto = Boolean(r && 'tipo' in r && r.tipo === 'incerto')
+  const entrega = r && !('tipo' in r) ? r : p.entregaDaResposta
   return (
-    <Compacto q={p} texto={`Você respondeu: ${p.resposta}`} entrega={entrega} em={ms(entrega.em) || undefined}>
-      {r === 'andando' ? <Spinner label={`Entregando a ${nomeDoDestino(p)}…`} />
-        : entrega.estado !== 'entregue' && p.endereco ? <Row><Button variant="outline" onPress={() => void reentregar(p.id)}>Tentar entregar de novo</Button></Row> : null}
+    <Compacto q={p} texto={`Você respondeu: ${p.resposta}`} entrega={entrega} incerto={incerto} em={ms(entrega.em) || undefined}>
+      {emVoo ? <Spinner label={`Entregando a ${nomeDoDestino(p)}…`} />
+        : (incerto || entrega.estado !== 'entregue') && p.endereco ? <Row><Button variant="outline" onPress={() => void reentregar(p)}>Tentar entregar de novo</Button></Row> : null}
     </Compacto>
   )
 }
@@ -457,13 +558,17 @@ function LinhaDaDecisao(props: { q: Pergunta }) {
   const perguntada = ms(q.atualizadoEm)
   const quem = `Decidida pela ${item ? `sessão do ${item}` : 'sessão'}`
   const aberto = Boolean(read(detalhes)[q.id])
-  if (f?.tipo === 'confirmada' || f?.tipo === 'feito') {
+  if (f?.tipo === 'confirmada' || f?.tipo === 'feito' || f?.tipo === 'incerto') {
     const confirmada = f.tipo === 'confirmada'
+    const incerto = f.tipo === 'incerto'
+    const entrega = f.tipo === 'feito' ? f.entrega : undefined
+    const em = f.tipo === 'incerto' ? f.desde : f.em
     const como = confirmada ? (f.lote === 'todas' ? ', com todas' : f.lote ? ', com o grupo' : '') : ''
     return caixa(
       <Box gap="xs">
         <Text size="sm" tone={confirmada ? 'success' : undefined}>{confirmada ? `Confirmada: ${titulo}` : `Você mudou: ${f.texto}`}</Text>
-        {f.tipo === 'feito' ? <Row><SeloDaEntrega q={q} entrega={f.entrega} /></Row> : null}
+        {confirmada ? null : <Row><SeloDaEntrega q={q} entrega={entrega} incerto={incerto} /></Row>}
+        {confirmada ? null : <LinhaDaEntrega q={q} entrega={entrega} incerto={incerto} />}
         <Row justify="end" align="center" gap="xs">
           {confirmada && !f.lote && agora < f.ate ? <Button variant="ghost" size="sm" onPress={() => void desfazerConfirmacao([{ id: q.id, versao: f.versao }], null)}>Desfazer</Button> : null}
           <BotaoDeDetalhes id={q.id} titulo={titulo} />
@@ -474,11 +579,11 @@ function LinhaDaDecisao(props: { q: Pergunta }) {
             {q.caso && q.caso !== decidiu ? <Text size="xs" muted>{q.caso}</Text> : null}
             {q.seNaoDecidir ? <Text size="xs" muted>{`Se ninguém decidir: ${q.seNaoDecidir}`}</Text> : null}
             {perguntada ? <Text size="xs" muted>{`${quem} · ${quando(perguntada, agora)} · ${q.id}`}</Text> : null}
-            <Text size="xs" muted>{`${confirmada ? 'Confirmada' : 'Mudada'} por você às ${horaSP(f.em)}${como}.`}</Text>
+            <Text size="xs" muted>{`${confirmada ? 'Confirmada' : 'Mudada'} por você às ${horaSP(em)}${como}.`}</Text>
           </Box>
         ) : null}
       </Box>,
-      confirmada ? 'success' : bordaDaEntrega(f.tipo === 'feito' ? f.entrega : undefined),
+      confirmada ? 'success' : bordaDaEntrega(entrega),
     )
   }
   if (f?.tipo === 'confirmando') return caixa(<Spinner label={`Gravando: ${titulo}`} />)

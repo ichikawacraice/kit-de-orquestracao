@@ -70,6 +70,24 @@ test('ler não acorda ninguém: nenhum terminal, nenhum agente, nenhuma mensagem
   await w.deactivate()
 })
 
+// F450: a aba que não viu a resposta do `kit.responder` voltar pede o estado gravado das perguntas em voo.
+test('ler com acompanhar devolve o estado gravado de cada id pedido; sem acompanhar, o campo não vem', async () => {
+  const a = ambiente()
+  a.pergunta('Q1', { estado: 'aberta', titulo: 'qual pasta', endereco: { orca: 'dispatch:ctx_1' } }, 4)
+  const w = await mountWorker(main, { host: a.host })
+  const r = await w.request('kit.responder', { id: 'Q1', versao: 4, esperado: 'aberta', resposta: 'sim' })
+  assert.equal(r.gravou, true)
+  const l = await w.request('kit.ler', { acompanhar: ['Q1', 'Q99'] })
+  assert.ok(l.acompanhadas, 'a leitura trouxe as acompanhadas')
+  assert.equal(l.acompanhadas.Q1.estado, 'respondida')
+  assert.equal(l.acompanhadas.Q1.resposta, 'sim')
+  assert.equal(l.acompanhadas.Q1.respondidaPor, 'operador-orca')
+  assert.deepEqual(l.acompanhadas.Q1.entregaDaResposta, a.doc('Q1').data.entregaDaResposta)
+  assert.equal(l.acompanhadas.Q99, null)
+  assert.equal('acompanhadas' in (await w.request('kit.ler', {})), false)
+  await w.deactivate()
+})
+
 test('responder com endereço grava a prova do clique e entrega o texto byte a byte à sessão que perguntou', async () => {
   const a = ambiente()
   a.pergunta('Q1', { estado: 'aberta', titulo: 'qual pasta', caso: 'o caso', endereco: { orca: 'dispatch:ctx_1' } }, 4)

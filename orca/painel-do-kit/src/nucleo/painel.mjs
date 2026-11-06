@@ -107,6 +107,31 @@ export function lerPerguntas(pasta, { agoraMs = Date.now() } = {}) {
   return saida;
 }
 
+/** Quantas perguntas a aba acompanha por leitura: as que ela mandou responder e ainda não viu o desfecho. */
+const ACOMPANHAR_MAX = 50;
+
+/**
+ * O estado gravado de cada pergunta que a aba mandou responder (F450): a pasta quente primeiro, depois o arquivo.
+ * É a verdade que tira o cartão do "Entregando…" quando a resposta do worker se perde (o guest do painel trocado leva
+ * o estado da aba, mas não a promessa). Id inválido fica de fora; a que sumiu ou não se lê vem `null`.
+ */
+export function lerAcompanhadas(pasta, ids) {
+  const saida = {};
+  if (!Array.isArray(ids)) return saida;
+  for (const id of ids.filter((x) => typeof x === 'string' && ID.test(x)).slice(0, ACOMPANHAR_MAX)) {
+    const f = acharArquivo(pasta, id);
+    let doc = null;
+    try { doc = f ? JSON.parse(readFileSync(f, 'utf8')) : null; } catch { /* ilegível: fica null */ }
+    const d = doc?.data;
+    saida[id] = d && typeof d === 'object' ? {
+      estado: String(d.estado ?? ''), versao: Number.isInteger(doc.version) ? doc.version : 0,
+      resposta: texto(d.resposta), respondidaPor: texto(d.respondidaPor), respondidaEm: texto(d.respondidaEm),
+      entregaDaResposta: ESTADOS_DA_ENTREGA.has(d.entregaDaResposta?.estado) ? d.entregaDaResposta : null,
+    } : null;
+  }
+  return saida;
+}
+
 // ── Trava do painel ────────────────────────────────────────────────────────────────────────────────────────────────
 // Mesmo protocolo do `painel.mjs`: a `.trava` nasce completa (diretório com `dono` dentro, entra por rename) e sai por
 // rename para nome único. A aba nunca rouba trava alheia (o `painel.mjs` cuida da órfã): espera um pouco e recusa.

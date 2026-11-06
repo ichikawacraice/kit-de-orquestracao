@@ -7,7 +7,7 @@ import { existsSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
-  lerPerguntas, gravarResposta, confirmarTodas, desfazerConfirmacao, gravarEntregaDaResposta, RecusaDoPainel, textoDaEntrega, textoDaMudanca,
+  lerPerguntas, lerAcompanhadas, gravarResposta, confirmarTodas, desfazerConfirmacao, gravarEntregaDaResposta, RecusaDoPainel, textoDaEntrega, textoDaMudanca,
 } from './nucleo/painel.mjs'
 import { entregasDoPainel, entregasDoOrca, juntarEntregas } from './nucleo/entregas.mjs'
 import { prepararEnvio, lerResultado, destinoValido, destinoDoSeguimento } from './nucleo/envio.mjs'
@@ -113,14 +113,16 @@ export default function activate(orca: OrcaWorkerApi): void {
     enviarLote: (destino: string, lote: { assunto: string; corpo: string }) => enviar(destino, lote.assunto, lote.corpo),
   })
 
-  orca.panels.handle('kit.ler', async (input?: { forcar?: boolean }): Promise<Leitura> => {
+  orca.panels.handle('kit.ler', async (input?: { forcar?: boolean; acompanhar?: string[] }): Promise<Leitura> => {
     const p = pasta()
     const perguntas = lerPerguntas(p)
     const c = await lerCaixa(Boolean(input?.forcar))
     const painel = entregasDoPainel(p, { desdeMs: Date.now() - DIAS * 86_400_000 })
     // O destino do "Responder…" de cada entrega sai daqui: o painel não importa o núcleo (que usa `node:fs`).
     const entregas = (juntarEntregas(painel, c.orca) as Entrega[]).map((e) => ({ ...e, seguimento: destinoDoSeguimento(e) }))
-    return { ...perguntas, entregas, erroDaCaixa: c.erro, caixaAte: c.ate, lidoEm: Date.now() } as Leitura
+    // O que a aba mandou responder e ainda não viu o desfecho (F450): o arquivo diz, mesmo se a resposta deste pedido se perdeu.
+    const acompanhadas = Array.isArray(input?.acompanhar) && input.acompanhar.length ? { acompanhadas: lerAcompanhadas(p, input.acompanhar) } : {}
+    return { ...perguntas, entregas, erroDaCaixa: c.erro, caixaAte: c.ate, lidoEm: Date.now(), ...acompanhadas } as Leitura
   })
 
   // Responder uma aberta ou discordar de uma assumida: grava a prova do clique e entrega a quem perguntou, se há endereço.
