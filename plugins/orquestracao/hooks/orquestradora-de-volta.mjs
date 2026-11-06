@@ -6,6 +6,8 @@
 // apaga os das ids que ela deixou para trás e devolve a ordem para o additionalContext. Quem chama engole qualquer erro.
 // F220: a limpeza também mata a fila de merge que rodava em segundo plano; a fila do projeto órfã entra no aviso, com a
 // chamada que a retoma.
+// F447: no Orca o título da conversa não se troca; a orquestradora se declara por `painel orquestradora assumir`, que grava o
+// id do Orca (`orca_session_id:…`) na 2ª linha do marcador, e volta por ele: o id do Orca não muda ao limpar o contexto.
 // F351: o arquivo de estado do projeto (`<BASE>/<repo>.md`) gira aqui, antes do "Ao assumir" lê-lo: as seções datadas antigas
 // vão ao arquivo morto (estado-girar.mjs) e a orquestradora lê só o vivo.
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
@@ -22,6 +24,16 @@ function nomeadaNaBatida(localId) {
   return readdirSync(dir).some((n) => {
     if (!n.endsWith('.json')) return false;
     try { return JSON.parse(readFileSync(join(dir, n), 'utf8'))?.orquestradora === localId; } catch { return false; }
+  });
+}
+
+// Algum marcador de `ativas/` traz este id do Orca na 2ª linha.
+function marcadaNoOrca(localId) {
+  if (!String(localId).startsWith('orca_session_id:')) return false;
+  const dir = join(BASE, 'ativas');
+  if (!existsSync(dir)) return false;
+  return readdirSync(dir).some((id) => {
+    try { return readFileSync(join(dir, id), 'utf8').split('\n')[1]?.trim() === localId; } catch { return false; }
   });
 }
 
@@ -58,12 +70,13 @@ export function orquestradoraDeVolta({ sessionId, localId, cwd }) {
   if (!localId || !sessionId || !ID_SEGURO.test(sessionId)) return null;
   const reg = registroDaSessao(localId, { fresco: true });
   if (!reg || reg.arquivada) return null;
-  if (!reg.titulo.startsWith('🎛 orquestradora') && !nomeadaNaBatida(localId)) return null;
+  if (!reg.titulo.startsWith('🎛 orquestradora') && !nomeadaNaBatida(localId) && !marcadaNoOrca(localId)) return null;
 
   const ativas = join(BASE, 'ativas');
   mkdirSync(ativas, { recursive: true });
   const marcador = join(ativas, sessionId);
-  writeFileSync(marcador, `${gitCommonDir(reg.originCwd || reg.cwd || cwd) ?? 'null'}\n`);
+  const doOrca = String(localId).startsWith('orca_session_id:') ? `${localId}\n` : '';
+  writeFileSync(marcador, `${gitCommonDir(reg.originCwd || reg.cwd || cwd) ?? 'null'}\n${doOrca}`);
   const apagados = [];
   // Só as ids que o registro já marca como deixadas para trás. A id atual do registro fica: "o app ainda não gravou a id
   // nova da limpeza" e "um `claude` lançado do Bash da orquestradora" (herda o CLAUDE_CODE_HOST_SESSION_ID) chegam iguais

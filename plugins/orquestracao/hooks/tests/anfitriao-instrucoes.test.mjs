@@ -130,6 +130,28 @@ test('doc × trava: todo comando `orca …` de exemplo da tabela passa pela trav
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+// F447: a seção "No Orca" da skill da orquestradora (e a referência) também dá comandos `orca …` de exemplo
+const SKILL_ORQ = join(PLUGIN, 'skills', 'orquestradora', 'SKILL.md');
+test('doc × trava: todo comando `orca …` da seção "No Orca" da skill orquestradora passa pela trava do orca', () => {
+  const texto = readFileSync(SKILL_ORQ, 'utf8');
+  const i = texto.indexOf('<a id="no-orca"></a>');
+  assert.ok(i >= 0, 'a skill não tem a âncora no-orca');
+  const secao = texto.slice(i, texto.indexOf('\n<a id=', i + 1));
+  const comandos = [...secao.matchAll(/`(orca [^`\n]+)`/g)].map((m) => m[1]);
+  for (const sub of ['worker-start --agent claude', 'worker-start --terminal', 'send --from', 'worker-release', 'worktree set', 'worktree rm', 'worker-list']) {
+    assert.ok(comandos.some((c) => c.includes(sub)), `a seção não traz o exemplo de ${sub}`);
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'anfitriao-no-orca-'));
+  try {
+    const repo = join(dir, 'repo'); mkdirSync(repo);
+    execFileSync('git', ['-C', repo, 'init', '-q', '-b', 'principal'], { timeout: 15000, killSignal: 'SIGKILL' });
+    for (const c of comandos) {
+      const r = decidir(c, { cwd: repo, env: { HOME: dir } });
+      assert.equal(r.recusa, null, `a trava recusa o exemplo da skill: ${c}\nmotivo: ${r.recusa}`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('a tabela tem uma linha por ferramenta do app listada no ADR 0030 (item 2)', () => {
   assert.ok(existsSync(TABELA), 'pool/anfitriao-orca.md não existe');
   const tabela = readFileSync(TABELA, 'utf8');

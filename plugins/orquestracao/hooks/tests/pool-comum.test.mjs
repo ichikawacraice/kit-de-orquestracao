@@ -35,6 +35,9 @@ function caso_repoDoMarcador() {
     const eq = (a, b) => { if (a !== b) throw new Error(`esperava ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
     eq(repoDoMarcador('/r/x/.git\n'), '/r/x/.git'); eq(repoDoMarcador('/r/x/.git/\n'), '/r/x/.git');
     eq(repoDoMarcador('\n'), ''); eq(repoDoMarcador('null\n'), ''); eq(repoDoMarcador(undefined), '');
+    // F447: o marcador da orquestradora do Orca traz o id do Orca na 2ª linha; o repo é só a 1ª
+    eq(repoDoMarcador('/r/x/.git\norca_session_id:abc\n'), '/r/x/.git'); eq(repoDoMarcador('/r/x/.git/\norca_session_id:abc'), '/r/x/.git');
+    eq(repoDoMarcador('\norca_session_id:abc\n'), '');
     for (const h of ['pool-comum.mjs', 'orquestradora-nao-edita.mjs']) // painel-das-sessoes.mjs saiu: vale com ou sem orquestradora (ADR 0007)
      {
       const src = readFileSync(join(HOOKS, h), 'utf8');

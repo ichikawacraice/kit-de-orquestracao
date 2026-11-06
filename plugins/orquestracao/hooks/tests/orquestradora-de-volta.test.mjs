@@ -159,3 +159,38 @@ test('orquestradora que volta: o arquivo de estado do projeto gira e o aviso diz
   const segunda = inicio('cli-novo');
   assert.doesNotMatch(segunda, /girou/, 'sem nada a mover, sem aviso');
 });
+
+// F447: no Orca o título não se troca; a orquestradora se declara por `painel orquestradora assumir`, que grava o id do Orca
+// na 2ª linha do marcador. Depois de limpar o contexto (id do CLI novo, o mesmo id do Orca), ela volta pelo marcador.
+function inicioNoOrca(sessionId, orcaCru = 'orq-do-orca') {
+  const r = spawnSync('node', [join(HOOKS, 'sessao-inicio.mjs')], {
+    input: JSON.stringify({ session_id: sessionId, hook_event_name: 'SessionStart', source: 'clear', cwd: repo }),
+    encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
+    env: { ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'), PAINEL_DIR: join(base, 'painel'),
+      CLAUDE_CODE_HOST_SESSION_ID: '', KIT_ANFITRIAO: 'orca', ORCA_AGENT_SESSION_ID: orcaCru, ORCA_TERMINAL_HANDLE: '' },
+  });
+  assert.equal(r.status, 0, r.stderr);
+  return r.stdout ? JSON.parse(r.stdout).hookSpecificOutput.additionalContext : '';
+}
+function registroDoOrcaVelho(orcaCru, cli) {
+  mkdirSync(join(base, 'orq', 'orca-sessoes'), { recursive: true });
+  writeFileSync(join(base, 'orq', 'orca-sessoes', `${orcaCru}.json`), JSON.stringify({ orcaId: `orca_session_id:${orcaCru}`, cliAtual: cli, cliIds: [cli], terminal: null, enderecoDoSend: `orca_session_id:${orcaCru}`, cwd: repo, em: new Date().toISOString() }));
+}
+
+test('(F447) orquestradora do Orca pelo marcador: depois de limpar, recria o marcador com o id do Orca e apaga o da id velha', () => {
+  registroDoOrcaVelho('orq-do-orca', 'cli-velho');
+  writeFileSync(marcador('cli-velho'), `${join(repo, '.git')}\norca_session_id:orq-do-orca\n`);
+  const t = inicioNoOrca('cli-novo');
+  assert.ok(t.includes(ORDEM), `falta a ordem: ${t.slice(0, 300)}`);
+  assert.equal(readFileSync(marcador('cli-novo'), 'utf8'), `${join(repo, '.git')}\norca_session_id:orq-do-orca\n`, 'o marcador novo guarda o repo e o id do Orca');
+  assert.ok(!existsSync(marcador('cli-velho')), 'o marcador da id velha saiu');
+});
+
+test('(F447) marcador de outra sessão do Orca não faz desta a orquestradora', () => {
+  registroDoOrcaVelho('orq-do-orca', 'cli-velho');
+  writeFileSync(marcador('cli-outra'), `${join(repo, '.git')}\norca_session_id:outra-sessao\n`);
+  const t = inicioNoOrca('cli-novo');
+  assert.ok(!t.includes(ORDEM), 'não recebe a ordem');
+  assert.ok(!existsSync(marcador('cli-novo')), 'nenhum marcador novo');
+  assert.ok(existsSync(marcador('cli-outra')), 'o marcador da outra fica');
+});

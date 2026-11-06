@@ -6,6 +6,10 @@
 // (skills/orquestradora/scripts/ausencia.mjs, seção `resumo-da-ausencia`).
 // O teto: `KIT_TETO_DE_DONAS` (padrão 4), 3 com a máquina cheia; acima dele o item espera sem cobrança.
 // A sessão é orquestradora quando existe ~/.claude/orquestracao/ativas/<session_id>.
+// F447 (ADR 0030, item 7): no Orca o turno começa no `turnOrigin` (o Orca não grava `origin`), a dona abre por
+// `orca orchestration worker-start` (sem `--terminal`, que é a devolução) e o `orca orchestration send` que cita o item vale como a
+// mensagem; o comando é lido pelo leitor da trava do orca (`orca` dentro de string não conta). Não há mod nem batida do app para
+// conferir: a batida parada não é cobrada.
 import { readFileSync, existsSync, appendFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -14,6 +18,8 @@ import { BASE, modoAusente } from './hooks-crewai-comum.mjs';
 import { semDona, donaACaminho, tetoDeDonas, donaTrabalhando } from './sem-dona.mjs';
 import { filaDir, maquinaCheia } from './pool-comum.mjs';
 import { pendente, projetoDoRepo } from '../skills/orquestradora/scripts/ausencia.mjs';
+import { anfitriao } from './anfitriao.mjs';
+import { invocacoesDoOrca } from './trava-do-orca.mjs';
 
 const AUSENCIA = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'orquestradora', 'scripts', 'ausencia.mjs');
 
@@ -73,7 +79,7 @@ function donasTrabalhando(nomeProjeto) {
 
 // O item sem dona pede a sessão dona, até o teto de donas trabalhando; acima do teto, espera sem cobrança. Satisfaz: um
 // `start_session` no turno, o modo ausente ligado (ninguém para abrir), gravar o dono do item ou mandar mensagem que o cite.
-function cobrancaDeDona(nomeProjeto, comandos, usadas, mensagens) {
+function cobrancaDeDona(nomeProjeto, comandos, usadas, mensagens, noOrca) {
   const { itens, aCaminho } = itensSemDona(nomeProjeto);
   if (itens.length === 0) return [];
   if ([...usadas].some((n) => n.endsWith('start_session')) || modoAusente()) return [];
@@ -84,7 +90,10 @@ function cobrancaDeDona(nomeProjeto, comandos, usadas, mensagens) {
   const conta = aCaminho > 0 ? `${ocupadas - aCaminho} de ${teto} donas trabalhando, ${aCaminho} a caminho` : `${ocupadas} de ${teto} donas trabalhando`;
   const cita = (id, x) => new RegExp(`\\b${id}\\b`).test(x);
   const faltam = itens.filter((it) => !comandos.some((c) => cita(it.id, c) && /donoLocalId/.test(c)) && !mensagens.some((m) => cita(it.id, m)));
-  return faltam.slice(0, teto - ocupadas).map((it) => `${it.id} sem dona há ${it.minutos} min (${conta}): abra a sessão dona do item (start_session; fora do turno do operador, cartão)`);
+  const como = noOrca
+    ? 'orca orchestration worker-start; pool/anfitriao-orca.md#tabela'
+    : 'start_session; fora do turno do operador, cartão';
+  return faltam.slice(0, teto - ocupadas).map((it) => `${it.id} sem dona há ${it.minutos} min (${conta}): abra a sessão dona do item (${como})`);
 }
 
 // A batida escreve `batida/<projeto>.json` a cada rodada; sem ele, ou velho, o mod não a está rodando.
@@ -110,14 +119,16 @@ function main() {
     try { entradas.push(JSON.parse(l)); } catch { /* linha parcial */ }
   }
 
-  // Início do turno: a última mensagem com origem (operador, sessão, notificação).
+  // Início do turno: a última mensagem com origem (operador, sessão, notificação); no Orca, com `turnOrigin`.
   let inicio = -1;
   for (let i = entradas.length - 1; i >= 0; i--) {
     const e = entradas[i];
-    if (e.type === 'user' && e.origin && e.origin.kind) { inicio = i; break; }
+    if (e.type === 'user' && (e.origin?.kind || e.turnOrigin)) { inicio = i; break; }
   }
   if (inicio < 0) return;
 
+  const cwd = input.cwd || process.cwd();
+  const noOrca = anfitriao({ cwd }).anfitriao === 'orca';
   const usadas = new Set();
   const comandos = [];
   const mensagens = [];
@@ -131,15 +142,21 @@ function main() {
       if (item.name === 'Bash') {
         const cmd = String(item.input?.command ?? '');
         comandos.push(cmd);
+        if (noOrca) {
+          for (const o of invocacoesDoOrca(cmd, { cwd })) {
+            if (o.sub === 'orchestration worker-start' && !o.bandeiras.terminal) usadas.add('orca:start_session');
+            if (o.sub === 'orchestration send') mensagens.push(JSON.stringify({ subject: o.bandeiras.subject ?? '', body: o.bandeiras.body ?? '' }));
+          }
+        }
       }
       if (/(^|__)(SendMessage|send_message)$/.test(item.name)) mensagens.push(JSON.stringify(item.input ?? {}));
     }
   }
 
-  const projeto = projetoDoRepo(input.cwd || process.cwd());
+  const projeto = projetoDoRepo(cwd);
   const periodo = projeto ? pendente(projeto) : null;
-  const itensSemDona = projeto ? cobrancaDeDona(projeto, comandos, usadas, mensagens) : [];
-  const batidaParada = projeto ? faltaBatida(projeto) : null;
+  const itensSemDona = projeto ? cobrancaDeDona(projeto, comandos, usadas, mensagens, noOrca) : [];
+  const batidaParada = projeto && !noOrca ? faltaBatida(projeto) : null;
   if (!periodo && itensSemDona.length === 0 && !batidaParada) return;
   const resumo = periodo
     ? `O operador desligou o modo ausente (período de ${periodo.desde} a ${periodo.ate}) e o resumo ainda não foi entregue: ` +

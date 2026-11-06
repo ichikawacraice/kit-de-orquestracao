@@ -424,8 +424,9 @@ const semBarra = (r) => String(r ?? '').replace(/\/+$/, '');
 
 // O repo que o marcador de `ativas/<id>` guarda: vazio (formato antigo) e o texto `null` valem "sem repo"; barra final sai.
 // Os três leitores do marcador (aqui, orquestradora-nao-edita e painel-das-sessoes) passam por esta função.
+// F447: o repo é só a 1ª linha; a orquestradora do Orca guarda o id dela (`orca_session_id:…`) na 2ª.
 export function repoDoMarcador(texto) {
-  const r = semBarra(String(texto ?? '').trim());
+  const r = semBarra(String(texto ?? '').split('\n')[0].trim());
   return r === 'null' ? '' : r;
 }
 
