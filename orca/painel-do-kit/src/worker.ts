@@ -12,7 +12,9 @@ import {
 import { entregasDoPainel, entregasDoOrca, juntarEntregas } from './nucleo/entregas.mjs'
 import { prepararEnvio, lerResultado, destinoValido, destinoDoSeguimento } from './nucleo/envio.mjs'
 import { criarFilaDeEntrega } from './nucleo/fila-de-entrega.mjs'
-import type { Leitura, Resultado, Entrega, EstadoDaEntrega } from './protocol'
+import { sessoesDoKit } from './nucleo/sessoes.mjs'
+import { inicioDoDiaSP } from './vista'
+import type { Leitura, Resultado, Entrega, EstadoDaEntrega, VistaDasSessoes } from './protocol'
 import { ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, LIMITE_DA_CAIXA } from './protocol'
 
 const DIAS = 7
@@ -22,6 +24,7 @@ const ORCA_APP = '/Applications/Orca.app/Contents/Resources/bin/orca'
 const pasta = () => process.env.PAINEL_DIR || join(homedir(), '.claude', 'orquestracao', 'painel')
 // O binário do Orca: o de teste (variável), o do app, ou o do PATH.
 const orcaBin = () => process.env.PAINEL_DO_KIT_ORCA || (existsSync(ORCA_APP) ? ORCA_APP : 'orca')
+// O início do dia em São Paulo (UTC−3, sem horário de verão desde 2019): a seção Sessões mostra só as entregas de hoje.
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 // A janela do lote: a do contrato, ou a do teste (variável), que não espera 5 s por caso.
@@ -40,7 +43,8 @@ function rodarJson(args: string[]): Promise<unknown> {
 
 export default function activate(orca: OrcaWorkerApi): void {
   // A caixa do Orca é lida no máximo uma vez por minuto (ou quando a pessoa pede "Atualizar").
-  let caixa: { em: number; orca: Entrega[]; erro: string | null; ate: string | null } = { em: 0, orca: [], erro: null, ate: null }
+  // Os workers do Orca ficam com a caixa: a seção Sessões os usa para dizer a sessão que falhou (F452).
+  let caixa: { em: number; orca: Entrega[]; erro: string | null; ate: string | null; workers: unknown[] | null } = { em: 0, orca: [], erro: null, ate: null, workers: null }
   const lerCaixa = async (forcar: boolean) => {
     if (!forcar && Date.now() - caixa.em < CAIXA_MS) return caixa
     const desdeMs = Date.now() - DIAS * 86_400_000
@@ -53,9 +57,10 @@ export default function activate(orca: OrcaWorkerApi): void {
       const msgs = (inbox as { result?: { messages?: { created_at?: string }[] } })?.result?.messages
       const ultima = Array.isArray(msgs) && msgs.length >= LIMITE_DA_CAIXA ? msgs[msgs.length - 1]?.created_at : undefined
       const ate = ultima && Date.parse(ultima) > desdeMs ? ultima : null // cortou antes dos 7 dias: só aí falta algo
-      caixa = { em: Date.now(), orca: entregasDoOrca(inbox, workers, { desdeMs }) as Entrega[], erro: null, ate }
+      const lista = (workers as { result?: { workers?: unknown[] } } | null)?.result?.workers
+      caixa = { em: Date.now(), orca: entregasDoOrca(inbox, workers, { desdeMs }) as Entrega[], erro: null, ate, workers: Array.isArray(lista) ? lista : caixa.workers }
     } catch (e) {
-      caixa = { em: Date.now(), orca: caixa.orca, erro: `não consegui ler a caixa do Orca (${msg(e)})`, ate: caixa.ate }
+      caixa = { em: Date.now(), orca: caixa.orca, erro: `não consegui ler a caixa do Orca (${msg(e)})`, ate: caixa.ate, workers: caixa.workers }
     }
     return caixa
   }
@@ -122,7 +127,16 @@ export default function activate(orca: OrcaWorkerApi): void {
     const entregas = (juntarEntregas(painel, c.orca) as Entrega[]).map((e) => ({ ...e, seguimento: destinoDoSeguimento(e) }))
     // O que a aba mandou responder e ainda não viu o desfecho (F450): o arquivo diz, mesmo se a resposta deste pedido se perdeu.
     const acompanhadas = Array.isArray(input?.acompanhar) && input.acompanhar.length ? { acompanhadas: lerAcompanhadas(p, input.acompanhar) } : {}
-    return { ...perguntas, entregas, erroDaCaixa: c.erro, caixaAte: c.ate, lidoEm: Date.now(), ...acompanhadas } as Leitura
+    const agoraMs = Date.now()
+    let sessoes: VistaDasSessoes
+    try {
+      sessoes = sessoesDoKit(p, { agoraMs, desdeMs: inicioDoDiaSP(agoraMs), abertas: perguntas.abertas, workers: c.workers }) as VistaDasSessoes
+    } catch (e) {
+      // A seção cai sozinha: as perguntas e as entregas seguem.
+      orca.log(`sessões: ${msg(e)}`)
+      sessoes = { projetos: [], paradas: 0, ilegiveis: 0, batidaEm: null, erro: msg(e), lidoEm: agoraMs }
+    }
+    return { ...perguntas, entregas, erroDaCaixa: c.erro, caixaAte: c.ate, sessoes, lidoEm: agoraMs, ...acompanhadas } as Leitura
   })
 
   // Responder uma aberta ou discordar de uma assumida: grava a prova do clique e entrega a quem perguntou, se há endereço.

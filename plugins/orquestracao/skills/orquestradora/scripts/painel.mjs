@@ -39,7 +39,7 @@
 //   (`com` só muda por `com add|del`: o set aceita o igual ao gravado e recusa o diferente, o update e o batch recusam; `espera` se grava pelo update comum)
 //   (`fez` e `passaram` são históricos de itens antigos: só leitura; o set guarda o gravado e recusa o diferente, o update e o batch recusam)
 //   (set e delete em sessoes/<id> que JÁ existe e é de OUTRA sessão exigem --de-outra; no batch, "deOutra": true na op)
-//   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · maisFatias · depois · perguntas · donoLocalId+donoApelido
+//   fila: etapa · tema (de temas.json, ao lado das coleções) · trava {motivo,texto} · prs · maisFatias · fatias (nomes, F452) · depois · perguntas · donoLocalId+donoApelido
 //   são validados quando presentes; etapa/dono que mudam ganham `historico` e a etapa final grava `feitoEm` (F27 fatia 1).
 //   (set em fila/<id> que JÁ existe exige --se-versao N — ou "seVersao" na op do batch —: sem ele, o set apagaria o item em silêncio)
 //
@@ -325,6 +325,8 @@ function comandoTemas(args) {
   throw new Error('uso: painel.mjs temas list [--projeto <nome>] | temas add <id> "<rótulo>" [--projeto <nome>]');
 }
 const textoNaoVazio = (v) => typeof v === 'string' && v.trim() !== '';
+const MAX_FATIAS = 12;
+const MAX_NOME_DA_FATIA = 60;
 
 // `list <coleção> <filtro>`: na fila, `em-andamento` é ter dono e etapa não final (item antigo, sem etapa válida, cai no `estado`); os outros valores casam com a etapa ou o estado.
 function filtraPorEstado(colecao, d, filtro) {
@@ -441,6 +443,13 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
     throw new Error(`${chave}: prs é uma lista de inteiros positivos`);
   }
   if (tem('maisFatias') && typeof novo.maisFatias !== 'boolean') throw new Error(`${chave}: maisFatias é true (o PR em merge não é a última fatia) ou false`);
+  // F452: o plano das fatias, em nomes curtos, para a aba do kit mostrar "fatia k de m"; as feitas se deduzem dos PRs mergeados.
+  if (tem('fatias')) {
+    const f = novo.fatias;
+    const ok = Array.isArray(f) && f.length >= 1 && f.length <= MAX_FATIAS
+      && f.every((n) => textoNaoVazio(n) && n.trim().length <= MAX_NOME_DA_FATIA && !/\bF\d+\b|#\d+/.test(n));
+    if (!ok) throw new Error(`${chave}: fatias é uma lista de 1 a ${MAX_FATIAS} nomes curtos (até ${MAX_NOME_DA_FATIA} caracteres, sem citar item nem PR), na ordem em que entram`);
+  }
   if (tem('depois')) {
     const ok = Array.isArray(novo.depois) && novo.depois.every((d) => d && typeof d === 'object' && textoNaoVazio(d.texto) && (d.item === undefined || /^F\d+$/.test(String(d.item))));
     if (!ok) throw new Error(`${chave}: depois é uma lista de {texto, item?}, texto não vazio e item no formato F<n>`);

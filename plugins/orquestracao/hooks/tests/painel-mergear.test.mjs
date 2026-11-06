@@ -248,6 +248,32 @@ test('F222: maisFatias que não é booleano é recusado', () => {
   } finally { limpar(c); }
 });
 
+test('F452: fatias é a lista de nomes curtos das fatias do item; o resto é recusado', () => {
+  const c = montar();
+  try {
+    const base = { titulo: 'T', etapa: 'execucao', tema: 'editor' };
+    const ok = c.painel('set', 'fila', 'F1', JSON.stringify({ ...base, maisFatias: true, fatias: ['núcleo e leitura', 'a seção na aba'] }));
+    assert.equal(ok.exit, 0, ok.err);
+    assert.deepEqual(c.dado('F1').fatias, ['núcleo e leitura', 'a seção na aba']);
+    assert.equal(c.painel('update', 'fila', 'F1', '{"fatias":null}').exit, 0, 'null apaga o campo, como nos outros');
+    const ruins = [
+      ['não lista', 'núcleo'],
+      ['vazia', []],
+      ['nome vazio', ['a', '  ']],
+      ['nome não texto', ['a', 3]],
+      ['nome longo', ['x'.repeat(61)]],
+      ['mais de 12', Array.from({ length: 13 }, (_, i) => `fatia ${i + 1}`)],
+      ['cita item', ['termina o F12']],
+      ['cita PR', ['o #40']],
+    ];
+    for (const [caso, fatias] of ruins) {
+      const r = c.painel('set', 'fila', 'F2', JSON.stringify({ ...base, fatias }));
+      assert.notEqual(r.exit, 0, `${caso}: devia recusar`);
+      assert.match(r.err, /fatias/, caso);
+    }
+  } finally { limpar(c); }
+});
+
 test('--seco confere tudo e não chama gh pr merge nem grava o painel', () => {
   const c = montar();
   try {

@@ -1,5 +1,5 @@
 // Contas da tela da aba do kit (F436), sem estado e sem Orca: tempo em português, agrupamentos e rótulos.
-import type { Entrega, Pergunta } from './protocol'
+import type { Entrega, Pergunta, Sessao } from './protocol'
 
 const FUSO = 'America/Sao_Paulo'
 
@@ -103,3 +103,20 @@ export function cortar(texto: string, limite: number): { curto: string; cortou: 
 
 /** `hoje, 14:05`, `ontem, 09:30` ou `terça, 3 de nov, 14:05`, em São Paulo. */
 export const quando = (msEpoch: number, agoraMs: number) => `${nomeDoDia(msEpoch, agoraMs).toLowerCase()}, ${horaSP(msEpoch)}`
+
+/** Meia-noite de hoje em São Paulo (UTC−3, sem horário de verão desde 2019): de onde contam as entregues de hoje. */
+export const inicioDoDiaSP = (agoraMs: number) => Date.parse(`${diaSP(agoraMs)}T03:00:00Z`)
+
+/** O tempo da 2ª linha do cartão: `agora` com a sessão do app rodando, senão `há X` (na parada, o selo já diz Parada). */
+export function tempoDaSessao(s: Pick<Sessao, 'estado' | 'desdeEm' | 'rodando'>, agoraMs: number): string {
+  if (s.rodando && (s.estado === 'trabalhando' || s.estado === 'validando')) return 'agora'
+  if (!s.desdeEm || !ms(s.desdeEm)) return ''
+  return haQuanto(ms(s.desdeEm), agoraMs)
+}
+
+/** `168`, `168 e 165`, `168, 165 e 160`, `168, 165, 160 e mais 11`. */
+export function listaDePRs(prs: number[]): string {
+  if (prs.length <= 1) return prs.map(String).join('')
+  if (prs.length <= 3) return `${prs.slice(0, -1).join(', ')} e ${prs.at(-1)}`
+  return `${prs.slice(0, 3).join(', ')} e mais ${prs.length - 3}`
+}
