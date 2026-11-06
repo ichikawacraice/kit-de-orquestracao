@@ -37,7 +37,7 @@ O operador olha a seção e responde, para cada projeto: **qual sessão precisa 
 | Q-ID da pergunta que prende | frase curta do Espera você | responder | várias por hora | **fica** |
 | Título da pergunta e caminho para responder | cartão aberto | responder | várias por hora | **sob demanda** (cartão aberto): a pergunta inteira já mora em Perguntas, e a faixa do topo já avisa |
 | Motivo da trava ou da espera | frase curta (cortada) e cartão aberto (inteiro) | intervir ou deixar com a dona | raro | **fica** cortado e **sob demanda** inteiro |
-| `fatia k de m` | frase curta do Trabalhando | "quanto falta" | toda leitura | **fica** |
+| `fatia k de m` (com todas mergeadas, `as m fatias mergeadas`; sem a dedução, nada) | frase curta do Trabalhando | "quanto falta" | toda leitura | **fica** |
 | Etapas em bolinhas | cartão aberto | "o que já saiu e o que vem" | algumas vezes por dia | **sob demanda** (cartão aberto) |
 | PRs abertos e mergeados | cartão aberto | abrir o PR (pelo número) | raro | **sob demanda** |
 | Posição na fila e PR em gate | frase curta | "quando sai" | toda leitura | **fica** |
@@ -110,10 +110,10 @@ Um estado por cartão, pela primeira linha da tabela que casa (a causa vence o s
 | 2b | Travada por gate | `trava.motivo = gate-vermelho` | `Gate vermelho` · `danger` | `trava.texto` | idem |
 | 3a | Parada | `deduzido.parado` (fora da etapa `merge`, como na D7 do pane) | `Parada` · `neutral` | `sem atividade`; com `dependeDe` aberto, `depende de F441` | `há X` desde `ultimaAtividade` (o selo já diz Parada) |
 | 3b | Sessão falhou | o worker do Orca ligado ao item tem `state = failed` | `Sessão falhou` · `danger` | `a sessão no Orca terminou com falha` | `há X` desde `ultimaAtividade` |
-| 3c | Sem sessão | `donaViva` é `null` ou `false` | `Sem sessão` · `neutral` | `esperando a orquestradora abrir uma`; com `dependeDe` aberto, `depende de F441` | `há X` desde o `atualizadoEm` |
+| 3c | Sem sessão | `donaViva` é `false`, ou `null` num item sem dona registrada (o `null` da sessão do Orca registrada é "fora da vista", não sumida) | `Sem sessão` · `neutral` | `esperando a orquestradora abrir uma`; com `dependeDe` aberto, `depende de F441` | `há X` desde o `atualizadoEm` |
 | 4 | Mergeando | um PR do item está em `emVoo` e a fila tem `ocupada` | `Mergeando` · `neutral` + `Spinner` | `PR 1716 · gate rodando` | `há X` desde `ocupada.desde` |
 | 5 | Na fila | um PR do item está em `pendentes`, ou em `emVoo` sem `ocupada` | `Na fila` · `neutral` | `PR 173 · 2º da fila` (posição em `emVoo` + `pendentes`) | `há X` desde `ultimaAtividade` |
-| 6 | PR aberto | etapa deduzida `merge`, com PR aberto fora da fila ([D5](#d5)) | `PR aberto` · `neutral` | `PR 173 · fora da fila de merge` | idem |
+| 6 | PR aberto | etapa deduzida `merge`, com PR aberto fora da fila ([D5](#d5)) | `PR aberto` · `neutral` | `PR 173 · fora da fila de merge`; sem a dedução (estado velho), a etapa `merge` declarada dá só `fora da fila de merge`, porque a lista de PRs do item guarda também os já mergeados | idem |
 | 7 | Validando | etapa `validacao` | `Validando` · `neutral` | o `agora`, cortado | idem |
 | 8 | Trabalhando | etapa `planejamento`, `design` ou `execucao` | `Planejando` / `No design` / `Executando` · `neutral` | `fatia 2 de 4 · <agora>`, ou `fatia 3 · <agora>` sem total, ou só o `agora` | idem; `agora` quando a sessão do app está `rodando` |
 | 9 | Entregue hoje | etapa `feito` com `feitoEm` no dia de hoje em SP | sem selo, porque fica na dobra Entregues hoje | — | a hora, `14:05` |
@@ -363,7 +363,7 @@ Também mudam o `Secao`, que ganha `'sessoes'`, a linha nova em `SECOES`, o caso
   11. `Responder em Perguntas` troca a seção para Perguntas.
 - **Bolinhas:**
   12. Com `fatias` de 4 e 1 PR mergeado: feita, agora, falta, falta.
-  13. Com 5 mergeados e 4 fatias: as 4 feitas, mais a linha `Todas as fatias têm PR mergeado`.
+  13. Com 5 mergeados e 4 fatias: as 4 feitas, mais a linha `Todas as fatias têm PR mergeado`. Com mais de 7 fatias todas mergeadas, `Fatias 1 a 8 feitas`, a última como bolinha e a mesma linha.
   14. Com 9 fatias: a linha das feitas juntas e o `e mais N`.
   15. Sem `fatias`: a esteira de 5. Com etapa `design`, a agora é a de planejamento, com `planejamento · design`.
   16. Cada tipo de bolinha tem o `Box` certo: a feita com `background="success"`, a de agora com `"accent"` e a que falta só com `border`.

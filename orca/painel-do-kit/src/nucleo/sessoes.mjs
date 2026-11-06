@@ -69,20 +69,24 @@ function filaDeMerge(base, projeto, cache) {
   return cache.get(chave);
 }
 
-// O worker do Orca deste item falhou? Liga o `donoLocalId` (orca_session_id:<id>) ao terminal gravado pelo hook.
+// O worker do Orca deste item falhou? Liga o `donoLocalId` (orca_session_id:<id>) ao terminal gravado pelo hook. O terminal
+// tem uma linha por despacho, sem ordem nem data: só falhou quando todas falharam (um despacho antigo com falha não pinta
+// de vermelho a dona que seguiu).
 function sessaoFalhou(base, d, workers) {
   if (!Array.isArray(workers) || !workers.length) return false;
   const id = /^orca_session_id:([\w-]+)$/.exec(texto(d.donoLocalId) ?? '')?.[1];
   if (!id) return false;
   const terminal = texto(lerJson(join(base, 'orca-sessoes', `${id}.json`))?.terminal);
-  const w = terminal && workers.find((x) => x?.terminal === terminal);
-  return Boolean(w && (w.state === 'failed' || w.outcome === 'failed'));
+  const meus = terminal ? workers.filter((x) => x?.terminal === terminal) : [];
+  return meus.length > 0 && meus.every((w) => w.state === 'failed' || w.outcome === 'failed');
 }
 
 // O estado de um item vivo, pela primeira regra que casa: a causa vence o sintoma.
+// Sem a batida, o `prs` do item guarda todos os PRs que ele já teve: só a fila de merge prova que um deles está aberto.
 function estadoDoItem(d, ded, fila, perguntas, falhou) {
   const etapa = ded?.etapa ?? d.etapa;
-  const abertos = ded ? inteiros(ded.prsAbertos) : inteiros(d.prs);
+  const abertos = ded ? inteiros(ded.prsAbertos) : [];
+  const candidatos = ded ? abertos : inteiros(d.prs);
   const trava = d.trava && typeof d.trava === 'object' ? d.trava : null;
   const ativ = maisRecente(d.atualizadoEm, ded?.ultimaAtividade);
   if (perguntas.length) return { estado: 'esperando', desdeEm: maisRecente(...perguntas.map((q) => q.atualizadoEm)) ?? iso(d.atualizadoEm) };
@@ -92,13 +96,15 @@ function estadoDoItem(d, ded, fila, perguntas, falhou) {
   if (falhou) return { estado: 'parada', tipoDeParada: 'falhou', desdeEm: iso(ded?.ultimaAtividade) ?? ativ };
   // Na etapa merge, a dona já entregou o PR: dona encerrada e parado não são parada, o PR espera a fila.
   if (etapa !== 'merge') {
-    if (ded && (ded.donaViva === false || ded.donaViva === null)) return { estado: 'parada', tipoDeParada: 'sem-dona', desdeEm: iso(d.atualizadoEm) };
+    // `null` com dona é a sessão do Orca fora da vista da batida, não a dona sumida.
+    if (ded && (ded.donaViva === false || (ded.donaViva === null && !texto(d.donoLocalId)))) return { estado: 'parada', tipoDeParada: 'sem-dona', desdeEm: iso(d.atualizadoEm) };
     if (ded?.parado === true) return { estado: 'parada', tipoDeParada: 'sem-movimento', desdeEm: iso(ded.ultimaAtividade) ?? ativ };
   }
-  const naFila = fila.ilegivel ? null : abertos.find((n) => fila.ordem.includes(n));
+  const naFila = fila.ilegivel ? null : candidatos.find((n) => fila.ordem.includes(n));
   if (naFila && fila.emVoo.has(naFila) && fila.ocupada) return { estado: 'mergeando', prNaFila: naFila, desdeEm: iso(fila.ocupada.desde) ?? ativ };
   if (naFila) return { estado: 'na-fila', prNaFila: naFila, posicaoNaFila: fila.ordem.indexOf(naFila) + 1, foraDaFila: false, desdeEm: ativ };
-  if (etapa === 'merge' && abertos.length) return { estado: 'na-fila', prNaFila: abertos[0], foraDaFila: true, desdeEm: ativ };
+  // Sem a batida, a etapa merge declarada diz que há PR aberto fora da fila, sem dizer qual.
+  if (etapa === 'merge' && (abertos.length || !ded)) return { estado: 'na-fila', prNaFila: abertos[0] ?? null, foraDaFila: true, desdeEm: ativ };
   if (d.espera?.motivo === 'gate') return { estado: 'na-fila', foraDaFila: false, desdeEm: ativ };
   if (etapa === 'validacao') return { estado: 'validando', desdeEm: ativ };
   return { estado: 'trabalhando', subEtapa: etapa ?? null, desdeEm: ativ };
@@ -121,6 +127,8 @@ function cortarBolinhas(etapas, comNomes) {
   const feitas = etapas.filter((e) => e.estado === 'feito');
   const agora = etapas.filter((e) => e.estado === 'agora');
   const faltam = etapas.filter((e) => e.estado === 'falta');
+  // Todas feitas: a última fica como bolinha, para o cartão aberto não ficar sem a lista.
+  if (!agora.length && !faltam.length) return { etapas: feitas.slice(-1), feitasJuntas: feitas.length - 1, maisBolinhas: 0 };
   return { etapas: [...agora, ...faltam.slice(0, FALTAM_A_MOSTRAR)], feitasJuntas: feitas.length, maisBolinhas: Math.max(0, faltam.length - FALTAM_A_MOSTRAR) };
 }
 
@@ -165,10 +173,11 @@ export function sessoesDoKit(pasta, { agoraMs = Date.now(), desdeMs, abertas = [
     const fila = filaDeMerge(base, projeto, filas);
     const minhas = (Array.isArray(abertas) ? abertas : []).filter((q) => q?.item === id);
     const est = entregue ? { estado: 'entregue', desdeEm: iso(d.feitoEm) } : estadoDoItem(d, ded, fila, minhas, sessaoFalhou(base, d, workers));
+    // Sem a batida não se sabe quais PRs entraram: nem lista de PRs nem número de fatia (vale só a etapa declarada).
     const mergeados = entregue ? inteiros(d.prs) : ded ? inteiros(ded.prsMergeados) : [];
-    const abertos = entregue ? [] : ded ? inteiros(ded.prsAbertos) : inteiros(d.prs);
+    const abertos = entregue || !ded ? [] : inteiros(ded.prsAbertos);
     const etapa = entregue ? 'feito' : ded?.etapa ?? d.etapa ?? null;
-    const f = fatiaDe(d, mergeados.length, est.estado);
+    const f = entregue || ded ? fatiaDe(d, mergeados.length, est.estado) : { fatia: null, nomes: null, feitas: 0, todasFeitas: false };
     const corte = cortarBolinhas(etapasDaSessao({ estado: est.estado, etapa, fatias: f.nomes, feitas: f.feitas }), Boolean(f.nomes));
     const titulo = texto(d.titulo) ?? texto(d.tema) ?? id;
     const agora = entregue ? null : texto(d.agora);

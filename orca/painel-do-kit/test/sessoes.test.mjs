@@ -307,3 +307,48 @@ test('item ilegível e pasta sem fila não quebram a leitura', () => {
   assert.deepEqual(vazio.projetos, []);
   assert.equal(vazio.paradas, 0);
 });
+
+test('dona do Orca fora da vista da batida (donaViva null com donoLocalId) não é dona sumida', () => {
+  const p = montar({ itens: { F1: item({ donoLocalId: 'orca_session_id:abc' }), F2: item() }, deduzido: { F1: ded({ donaViva: null }), F2: ded({ donaViva: null }) } });
+  const s = porItem(ler(p));
+  assert.equal(s.F1.estado, 'trabalhando');
+  // O mesmo null sem dona registrada é sem-dona: prova que a regra mede a dona, não o null.
+  assert.deepEqual([s.F2.estado, s.F2.tipoDeParada], ['parada', 'sem-dona']);
+  assert.equal(ler(p).paradas, 1);
+});
+
+test('sem a batida, os PRs do item não viram "abertos" nem fatia: só a fila de merge prova o PR aberto', () => {
+  const prs = [1617, 1620, 1623, 1627];
+  const p = montar({ itens: { F1: item({ etapa: 'merge', maisFatias: true, prs, fatias: ['a', 'b', 'c', 'd', 'e'] }) } });
+  const s = so(ler(p));
+  assert.equal(s.estado, 'na-fila');
+  assert.equal(s.foraDaFila, true);
+  assert.equal(s.prNaFila, null, 'o 1617 pode já ter entrado: não se afirma');
+  assert.deepEqual(s.prs, { abertos: [], mergeados: [] });
+  assert.equal(s.fatia, null);
+  assert.deepEqual(s.etapas.map((e) => e.nome), ['planejamento', 'execução', 'validação', 'merge', 'entregue'], 'sem saber as feitas, vale a esteira declarada');
+  // Com o PR anotado na fila de merge, ele está aberto: a fila basta.
+  const p2 = montar({ itens: { F1: item({ etapa: 'merge', prs }) }, filas: { kit: { pendentes: [{ pr: 1627 }] } } });
+  assert.deepEqual([so(ler(p2)).estado, so(ler(p2)).prNaFila, so(ler(p2)).foraDaFila], ['na-fila', 1627, false]);
+});
+
+test('mais de 7 fatias, todas com PR mergeado: a última fica como bolinha e as outras se juntam', () => {
+  const nomes = Array.from({ length: 9 }, (_, i) => `fatia ${i + 1}`);
+  const p = montar({ itens: { F1: item({ fatias: nomes }) }, deduzido: { F1: ded({ prsMergeados: [1, 2, 3, 4, 5, 6, 7, 8, 9] }) } });
+  const s = so(ler(p));
+  assert.equal(s.todasFeitas, true);
+  assert.equal(s.feitasJuntas, 8);
+  assert.deepEqual(s.etapas, [{ nome: 'fatia 9', estado: 'feito' }]);
+});
+
+test('terminal com vários despachos: só falhou quando todos falharam', () => {
+  const p = montar({
+    itens: { F1: item({ donoLocalId: 'orca_session_id:aaa' }) },
+    deduzido: { F1: ded() },
+    orcaSessoes: { aaa: { terminal: 'structworker_x' } },
+  });
+  const misto = [{ terminal: 'structworker_x', state: 'failed' }, { terminal: 'structworker_x', state: 'running' }];
+  assert.equal(so(ler(p, { workers: misto })).estado, 'trabalhando');
+  const todos = [{ terminal: 'structworker_x', state: 'failed' }, { terminal: 'structworker_x', state: 'failed' }];
+  assert.equal(so(ler(p, { workers: todos })).tipoDeParada, 'falhou');
+});

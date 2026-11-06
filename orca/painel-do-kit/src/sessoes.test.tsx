@@ -223,6 +223,7 @@ teste('as bolinhas: feita em verde, a de agora em destaque com o estado, a que f
   assert.ok(rotulo('F3', 'e mais 1'))
   assert.equal(bolinhas('F3').length, 7, 'a das feitas juntas, a de agora e 5 que faltam')
   assert.ok(rotulo('F4', 'Todas as fatias têm PR mergeado; o item segue aberto.'))
+  assert.ok(rotulo('F4', 'as 2 fatias mergeadas'), 'a 2ª linha não diz "fatia 2 de 2" quando todas entraram')
   assert.ok(rotulo('F5', 'execução · travada'))
   // Na bolinha do merge, o estado diz o que falta, não repete a etapa; a sigla PR não vira minúscula.
   assert.ok(rotulo('F6', 'merge · 2º da fila'))
@@ -323,5 +324,21 @@ teste('nenhum texto da seção cita SPEC, ADR, arquivo .md nem batida', async ()
   const textos = nos({}).flatMap((n) => [n.text, n.label, n.props.title, n.props.description]).filter((t): t is string => typeof t === 'string' && t.length > 0)
   assert.ok(textos.length > 10, 'a lista de textos não está vazia')
   assert.deepEqual(textos.filter((t) => /SPEC|ADR|\.md\b|batida/i.test(t)), [])
+  semErros(v)
+})
+
+teste('com muitas fatias todas mergeadas o cartão aberto mostra as feitas e o aviso; PR fora da fila sem número', async () => {
+  const todas = sessao('F1', {
+    fatia: { atual: 9, total: 9 }, todasFeitas: true, feitasJuntas: 8, etapas: [{ nome: 'fatia 9', estado: 'feito' }],
+  })
+  const semNumero = sessao('F2', { estado: 'na-fila', etapa: 'merge', prNaFila: null, foraDaFila: true })
+  const { v, doCartao } = await montar(() => leitura(vista([grupo('kit', [todas, semNumero])])))
+  await v.press({ label: 'Abrir F1' })
+  const textos = (item: string) => doCartao(item, { type: 'Text' }).map((t) => t.text ?? '')
+  assert.ok(textos('F1').includes('Fatias 1 a 8 feitas'), JSON.stringify(textos('F1')))
+  assert.ok(textos('F1').includes('fatia 9'))
+  assert.ok(textos('F1').includes('Todas as fatias têm PR mergeado; o item segue aberto.'))
+  assert.ok(textos('F2').includes('fora da fila de merge'), JSON.stringify(textos('F2')))
+  assert.deepEqual(textos('F2').filter((t) => /null|undefined/.test(t)), [])
   semErros(v)
 })

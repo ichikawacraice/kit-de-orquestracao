@@ -881,7 +881,11 @@ function chaveDoSelo(s: Sessao): string {
 const seloDe = (s: Sessao) => SELOS[chaveDoSelo(s)]
 const semItem = (titulo: string) => titulo.replace(SEM_ITEM_NO_TITULO, '')
 const dependencia = (s: Sessao) => (s.dependeDe.length ? `depende de ${s.dependeDe.join(' e ')}` : null)
-const fatiaDe = (s: Sessao) => (s.fatia ? (s.fatia.total ? `fatia ${s.fatia.atual} de ${s.fatia.total}` : `fatia ${s.fatia.atual}`) : null)
+const fatiaDe = (s: Sessao) => {
+  if (!s.fatia) return null
+  if (s.todasFeitas) return `as ${s.fatia.total} fatias mergeadas`
+  return s.fatia.total ? `fatia ${s.fatia.atual} de ${s.fatia.total}` : `fatia ${s.fatia.atual}`
+}
 
 /** A frase curta da 2ª linha: o que exatamente prende ou anda; vazia quando só repetiria o selo. */
 function fraseDaSessao(s: Sessao): string {
@@ -894,7 +898,7 @@ function fraseDaSessao(s: Sessao): string {
     case 'sem-dona': return dependencia(s) ?? 'esperando a orquestradora abrir uma'
     case 'mergeando': return s.prNaFila ? `PR ${s.prNaFila} · gate rodando` : 'gate rodando'
     case 'na-fila': return s.prNaFila && s.posicaoNaFila ? `PR ${s.prNaFila} · ${s.posicaoNaFila}º da fila` : 'esperando o gate'
-    case 'pr-aberto': return `PR ${s.prNaFila} · fora da fila de merge`
+    case 'pr-aberto': return s.prNaFila ? `PR ${s.prNaFila} · fora da fila de merge` : 'fora da fila de merge'
     // Sem nota, a frase fica vazia: o selo já diz a etapa.
     default: return [fatiaDe(s), s.agora].filter(Boolean).join(' · ')
   }
