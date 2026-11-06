@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   lerPerguntas, gravarResposta, confirmarTodas, desfazerConfirmacao, gravarEntregaDaResposta, RecusaDoPainel,
-  RESPOSTA_DE_CONFIRMACAO, ORIGEM, textoDaEntrega, textoDaMudanca,
+  RESPOSTA_DE_CONFIRMACAO, ORIGEM, textoDaEntrega, textoDaMudanca, lerAcompanhadas,
 } from '../src/nucleo/painel.mjs';
 
 const novoPainel = () => { const p = mkdtempSync(join(tmpdir(), 'f436-painel-')); mkdirSync(join(p, 'perguntas'), { recursive: true }); return p; };
@@ -238,4 +238,31 @@ test('desfazer a confirmação que a batida já arquivou devolve a decisão à p
   assert.equal(existsSync(f), false, 'saiu do arquivo');
   assert.equal(doc(p, 'Q1').data.estado, 'assumida');
   assert.deepEqual(lerPerguntas(p).assumidas.map((q) => q.id), ['Q1']);
+});
+
+// F450: a aba que perdeu a resposta do worker (guest trocado, promessa perdida) acompanha pelo arquivo as perguntas que
+// mandou responder: o desfecho gravado tira o cartão do "Entregando…", mesmo depois de a batida arquivar a pergunta.
+test('acompanhar: o estado gravado de cada id pedido, na pasta quente ou no arquivo; null para a que sumiu', () => {
+  const p = novoPainel();
+  const entrega = { estado: 'entregue', via: 'orca', destino: 'dispatch:ctx_a', em: AGORA };
+  pergunta(p, 'Q1', { estado: 'respondida', titulo: 't', projeto: 'kit', respondidaPor: ORIGEM, respondidaEm: AGORA, resposta: 'sim', entregaDaResposta: entrega }, 5);
+  pergunta(p, 'Q2', { estado: 'aberta', titulo: 'ainda aberta' }, 2);
+  pergunta(p, 'Q3', { estado: 'respondida', titulo: 't', respondidaPor: ORIGEM, resposta: 'não' }, 3);
+  arquivar(p, 'Q1', 'kit', '2026-11');
+  const r = lerAcompanhadas(p, ['Q1', 'Q2', 'Q3', 'Q9', '../x', 7]);
+  assert.deepEqual(Object.keys(r).sort(), ['Q1', 'Q2', 'Q3', 'Q9'], 'id inválido fica de fora');
+  assert.deepEqual(r.Q1, { estado: 'respondida', versao: 5, resposta: 'sim', respondidaPor: ORIGEM, respondidaEm: AGORA, entregaDaResposta: entrega });
+  assert.deepEqual(r.Q2, { estado: 'aberta', versao: 2, resposta: null, respondidaPor: null, respondidaEm: null, entregaDaResposta: null });
+  assert.equal(r.Q3.entregaDaResposta, null, 'gravada, entrega ainda não anotada');
+  assert.equal(r.Q9, null);
+});
+
+test('acompanhar: sem ids, ou com lista que não é lista, devolve vazio; ilegível vira null sem quebrar', () => {
+  const p = novoPainel();
+  writeFileSync(join(p, 'perguntas', 'Q1.json'), '{não é json');
+  assert.deepEqual(lerAcompanhadas(p, []), {});
+  assert.deepEqual(lerAcompanhadas(p, undefined), {});
+  assert.deepEqual(lerAcompanhadas(p, ['Q1']), { Q1: null });
+  const muitos = Array.from({ length: 80 }, (_, i) => `Q${i + 1}`);
+  assert.equal(Object.keys(lerAcompanhadas(p, muitos)).length, 50, 'no máximo 50 por leitura');
 });
