@@ -29,6 +29,8 @@
 //   painel.mjs fila-de-merge <PR:sha> [<PR:sha>…] --anotar   (F351) a entrega da dona: confere que a ponta de cada PR é o sha dado, só anota os PRs nos pendentes, grava a pasta do repositório e liga o item e, com a fila livre e o gate gravado, lança a rodada sem turno destacada (F427; o julgamento e a marca `lancada` da batida) → {anotado, pendentes, lancou, pid?, log?, naoLancou?, aviso?, avisoSemCodigo?, avisoSemEntrega?}; ele mesmo não roda gate nem mergeia
 //   painel.mjs fila-de-merge <PR:sha>… --gate "<cmd>" [--preparar "<cmd>"] --sem-turno   (F351) a rodada que a batida lança destacada: igual à da orquestradora, e grava o desfecho em `desfechos` do estado da fila
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga), lança a fila de merge anotada sem processo e entrega os desfechos dela (F351) → {mensagens, soltos, projetos, marcadoresApagados, filasLancadas?}; --seco não grava nem lança nada
+//   painel.mjs orquestradora assumir   (F447) declara esta sessão a orquestradora do projeto da pasta: grava <base>/ativas/<CLAUDE_CODE_SESSION_ID> com o git common dir e, no Orca, o orca_session_id na 2ª linha (as travas valem por ele; no Orca o título não se troca) → {marcador, repo, orcaId, outras}
+//   painel.mjs orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]   (F447) arquiva no Orca a dona do despacho: confere PR mergeado com o HEAD da worktree (ou nenhum PR e nenhum commit fora da base), nenhuma pergunta aberta do item (pelo item, por quem trabalhou nele ou pelo título), worktree ligada (nunca o checkout principal), limpa e empurrada e worker parado (todo despacho do mesmo terminal ou pasta em estado final); valendo, `orca orchestration worker-release` e `orca worktree set --workspace-status completed` (e `orca worktree rm`, nunca --force, com --remover-worktree) → {arquivado, condicoes, feitos}; faltando algo → {arquivado:false, faltam} e exit 1, sem chamar nada; --seco só confere
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
 //   (item que vira feito/descartado arquiva os próprios handoffs e roda a limpeza; reaberto, eles voltam. Pasta: PAINEL_HANDOFFS_DIR, senão PAINEL_DIR/../pool/handoffs, senão ~/.claude/orquestracao/pool/handoffs)
@@ -55,7 +57,7 @@
 import { appendFileSync, closeSync, cpSync, existsSync, mkdirSync, openSync, mkdtempSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
@@ -125,7 +127,8 @@ const pool = MEU_CLI
 const DA_BATIDA = process.argv[2] === 'batida';
 const DO_REINICIO = process.argv[2] === 'pode-reiniciar';
 const DA_MIGRACAO = process.argv[2] === 'perguntas' && process.argv[3] === 'migrar';
-const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || DA_MIGRACAO || ['com', 'fila-de-merge', 'mergear', 'custo'].includes(process.argv[2]);
+const DA_ORQUESTRADORA = process.argv[2] === 'orquestradora';
+const CONFERE_MEMBRO = DA_BATIDA || DO_REINICIO || DA_MIGRACAO || DA_ORQUESTRADORA || ['com', 'fila-de-merge', 'mergear', 'custo'].includes(process.argv[2]);
 const moduloSemDona = (process.argv[2] === 'list' && process.argv.slice(3).includes('fila')) || DA_BATIDA
   ? await import(pathToFileURL(join(HOOKS_DIR, 'sem-dona.mjs')).href)
   : null;
@@ -134,14 +137,14 @@ const donaACaminho = moduloSemDona?.donaACaminho;
 // A batida, o `pode-reiniciar`, a migração das perguntas, o `com add` e a fila de merge (a branch da dona, F221) também precisam do registro do app, do modo ausente e da máquina cheia (hooks/).
 const regras = CONFERE_MEMBRO
   ? await import(pathToFileURL(POOL_COMUM).href).catch((e) => {
-    if (DA_BATIDA || DO_REINICIO) throw e;
+    if (DA_BATIDA || DO_REINICIO || DA_ORQUESTRADORA) throw e;
     process.stderr.write(`painel.mjs: aviso: não consegui importar ${POOL_COMUM} (${e.message}); o projeto da sessão não foi conferido\n`);
     return null;
   })
   : null;
 // F444 (ADR 0030, item 6): a batida e o `pode-reiniciar` leem a lista de workers do Orca (a vida da dona do Orca, a conta do
-// reinício) e o registro das sessões do Orca (orca-sessoes/).
-const moduloOrca = DA_BATIDA || DO_REINICIO
+// reinício) e o registro das sessões do Orca (orca-sessoes/); F447: o `orquestradora arquivar` lê a lista e chama o `orca`.
+const moduloOrca = DA_BATIDA || DO_REINICIO || DA_ORQUESTRADORA
   ? await Promise.all([import(pathToFileURL(join(HOOKS_DIR, 'orca-workers.mjs')).href), import(pathToFileURL(join(HOOKS_DIR, 'orca-sessoes.mjs')).href)])
     .then(([w, s]) => ({ ...w, ...s }))
   : null;
@@ -233,7 +236,7 @@ const MOTIVOS_DA_ESPERA = ['operador', 'gate'];
 const LOCAL_ID = /^local_[0-9a-f-]{36}$/;
 // F439 (ADR 0030): o endereço da sessão é o `local_…` do app ou o `orca_session_id:<id>` do Orca; o formato mora em
 // hooks/anfitriao.mjs. Sem o módulo (a cópia do script solta numa pasta sem `hooks/`), só o do app.
-const { ehIdDeSessao = (v) => LOCAL_ID.test(String(v)) } = await import(pathToFileURL(join(HOOKS_DIR, 'anfitriao.mjs')).href).catch(() => ({}));
+const { ehIdDeSessao = (v) => LOCAL_ID.test(String(v)), quemSou = () => null } = await import(pathToFileURL(join(HOOKS_DIR, 'anfitriao.mjs')).href).catch(() => ({}));
 const NAO_E_SESSAO = 'não é local_<uuid> nem orca_session_id:<id>';
 const CITA_NUMERO = /\bF\d+\b|#\d+/;
 // F43: o texto que o operador lê cita item como "F13 · <título>" na primeira menção; as seguintes podem ser só "F13".
@@ -1509,7 +1512,15 @@ function marcadoresMortos(porId, agoraMs) {
       if (agoraMs - mtime >= MARCADOR_NOVO_MS) mortos.push(id);
       continue;
     }
-    if (reg.arquivada || reg.anterior) { mortos.push(id); continue; }
+    if (reg.arquivada) { mortos.push(id); continue; }
+    if (reg.anterior) {
+      // F447: o marcador da orquestradora do Orca (o id do Orca na 2ª linha) fica enquanto o transcript da id escreve: um
+      // `claude` lançado do Bash dela vira o CLI atual do registro e a deixa "anterior" estando viva
+      let doOrca = false;
+      try { doOrca = /^orca_session_id:/.test(readFileSync(join(dir, id), 'utf8').split('\n')[1] ?? ''); } catch { /* sumiu */ }
+      if (!doOrca || moduloOrca?.cliParado(id) === true) mortos.push(id);
+      continue;
+    }
     const linha = porId.get(reg.localId);
     if (linha?.isRunning === true) continue;
     const t = Date.parse(linha?.lastActivityAt);
@@ -1801,6 +1812,172 @@ function arquivarFechadas(seco) {
 }
 
 // A batida só arquiva depois da migração: antes dela, mover 400 arquivos do estado real sem backup nem ok do operador não vale.
+// F447 (ADR 0030, item 7; plano do modo Orca, fatia 5): a orquestradora no Orca. No Orca o título da conversa não se troca:
+// a sessão se declara orquestradora pelo marcador, e arquivar a dona é soltar o worker e marcar a worktree, lidos no Orca.
+const ID_DO_CLI = /^[\w-]+$/; // vira nome de arquivo em ativas/
+function gitDe(cwd, args) {
+  return execFileSync('git', ['-C', cwd, ...args], {
+    encoding: 'utf8', timeout: Number(process.env.KIT_GIT_TIMEOUT_MS) || 10000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+// `orquestradora assumir`: grava ativas/<id do CLI> com o git common dir do repositório e, no Orca, o id do Orca na 2ª linha
+// (o `orquestradora-de-volta` o reconhece por ele depois de limpar o contexto; a batida não o apaga enquanto o registro do
+// Orca disser que o CLI é o atual). As travas da orquestradora valem pelo marcador: nada depende do título.
+function assumir() {
+  const cli = String(process.env.CLAUDE_CODE_SESSION_ID ?? '').trim();
+  if (!cli) throw new Error('orquestradora assumir: sem CLAUDE_CODE_SESSION_ID no ambiente (rode pelo Bash da própria sessão)');
+  if (!ID_DO_CLI.test(cli)) throw new Error(`orquestradora assumir: CLAUDE_CODE_SESSION_ID inválido: ${JSON.stringify(cli)}`);
+  let repo;
+  try { repo = gitDe(process.cwd(), ['rev-parse', '--path-format=absolute', '--git-common-dir']); } catch { repo = ''; }
+  if (!repo) throw new Error('orquestradora assumir: a pasta atual está fora de git (rode na pasta do projeto)');
+  const eu = quemSou();
+  const orcaId = typeof eu === 'string' && eu.startsWith('orca_session_id:') ? eu : null;
+  const dir = join(ORQ(), 'ativas');
+  mkdirSync(dir, { recursive: true });
+  const marcador = join(dir, cli);
+  writeFileSync(marcador, `${repo}\n${orcaId ? `${orcaId}\n` : ''}`);
+  const outras = readdirSync(dir).filter((id) => id !== cli).filter((id) => {
+    try { return regras.repoDoMarcador(readFileSync(join(dir, id), 'utf8')) === repo; } catch { return false; }
+  });
+  return { marcador, repo, orcaId, outras };
+}
+
+// As condições de arquivar a dona de um worker do Orca. → { condicoes, faltam, pasta, terminal, item }.
+function condicoesDeArquivar(dispatchId, itemPedido, lista) {
+  const faltam = [];
+  const condicoes = {};
+  const w = lista.workers.find((x) => x.dispatchId === dispatchId);
+  if (!w) return { condicoes, faltam: [`o despacho ${dispatchId} não está no orca worker-list`], pasta: null, terminal: null, item: null };
+  const { pasta, terminal } = w;
+  // parado: todo despacho do mesmo terminal ou da mesma pasta terminou (a devolução por `send --to dispatch:` cria um despacho
+  // novo no mesmo terminal, e o antigo fica `succeeded` enquanto o worker trabalha de novo)
+  const juntos = lista.workers.filter((x) => (terminal && x.terminal === terminal) || (pasta && x.pasta && moduloOrca.dentroDe(x.pasta, pasta)));
+  const vivos = juntos.filter((x) => !moduloOrca.estadoFinal(x.state));
+  condicoes.parado = vivos.length === 0;
+  for (const x of vivos) faltam.push(`worker não está parado: ${x.dispatchId ?? '?'} em ${x.state ?? 'estado desconhecido'}`);
+  // limpa e empurrada
+  let branch = null; let head = null; let base = 'origin/main';
+  if (!pasta || !existsSync(pasta)) { condicoes.limpa = false; faltam.push(`a worktree ${pasta ?? '(sem pasta)'} não existe`); }
+  else {
+    try {
+      // o checkout principal não é a worktree de uma dona: marcá-lo completed ou removê-lo apagaria o projeto
+      if (gitDe(pasta, ['rev-parse', '--path-format=absolute', '--git-dir']) === gitDe(pasta, ['rev-parse', '--path-format=absolute', '--git-common-dir'])) {
+        condicoes.worktree = false; faltam.push(`a pasta ${pasta} é o checkout principal, não uma worktree ligada`);
+      }
+      branch = gitDe(pasta, ['branch', '--show-current']) || null;
+      head = gitDe(pasta, ['rev-parse', 'HEAD']);
+      try { base = gitDe(pasta, ['rev-parse', '--abbrev-ref', 'origin/HEAD']) || base; } catch { /* sem origin/HEAD: origin/main */ }
+      const sujos = gitDe(pasta, ['status', '--porcelain']);
+      const semPush = gitDe(pasta, ['rev-list', 'HEAD', '--not', '--remotes']);
+      condicoes.limpa = !sujos && !semPush;
+      if (sujos) faltam.push(`a worktree não está limpa (arquivo sem commit): ${sujos.split('\n').slice(0, 3).join('; ')}`);
+      if (semPush) faltam.push(`commit sem push: ${semPush.split('\n').length} commit(s) só na worktree`);
+    } catch (e) { condicoes.limpa = false; faltam.push(`git na worktree falhou: ${String(e?.stderr || e?.message || e).trim().slice(0, 200)}`); }
+  }
+  // o item: o pedido, senão o que tem a branch da worktree
+  const itens = itensDaFila();
+  let item = itemPedido;
+  if (!item && branch) item = [...itens].find(([, d]) => d?.branch === branch)?.[0] ?? null;
+  // PR mergeado com o HEAD da worktree, ou trabalho sem PR que não deixa commit fora da base ("não achei PR" não basta: a
+  // dona que morreu antes do `gh pr create` deixa a branch empurrada e sem PR)
+  if (!branch || !head) { condicoes.pr = false; faltam.push('a worktree não está numa branch: não dá para achar o PR'); }
+  else {
+    try {
+      const saida = execFileSync(process.env.GH_BIN || 'gh', ['pr', 'list', '--head', branch, '--state', 'all', '--json', 'number,state,headRefOid'], {
+        cwd: pasta, encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const prs = JSON.parse(saida);
+      if (!Array.isArray(prs)) throw new Error('a resposta não é uma lista');
+      const pendentes = prs.filter((p) => p?.state !== 'MERGED');
+      const mergeados = prs.filter((p) => p?.state === 'MERGED');
+      for (const p of pendentes) faltam.push(p?.state === 'OPEN' ? `PR #${p.number} está aberto` : `PR #${p?.number} fechado sem merge`);
+      let cobre = true;
+      if (!prs.length) {
+        let fora = null;
+        try { fora = gitDe(pasta, ['rev-list', 'HEAD', '--not', base]); } catch (e) { faltam.push(`não achei a base ${base} para conferir o trabalho sem PR: ${String(e?.stderr || e?.message || e).trim().slice(0, 200)}`); cobre = false; }
+        if (fora) { cobre = false; faltam.push(`sem PR e com ${fora.split('\n').length} commit(s) fora de ${base}: abra o PR ou confira com o operador`); }
+      } else if (mergeados.length && !mergeados.some((p) => p?.headRefOid === head)) {
+        cobre = false;
+        faltam.push(`commit depois do PR #${mergeados.map((p) => p?.number).join(', #')} mergeado: o HEAD ${head.slice(0, 12)} não entrou em PR`);
+      }
+      condicoes.pr = pendentes.length === 0 && cobre;
+    } catch (e) { condicoes.pr = false; faltam.push(`o gh não respondeu sobre os PRs da branch ${branch}: ${String(e?.stderr || e?.message || e).trim().slice(0, 200)}`); }
+  }
+  // nenhuma pergunta aberta do item esperando o operador (a assumida não segura o worker): a que traz o item, a de quem trabalhou nele (o painel só exige o sessaoId
+  // na pergunta) e a que o título nomeia
+  if (!item) { condicoes.perguntas = false; faltam.push('não achei o item da worktree: passe --item F<n>'); }
+  else {
+    const d0 = itens.get(item) ?? {};
+    const dela = new Set([d0.donoLocalId, d0.donaAoFechar?.donoLocalId, ...[d0.com, d0.donaAoFechar?.com].flatMap((c) => (Array.isArray(c) ? c.map((x) => x?.localId) : []))].filter(textoNaoVazio));
+    const doTitulo = new RegExp(`^${item}(?!\\d)`);
+    const dir = caminho('perguntas');
+    const abertas = existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.json')).flatMap((n) => {
+      try {
+        const d = JSON.parse(readFileSync(join(dir, n), 'utf8'));
+        const p = d?.data ?? {};
+        // só a aberta espera o operador: a assumida já seguiu com a recomendação e a resposta vai à orquestradora
+        if ((p.estado ?? p.status) !== 'aberta') return [];
+        const doItem = p.item ? p.item === item : (dela.has(p.sessaoId) || doTitulo.test(String(p.titulo ?? '').trim()));
+        return doItem ? [d.id] : [];
+      } catch { return []; }
+    }) : [];
+    condicoes.perguntas = abertas.length === 0;
+    if (abertas.length) faltam.push(`pergunta aberta do ${item}: ${abertas.join(', ')}`);
+  }
+  return { condicoes, faltam, pasta, terminal, item };
+}
+
+function orcaMutante(args) {
+  const bin = moduloOrca.binarioDoOrca();
+  const r = spawnSync(bin, [...args, '--json'], { encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'] });
+  let d = null;
+  try { d = JSON.parse(r.stdout); } catch { /* sem JSON */ }
+  const ok = !r.error && r.status === 0 && d?.ok !== false;
+  return { comando: `orca ${args.join(' ')}`, ok, ...(ok ? {} : { erro: String(r.error?.message || r.stderr || r.stdout || '').trim().slice(0, 300) }) };
+}
+
+// `orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]`: as condições de "Arquivar sessão que terminou"
+// lidas no Orca. Todas valendo: `worker-release` (fecha o terminal) e `worktree set --workspace-status completed`; com
+// --remover-worktree, também `worktree rm` (nunca --force). Faltando qualquer uma, não chama nada e diz qual faltou (exit 1).
+function arquivarNoOrca(args) {
+  const seco = flag(args, '--seco', false);
+  const remover = flag(args, '--remover-worktree', false);
+  const itemPedido = flag(args, '--item');
+  if (itemPedido !== null && !/^F\d+$/.test(itemPedido)) throw new Error(`--item pede F<n>, veio ${JSON.stringify(itemPedido)}`);
+  const [dispatchId, ...sobra] = args;
+  if (!/^ctx_[\w-]+$/.test(String(dispatchId ?? ''))) throw new Error('uso: painel.mjs orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]');
+  if (sobra.length) throw new Error(`argumento desconhecido: ${sobra[0]}`);
+  const lista = listaDoOrca();
+  if (lista === null) throw new Error('orquestradora arquivar: sem orca nesta máquina (o arquivar do Orca precisa do orca worker-list)');
+  if (lista.erro) return { arquivado: false, dispatchId, faltam: [`não li o Orca: ${lista.erro}`], condicoes: {} };
+  const { condicoes, faltam, pasta, item } = condicoesDeArquivar(dispatchId, itemPedido, lista);
+  const base = { dispatchId, item, pasta, condicoes };
+  if (faltam.length) return { arquivado: false, ...base, faltam };
+  if (seco) return { arquivado: false, seco: true, ...base, faltam: [], chamaria: ['worker-release', 'worktree set', ...(remover ? ['worktree rm'] : [])] };
+  const feitos = [];
+  for (const a of [
+    ['orchestration', 'worker-release', '--dispatch', dispatchId],
+    ['worktree', 'set', '--worktree', `path:${pasta}`, '--workspace-status', 'completed'],
+    ...(remover ? [['worktree', 'rm', '--worktree', `path:${pasta}`]] : []),
+  ]) {
+    const r = orcaMutante(a);
+    feitos.push(r);
+    if (!r.ok) return { arquivado: false, ...base, faltam: [`${r.comando} falhou: ${r.erro}`], feitos };
+  }
+  return { arquivado: true, ...base, feitos };
+}
+
+function comandoOrquestradora(args) {
+  const [sub, ...resto] = args;
+  if (!regras) throw new Error(`orquestradora: não consegui carregar ${POOL_COMUM}`);
+  if (sub === 'assumir') {
+    if (resto.length) throw new Error(`argumento desconhecido: ${resto[0]}`);
+    return assumir();
+  }
+  if (sub === 'arquivar') return arquivarNoOrca(resto);
+  throw new Error('uso: painel.mjs orquestradora assumir | orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]');
+}
+
 const MARCA_DA_MIGRACAO = () => join(BASE, '.migracao-F183');
 // Painel novo (ou que nunca precisou da migração): sem nada a migrar, a marca nasce aqui e a batida passa a arquivar.
 // Enquanto há o que migrar, cada batida confere de novo (lê o painel inteiro) e não move nada.
@@ -2030,6 +2207,9 @@ function main(argv) {
     case 'fila-de-merge':
       saida = comandoFilaDeMerge(resto);
       break;
+    case 'orquestradora':
+      saida = comandoOrquestradora(resto);
+      break;
     case 'batch': {
       const ops = JSON.parse(a);
       if (!Array.isArray(ops)) throw new Error('batch: esperava uma lista');
@@ -2037,10 +2217,10 @@ function main(argv) {
       break;
     }
     default:
-      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|perguntas|com|soltar|batida|mergear|custo|entregas|pode-reiniciar|fila-de-merge|handoffs … (veja o cabeçalho do script)');
+      throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|perguntas|com|soltar|batida|mergear|custo|entregas|pode-reiniciar|fila-de-merge|handoffs|orquestradora … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
-  return cmd === 'mergear' && saida.recusado ? 1 : 0;
+  return (cmd === 'mergear' && saida.recusado) || (cmd === 'orquestradora' && saida.arquivado === false && !saida.seco) ? 1 : 0;
 }
 
 try {

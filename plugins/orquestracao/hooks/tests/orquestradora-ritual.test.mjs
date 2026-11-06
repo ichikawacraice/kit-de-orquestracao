@@ -38,7 +38,7 @@ function cenario({ bandeira, entregue = false, cwdGit = true } = {}) {
   const tr = join(raiz, 't.jsonl'); writeFileSync(tr, linhas.map((l) => JSON.stringify(l)).join('\n'));
   const rodar = (extra = {}) => execFileSync('node', [HOOK], {
     input: JSON.stringify({ session_id: sid, transcript_path: tr, cwd: cwdGit ? repo : join(raiz, 'fora'), ...extra }),
-    encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: { ...process.env, HOME: home, HOOKS_CREWAI_BASE: base, POOL_APP_SESSOES_DIR: app },
+    encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', env: { ...process.env, HOME: home, HOOKS_CREWAI_BASE: base, POOL_APP_SESSOES_DIR: app, KIT_ANFITRIAO: 'claude-desktop' },
   });
   return { rodar };
 }
@@ -105,9 +105,12 @@ const START = ['mcp__ccd_session__start_session', { title: 'F7 · item F7' }];
 const DONO = (F) => ['Bash', { command: `painel update fila ${F} '{"donoLocalId":"local_x","donoApelido":"dona"}'` }];
 const MSG = (F) => ['SendMessage', { to: 'local_x', message: `${F}: abro a dona no próximo turno do operador` }];
 
-function rodar(ferramentas, { extra = {}, env = {} } = {}) {
+// `orca`: o turno como o Orca o grava (`turnOrigin`, sem `origin`) e o anfitrião fixado em orca. Sem ele, o anfitrião fica fixo
+// no app: o ambiente de quem roda o teste (um worker do Orca, por exemplo) não muda o caso.
+function rodar(ferramentas, { extra = {}, env = {}, orca = false } = {}) {
   const t0 = Date.now() - 60_000;
-  const L = [{ type: 'user', origin: { kind: 'human' }, timestamp: new Date(t0).toISOString(), message: { content: 'turno' } }];
+  const abertura = orca ? { turnOrigin: 'sdk' } : { origin: { kind: 'human' } };
+  const L = [{ type: 'user', ...abertura, timestamp: new Date(t0).toISOString(), message: { content: 'turno' } }];
   ferramentas.forEach(([name, input], k) => L.push({ type: 'assistant', timestamp: new Date(t0 + 1000 + k).toISOString(), message: { content: [{ type: 'tool_use', name, input }] } }));
   const f = join(base, 't.jsonl');
   writeFileSync(f, L.map((x) => JSON.stringify(x)).join('\n') + '\n');
@@ -117,7 +120,8 @@ function rodar(ferramentas, { extra = {}, env = {} } = {}) {
     env: { ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'),
       PAINEL_DIR: join(base, 'painel'), FILA_DIR: '', ESPERA_MIN: '', KIT_TETO_DE_DONAS: '',
       // a máquina do teste nunca está cheia por acaso: sem fichas e com carga zero, a menos que o caso diga o contrário
-      KIT_NUCLEOS_DIR: join(base, 'nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', CI: '', KIT_CARGA_1MIN: '0', ...env },
+      KIT_NUCLEOS_DIR: join(base, 'nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', CI: '', KIT_CARGA_1MIN: '0',
+      KIT_ANFITRIAO: orca ? 'orca' : 'claude-desktop', ORCA_AGENT_SESSION_ID: orca ? 'orq-do-orca' : '', CLAUDE_CODE_HOST_SESSION_ID: '', ...env },
   });
   assert.equal(r.status, 0, r.stderr);
   return r.stdout ? JSON.parse(r.stdout) : null;
@@ -220,5 +224,42 @@ test('(dona-6) F218: o item com cartão esperando o clique ocupa a vaga dele no 
   const r = rodar([LIST, GRAVA], { env: { KIT_TETO_DE_DONAS: '5' } });
   assert.match(r?.reason ?? '', /F8 sem dona há 10 min \(3 de 5 donas trabalhando, 1 a caminho\)/, 'prova: com vaga, cobra o F8 e conta o F7 a caminho');
   assert.doesNotMatch(r.reason, /F7 sem dona/);
+});
+
+// F447 (ADR 0030, item 7): a orquestradora no Orca. O turno começa no `turnOrigin` (o Orca não grava `origin`), a dona abre por
+// `orca orchestration worker-start` e não há mod nem batida para conferir.
+const WSTART = (F) => ['Bash', { command: `orca orchestration worker-start --agent claude --model claude-sonnet-5-5 --effort medium --worktree new-child --display-name "${F} · item ${F}" --spec-file /tmp/spec-${F}.md` }];
+const SEND = (F) => ['Bash', { command: `orca orchestration send --from orca_session_id:orq --to orca_session_id:outra --subject "fila" --body "${F}: abro a dona quando vagar"` }];
+test('(orca-1) no Orca o turno sem `origin` é lido: o item sem dona é cobrado com o comando do Orca, sem start_session nem cartão', () => {
+  semDona('F7');
+  const r = rodar([], { orca: true });
+  assert.equal(r?.decision, 'block', 'o turno do Orca (turnOrigin) conta como turno');
+  assert.match(r.reason, /F7 sem dona há 10 min \(0 de 4 donas trabalhando\)/);
+  assert.match(r.reason, /orca orchestration worker-start/);
+  assert.match(r.reason, /anfitriao-orca\.md/);
+  assert.doesNotMatch(r.reason, /start_session|cartão/);
+  const app = rodar([]);
+  assert.match(app?.reason ?? '', /start_session; fora do turno do operador, cartão/, 'no app a cobrança segue a mesma');
+});
+test('(orca-2) o worker-start que abre a dona satisfaz; o send que cita o item também; o de outro item e o `orca` dentro de string não', () => {
+  semDona('F7');
+  assert.equal(rodar([WSTART('F7')], { orca: true }), null);
+  assert.equal(rodar([SEND('F7')], { orca: true }), null);
+  assert.equal(rodar([SEND('F8')], { orca: true })?.decision, 'block', 'mensagem de outro item não satisfaz');
+  const naString = ['Bash', { command: `echo "orca orchestration worker-start --display-name 'F7 · item' --spec-file /tmp/x.md"` }];
+  assert.equal(rodar([naString], { orca: true })?.decision, 'block', 'orca dentro de string não é comando');
+  const devolucao = ['Bash', { command: 'orca orchestration worker-start --terminal term_ab12 --worktree path:/tmp/w --spec "F7: gate vermelho"' }];
+  assert.equal(rodar([devolucao], { orca: true })?.decision, 'block', 'a devolução no mesmo terminal não abre dona nova');
+});
+test('(orca-3) no Orca a batida parada não é cobrada (não há mod do app); no app segue cobrada', () => {
+  batidaRodou('proj-a', 45);
+  assert.match(rodar([])?.reason ?? '', /A batida não roda há 45 min/, 'prova: no app a batida velha é cobrada');
+  assert.equal(rodar([], { orca: true }), null);
+  rmSync(join(base, 'orq', 'batida', 'proj-a.json'));
+  assert.equal(rodar([], { orca: true }), null, 'nem o relatório que nunca existiu');
+});
+test('(orca-4) no Orca o resumo do ausente segue cobrado', () => {
+  writeFileSync(join(base, 'orq', 'operador-ausente.json'), JSON.stringify({ ligado: false, desde: minAtras(12 * 60), desligadoEm: minAtras(120), por: 'painel' }));
+  assert.match(rodar([], { orca: true })?.reason ?? '', /resumo/);
 });
 }

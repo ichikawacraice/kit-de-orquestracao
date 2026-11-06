@@ -6,6 +6,8 @@
 // apaga os das ids que ela deixou para trás e devolve a ordem para o additionalContext. Quem chama engole qualquer erro.
 // F220: a limpeza também mata a fila de merge que rodava em segundo plano; a fila do projeto órfã entra no aviso, com a
 // chamada que a retoma.
+// F447: no Orca o título da conversa não se troca; a orquestradora se declara por `painel orquestradora assumir`, que grava o
+// id do Orca (`orca_session_id:…`) na 2ª linha do marcador, e volta por ele: o id do Orca não muda ao limpar o contexto.
 // F351: o arquivo de estado do projeto (`<BASE>/<repo>.md`) gira aqui, antes do "Ao assumir" lê-lo: as seções datadas antigas
 // vão ao arquivo morto (estado-girar.mjs) e a orquestradora lê só o vivo.
 import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
@@ -13,6 +15,7 @@ import { join } from 'node:path';
 import { BASE, registroDaSessao, gitCommonDir, projetoDaSessao } from './pool-comum.mjs';
 import { avisoSemGate, comandoDeRelance, lerFilaOrfa } from '../skills/orquestradora/scripts/fila-orfa.mjs';
 import { girarArquivo } from '../skills/orquestradora/scripts/estado-girar.mjs';
+import { cliParado } from './orca-sessoes.mjs';
 
 const ID_SEGURO = /^[\w-]+$/; // o session_id vira nome de arquivo em ativas/
 
@@ -22,6 +25,16 @@ function nomeadaNaBatida(localId) {
   return readdirSync(dir).some((n) => {
     if (!n.endsWith('.json')) return false;
     try { return JSON.parse(readFileSync(join(dir, n), 'utf8'))?.orquestradora === localId; } catch { return false; }
+  });
+}
+
+// Algum marcador de `ativas/` traz este id do Orca na 2ª linha.
+function marcadaNoOrca(localId) {
+  if (!String(localId).startsWith('orca_session_id:')) return false;
+  const dir = join(BASE, 'ativas');
+  if (!existsSync(dir)) return false;
+  return readdirSync(dir).some((id) => {
+    try { return readFileSync(join(dir, id), 'utf8').split('\n')[1]?.trim() === localId; } catch { return false; }
   });
 }
 
@@ -54,22 +67,27 @@ function giroDoEstado(reg) {
 }
 
 // → { texto, marcador, apagados } quando a sessão é a orquestradora; null quando não é ou não dá para saber.
-export function orquestradoraDeVolta({ sessionId, localId, cwd }) {
+export function orquestradoraDeVolta({ sessionId, localId, cwd, source }) {
   if (!localId || !sessionId || !ID_SEGURO.test(sessionId)) return null;
   const reg = registroDaSessao(localId, { fresco: true });
   if (!reg || reg.arquivada) return null;
-  if (!reg.titulo.startsWith('🎛 orquestradora') && !nomeadaNaBatida(localId)) return null;
+  if (!reg.titulo.startsWith('🎛 orquestradora') && !nomeadaNaBatida(localId) && !marcadaNoOrca(localId)) return null;
 
   const ativas = join(BASE, 'ativas');
   mkdirSync(ativas, { recursive: true });
   const marcador = join(ativas, sessionId);
-  writeFileSync(marcador, `${gitCommonDir(reg.originCwd || reg.cwd || cwd) ?? 'null'}\n`);
+  const doOrca = String(localId).startsWith('orca_session_id:') ? `${localId}\n` : '';
+  writeFileSync(marcador, `${gitCommonDir(reg.originCwd || reg.cwd || cwd) ?? 'null'}\n${doOrca}`);
   const apagados = [];
   // Só as ids que o registro já marca como deixadas para trás. A id atual do registro fica: "o app ainda não gravou a id
   // nova da limpeza" e "um `claude` lançado do Bash da orquestradora" (herda o CLAUDE_CODE_HOST_SESSION_ID) chegam iguais
   // aqui, e no segundo apagar a atual derrubaria as travas da orquestradora viva. O que sobrar, a batida apaga.
+  // No Orca o próprio início regrava o registro: o `claude` filho vira o CLI atual e a orquestradora vira "anterior". Fora da
+  // limpeza e da compactação (que trocam o id de verdade), a id anterior só sai com o transcript parado há 30 min.
+  const trocouDeVerdade = !doOrca || source === 'clear' || source === 'compact';
   for (const id of reg.cliIds ?? []) {
     if (id === sessionId || id === reg.cliAtual || !ID_SEGURO.test(id) || !existsSync(join(ativas, id))) continue;
+    if (!trocouDeVerdade && cliParado(id) !== true) continue;
     rmSync(join(ativas, id), { force: true });
     apagados.push(id);
   }

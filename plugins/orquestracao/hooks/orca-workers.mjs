@@ -37,6 +37,8 @@ const texto = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 // Estados finais do despacho. O despacho só de contexto (sem terminal) não tem processo dele: vivo só enquanto o estado não é
 // um destes (medido em 06/11: a linha `succeeded` sem terminal fica na lista para sempre, e nunca vira `released`).
 const ESTADOS_FINAIS = new Set(['succeeded', 'failed', 'cancelled', 'canceled', 'completed', 'done', 'expired']);
+/** O estado do despacho é final (o worker terminou o que recebeu). */
+export const estadoFinal = (state) => ESTADOS_FINAIS.has(String(state ?? '').toLowerCase());
 
 function normalizar(w) {
   const ws = texto(w?.workspace);

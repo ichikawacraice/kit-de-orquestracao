@@ -42,7 +42,7 @@ if (quem?.startsWith('orca_session_id:')) {
 let papel = '';
 try {
   const { orquestradoraDeVolta } = await import('./orquestradora-de-volta.mjs');
-  papel = orquestradoraDeVolta({ sessionId: entrada.session_id, localId: quem, cwd: entrada.cwd })?.texto ?? '';
+  papel = orquestradoraDeVolta({ sessionId: entrada.session_id, localId: quem, cwd: entrada.cwd, source: entrada.source })?.texto ?? '';
 } catch { /* sem o papel */ }
 
 let perguntas = '';

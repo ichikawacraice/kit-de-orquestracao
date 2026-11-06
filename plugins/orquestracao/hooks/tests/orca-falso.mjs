@@ -10,9 +10,17 @@ const d = process.env.ORCA_FALSO_DIR;
 const env = {};
 for (const k of Object.keys(process.env)) if (k.startsWith('ORCA_')) env[k] = process.env[k];
 fs.appendFileSync(d + '/chamadas.jsonl', JSON.stringify({ argv: process.argv.slice(2), env }) + '\\n');
-// paginas.json é um mapa cursor → resposta, ou uma lista de mapas: a N-ª chamada sem cursor (e as páginas dela) usa o N-º
+// F447: outro subcomando (worker-release, worktree set, worktree rm…) responde pelo mapa 'outros' de paginas.json
+// ('<palavra> <palavra>' → resposta), e sem entrada nele responde ok; só o worker-list lê as páginas.
 const todas = JSON.parse(fs.readFileSync(d + '/paginas.json', 'utf8'));
-const n = fs.readFileSync(d + '/chamadas.jsonl', 'utf8').trim().split('\\n').filter((l) => !JSON.parse(l).argv.includes('--cursor')).length;
+const sub = process.argv.slice(2, 4).join(' ');
+if (sub !== 'orchestration worker-list') {
+  const o = (!Array.isArray(todas) && todas.outros && todas.outros[sub]) || { stdout: { ok: true, result: {} } };
+  process.stdout.write(typeof o.stdout === 'string' ? o.stdout : JSON.stringify(o.stdout)); process.exitCode = o.exit || 0;
+  return;
+}
+// paginas.json é um mapa cursor → resposta, ou uma lista de mapas: a N-ª leitura da lista sem cursor (e as páginas dela) usa o N-º
+const n = fs.readFileSync(d + '/chamadas.jsonl', 'utf8').trim().split('\\n').map((l) => JSON.parse(l).argv).filter((a) => a.slice(0, 2).join(' ') === 'orchestration worker-list' && !a.includes('--cursor')).length;
 const paginas = Array.isArray(todas) ? todas[Math.min(n, todas.length) - 1] : todas;
 const i = process.argv.indexOf('--cursor');
 const r = paginas[i >= 0 ? process.argv[i + 1] : ''];

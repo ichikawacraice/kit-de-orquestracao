@@ -32,10 +32,20 @@ O resto chega a quem é: a fila sobe a versão, atualiza os plugins e gira o seu
 
 ## Ao assumir (e ao voltar de uma limpeza)
 1. Renomeie a sessão `🎛 orquestradora — <projeto>` (`set_session_title` com `"self"`), se ainda não estiver, e crie o marcador `~/.claude/orquestracao/ativas/<session_id>` ([a trava do ritual](referencia.md#trava-do-ritual)).
+   - **No Orca** o título não se troca: declare-se com `painel orquestradora assumir` ([no Orca](#no-orca)).
 2. Leia `~/.claude/orquestracao/<nome-do-repo>.md` (já girado; o arquivo morto do mês só por `grep -n`). Se não existir, crie com: PRs abertos · Decisões acumuladas · Números reservados · Adiados · Próximo release · Entregas arquivadas ([estado e sucessão](referencia.md#estado-e-sucessao)).
 2b. `tail -n 20 ~/.claude/orquestracao/batida/<projeto>.desfechos.log`: os lotes que a fila fechou sem você. Leve ao estado só o que segue valendo.
 3. `list_sessions` (com `limit`) e confira o que mudou desde o arquivo; leve a diferença ao painel. Não releia transcrições: o que não está no arquivo, pergunte à sessão.
 4. As perguntas que você abriu antes da limpeza continuam suas (protocolo, âncora `perguntas-proprias`): a lista chega no início da conversa; resposta pelo painel a elas não se repassa.
+
+<a id="no-orca"></a>
+## No Orca
+As regras são as mesmas; muda o instrumento ([tabela](../../pool/anfitriao-orca.md#tabela)). Nada depende do título da conversa, que o Orca não troca.
+- **Declarar-se:** `painel orquestradora assumir`, na pasta do projeto. Grava `ativas/<id do CLI>` com o repositório e o seu `orca_session_id`: as travas valem por ele, a batida não o apaga e, depois de limpar o contexto, o hook de início o reconhece pelo id do Orca e o recria.
+- **Abrir a dona:** `orca orchestration worker-start --agent claude --model claude-sonnet-5-5 --effort medium --worktree new-child --display-name "F123 · tema do item" --spec-file /tmp/spec-F123.md`. O teto de 4 donas se conta pela `orca orchestration worker-list --json`.
+- **A entrega da dona:** o `PR N pronto, HEAD <sha>` chega no corpo do `worker_done`; rode a fila no mesmo turno, em segundo plano (`painel fila-de-merge <N>:<sha>`).
+- **Devolver à dona** (conflito real ou gate vermelho): `orca orchestration worker-start --terminal term_ab12 --worktree path:/caminho/da/worktree --spec "Gate vermelho: conserte e avise"`. A devolução curta pode ir por `orca orchestration send --from $EU --to dispatch:ctx_6eb257172494 --subject "devolvido" --body "Gate vermelho: conserte e avise"` (medido em 06/11/2026: cria um despacho de follow-up, com id novo, no mesmo terminal e acorda o worker; o despacho antigo segue `succeeded` enquanto ele trabalha).
+- **Arquivar a dona:** `painel orquestradora arquivar ctx_6eb257172494 [--item F123] [--remover-worktree] [--seco]`. Ele confere as condições de "Arquivar sessão que terminou" lidas no Orca (PR mergeado com o HEAD da worktree, ou nenhum PR e nenhum commit fora da base; nenhuma pergunta aberta do item (a decisão assumida não segura), a que traz o item, a de quem trabalhou nele e a que o título nomeia; worktree ligada, limpa e empurrada, nunca o checkout principal; todo despacho do mesmo terminal ou da mesma pasta em estado final) e só então chama `orca orchestration worker-release --dispatch ctx_6eb257172494` e `orca worktree set --worktree path:/caminho/da/worktree --workspace-status completed`; com `--remover-worktree`, também `orca worktree rm --worktree path:/caminho/da/worktree`, nunca com `--force`. Faltando algo, não chama nada e diz o que faltou.
 
 <a id="ritual-de-cada-turno"></a>
 ## Ritual de cada turno (antes de responder)
@@ -79,6 +89,8 @@ Todo turno (do operador, de notificação, de mensagem de sessão) começa por e
 - o worktree dela está limpo: `git status --porcelain` vazio e nenhum commit sem push — arquivar apaga o worktree;
 - ela não está fixada nem aberta na tela;
 - ela está parada (`isRunning` falso).
+
+No Orca as condições se leem no Orca e o arquivar é um comando só: `painel orquestradora arquivar` ([no Orca](#no-orca)).
 
 **Frente nova vira sessão — a orquestradora não executa.** Trabalho que vira frente (feature, estudo, SPEC, correção com PR de produto) vira item com a sua dona, nem por subagente seu. Ela faz só o trabalho da orquestração: conferir e mergear PR, gate na base combinada, notas e release, medir produção só lendo, ligar ou desligar o que o operador autorizou, arquivar. Pedido misto se divide: a medição curta ela faz; o conserto vira item. Na dúvida, item com dona: o subagente da orquestradora gasta o contexto dela. A trava `orquestradora-nao-edita.mjs` PERGUNTA (não recusa) antes de cada edição dela ([por dentro](referencia.md#trava-da-edicao)); a resposta quase sempre é *sessão nova*.
 
