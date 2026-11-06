@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { BASE, registroDaSessao, gitCommonDir, projetoDaSessao } from './pool-comum.mjs';
 import { avisoSemGate, comandoDeRelance, lerFilaOrfa } from '../skills/orquestradora/scripts/fila-orfa.mjs';
 import { girarArquivo } from '../skills/orquestradora/scripts/estado-girar.mjs';
+import { cliParado } from './orca-sessoes.mjs';
 
 const ID_SEGURO = /^[\w-]+$/; // o session_id vira nome de arquivo em ativas/
 
@@ -66,7 +67,7 @@ function giroDoEstado(reg) {
 }
 
 // → { texto, marcador, apagados } quando a sessão é a orquestradora; null quando não é ou não dá para saber.
-export function orquestradoraDeVolta({ sessionId, localId, cwd }) {
+export function orquestradoraDeVolta({ sessionId, localId, cwd, source }) {
   if (!localId || !sessionId || !ID_SEGURO.test(sessionId)) return null;
   const reg = registroDaSessao(localId, { fresco: true });
   if (!reg || reg.arquivada) return null;
@@ -81,8 +82,12 @@ export function orquestradoraDeVolta({ sessionId, localId, cwd }) {
   // Só as ids que o registro já marca como deixadas para trás. A id atual do registro fica: "o app ainda não gravou a id
   // nova da limpeza" e "um `claude` lançado do Bash da orquestradora" (herda o CLAUDE_CODE_HOST_SESSION_ID) chegam iguais
   // aqui, e no segundo apagar a atual derrubaria as travas da orquestradora viva. O que sobrar, a batida apaga.
+  // No Orca o próprio início regrava o registro: o `claude` filho vira o CLI atual e a orquestradora vira "anterior". Fora da
+  // limpeza e da compactação (que trocam o id de verdade), a id anterior só sai com o transcript parado há 30 min.
+  const trocouDeVerdade = !doOrca || source === 'clear' || source === 'compact';
   for (const id of reg.cliIds ?? []) {
     if (id === sessionId || id === reg.cliAtual || !ID_SEGURO.test(id) || !existsSync(join(ativas, id))) continue;
+    if (!trocouDeVerdade && cliParado(id) !== true) continue;
     rmSync(join(ativas, id), { force: true });
     apagados.push(id);
   }

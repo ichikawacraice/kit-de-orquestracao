@@ -4,7 +4,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -162,12 +162,12 @@ test('orquestradora que volta: o arquivo de estado do projeto gira e o aviso diz
 
 // F447: no Orca o título não se troca; a orquestradora se declara por `painel orquestradora assumir`, que grava o id do Orca
 // na 2ª linha do marcador. Depois de limpar o contexto (id do CLI novo, o mesmo id do Orca), ela volta pelo marcador.
-function inicioNoOrca(sessionId, orcaCru = 'orq-do-orca') {
+function inicioNoOrca(sessionId, orcaCru = 'orq-do-orca', { source = 'clear' } = {}) {
   const r = spawnSync('node', [join(HOOKS, 'sessao-inicio.mjs')], {
-    input: JSON.stringify({ session_id: sessionId, hook_event_name: 'SessionStart', source: 'clear', cwd: repo }),
+    input: JSON.stringify({ session_id: sessionId, hook_event_name: 'SessionStart', source, cwd: repo }),
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL',
     env: { ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), POOL_APP_SESSOES_DIR: join(base, 'app'), PAINEL_DIR: join(base, 'painel'),
-      CLAUDE_CODE_HOST_SESSION_ID: '', KIT_ANFITRIAO: 'orca', ORCA_AGENT_SESSION_ID: orcaCru, ORCA_TERMINAL_HANDLE: '' },
+      CLAUDE_CODE_HOST_SESSION_ID: '', KIT_ANFITRIAO: 'orca', ORCA_AGENT_SESSION_ID: orcaCru, ORCA_TERMINAL_HANDLE: '', CLAUDE_CONFIG_DIR: join(base, 'cfg') },
   });
   assert.equal(r.status, 0, r.stderr);
   return r.stdout ? JSON.parse(r.stdout).hookSpecificOutput.additionalContext : '';
@@ -193,4 +193,31 @@ test('(F447) marcador de outra sessão do Orca não faz desta a orquestradora', 
   assert.ok(!t.includes(ORDEM), 'não recebe a ordem');
   assert.ok(!existsSync(marcador('cli-novo')), 'nenhum marcador novo');
   assert.ok(existsSync(marcador('cli-outra')), 'o marcador da outra fica');
+});
+
+// O transcript do id do CLI em CLAUDE_CONFIG_DIR/projects/<pasta>/<id>.jsonl, escrito há `minutos`.
+function transcript(cli, minutos) {
+  const d = join(base, 'cfg', 'projects', '-repos-kit'); mkdirSync(d, { recursive: true });
+  const f = join(d, `${cli}.jsonl`); writeFileSync(f, '{}\n');
+  const t = new Date(Date.now() - minutos * 60_000); utimesSync(f, t, t);
+}
+
+test('(F447) `claude` lançado do Bash da orquestradora do Orca (startup, ela escrevendo agora): o marcador dela fica', () => {
+  registroDoOrcaVelho('orq-do-orca', 'cli-orq');
+  writeFileSync(marcador('cli-orq'), `${join(repo, '.git')}\norca_session_id:orq-do-orca\n`);
+  transcript('cli-orq', 1);
+  const t = inicioNoOrca('cli-filho', 'orq-do-orca', { source: 'startup' });
+  assert.ok(t.includes(ORDEM), 'precondição: o filho herda o id do Orca e é reconhecido');
+  assert.ok(existsSync(marcador('cli-orq')), 'o marcador da orquestradora viva fica');
+});
+test('(F447) a orquestradora do Orca que volta por startup: o marcador da id parada há mais de 30 min sai; sem transcript, fica', () => {
+  registroDoOrcaVelho('orq-do-orca', 'cli-velho');
+  writeFileSync(marcador('cli-velho'), `${join(repo, '.git')}\norca_session_id:orq-do-orca\n`);
+  transcript('cli-velho', 120);
+  inicioNoOrca('cli-novo', 'orq-do-orca', { source: 'startup' });
+  assert.ok(!existsSync(marcador('cli-velho')), 'a id parada saiu');
+  writeFileSync(marcador('cli-sem'), `${join(repo, '.git')}\norca_session_id:orq-do-orca\n`);
+  registroDoOrcaVelho('orq-do-orca', 'cli-sem');
+  inicioNoOrca('cli-outro', 'orq-do-orca', { source: 'startup' });
+  assert.ok(existsSync(marcador('cli-sem')), 'sem o transcript não dá para saber: fica para a batida');
 });

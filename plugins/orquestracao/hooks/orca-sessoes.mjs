@@ -5,7 +5,8 @@
 // `enderecoDoSend` é o `--to` do `orca orchestration send` (medido em 06/11: o `orca_session_id:<id>` entrega; o handle do
 // terminal, guardado em `terminal`, também). Quem apaga o arquivo da sessão que acabou é o limpador da fatia 4.
 // Não depende de `anfitriao()`: quem lê pergunta pelo id, e o teste que herda as envs do Orca não muda de caminho.
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { BASE } from './hooks-crewai-comum.mjs';
 import { ID_DO_ORCA } from './anfitriao.mjs';
@@ -91,4 +92,22 @@ export function registroDoOrca(id) {
   if (!d) return null;
   const cliIds = [...new Set([d.cliAtual, ...(Array.isArray(d.cliIds) ? d.cliIds : [])].filter((x) => typeof x === 'string' && x))];
   return { localId: d.orcaId, titulo: '', arquivada: false, cwd: d.cwd || null, originCwd: d.cwd || null, cliIds, cliAtual: d.cliAtual, anterior: id !== d.orcaId && id !== d.cliAtual };
+}
+
+/**
+ * F447: o transcript do id do CLI (`<CLAUDE_CONFIG_DIR ou ~/.claude>/projects/<pasta>/<id>.jsonl`) está parado há pelo menos
+ * `ms` → true; escreveu há menos → false; não foi achado → null. No Orca, o registro troca o CLI atual também quando um
+ * `claude` é lançado do Bash de uma sessão (ele herda o ORCA_AGENT_SESSION_ID): "id anterior" não prova que a sessão acabou.
+ */
+export const CLI_PARADO_MS = 30 * 60_000;
+export function cliParado(cliId, { ms = CLI_PARADO_MS, agora = Date.now(), env = process.env } = {}) {
+  const cli = texto(cliId);
+  if (!ID_CRU.test(cli)) return null;
+  const raiz = join(texto(env.CLAUDE_CONFIG_DIR) || join(homedir(), '.claude'), 'projects');
+  let pastas;
+  try { pastas = readdirSync(raiz); } catch { return null; }
+  for (const d of pastas) {
+    try { return agora - statSync(join(raiz, d, `${cli}.jsonl`)).mtimeMs >= ms; } catch { /* não está nesta pasta */ }
+  }
+  return null;
 }

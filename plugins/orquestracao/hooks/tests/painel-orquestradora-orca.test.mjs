@@ -6,7 +6,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +29,8 @@ const ativas = () => join(base, 'orq', 'ativas');
 const envBase = (extra = {}) => ({
   ...process.env, HOME: join(base, 'home'), HOOKS_CREWAI_BASE: join(base, 'orq'), PAINEL_DIR: join(base, 'painel'),
   POOL_APP_SESSOES_DIR: join(base, 'app'), CLAUDE_CODE_HOST_SESSION_ID: '', ORCA_TERMINAL_HANDLE: '', KIT_ORCA_BIN: 'off',
-  KIT_ANFITRIAO: 'orca', ORCA_AGENT_SESSION_ID: ORCA_CRU, CLAUDE_CODE_SESSION_ID: 'cli-orq', KIT_ESTADO_DEDUZIDO: 'off', ...extra,
+  KIT_ANFITRIAO: 'orca', ORCA_AGENT_SESSION_ID: ORCA_CRU, CLAUDE_CODE_SESSION_ID: 'cli-orq', KIT_ESTADO_DEDUZIDO: 'off',
+  CLAUDE_CONFIG_DIR: join(base, 'cfg'), ...extra,
 });
 function painel(args, { cwd = repo, env = {} } = {}) {
   const r = spawnSync('node', [PAINEL, ...args], { cwd, encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', env: envBase(env) });
@@ -106,11 +107,33 @@ test('(assumir-5) a batida não apaga o marcador da orquestradora do Orca regist
   mkdirSync(join(base, 'orq', 'orca-sessoes'), { recursive: true });
   writeFileSync(join(base, 'orq', 'orca-sessoes', `${ORCA_CRU}.json`), JSON.stringify({ orcaId: ORCA_ID, cliAtual: 'cli-orq', cliIds: ['cli-orq', 'cli-velho'], terminal: null, enderecoDoSend: ORCA_ID, cwd: repo, em: new Date().toISOString() }));
   writeFileSync(join(ativas(), 'cli-velho'), `${join(repo, '.git')}\n${ORCA_ID}\n`);
+  transcript('cli-velho', 120);
   const sessoes = join(base, 'sessoes.json'); writeFileSync(sessoes, '[]');
   const r = painel(['batida', '--sessoes', sessoes, '--seco'], { env: { CLAUDE_CODE_SESSION_ID: '' } });
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.json?.marcadoresApagados?.includes('cli-velho'), `prova: a batida apaga o marcador morto (${r.stdout.slice(0, 300)})`);
   assert.ok(!r.json.marcadoresApagados.includes('cli-orq'), 'o marcador da orquestradora viva fica');
+});
+
+// O transcript do id do CLI em CLAUDE_CONFIG_DIR/projects/<pasta>/<id>.jsonl, escrito há `minutos`.
+function transcript(cli, minutos) {
+  const d = join(base, 'cfg', 'projects', '-kit'); mkdirSync(d, { recursive: true });
+  const f = join(d, `${cli}.jsonl`); writeFileSync(f, '{}\n');
+  const t = new Date(Date.now() - minutos * 60_000); utimesSync(f, t, t);
+}
+test('(assumir-6) um `claude` lançado do Bash da orquestradora vira o CLI atual do registro: a batida não apaga o marcador dela enquanto ela escreve', () => {
+  painel(['orquestradora', 'assumir']);
+  mkdirSync(join(base, 'orq', 'orca-sessoes'), { recursive: true });
+  writeFileSync(join(base, 'orq', 'orca-sessoes', `${ORCA_CRU}.json`), JSON.stringify({ orcaId: ORCA_ID, cliAtual: 'cli-filho', cliIds: ['cli-filho', 'cli-orq'], terminal: null, enderecoDoSend: ORCA_ID, cwd: repo, em: new Date().toISOString() }));
+  transcript('cli-orq', 1);
+  const sessoes = join(base, 'sessoes.json'); writeFileSync(sessoes, '[]');
+  const viva = painel(['batida', '--sessoes', sessoes, '--seco'], { env: { CLAUDE_CODE_SESSION_ID: '' } });
+  assert.equal(viva.status, 0, viva.stderr);
+  assert.ok(Array.isArray(viva.json?.marcadoresApagados), viva.stdout.slice(0, 300));
+  assert.ok(!viva.json.marcadoresApagados.includes('cli-orq'), 'escrevendo agora: fica');
+  transcript('cli-orq', 120);
+  const parada = painel(['batida', '--sessoes', sessoes, '--seco'], { env: { CLAUDE_CODE_SESSION_ID: '' } });
+  assert.ok(parada.json?.marcadoresApagados?.includes('cli-orq'), 'prova: parada há 2 h, sai');
 });
 
 // ───────────────────────────── arquivar ─────────────────────────────
@@ -121,7 +144,9 @@ fs.appendFileSync(process.env.GH_LOG, JSON.stringify(process.argv.slice(2)) + '\
 if (process.env.GH_FALHA) { process.stderr.write('gh: sem rede'); process.exitCode = 1; return; }
 process.stdout.write(process.env.GH_PRS || '[]');
 `;
-function cenario({ prs = [{ number: 12, state: 'MERGED' }], workers, item = {} } = {}) {
+// o PR mergeado leva o HEAD da worktree: commit depois do merge é trabalho sem PR
+function cenario({ prs, workers, item = {} } = {}) {
+  prs ??= [{ number: 12, state: 'MERGED', headRefOid: git(pasta, 'rev-parse', 'HEAD') }];
   const gh = join(base, 'gh'); writeFileSync(gh, GH_FALSO); chmodSync(gh, 0o755);
   const w = worker(pasta, 'retained', { dispatchId: 'ctx_aaa111', state: 'succeeded', terminal: 'structworker_t1' });
   const orca = orcaFalso({ '': recibo(workers ?? [w]) });
@@ -150,16 +175,36 @@ test('(arquivar-2) --remover-worktree remove pela mesma via, nunca com --force',
   assert.deepEqual(ms.at(-1), ['worktree', 'rm', '--worktree', `path:${pasta}`, '--json']);
   assert.ok(ms.every((a) => !a.includes('--force')), 'nenhum --force');
 });
-test('(arquivar-3) trabalho sem PR conta como a condição do PR valendo', () => {
+test('(arquivar-3) trabalho sem PR e sem commit fora da main conta como a condição do PR valendo', () => {
+  git(pasta, 'reset', '-q', '--hard', 'origin/main');
   const c = cenario({ prs: [] });
-  assert.equal(arquivar(c).status, 0);
+  const r = arquivar(c);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.equal(c.mutantes().length, 2);
 });
 
 const FALTAS = [
   ['PR aberto', () => cenario({ prs: [{ number: 12, state: 'OPEN' }] }), /PR #12 (está )?aberto/],
   ['PR fechado sem merge', () => cenario({ prs: [{ number: 12, state: 'CLOSED' }] }), /PR #12 fechado sem merge/],
-  ['o gh não respondeu', () => { const c = cenario(); c.env.GH_FALHA = '1'; return c; }, /gh/],
+  ['o gh não respondeu', () => { const c = cenario(); c.env.GH_FALHA = '1'; return c; }, /o gh não respondeu/],
+  ['sem PR, com commit fora da main', () => cenario({ prs: [] }), /sem PR e com 1 commit\(s\) fora de origin\/main/],
+  ['commit depois do PR mergeado', () => cenario({ prs: [{ number: 12, state: 'MERGED', headRefOid: '0'.repeat(40) }] }), /commit depois do PR #12 mergeado/],
+  ['pergunta aberta da dona sem o campo item', () => {
+    const c = cenario({ item: { donoLocalId: 'orca_session_id:dona-f7' } });
+    writeFileSync(join(base, 'painel', 'perguntas', 'Q6.json'), JSON.stringify({ id: 'Q6', version: 1, data: { estado: 'aberta', sessaoId: 'orca_session_id:dona-f7', projeto: 'kit' } }));
+    return c;
+  }, /pergunta aberta do F7: Q6/],
+  ['pergunta aberta de quem esteve no item fechado (donaAoFechar)', () => {
+    const c = cenario({ item: { donaAoFechar: { donoLocalId: null, com: [{ localId: 'orca_session_id:dona-f7' }] } } });
+    writeFileSync(join(base, 'painel', 'perguntas', 'Q8.json'), JSON.stringify({ id: 'Q8', version: 1, data: { estado: 'aberta', sessaoId: 'orca_session_id:dona-f7', projeto: 'kit' } }));
+    return c;
+  }, /pergunta aberta do F7: Q8/],
+  ['pergunta aberta com o item só no título', () => {
+    const c = cenario();
+    writeFileSync(join(base, 'painel', 'perguntas', 'Q9.json'), JSON.stringify({ id: 'Q9', version: 1, data: { estado: 'aberta', sessaoId: 'orca_session_id:outra', titulo: 'F7 · qual caminho', projeto: 'kit' } }));
+    return c;
+  }, /pergunta aberta do F7: Q9/],
+  ['a pasta é o checkout principal', () => cenario({ workers: [worker(repo, 'retained', { dispatchId: 'ctx_aaa111', state: 'succeeded', terminal: 'structworker_t1' })] }), /checkout principal/],
   ['pergunta aberta do item', () => {
     const c = cenario();
     writeFileSync(join(base, 'painel', 'perguntas', 'Q5.json'), JSON.stringify({ id: 'Q5', version: 1, data: { item: 'F7', estado: 'aberta', sessaoId: ORCA_ID, projeto: 'kit' } }));
@@ -172,7 +217,7 @@ const FALTAS = [
     worker(pasta, 'retained', { dispatchId: 'ctx_aaa111', state: 'succeeded', terminal: 'structworker_t1' }),
     worker(pasta, 'retained', { dispatchId: 'ctx_bbb222', state: 'ready', terminal: 'structworker_t1' }),
   ] }), /ctx_bbb222/],
-  ['despacho fora da lista', () => cenario({ workers: [worker(pasta, 'retained', { dispatchId: 'ctx_outro', state: 'succeeded' })] }), /ctx_aaa111/],
+  ['despacho fora da lista', () => cenario({ workers: [worker(pasta, 'retained', { dispatchId: 'ctx_outro', state: 'succeeded' })] }), /não está no orca worker-list/],
   ['a lista do Orca falhou', () => { const c = cenario(); writeFileSync(join(c.orca.dir, 'paginas.json'), JSON.stringify({ '': { stdout: 'quebrado', exit: 2 } })); return c; }, /worker-list/],
 ];
 for (const [nome, montar, motivo] of FALTAS) {
