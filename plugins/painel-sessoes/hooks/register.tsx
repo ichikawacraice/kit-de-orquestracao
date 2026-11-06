@@ -2100,8 +2100,16 @@ async function registrarFalha($: EngineInterface, pasta: string, agora: number, 
   }
 }
 
+/** Mesmo critério do `hooks/anfitriao.mjs` do plugin orquestracao (ADR 0030): sem sinal do app desktop e com sinal do Orca. */
+async function ehOrca($: EngineInterface): Promise<boolean> {
+  if ((await $.env.get('CLAUDE_CODE_HOST_SESSION_ID'))?.trim()) return false
+  return Boolean((await $.env.get('ORCA_AGENT_SESSION_ID'))?.trim()) || (await $.env.get('ORCA_STRUCTURED_SESSION'))?.trim() === '1'
+}
+
 async function rodar($: EngineInterface): Promise<void> {
   if ((await $.env.get('BATIDA')) === 'off') return
+  // No Orca não há as ferramentas `mcp__ccd_session_mgmt__*` (ADR 0030): a batida não tem o que fazer e não escreve na conversa.
+  if (await ehOrca($)) return
   const home = await $.env.get('HOME')
   if (!home) return
   const minutos = inteiroPositivo(await $.env.get('BATIDA_MIN'), BATIDA_MIN_PADRAO)
