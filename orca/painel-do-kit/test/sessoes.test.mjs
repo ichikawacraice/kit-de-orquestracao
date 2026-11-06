@@ -388,3 +388,40 @@ test('terminal com vários despachos: só falhou quando todos falharam', () => {
   const todos = [{ terminal: 'structworker_x', state: 'failed' }, { terminal: 'structworker_x', state: 'failed' }];
   assert.equal(so(ler(p, { workers: todos })).tipoDeParada, 'falhou');
 });
+
+// F474: o PR entregue espera a fila; dona que acabou não faz o item parecer parado.
+test('F474: PR do item na fila vale antes de dona encerrada e de parado, mesmo com a etapa ainda em execução', () => {
+  const dona = { donaViva: false };
+  const parado = { donaViva: true, parado: true };
+  const itens = { F1: item({ donoLocalId: 'orca_session_id:abc' }), F2: item(), F3: item() };
+  const p = montar({
+    itens,
+    deduzido: { F1: ded({ ...dona, prsAbertos: [11] }), F2: ded({ ...parado, prsAbertos: [22] }), F3: ded({ ...dona, prsAbertos: [33] }) },
+    filas: { kit: { ocupada: { pid: 1, desde: '2026-11-06T14:58:00Z' }, emVoo: [{ pr: 33 }], pendentes: [{ pr: 11 }, { pr: 22 }] } },
+  });
+  const s = porItem(ler(p));
+  assert.ok(s.F1 && s.F2 && s.F3, 'os três itens existem');
+  assert.deepEqual([s.F1.estado, s.F1.prNaFila, s.F1.posicaoNaFila], ['na-fila', 11, 2], 'dona encerrada com PR pendente: na fila, com a posição');
+  assert.deepEqual([s.F2.estado, s.F2.prNaFila, s.F2.posicaoNaFila], ['na-fila', 22, 3], 'parado com PR pendente: na fila');
+  assert.deepEqual([s.F3.estado, s.F3.prNaFila], ['mergeando', 33], 'dona encerrada com o PR em voo: mergeando');
+  assert.equal(ler(p).paradas, 0, 'ninguém conta como parada');
+  // Contra-prova: sem o PR na fila, o mesmo item é parada (a regra mede a fila, não o item).
+  const sem = montar({ itens: { F1: item() }, deduzido: { F1: ded({ ...dona, prsAbertos: [11] }) } });
+  assert.deepEqual([so(ler(sem)).estado, so(ler(sem)).tipoDeParada], ['parada', 'sem-dona']);
+});
+
+test('F474: worker_done com sucesso e PR aberto fora da fila é "PR aberto", não "Sem sessão"; sem PR aberto continua parada', () => {
+  const orcaSessoes = { 'abc-1': { terminal: 'term-1' } };
+  const itens = { F1: item({ donoLocalId: 'orca_session_id:abc-1' }) };
+  const workers = [{ terminal: 'term-1', state: 'succeeded' }];
+  const com = montar({ itens, orcaSessoes, deduzido: { F1: ded({ donaViva: false, prsAbertos: [44] }) } });
+  const s = so(ler(com, { workers }));
+  assert.deepEqual([s.estado, s.foraDaFila, s.prNaFila], ['na-fila', true, 44]);
+  const sem = montar({ itens, orcaSessoes, deduzido: { F1: ded({ donaViva: false, prsAbertos: [] }) } });
+  assert.equal(so(ler(sem, { workers })).estado, 'parada', 'entregou sem PR aberto: não há o que esperar');
+  // Sem o sinal de sucesso (worker falhou ou não há worker), o PR aberto sozinho não livra a dona sumida.
+  assert.equal(so(ler(com)).estado, 'parada');
+  // Despacho de follow-up em andamento (a forma real: state ready, outcome in_progress): a dona segue, não entregou.
+  const seguindo = [...workers, { terminal: 'term-1', state: 'ready', outcome: 'in_progress' }];
+  assert.equal(so(ler(com, { workers: seguindo })).estado, 'parada');
+});

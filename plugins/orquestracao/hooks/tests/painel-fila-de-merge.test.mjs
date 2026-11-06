@@ -671,6 +671,28 @@ test('F221: com a fila ocupada, o PR anotado já liga o item e o põe em merge',
   } finally { limpar(c); }
 });
 
+test('F474: dona do Orca (sem linha no app) com a fila ocupada: o PR pendente liga o item pelo id da branch e o põe em merge', () => {
+  const c = montar();
+  try {
+    const r0 = c.painel('set', 'fila', 'F9', JSON.stringify({ titulo: 'item da dona do Orca', etapa: 'execucao', tema: 'editor', via: 'dona', donoLocalId: 'orca_session_id:abc-123', donoApelido: 'dona' }));
+    assert.equal(r0.exit, 0, r0.err + r0.out);
+    const arq = join(c.raiz, 'estado.json');
+    const est = JSON.parse(readFileSync(arq, 'utf8'));
+    est.prs[24].headRefName = 'fulano/f9-entrega';
+    writeFileSync(arq, JSON.stringify(est));
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: process.pid, desde: new Date().toISOString() }, pendentes: [] }));
+    const r = c.painel('fila-de-merge', '24');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.equal(s.pendente, true);
+    assert.deepEqual(s.ligados, [{ pr: 24, item: 'F9' }]);
+    const d = c.dado('F9');
+    assert.equal(d.etapa, 'merge');
+    assert.deepEqual(d.prs, [24]);
+  } finally { limpar(c); }
+});
+
 test('F221: a branch que aponta dois itens (a dona com outro item vivo) não liga nenhum', () => {
   const c = montar();
   try {

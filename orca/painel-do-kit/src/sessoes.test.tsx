@@ -131,7 +131,7 @@ teste('cada estado tem o seu selo, o seu tom e a sua frase; nenhum cartão tem b
     [sessao('F7', { estado: 'parada', tipoDeParada: 'falhou' }), 'Sessão falhou', 'danger', 'a sessão no Orca terminou com falha'],
     [sessao('F8', { estado: 'parada', tipoDeParada: 'sem-dona' }), 'Sem sessão', 'neutral', 'esperando a orquestradora abrir uma'],
     [sessao('F9', { estado: 'mergeando', prNaFila: 1716, desdeEm: iso(6 * MIN) }), 'Mergeando', 'accent', 'PR 1716 · gate rodando'],
-    [sessao('F10', { estado: 'na-fila', prNaFila: 173, posicaoNaFila: 2 }), 'Na fila', 'warning', 'PR 173 · 2º da fila'],
+    [sessao('F10', { estado: 'na-fila', prNaFila: 173, posicaoNaFila: 2 }), 'Aguarda merge', 'warning', 'PR 173 · 2º da fila'],
     [sessao('F11', { estado: 'na-fila', prNaFila: 174, foraDaFila: true }), 'PR aberto', 'warning', 'PR 174 · fora da fila de merge'],
     [sessao('F12', { estado: 'validando', agora: 'rodando o validador' }), 'Validando', 'accent', 'rodando o validador'],
     [sessao('F13', { subEtapa: 'planejamento', etapa: 'planejamento' }), 'Planejando', 'accent', null],

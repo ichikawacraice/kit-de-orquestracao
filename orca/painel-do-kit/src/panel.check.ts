@@ -116,6 +116,11 @@ export default defineCheck({
   vazio: { requests: { 'kit.ler': leitura() } },
   'entregas com a caixa fora': { requests: { 'kit.ler': leitura({ entregas: entregas.filter((e) => e.origem === 'painel'), erroDaCaixa: 'o Orca não respondeu à leitura da caixa' }) }, persisted: { plugin: { secao: 'entregas' } } },
   sessoes: { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) } },
+  'sessoes aguardando merge': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes({ projetos: [{ projeto: 'kit-de-orquestracao', filaIlegivel: false, sessoes: [
+    sessao('F473', 'Selo de estado igual em todas as sessões', { estado: 'na-fila', etapa: 'execucao', prNaFila: 192, posicaoNaFila: 2, desdeEm: iso(4 * MIN), prs: { abertos: [192], mergeados: [] }, etapas: esteira(3) }),
+    sessao('F471', 'Pasta de testes por projeto', { estado: 'mergeando', etapa: 'merge', prNaFila: 191, desdeEm: iso(7 * MIN), prs: { abertos: [191], mergeados: [] }, etapas: esteira(3) }),
+    sessao('F470', 'Resumo do dia', { estado: 'na-fila', etapa: 'execucao', prNaFila: 190, foraDaFila: true, desdeEm: iso(9 * MIN), prs: { abertos: [190], mergeados: [] }, etapas: esteira(3) }),
+  ] }], paradas: 0 }) }) } },
   'sessoes com versao nova do kit': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes(), atualizacao: [{ nome: 'orquestracao', instalada: '0.1.108', publicada: '0.1.109' }, { nome: 'painel-sessoes', instalada: '0.9.20', publicada: '0.9.21' }] }) } },
   'sessoes esperando item': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ projetos: [kitComEspera], paradas: 2 }) }) } },
   'sessoes (claro)': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) }, theme: 'light' },
