@@ -24,6 +24,7 @@ Lidos de `.claude/kit.json`:
 - Sem typecheck neste repo.
 - Validar manifestos: `claude plugin validate .` (e `claude plugin validate plugins/<nome> --strict`)
 - Testes do mod: `claude plugin test plugins/painel-sessoes` (o `node --test` da raiz não os pega: são `.tsx`).
+- Testes da aba do Orca: `orca plugin test orca/painel-do-kit` (painel e worker, `.ts`/`.tsx`; o núcleo `.mjs` dela entra no `npm test`).
 - **Testes afetados** (durante o trabalho, ADR 0011): `testes-afetados --padrao '^(?!design-system/)(?:.*/)?(?:[^/]*\.test\.(?:mjs|cjs|js)|test/.*\.(?:mjs|cjs|js))$' -- node gate/com-fichas.mjs -- node --test` (sem `--`, só lista). O `--padrao` deixa `design-system/` de fora, também quando a seleção cai em "todos" (ADR 0020).
 <!-- /kit:comandos -->
 
