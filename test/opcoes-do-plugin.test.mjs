@@ -11,6 +11,8 @@ import { OPCOES_DO_PROCESSOS, REGRAS_DE_DOCUMENTO, carregarConfig } from '../gat
 import { OPCOES_DO_DESIGN, lerConfig } from '../plugins/kit-design/hooks/guarda-de-design.mjs';
 import { booleanoDaOpcao, opcoesDoPlugin, pluginLigado } from '../gate/opcoes-do-plugin.mjs';
 import { booleanoDaOpcao as booleanoDoHook, pluginLigado as pluginLigadoDoHook, opcoesDoPlugin as opcoesDoHook } from '../plugins/kit-design/hooks/opcoes-do-plugin.mjs';
+// F438 (ADR 0030): a casa do teste é a temporária; o CLAUDE_CONFIG_DIR de quem roda (o perfil do Orca) não vale aqui, nem nos filhos.
+delete process.env.CLAUDE_CONFIG_DIR;
 
 const RAIZ_DO_KIT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const temporarios = [];

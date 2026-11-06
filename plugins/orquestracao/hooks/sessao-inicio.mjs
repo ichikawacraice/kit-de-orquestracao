@@ -43,8 +43,21 @@ try {
   regras = resumoParaOProjeto(regras, entrada.cwd);
 } catch { regras = regras.replace(/\s*<!--[\s\S]*?-->/g, ''); }
 
+// F438 (ADR 0030): a chave `anfitriao` do .claude/kit.json que contradiz os sinais vira uma linha, para o engano não passar
+// calado; o valor desconhecido vai ao log. Sem contradição, nada.
+let anfitriaoAviso = '';
 try {
-  const partes = [papel, regras && comAviso(regras), perguntas && comAviso(perguntas)].filter(Boolean);
+  const { anfitriao } = await import('./anfitriao.mjs');
+  const a = anfitriao({ env: process.env, cwd: entrada.cwd || process.cwd() });
+  if (a.contradicao) anfitriaoAviso = `**Anfitrião:** ${a.contradicao}`;
+  if (a.desconhecido) {
+    const { registrar } = await import('./hooks-crewai-comum.mjs');
+    registrar(entrada.session_id, 'sessao-inicio', 'anfitriao-desconhecido', a.desconhecido);
+  }
+} catch { /* sem o aviso */ }
+
+try {
+  const partes = [papel, anfitriaoAviso, regras && comAviso(regras), perguntas && comAviso(perguntas)].filter(Boolean);
   if (partes.length) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: partes.join('\n\n') } }));
 } catch { /* sessão segue */ }
 process.exitCode = 0;

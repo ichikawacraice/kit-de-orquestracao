@@ -1,4 +1,5 @@
 {
+  "anfitriao": "auto",
   "perfis": {
     "simples": {
       "descricao": "Projeto de um pacote só: o gate roda `npm run test:suite`.",

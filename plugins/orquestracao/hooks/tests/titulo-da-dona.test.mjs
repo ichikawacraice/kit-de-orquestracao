@@ -191,3 +191,39 @@ test('a lista de gatilhos do código é a mesma da tabela da skill papeis-e-mode
   assert.ok(naTabela.length > 0, 'a tabela de gatilhos está vazia');
   assert.deepEqual(naTabela, GATILHOS_DO_OPUS);
 });
+
+// F438 (ADR 0030): a decisão do modelo é a mesma no Orca, com o papel (dona ou worker) e a sintaxe de bandeira do `orca`.
+// Os casos acima ficam como estão: sem o terceiro argumento, o recusaDoModelo devolve o mesmo que antes.
+import { recusaDoModelo, MARCA_DE_DONA } from '../titulo-da-dona.mjs';
+
+test('F438: sem papel nem sintaxe, o recusaDoModelo é o do app (texto com `model:` e "sessão dona")', () => {
+  const m = recusaDoModelo('F1', { prompt: 'x' });
+  assert.ok(m);
+  assert.match(m, /sessão dona do F1/);
+  assert.match(m, /`model: "sonnet"`/);
+  assert.equal(recusaDoModelo('F1', SONNET), null);
+});
+
+test('F438: no papel worker o Haiku passa; na dona continua recusado; Opus sem gatilho recusa nos dois', () => {
+  const haiku = { model: 'haiku', effort: 'low', prompt: 'Leia o log.' };
+  assert.equal(recusaDoModelo(null, haiku, { papel: 'worker', sintaxe: 'orca' }), null);
+  assert.ok(recusaDoModelo('F1', haiku, { papel: 'dona', sintaxe: 'orca' }));
+  const opus = { model: 'opus', effort: 'high', prompt: 'Faça X.' };
+  assert.ok(recusaDoModelo(null, opus, { papel: 'worker', sintaxe: 'orca' }));
+  assert.ok(recusaDoModelo('F1', opus, { papel: 'dona', sintaxe: 'orca' }));
+  assert.equal(recusaDoModelo(null, { ...opus, prompt: 'Faça X.\nGatilho do Opus: estado' }, { papel: 'worker', sintaxe: 'orca' }), null);
+  assert.ok(recusaDoModelo(null, { model: 'gpt-5', effort: 'medium', prompt: '' }, { papel: 'worker', sintaxe: 'orca' }));
+});
+
+test('F438: na sintaxe do Orca a recusa fala em bandeiras (`--model sonnet --effort medium`), não em `model:`', () => {
+  const m = recusaDoModelo(null, { prompt: 'x' }, { papel: 'worker', sintaxe: 'orca' });
+  assert.ok(m);
+  assert.match(m, /--model sonnet --effort medium/);
+  assert.doesNotMatch(m, /`model: "sonnet"`/);
+  assert.doesNotMatch(m, /sessão dona/);
+});
+
+test('F438: a marca de dona é exportada e acha o item', () => {
+  assert.equal(MARCA_DE_DONA.exec('Você é a dona do F438 · Modo Orca')?.[1], 'F438');
+  assert.equal(MARCA_DE_DONA.exec('avise a dona do F150'), null);
+});

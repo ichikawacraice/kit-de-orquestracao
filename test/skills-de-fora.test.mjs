@@ -6,6 +6,8 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { conferirSkillsDeFora, pluginsPresentes } from '../cli/skills-de-fora.mjs';
+// F438 (ADR 0030): a casa do teste é a temporária; o CLAUDE_CONFIG_DIR de quem roda (o perfil do Orca) não vale aqui, nem nos filhos.
+delete process.env.CLAUDE_CONFIG_DIR;
 
 const catalogo = {
   plugins: [

@@ -14,7 +14,7 @@ const HOOK = 'titulo-da-dona';
 const TOOL = 'mcp__ccd_session__start_session';
 // A frase que diz quem a sessão É ("Você é a dona do F<n>", da skill orquestradora), não qualquer "dona do F<n>" citada no
 // contexto do prompt: "a dona do F174 abriu sem ID" ou "avise a dona do F150" não fazem desta sessão a dona de outro item.
-const MARCA_DE_DONA = /\b(?:você|voce)\s+é\s+a\s+dona\s+do\s+`?(F\d+)\b/i;
+export const MARCA_DE_DONA = /\b(?:você|voce)\s+é\s+a\s+dona\s+do\s+`?(F\d+)\b/i;
 // Um ID solto no começo do título (`F180 · `, `F181 - `, `F181: `) sai da sugestão: o certo entra no lugar dele.
 const ID_NO_COMECO = /^\s*F\d+\b\s*[·:\-–—]?\s*/i;
 
@@ -30,21 +30,31 @@ export function gatilhoDoOpus(prompt) {
   return m && GATILHOS_DO_OPUS.includes(m[1]) ? m[1] : null;
 }
 
-const PADRAO = 'Padrão: `model: "sonnet"`, `effort: "medium"`; Opus (`effort: "high"`) só com a linha `Gatilho do Opus: <gatilho>` no prompt, um de: '
-  + GATILHOS_DO_OPUS.join(', ') + ' (skill papeis-e-modelos).';
+const LISTA = GATILHOS_DO_OPUS.join(', ') + ' (skill papeis-e-modelos).';
+const PADRAO = 'Padrão: `model: "sonnet"`, `effort: "medium"`; Opus (`effort: "high"`) só com a linha `Gatilho do Opus: <gatilho>` no prompt, um de: ' + LISTA;
+// F438 (ADR 0030): no Orca o modelo vai em bandeira do `orca` (que o repassa ao `claude --model`, que aceita o apelido).
+const PADRAO_ORCA = 'Padrão: `--model sonnet --effort medium`; Opus (`--model opus --effort high`) só com a linha `Gatilho do Opus: <gatilho>` no texto do pedido, um de: ' + LISTA;
 
-/** A recusa pelo modelo, ou null quando passa. Só para prompt de dona. */
-export function recusaDoModelo(id, input) {
+/**
+ * A recusa pelo modelo, ou null quando passa. No app (padrão), só para prompt de dona.
+ * F438: `papel` 'worker' (quem não é dona, no Orca) aceita também o Haiku; `sintaxe` 'orca' fala em bandeiras do `orca`.
+ */
+export function recusaDoModelo(id, input, { papel = 'dona', sintaxe = 'app' } = {}) {
+  const orca = sintaxe === 'orca';
+  const padrao = orca ? PADRAO_ORCA : PADRAO;
+  const quem = papel === 'dona' ? (orca ? `worker dono do ${id}` : `sessão dona do ${id}`) : 'worker';
   if (input?.target === 'cloud') return null;
-  if (input?.context === 'fork') return `sessão dona do ${id} aberta por fork: o fork herda o modelo e a conversa inteira de quem abre. Abra com context "fresh" e \`model\`/\`effort\` explícitos. ${PADRAO}`;
+  if (input?.context === 'fork') return `${quem} aberta por fork: o fork herda o modelo e a conversa inteira de quem abre. Abra com context "fresh" e \`model\`/\`effort\` explícitos. ${padrao}`;
   const model = typeof input?.model === 'string' ? input.model.trim().toLowerCase() : '';
   const effort = typeof input?.effort === 'string' ? input.effort.trim() : '';
-  if (!model || !effort) return `sessão dona do ${id} sem ${!model ? '`model`' : ''}${!model && !effort ? ' nem ' : ''}${!effort ? '`effort`' : ''}: sem eles a dona herda o Opus de quem abre. ${PADRAO}`;
-  if (model.includes('haiku')) return `sessão dona do ${id} em Haiku: Haiku só lê, e a dona escreve. ${PADRAO}`;
+  const [m, e] = orca ? ['`--model`', '`--effort`'] : ['`model`', '`effort`'];
+  const herda = orca ? 'sem eles o worker nasce no modelo da configuração do Orca, e não no do risco do item' : 'sem eles a dona herda o Opus de quem abre';
+  if (!model || !effort) return `${quem} sem ${!model ? m : ''}${!model && !effort ? ' nem ' : ''}${!effort ? e : ''}: ${herda}. ${padrao}`;
+  if (model.includes('haiku')) return papel === 'dona' ? `${quem} em Haiku: Haiku só lê, e a dona escreve. ${padrao}` : null;
   if (model.includes('sonnet')) return null;
-  if (!model.includes('opus')) return `sessão dona do ${id} com modelo desconhecido ("${input.model}"). ${PADRAO}`;
+  if (!model.includes('opus')) return `${quem} com modelo desconhecido ("${input.model}"). ${padrao}`;
   if (gatilhoDoOpus(input?.prompt)) return null;
-  return `sessão dona do ${id} em Opus sem gatilho nomeado. ${PADRAO}`;
+  return `${quem} em Opus sem gatilho nomeado. ${padrao}`;
 }
 
 /** O que vai ao log quando a dona passa. */

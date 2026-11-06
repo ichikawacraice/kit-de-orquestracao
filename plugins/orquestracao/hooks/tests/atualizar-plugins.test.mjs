@@ -8,6 +8,8 @@ import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// F438 (ADR 0030): a casa do teste é a temporária; o CLAUDE_CONFIG_DIR de quem roda (o perfil do Orca) não vale aqui, nem nos filhos.
+delete process.env.CLAUDE_CONFIG_DIR;
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts', 'atualizar-plugins.mjs');
 const MP = 'ichikawa-kit';

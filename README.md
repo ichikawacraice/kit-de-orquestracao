@@ -116,6 +116,7 @@ Fica no git e vale para todos do projeto. Vence a opção da conta quando os doi
 | `plugins.desligar` | Plugins que não servem ao projeto, desligados só nele ([perfil de plugins](docs/guia/ligar-e-desligar.md#perfil-de-plugins)) |
 | `skillsDeFora` | Libera uma skill de outro plugin que o kit barra, ou declara a substituta |
 | `performance` | Práticas dispensadas e o orçamento de web vitals do `kit-performance` |
+| `anfitriao` | Qual app hospeda as sessões: `"auto"` (padrão: o kit reconhece o app desktop, o Orca e o terminal pelo ambiente) ou um valor fixo (`claude-desktop`, `orca`, `terminal`) para corrigir uma detecção errada |
 
 ### Ligar e desligar
 
