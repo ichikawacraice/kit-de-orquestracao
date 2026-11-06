@@ -581,13 +581,14 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
     const doModelo = lerModelo();
     desejado.documentos = structuredClone(doModelo.documentos ?? {});
     desejado.design = structuredClone(doModelo.design ?? {});
+    if (typeof doModelo.anfitriao === 'string') desejado.anfitriao = doModelo.anfitriao; // F438 (ADR 0030): "auto", os sinais decidem
     if (design) { desejado.design.pasta = design; desejado.design.fontes = ['PRODUCT.md', 'ANATOMIA.md', 'DESIGN.md'].map((f) => `${design}/${f}`); }
     const mescla = (alvo, fonte, caminho) => {
       for (const [chave, valor] of Object.entries(fonte)) {
         const cam = caminho ? `${caminho}.${chave}` : chave;
         if (!(chave in alvo)) { alvo[chave] = valor; ck.adicionadas.push({ caminho: cam, valor }); }
         else if (ehObjeto(alvo[chave]) && ehObjeto(valor)) mescla(alvo[chave], valor, cam);
-        else if (/^(documentos|design)\./.test(cam)) continue; // caminho de documento e de design: o do projeto vale, não é conflito
+        else if (/^(documentos|design)\./.test(cam) || cam === 'anfitriao') continue; // documento, design e anfitrião: o do projeto vale, não é conflito
         else if (!isDeepStrictEqual(alvo[chave], valor)) conflitos.push(`.claude/kit.json: ${cam} já é ${JSON.stringify(alvo[chave])} — não troquei`);
         else if (recuperando) ck.adicionadas.push({ caminho: cam, valor });
       }

@@ -39,7 +39,8 @@ describe('kit iniciar — perfil simples (o padrão), em pasta vazia', () => {
       assert.equal((claude.match(/<!-- kit:[a-z-]+ v\d+ -->/g) || []).length, 8);
       const kj = json(d, '.claude/kit.json');
       assert.deepEqual(kj.gate, { comandoCompleto: 'npm run test:suite' });
-      assert.deepEqual(Object.keys(kj).sort(), ['design', 'documentos', 'gate'], 'as seções documentos e design (K14) entram sem o conferir');
+      assert.deepEqual(Object.keys(kj).sort(), ['anfitriao', 'design', 'documentos', 'gate'], 'as seções documentos e design (K14) entram sem o conferir; o anfitrião (F438) nasce "auto"');
+      assert.equal(kj.anfitriao, 'auto');
       const gate = readdirSync(join(RAIZ, 'gate')).filter((f) => f.endsWith('.mjs')).sort();
       assert.ok(gate.length >= 7, 'insumo vazio: gate/ sem scripts');
       assert.deepEqual(readdirSync(join(d, 'scripts', 'kit')).sort(), gate, 'scripts/kit = cópia do gate/ (só os .mjs, sem test/)');

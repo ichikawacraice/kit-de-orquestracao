@@ -120,7 +120,8 @@ describe('kit adotar', () => {
       assert.equal(p.scripts['test:projeto'], undefined, 'sem --trocar-test não nasce test:projeto');
       const kj = json(d, '.claude', 'kit.json');
       assert.deepEqual(kj.gate, { comandoCompleto: JSON.parse(PACKAGE_PROPRIO).scripts.test });
-      assert.deepEqual(Object.keys(kj).sort(), ['design', 'documentos', 'gate']);
+      assert.deepEqual(Object.keys(kj).sort(), ['anfitriao', 'design', 'documentos', 'gate']);
+      assert.equal(kj.anfitriao, 'auto', 'F438: o projeto nasce com o anfitrião detectado pelos sinais');
       assert.match(r.stdout, /--trocar-test/, 'a saída não avisa do --trocar-test');
       assert.equal(ler(d, 'src', 'index.ts'), antes['src/index.ts']);
       const lock = json(d, '.claude', 'kit.lock.json');
@@ -128,6 +129,17 @@ describe('kit adotar', () => {
       assert.ok(Object.keys(lock.arquivos).some((f) => f.startsWith('scripts/kit/')));
       assert.equal(lock.arquivos['CLAUDE.md'], undefined, 'o CLAUDE.md é do projeto: não entra como arquivo do kit');
       assert.equal(lock.arquivos['package.json'], undefined);
+    } finally { limpar(d); }
+  });
+
+  it('F438: o anfitrião fixado pelo projeto fica, sem conflito', () => {
+    const d = rascunho();
+    try {
+      writeFileSync(join(d, '.claude', 'kit.json'), `${JSON.stringify({ anfitriao: 'orca' }, null, 2)}\n`);
+      const r = kit(d, ['adotar']);
+      assert.equal(r.status, 0, saida(r));
+      assert.equal(json(d, '.claude', 'kit.json').anfitriao, 'orca');
+      assert.doesNotMatch(saida(r), /anfitriao já é/);
     } finally { limpar(d); }
   });
 
