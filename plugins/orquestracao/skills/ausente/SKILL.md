@@ -1,6 +1,6 @@
 ---
 name: ausente
-description: Liga e desliga o modo ausente da orquestradora — /ausente on abre, no turno do operador, as sessões donas que faltam para os itens sem dona (até o teto); depois disso nenhuma sessão abre fora do turno do operador. /ausente off volta ao normal e entrega o resumo do período. Só pelo comando; nenhuma frase liga ou desliga.
+description: Liga e desliga o modo ausente da orquestradora — /ausente on abre, no turno do operador, as sessões donas que faltam para os itens sem dona; depois disso nenhuma sessão abre fora do turno do operador. /ausente off volta ao normal e entrega o resumo do período. Só pelo comando; nenhuma frase liga ou desliga.
 argument-hint: on | off
 disable-model-invocation: true
 ---
@@ -23,8 +23,8 @@ No Orca: `orca orchestration worker-start` no lugar de `start_session` e `worker
 ## Passos
 
 1. **O que existe e o que está vivo.** Rode `painel list fila --projeto <este>` e `list_sessions` (sem `linked`: a dona que se desligou com `detach_session` some da família): quais itens estão sem dona e quantas donas já trabalham, contadas pelos itens vivos com `donoLocalId` de sessão não arquivada.
-2. **Abra as donas que faltam, até o teto** (4 donas trabalhando, 3 com a máquina cheia; protocolo, âncora `teto-de-donas`): um `start_session` por item sem dona, com o título `F<n> · <tema>` e o modelo pela classificação do item (skill `papeis-e-modelos`). É a última chance: depois deste turno, item que nascer sem dona espera a volta do operador.
-3. **O resto fica na fila.** Não se propõe cartão para cada item além do teto, e **nada se arquiva** enquanto o modo ausente durar.
+2. **Abra as donas que faltam** (sem teto de donas; protocolo, âncora `teto-de-donas`): um `start_session` por item sem dona, com o título `F<n> · <tema>` e o modelo pela classificação do item (skill `papeis-e-modelos`). É a última chance: depois deste turno, item que nascer sem dona espera a volta do operador.
+3. **O resto fica na fila.** Se a sessão não puder abrir uma dona, ela não propõe cartão item a item, e **nada se arquiva** enquanto o modo ausente durar.
 4. **Registre:**
    - no painel, o dono de cada item aberto e a etapa da orquestradora (*"modo ausente: N donas abertas"*);
    - uma linha no `~/.claude/orquestracao/<projeto>.md`.

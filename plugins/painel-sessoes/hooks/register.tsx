@@ -759,7 +759,7 @@ export function orquestradoraDoProjeto(projeto: string, orqs: Array<{ id: string
 export function textoDoPedidoDeVaga(projeto: string, itens: Array<{ id: string; titulo: string }>, agora: number): string {
   const lista = itens.map(i => `${i.id} · ${i.titulo}`).join('; ')
 
-  return `Pedido do operador pelo painel (${hora(agora).slice(0, 5)}): abra a sessão dona de cada item sem dona em ${projeto} — ${lista}. Num turno do operador, abra a dona (start_session, modelo pelo risco do item, até o teto de donas); fora dele, proponha o cartão. Skill orquestradora, âncora vaga-pelo-painel.`
+  return `Pedido do operador pelo painel (${hora(agora).slice(0, 5)}): abra a sessão dona de cada item sem dona em ${projeto} — ${lista}. Num turno do operador, abra a dona (start_session, modelo pelo risco do item); fora dele, proponha o cartão. Skill orquestradora, âncora vaga-pelo-painel.`
 }
 
 /** O estado ainda vale no instante `agora`? `enviando` vale até acabar; o resto, até o prazo. */

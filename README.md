@@ -61,7 +61,7 @@ você ──pede──▶ orquestradora ──abre──▶ dona F12 ──PR─
 ```
 
 - **Você conversa com uma sessão só, a orquestradora.** Ela registra cada pedido como item (`F12`), abre uma **sessão dona** para ele e cuida do merge. Não edita código.
-- **A dona faz o item inteiro:** confere o pedido, planeja, escreve, roda os testes afetados, pede revisão a um subagente de contexto limpo e abre o PR. Até 4 donas ao mesmo tempo.
+- **A dona faz o item inteiro:** confere o pedido, planeja, escreve, roda os testes afetados, pede revisão a um subagente de contexto limpo e abre o PR. Sem teto de donas ao mesmo tempo: o limite é o dos testes.
 - **A fila de merge** junta os PRs prontos, roda os testes completos **uma vez** sobre a combinação e mergeia o que passou. Conflito ou vermelho volta para a dona.
 - **Tudo o que precisa de você chega com ID (`Q12`):** o caso, o que acontece se você não decidir e a recomendação. Responde no chat (`Q12 sim`) ou no botão do painel. Decisão de baixo risco a sessão assume e marca *assumida, a confirmar*.
 - **Travas (hooks)** seguram o que não pode depender de memória: subagente não edita, segredo não sai para outra sessão, só a orquestradora mergeia, teste não roda fora do teto de núcleos.
@@ -145,7 +145,7 @@ Põe em pé o modelo de uma sessão dona por item com uma orquestradora coordena
 - **Agentes:** `validador` (revisa o trabalho da dona com contexto limpo, só achados que afetam correção) e `explorador` (busca e leitura rápidas).
 - **Comandos no terminal das sessões:** `painel` (lê e grava o estado), `proximo-item` (`F13`), `proxima-pergunta` (`Q42`), `testes-afetados`, `esperar-fundo`, `subir-versao`, `atualizar-plugins` e `limpar-disco`.
 - **Travas (hooks):** a orquestradora não edita código, subagente não edita, segredo não sai, a dona grava o painel e o critério antes de terminar o turno, o contexto alto cobra limpeza, o validador roda no modelo certo, entre outras.
-- **Configura:** pela lista `~/.claude/orquestracao/subagente-pode-escrever.txt`, a `trava-edicao-repos.txt` e o `KIT_TETO_DE_DONAS` (padrão 4).
+- **Configura:** pela lista `~/.claude/orquestracao/subagente-pode-escrever.txt`, a `trava-edicao-repos.txt`. (`KIT_TETO_DE_DONAS` não vale mais; se estiver definida, é ignorada.)
 
 Regra completa: [`protocolo.md`](plugins/orquestracao/pool/protocolo.md), [`dona.md`](plugins/orquestracao/pool/dona.md) e a skill [`orquestradora`](plugins/orquestracao/skills/orquestradora/SKILL.md). Todas as travas: [ligar e desligar](docs/guia/ligar-e-desligar.md#plugin-orquestracao-as-travas).
 

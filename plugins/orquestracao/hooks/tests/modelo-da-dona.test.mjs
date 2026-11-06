@@ -1,20 +1,10 @@
-// ADR 0011: o teto de donas e a escolha dos testes afetados.
+// ADR 0011: a escolha dos testes afetados (o teto de donas saiu no ADR 0033).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { tetoDeDonas, donaTrabalhando } from '../sem-dona.mjs';
 import { afetados, citacoesDe } from '../../skills/orquestradora/scripts/testes-afetados.mjs';
-
-test('teto de donas: padrão 4, KIT_TETO_DE_DONAS troca; donaTrabalhando só conta item em etapa de trabalho com alguém', () => {
-  assert.equal(tetoDeDonas({}), 4);
-  assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: '3' }), 3);
-  assert.equal(tetoDeDonas({ KIT_TETO_DE_DONAS: '0' }), 4);
-  assert.equal(donaTrabalhando({ etapa: 'execucao', donoLocalId: 'local_x' }), true);
-  assert.equal(donaTrabalhando({ etapa: 'merge', donoLocalId: 'local_x' }), false, 'merge não conta');
-  assert.equal(donaTrabalhando({ etapa: 'planejamento', com: [] }), false, 'sem ninguém não conta');
-});
 
 test('testes afetados: o teste tocado, o que cita o arquivo, o que cita um dependente; o resto fica de fora', () => {
   const arquivos = ['src/a.mjs', 'src/b.mjs', 'src/c.mjs', 'doc/x.md', 't/a.test.mjs', 't/b.test.mjs', 't/c.test.mjs', 't/x.test.mjs', 't/novo.test.mjs'];
