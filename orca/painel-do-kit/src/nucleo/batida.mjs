@@ -1,6 +1,7 @@
 // A batida de leitura que o worker da aba roda no Orca (F460, ADR 0032). No Orca o mod `painel-sessoes` não roda, e sem
 // batida o `deduzido.json` envelhece e a seção Sessões avisa que o estado não se atualiza. O worker roda
-// `painel.mjs batida --leitura` quando o deduzido tem 10 min (o relógio confere a cada minuto): só deduz e grava o deduzido; não cutuca, não solta, não fecha nem lança fila.
+// `painel.mjs batida --leitura` quando o deduzido tem 10 min (o relógio confere a cada minuto): deduz e grava o deduzido e fecha o item cujo PR mergeou (F472, ADR 0034);
+// não cutuca, não solta nem lança fila.
 // Aqui fica o que é puro ou só lê arquivo: quando rodar, qual script e com que ambiente.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';

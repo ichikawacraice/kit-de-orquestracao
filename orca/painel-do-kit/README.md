@@ -15,11 +15,11 @@ A resposta vai só ao endereço gravado na pergunta (`endereco.orca`, que o pain
 Ler não aciona modelo: a aba lê os arquivos do painel (`~/.claude/orquestracao/`) e o CLI do Orca em modo leitura (`orchestration inbox` e `worker-list`, com cache de 60 s). Só responder, discordar e responder a uma entrega acordam uma sessão, e só a que precisa.
 
 **A batida de leitura.** No Orca, o mod do app desktop não roda, e a seção Sessões ficaria com o estado velho. Por isso o worker roda `painel.mjs batida --leitura` ao abrir e a cada 10 min: o relógio confere a cada minuto e roda quando `batida/deduzido.json` tem 10 min ou mais. O aviso de estado velho só aparece depois de 15 min, uma batida perdida.
-- O que ela faz: deduz o estado dos itens pelo git, pelo `gh` e pela lista de workers do Orca, e grava o `deduzido.json`.
-- O que ela não faz: não cutuca, não solta, não fecha nem lança fila; isso segue com a batida do app desktop e com a orquestradora.
+- O que ela faz: deduz o estado dos itens pelo git, pelo `gh` e pela lista de workers do Orca, grava o `deduzido.json` e fecha o item cujos PRs ligados mergearam, pela mesma regra da batida do app desktop. O item da dona do app desktop (`local_`) fica para aquela batida: sem a lista do app, a branch dela não se vê.
+- O que ela não faz: não cutuca, não solta nem lança fila; isso segue com a batida do app desktop e com a orquestradora.
 - O `painel.mjs` é o do plugin `orquestracao` instalado no escopo do usuário.
 - `PAINEL_DO_KIT_BATIDA=off` desliga.
-- Decisão: `docs/adr/0032-no-orca-a-aba-do-kit-roda-a-batida-de-leitura.md`.
+- Decisão: `docs/adr/0032-no-orca-a-aba-do-kit-roda-a-batida-de-leitura.md`; o fechamento, `docs/adr/0034-a-batida-de-leitura-fecha-o-item-mergeado.md`.
 
 ## Instalar (pasta de desenvolvimento)
 

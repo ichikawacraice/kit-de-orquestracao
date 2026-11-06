@@ -1,8 +1,8 @@
 // Worker da aba do kit no Orca (F436). Lê o painel do kit e a caixa do Orca, grava as respostas do operador e entrega
 // o que precisa acordar uma sessão. Ler nunca aciona modelo: só arquivos e o CLI do Orca em modo leitura (`inbox`,
 // `worker-list`). Só "responder", "discordar" e o seguimento de uma entrega abrem um terminal que envia uma mensagem.
-// F460 (ADR 0032): a cada 10 min o worker roda a batida de leitura (`painel.mjs batida --leitura`), que só deduz o estado
-// dos itens e grava `batida/deduzido.json`; não acorda nem solta ninguém.
+// F460 (ADR 0032): a cada 10 min o worker roda a batida de leitura (`painel.mjs batida --leitura`), que deduz o estado
+// dos itens, grava `batida/deduzido.json` e fecha o item mergeado (F472, ADR 0034); não acorda nem solta ninguém.
 import type { OrcaWorkerApi } from 'orca/worker'
 import { execFile } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'

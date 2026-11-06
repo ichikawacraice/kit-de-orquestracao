@@ -771,7 +771,8 @@ test('batida: dona do Orca sem a lista (sem orca, ou orca falhando) → fora da 
 });
 
 // F460: no Orca, o worker da aba roda `batida --leitura`, sem a lista do app. Ela só coleta o estado deduzido e grava
-// `batida/deduzido.json` (com `fonte: 'leitura'`); não julga, não cutuca, não solta, não fecha, não lança fila e não apaga nada.
+// `batida/deduzido.json` (com `fonte: 'leitura'`); não cutuca, não solta, não lança fila e não apaga nada. F472: fecha o item
+// cujos PRs ligados mergearam, como a batida completa, salvo o da dona `local_`.
 // O repositório de cada projeto sai da pasta dos workers do Orca; a dona `local_` (do app desktop) fica fora da vista.
 const leitura = (agoraMs = T, env = {}, extra = []) => painel(['batida', '--leitura', '--agora', iso(agoraMs), ...extra], { env });
 const arquivoDeduzido = () => join(pastaOrq(), 'batida', 'deduzido.json');
@@ -806,12 +807,14 @@ test('batida --leitura: item vencido de dona local_ fora da lista não sai solto
   assert.deepEqual(c.json().soltos, ['F1'], c.out);
 });
 
-test('batida --leitura: o repositório sai da pasta do worker do Orca; o PR mergeado é deduzido mas o item não fecha', () => {
-  item('F1', { etapa: 'merge', prs: [7] });
+test('batida --leitura: o repositório sai da pasta do worker do Orca; o item cujo PR mergeou fecha (F472)', () => {
+  item('F1', { etapa: 'merge', prs: [7], ...semGente });
   prsNoGh([{ number: 7, state: 'MERGED', headRefName: 'f1-x', mergedAt: iso(T - 5 * MIN), createdAt: iso(T - 30 * MIN), updatedAt: iso(T - 5 * MIN) }]);
   const sem = leitura();
   assert.equal(sem.exit, 0, sem.err);
   assert.equal(JSON.parse(readFileSync(arquivoDeduzido(), 'utf8')).itens.F1.fontes.prs, 'item', 'sem o Orca não há repositório: vale o declarado');
+  assert.equal(sem.json().fechados, undefined, 'sem o gh, o PR não lido segura o fechamento');
+  assert.equal(lerItem('F1').data.etapa, 'merge');
   rmSync(arquivoDeduzido());
   const o = orcaFalso({ '': recibo([worker(repo, 'retained')]) });
   const r = leitura(T, o.env);
@@ -819,8 +822,67 @@ test('batida --leitura: o repositório sai da pasta do worker do Orca; o PR merg
   const dd = JSON.parse(readFileSync(arquivoDeduzido(), 'utf8')).itens.F1;
   assert.equal(dd.fontes.prs, 'gh', JSON.stringify(dd));
   assert.equal(dd.mergeado, true);
-  assert.equal(r.json().fechados, undefined, 'a leitura não fecha pelo merge');
+  assert.deepEqual(r.json().fechados, ['F1'], r.out);
+  const d = lerItem('F1').data;
+  assert.equal(d.etapa, 'feito');
+  assert.match(d.agora, /PR 7/);
+  assert.equal(r.json().mensagens, undefined, 'fechar não manda mensagem');
+  assert.equal(existsSync(join(pastaOrq(), 'batida', 'estado.json')), false, 'fechar não grava a memória das cutucadas');
+  // idempotente: a leitura seguinte não regrava o item fechado
+  const v = lerItem('F1').version;
+  const b = leitura(T + 11 * MIN, o.env);
+  assert.equal(b.json().gravado, true, b.out);
+  assert.equal(b.json().fechados, undefined);
+  assert.equal(lerItem('F1').version, v);
+});
+
+// F472: a leitura fecha pelo mesmo julgamento e pela mesma gravação da batida completa. Os mesmos itens nas duas: fecham os
+// mesmos, com os mesmos dados; o PR aberto, a fatia (`maisFatias`) e o PR que o gh não leu não fecham em nenhuma.
+function cenarioDeParidade() {
+  rmSync(join(pastaOrq(), 'batida'), { recursive: true, force: true });
+  const pr = (number, state, extra = {}) => ({ number, state, headRefName: `b${number}`, createdAt: iso(T - 30 * MIN), updatedAt: iso(T - 5 * MIN), mergedAt: state === 'MERGED' ? iso(T - 5 * MIN) : null, ...extra });
+  item('F1', { etapa: 'merge', prs: [7], ...semGente });
+  item('F2', { etapa: 'merge', prs: [8], maisFatias: true, ...semGente });
+  item('F3', { etapa: 'merge', prs: [9, 10], ...semGente });
+  item('F4', { etapa: 'merge', prs: [11], ...semGente });
+  // o F455 de outro projeto: a fila fechou, um update repetido o reabriu direto em merge sem PR novo
+  donaDoOrca('F5');
+  const d5 = lerItem('F5');
+  d5.data = { ...d5.data, etapa: 'merge', prs: [12], historico: [{ em: iso(T - 40 * MIN), etapa: 'execucao', dono: 'dona' }, { em: iso(T - 20 * MIN), etapa: 'feito', dono: null }, { em: iso(T - 15 * MIN), etapa: 'merge', dono: 'dona' }] };
+  writeFileSync(arquivoDoItem('F5'), `${JSON.stringify(d5)}\n`);
+  prsNoGh([pr(7, 'MERGED'), pr(8, 'MERGED'), pr(9, 'MERGED'), pr(10, 'OPEN'), pr(12, 'MERGED', { mergedAt: iso(T - 21 * MIN) })]);
+}
+// a hora da gravação varia entre as duas rodadas (atualizadoEm, feitoEm, o `em` do histórico); o feitoEm só se confere existir
+const semVariar = (d) => { const { atualizadoEm, feitoEm, historico, ...resto } = d; return { ...resto, ...(d.etapa === 'feito' ? { feitoEm: typeof feitoEm === 'string' && feitoEm !== '' } : {}), historico: historico.map(({ em, ...h }) => h) }; };
+test('F472 paridade: a batida de leitura fecha os mesmos itens, com os mesmos dados, que a batida completa', () => {
+  const o = orcaFalso({ '': recibo([worker(repo, 'retained'), worker(join(base, 'wt-f444'), 'retained', { terminal: 'structworker_f444' })]) });
+  cenarioDeParidade();
+  const l = leitura(T, o.env);
+  assert.equal(l.exit, 0, l.err);
+  const fechadosNaLeitura = l.json().fechados;
+  const dadosNaLeitura = Object.fromEntries(['F1', 'F2', 'F3', 'F4', 'F5'].map((F) => [F, semVariar(lerItem(F).data)]));
+  cenarioDeParidade();
+  const c = painel(['batida', '--sessoes', sessoes(sessao(30, '🎛 orquestradora — kit')), '--agora', iso(T)], { env: o.env });
+  assert.equal(c.exit, 0, c.err);
+  assert.deepEqual(fechadosNaLeitura, ['F1', 'F5'], l.out);
+  assert.deepEqual(c.json().fechados, fechadosNaLeitura, c.out);
+  for (const F of ['F1', 'F2', 'F3', 'F4', 'F5']) assert.deepEqual(semVariar(lerItem(F).data), dadosNaLeitura[F], F);
+  assert.equal(dadosNaLeitura.F5.etapa, 'feito');
+  for (const F of ['F2', 'F3', 'F4']) assert.equal(dadosNaLeitura[F].etapa, 'merge', `${F} não pode fechar`);
+});
+
+test('F472: a leitura não fecha o item da dona local_ (sem a lista do app, a branch dela não se vê); a batida completa fecha', () => {
+  item('F1', { etapa: 'merge', prs: [7] });
+  prsNoGh([{ number: 7, state: 'MERGED', headRefName: 'f1-x', mergedAt: iso(T - 5 * MIN), createdAt: iso(T - 30 * MIN), updatedAt: iso(T - 5 * MIN) }]);
+  const o = orcaFalso({ '': recibo([worker(repo, 'retained')]) });
+  const r = leitura(T, o.env);
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(deduzidoDe('F1').mergeado, true, 'precondição: deduzido mergeado');
+  assert.equal(r.json().fechados, undefined, r.out);
   assert.equal(lerItem('F1').data.etapa, 'merge');
+  rmSync(arquivoDeduzido());
+  const c = batida(sessoes(sessao(1, 'F1 · Item')));
+  assert.deepEqual(c.json().fechados, ['F1'], 'o contraste: a batida completa, com a linha da dona, fecha');
 });
 
 test('batida --leitura: dona do Orca viva pela lista sai viva no deduzido', () => {

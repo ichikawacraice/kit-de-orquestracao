@@ -11,12 +11,18 @@ const inteiros = (l) => (Array.isArray(l) ? l.filter((n) => Number.isInteger(n) 
 // a branch que não é de item: o PR aberto dela não se liga a item nenhum
 const BRANCH_DE_BASE = /^(main|master|develop|HEAD)$/;
 
-// A última reabertura do item (a entrada do histórico que sai de `feito`/`descartado`), em ms, ou null.
+// A última reabertura do item (a entrada do histórico que sai de `feito`/`descartado`), em ms, ou null. F472: com
+// `semMergeParado`, não conta a reabertura direto em `merge` da qual o item não saiu desde então (o `painel update` repetido que
+// reabriu o item já fechado no merge, o caso F455 de outro projeto).
 const FINAIS = new Set(['feito', 'descartado']);
-export function reabertoEm(d) {
+export function reabertoEm(d, { semMergeParado = false } = {}) {
   const h = Array.isArray(d?.historico) ? d.historico : [];
   let em = null;
-  for (let i = 1; i < h.length; i++) if (FINAIS.has(h[i - 1]?.etapa) && !FINAIS.has(h[i]?.etapa)) em = ms(h[i]?.em) ?? em;
+  for (let i = 1; i < h.length; i++) {
+    if (!FINAIS.has(h[i - 1]?.etapa) || FINAIS.has(h[i]?.etapa)) continue;
+    if (semMergeParado && d?.etapa === 'merge' && h.slice(i).every((x) => x?.etapa === 'merge')) continue;
+    em = ms(h[i]?.em) ?? em;
+  }
   return em;
 }
 
@@ -24,16 +30,23 @@ export function reabertoEm(d) {
 // (a `branch` do item, ou a do worktree dela). O PR da branch só conta se foi criado depois do item nascer: o worktree
 // reaproveitado não herda o PR do item anterior. O PR mergeado antes do item nascer não conta (o número de `prs` que é de outro
 // repositório e colide com um PR antigo deste), nem o mergeado antes da última reabertura (o item reaberto não refecha pelo
-// merge que já o tinha fechado). `ambiguos`: os números que a branch liga a mais de um item vivo, ou a outro item (não ligam
+// merge que já o tinha fechado; F472: salvo a reabertura direto em `merge` sem PR ligado depois dela, que não conta). `ambiguos`: os números que a branch liga a mais de um item vivo, ou a outro item (não ligam
 // nenhum). F446: com o `id` (F303), liga também o PR ABERTO cujo primeiro id de item na branch é o dele (`feat/f303-x`, não
 // `f450-conserta-o-f303`): a dona que roda no checkout principal e abre o PR num worktree ao lado não tem a branch dele no git
 // da sessão. Só o aberto: o id segura o fechamento, nunca fecha o item. → [{number, state, mergedAt, updatedAt, headRefName, fonte}]
 export function prsDoItem(d, { prs = null, branchDaDona = null, ambiguos = null, id = null } = {}) {
-  const porNumero = new Map((prs ?? []).filter((p) => Number.isInteger(p?.number)).map((p) => [p.number, p]));
   const nasceu = ms(d?.historico?.[0]?.em);
-  const reaberto = reabertoEm(d);
   // mergeado antes do item nascer (o número que colide com um PR de outro repositório) ou antes da última reabertura: não é dele
-  const corte = Math.max(nasceu ?? -Infinity, reaberto ?? -Infinity);
+  const reaberto = reabertoEm(d);
+  const ligados = ligarPrs(d, { prs, branchDaDona, ambiguos, id, nasceu, corte: Math.max(nasceu ?? -Infinity, reaberto ?? -Infinity) });
+  if (ligados.length > 0 || reaberto === null) return ligados;
+  // F472: nada ligado depois da reabertura e ela foi direto a `merge`, de onde o item não saiu: o merge de antes vale
+  const semMerge = reabertoEm(d, { semMergeParado: true });
+  if (semMerge === reaberto) return ligados;
+  return ligarPrs(d, { prs, branchDaDona, ambiguos, id, nasceu, corte: Math.max(nasceu ?? -Infinity, semMerge ?? -Infinity) });
+}
+function ligarPrs(d, { prs, branchDaDona, ambiguos, id, nasceu, corte }) {
+  const porNumero = new Map((prs ?? []).filter((p) => Number.isInteger(p?.number)).map((p) => [p.number, p]));
   const jaFechou = (p) => ms(p?.mergedAt) !== null && ms(p.mergedAt) < corte;
   const ligados = new Map();
   for (const n of inteiros(d?.prs)) {
