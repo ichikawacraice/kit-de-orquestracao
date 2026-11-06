@@ -3,7 +3,7 @@
 # TODAS as sessões e projetos desta máquina. Trava por mkdir (atômico), com prazo.
 set -euo pipefail
 # F433: sem argumentos; qualquer um (inclusive --help) é recusado ANTES de gastar um ID.
-case "${1:-}" in
+case "${1-}${2+x}" in
   '') ;;
   --help|-h) echo "uso: proxima-pergunta (sem argumentos; devolve o próximo ID Q<n>)"; exit 0 ;;
   *) echo "argumento desconhecido: $1" >&2; echo "uso: proxima-pergunta (sem argumentos; devolve o próximo ID Q<n>)" >&2; exit 1 ;;

@@ -5,7 +5,7 @@
 # painel (painel/fila/F<n>.json) ou entre os itens antigos (pool/itens/F<n>.md).
 set -euo pipefail
 # F433: sem argumentos; qualquer um (inclusive --help) é recusado ANTES de pegar a trava e gastar um ID.
-case "${1:-}" in
+case "${1-}${2+x}" in
   '') ;;
   --help|-h) echo "uso: proximo-item (sem argumentos; devolve o próximo ID F<n>)"; exit 0 ;;
   *) echo "argumento desconhecido: $1" >&2; echo "uso: proximo-item (sem argumentos; devolve o próximo ID F<n>)" >&2; exit 1 ;;
