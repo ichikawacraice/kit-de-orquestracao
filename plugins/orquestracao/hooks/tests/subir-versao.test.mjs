@@ -199,6 +199,40 @@ test('--empurrar manda o commit da subida ao origin', () => {
   assert.equal(git(['log', '-1', '--format=%s'], bare), 'chore(versao): sobe os plugins do lote — a 0.1.6');
 });
 
+// F432: o commit de versão feito e não empurrado (rodada sem --empurrar, push que falhou) fica para trás: o --empurrar seguinte achava
+// "nada mudou" e devolvia subiu: [] sem empurrar. Empurra só o que é commit de versão; commit alheio ahead nunca vai junto.
+test('--empurrar manda ao origin o commit de versão já feito e ainda não empurrado', () => {
+  const bare = join(base, 'bare.git');
+  git(['init', '-q', '--bare', '-b', 'main', bare], base);
+  git(['remote', 'add', 'origin', bare]);
+  git(['push', '-q', 'origin', 'main']);
+  escrever('plugins/a/x.mjs', 'dois\n'); commitar('feat(a): muda');
+  git(['push', '-q', 'origin', 'main']);
+  assert.equal(subir().exit, 0, 'precondição: a subida local commita');
+  const local = git(['rev-parse', 'HEAD']);
+  assert.notEqual(git(['rev-parse', 'main'], bare), local, 'precondição: o commit de versão não foi empurrado');
+  const seco = subir(['--seco', '--empurrar']);
+  assert.equal(seco.json.empurrou, undefined, '--seco nunca empurra');
+  assert.notEqual(git(['rev-parse', 'main'], bare), local, '--seco não mexeu no origin');
+  const r = subir(['--empurrar']);
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.equal(r.json.empurrou, true, JSON.stringify(r.json));
+  assert.equal(r.json.commit, local);
+  assert.equal(git(['rev-parse', 'main'], bare), local);
+});
+
+test('--empurrar não empurra commit alheio que está à frente do origin', () => {
+  const bare = join(base, 'bare.git');
+  git(['init', '-q', '--bare', '-b', 'main', bare], base);
+  git(['remote', 'add', 'origin', bare]);
+  git(['push', '-q', 'origin', 'main']);
+  escrever('plugins/a/x.mjs', 'dois\n'); commitar('feat(a): muda sem push');
+  const antes = git(['rev-parse', 'main'], bare);
+  const r = subir(['--seco', '--empurrar']);
+  assert.equal(r.json.empurrou, undefined);
+  assert.equal(git(['rev-parse', 'main'], bare), antes);
+});
+
 // F373 (fatia 3): a fila sem turno sobe a versão num worktree temporário destacado em origin/<base> (a main do checkout principal
 // não pode ser posta em dois worktrees); `--destacado` aceita o HEAD destacado em dia com a base e empurra para ela.
 test('--destacado: HEAD destacado em dia com origin/main sobe e empurra; sem a flag, recusa; atrás da base, recusa', () => {
