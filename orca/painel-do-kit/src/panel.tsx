@@ -405,7 +405,6 @@ function BotaoDeDetalhes(props: { id: string; titulo: string }) {
   )
 }
 
-const bordaDaEntrega = (e: EstadoDaEntrega | undefined) => (e?.estado === 'entregue' ? 'success' : e?.estado === 'falhou' ? 'danger' : true)
 
 // ── Perguntas ────────────────────────────────────────────────────────────────────────────────────────────────────
 function CartaoDaPergunta(props: { q: Pergunta }) {
@@ -491,7 +490,7 @@ function Compacto(props: { q: Pergunta; texto?: string; nota?: string; entrega?:
   const aberto = Boolean(read(detalhes)[q.id])
   const perguntada = ms(q.atualizadoEm)
   return (
-    <Box key={`q-${q.id}`} background="card" border={bordaDaEntrega(e)} radius="lg" padding="md" gap="xs">
+    <Box key={`q-${q.id}`} background="card" border={true} radius="lg" padding="md" gap="xs">
       <Cabeca projeto={q.projeto} item={item} estado={e || props.incerto ? <SeloDaEntrega q={q} entrega={e} incerto={props.incerto} /> : null} />
       <Text size="sm" weight="semibold">{titulo}</Text>
       {props.texto ? <Text size="sm">{props.texto}</Text> : null}
@@ -584,7 +583,6 @@ function LinhaDaDecisao(props: { q: Pergunta }) {
           </Box>
         ) : null}
       </Box>,
-      confirmada ? 'success' : bordaDaEntrega(entrega),
     )
   }
   if (f?.tipo === 'confirmando') return caixa(<Spinner label={`Gravando: ${titulo}`} />)
@@ -852,24 +850,24 @@ const BATIDA_DECLARADA_MS = 25 * 60_000
 const SEM_ITEM_NO_TITULO = /^F\d+\s*·\s*/
 
 type Tom = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
-// O Badge só tem tom (5), então a distinção de relance vem de dois sinais: o tom pelo sentido (âmbar espera uma pessoa ou ninguém move,
-// vermelho quebrou ou travou, destaque anda, verde terminou, neutro espera a vez) e um ponto colorido no começo do texto. O par
-// tom + ponto é único por estado (o teste confere), e o texto sempre diz o estado: a cor nunca é a única pista.
-export const SELOS: Record<string, { texto: string; tom: Tom; ponto: string }> = {
-  esperando: { texto: 'Espera você', tom: 'warning', ponto: '🟡' },
-  travada: { texto: 'Travada', tom: 'danger', ponto: '🛑' },
-  'gate-vermelho': { texto: 'Gate vermelho', tom: 'danger', ponto: '🔴' },
-  'sem-movimento': { texto: 'Parada', tom: 'neutral', ponto: '⚫' },
-  falhou: { texto: 'Sessão falhou', tom: 'danger', ponto: '❌' },
-  'sem-dona': { texto: 'Sem sessão', tom: 'neutral', ponto: '🟤' },
-  mergeando: { texto: 'Mergeando', tom: 'accent', ponto: '🟦' },
-  'na-fila': { texto: 'Na fila', tom: 'neutral', ponto: '⚪' },
-  'pr-aberto': { texto: 'PR aberto', tom: 'neutral', ponto: '🟠' },
-  validando: { texto: 'Validando', tom: 'accent', ponto: '🔎' },
-  planejamento: { texto: 'Planejando', tom: 'accent', ponto: '🟣' },
-  design: { texto: 'No design', tom: 'accent', ponto: '🎨' },
-  execucao: { texto: 'Executando', tom: 'accent', ponto: '🔵' },
-  entregue: { texto: 'Entregue', tom: 'success', ponto: '🟢' },
+// O Badge só tem tom (5): o selo agrupa os estados por sentido, sem emoji e sem outro sinal de cor. Destaque anda (Executando, Planejando,
+// No design, Validando, Mergeando); âmbar espera algo ou alguém (Espera você, PR aberto, Na fila); verde terminou; vermelho quebrou
+// ou travou; neutro está parado sem causa. O texto sempre diz o estado: a cor nunca é a única pista.
+export const SELOS: Record<string, { texto: string; tom: Tom }> = {
+  esperando: { texto: 'Espera você', tom: 'warning' },
+  travada: { texto: 'Travada', tom: 'danger' },
+  'gate-vermelho': { texto: 'Gate vermelho', tom: 'danger' },
+  'sem-movimento': { texto: 'Parada', tom: 'neutral' },
+  falhou: { texto: 'Sessão falhou', tom: 'danger' },
+  'sem-dona': { texto: 'Sem sessão', tom: 'neutral' },
+  mergeando: { texto: 'Mergeando', tom: 'accent' },
+  'na-fila': { texto: 'Na fila', tom: 'warning' },
+  'pr-aberto': { texto: 'PR aberto', tom: 'warning' },
+  validando: { texto: 'Validando', tom: 'accent' },
+  planejamento: { texto: 'Planejando', tom: 'accent' },
+  design: { texto: 'No design', tom: 'accent' },
+  execucao: { texto: 'Executando', tom: 'accent' },
+  entregue: { texto: 'Entregue', tom: 'success' },
 }
 
 export function chaveDoSelo(s: Sessao): string {
@@ -908,7 +906,7 @@ const vivasDe = (g: GrupoDeSessoes) => g.sessoes.filter((s) => s.estado !== 'ent
 
 function SeloDoEstado(props: { s: Sessao }) {
   const selo = seloDe(props.s)
-  return <Badge tone={selo.tom}>{`${selo.ponto} ${selo.texto}`}</Badge>
+  return <Badge tone={selo.tom}>{selo.texto}</Badge>
 }
 
 function LinhaDoEstado(props: { s: Sessao }) {
@@ -1018,7 +1016,7 @@ function CartaoDaSessao(props: { s: Sessao }) {
   const s = props.s
   const aberto = Boolean(read(sessoesAbertas)[s.item])
   return (
-    <Box key={`s-${s.item}`} border={s.estado === 'esperando' ? 'warning' : true} radius="md" padding="sm" gap="xs">
+    <Box key={`s-${s.item}`} border={true} radius="md" padding="sm" gap="xs">
       <Row justify="between" align="center" gap="sm">
         <Box grow minWidth={0}><Text size="sm" weight="semibold" truncate={!aberto}>{s.nome}</Text></Box>
         <IconButton

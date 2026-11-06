@@ -384,7 +384,7 @@ test('F451: a decisão confirmada abre os detalhes no lugar e fecha de novo; o r
   })
   const v = await mount(painel, { host: w.host, persisted: { plugin: { secao: 'decisoes' } } })
   await v.press({ label: 'Confirmar: decidi Q1' })
-  assert.ok(caixas(v, 'success').length >= 1, 'a linha confirmada tem borda verde')
+  assert.equal(caixas(v, 'success').length, 0, 'F466: a linha confirmada diz o verde pelo texto, sem borda repetindo')
   assert.equal(v.find({ text: 'Decidiu: fiz Q1' }), null, 'fechada, não mostra os detalhes')
   await v.press({ label: 'Ver detalhes: decidi Q1' })
   assert.ok(v.find({ text: 'Decidiu: fiz Q1' }))
@@ -415,14 +415,14 @@ test('F451: confirmada pelo grupo diz "com o grupo"; o detalhe aberto sobrevive 
   await v.unmount()
 })
 
-test('F451: a pergunta respondida vira compacto verde, com o selo de estado na ponta, e abre o caso e a recomendação', async () => {
+test('F451: a pergunta respondida vira compacto, com o selo verde de estado na ponta, e abre o caso e a recomendação', async () => {
   const w = worker({
     'kit.ler': leitura({ abertas: [pergunta('Q1', { versao: 4 })] }),
     'kit.responder': { gravou: true, entrega: { estado: 'entregue', via: 'orca', destino: 'dispatch:ctx_1', em: iso(0) } },
   })
   const v = await mount(painel, { host: w.host })
   await v.press({ role: 'button', text: 'Aceitar a recomendação' })
-  assert.ok(caixas(v, 'success').length >= 1)
+  assert.equal(caixas(v, 'success').length, 0, 'F466: entregue tem uma pista verde só, o selo: a caixa não tem borda verde')
   assert.equal(v.findAll({ type: 'Badge' }).find((b: No) => b.text === 'Entregue a F435')?.props?.tone, 'success')
   assert.ok(v.find({ text: 'kit' }), 'o projeto continua à vista no compacto')
   assert.equal(v.find({ text: 'caso de Q1' }), null)
