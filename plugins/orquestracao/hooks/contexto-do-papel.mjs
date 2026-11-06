@@ -18,6 +18,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BASE, registrar, textoDe, modoAusente, lerEstadoDe, gravarEstadoDe } from './hooks-crewai-comum.mjs';
+import { anfitriao } from './anfitriao.mjs';
 import { registroDaSessao, ehOrquestradora, itensDonosDaSessao, inicioDoTurno, contextoDoTranscript } from './pool-comum.mjs';
 
 const HOOK = 'contexto-do-papel';
@@ -34,8 +35,18 @@ function papelDe(e, reg) {
   return null;
 }
 
+// F443 (ADR 0030, item 4): o anfitrião muda o que a cobrança manda fazer. No app, `clear_session "self"`; no Orca (que não tem
+// essa ferramenta), o handoff e o `worker_done` — a coordenadora abre outro worker na worktree do item; no terminal, o handoff e
+// o `/clear` pelo operador. `clear_session` só conta como limpeza no app.
+const hostDaSessao = () => { try { return anfitriao({ env: process.env, cwd: process.cwd() }).anfitriao; } catch { return 'claude-desktop'; } };
+const LIMPAR = {
+  'claude-desktop': 'chame clear_session "self"',
+  orca: 'grave o handoff (skill `handoff-de-sessao`) e termine o turno com `orca orchestration send --type worker_done --subject "troca de sessão" --outcome failed`, dizendo que é troca de sessão: a coordenadora abre outro worker na worktree do item',
+  terminal: 'grave o handoff (skill `handoff-de-sessao`) e peça ao operador o `/clear`',
+};
+
 // O que o turno que começou em `inicio` (ms) fez e disse: chamou `clear_session` "self"? e o último texto (a última entrada com texto).
-function doTurno(transcript, inicio, ultimaMensagem) {
+function doTurno(transcript, inicio, ultimaMensagem, host = 'claude-desktop') {
   const pedidos = new Set(); const recusados = new Set(); let texto = '';
   for (const l of readFileSync(transcript, 'utf8').split('\n')) {
     if (!l) continue;
@@ -50,7 +61,7 @@ function doTurno(transcript, inicio, ultimaMensagem) {
     const c = x.message?.content;
     if (!Array.isArray(c)) continue;
     for (const b of c) {
-      if (b?.type === 'tool_use' && String(b.name || '').endsWith('clear_session') && [undefined, null, 'self'].includes(b.input?.session_id)) pedidos.add(b.id);
+      if (host === 'claude-desktop' && b?.type === 'tool_use' && String(b.name || '').endsWith('clear_session') && [undefined, null, 'self'].includes(b.input?.session_id)) pedidos.add(b.id);
     }
   }
   if (typeof ultimaMensagem === 'string' && ultimaMensagem.trim()) texto = ultimaMensagem.trim();
@@ -69,7 +80,7 @@ function terminaEsperando(texto) {
 // 250 mil. O Stop não bloqueia (não há pergunta nem janela a cobrar); só registra, para o histórico.
 function orquestradora(e, sid, transcript, t, det) {
   if (t < PEDIR) return;
-  const { limpou } = doTurno(transcript, inicioDoTurno(transcript) ?? 0, e.last_assistant_message);
+  const { limpou } = doTurno(transcript, inicioDoTurno(transcript) ?? 0, e.last_assistant_message, hostDaSessao());
   registrar(sid, HOOK, limpou ? 'limpou' : 'contexto-alto', det);
 }
 
@@ -90,6 +101,9 @@ function main() {
   const reg = registroDaSessao(sid);
   const papel = papelDe(e, reg);
   if (!papel) return;
+  const host = hostDaSessao(); let limpar = LIMPAR[host] ?? LIMPAR['claude-desktop'];
+  // No Orca a orquestradora é a coordenadora: não há dispatch para o `worker_done`; ela grava o handoff e o operador troca a sessão.
+  if (host === 'orca' && papel === 'orquestradora-ausente') limpar = 'grave o handoff (skill `handoff-de-sessao`) e avise o operador no próximo contato que a sessão precisa ser trocada (a coordenadora do Orca não tem `worker_done`)';
   const t = ctx.tokens; const det = `${papel} ${mil(t)} mil`;
 
   if (papel === 'orquestradora') return orquestradora(e, sid, transcript, t, det);
@@ -102,17 +116,17 @@ function main() {
   // O que cobraria, nesta ordem de gravidade. `sigoVale`: a linha de escape não vale no teto.
   let cobranca = null;
   if (t >= TETO) {
-    cobranca = { nivel: 3, desfecho: 'cobrou-300', sigoVale: false, reason: `Contexto em ${mil(t)} mil. Não pegue trabalho novo. Escreva o estado (o próximo passo exato) e chame clear_session "self".` };
+    cobranca = { nivel: 3, desfecho: 'cobrou-300', sigoVale: false, reason: `Contexto em ${mil(t)} mil. Não pegue trabalho novo. Escreva o estado (o próximo passo exato) e ${limpar}.` };
   } else if (t >= ALTO) {
-    cobranca = { nivel: 2, desfecho: 'cobrou-200', sigoVale: true, reason: `Contexto em ${mil(t)} mil, acima de ${mil(ALTO)} mil. Se a unidade de trabalho acabou, escreva o estado e chame clear_session "self"; se não acabou, diga numa linha \`Contexto: sigo — <o que falta na unidade>\`.` };
+    cobranca = { nivel: 2, desfecho: 'cobrou-200', sigoVale: true, reason: `Contexto em ${mil(t)} mil, acima de ${mil(ALTO)} mil. Se a unidade de trabalho acabou, escreva o estado e ${limpar}; se não acabou, diga numa linha \`Contexto: sigo — <o que falta na unidade>\`.` };
   } else if (t >= ESPERA) {
-    cobranca = { nivel: 1, desfecho: 'cobrou-150-espera', sigoVale: true, esperando: true, reason: `Contexto em ${mil(t)} mil e o turno termina esperando resposta: limpe antes (retomar custa ~105 mil, reler ${mil(t)} mil a cada turno custa mais).` };
+    cobranca = { nivel: 1, desfecho: 'cobrou-150-espera', sigoVale: true, esperando: true, reason: `Contexto em ${mil(t)} mil e o turno termina esperando resposta: ${host === 'claude-desktop' ? 'limpe antes' : `troque de sessão antes (${limpar})`} (retomar custa ~105 mil, reler ${mil(t)} mil a cada turno custa mais).` };
   }
   if (!cobranca) return;
   if (papel === 'orquestradora-ausente') cobranca.reason += ` Vale porque o modo ausente está ligado${desdeDoModo()}; se o operador está aqui, quem desliga é ele (\`/ausente off\` ou o botão do painel), e aí a limpeza volta a ser dele.`;
 
   const inicio = inicioDoTurno(transcript) ?? 0;
-  const { limpou, texto } = doTurno(transcript, inicio, e.last_assistant_message);
+  const { limpou, texto } = doTurno(transcript, inicio, e.last_assistant_message, host);
   if (cobranca.esperando && !terminaEsperando(texto)) return; // não termina esperando o operador
   if (limpou) { registrar(sid, HOOK, 'limpou', det); return; }
   if (cobranca.nivel <= cobrado) { registrar(sid, HOOK, 'ja-avisado', `${cobranca.desfecho} ${det}`); return; }

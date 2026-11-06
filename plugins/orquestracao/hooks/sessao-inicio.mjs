@@ -57,7 +57,10 @@ try {
 // F347: sem as regras que o CLAUDE.md do projeto já traz (blocos `kit:`); sem o módulo, só tira os comentários de marcação.
 try {
   const { resumoParaOProjeto } = await import('./regras-do-inicio.mjs');
-  regras = resumoParaOProjeto(regras, entrada.cwd);
+  const { filtrarPorAnfitriao } = await import('./regras-do-inicio.mjs');
+  let host = 'claude-desktop';
+  try { host = (await import('./anfitriao.mjs')).anfitriao({ env: process.env, cwd: entrada.cwd || process.cwd() }).anfitriao; } catch { /* sem o módulo: variante do app */ }
+  regras = resumoParaOProjeto(filtrarPorAnfitriao(regras, host), entrada.cwd);
 } catch { regras = regras.replace(/\s*<!--[\s\S]*?-->/g, ''); }
 
 // F438 (ADR 0030): a chave `anfitriao` do .claude/kit.json que contradiz os sinais vira uma linha, para o engano não passar

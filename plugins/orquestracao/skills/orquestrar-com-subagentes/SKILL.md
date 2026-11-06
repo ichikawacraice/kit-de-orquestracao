@@ -10,6 +10,7 @@ O dono pediu duas garantias, e tudo aqui existe para elas:
 2. **A sessão principal só orquestra.** Executar é com os subagentes e as sessões irmãs; a principal planeja, escreve os briefings, revisa, consolida e devolve as respostas ao dono.
 
 **Quem escreve é sessão.** Subagente só lê, mede ou devolve achados; trabalho que grava arquivo, commita ou abre PR vai para uma sessão irmã (`start_session`, worktree próprio), que aparece na lista e no painel e pode ser conduzida. O porquê e os casos estão na seção *Quem escreve é sessão* da skill `papeis-e-modelos` (`${CLAUDE_PLUGIN_ROOT}/skills/papeis-e-modelos/SKILL.md#quem-escreve-e-sessao`). Esta skill continua valendo inteira para os dois: o registro de pedidos, o briefing e a revisão antes de "feito" cobrem o subagente e a sessão do mesmo jeito. Nenhum subagente grava por Bash para contornar a trava.
+No Orca a sessão irmã é `orca orchestration worker-start --worktree new-child` ([tabela](../../pool/anfitriao-orca.md)).
 
 O motivo: a conversa da sessão principal é o único lugar que enxerga o todo. Se ela gasta contexto lendo arquivos, rodando teste e escrevendo código, perde o fio dos pedidos, e um pedido do meio vira esquecido. Delegando, ela fica leve, e o trabalho anda em paralelo.
 
@@ -93,6 +94,7 @@ Fora isso, delegue. Sinal de alerta: a principal está lendo o quinto arquivo ou
 - Nunca abra o arquivo de saída/transcrição de um subagente; a notificação já traz a entrega.
 
 **Limpar cedo.** Sessão longa: ao passar de ~350 mil tokens de contexto (`get_usage`, se houver) e sem agente rodando, atualize o registro (seção 1) com o próximo passo exato, use a skill `handoff-de-sessao` se houver estado que o registro não guarda, e limpe o contexto (`clear_session` com `"self"`, ou `/clear`); a retomada segue a seção 7. Prefira limpar a `/compact`: o resumo da compactação fica na conversa e é relido a cada turno.
+No Orca o contexto se lê do transcript e a troca é handoff mais `worker_done` ([tabela](../../pool/anfitriao-orca.md)).
 
 ## 5. Revisão antes de "feito"
 
