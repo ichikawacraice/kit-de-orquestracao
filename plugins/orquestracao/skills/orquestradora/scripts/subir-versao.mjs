@@ -85,6 +85,15 @@ function main() {
     saida.commit = git(['rev-parse', 'HEAD']);
     if (empurrar) { git(['push', '-q', 'origin', `HEAD:${base}`]); saida.empurrou = true; }
   }
+  // F432: commit de versão já feito e não empurrado (rodada sem --empurrar, push que falhou): empurra, mas só se tudo o que está à frente
+  // do origin é `chore(versao)`; commit alheio nunca vai junto. O --seco nunca chega aqui.
+  if (!seco && empurrar && !subiu.length && tenta(['remote', 'get-url', 'origin'])) {
+    const frente = git(['log', '--format=%s', `origin/${base}..HEAD`]).split('\n').filter(Boolean);
+    if (frente.length && frente.every((l) => /^chore\(versao\)/.test(l))) {
+      git(['push', '-q', 'origin', `HEAD:${base}`]);
+      saida.commit = git(['rev-parse', 'HEAD']); saida.empurrou = true;
+    }
+  }
   process.stdout.write(`${JSON.stringify(saida)}\n`);
 }
 
