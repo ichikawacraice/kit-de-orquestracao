@@ -329,3 +329,36 @@ test('sem --por-dia (uso manual): sobe sempre, como antes', () => {
   const r = subir([], repo, { KIT_AGORA: '2026-11-05T22:00:00-03:00' });
   assert.equal(r.json.subiu.length, 1, r.out + r.err);
 });
+
+// F433: opção desconhecida nunca vira subida real (`subir-versao --help` gravou o commit de versão na main).
+test('F433: --help mostra o uso, sai 0 e não escreve nada', () => {
+  escrever('plugins/a/x.mjs', 'dois\n'); commitar('feat: muda a');
+  const antes = git(['rev-parse', 'HEAD']);
+  const r = subir(['--help']);
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.match(r.out, /uso: subir-versao/, r.out);
+  assert.equal(git(['rev-parse', 'HEAD']), antes, 'HEAD não pode mudar');
+  assert.equal(git(['status', '--porcelain']), '', 'árvore não pode mudar');
+  assert.match(readFileSync(join(repo, 'plugins/a/.claude-plugin/plugin.json'), 'utf8'), /"0\.1\.5"/);
+});
+
+test('F433: opção desconhecida sai com erro e o uso, sem subir nada', () => {
+  escrever('plugins/a/x.mjs', 'dois\n'); commitar('feat: muda a');
+  const antes = git(['rev-parse', 'HEAD']);
+  for (const arg of ['--ajuda', '--secoo', 'lixo']) {
+    const r = subir([arg]);
+    assert.equal(r.exit, 1, `${arg}: ${r.err + r.out}`);
+    assert.equal(r.json?.recusado, true, `${arg}: ${r.out}`);
+    assert.match(r.json.motivo, new RegExp(`opção desconhecida: ${arg}`), r.out);
+    assert.match(r.json.motivo, /uso: subir-versao/, r.out);
+    assert.equal(git(['rev-parse', 'HEAD']), antes, `${arg}: HEAD não pode mudar`);
+    assert.equal(git(['status', '--porcelain']), '', `${arg}: árvore não pode mudar`);
+  }
+});
+
+test('F433: o valor do --base não conta como opção desconhecida', () => {
+  escrever('plugins/a/x.mjs', 'dois\n'); commitar('feat: muda a');
+  const r = subir(['--base', 'main', '--seco']);
+  assert.equal(r.exit, 0, r.err + r.out);
+  assert.equal(r.json.subiu.length, 1, r.out);
+});

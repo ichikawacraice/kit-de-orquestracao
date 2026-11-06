@@ -4,6 +4,12 @@
 # O próximo é sempre DEPOIS do maior entre o contador (quando numérico) e o maior F<n> que já exista na coleção `fila` do
 # painel (painel/fila/F<n>.json) ou entre os itens antigos (pool/itens/F<n>.md).
 set -euo pipefail
+# F433: sem argumentos; qualquer um (inclusive --help) é recusado ANTES de pegar a trava e gastar um ID.
+case "${1:-}" in
+  '') ;;
+  --help|-h) echo "uso: proximo-item (sem argumentos; devolve o próximo ID F<n>)"; exit 0 ;;
+  *) echo "argumento desconhecido: $1" >&2; echo "uso: proximo-item (sem argumentos; devolve o próximo ID F<n>)" >&2; exit 1 ;;
+esac
 dir="$HOME/.claude/orquestracao"; cont="$dir/pool/contador-de-itens"; trava="$dir/pool/.trava-itens"
 mkdir -p "$dir/pool"
 # A trava nasce COMPLETA (como no painel.mjs): diretório temporário com o `dono` dentro, que entra por rename — no APFS o

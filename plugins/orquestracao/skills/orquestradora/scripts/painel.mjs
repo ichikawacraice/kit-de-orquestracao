@@ -1920,6 +1920,8 @@ function main(argv) {
     case 'set':
     case 'update':
     case 'delete':
+      // F433: argumento sobrando (opção que o painel não conhece) recusa antes de gravar ou apagar
+      if (resto.length > (cmd === 'delete' ? 2 : 3)) throw new Error(`argumento desconhecido: ${resto[cmd === 'delete' ? 2 : 3]} (uso: painel.mjs ${cmd} <colecao> <id>${cmd === 'delete' ? '' : ' <json>'} [--se-versao N] [--de-outra])`);
       saida = aplicarLote([[{ op: cmd, colecao: a, id: b, data: c, deOutra }, seVersao]])[0];
       break;
     case 'temas':
