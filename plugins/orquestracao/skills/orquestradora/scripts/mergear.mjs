@@ -1,6 +1,7 @@
 // `painel mergear <PR> <sha> [--seco]` (F150): a parte que fala com o GitHub e o git. A escrita no painel fica no painel.mjs
 // (só ele tem a trava). Executáveis: GH_BIN e GIT_BIN (env) trocam `gh` e `git`, para teste.
 import { execFileSync } from 'node:child_process';
+import { buscarPontaDoPr } from './fila-de-merge.mjs';
 
 export const SHA_VALIDADO = /^[0-9a-f]{7,40}$/i;
 const LIMITE_MS = Number(process.env.KIT_GH_TIMEOUT_MS) || 120_000;
@@ -40,6 +41,16 @@ export const deFork = (v) => v?.isCrossRepository === true;
 export const MOTIVO_DO_FORK = (pr) => `o PR ${pr} vem de um fork (outro repositório): a fila não roda o gate nem mergeia código de fora; quem é dono do repositório revisa e mergeia à mão`;
 export const estadoDoPr = (pr, cwd) => String(JSON.parse(gh(['pr', 'view', String(pr), '--json', 'state'], cwd))?.state ?? '');
 
+// F446: o release aberto é o PR aberto que leva a base do lote a outra branch (develop → main): mergear na base agora mudaria o
+// release em revisão. → { pr, base, head } ou null. O gh que não lê não segura a fila (null): a conferência se repete antes do
+// merge, e o release costuma ficar aberto por horas.
+export function releaseAberto(base, cwd) {
+  let lista;
+  try { lista = JSON.parse(gh(['pr', 'list', '--state', 'open', '--head', base, '--json', 'number,headRefName,baseRefName,isCrossRepository', '--limit', '20'], cwd)); } catch { return null; }
+  const r = (Array.isArray(lista) ? lista : []).find((p) => Number.isInteger(p?.number) && p.headRefName === base && typeof p.baseRefName === 'string' && p.baseRefName !== base && p.isCrossRepository !== true);
+  return r ? { pr: r.number, base: r.baseRefName, head: base } : null;
+}
+
 // Confere o PR contra o sha validado. Devolve { ok:true, pr, sha, base } ou { recusado:true, motivo, … }.
 export function conferir(pr, shaCurto, cwd) {
   const v = dadosDoPr(pr, cwd);
@@ -51,10 +62,9 @@ export function conferir(pr, shaCurto, cwd) {
   }
   const sha = v.headRefOid.toLowerCase();
   const base = v.baseRefName;
-  for (const args of [['fetch', '-q', 'origin', `+refs/heads/${base}:refs/remotes/origin/${base}`], ['fetch', '-q', 'origin', `refs/pull/${pr}/head`]]) {
-    const f = git(args, cwd);
-    if (f.status !== 0) throw new Error(`git ${args.slice(0, 2).join(' ')} falhou: ${f.err || `exit ${f.status}`}`);
-  }
+  const f = git(['fetch', '-q', 'origin', `+refs/heads/${base}:refs/remotes/origin/${base}`], cwd);
+  if (f.status !== 0) throw new Error(`git fetch -q falhou: ${f.err || `exit ${f.status}`}`);
+  buscarPontaDoPr(pr, { sha, head: v.headRefName }, cwd); // F446: sem refs/pull/N/head, pela branch do PR
   const m = git(['merge-tree', '--write-tree', '--name-only', `origin/${base}`, sha], cwd);
   if (m.status === 1 && /CONFLICT/.test(m.out)) {
     const [, ...resto] = m.out.split('\n');

@@ -31,6 +31,12 @@ if (a[0] === 'pr' && a[1] === 'view') {
   if (!pr) process.exit(1);
   pr.state = 'MERGED';
   fs.writeFileSync(process.env.GH_ESTADO, JSON.stringify(est));
+} else if (a[0] === 'pr' && a[1] === 'list' && Array.isArray(est.releases)) {
+  // F446: os PRs abertos de \`releases\` (sem a lista, o gh falso não conhece o \`pr list\` e sai com 2)
+  const head = a.includes('--head') ? a[a.indexOf('--head') + 1] : null;
+  const campos = a[a.indexOf('--json') + 1]?.split(',') ?? [];
+  const lista = est.releases.filter((r) => head === null || r.headRefName === head);
+  process.stdout.write(JSON.stringify(lista.map((r) => Object.fromEntries(campos.filter((c) => c in r).map((c) => [c, r[c]])))));
 } else process.exit(2);
 `;
 
@@ -629,6 +635,26 @@ test('F221: PR de outra branch não se liga ao item da dona; o campo `branch` do
   } finally { limpar(c); }
 });
 
+// F446: a dona do F303 abriu o PR num worktree ao lado do checkout da sessão: a branch da sessão era outra, e a devolução do
+// PR 1704 saiu sem item. Sem `prs` nem branch da dona, a fila liga o PR ao item do primeiro id da branch dele.
+test('F446: sem prs nem branch da dona, o PR se liga ao item do primeiro id da branch; a branch de outro item que o cita, não', () => {
+  const c = montar();
+  try {
+    for (const F of ['F7', 'F8']) { const s = c.painel('set', 'fila', F, JSON.stringify({ titulo: F === 'F7' ? 'o item sete' : 'o item oito', etapa: 'execucao', tema: 'editor', via: 'dona', donoLocalId: LA, donoApelido: 'dona' })); assert.equal(s.exit, 0, s.err + s.out); }
+    const arq = join(c.raiz, 'estado.json');
+    const est = JSON.parse(readFileSync(arq, 'utf8'));
+    est.prs[23].headRefName = 'ichikawa/f8-conserta-o-f7';
+    est.prs[24].headRefName = 'ichikawa/f7-segunda-fatia';
+    writeFileSync(arq, JSON.stringify(est));
+    const r = c.painel('fila-de-merge', '23', '24', '--gate', 'test ! -f c.txt');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.ligados, [{ pr: 23, item: 'F8' }, { pr: 24, item: 'F7' }], r.out);
+    assert.deepEqual(s.devolvidos.map((x) => [x.pr, x.itens.map((i) => i.item)]), [[23, ['F8']]], 'a devolução chega ao item certo');
+    assert.deepEqual(s.mergeados.map((m) => [m.pr, m.itens.map((i) => i.item)]), [[24, ['F7']]]);
+  } finally { limpar(c); }
+});
+
 test('F221: com a fila ocupada, o PR anotado já liga o item e o põe em merge', () => {
   const c = montar();
   try {
@@ -1162,5 +1188,166 @@ test('F398: --anotar recusa as flags de infraestrutura (o config é da rodada da
     const r = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--anotar', '--falha-de-infra', 'x');
     assert.equal(r.exit, 1, r.out);
     assert.match(r.err, /--anotar/);
+  } finally { limpar(c); }
+});
+
+// F446: o remoto sem `refs/pull/N/head` (medido no Izanagi: o fetch da ref do PR falhou e a rodada inteira caiu) tem a
+// branch do PR; a fila busca a ponta por ela, pelo `headRefName` do gh, e confere que o sha validado veio junto.
+const soPelaBranch = (c, n) => {
+  git(c.clone, 'push', '-q', 'origin', `pr${n}:refs/heads/pr${n}`);
+  git(c.clone, 'push', '-q', 'origin', `:refs/pull/${n}/head`);
+};
+test('F446: sem refs/pull/N/head, a fila busca a ponta pela branch do PR e mergeia', () => {
+  const c = montar();
+  try {
+    soPelaBranch(c, 24);
+    c.item('F1', 21); c.item('F2', 24);
+    const r = c.painel('fila-de-merge', '21', '24', '--gate', 'test -f d.txt && grep -q "do 21" a.txt');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(s.mergeados.map((m) => m.pr), [21, 24]);
+    assert.deepEqual(c.merges(), [21, 24]);
+  } finally { limpar(c); }
+});
+
+test('F446: sem refs/pull/N/head e sem a branch, o erro diz as duas refs que faltaram', () => {
+  const c = montar();
+  try {
+    git(c.clone, 'push', '-q', 'origin', ':refs/pull/24/head');
+    c.item('F2', 24);
+    const r = c.painel('fila-de-merge', '24', '--gate', 'true');
+    assert.notEqual(r.exit, 0, r.out);
+    assert.match(r.err + r.out, /refs\/pull\/24\/head/);
+    assert.match(r.err + r.out, /refs\/heads\/pr24/);
+    assert.deepEqual(c.merges(), []);
+  } finally { limpar(c); }
+});
+
+// F446: a fila sem turno não mergeia na base que tem um release aberto (o PR develop → main, medido no Izanagi: a rodada sem
+// turno mergeou na develop com o release em revisão). Os PRs voltam aos pendentes, sem devolução, e a fila grava a pausa; a
+// rodada da orquestradora não pausa (o release é dela).
+const RELEASE = { number: 900, headRefName: 'main', baseRefName: 'producao', state: 'OPEN', isCrossRepository: false };
+const comRelease = (c, releases = [RELEASE]) => {
+  const arq = join(c.raiz, 'estado.json');
+  const est = JSON.parse(readFileSync(arq, 'utf8'));
+  writeFileSync(arq, JSON.stringify({ ...est, releases }));
+};
+test('F446: com release aberto, a rodada --sem-turno não roda o gate, devolve os PRs aos pendentes e grava a pausa', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21);
+    comRelease(c, [{ ...RELEASE, headRefName: 'outra' }, { ...RELEASE, number: 901, isCrossRepository: true }]);
+    const sem = c.painel('fila-de-merge', `21:${c.shas[21]}`, '--gate', 'true', '--sem-turno');
+    assert.equal(sem.exit, 0, sem.err + sem.out);
+    assert.deepEqual(c.merges(), [21], 'contraste: o PR aberto de outra branch, ou de fork, não é release da base');
+    c.item('F2', 24);
+    comRelease(c);
+    const r = c.painel('fila-de-merge', `24:${c.shas[24]}`, '--gate', 'true', '--sem-turno');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.equal(s.gates, 0, 'não roda o gate');
+    assert.equal(s.pausa?.release, 900, r.out);
+    assert.match(s.pausa.motivo, /release aberto \(PR 900, main → producao\)/);
+    assert.deepEqual(c.merges(), [21], 'nada mergeado na base do release');
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.pendentes.map((p) => [p.pr, p.sha]), [[24, c.shas[24]]], 'o PR volta aos pendentes com o sha da dona');
+    assert.deepEqual(e.emVoo, []);
+    assert.equal(e.ocupada, null);
+    assert.equal(e.pausa.release, 900);
+    assert.ok(Date.parse(e.pausa.em) > Date.now() - 60_000);
+    assert.equal(e.desfechos.length, 1, 'a pausa sem merge nem devolução não grava desfecho (só o do PR 21)');
+    assert.equal(c.dado('F2').etapa, 'merge', 'o item não é devolvido');
+  } finally { limpar(c); }
+});
+
+test('F446: o release aberto durante o gate segura o merge; o PR verde volta aos pendentes', () => {
+  const c = montar();
+  try {
+    c.item('F2', 24);
+    // o gate abre o release (o operador o abriu enquanto o gate rodava)
+    const abre = join(c.raiz, 'abre-release.cjs');
+    writeFileSync(abre, `const fs = require('node:fs'); const f = process.env.GH_ESTADO; const e = JSON.parse(fs.readFileSync(f, 'utf8')); e.releases = [${JSON.stringify(RELEASE)}]; fs.writeFileSync(f, JSON.stringify(e));`);
+    comRelease(c, []);
+    const r = c.painel('fila-de-merge', `24:${c.shas[24]}`, '--gate', `node "${abre}"`, '--sem-turno');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.equal(s.gates, 1, 'o gate rodou (sem release no começo)');
+    assert.equal(s.pausa?.release, 900, r.out);
+    assert.deepEqual(c.merges(), []);
+    assert.deepEqual(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')).pendentes.map((p) => p.pr), [24]);
+  } finally { limpar(c); }
+});
+
+// F446 (validador): o release de uma base não prende o PR de outra base que está no mesmo lote, nem atrás dele
+test('F446: com release aberto na base do primeiro PR, o PR de outra base mergeia e só o da base do release fica', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F2', 24);
+    git(c.clone, 'push', '-q', 'origin', 'main:producao');
+    const arq = join(c.raiz, 'estado.json');
+    const est = JSON.parse(readFileSync(arq, 'utf8'));
+    est.prs[24].baseRefName = 'producao';
+    writeFileSync(arq, JSON.stringify({ ...est, releases: [RELEASE] }));
+    const r = c.painel('fila-de-merge', `21:${c.shas[21]}`, `24:${c.shas[24]}`, '--gate', 'true', '--sem-turno');
+    assert.equal(r.exit, 0, r.err + r.out);
+    const s = JSON.parse(r.out);
+    assert.deepEqual(c.merges(), [24], 'o PR da base sem release mergeia');
+    assert.equal(s.pausa?.release, 900, r.out);
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.pendentes.map((p) => [p.pr, p.sha]), [[21, c.shas[21]]], 'só o da base do release fica, com o sha da dona');
+    assert.deepEqual([e.ocupada, e.emVoo, e.pausa?.release], [null, [], 900]);
+    assert.equal(c.dado('F1').etapa, 'merge', 'o item pausado não é devolvido');
+  } finally { limpar(c); }
+});
+
+test('F446: o PR segurado pelo release não sai da fila quando o lote da outra base cai no preparo', () => {
+  const c = montar();
+  try {
+    c.item('F1', 21); c.item('F2', 24);
+    git(c.clone, 'push', '-q', 'origin', 'main:producao');
+    const arq = join(c.raiz, 'estado.json');
+    const est = JSON.parse(readFileSync(arq, 'utf8'));
+    est.prs[24].baseRefName = 'producao';
+    writeFileSync(arq, JSON.stringify({ ...est, releases: [RELEASE] }));
+    const r = c.painel('fila-de-merge', `21:${c.shas[21]}`, `24:${c.shas[24]}`, '--gate', 'true', '--preparar', 'false', '--sem-turno');
+    assert.equal(r.exit, 1, r.out);
+    assert.match(r.err, /não rodaram: #24\b/, 'o 21 não rodou o lote: está pausado, não perdido');
+    assert.match(r.err, /ficaram na fila: #21/);
+    const e = JSON.parse(readFileSync(c.estadoDaFila, 'utf8'));
+    assert.deepEqual(e.pendentes.map((p) => [p.pr, p.sha]), [[21, c.shas[21]]], 'o pausado fica, com o sha da dona');
+    assert.equal(e.pausa?.release, 900, 'e a pausa se grava');
+    assert.deepEqual(c.merges(), []);
+  } finally { limpar(c); }
+});
+
+test('F446: a rodada da orquestradora não pausa com release aberto', () => {
+  const c = montar();
+  try {
+    c.item('F2', 24);
+    comRelease(c);
+    const r = c.painel('fila-de-merge', `24:${c.shas[24]}`, '--gate', 'true');
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.deepEqual(c.merges(), [24]);
+  } finally { limpar(c); }
+});
+
+test('F446: com a pausa recente, o --anotar não lança a fila e diz o release; a pausa velha não segura', () => {
+  const c = montar();
+  try {
+    c.item('F2', 24);
+    assert.equal(c.painel('update', 'fila', 'F2', JSON.stringify({ entrega: { resultado: 'r' } })).exit, 0, 'sem aviso pendente');
+    const config = { cwd: c.clone, gate: 'true', preparar: null };
+    mkdirSync(dirname(c.estadoDaFila), { recursive: true });
+    const pausa = { release: 900, motivo: 'release aberto (PR 900, main → producao)', em: new Date(Date.now() - 60_000).toISOString() };
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [], config, pausa }));
+    const s = JSON.parse(c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar').out);
+    assert.equal(s.lancou, false);
+    assert.match(s.naoLancou, /release aberto \(PR 900/);
+    assert.equal(JSON.parse(readFileSync(c.estadoDaFila, 'utf8')).lancada, undefined, 'não marca lançamento');
+    // a pausa velha não segura: o julgamento lança (KIT_FILA_SEM_TURNO=off só para não subir o processo; a recusa muda de motivo)
+    writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: null, pendentes: [], emVoo: [], config, pausa: { ...pausa, em: new Date(Date.now() - 3600_000).toISOString() } }));
+    c.envExtra = { KIT_FILA_SEM_TURNO: 'off' };
+    const velha = JSON.parse(c.painel('fila-de-merge', `24:${c.shas[24]}`, '--anotar').out);
+    assert.match(velha.naoLancou, /desligad/);
   } finally { limpar(c); }
 });

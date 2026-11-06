@@ -60,8 +60,8 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparArquivados } from './handoffs.mjs';
 import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
-import { coletar as coletarDeduzidos } from './estado-deduzido.mjs';
-import { MOTIVO_DO_FORK, SHA_VALIDADO, arquivosDoPr, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub, soDocumentacao } from './mergear.mjs';
+import { coletar as coletarDeduzidos, primeiroId } from './estado-deduzido.mjs';
+import { MOTIVO_DO_FORK, SHA_VALIDADO, arquivosDoPr, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub, releaseAberto, soDocumentacao } from './mergear.mjs';
 import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, orcaNoReinicio, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote, motivoDeConflito, padroesDeInfra, ESPERA_DE_INFRA_S } from './fila-de-merge.mjs';
 import { donoDaFilaVivo, filaOrfa } from './fila-orfa.mjs';
@@ -1138,7 +1138,10 @@ function ligarPrsAosItens(branches, { projeto, oQue, pular = new Set() }) {
       const pelosPrs = vivos.filter(([, d]) => prsDe(d).includes(pr));
       // o campo `branch` do item é o sinal explícito: desempata o worktree da dona
       const explicitos = b ? vivos.filter(([, d]) => d.branch === b) : [];
-      const casados = pelosPrs.length ? pelosPrs : explicitos.length === 1 ? explicitos : vivos.filter(([, d]) => pelaBranch(d, b));
+      const daDonaNaBranch = pelosPrs.length || explicitos.length === 1 ? [] : vivos.filter(([, d]) => pelaBranch(d, b));
+      // F446: sem `prs` nem branch de dona, o item do primeiro id da branch (a dona que abre o PR num worktree ao lado)
+      const peloId = b && !pelosPrs.length && explicitos.length !== 1 && !daDonaNaBranch.length ? vivos.filter(([F]) => F.toUpperCase() === primeiroId(b)) : [];
+      const casados = pelosPrs.length ? pelosPrs : explicitos.length === 1 ? explicitos : daDonaNaBranch.length ? daDonaNaBranch : peloId;
       if (!pelosPrs.length && casados.length > 1) { ambiguos.push(pr); continue; }
       for (const [F] of casados) porItem.set(F, [...(porItem.get(F) ?? []), pr]);
     }
@@ -1190,7 +1193,9 @@ function comandoFilaDeMerge(args) {
     try { desfecho({ erro: String(e?.message || e).split('\n')[0] }); } catch { /* o erro segue no log da batida */ }
     throw e;
   }
-  if (!saida.pendente) {
+  // F446: a pausa por release sem merge nem devolução não é desfecho (a batida o mandaria à orquestradora a cada relance)
+  const soPausa = saida.pausa && !(saida.mergeados?.length || saida.devolvidos?.length || saida.erros?.length);
+  if (!saida.pendente && !soPausa) {
     const { mergeados = [], devolvidos = [], suspeitaDeInstavel, infraRepetida, erros, logs } = saida;
     // F373 (fatia 3): com merge, o pós-merge (versão, plugins, giro do estado) roda aqui, sem turno da orquestradora
     const comPos = mergeados.length > 0 && process.env.KIT_POS_MERGE !== 'off';
@@ -1318,7 +1323,7 @@ function filaDeMerge(args, { semTurno = false } = {}) {
     // F398: os outros campos do config (os padrões de infraestrutura) passam; só o dado agora os troca
     const config = semTurno ? e.config : { ...(e.config && typeof e.config === 'object' ? e.config : {}), cwd: raizDoRepo(cwd), gate, preparar: preparar ?? null, ...infraDoConfig };
     // a fila que se gravou dona zera a contagem de lançamentos da batida
-    gravarJson(arquivo, { ...e, lancada: undefined, ...(config ? { config } : {}), ocupada: { pid: process.pid, desde: new Date().toISOString(), gate, ...(preparar ? { preparar } : {}) }, pendentes: [], emVoo: lote });
+    gravarJson(arquivo, { ...e, lancada: undefined, pausa: undefined, ...(config ? { config } : {}), ocupada: { pid: process.pid, desde: new Date().toISOString(), gate, ...(preparar ? { preparar } : {}) }, pendentes: [], emVoo: lote });
     return { lote };
   });
   const projetoDaFila = projetoDoCwd(cwd).projeto;
@@ -1327,6 +1332,8 @@ function filaDeMerge(args, { semTurno = false } = {}) {
   const devolvidosAqui = new Set();
   const rodadas = [];
   let aReler = []; // o que o gh não leu nesta chamada: fica nos pendentes, fora dos lotes seguintes dela
+  let aPausar = []; // F446: o que o release aberto na base segurou nesta chamada: idem
+  let pausa = null;
   try {
     let lote = entrada.lote;
     while (lote.length) {
@@ -1336,15 +1343,15 @@ function filaDeMerge(args, { semTurno = false } = {}) {
       for (const n of lig.ambiguos) if (!ligacoes.ambiguos.includes(n)) ligacoes.ambiguos.push(n);
       let r;
       try {
-        r = rodadaDaFila(lote, { seco, gate, preparar, falhaDeInfra, esperaDeInfra, cwd });
+        r = rodadaDaFila(lote, { seco, gate, preparar, falhaDeInfra, esperaDeInfra, cwd, semTurno });
       } catch (erro) {
         // erro da rodada inteira: os PRs dela não voltam à lista (um PR que derruba o preparo travaria a fila para sempre)
-        const adiados = [...(erro?.adiados ?? []), ...(erro?.releitura ?? [])];
+        const adiados = [...(erro?.adiados ?? []), ...(erro?.releitura ?? []), ...(erro?.pausados ?? [])];
         const naoRodaram = lote.filter((p) => !adiados.some((a) => a.pr === p.pr)).map((p) => p.pr);
         const ficaram = comTrava(() => {
           const e = lerEstado();
           const pendentes = juntarPedidos(adiados, e.pendentes);
-          gravarJson(arquivo, { ...e, pendentes, emVoo: [] });
+          gravarJson(arquivo, { ...e, pendentes, emVoo: [], ...(erro?.pausa && !e.pausa ? { pausa: erro.pausa } : {}) });
           return pendentes.map((p) => p.pr);
         });
         const msg = `${String(erro?.message || erro).split('\n')[0]}; não rodaram: ${naoRodaram.map((n) => `#${n}`).join(', ')} (chame de novo com os que seguem valendo)${ficaram.length ? `; ficaram na fila: ${ficaram.map((n) => `#${n}`).join(', ')}` : ''}`;
@@ -1352,17 +1359,21 @@ function filaDeMerge(args, { semTurno = false } = {}) {
         rodadas.push({ prs: naoRodaram, erro: msg, mergeados: [], devolvidos: [] });
         break;
       }
-      const { adiados = [], releitura = [], ...resto } = r;
+      const { adiados = [], releitura = [], pausados = [], ...resto } = r;
       for (const dv of resto.devolvidos ?? []) for (const it of dv.itens ?? []) devolvidosAqui.add(it.item);
       rodadas.push({ prs: lote.filter((p) => !adiados.some((a) => a.pr === p.pr)).map((p) => p.pr), ...resto, ...(releitura.length ? { releitura: releitura.map((p) => p.pr) } : {}) });
+      // F446: o PR pausado por release aberto na base dele fica nos pendentes, como o que o gh não leu, e a fila grava a
+      // pausa; a batida e o --anotar só a relançam depois de PAUSA_MIN, e a rodada relançada confere o release de novo
+      if (resto.pausa) { aPausar = juntarPedidos(aPausar, pausados); pausa ??= resto.pausa; }
       // ler a lista vazia e soltar a fila no mesmo trecho travado: o PR que chega depois disso acha a fila livre.
       // O PR que o gh não leu fica nos pendentes, fora do lote seguinte desta chamada: a próxima chamada o tenta de novo.
       aReler = juntarPedidos(aReler, releitura);
-      const reler = (p) => aReler.some((x) => x.pr === p.pr);
+      const fora = (p) => aReler.some((x) => x.pr === p.pr) || aPausar.some((x) => x.pr === p.pr);
       lote = comTrava(() => {
         const e = lerEstado();
-        const seguinte = juntarPedidos(adiados, e.pendentes.filter((p) => !reler(p)));
-        gravarJson(arquivo, { ...e, ocupada: seguinte.length ? e.ocupada : null, pendentes: juntarPedidos(aReler, e.pendentes.filter(reler)), emVoo: seguinte });
+        const seguinte = juntarPedidos(adiados, e.pendentes.filter((p) => !fora(p)));
+        const pendentes = juntarPedidos(juntarPedidos(aReler, aPausar), e.pendentes.filter(fora));
+        gravarJson(arquivo, { ...e, ocupada: seguinte.length ? e.ocupada : null, pendentes, emVoo: seguinte, ...(pausa ? { pausa } : {}) });
         return seguinte;
       });
     }
@@ -1385,13 +1396,14 @@ function filaDeMerge(args, { semTurno = false } = {}) {
     ...(infraRepetida.length ? { infraRepetida } : {}),
     ...(erros.length ? { erros } : {}),
     ...(releitura.length ? { releitura } : {}),
+    ...(pausa ? { pausa } : {}),
     rodadas,
     ...lig,
   };
 }
 
 // Uma rodada da fila: confere cada PR, monta o lote e testa, mergeia o que passou e devolve o resto à dona.
-function rodadaDaFila(pedidos, { seco, gate, preparar, falhaDeInfra, esperaDeInfra, cwd }) {
+function rodadaDaFila(pedidos, { seco, gate, preparar, falhaDeInfra, esperaDeInfra, cwd, semTurno = false }) {
   const recusados = [];
   const prs = [];
   const releitura = [];
@@ -1410,23 +1422,46 @@ function rodadaDaFila(pedidos, { seco, gate, preparar, falhaDeInfra, esperaDeInf
     if (deFork(v)) { recusados.push({ pr, sha: '', motivo: `${MOTIVO_DO_FORK(pr)}; saiu da fila` }); continue; }
     const sha = v.headRefOid.toLowerCase();
     if (pedido && !sha.startsWith(pedido)) { recusados.push({ pr, sha, motivo: `a ponta mudou: entregue ${pedido}, agora ${sha.slice(0, 7)}; a dona manda de novo PR ${pr} pronto` }); continue; }
-    prs.push({ pr, sha, base: v.baseRefName });
+    prs.push({ pr, sha, base: v.baseRefName, head: v.headRefName });
   }
-  // um lote por base: a do primeiro a chegar; o PR de outra base fica para a rodada seguinte (no `--seco`, só se diz)
-  const base = prs[0]?.base;
-  const adiados = prs.filter((p) => p.base !== base).map(({ pr }) => pedidos.find((x) => x.pr === pr));
-  const doLote = prs.filter((p) => p.base === base);
+  // um lote por base: a do primeiro a chegar; o PR de outra base fica para a rodada seguinte (no `--seco`, só se diz).
+  // F446: a rodada sem turno não mergeia na base com release aberto: o lote é da primeira base sem release, o PR da base com
+  // release fica pausado (sem prender o de outra base) e a base do lote se confere de novo antes do merge (o gate leva
+  // minutos); a rodada da orquestradora não confere (o release é dela)
+  const conferePausa = semTurno && !seco;
+  let base = prs[0]?.base;
+  let release = null;
+  const travados = [];
+  if (conferePausa) {
+    base = undefined;
+    for (const b of new Set(prs.map((p) => p.base))) {
+      const rel = releaseAberto(b, cwd);
+      if (!rel) { base = b; break; }
+      release ??= rel;
+      travados.push(...prs.filter((p) => p.base === b));
+    }
+  }
+  const adiados = prs.filter((p) => p.base !== base && !travados.includes(p)).map(({ pr }) => pedidos.find((x) => x.pr === pr));
+  const doLote = base === undefined ? [] : prs.filter((p) => p.base === base);
   const extra = { ...(adiados.length ? { adiados } : {}), ...(releitura.length ? { releitura } : {}) };
   // sem PR para montar, a devolução dos recusados segue o mesmo caminho (o item fechado sem merge volta à dona)
-  let lote = { aprovados: [], devolvidos: [], gates: 0 };
-  if (doLote.length) try { lote = montarLote({ prs: doLote.map(({ pr, sha }) => ({ pr, sha })), base, cwd, gate, preparar, falhaDeInfra, esperaDeInfra }); } catch (e) { e.adiados = adiados; e.releitura = releitura; throw e; }
+  let lote = { aprovados: [], devolvidos: [], gates: 0, ...(base === undefined && travados.length ? { base: travados[0].base } : {}) };
+  // o pausado volta à fila com o pedido da dona (o sha que ela testou), não com a ponta lida agora
+  const pedidoDe = ({ pr, sha }) => pedidos.find((p) => p.pr === pr) ?? { pr, sha };
+  const pausaDe = (rel) => ({ release: rel.pr, base: rel.base, head: rel.head, motivo: `release aberto (PR ${rel.pr}, ${rel.head} → ${rel.base})`, em: new Date().toISOString() });
+  // o lote que cai não leva junto o PR que o release segurou: ele fica nos pendentes, com a pausa
+  if (doLote.length) try { lote = montarLote({ prs: doLote.map(({ pr, sha, head }) => ({ pr, sha, head })), base, cwd, gate, preparar, falhaDeInfra, esperaDeInfra }); } catch (e) { e.adiados = adiados; e.releitura = releitura; if (release) { e.pausados = travados.map(pedidoDe); e.pausa = pausaDe(release); } throw e; }
   lote.devolvidos.unshift(...recusados);
   const { projeto } = projetoDoCwd();
   const itensDoPr = (pr) => [...itensVivos()].filter(([, d]) => projeto && String(d?.projeto ?? '').toLowerCase() === projeto && Array.isArray(d.prs) && d.prs.includes(pr));
   const resumo = { base: lote.base, gates: lote.gates, logs: lote.pasta, ...(lote.suspeitaDeInstavel ? { suspeitaDeInstavel: lote.suspeitaDeInstavel } : {}), ...(lote.infraRepetida ? { infraRepetida: lote.infraRepetida } : {}) };
   if (seco) return { seco: true, ...resumo, mergearia: lote.aprovados.map((a) => a.pr), devolveria: lote.devolvidos.map(({ pr, motivo }) => ({ pr, motivo })), ...(adiados.length ? { outraBase: adiados.map((a) => a.pr) } : {}) };
   const mergeados = [];
-  for (const { pr, sha } of lote.aprovados) {
+  const releaseDoLote = conferePausa && lote.aprovados.length ? releaseAberto(base, cwd) : null;
+  const pausados = [...travados, ...(releaseDoLote ? lote.aprovados : [])];
+  release ??= releaseDoLote;
+  const pausa = release ? pausaDe(release) : null;
+  for (const { pr, sha } of releaseDoLote ? [] : lote.aprovados) {
     // um merge que falha (gh, fetch) não derruba o lote: vira devolução e os outros seguem
     let r;
     try { r = comandoMergear([String(pr), sha]); } catch (e) { r = { recusado: true, motivo: `o merge falhou: ${String(e?.message || e).split('\n')[0]}` }; }
@@ -1444,7 +1479,7 @@ function rodadaDaFila(pedidos, { seco, gate, preparar, falhaDeInfra, esperaDeInf
     }));
     return { pr, motivo, ...(log ? { log } : {}), itens };
   });
-  return { ...resumo, mergeados, devolvidos, ...extra };
+  return { ...resumo, mergeados, devolvidos, ...(pausa ? { pausa, pausados: pausados.map(pedidoDe) } : {}), ...extra };
 }
 
 const ORQ = () => regras.BASE;
@@ -1543,6 +1578,7 @@ function comandoPodeReiniciar(args) {
 // esperaria a batida inteira).
 const RELANCE_MIN = 5;
 const LANCAMENTOS = 3; // lançada tantas vezes sem nunca se gravar dona: volta ao relatório da orquestradora
+const PAUSA_MIN = 10; // F446: a fila pausada por release aberto se relança depois disso, e a rodada confere o release de novo
 function lancarFilaSemTurno({ orfa, config, arquivo }) {
   const log = arquivo.replace(/\.json$/, '.sem-turno.log');
   const fd = openSync(log, 'a'); // em 'a': uma rodada anterior ainda pode escrever nele
@@ -1564,6 +1600,8 @@ function julgarLancamento(e, orfa, agoraMs) {
   if (process.env.KIT_FILA_SEM_TURNO === 'off') return { motivo: 'o lançamento sem turno está desligado (KIT_FILA_SEM_TURNO=off)' };
   if (!orfa.prs.every((p) => p.sha)) return { motivo: 'há PR anotado sem o sha da dona' };
   if (!textoNaoVazio(c.gate) || !textoNaoVazio(c.cwd) || !existsSync(c.cwd)) return { motivo: 'a fila não tem gate e pasta gravados pela orquestradora' };
+  // F446: pausada há pouco conta como viva (não vai ao relatório como fila parada) e não se relança
+  if (Date.parse(e?.pausa?.em) > agoraMs - PAUSA_MIN * 60_000) return { recente: true, motivo: `a fila está pausada: ${e.pausa.motivo ?? 'release aberto'}; confere de novo em até ${PAUSA_MIN} min` };
   if (recente) return { recente, motivo: `a fila foi lançada há pouco (${e.lancada.em}); a rodada lançada leva o PR` };
   if (tentativas >= LANCAMENTOS) return { motivo: `${tentativas} lançamentos sem a fila se gravar dona: fica com a orquestradora` };
   return { config: c, lancada: { em: new Date(agoraMs).toISOString(), tentativas: tentativas + 1 } };

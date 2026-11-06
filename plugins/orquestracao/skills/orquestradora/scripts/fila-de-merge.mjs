@@ -56,6 +56,23 @@ function gitOk(args, cwd) {
   return r.out;
 }
 
+// F446: traz a ponta do PR. O remoto sem `refs/pull/N/head` (medido no Izanagi: o fetch falhou e a rodada inteira caiu) tem a
+// branch do PR (`headRefName` do gh): busca-se por ela e confere-se que o sha validado veio junto, porque a branch pode ter
+// andado depois da leitura do gh. O nome vem do gh e vai à refspec: só o nome de branch comum passa.
+const BRANCH_SEGURA = /^(?!-)(?!.*\.\.)[\w./-]+$/;
+export function buscarPontaDoPr(pr, { sha = null, head = null } = {}, cwd) {
+  const f = git(['fetch', '-q', 'origin', `refs/pull/${pr}/head`], cwd);
+  if (f.status === 0) return 'pull';
+  const motivo = (r) => r.err || r.out || `exit ${r.status}`;
+  if (typeof head !== 'string' || !BRANCH_SEGURA.test(head)) throw new Error(`git fetch -q falhou: ${motivo(f)}`);
+  const b = git(['fetch', '-q', 'origin', `+refs/heads/${head}:refs/remotes/origin/${head}`], cwd);
+  if (b.status !== 0) throw new Error(`git fetch -q falhou para refs/pull/${pr}/head (${motivo(f)}) e para refs/heads/${head} (${motivo(b)})`);
+  if (typeof sha === 'string' && sha && git(['cat-file', '-e', `${sha}^{commit}`], cwd).status !== 0) {
+    throw new Error(`sem refs/pull/${pr}/head, a branch ${head} do PR ${pr} não tem o sha ${sha.slice(0, 7)} (andou depois da leitura do gh?)`);
+  }
+  return 'branch';
+}
+
 // Roda um comando de shell no worktree, com a saída num arquivo. → { ok, status, log }
 export function rodarComando(cmd, cwd, log) {
   const fd = openSync(log, 'w');
@@ -93,11 +110,11 @@ export function motivoDeConflito({ pr, sobre, arquivos, base }) {
   return `conflito com ${sobre}: traga a base pelo sync_with_base_branch do app (ou git rebase origin/${base}), resolva, rode os afetados e mande PR ${pr} pronto de novo; arquivos: ${lista}`;
 }
 
-// prs: [{ pr, sha }] na ordem. → { base, aprovados: [{pr, sha}], devolvidos: [{pr, sha, motivo, arquivos?, log?}], gates, pasta }
+// prs: [{ pr, sha, head? }] na ordem (`head`: a branch do PR, para o remoto sem refs/pull). → { base, aprovados: [{pr, sha}], devolvidos: [{pr, sha, motivo, arquivos?, log?}], gates, pasta }
 export function montarLote({ prs, base, cwd, gate = GATE_PADRAO, preparar = null, falhaDeInfra = padroesDeInfra(), esperaDeInfra = ESPERA_DE_INFRA_S }) {
   if (!Array.isArray(prs) || prs.length === 0) throw new Error('fila-de-merge: nenhum PR');
   gitOk(['fetch', '-q', 'origin', `+refs/heads/${base}:refs/remotes/origin/${base}`], cwd);
-  for (const { pr } of prs) gitOk(['fetch', '-q', 'origin', `refs/pull/${pr}/head`], cwd);
+  for (const { pr, sha, head } of prs) buscarPontaDoPr(pr, { sha, head }, cwd);
   const pasta = mkdtempSync(join(tmpdir(), 'fila-de-merge-'));
   const wt = join(pasta, 'arvore');
   gitOk(['worktree', 'add', '-q', '--detach', wt, `origin/${base}`], cwd);
