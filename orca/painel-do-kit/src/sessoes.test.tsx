@@ -7,7 +7,6 @@ import { ORDEM_DOS_ESTADOS } from './nucleo/sessoes.mjs'
 import type { GrupoDeSessoes, Leitura, Pergunta, Sessao, VistaDasSessoes } from './protocol'
 import { inicioDoDiaSP, tempoDaSessao } from './vista'
 
-const PONTOS: Record<string, string> = {'Espera você': '🟡', 'Travada': '🛑', 'Gate vermelho': '🔴', 'Parada': '⚫', 'Sessão falhou': '❌', 'Sem sessão': '🟤', 'Mergeando': '🟦', 'Na fila': '⚪', 'PR aberto': '🟠', 'Validando': '🔎', 'Planejando': '🟣', 'No design': '🎨', 'Executando': '🔵', 'Entregue': '🟢'}
 const AGORA = Date.now()
 const MIN = 60_000
 const iso = (msAtras: number) => new Date(AGORA - msAtras).toISOString()
@@ -103,7 +102,7 @@ teste('os grupos vêm na ordem dada pelo núcleo; o cabeçalho conta só as viva
   semErros(v)
 })
 
-teste('cada estado tem o seu selo, o seu tom e a sua frase; só Espera você tem borda âmbar; só Mergeando tem Spinner', async () => {
+teste('cada estado tem o seu selo, o seu tom e a sua frase; nenhum cartão tem borda colorida (o selo já diz a cor); só Mergeando tem Spinner', async () => {
   const casos: [Sessao, string, string, string | null][] = [
     [sessao('F1', { estado: 'esperando', perguntas: [{ id: 'Q1060', titulo: 'F1 · Mergear?' }], desdeEm: iso(5 * 60 * MIN) }), 'Espera você', 'warning', 'Q1060 · Mergear?'],
     [sessao('F2', { estado: 'esperando', motivo: 'pausado pelo operador para trocar de conta' }), 'Espera você', 'warning', 'pausado pelo operador para trocar de conta'],
@@ -114,8 +113,8 @@ teste('cada estado tem o seu selo, o seu tom e a sua frase; só Espera você tem
     [sessao('F7', { estado: 'parada', tipoDeParada: 'falhou' }), 'Sessão falhou', 'danger', 'a sessão no Orca terminou com falha'],
     [sessao('F8', { estado: 'parada', tipoDeParada: 'sem-dona' }), 'Sem sessão', 'neutral', 'esperando a orquestradora abrir uma'],
     [sessao('F9', { estado: 'mergeando', prNaFila: 1716, desdeEm: iso(6 * MIN) }), 'Mergeando', 'accent', 'PR 1716 · gate rodando'],
-    [sessao('F10', { estado: 'na-fila', prNaFila: 173, posicaoNaFila: 2 }), 'Na fila', 'neutral', 'PR 173 · 2º da fila'],
-    [sessao('F11', { estado: 'na-fila', prNaFila: 174, foraDaFila: true }), 'PR aberto', 'neutral', 'PR 174 · fora da fila de merge'],
+    [sessao('F10', { estado: 'na-fila', prNaFila: 173, posicaoNaFila: 2 }), 'Na fila', 'warning', 'PR 173 · 2º da fila'],
+    [sessao('F11', { estado: 'na-fila', prNaFila: 174, foraDaFila: true }), 'PR aberto', 'warning', 'PR 174 · fora da fila de merge'],
     [sessao('F12', { estado: 'validando', agora: 'rodando o validador' }), 'Validando', 'accent', 'rodando o validador'],
     [sessao('F13', { subEtapa: 'planejamento', etapa: 'planejamento' }), 'Planejando', 'accent', null],
     [sessao('F14', { subEtapa: 'design', etapa: 'design' }), 'No design', 'accent', null],
@@ -128,14 +127,13 @@ teste('cada estado tem o seu selo, o seu tom e a sua frase; só Espera você tem
   for (const [s, texto, tom, frase] of casos) {
     const selos = doCartao(s.item, { type: 'Badge' })
     assert.equal(selos.length, 1, `${s.item}: um selo`)
-    assert.ok(selos[0].text?.endsWith(texto), `${s.item}: o texto do selo diz o estado (a cor só reforça)`)
-    assert.equal(selos[0].text, `${PONTOS[texto]} ${texto}`, `${s.item}: ponto colorido + texto`)
+    assert.equal(selos[0].text, texto, `${s.item}: o texto do selo é só o estado, sem emoji`)
     assert.equal(selos[0].props.tone, tom, `${s.item}: o tom do selo`)
     if (frase) assert.equal(doCartao(s.item, { text: frase }).length, 1, `${s.item}: a frase "${frase}"`)
     // Sem nota nem motivo, a frase não repete o selo: a linha fica só com o selo e o tempo.
     else assert.deepEqual(doCartao(s.item, { type: 'Text' }).map((t) => t.text), [s.nome, 'há 12 min'], `${s.item}: sem frase`)
     const caixa = caixaDo(s.item)
-    assert.equal(caixa?.props?.border, s.estado === 'esperando' ? 'warning' : true, `${s.item}: a borda`)
+    assert.equal(caixa?.props?.border, true, `${s.item}: a borda é a comum: o selo já diz a cor`)
     assert.equal(doCartao(s.item, { type: 'Spinner' }).length, s.estado === 'mergeando' ? 1 : 0, `${s.item}: o Spinner`)
     const nome = doCartao(s.item, { text: s.nome })[0]
     assert.equal(nome.props.truncate, true, `${s.item}: o nome corta no fechado`)
@@ -169,19 +167,14 @@ teste('o mapa selo × tom cobre todo estado do núcleo e usa só os 5 tons do Or
     assert.ok(texto.length > 0, `${chave}: o texto diz o estado, a cor só reforça`)
     assert.ok(TONS.includes(tom), `${chave}: tom fora dos 5 do Orca`)
   }
-  // Nenhum estado repete a aparência de outro: o par tom + ponto é único (o ponto dá a cor que o Badge, que só tem tom, não dá).
-  const pares = Object.entries(SELOS).map(([k, v]) => `${v.tom}|${v.ponto}`)
-  assert.equal(new Set(pares).size, pares.length, 'dois estados com o mesmo tom e o mesmo ponto')
-  assert.ok(Object.values(SELOS).every((v) => v.ponto.length > 0), 'todo selo tem ponto')
-  assert.ok(Object.entries(SELOS).every(([, v]) => PONTOS[v.texto] === v.ponto), 'o teste e o mapa concordam nos pontos')
-  // Os que mais importam: Executando, PR aberto, Planejando, Validando, Na fila e Mergeando se distinguem entre si.
-  const vizinhos = ['execucao', 'pr-aberto', 'planejamento', 'validando', 'na-fila', 'mergeando'].map((k) => SELOS[k].ponto)
-  assert.equal(new Set(vizinhos).size, vizinhos.length, 'os estados vizinhos têm pontos diferentes')
-  assert.notEqual(SELOS['execucao'].tom, SELOS['pr-aberto'].tom, 'Executando e PR aberto nem no tom se parecem')
+  // O mapa selo × tom: agrupado por sentido, só com os 5 tons do Orca; o texto diz o estado.
   const porTom = (t: string) => Object.entries(SELOS).filter(([, v]) => v.tom === t).map(([k]) => k).sort()
-  assert.deepEqual(porTom('danger'), ['falhou', 'gate-vermelho', 'travada'])
+  assert.deepEqual(porTom('accent'), ['design', 'execucao', 'mergeando', 'planejamento', 'validando'])
+  assert.deepEqual(porTom('warning'), ['esperando', 'na-fila', 'pr-aberto'])
   assert.deepEqual(porTom('success'), ['entregue'])
-  assert.deepEqual(porTom('warning'), ['esperando'])
+  assert.deepEqual(porTom('danger'), ['falhou', 'gate-vermelho', 'travada'])
+  assert.deepEqual(porTom('neutral'), ['sem-dona', 'sem-movimento'])
+  assert.ok(Object.values(SELOS).every((v) => !/\p{Extended_Pictographic}/u.test(v.texto)), 'sem emoji no selo')
 })
 
 teste('abrir mostra o nome inteiro e os blocos; continua aberto depois de uma releitura que muda o estado e a ordem', async () => {
@@ -349,7 +342,7 @@ teste('a fila de merge ilegível num projeto: a linha sob o cabeçalho e o cart�
   const s = sessao('F439', { estado: 'na-fila', prNaFila: 173, foraDaFila: true, etapa: 'merge' })
   const { v, doCartao } = await montar(() => leitura(vista([grupo('kit', [s], { filaIlegivel: true }), grupo('izanagi', [sessao('F1')])])))
   assert.equal(v.findAll({ text: 'Não li a fila de merge deste projeto.' }).length, 1)
-  assert.equal(doCartao('F439', { type: 'Badge' })[0].text, '🟠 PR aberto')
+  assert.equal(doCartao('F439', { type: 'Badge' })[0].text, 'PR aberto')
   semErros(v)
 })
 
