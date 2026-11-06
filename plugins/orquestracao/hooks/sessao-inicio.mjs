@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// SessionStart: injeta o resumo das regras globais (regras-globais.md, fonte única) como additionalContext e, quando o app
-// informa a sessão (CLAUDE_CODE_HOST_SESSION_ID), as perguntas do painel que ela mesma abriu: depois de uma limpeza de
+// SessionStart: injeta o resumo das regras globais (regras-globais.md, fonte única) como additionalContext e, quando o anfitrião
+// informa a sessão (o `local_…` do app ou o `orca_session_id:<id>` do Orca, F439), as perguntas do painel que ela mesma abriu: depois de uma limpeza de
 // contexto, é por aqui que ela as reconhece. Na orquestradora, antes de tudo, a ordem de voltar ao papel e o marcador
 // recriado (orquestradora-de-volta.mjs, F208). Nunca trava o início da sessão: qualquer erro escreve só o que já tinha e sai 0.
 import { readFileSync } from 'node:fs';
@@ -22,15 +22,32 @@ try {
 let entrada = {};
 try { entrada = JSON.parse(readFileSync(0, 'utf8') || '{}') ?? {}; } catch { /* sem entrada */ }
 
+// F439 (ADR 0030): quem é esta sessão — o `local_…` no app, o `orca_session_id:<id>` no Orca (null no terminal). No Orca, o
+// início grava `orca-sessoes/<id>.json` (o id do CLI, a pasta, a hora e o endereço do send) antes de tudo: é por ele que o
+// registro da sessão, a batida e as travas a reconhecem.
+// A gravação segue o endereço, não o anfitrião fixado: a sessão cujo endereço é do Orca grava, mesmo com a chave do projeto
+// fixando outro anfitrião. Falha na gravação não apaga o endereço.
+let quem = null;
+try {
+  const { quemSou } = await import('./anfitriao.mjs');
+  quem = quemSou({ env: process.env, cwd: entrada.cwd || process.cwd() });
+} catch { quem = process.env.CLAUDE_CODE_HOST_SESSION_ID || null; }
+if (quem?.startsWith('orca_session_id:')) {
+  try {
+    const { gravarSessaoDoOrca } = await import('./orca-sessoes.mjs');
+    gravarSessaoDoOrca({ env: process.env, cliId: entrada.session_id, cwd: entrada.cwd || process.cwd() });
+  } catch { /* sem o arquivo, o painel não acha a sessão pelo id do CLI; o início segue */ }
+}
+
 let papel = '';
 try {
   const { orquestradoraDeVolta } = await import('./orquestradora-de-volta.mjs');
-  papel = orquestradoraDeVolta({ sessionId: entrada.session_id, localId: process.env.CLAUDE_CODE_HOST_SESSION_ID, cwd: entrada.cwd })?.texto ?? '';
+  papel = orquestradoraDeVolta({ sessionId: entrada.session_id, localId: quem, cwd: entrada.cwd })?.texto ?? '';
 } catch { /* sem o papel */ }
 
 let perguntas = '';
 try {
-  const localId = process.env.CLAUDE_CODE_HOST_SESSION_ID;
+  const localId = quem;
   if (localId) {
     const { perguntasDaSessao, textoDasPerguntas } = await import('./perguntas-da-sessao.mjs');
     perguntas = textoDasPerguntas(perguntasDaSessao(localId), localId);

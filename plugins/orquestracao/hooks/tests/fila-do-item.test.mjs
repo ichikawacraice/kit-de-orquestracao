@@ -58,7 +58,7 @@ function rodar(evento, sessoes = join(base, 'sessoes'), hooksDir = HOOKS) {
   const entrada = typeof evento === 'string' ? evento : JSON.stringify(evento);
   const out = execFileSync('node', [join(hooksDir, 'fila-do-item.mjs')], {
     input: entrada, encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL',
-    env: { ...process.env, FILA_DIR: filaDir(), FILA_APP_SESSOES_DIR: sessoes, FILA_LOG: logArq(), FILA_DEDUZIDO: deduzidoArq() },
+    env: { ...process.env, FILA_DIR: filaDir(), FILA_APP_SESSOES_DIR: sessoes, FILA_LOG: logArq(), FILA_DEDUZIDO: deduzidoArq(), HOOKS_CREWAI_BASE: join(base, 'orq') },
   });
   return out ? JSON.parse(out) : null;
 }
@@ -329,6 +329,25 @@ caso('F424: projeção ilegível vale como ausente (o declarado decide)', () => 
   writeFileSync(deduzidoArq(), '{quebrado');
   igual(rodar(stop())?.decision, 'block', 'declarado em merge sem entrega bloqueia');
   igual(desfechos().join(','), 'bloqueou-entrega', 'log sem erro');
+});
+
+// F439: no Orca não há registro do app; o que liga o id do CLI à sessão é `orca-sessoes/<id>.json`, gravado no início dela.
+// A dona do Orca (donoLocalId = orca_session_id:<id>) é achada pelo id do CLI atual e pelo anterior, e é cobrada como a do app.
+function sessaoDoOrca(orcaId, cliAtual, anteriores = []) {
+  mkdirSync(join(base, 'orq', 'orca-sessoes'), { recursive: true });
+  writeFileSync(join(base, 'orq', 'orca-sessoes', `${orcaId}.json`), JSON.stringify({ orcaId: `orca_session_id:${orcaId}`, cliAtual, cliIds: [cliAtual, ...anteriores], terminal: null, enderecoDoSend: `orca_session_id:${orcaId}`, cwd: '/r', em: INICIO }));
+}
+const ORCA = 'orca_session_id:880dae07-91e8-4aae-9a46-0e857a656849';
+caso('F439 a dona do Orca é achada pelo id do CLI (atual e anterior) e bloqueia sem entrega', () => {
+  item('F12', emMerge({ donoLocalId: ORCA }));
+  transcript(turno());
+  igual(rodar(stop()), null, 'prova: sem o arquivo do Orca, passa');
+  igual(desfechos().join(','), 'sem-local-id', 'prova: o log diz sem-local-id');
+  sessaoDoOrca('880dae07-91e8-4aae-9a46-0e857a656849', SID);
+  igual(rodar(stop())?.decision, 'block', 'id do CLI atual');
+  sessaoDoOrca('880dae07-91e8-4aae-9a46-0e857a656849', 'cccccccc-atual', [SID]);
+  igual(rodar(stop())?.decision, 'block', 'id do CLI anterior');
+  ok(!desfechos().slice(1).includes('sem-local-id'), `log: ${desfechos().join(',')}`);
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');

@@ -7,6 +7,7 @@ import { homedir, loadavg, availableParallelism } from 'node:os';
 import { join, basename, dirname } from 'node:path';
 import { fechadasRecentes, slugDoProjeto } from '../skills/orquestradora/scripts/perguntas-arquivo.mjs';
 import { BASE } from './hooks-crewai-comum.mjs';
+import { registroDoOrca } from './orca-sessoes.mjs';
 
 export { BASE };
 const H = homedir();
@@ -120,6 +121,12 @@ function guardarCache(id, reg) {
 // fresco: ignora o cache (o título muda e a decisão depende dele — arquivar sessão, só por comando do operador).
 export function registroDaSessao(id, { fresco = false } = {}) {
   if (!id) return null;
+  // F439: a sessão do Orca (pelo `orca_session_id:` ou pelo id do CLI) vem do arquivo que o início dela grava, sem cache: a
+  // pasta é pequena, e o "fora do registro" guardado antes de o início gravar não pode esconder a sessão por 2 min.
+  if (!String(id).startsWith('local_')) {
+    const orca = registroDoOrca(id);
+    if (orca || String(id).startsWith('orca_session_id:')) return orca;
+  }
   const hit = fresco ? null : lerCache()[id];
   // Cache de antes do `cwd`/`originCwd` (reg sem a chave `cwd`) é descartado: não vale como "sem projeto".
   if (hit && Date.now() - hit.em <= CACHE_TTL_MS && (hit.reg === null || 'cwd' in hit.reg)) return hit.reg;
