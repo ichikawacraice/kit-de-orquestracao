@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { orcaFalso, recibo, worker } from './orca-falso.mjs';
+import { orcaFalso, recibo, worker, reciboPs, worktreeComAgentes, agenteDoOrca } from './orca-falso.mjs';
 
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 const PAINEL = join(SCRIPTS, 'painel.mjs');
@@ -829,6 +829,56 @@ test('batida --leitura: dona do Orca viva pela lista sai viva no deduzido', () =
   const r = leitura(T, o.env);
   assert.equal(r.exit, 0, r.err);
   assert.equal(deduzidoDe('F1').donaViva, true);
+});
+
+// F470: no Orca "rodando" vem do estado do agente na `orca worktree ps` (o mesmo que a barra lateral do Orca mostra), ligado à dona pelo id
+// dela na paneKey. Medido em 06/11: o `lastOutputAt` do `terminal list` é do terminal de shell (horas parado com a dona trabalhando) e o
+// `liveness` do `worker-list` é "unverifiable" para toda dona viva: nenhum dos dois distingue trabalhando de parada.
+const psDaDona = (wt, agentes) => ({ '': recibo([worker(wt, 'retained', { terminal: 'structworker_f444' })]), outros: { 'worktree ps': reciboPs([worktreeComAgentes(wt, agentes)]) } });
+test('batida --leitura: dona do Orca com o agente working na worktree ps sai rodando, e não parada', () => {
+  const wt = donaDoOrca('F1', { terminal: 'structworker_f444' });
+  const o = orcaFalso(psDaDona(wt, [agenteDoOrca(ORCA_ID.split(':')[1], 'working')]));
+  const r = leitura(T, o.env);
+  assert.equal(r.exit, 0, r.err);
+  const d = deduzidoDe('F1');
+  assert.equal(d.donaViva, true);
+  assert.equal(d.rodando, true, JSON.stringify(d));
+  assert.equal(d.parado, false, 'o item de 40 min sem gravar não é parado com a dona trabalhando');
+});
+
+test('batida --leitura: dona do Orca com o agente done (esperando a resposta) não sai rodando e o item segue parado', () => {
+  const wt = donaDoOrca('F1', { terminal: 'structworker_f444' });
+  const o = orcaFalso(psDaDona(wt, [agenteDoOrca(ORCA_ID.split(':')[1], 'done')]));
+  const r = leitura(T, o.env);
+  assert.equal(r.exit, 0, r.err);
+  assert.ok(o.chamadas().some((c) => c.argv.slice(0, 2).join(' ') === 'worktree ps'), 'a leitura não consultou o worktree ps: o teste não mediria nada');
+  const d = deduzidoDe('F1');
+  assert.equal(d.donaViva, true);
+  assert.equal(d.rodando, false);
+  assert.equal(d.parado, true);
+});
+
+test('batida --leitura: outro agente working na mesma worktree (a coordenadora) não faz a dona rodar', () => {
+  const wt = donaDoOrca('F1', { terminal: 'structworker_f444' });
+  const o = orcaFalso(psDaDona(wt, [agenteDoOrca('claude_3c8ec4cb_1849_49ba_be37_f9215e9742a6', 'working'), agenteDoOrca(ORCA_ID.split(':')[1], 'done')]));
+  const r = leitura(T, o.env);
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(deduzidoDe('F1').rodando, false);
+});
+
+test('batida --leitura: worktree ps que falha ou vem truncado → ninguém roda, a leitura segue e a dona continua viva', () => {
+  const wt = donaDoOrca('F1', { terminal: 'structworker_f444' });
+  const agentes = [agenteDoOrca(ORCA_ID.split(':')[1], 'working')];
+  const falha = orcaFalso({ '': recibo([worker(wt, 'retained', { terminal: 'structworker_f444' })]), outros: { 'worktree ps': { stdout: 'quebrou', exit: 1 } } });
+  const a = leitura(T, falha.env);
+  assert.equal(a.exit, 0, a.err);
+  assert.equal(deduzidoDe('F1').rodando, false);
+  assert.equal(deduzidoDe('F1').donaViva, true);
+  rmSync(arquivoDeduzido());
+  const cortado = orcaFalso({ '': recibo([worker(wt, 'retained', { terminal: 'structworker_f444' })]), outros: { 'worktree ps': reciboPs([worktreeComAgentes(wt, agentes)], { truncated: true }) } });
+  const b = leitura(T, cortado.env);
+  assert.equal(b.exit, 0, b.err);
+  assert.equal(deduzidoDe('F1').rodando, false, 'lista cortada não prova que roda');
 });
 
 test('batida --leitura: deduzido com menos de 10 min → pula sem chamar o Orca; com 10 min ou mais, roda', () => {

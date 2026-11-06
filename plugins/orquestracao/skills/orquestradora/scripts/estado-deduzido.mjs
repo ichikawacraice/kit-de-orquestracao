@@ -94,7 +94,8 @@ export function deduzir({ id = null, item: d, linha = null, prs = null, git = nu
   const temDona = texto(d?.donoLocalId);
   const donaViva = !temDona ? null : orca && !linha ? (typeof orca.viva === 'boolean' ? orca.viva : null)
     : !linha && semListaDoApp ? null : Boolean(linha && linha.isArchived !== true);
-  const rodando = Boolean(donaViva && linha?.isRunning === true);
+  // F470: a dona do Orca não tem `isRunning` na lista do app; o agente dela no Orca (`orca.rodando`) diz se trabalha agora
+  const rodando = Boolean(donaViva && (linha ? linha.isRunning === true : orca?.rodando === true));
   const marcas = [ms(d?.atualizadoEm), donaViva ? ms(linha?.lastActivityAt) : null, git?.ultimoCommitMs ?? null, ...ligados.map((p) => ms(p.updatedAt))].filter((t) => t !== null);
   const ultimaAtividade = marcas.length ? Math.min(Math.max(...marcas), agoraMs) : null;
   const parado = !rodando && !d?.espera && !d?.trava && (ultimaAtividade === null || agoraMs - ultimaAtividade >= prazoMin * 60_000);
@@ -160,7 +161,7 @@ export function gitDoWorktree(cwd) {
 
 // Coleta e deduz cada item vivo. `itens`: Map F → data; `linhas`: list_sessions; `projetoDe(linha)` → slug.
 // O repositório do projeto é o cwd de uma sessão viva DELE (a da dona primeiro, se for do projeto). → Map F → deduzido
-// F444: `donaDoOrca(id)` → { viva, cwd } da dona do Orca (o registro de orca-sessoes e a lista de workers); o git dela sai do cwd
+// F444: `donaDoOrca(id)` → { viva, rodando (F470), cwd } da dona do Orca (o registro de orca-sessoes e a lista de workers); o git dela sai do cwd
 // registrado enquanto ela não está provada morta. F460: `semListaDoApp` (a batida de leitura do Orca): `linhas` são só as pastas dos
 // workers do Orca, para achar o repositório; a dona `local_` sai fora da vista (donaViva null), nunca morta.
 export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? '').toLowerCase(), agoraMs, prazoMin, ler = { prsDoRepositorio, gitDoWorktree }, donaDoOrca = () => null, semListaDoApp = false }) {
@@ -168,7 +169,7 @@ export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? ''
   try {
     const porId = new Map(linhas.map((r) => [r.sessionId, r]));
     const viva = (r) => Boolean(r && r.isArchived !== true && texto(r.cwd));
-    const orcaDe = (id) => { let o = null; try { o = donaDoOrca(id); } catch { /* fora da vista */ } return { viva: typeof o?.viva === 'boolean' ? o.viva : null, cwd: o?.cwd ?? null }; };
+    const orcaDe = (id) => { let o = null; try { o = donaDoOrca(id); } catch { /* fora da vista */ } return { viva: typeof o?.viva === 'boolean' ? o.viva : null, rodando: typeof o?.rodando === 'boolean' ? o.rodando : null, cwd: o?.cwd ?? null }; };
     const doProjeto = (r, p) => { try { return projetoDe(r) === p; } catch { return false; } };
     const repoDe = new Map(); // projeto → cwd
     for (const [, d] of itens) {

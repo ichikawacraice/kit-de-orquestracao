@@ -120,6 +120,42 @@ test('esperando: pergunta aberta (com o Q-ID e o tempo dela), espera do operador
   }
 });
 
+// F470: o item parado de propósito esperando OUTRO item ou PR (`espera: { motivo: 'item', texto }`) é Esperando com o texto, não Parada.
+test('espera por item: esperando com o motivo, mesmo com a dona sem movimento ou sem sessão; não conta como parada e sai do topo da lista', () => {
+  const espera = { motivo: 'item', texto: 'aguarda o F462 mergear' };
+  const p = montar({
+    itens: { F1: item({ espera }), F2: item({ espera }), F3: item(), F4: item({ espera: { motivo: 'operador', texto: 'precisa do token' } }) },
+    deduzido: { F1: ded({ parado: true, minParado: 90, ultimaAtividade: '2026-11-06T13:30:00Z' }), F2: ded({ donaViva: false }), F3: ded(), F4: ded() },
+  });
+  const r = ler(p);
+  const s = porItem(r);
+  for (const id of ['F1', 'F2']) {
+    assert.equal(s[id].estado, 'esperando', id);
+    assert.equal(s[id].tipoDeEspera, 'item', id);
+    assert.equal(s[id].motivo, 'aguarda o F462 mergear', id);
+    assert.equal(s[id].tipoDeParada, null, id);
+  }
+  assert.equal(s.F4.tipoDeEspera, null, 'a espera do operador segue sendo da pessoa');
+  assert.equal(s.F3.tipoDeEspera, null);
+  assert.equal(r.paradas, 1, 'só a espera do operador sem pergunta conta; esperar outro item não pede nada ao operador');
+  assert.deepEqual(r.projetos[0].sessoes.map((x) => x.item), ['F4', 'F3', 'F1', 'F2'], 'a espera do operador sobe; a por item fica depois de quem trabalha');
+});
+
+test('espera por item: a pergunta aberta e a trava vencem; sem a espera, a mesma dona sem movimento é Parada (a prova de que a regra morde)', () => {
+  const espera = { motivo: 'item', texto: 'aguarda o F462' };
+  const p = montar({
+    itens: { F1: item({ espera }), F2: item({ espera, trava: { motivo: 'conflito', texto: 'c' } }), F3: item() },
+    deduzido: { F1: ded(), F2: ded(), F3: ded({ parado: true, minParado: 90 }) },
+  });
+  const s = porItem(ler(p, { abertas: [{ id: 'Q1', titulo: 't', item: 'F1' }] }));
+  assert.equal(s.F1.estado, 'esperando');
+  assert.equal(s.F1.tipoDeEspera, null, 'a pergunta é da pessoa: vale o estado dela');
+  assert.equal(s.F2.estado, 'parada');
+  assert.equal(s.F2.tipoDeParada, 'conflito');
+  assert.equal(s.F3.estado, 'parada');
+  assert.equal(s.F3.tipoDeParada, 'sem-movimento');
+});
+
 test('precedência: a pergunta aberta vence a trava; a trava vence a fila; a pergunta vence a fila', () => {
   const p = montar({
     itens: { F1: item({ etapa: 'merge', trava: { motivo: 'gate-vermelho', texto: 'gate vermelho' } }), F2: item({ etapa: 'merge' }), F3: item({ etapa: 'merge', trava: { motivo: 'conflito', texto: 'c' } }) },

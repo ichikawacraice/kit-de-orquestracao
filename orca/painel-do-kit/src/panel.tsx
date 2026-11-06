@@ -886,6 +886,7 @@ type Tom = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
 // ou travou; neutro está parado sem causa. O texto sempre diz o estado: a cor nunca é a única pista.
 export const SELOS: Record<string, { texto: string; tom: Tom }> = {
   esperando: { texto: 'Espera você', tom: 'warning' },
+  'espera-item': { texto: 'Esperando', tom: 'warning' },
   travada: { texto: 'Travada', tom: 'danger' },
   'gate-vermelho': { texto: 'Gate vermelho', tom: 'danger' },
   'sem-movimento': { texto: 'Parada', tom: 'neutral' },
@@ -902,6 +903,7 @@ export const SELOS: Record<string, { texto: string; tom: Tom }> = {
 }
 
 export function chaveDoSelo(s: Sessao): string {
+  if (s.estado === 'esperando' && s.tipoDeEspera === 'item' && !s.perguntas.length) return 'espera-item'
   if (s.estado === 'parada') return s.tipoDeParada && s.tipoDeParada in SELOS ? s.tipoDeParada : 'travada'
   if (s.estado === 'na-fila') return s.foraDaFila ? 'pr-aberto' : 'na-fila'
   if (s.estado === 'trabalhando') return s.subEtapa === 'planejamento' || s.subEtapa === 'design' ? s.subEtapa : 'execucao'
@@ -921,7 +923,7 @@ function fraseDaSessao(s: Sessao): string {
   const q = s.perguntas[0]
   switch (chaveDoSelo(s)) {
     case 'esperando': return q ? `${q.id} · ${semItem(q.titulo)}` : s.motivo ?? ''
-    case 'travada': case 'gate-vermelho': return s.motivo ?? ''
+    case 'espera-item': case 'travada': case 'gate-vermelho': return s.motivo ?? ''
     case 'sem-movimento': return dependencia(s) ?? 'sem atividade'
     case 'falhou': return 'a sessão no Orca terminou com falha'
     case 'sem-dona': return dependencia(s) ?? 'esperando a orquestradora abrir uma'
@@ -1038,7 +1040,7 @@ function DetalheDaSessao(props: { s: Sessao }) {
         </Box>
       ) : s.motivo ? <Text size="sm">{`Motivo: ${s.motivo}`}</Text> : null}
       {/* Espera sem pergunta não tem gesto em Perguntas: diz onde retomar. */}
-      {s.estado === 'esperando' && !s.perguntas.length ? <Text size="xs" muted>{`Retome na sessão do ${s.item}.`}</Text> : null}
+      {s.estado === 'esperando' && s.tipoDeEspera !== 'item' && !s.perguntas.length ? <Text size="xs" muted>{`Retome na sessão do ${s.item}.`}</Text> : null}
       {s.etapas.length ? <Etapas s={s} /> : null}
       {prs ? <Text size="xs">{prs}</Text> : null}
       {s.agora ? (

@@ -15,7 +15,7 @@ const sessao = (item: string, extra: Partial<Sessao> = {}): Sessao => ({
   item, titulo: `título do ${item}`, nome: `${item} · título do ${item}`, projeto: 'kit', etapa: 'execucao', estado: 'trabalhando',
   subEtapa: 'execucao', tipoDeParada: null, motivo: null, prNaFila: null, posicaoNaFila: null, foraDaFila: false, desdeEm: iso(12 * MIN),
   agora: null, notaEm: null, rodando: false, perguntas: [], prs: { abertos: [], mergeados: [] }, fatia: null, todasFeitas: false,
-  etapas: [], feitasJuntas: 0, maisBolinhas: 0, dependeDe: [], ...extra,
+  etapas: [], feitasJuntas: 0, maisBolinhas: 0, dependeDe: [], tipoDeEspera: null, ...extra,
 })
 const grupo = (projeto: string | null, sessoes: Sessao[], extra: Partial<GrupoDeSessoes> = {}): GrupoDeSessoes => ({ projeto, filaIlegivel: false, sessoes, ...extra })
 const vista = (projetos: GrupoDeSessoes[], extra: Partial<VistaDasSessoes> = {}): VistaDasSessoes =>
@@ -123,6 +123,7 @@ teste('cada estado tem o seu selo, o seu tom e a sua frase; nenhum cartão tem b
   const casos: [Sessao, string, string, string | null][] = [
     [sessao('F1', { estado: 'esperando', perguntas: [{ id: 'Q1060', titulo: 'F1 · Mergear?' }], desdeEm: iso(5 * 60 * MIN) }), 'Espera você', 'warning', 'Q1060 · Mergear?'],
     [sessao('F2', { estado: 'esperando', motivo: 'pausado pelo operador para trocar de conta' }), 'Espera você', 'warning', 'pausado pelo operador para trocar de conta'],
+    [sessao('F19', { estado: 'esperando', tipoDeEspera: 'item', motivo: 'aguarda o F462 mergear' }), 'Esperando', 'warning', 'aguarda o F462 mergear'],
     [sessao('F3', { estado: 'parada', tipoDeParada: 'conflito', motivo: 'conflito com a main' }), 'Travada', 'danger', 'conflito com a main'],
     [sessao('F4', { estado: 'parada', tipoDeParada: 'gate-vermelho', motivo: '2 testes vermelhos' }), 'Gate vermelho', 'danger', '2 testes vermelhos'],
     [sessao('F5', { estado: 'parada', tipoDeParada: 'sem-movimento', desdeEm: iso(45 * MIN) }), 'Parada', 'neutral', 'sem atividade'],
@@ -169,9 +170,10 @@ teste('o mapa selo × tom cobre todo estado do núcleo e usa só os 5 tons do Or
     if (estado === 'parada') return paradas.map((tipoDeParada) => sessao('F1', { estado, tipoDeParada }))
     if (estado === 'trabalhando') return [null, 'planejamento', 'design', 'execucao'].map((subEtapa) => sessao('F1', { estado, subEtapa }))
     if (estado === 'na-fila') return [false, true].map((foraDaFila) => sessao('F1', { estado, foraDaFila }))
+    if (estado === 'esperando') return [sessao('F1', { estado }), sessao('F1', { estado, tipoDeEspera: 'item' })]
     return [sessao('F1', { estado })]
   })
-  assert.ok(ORDEM_DOS_ESTADOS.length === 7 && combinacoes.length >= 14, 'o núcleo dá os estados: sem eles o teste não mede nada')
+  assert.ok(ORDEM_DOS_ESTADOS.length === 7 && combinacoes.length >= 15, 'o núcleo dá os estados: sem eles o teste não mede nada')
   const usadas = new Set<string>()
   for (const s of combinacoes) {
     const chave = chaveDoSelo(s)
@@ -186,7 +188,7 @@ teste('o mapa selo × tom cobre todo estado do núcleo e usa só os 5 tons do Or
   // O mapa selo × tom: agrupado por sentido, só com os 5 tons do Orca; o texto diz o estado.
   const porTom = (t: string) => Object.entries(SELOS).filter(([, v]) => v.tom === t).map(([k]) => k).sort()
   assert.deepEqual(porTom('accent'), ['design', 'execucao', 'mergeando', 'planejamento', 'validando'])
-  assert.deepEqual(porTom('warning'), ['esperando', 'na-fila', 'pr-aberto'])
+  assert.deepEqual(porTom('warning'), ['espera-item', 'esperando', 'na-fila', 'pr-aberto'])
   assert.deepEqual(porTom('success'), ['entregue'])
   assert.deepEqual(porTom('danger'), ['falhou', 'gate-vermelho', 'travada'])
   assert.deepEqual(porTom('neutral'), ['sem-dona', 'sem-movimento'])
@@ -276,6 +278,17 @@ teste('espera sem pergunta: o cartão aberto diz o motivo e onde retomar', async
   assert.equal(doCartao('F442', { text: 'Motivo: pausado pelo operador para trocar de conta' }).length, 1)
   assert.equal(doCartao('F442', { text: 'Retome na sessão do F442.' }).length, 1)
   assert.equal(doCartao('F442', { role: 'button', text: 'Responder em Perguntas' }).length, 0)
+  semErros(v)
+})
+
+teste('espera por item: o cartão aberto diz o motivo e não manda o operador retomar nada', async () => {
+  const s = sessao('F442', { estado: 'esperando', tipoDeEspera: 'item', motivo: 'aguarda o F462 mergear' })
+  const { v, doCartao } = await montar(() => leitura(vista([grupo('kit', [s])])))
+  assert.equal(doCartao('F442', { text: 'Espera você' }).length, 0, 'o selo da pessoa não vale: quem espera é o item')
+  assert.equal(doCartao('F442', { text: 'Esperando' }).length, 1)
+  await v.press({ label: 'Abrir F442' })
+  assert.equal(doCartao('F442', { text: 'Motivo: aguarda o F462 mergear' }).length, 1)
+  assert.equal(doCartao('F442', { text: 'Retome na sessão do F442.' }).length, 0, 'não há nada a retomar: a sessão espera o outro item')
   semErros(v)
 })
 

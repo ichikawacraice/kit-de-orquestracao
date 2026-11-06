@@ -94,6 +94,8 @@ function estadoDoItem(d, ded, fila, perguntas, falhou) {
   if (d.espera?.motivo === 'operador') return { estado: 'esperando', motivo: texto(d.espera.texto), desdeEm: iso(d.atualizadoEm) };
   if (trava) return { estado: 'parada', tipoDeParada: texto(trava.motivo) ?? 'outra', motivo: texto(trava.texto), desdeEm: iso(d.atualizadoEm) };
   if (falhou) return { estado: 'parada', tipoDeParada: 'falhou', desdeEm: iso(ded?.ultimaAtividade) ?? ativ };
+  // F470: parada de propósito esperando OUTRO item ou PR: não é sem-movimento nem sem-dona, e não pede nada ao operador.
+  if (d.espera?.motivo === 'item') return { estado: 'esperando', tipoDeEspera: 'item', motivo: texto(d.espera.texto), desdeEm: iso(d.atualizadoEm) };
   // Na etapa merge, a dona já entregou o PR: dona encerrada e parado não são parada, o PR espera a fila.
   if (etapa !== 'merge') {
     // `null` com dona é a sessão do Orca fora da vista da batida, não a dona sumida.
@@ -135,7 +137,7 @@ function cortarBolinhas(etapas, comNomes) {
 // A ordem fina dos cartões: dentro de `parada`, a trava antes do parado; dentro de `na-fila`, a fila antes do PR fora dela.
 function urgencia(s) {
   switch (s.estado) {
-    case 'esperando': return 0;
+    case 'esperando': return s.tipoDeEspera === 'item' ? 7.5 : 0;
     case 'parada': return ['sem-movimento', 'falhou', 'sem-dona'].includes(s.tipoDeParada) ? 2 : 1;
     case 'mergeando': return 3;
     case 'na-fila': return s.foraDaFila ? 5 : 4;
@@ -146,7 +148,7 @@ function urgencia(s) {
 }
 
 /** Conta do trilho: o que está fora do ritmo e que a seção Perguntas não conta (as paradas e a espera sem pergunta). */
-const ehParada = (s) => s.estado === 'parada' || (s.estado === 'esperando' && !s.perguntas.length);
+const ehParada = (s) => s.estado === 'parada' || (s.estado === 'esperando' && s.tipoDeEspera !== 'item' && !s.perguntas.length);
 
 /**
  * As sessões do kit agrupadas por projeto. `pasta` é a do painel (`…/orquestracao/painel`); a batida, a fila de merge e as
@@ -183,7 +185,7 @@ export function sessoesDoKit(pasta, { agoraMs = Date.now(), desdeMs, abertas = [
     const agora = entregue ? null : texto(d.agora);
     sessoes.push({
       item: id, titulo, nome: `${id} · ${titulo}`, projeto, etapa,
-      subEtapa: null, tipoDeParada: null, motivo: null, prNaFila: null, posicaoNaFila: null, foraDaFila: false,
+      subEtapa: null, tipoDeParada: null, tipoDeEspera: null, motivo: null, prNaFila: null, posicaoNaFila: null, foraDaFila: false,
       ...est,
       agora, notaEm: agora ? iso(d.atualizadoEm) : null,
       rodando: ded?.rodando === true,

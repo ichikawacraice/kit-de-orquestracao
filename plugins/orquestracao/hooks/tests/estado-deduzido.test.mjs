@@ -312,6 +312,26 @@ test('dona do Orca: viva pela lista do Orca, morta só com a prova, fora da vist
   assert.equal(v.rodando, false);
   assert.equal(v.fontes.dona, 'orca');
 });
+// F470: a dona do Orca não tem `isRunning` na lista do app; "rodando" vem do agente dela no Orca (`orca.rodando`).
+test('F470: dona do Orca com o agente rodando → rodando e não parada; sem rodar, o item de 40 min sem gravar é parado', () => {
+  const it = item({ donoLocalId: ORCA }); // atualizadoEm: 40 min atrás, prazo 15
+  const roda = ded({ item: it, prs: [], orca: { viva: true, rodando: true } });
+  assert.equal(roda.rodando, true);
+  assert.equal(roda.parado, false);
+  const espera = ded({ item: it, prs: [], orca: { viva: true, rodando: false } });
+  assert.equal(espera.rodando, false);
+  assert.equal(espera.parado, true);
+  assert.equal(ded({ item: it, prs: [], orca: { viva: true, rodando: null } }).rodando, false, 'sem o dado, não roda');
+  assert.equal(ded({ item: it, prs: [], orca: { viva: false, rodando: true } }).rodando, false, 'dona provada morta não roda');
+});
+test('F470: coletar leva o rodando da dona do Orca ao deduzido', () => {
+  const ler = { prsDoRepositorio: () => [], gitDoWorktree: () => null };
+  const itens = new Map([['F1', item({ donoLocalId: ORCA })]]);
+  const roda = coletar({ itens, linhas: [], projetoDe: () => 'kit', agoraMs: T, prazoMin: 15, ler, donaDoOrca: () => ({ viva: true, cwd: '/orca/wt/f1', rodando: true }) });
+  assert.equal(roda.get('F1').rodando, true);
+  const nao = coletar({ itens, linhas: [], projetoDe: () => 'kit', agoraMs: T, prazoMin: 15, ler, donaDoOrca: () => ({ viva: true, cwd: '/orca/wt/f1' }) });
+  assert.equal(nao.get('F1').rodando, false);
+});
 test('coletar: dona do Orca não provada morta → o git sai da pasta registrada; provada morta → sem git', () => {
   const pastas = [];
   const ler = { prsDoRepositorio: () => [], gitDoWorktree: (cwd) => { pastas.push(cwd); return { branch: 'f1-x', aFrente: 1, sujo: false, ultimoCommitMs: T - 2 * MIN }; } };

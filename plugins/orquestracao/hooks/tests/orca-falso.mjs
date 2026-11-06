@@ -54,3 +54,17 @@ export const worker = (pasta, terminalState = 'retained', extra = {}) => ({
   dispatchId: `ctx_${Math.random().toString(16).slice(2, 10)}`, taskId: 'task_x', state: 'ready', liveness: 'unverifiable',
   terminal: `structworker_${Math.random().toString(16).slice(2, 10)}`, terminalState, workspace: `repo-uuid::${pasta}`, host: 'local', ...extra,
 });
+
+/**
+ * O recibo do `worktree ps --json` como o Orca o devolve (medido em 06/11/2026): uma linha por worktree, com os agentes dela.
+ * O falso o serve pelo mapa 'outros' de paginas.json, na chave 'worktree ps'.
+ */
+export const reciboPs = (worktrees, { truncated = false } = {}) => ({
+  stdout: { ok: true, result: { worktrees, hostScope: { covered: ['local'] }, totalCount: worktrees.length, truncated } },
+});
+export const worktreeComAgentes = (path, agentes) => ({ workspaceKind: 'git', path, isArchived: false, status: 'working', agents: agentes });
+/** Um agente do Orca: `cru` é o id da sessão sem o prefixo `orca_session_id:` (vai na paneKey); `state`: working, done… */
+export const agenteDoOrca = (cru, state, extra = {}) => ({
+  paneKey: `structured-agent-session-${cru}:af1bbe52-8eb9-457f-a5c3-8db0ec5559fe`, parentPaneKey: null, state, agentType: 'claude',
+  mainAgent: { state, stateStartedAt: Date.now() }, stateStartedAt: Date.now(), ...extra,
+});
