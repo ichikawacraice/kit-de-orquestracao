@@ -202,6 +202,19 @@ test('o terminal de envio nasce num workspace desta máquina, nunca num host rem
   } finally { await w2.deactivate() }
 })
 
+test('o Orca atual marca toda pasta local com hostId "local": o terminal de envio nasce nela (F449)', async () => {
+  const a = ambiente({ workspaces: (raiz) => [
+    { id: 'ssh', kind: 'worktree', name: 'ssh', path: raiz, branch: 'main', hostId: 'host-ssh' },
+    { id: 'pasta', kind: 'folder', name: 'kit', path: raiz, branch: null, hostId: 'local' },
+    { id: 'arvore', kind: 'worktree', name: 'kit', path: raiz, branch: 'main', hostId: 'local' },
+  ] })
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    assert.equal((await w.request('kit.seguimento', { destino: 'run:run_a', titulo: 'F9', texto: 'oi' })).ok, true)
+    assert.deepEqual(a.host.callsOf('terminal.create').map((c: { workspaceId: string }) => c.workspaceId), ['arvore'])
+  } finally { await w.deactivate() }
+})
+
 test('caixa do Orca maior que o limite: a leitura diz até quando as entregas do Orca vão', async () => {
   const t0 = Date.now()
   const mensagens = Array.from({ length: LIMITE_DA_CAIXA + 5 }, (_, i) => ({ id: `msg_${i}`, type: 'status', subject: 's', body: 'b', created_at: new Date(t0 - i * 60_000).toISOString() }))
