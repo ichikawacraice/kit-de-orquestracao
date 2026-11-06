@@ -39,6 +39,8 @@ function decisao(tipo, motivo) {
 // O sim do painel vale 30 min a partir de `respondidaEm` (a hora do clique); `atualizadoEm` não conta (qualquer update o renova).
 const OK_DO_PAINEL_MS = 30 * 60_000;
 const noPrazo = (iso) => { const t = Date.parse(iso); const d = Date.now() - t; return !Number.isNaN(t) && d >= 0 && d <= OK_DO_PAINEL_MS; };
+// Quem grava a prova do clique do operador numa pergunta: o pane do app (`painel`) e a aba do kit no Orca (`operador-orca`, F436).
+const ORIGENS_DO_CLIQUE = new Set(['painel', 'operador-orca']);
 
 function main() {
   const e = lerEntrada();
@@ -112,7 +114,8 @@ function main() {
     try { origem = e.transcript_path ? origemDoTurno(e.transcript_path) : null; } catch { /* sem transcript */ }
     if (origem === 'human') return libera('turno do operador');
     if (okDoBotaoDeLimpar(reg?.localId)) return libera('botão da barra');
-    const ok = perguntasDeLimpeza(reg?.localId).find((d) => d.estado === 'respondida' && d.respondidaPor === 'painel'
+    // F436: a aba do kit no Orca grava a mesma prova do clique do operador, com a sua origem.
+    const ok = perguntasDeLimpeza(reg?.localId).find((d) => d.estado === 'respondida' && ORIGENS_DO_CLIQUE.has(d.respondidaPor)
       && /^\s*sim/i.test(String(d.resposta ?? '')) && noPrazo(d.respondidaEm));
     if (ok) return libera('sim do painel');
     // O sim dado na janela (AskUserQuestion, F53): o app escreve o tool_result no transcript; vale 30 min, nunca no futuro.

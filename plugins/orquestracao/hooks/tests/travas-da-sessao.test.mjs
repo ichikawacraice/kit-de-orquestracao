@@ -287,6 +287,13 @@ caso('T7: o sim do painel libera (≤ 30 min, respondidaPor painel, resposta sim
   perguntaLimpar(OKP({ titulo: 'limpar · worktrees órfãos' })); nega7(limpa('ORQ', depeer()), 'M1: outra pergunta `limpar · …`');
   perguntaLimpar(OKP({ titulo: ' limpar · orquestradora ' })); passa(limpa('ORQ', depeer()), 'título exato com espaços nas pontas');
 });
+// F436: a aba do kit no Orca grava a mesma prova do clique, com a origem `operador-orca`; outra origem segue negada.
+caso('F436 T7: o sim dado pela aba do Orca (respondidaPor operador-orca) libera; origem desconhecida nega', () => {
+  perguntaLimpar(OKP({ respondidaPor: 'operador-orca' })); passa(limpa('ORQ', depeer()), 'sim da aba do Orca');
+  perguntaLimpar(OKP({ respondidaPor: 'operador-orca', respondidaEm: haMin(40) })); nega7(limpa('ORQ', depeer()), 'operador-orca há 40 min');
+  perguntaLimpar(OKP({ respondidaPor: 'sessao' })); nega7(limpa('ORQ', depeer()), 'origem sessao');
+  perguntaLimpar(OKP({ respondidaPor: 'orca' })); nega7(limpa('ORQ', depeer()), 'origem orca (só o nome exato vale)');
+});
 // F147: o botão de limpar da barra grava <PAINEL_DIR>/../limpeza/<local_…>.json antes de mandar o prompt (origem `plugin`, medida em transcript real).
 const okDoBotao = (data, nome = 'local_ORQ') => { mkdirSync(dir('limpeza'), { recursive: true }); writeFileSync(dir('limpeza', `${nome}.json`), typeof data === 'string' ? data : JSON.stringify(data)); };
 caso('F147 T7: o ok do botão da barra libera em turno peer (≤ 30 min, por barra, da própria sessão); o resto nega', () => {

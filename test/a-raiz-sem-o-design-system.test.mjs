@@ -13,6 +13,9 @@ const globs = [...script.split(' node --test ')[1].matchAll(/'([^']+)'/g)].map((
 // a descoberta padrão do `node --test` sem argumento (Node ≥ 22, com os .ts que ele já remove o tipo)
 const EXT = '{cjs,mjs,js,cts,mts,ts}';
 const PADRAO = [`**/*.test.${EXT}`, `**/*-test.${EXT}`, `**/*_test.${EXT}`, `**/test-*.${EXT}`, `**/test.${EXT}`, `**/test/**/*.${EXT}`];
+// Os .ts dos plugins do Orca (orca/<plugin>/src/) importam o SDK do Orca e só rodam pelo `orca plugin test`, como os .tsx do
+// painel-sessoes pelo `claude plugin test`; o núcleo .mjs deles (orca/<plugin>/test/) entra no npm test.
+const doOrca = (f) => /^orca\/[^/]+\/src\/.*\.ts$/.test(f);
 const achar = (padroes) => new Set(padroes.flatMap((p) => globSync(p, { cwd: RAIZ, exclude: (f) => f.split(/[\\/]/).includes('node_modules') })));
 
 describe('a raiz não roda os testes do design-system', () => {
@@ -20,7 +23,8 @@ describe('a raiz não roda os testes do design-system', () => {
     assert.ok(globs.length > 0, `sem glob no script: ${script}`);
     const padrao = achar(PADRAO);
     assert.ok([...padrao].some((f) => f.startsWith('design-system/')), 'precondição: a descoberta padrão pegaria design-system/');
-    const esperado = [...padrao].filter((f) => !f.startsWith('design-system/')).sort();
+    assert.ok([...padrao].some(doOrca), 'precondição: a descoberta padrão pegaria os .ts dos plugins do Orca');
+    const esperado = [...padrao].filter((f) => !f.startsWith('design-system/') && !doOrca(f)).sort();
     assert.ok(esperado.length > 50, `precondição: testes do kit achados: ${esperado.length}`);
     assert.deepEqual([...achar(globs)].sort(), esperado);
   });
