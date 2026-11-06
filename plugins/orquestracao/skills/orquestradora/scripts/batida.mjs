@@ -59,6 +59,24 @@ export function cartoesResolvidos({ cartoes, linhas, projetoDe, agoraMs, itens =
   return apagar;
 }
 
+// F472 (ADR 0034): a regra do fechamento pelo merge, uma só para as duas batidas (a completa, no `julgar`, e a de leitura da aba
+// do Orca, em painel.mjs#comandoBatidaDeLeitura): o item vivo, de projeto com nome, cujos PRs ligados estão todos mergeados
+// (`deduzir` já tira a fatia com `maisFatias` e o PR que o gh não leu).
+export const fechaPeloMerge = (d, dd) => Boolean(d) && !ETAPAS_FINAIS.has(d.etapa) && Boolean(slugDoProjeto(d.projeto)) && dd?.mergeado === true;
+// O item mudou entre a coleta (fora da trava, até 25 s de gh) e o fechamento (dentro dela): ganhou PR que a coleta não viu (o
+// `--anotar` de um PR novo) ou trocou de etapa (reaberto em execucao). Fica para a próxima batida, que o vê como está.
+// `coleta` sem foto (undefined): vale a regra de antes.
+const numeros = (l) => (Array.isArray(l) ? l.filter((n) => Number.isInteger(n) && n > 0) : []);
+export function mudouDesdeAColeta(coleta, atual) {
+  if (!coleta || !atual) return false;
+  if (coleta.etapa !== atual.etapa) return true;
+  const vistos = new Set(numeros(coleta.prs));
+  return numeros(atual.prs).some((n) => !vistos.has(n));
+}
+// → [{ F, prs }] na ordem do `julgar` (F2 antes de F10)
+export const aFechar = (itens, deduzidos) => [...itens].sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }))
+  .filter(([F, d]) => fechaPeloMerge(d, deduzidos.get(F))).map(([F]) => ({ F, prs: deduzidos.get(F).prs }));
+
 // `filasOrfas`: { <projeto>: fila-orfa.mjs#filaOrfa } — a fila de merge com PR anotado e sem processo vivo (F220). O item em
 // merge com PR nela vai ao relatório na hora, sem esperar o prazo, e o relatório leva `filaParada` com o comando de relance.
 // F351: `filasVivas` { <projeto>: [pr] } são os PRs que uma fila com processo vivo (ou lançada agora pela batida) vai levar: o
@@ -101,7 +119,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     const proj = projeto(nome);
     vistos.add(F);
     const dd = deduzidos.get(F) ?? null;
-    if (dd?.mergeado) { fechar.push({ F, prs: dd.prs }); delete cutucadas[F]; continue; }
+    if (fechaPeloMerge(d, dd)) { fechar.push({ F, prs: dd.prs }); delete cutucadas[F]; continue; }
     const etapa = dd?.etapa ?? d.etapa;
     const prsDoItem = dd ? dd.prs : d.prs;
     const gente = [...new Set([d.donoLocalId, ...(Array.isArray(d.com) ? d.com.map((c) => c?.localId) : [])].filter(texto))];

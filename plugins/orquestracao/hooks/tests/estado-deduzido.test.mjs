@@ -404,3 +404,32 @@ test('F446: coletar passa o id do item à dedução', () => {
   assert.deepEqual(m.get('F303').prs, [1698, 1704]);
   assert.equal(m.get('F303').mergeado, false);
 });
+
+// F472: o caso F455 de outro projeto. A fila fechou o item no merge e, 7 min depois, um `painel update` repetido o reabriu direto em
+// `merge`, sem PR novo. A regra do "reaberto não refecha pelo merge que já o fechou" o deixava em merge para sempre: a reabertura
+// direto em `merge` sem PR ligado depois dela não conta como reabertura.
+test('F472: reaberto direto em merge sem PR novo → o merge de antes vale e o item fecha; com PR novo, a reabertura conta', () => {
+  const historico = [{ em: iso(T - 300 * MIN), etapa: 'execucao' }, { em: iso(T - 100 * MIN), etapa: 'feito' }, { em: iso(T - 90 * MIN), etapa: 'merge' }];
+  const velho = pr(7, 'MERGED', { createdAt: iso(T - 200 * MIN), mergedAt: iso(T - 101 * MIN) });
+  const d = ded({ item: item({ etapa: 'merge', prs: [7], historico }), linha: null, prs: [velho], git: null });
+  assert.deepEqual(d.prs, [7], JSON.stringify(d));
+  assert.equal(d.mergeado, true);
+  assert.equal(d.etapa, 'feito');
+  // presença da regra antiga: a mesma reabertura em `execucao` segue sem refechar
+  const exec = historico.map((h, i) => (i === 2 ? { ...h, etapa: 'execucao' } : h));
+  const e = ded({ item: item({ etapa: 'execucao', prs: [7], historico: exec }), linha: null, prs: [velho], git: null });
+  assert.equal(e.mergeado, false, 'reaberto em execucao: o merge de antes não fecha');
+  // reaberto em merge e depois levado a execucao: a reabertura conta (o item saiu do merge, alguém o retomou)
+  const saiu = [...historico, { em: iso(T - 60 * MIN), etapa: 'execucao' }];
+  const s = ded({ item: item({ etapa: 'execucao', prs: [7], historico: saiu }), linha: null, prs: [velho], git: null });
+  assert.equal(s.mergeado, false, 'saiu do merge depois da reabertura: o merge de antes não fecha');
+  // com PR novo ligado depois da reabertura em merge (mesmo fechado sem merge), a reabertura conta: o PR velho não fecha
+  const novo = pr(8, 'CLOSED', { createdAt: iso(T - 80 * MIN) });
+  const f = ded({ item: item({ etapa: 'merge', prs: [7, 8], historico }), linha: null, prs: [velho, novo], git: null });
+  assert.deepEqual(f.prs, [8]);
+  assert.equal(f.mergeado, false, 'o PR novo fechado sem merge não deixa o velho fechar o item');
+  const aberto = pr(8, 'OPEN', { createdAt: iso(T - 80 * MIN) });
+  const g = ded({ item: item({ etapa: 'merge', prs: [7, 8], historico }), linha: null, prs: [velho, aberto], git: null });
+  assert.equal(g.mergeado, false);
+  assert.deepEqual(g.prsAbertos, [8]);
+});

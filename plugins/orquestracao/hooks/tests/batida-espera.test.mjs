@@ -4,7 +4,7 @@
 // Rodar: node gate/com-fichas.mjs -- node --test plugins/orquestracao/hooks/tests/batida-espera.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { julgar } from '../../skills/orquestradora/scripts/batida.mjs';
+import { julgar, mudouDesdeAColeta } from '../../skills/orquestradora/scripts/batida.mjs';
 
 const MIN = 60_000;
 const T = Date.UTC(2026, 10, 6, 8, 0);
@@ -52,4 +52,17 @@ test('F446: o item em espera com PR numa fila órfã não vai ao relatório como
   const r = rodar({ itens: [emMerge({ espera: ESPERA })], filasOrfas });
   assert.deepEqual(r.projetos.kit.merge, []);
   assert.deepEqual(r.projetos.kit.filaParada?.prs, [7], 'a fila parada segue no relatório');
+});
+
+// F472: as duas batidas deduzem fora da trava (o gh leva até 25 s) e fecham dentro dela. O item que mudou nesse meio tempo (o
+// `--anotar` ligou um PR novo, alguém o reabriu em execucao) não fecha pelo deduzido velho: a próxima batida o vê como está.
+test('F472: mudouDesdeAColeta → o PR novo em prs ou a etapa trocada seguram o fechamento; o resto não', () => {
+  const coleta = { etapa: 'merge', prs: [7], agora: 'x' };
+  assert.equal(mudouDesdeAColeta(coleta, { ...coleta }), false, 'igual: fecha');
+  assert.equal(mudouDesdeAColeta(coleta, { ...coleta, agora: 'outro', atualizadoEm: 'y' }), false, 'só o agora mudou: fecha');
+  assert.equal(mudouDesdeAColeta(coleta, { ...coleta, prs: [7, 8] }), true, 'PR novo ligado');
+  assert.equal(mudouDesdeAColeta(coleta, { ...coleta, etapa: 'execucao' }), true, 'reaberto em execucao');
+  assert.equal(mudouDesdeAColeta({ etapa: 'merge' }, { etapa: 'merge', prs: [3] }), true, 'sem prs na coleta, com PR depois');
+  assert.equal(mudouDesdeAColeta(coleta, { ...coleta, prs: [] }), false, 'PR tirado não abre trabalho novo');
+  assert.equal(mudouDesdeAColeta(undefined, coleta), false, 'sem a foto da coleta, vale a regra de antes');
 });

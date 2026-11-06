@@ -516,3 +516,40 @@ test('F446: a branch do PR que não tem o sha validado não serve de ponta', () 
     assert.equal(c.merges().length, 0);
   } finally { limpar(c); }
 });
+
+// F472: o caso F455 de outro projeto. A fila fechou o item no merge (12:08) e um `painel update fila F455 '{"etapa":"merge"}'` repetido
+// (12:15) o reabriu em merge sem PR novo: a dona antiga voltou e ninguém mais o fechou. O item feito só volta a `merge` com PR
+// novo em `prs` no mesmo update; a reabertura legítima (em `execucao`, F370) segue.
+test('F472: item feito não volta a merge sem PR novo em prs; com PR novo, volta; em execucao, reabre como antes', () => {
+  const c = montar();
+  try {
+    c.item('F1');
+    assert.equal(c.painel('mergear', '12', c.sha.slice(0, 7)).exit, 0);
+    assert.equal(c.dado('F1').etapa, 'feito', 'precondição: fechou no merge');
+    for (const data of [{ etapa: 'merge' }, { etapa: 'merge', prs: [12] }, { etapa: 'merge', agora: 'mergeado; fecha pela batida' }]) {
+      const r = c.painel('update', 'fila', 'F1', JSON.stringify(data));
+      assert.equal(r.exit, 1, `${JSON.stringify(data)} passou: ${r.out}`);
+      assert.match(r.err, /feito.*não volta a "merge" sem PR novo/, r.err);
+      assert.equal(c.dado('F1').etapa, 'feito', 'o item segue fechado');
+    }
+    const doc = JSON.parse(c.painel('get', 'fila', 'F1').out);
+    const s = c.painel('set', 'fila', 'F1', JSON.stringify({ ...doc.data, etapa: 'merge' }), '--se-versao', String(doc.version));
+    assert.equal(s.exit, 1, 'o set também recusa');
+    assert.match(s.err, /sem PR novo/);
+    const novo = c.painel('update', 'fila', 'F1', JSON.stringify({ etapa: 'merge', prs: [12, 13] }));
+    assert.equal(novo.exit, 0, novo.err);
+    assert.equal(c.dado('F1').etapa, 'merge');
+  } finally { limpar(c); }
+});
+test('F472: a reabertura em execucao segue livre (o PR só de doc que fechou o item por engano)', () => {
+  const c = montar();
+  try {
+    c.item('F1');
+    assert.equal(c.painel('mergear', '12', c.sha.slice(0, 7)).exit, 0);
+    const r = c.painel('update', 'fila', 'F1', '{"etapa":"execucao"}');
+    assert.equal(r.exit, 0, r.err);
+    assert.equal(c.dado('F1').etapa, 'execucao');
+    // da execucao reaberta, o merge é transição normal (a dona abre o PR e anota)
+    assert.equal(c.painel('update', 'fila', 'F1', '{"etapa":"merge"}').exit, 0);
+  } finally { limpar(c); }
+});
