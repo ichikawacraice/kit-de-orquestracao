@@ -1,4 +1,4 @@
-// F446: o item em espera (ou com trava) não é cobrado pela batida. Medido no Izanagi (06/11): a dedução (F423) roda fora da trava,
+// F446: o item em espera (ou com trava) não é cobrado pela batida. Medido num projeto real (06/11): a dedução (F423) roda fora da trava,
 // com até 25 s de gh, e o `parado` dela leva a espera de antes; a espera gravada no meio tempo não segurava a cutucada. A
 // retomada do limite de uso e a fila órfã nem olhavam a espera.
 // Rodar: node gate/com-fichas.mjs -- node --test plugins/orquestracao/hooks/tests/batida-espera.test.mjs

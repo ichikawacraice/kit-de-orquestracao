@@ -322,7 +322,7 @@ test('coletar: dona do Orca não provada morta → o git sai da pasta registrada
 });
 
 // ---- F446: o PR cuja branch leva o id do item liga ao item, mesmo fora do worktree da dona ----
-// Medido no Izanagi (06/11): a dona do F303 rodava no checkout principal (branch fix/foco-secao-sem-veu) e abria os PRs num
+// Medido num projeto real (06/11): a dona do F303 rodava no checkout principal (branch fix/foco-secao-sem-veu) e abria os PRs num
 // worktree ao lado (feat/f303-produto-de-teste-2b3, #1704). Só o `prs: [1698]` (mergeado) ligava; com `maisFatias:false`, a
 // batida fechou o item às 00:35 com o #1704 aberto.
 test('F446: o PR aberto numa branch com o id do item segura o fechamento pelo PR velho', () => {
@@ -341,12 +341,12 @@ test('F446: o id casa só como o primeiro id da branch, palavra inteira, sem dif
   const casa = (headRefName, extra = {}) => prsDoItem(item(), { prs: [pr(9, 'OPEN', { headRefName, ...extra })], id: 'F30' }).map((p) => p.number);
   assert.deepEqual(casa('feat/F30-x'), [9]);
   assert.deepEqual(casa('f30'), [9]);
-  assert.deepEqual(casa('ichikawa/f30-fila'), [9]);
+  assert.deepEqual(casa('fulano/f30-fila'), [9]);
   assert.deepEqual(casa('feat/f303-x'), [], 'F30 não casa com f303');
   assert.deepEqual(casa('feat/ref30-x'), [], 'precisa de separador antes');
   assert.deepEqual(casa('feat/f30x'), [], 'e depois');
-  assert.deepEqual(casa('ichikawa/f450-conserta-o-f30'), [], 'a branch de outro item que cita este não é dele');
-  assert.deepEqual(casa('ichikawa/f30-depois-do-f450'), [9], 'o primeiro id vale');
+  assert.deepEqual(casa('fulano/f450-conserta-o-f30'), [], 'a branch de outro item que cita este não é dele');
+  assert.deepEqual(casa('fulano/f30-depois-do-f450'), [9], 'o primeiro id vale');
   assert.deepEqual(casa('feat/f30-x', { createdAt: iso(T - 120 * MIN) }), [], 'criado antes do item nascer');
   assert.equal(casa('feat/f30-x')[0], 9);
   assert.equal(prsDoItem(item(), { prs: [pr(9, 'OPEN', { headRefName: 'feat/f30-x' })], id: 'F30' })[0].fonte, 'id', 'fora da contagem de ambíguos da branch');
@@ -355,17 +355,17 @@ test('F446: o id casa só como o primeiro id da branch, palavra inteira, sem dif
 // F446 (validador): o id só segura o fechamento; o PR mergeado numa branch com o id não fecha o item, e o PR que a branch de
 // outro item liga continua dele.
 test('F446: o PR mergeado só pelo id não fecha o item', () => {
-  const merg = pr(1800, 'MERGED', { headRefName: 'ichikawa/f303-outro-caminho' });
+  const merg = pr(1800, 'MERGED', { headRefName: 'fulano/f303-outro-caminho' });
   const d = ded({ id: 'F303', item: item({ etapa: 'execucao' }), prs: [merg] });
   assert.deepEqual(d.prs, []);
   assert.equal(d.mergeado, false);
-  const aberto = ded({ id: 'F303', item: item({ etapa: 'execucao' }), prs: [pr(1800, 'OPEN', { headRefName: 'ichikawa/f303-outro-caminho' })] });
+  const aberto = ded({ id: 'F303', item: item({ etapa: 'execucao' }), prs: [pr(1800, 'OPEN', { headRefName: 'fulano/f303-outro-caminho' })] });
   assert.deepEqual(aberto.prs, [1800], 'contraste: aberto, liga');
 });
 
 test('F446: o PR da branch de outro item fica com ele, mesmo que a branch traga o id deste', () => {
   // a dona do F450 trabalha numa branch que começa pelo F303 (nome ruim, mas possível): a branch liga o PR ao F450
-  const ler = { prsDoRepositorio: () => [pr(1801, 'OPEN', { headRefName: 'ichikawa/f303-pelo-f450' })], gitDoWorktree: (cwd) => ({ branch: cwd === '/repo/b' ? 'ichikawa/f303-pelo-f450' : 'fix/outra', aFrente: 0, sujo: false, ultimoCommitMs: null }) };
+  const ler = { prsDoRepositorio: () => [pr(1801, 'OPEN', { headRefName: 'fulano/f303-pelo-f450' })], gitDoWorktree: (cwd) => ({ branch: cwd === '/repo/b' ? 'fulano/f303-pelo-f450' : 'fix/outra', aFrente: 0, sujo: false, ultimoCommitMs: null }) };
   const itens = new Map([['F303', item({ donoLocalId: 'local_a' })], ['F450', item({ donoLocalId: 'local_b' })]]);
   const linhas = [linha({ sessionId: 'local_a', cwd: '/repo/a' }), linha({ sessionId: 'local_b', cwd: '/repo/b' })];
   const m = coletar({ itens, linhas, projetoDe: () => 'kit', agoraMs: T, prazoMin: 15, ler });

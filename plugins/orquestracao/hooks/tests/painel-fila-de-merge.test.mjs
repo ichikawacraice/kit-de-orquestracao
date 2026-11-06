@@ -643,8 +643,8 @@ test('F446: sem prs nem branch da dona, o PR se liga ao item do primeiro id da b
     for (const F of ['F7', 'F8']) { const s = c.painel('set', 'fila', F, JSON.stringify({ titulo: F === 'F7' ? 'o item sete' : 'o item oito', etapa: 'execucao', tema: 'editor', via: 'dona', donoLocalId: LA, donoApelido: 'dona' })); assert.equal(s.exit, 0, s.err + s.out); }
     const arq = join(c.raiz, 'estado.json');
     const est = JSON.parse(readFileSync(arq, 'utf8'));
-    est.prs[23].headRefName = 'ichikawa/f8-conserta-o-f7';
-    est.prs[24].headRefName = 'ichikawa/f7-segunda-fatia';
+    est.prs[23].headRefName = 'fulano/f8-conserta-o-f7';
+    est.prs[24].headRefName = 'fulano/f7-segunda-fatia';
     writeFileSync(arq, JSON.stringify(est));
     const r = c.painel('fila-de-merge', '23', '24', '--gate', 'test ! -f c.txt');
     assert.equal(r.exit, 0, r.err + r.out);
@@ -1191,7 +1191,7 @@ test('F398: --anotar recusa as flags de infraestrutura (o config é da rodada da
   } finally { limpar(c); }
 });
 
-// F446: o remoto sem `refs/pull/N/head` (medido no Izanagi: o fetch da ref do PR falhou e a rodada inteira caiu) tem a
+// F446: o remoto sem `refs/pull/N/head` (medido num projeto real: o fetch da ref do PR falhou e a rodada inteira caiu) tem a
 // branch do PR; a fila busca a ponta por ela, pelo `headRefName` do gh, e confere que o sha validado veio junto.
 const soPelaBranch = (c, n) => {
   git(c.clone, 'push', '-q', 'origin', `pr${n}:refs/heads/pr${n}`);
@@ -1223,7 +1223,7 @@ test('F446: sem refs/pull/N/head e sem a branch, o erro diz as duas refs que fal
   } finally { limpar(c); }
 });
 
-// F446: a fila sem turno não mergeia na base que tem um release aberto (o PR develop → main, medido no Izanagi: a rodada sem
+// F446: a fila sem turno não mergeia na base que tem um release aberto (o PR develop → main, medido num projeto real: a rodada sem
 // turno mergeou na develop com o release em revisão). Os PRs voltam aos pendentes, sem devolução, e a fila grava a pausa; a
 // rodada da orquestradora não pausa (o release é dela).
 const RELEASE = { number: 900, headRefName: 'main', baseRefName: 'producao', state: 'OPEN', isCrossRepository: false };

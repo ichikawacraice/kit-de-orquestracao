@@ -56,7 +56,7 @@ function gitOk(args, cwd) {
   return r.out;
 }
 
-// F446: traz a ponta do PR. O remoto sem `refs/pull/N/head` (medido no Izanagi: o fetch falhou e a rodada inteira caiu) tem a
+// F446: traz a ponta do PR. O remoto sem `refs/pull/N/head` (medido num projeto real: o fetch falhou e a rodada inteira caiu) tem a
 // branch do PR (`headRefName` do gh): busca-se por ela e confere-se que o sha validado veio junto, porque a branch pode ter
 // andado depois da leitura do gh. O nome vem do gh e vai à refspec: só o nome de branch comum passa.
 const BRANCH_SEGURA = /^(?!-)(?!.*\.\.)[\w./-]+$/;
