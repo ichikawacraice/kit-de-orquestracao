@@ -51,7 +51,7 @@ O operador abre a aba para despachar: responder quem está preso, carimbar o que
 - **Conteúdo:** `Box` coluna, `grow`, `gap="md"`.
 - **Cabeçalho, igual em toda seção:** `Row justify="between"`: à esquerda o `Heading 2` com o nome curto da seção; à direita `há 20 s` (`Text xs muted`; vira o aviso âmbar quando a releitura falha) e o `IconButton ghost refresh` `Reler agora`. Nada de ação em lote no cabeçalho.
 - **Barra de lote, logo abaixo, só em Entregas:** `Row justify="between" align="center"`: à esquerda a explicação em `Text xs muted`; à direita a ação em lote. Entregas: `Últimos 7 dias. Limpar não apaga.` + `Limpar todas (23)`.
-- **A seção escolhida fica guardada** (átomo `persist:'plugin'`). Na primeira abertura, e sempre que houver pergunta aberta ao abrir a aba, a aba começa em Perguntas.
+- **A aba abre sempre em Sessões** (F456, substitui o que esta linha dizia antes: seção guardada e abertura em Perguntas com pergunta aberta). A seção escolhida vale só enquanto o painel está aberto; a pergunta aberta aparece pela faixa abaixo.
 - **Faixa da pergunta aberta:** fora da seção Perguntas, com pergunta aberta, logo abaixo do cabeçalho e acima da barra de lote, uma linha `Box border="warning" radius="md" padding="sm"`: `1 pergunta esperando você` + `Button ghost` `Ver`. É o que impede a pergunta de ficar escondida atrás da seção em que a pessoa parou ([D1](#d1)).
 - **Largura:** referência 360 px, pior caso 320 px (sobram ~268 px de conteúdo). Botões de um cartão em `Row wrap`.
 
@@ -217,7 +217,7 @@ O campo `Run da orquestradora`, o `KeyValue` de diagnóstico, a pergunta dentro 
 <a id="d1"></a>
 - **D1 · Trilho de seções, com faixa da pergunta aberta.**
   - *O caso:* o operador pediu abas e elegância; são 3 seções agora e 8 depois. Abas de texto (`Tabs`) não cabem 8 em 360 px, e uma pergunta nova ficaria escondida atrás da seção em que a pessoa parou.
-  - *Se não decidir:* trilho de ícones à esquerda com a contagem sob cada ícone, mais a faixa `1 pergunta esperando você · Ver` no topo de qualquer outra seção; a aba abre em Perguntas quando há pergunta aberta.
+  - *Se não decidir:* trilho de ícones à esquerda com a contagem sob cada ícone, mais a faixa `1 pergunta esperando você · Ver` no topo de qualquer outra seção; (F456: a aba abre em Sessões; a faixa cobre a pergunta aberta.)
   - *Recomendação:* essa. O trilho cresce até as 8 seções sem quebrar a largura, é a imagem 10 recolhida que o operador mandou, e a faixa resolve o único risco das abas (a pergunta presa ficar fora da vista). Alternativa: `Tabs` com 3 rótulos agora — mais simples, mas teria de virar outra coisa na fatia seguinte.
 <a id="d2"></a>
 - **D2 · Decisões agrupadas por item**, com `Confirmar as N do F…` no pé do grupo. Recomendação: por item, que é o assunto; confirmar o grupo depois de lê-lo torna o `Confirmar todas` quase desnecessário.

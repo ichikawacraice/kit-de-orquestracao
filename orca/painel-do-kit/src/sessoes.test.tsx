@@ -44,7 +44,7 @@ const teste = (nome: string, corpo: () => Promise<void>) => test(nome, async () 
   try { await corpo() } finally { for (const v of montadas.splice(0)) await v.unmount() }
 })
 async function montar(ler: () => Leitura) {
-  const v = await mount(painel, { host: mockHost({ requests: { 'kit.ler': () => ler() } }), persisted: { plugin: { secao: 'sessoes' } } })
+  const v = await mount(painel, { host: mockHost({ requests: { 'kit.ler': () => ler() } }), })
   montadas.push(v)
   const nos = (q: Record<string, unknown>) => v.findAll(q) as No[]
   /** O `Box` do cartão do item (chave `s-<item>`), achado na árvore desenhada: o `find` só devolve o nó mais fundo. */
@@ -77,11 +77,10 @@ teste('o trilho ganha Sessões com o ícone activity; o número e o rótulo segu
   semErros(v)
 })
 
-teste('com pergunta aberta a aba abre em Perguntas; em Sessões a faixa avisa e o cartão diz o Q-ID', async () => {
+teste('com pergunta aberta a aba abre em Sessões: a faixa avisa e o cartão diz o Q-ID', async () => {
   const s = sessao('F2', { estado: 'esperando', perguntas: [{ id: 'Q5', titulo: 'F2 · pergunta Q5' }] })
   const { v } = await montar(() => leitura(vista([grupo('kit', [s])]), { abertas: [pergunta('Q5', 'F2')] }))
-  assert.equal(v.persisted.plugin.secao, 'perguntas')
-  await v.press({ label: 'Sessões · nenhuma parada' })
+  assert.ok(v.find({ role: 'heading', text: 'Sessões' }))
   assert.ok(v.find({ text: '1 pergunta esperando você' }))
   assert.ok(v.find({ text: 'Q5 · pergunta Q5' }), 'a frase tira o item do título da pergunta')
   semErros(v)
@@ -175,7 +174,7 @@ teste('Responder em Perguntas troca a seção', async () => {
   const { v } = await montar(() => leitura(vista([grupo('kit', [s])])))
   await v.press({ label: 'Abrir F2' })
   await v.press({ role: 'button', text: 'Responder em Perguntas' })
-  assert.equal(v.persisted.plugin.secao, 'perguntas')
+  assert.ok(v.find({ role: 'button', text: 'Aceitar a recomendação' }) || v.find({ role: 'heading', text: 'Perguntas' }))
   semErros(v)
 })
 
@@ -247,7 +246,7 @@ teste('entregues de hoje ficam na dobra do grupo, com a hora de SP e o PR; Ver e
   assert.ok(v.find({ text: '14:05 · PR 168' }))
   assert.equal(caixaDo('F432'), null, 'a entregue não vira cartão')
   await v.press({ role: 'button', text: 'Ver em Entregas' })
-  assert.equal(v.persisted.plugin.secao, 'entregas')
+  assert.ok(v.find({ role: 'heading', text: 'Entregas' }))
   semErros(v)
 })
 
