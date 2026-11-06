@@ -36,6 +36,7 @@ export function lerComandos(c, { cwd = process.cwd(), env = {} } = {}) {
   const src = String(c ?? '');
   const comandos = [];
   let atual = novo(false); let palavra = null; let pendentes = []; let redir = null; let k = 0;
+  const internos = []; // os comandos de `$( )` e de crase entre aspas duplas, que o shell também executa
   function novo(porPipe) { return { palavras: [], porPipe, stdin: null }; }
   function fecharPalavra() {
     if (palavra === null) return;
@@ -67,7 +68,8 @@ export function lerComandos(c, { cwd = process.cwd(), env = {} } = {}) {
     }
     pendentes = [];
   }
-  const add = (v, cru) => { if (palavra === null) palavra = { v: '', cru: '' }; palavra.v += v; palavra.cru += cru; };
+  // `sub`: a palavra tem substituição que o shell executa (`$( )` ou crase fora de aspas simples); o texto real é desconhecido.
+  const add = (v, cru, sub = false) => { if (palavra === null) palavra = { v: '', cru: '', sub: false }; palavra.v += v; palavra.cru += cru; palavra.sub ||= sub; };
   const expandir = (nome) => (nome === 'PWD' ? resolve(cwd) : nome === 'HOME' && env.HOME ? env.HOME : null);
 
   while (k < src.length) {
@@ -81,14 +83,22 @@ export function lerComandos(c, { cwd = process.cwd(), env = {} } = {}) {
       add(src.slice(k + 1, f), src.slice(k, f + 1)); k = f + 1; continue;
     }
     if (ch === '"') {
-      let j = k + 1; let v = '';
+      let j = k + 1; let v = ''; let sub = false;
       while (j < src.length && src[j] !== '"') {
         if (src[j] === '\\' && '"\\$`\n'.includes(src[j + 1] ?? '')) { if (src[j + 1] !== '\n') v += src[j + 1]; j += 2; continue; }
-        if (src[j] === '$' && src[j + 1] === '(') { const f = fimDaSubstituicao(src, j + 2); v += src.slice(j, f); j = f; continue; }
+        if (src[j] === '$' && src[j + 1] === '(') {
+          const f = fimDaSubstituicao(src, j + 2); internos.push(...lerComandos(src.slice(j + 2, f - 1), { cwd, env }));
+          v += src.slice(j, f); j = f; sub = true; continue;
+        }
+        if (src[j] === '`') {
+          let f = j + 1; while (f < src.length && src[f] !== '`') f += src[f] === '\\' ? 2 : 1;
+          internos.push(...lerComandos(src.slice(j + 1, f).replace(/\\([`\\$])/g, '$1'), { cwd, env }));
+          v += src.slice(j, f + 1); j = f + 1; sub = true; continue;
+        }
         if (src[j] === '$') { const m = /^\$(?:\{(\w+)\}|(\w+))/.exec(src.slice(j)); const e = m && expandir(m[1] ?? m[2]); if (e !== null && m) { v += e; j += m[0].length; continue; } }
         v += src[j]; j++;
       }
-      add(v, src.slice(k, j + 1)); k = j + 1; continue;
+      add(v, src.slice(k, j + 1), sub); k = j + 1; continue;
     }
     if (ch === '#' && palavra === null) { while (k < src.length && src[k] !== '\n') k++; continue; }
     if (ch === '\n') { fecharComando(); k++; if (pendentes.length) lerHeredocs(); continue; }
@@ -105,6 +115,7 @@ export function lerComandos(c, { cwd = process.cwd(), env = {} } = {}) {
       if (src[k + 1] === '>') { fecharPalavra(); redir = '>'; k += src[k + 2] === '>' ? 3 : 2; continue; } // &> e &>>
       fecharComando(); k += src[k + 1] === '&' ? 2 : 1; continue;
     }
+    if ((ch === '<' || ch === '>') && src[k + 1] === '(') { fecharComando(); k += 2; continue; } // <( ) e >( )
     if (ch === '<' || ch === '>') {
       // O número colado antes (`2>`) é o descritor, não palavra.
       if (palavra && /^\d+$/.test(palavra.cru)) palavra = null; else fecharPalavra();
@@ -117,7 +128,7 @@ export function lerComandos(c, { cwd = process.cwd(), env = {} } = {}) {
     add(ch, ch); k++;
   }
   fecharComando();
-  return comandos;
+  return comandos.concat(internos);
 }
 
 // O fim de `$( … )` começando depois do `(`: conta parênteses fora de aspas e pula o corpo de heredoc interno.
@@ -143,6 +154,8 @@ function fimDaSubstituicao(src, j) {
   return src.length;
 }
 
+const SHELL = /(?:^|\/)(?:ba|z|da|k)?sh$/;
+const GLOBAIS_COM_VALOR = new Set(['environment', 'pairing-code']);
 const ehOrca = (p) => /(?:^|\/)orca$/.test(p.v) || /^\$\{?ORCA_CLI_COMMAND\}?$/.test(p.v);
 
 /**
@@ -159,19 +172,25 @@ export function comandosDoOrca(c, ctx = {}) {
       if (p.v === 'nice') { i++; if (ps[i]?.v === '-n') i += 2; else if (/^-\d+$/.test(ps[i]?.v ?? '')) i++; continue; }
       break;
     }
-    if (!ps[i] || !ehOrca(ps[i])) continue;
-    const sub = SUBCOMANDOS[`${ps[i + 1]?.v} ${ps[i + 2]?.v}`];
+    if (!ps[i]) continue;
+    // `bash -c "<script>"` e `eval <script>`: o script é outra linha de comando.
+    if (SHELL.test(ps[i].v)) { const c = ps.findIndex((p, n) => n > i && /^-[a-z]*c$/.test(p.v)); if (c > 0 && ps[c + 1]) saida.push(...comandosDoOrca(ps[c + 1].v, ctx)); continue; }
+    if (ps[i].v === 'eval') { saida.push(...comandosDoOrca(ps.slice(i + 1).map((p) => p.v).join(' '), ctx)); continue; }
+    if (!ehOrca(ps[i])) continue;
+    let s = i + 1; // opções globais antes do subcomando (`orca --json orchestration worker-start`)
+    while (ps[s] && /^-/.test(ps[s].v)) s += GLOBAIS_COM_VALOR.has(ps[s].v.slice(2)) ? 2 : 1;
+    const sub = SUBCOMANDOS[`${ps[s]?.v} ${ps[s + 1]?.v}`];
     if (!sub) continue;
-    const bandeiras = {}; const crus = [];
-    for (let j = i + 3; j < ps.length; j++) {
+    const bandeiras = {}; const crus = []; const comSubst = new Set();
+    for (let j = s + 2; j < ps.length; j++) {
       const m = /^--([\w-]+)(?:=([\s\S]*))?$/.exec(ps[j].v);
       if (!m) { crus.push({ cru: ps[j].cru }); continue; }
       const [, nome, igual] = m;
-      if (igual !== undefined) { bandeiras[nome] = igual; crus.push({ nome, valor: igual, cruValor: ps[j].cru.slice(ps[j].cru.indexOf('=') + 1) }); continue; }
+      if (igual !== undefined) { bandeiras[nome] = igual; if (ps[j].sub) comSubst.add(nome); crus.push({ nome, valor: igual, cruValor: ps[j].cru.slice(ps[j].cru.indexOf('=') + 1) }); continue; }
       if (BOOLEANAS.has(nome) || !ps[j + 1] || /^--[\w-]/.test(ps[j + 1].v)) { bandeiras[nome] = true; crus.push({ nome }); continue; }
-      bandeiras[nome] = ps[j + 1].v; crus.push({ nome, valor: ps[j + 1].v, cruValor: ps[j + 1].cru }); j++;
+      bandeiras[nome] = ps[j + 1].v; if (ps[j + 1].sub) comSubst.add(nome); crus.push({ nome, valor: ps[j + 1].v, cruValor: ps[j + 1].cru }); j++;
     }
-    saida.push({ sub, bandeiras, crus, binario: ps[i].cru, stdin: cmd.stdin, porPipe: cmd.porPipe });
+    saida.push({ sub, bandeiras, comSubst, crus, binario: ps[i].cru, stdin: cmd.stdin, porPipe: cmd.porPipe });
   }
   return saida;
 }
@@ -188,11 +207,11 @@ const CAT_HEREDOC = /^\$\(\s*cat\s+<<-?\s*(['"]?)(\w+)\1[ \t]*\n([\s\S]*?)\n[ \t
 function lerArquivo(caminho, cwd) {
   try { const p = isAbsolute(caminho) ? caminho : resolve(cwd, caminho); return existsSync(p) ? readFileSync(p, 'utf8') : null; } catch { return null; }
 }
-function deValor(v) {
+function deValor(v, sub) {
   if (typeof v !== 'string') return null;
   const h = CAT_HEREDOC.exec(v.trim());
   if (h) return h[3];
-  if (/\$\(|`/.test(v)) return null; // substituição que o hook não executa: o texto real é desconhecido
+  if (sub) return null; // substituição que o hook não executa: o texto real é desconhecido (entre aspas simples é texto)
   return v;
 }
 
@@ -200,7 +219,7 @@ function deValor(v) {
 function textoDoPedido(o, cwd) {
   const b = o.bandeiras;
   if (o.sub === 'worker-start') {
-    if (typeof b.spec === 'string') return deValor(b.spec);
+    if (typeof b.spec === 'string') return deValor(b.spec, o.comSubst.has('spec'));
     if (typeof b['spec-file'] === 'string') {
       const f = b['spec-file'];
       if (f === '-' || f === '/dev/stdin') {
@@ -212,7 +231,7 @@ function textoDoPedido(o, cwd) {
     }
     return null;
   }
-  return typeof b.prompt === 'string' ? deValor(b.prompt) : null;
+  return typeof b.prompt === 'string' ? deValor(b.prompt, o.comSubst.has('prompt')) : null;
 }
 
 function git(cwd, ...args) {
@@ -296,7 +315,7 @@ function decidirUm(o, { cwd, env }) {
 
   // O modelo sugerido: o que veio, quando serve ao papel; senão Sonnet.
   let motivoModelo = recusaDoModelo(id, { model, effort, prompt: legivel ? texto : '' }, { papel, sintaxe: 'orca' });
-  if (!motivoModelo && !legivel && ml.includes('opus')) {
+  if (!legivel && ml.includes('opus')) {
     motivoModelo = 'worker em Opus sem texto legível do pedido (`--task`, arquivo ausente ou stdin de pipe): sem texto não há a linha `Gatilho do Opus:`. Ponha o pedido em `--spec`/`--spec-file` com a linha, ou abra em `--model sonnet --effort medium`.';
   }
   const modelOk = model && (ml.includes('sonnet') || (ml.includes('haiku') && papel !== 'dona') || (ml.includes('opus') && legivel && gatilhoDoOpus(texto)));
@@ -306,7 +325,9 @@ function decidirUm(o, { cwd, env }) {
   const motivos = [];
   if (motivoModelo) motivos.push(motivoModelo);
   if (precisaPasta) {
-    const onde = cai === 'nao-resolve' ? `o seletor \`--worktree ${seletor}\` não se resolve para outra worktree e conta como a pasta de quem chama` : 'abre na pasta de quem chama';
+    const onde = cai === 'nao-resolve'
+      ? `o seletor \`--worktree ${seletor}\` não se resolve para outra worktree e conta como a pasta de quem chama${/^(name|identity|issue):/.test(seletor) ? ' (o hook não lê o nome de exibição, a identidade nem a issue do Orca; para abrir na worktree do item, use `--worktree path:<pasta>` ou `branch:<branch>`)' : ''}`
+      : 'abre na pasta de quem chama';
     const porque = legivel ? 'sem a linha `Só leitura: <motivo>` no texto do pedido' : 'e sem texto legível do pedido não há como ver a linha `Só leitura:`';
     motivos.push(`${o.sub === 'agent-launch' ? 'agent launch' : 'worker-start'} ${onde}, ${porque}: dois Claudes escrevendo na mesma worktree se atropelam.`);
   }
@@ -326,7 +347,7 @@ function decidirUm(o, { cwd, env }) {
   } else {
     sugestao = `Comando corrigido: \`${corrigido(o, { model: sugModel, effort: sugEffort, worktree: precisaPasta ? 'new-child' : null })}\``;
     if (precisaPasta) sugestao += ' (ou, se o worker só lê, ponha no texto do pedido a linha `Só leitura: <motivo>`)';
-    if (motivoModelo && ml.includes('opus') && !modelOk) sugestao += '; para manter o Opus, ponha no texto do pedido a linha `Gatilho do Opus: <gatilho>`';
+    if (motivoModelo && legivel && ml.includes('opus') && !modelOk) sugestao += '; para manter o Opus, ponha no texto do pedido a linha `Gatilho do Opus: <gatilho>`';
     sugestao += '.';
   }
   return { recusa: `${motivos.join(' ')} ${sugestao}`, desfecho: 'recusou', detalhe };

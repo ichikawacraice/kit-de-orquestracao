@@ -176,6 +176,37 @@ test('o binário é reconhecido pelo PATH, por $ORCA_CLI_COMMAND e pelo caminho 
   recusa(`orca \\\n  orchestration worker-start \\\n  --agent claude \\\n  --worktree new-child \\\n  --spec "Faça X."`);
 });
 
+test('revisão F438: substituição entre aspas duplas, <( ), opção global, bash -c e eval também são comandos', () => {
+  const resto = 'orchestration worker-start --agent claude --worktree new-child --spec x';
+  recusa(`out="$(orca ${resto} --json)"`);
+  recusa(`echo "\`orca ${resto}\`"`);
+  recusa(`cat <(orca ${resto})`);
+  recusa(`orca --json ${resto}`);
+  recusa(`orca --environment casa ${resto}`);
+  recusa(`bash -c "orca ${resto}"`);
+  recusa(`sh -c 'orca ${resto}'`);
+  recusa(`eval "orca ${resto}"`);
+  // Dentro de aspas simples, nada disso é comando.
+  passa(`echo '"$(orca ${resto})"'`);
+  passa(`echo 'bash -c "orca ${resto}"'`);
+});
+
+test('revisão F438: crase e $( entre aspas simples (ou escapados) são texto do pedido, não substituição', () => {
+  passa(`${WS} ${OK} --worktree current --spec 'Só leitura: medir o \`npm test\`'`);
+  passa(`${WS} ${OK} --worktree current --spec "Só leitura: medir o \\\`npm test\\\`"`);
+  passa(`${WS} --model opus --effort high --worktree new-child --spec 'Gatilho do Opus: estado\nRode \`x\` e $(y)'`);
+  recusa(`${WS} --model haiku --effort low --worktree new-child --spec 'Você é a dona do F12. Rode \`npm test\` antes do PR.'`);
+  // A substituição de verdade continua ilegível.
+  assert.deepEqual(desfechos(passa(`${WS} ${OK} --worktree new-child --spec "$(cat spec.md)"`)), ['passou-sem-ler-spec']);
+  assert.deepEqual(desfechos(passa(`${WS} ${OK} --worktree new-child --spec "Rode \`x\`"`)), ['passou-sem-ler-spec']);
+});
+
+test('revisão F438: Opus sem texto legível diz como resolver em vez de pedir a linha num texto que não existe', () => {
+  const m = recusa(`${WS} --model opus --effort high --worktree new-child --task task_1`);
+  assert.match(m, /sem texto legível/);
+  assert.match(m, /--model sonnet --effort medium/);
+});
+
 test('`orca …` dentro de string, heredoc de outro comando ou comentário não é comando', () => {
   const cmd = 'orca orchestration worker-start --agent claude --worktree new-child --spec x';
   recusa(cmd); // o mesmo texto fora da string recusa
