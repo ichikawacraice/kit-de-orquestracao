@@ -32,6 +32,7 @@
 //   painel.mjs batida --leitura [--agora <ISO>]   (F460) a batida de leitura que a aba do kit roda no Orca: sem a lista do app, só deduz o estado dos itens (git, gh, workers do Orca) e grava batida/deduzido.json com fonte "leitura"; não julga nem grava mais nada; pula se o deduzido tem menos de 10 min → {gravado, em?, itens?, pulou?}
 //   painel.mjs orquestradora assumir   (F447) declara esta sessão a orquestradora do projeto da pasta: grava <base>/ativas/<CLAUDE_CODE_SESSION_ID> com o git common dir e, no Orca, o orca_session_id na 2ª linha (as travas valem por ele; no Orca o título não se troca) → {marcador, repo, orcaId, outras}
 //   painel.mjs orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]   (F447) arquiva no Orca a dona do despacho: confere PR mergeado com o HEAD da worktree (ou nenhum PR e nenhum commit fora da base), nenhuma pergunta aberta do item (pelo item, por quem trabalhou nele ou pelo título), worktree ligada (nunca o checkout principal), limpa e empurrada e worker parado (todo despacho do mesmo terminal ou pasta em estado final); valendo, `orca orchestration worker-release` e `orca worktree set --workspace-status completed` (e `orca worktree rm`, nunca --force, com --remover-worktree) → {arquivado, condicoes, feitos}; faltando algo → {arquivado:false, faltam} e exit 1, sem chamar nada; --seco só confere
+//   painel.mjs orquestradora arquivar --concluidas [--itens F<n>,F<n>] [--remover-worktree] [--seco]   (F469) a aba do kit: as donas de item `feito`/`descartado` com worker no Orca, cada uma pelas MESMAS condições do arquivar acima, e com --remover-worktree também sai da barra lateral (a flag vale para todas, como no avulso) → {aptas, arquivadas, recusadas:[{item, faltam}]}; --seco só lista as aptas; --itens limita ao que a pessoa confirmou; exit 1 se alguma ficou recusada
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
 //   (item que vira feito/descartado arquiva os próprios handoffs e roda a limpeza; reaberto, eles voltam. Pasta: PAINEL_HANDOFFS_DIR, senão PAINEL_DIR/../pool/handoffs, senão ~/.claude/orquestracao/pool/handoffs)
@@ -2026,14 +2027,26 @@ function orcaMutante(args) {
 function arquivarNoOrca(args) {
   const seco = flag(args, '--seco', false);
   const remover = flag(args, '--remover-worktree', false);
+  const concluidas = flag(args, '--concluidas', false);
   const itemPedido = flag(args, '--item');
+  const itensPedidos = flag(args, '--itens');
   if (itemPedido !== null && !/^F\d+$/.test(itemPedido)) throw new Error(`--item pede F<n>, veio ${JSON.stringify(itemPedido)}`);
+  if (concluidas) {
+    if (itemPedido !== null || args.length) throw new Error('uso: painel.mjs orquestradora arquivar --concluidas [--itens F<n>,F<n>] [--remover-worktree] [--seco] (sem --item nem despacho)');
+    return arquivarConcluidas(itensPedidos, seco, remover);
+  }
+  if (itensPedidos !== null) throw new Error('--itens vale só com --concluidas');
   const [dispatchId, ...sobra] = args;
-  if (!/^ctx_[\w-]+$/.test(String(dispatchId ?? ''))) throw new Error('uso: painel.mjs orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]');
+  if (!/^ctx_[\w-]+$/.test(String(dispatchId ?? ''))) throw new Error('uso: painel.mjs orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco] | arquivar --concluidas [--itens F<n>,F<n>] [--remover-worktree] [--seco]');
   if (sobra.length) throw new Error(`argumento desconhecido: ${sobra[0]}`);
   const lista = listaDoOrca();
   if (lista === null) throw new Error('orquestradora arquivar: sem orca nesta máquina (o arquivar do Orca precisa do orca worker-list)');
   if (lista.erro) return { arquivado: false, dispatchId, faltam: [`não li o Orca: ${lista.erro}`], condicoes: {} };
+  return arquivarUm({ dispatchId, itemPedido, remover, seco, lista });
+}
+
+// Confere as condições de UM despacho (`condicoesDeArquivar`) e, valendo e sem --seco, solta o worker e marca a worktree.
+function arquivarUm({ dispatchId, itemPedido, remover, seco, lista }) {
   const { condicoes, faltam, pasta, item } = condicoesDeArquivar(dispatchId, itemPedido, lista);
   const base = { dispatchId, item, pasta, condicoes };
   if (faltam.length) return { arquivado: false, ...base, faltam };
@@ -2046,9 +2059,60 @@ function arquivarNoOrca(args) {
   ]) {
     const r = orcaMutante(a);
     feitos.push(r);
-    if (!r.ok) return { arquivado: false, ...base, faltam: [`${r.comando} falhou: ${r.erro}`], feitos };
+    if (!r.ok) return { arquivado: false, ...base, faltam: [`${r.comando} falhou: ${r.erro}${feitos.length > 1 ? ` (já feito: ${feitos.slice(0, -1).map((f) => f.comando).join('; ')})` : ''}`], feitos };
   }
   return { arquivado: true, ...base, feitos };
+}
+
+// F469: as sessões donas CONCLUÍDAS (item `feito`/`descartado`) que ainda têm worker no Orca. O item se acha pela branch da
+// worktree ou pela sessão que o trabalhou (orca-sessoes/: terminal ou pasta iguais). Quem decide é `arquivarUm`, com as
+// mesmas condições do `arquivar <ctx_…>`; aqui só se escolhe quem vai a ela. → [{ item, titulo, dispatchId }]
+function candidatasConcluidas(lista, itens) {
+  const finais = [...itens].filter(([, d]) => ETAPAS_FINAIS.has(d?.etapa));
+  const sessoesDe = (d) => [d.donoLocalId, d.donaAoFechar?.donoLocalId, ...[d.com, d.donaAoFechar?.com].flatMap((c) => (Array.isArray(c) ? c.map((x) => x?.localId) : []))]
+    .filter((id) => typeof id === 'string' && id.startsWith('orca_session_id:'));
+  const registrosDe = (d) => sessoesDe(d).flatMap((s) => { try { const r = moduloOrca.lerSessaoDoOrca(s); return r ? [r] : []; } catch { return []; } });
+  const registros = new Map(finais.map(([id, d]) => [id, registrosDe(d)]));
+  // Dona reaproveitada: a sessão (ou a branch) que também trabalha um item AINDA VIVO não é concluída, mesmo que o item fechado a tenha usado antes.
+  const vivos = [...itens].filter(([, d]) => d && !ETAPAS_FINAIS.has(d.etapa)).map(([, d]) => ({ branch: d.branch, registros: registrosDe(d) }));
+  const casa = (w, branch, d, regs) => (branch && d.branch === branch)
+    || regs.some((r) => (w.terminal && r.terminal === w.terminal) || (r.cwd && moduloOrca.dentroDe(r.cwd, w.pasta) && moduloOrca.dentroDe(w.pasta, r.cwd)));
+  const vistas = new Set();
+  const saida = [];
+  for (const w of lista.workers) {
+    if (!w.dispatchId || !w.pasta || !moduloOrca.estadoFinal(w.state) || vistas.has(w.pasta) || !existsSync(w.pasta)) continue;
+    let branch = null;
+    try { branch = gitDe(w.pasta, ['branch', '--show-current']) || null; } catch { /* pasta sem git: só o registro da sessão acha o item */ }
+    if (vivos.some((v) => casa(w, branch, v, v.registros))) continue;
+    const achado = finais.find(([id, d]) => casa(w, branch, d, registros.get(id)));
+    if (!achado || saida.some((x) => x.item === achado[0])) continue;
+    vistas.add(w.pasta);
+    saida.push({ item: achado[0], titulo: textoNaoVazio(achado[1].titulo) ? achado[1].titulo : achado[0], dispatchId: w.dispatchId });
+  }
+  return saida.sort((a, b) => Number(a.item.slice(1)) - Number(b.item.slice(1)));
+}
+
+// `arquivar --concluidas [--itens F1,F2] [--remover-worktree] [--seco]`: a cada concluída, o mesmo `arquivarUm` do despacho avulso
+// (a flag vale como no despacho avulso: `worktree rm`, nunca --force; sem a flag a worktree fica). --itens limita ao que a pessoa viu e confirmou; um item fora das concluídas é recusado.
+function arquivarConcluidas(itensPedidos, seco, remover) {
+  const pedidos = itensPedidos === null ? null : itensPedidos.split(',').map((x) => x.trim());
+  if (pedidos && (!pedidos.length || pedidos.some((x) => !/^F\d+$/.test(x)))) throw new Error(`--itens pede F<n>,F<n>, veio ${JSON.stringify(itensPedidos)}`);
+  const lista = listaDoOrca();
+  if (lista === null) throw new Error('orquestradora arquivar: sem orca nesta máquina (o arquivar do Orca precisa do orca worker-list)');
+  if (lista.erro) return { seco, aptas: [], arquivadas: [], recusadas: [], erro: `não li o Orca: ${lista.erro}` };
+  const candidatas = candidatasConcluidas(lista, itensDaFila());
+  const escolhidas = pedidos ? candidatas.filter((c) => pedidos.includes(c.item)) : candidatas;
+  const aptas = [];
+  const arquivadas = [];
+  const recusadas = pedidos ? pedidos.filter((i) => !candidatas.some((c) => c.item === i)).map((item) => ({ item, titulo: item, faltam: [`${item} não é uma sessão concluída com worker no Orca`] })) : [];
+  for (const c of escolhidas) {
+    const r = arquivarUm({ dispatchId: c.dispatchId, itemPedido: c.item, remover, seco, lista });
+    const dados = { item: c.item, titulo: c.titulo, dispatchId: c.dispatchId };
+    if (r.arquivado) arquivadas.push(dados);
+    else if (r.seco) aptas.push(dados);
+    else recusadas.push({ ...dados, faltam: r.faltam });
+  }
+  return { seco, aptas, arquivadas, recusadas };
 }
 
 function comandoOrquestradora(args) {
@@ -2304,7 +2368,7 @@ function main(argv) {
       throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|perguntas|com|soltar|batida|mergear|custo|entregas|pode-reiniciar|fila-de-merge|handoffs|orquestradora … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
-  return (cmd === 'mergear' && saida.recusado) || (cmd === 'orquestradora' && saida.arquivado === false && !saida.seco) ? 1 : 0;
+  return (cmd === 'mergear' && saida.recusado) || (cmd === 'orquestradora' && saida.arquivado === false && !saida.seco) || (cmd === 'orquestradora' && Array.isArray(saida.recusadas) && saida.recusadas.length) ? 1 : 0;
 }
 
 try {

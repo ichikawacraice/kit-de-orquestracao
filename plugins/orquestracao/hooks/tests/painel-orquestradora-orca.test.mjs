@@ -254,3 +254,143 @@ test('(arquivar-5) sem orca na máquina: recusa', () => {
   assert.equal(r.status, 1);
   assert.match(r.stderr + r.stdout, /orca/);
 });
+
+// ───────────────────── arquivar --concluidas (F469, o botão da aba do kit) ─────────────────────
+
+// Duas donas concluídas: F7 (worktree `pasta`, despacho ctx_aaa111) e F8 (outra worktree, ctx_bbb222), ambas com PR mergeado.
+function cenarioDeDuas({ itemF8 = {}, prsF8, workersExtra = [] } = {}) {
+  const c = cenario();
+  const pasta8 = join(base, 'wt-f8');
+  git(repo, 'worktree', 'add', '-q', '-b', 'f8-tema', pasta8);
+  git(pasta8, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'trabalho 8');
+  git(pasta8, 'push', '-q', '-u', 'origin', 'f8-tema');
+  const w7 = worker(pasta, 'retained', { dispatchId: 'ctx_aaa111', state: 'succeeded', terminal: 'structworker_t1' });
+  const w8 = worker(pasta8, 'retained', { dispatchId: 'ctx_bbb222', state: 'succeeded', terminal: 'structworker_t2' });
+  writeFileSync(join(c.orca.dir, 'paginas.json'), JSON.stringify({ '': recibo([w7, w8, ...workersExtra]) }));
+  writeFileSync(join(base, 'painel', 'fila', 'F8.json'), JSON.stringify({ id: 'F8', version: 1, data: { titulo: 'outro tema', etapa: 'feito', projeto: 'kit', branch: 'f8-tema', prs: [13], donoLocalId: null, com: [], perguntas: [], ...itemF8 } }));
+  // o gh falso devolve os PRs da branch pedida: o de F7 sempre mergeado com o HEAD; o de F8 como o cenário pedir
+  const gh = join(base, 'gh'); writeFileSync(gh, `#!${process.execPath}
+const fs = require('fs');
+const a = process.argv.slice(2);
+fs.appendFileSync(process.env.GH_LOG, JSON.stringify(a) + '\\n');
+const branch = a[a.indexOf('--head') + 1];
+process.stdout.write(branch === 'f8-tema' ? process.env.GH_PRS_F8 : process.env.GH_PRS);
+`); chmodSync(gh, 0o755);
+  c.env.GH_PRS_F8 = JSON.stringify(prsF8 ?? [{ number: 13, state: 'MERGED', headRefOid: git(pasta8, 'rev-parse', 'HEAD') }]);
+  return { ...c, pasta8 };
+}
+const concluidas = (c, extra = []) => painel(['orquestradora', 'arquivar', '--concluidas', ...extra], { env: c.env });
+
+test('(concluidas-1) --seco lista as aptas (achadas pela branch) e não chama nada', () => {
+  const c = cenarioDeDuas();
+  const r = concluidas(c, ['--seco']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.deepEqual(r.json?.aptas?.map((x) => x.item), ['F7', 'F8']);
+  assert.deepEqual(r.json.aptas.map((x) => x.dispatchId), ['ctx_aaa111', 'ctx_bbb222']);
+  assert.deepEqual(r.json.arquivadas, []);
+  assert.deepEqual(c.mutantes(), [], 'só lê');
+});
+test('(concluidas-2) sem branch no item, acha pela sessão que o trabalhou (orca-sessoes: terminal)', () => {
+  const c = cenarioDeDuas({ itemF8: { branch: undefined, donaAoFechar: { donoLocalId: 'orca_session_id:dona-f8', com: [] } } });
+  const dir = join(base, 'orq', 'orca-sessoes'); mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'dona-f8.json'), JSON.stringify({ orcaId: 'orca_session_id:dona-f8', cliAtual: 'x', cliIds: ['x'], terminal: 'structworker_t2', enderecoDoSend: 'orca_session_id:dona-f8', cwd: c.pasta8, em: new Date().toISOString() }));
+  const r = concluidas(c, ['--seco']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.ok(r.json?.aptas?.some((x) => x.item === 'F8'), `F8 achada pelo registro (${r.stdout.slice(0, 300)})`);
+});
+test('(concluidas-3) arquiva só as que passam: a de pergunta aberta fica, com o motivo; sem --remover-worktree, a worktree fica; nunca --force', () => {
+  const c = cenarioDeDuas();
+  writeFileSync(join(base, 'painel', 'perguntas', 'Q5.json'), JSON.stringify({ id: 'Q5', version: 1, data: { item: 'F8', estado: 'aberta', sessaoId: ORCA_ID, projeto: 'kit' } }));
+  const r = concluidas(c);
+  assert.equal(r.status, 1, 'exit 1: alguma ficou recusada');
+  assert.deepEqual(r.json?.arquivadas?.map((x) => x.item), ['F7']);
+  assert.equal(r.json.recusadas.length, 1);
+  assert.equal(r.json.recusadas[0].item, 'F8');
+  assert.match(r.json.recusadas[0].faltam.join(' '), /pergunta aberta do F8: Q5/);
+  const ms = c.mutantes();
+  assert.deepEqual(ms, [
+    ['orchestration', 'worker-release', '--dispatch', 'ctx_aaa111', '--json'],
+    ['worktree', 'set', '--worktree', `path:${pasta}`, '--workspace-status', 'completed', '--json'],
+  ]);
+  assert.ok(ms.every((a) => !a.includes('--force') && a[1] !== 'rm'), 'sem --force nem worktree rm');
+});
+test('(concluidas-4) item que não está feito/descartado não é candidato, mesmo com PR mergeado e worker parado', () => {
+  const c = cenarioDeDuas({ itemF8: { etapa: 'execucao' } });
+  const r = concluidas(c, ['--seco']);
+  assert.deepEqual(r.json?.aptas?.map((x) => x.item), ['F7']);
+  assert.ok(!JSON.stringify(r.json).includes('F8'), 'F8 nem aparece');
+  const real = concluidas(c);
+  assert.equal(real.status, 0);
+  assert.equal(c.mutantes().filter((a) => a.includes('ctx_bbb222') || a.includes(`path:${c.pasta8}`)).length, 0, 'F8 intocada');
+});
+test('(concluidas-5) --itens arquiva só o confirmado; item fora das concluídas é recusado sem chamar nada', () => {
+  const c = cenarioDeDuas();
+  const r = concluidas(c, ['--itens', 'F7,F99']);
+  assert.equal(r.status, 1);
+  assert.deepEqual(r.json?.arquivadas?.map((x) => x.item), ['F7']);
+  assert.equal(r.json.recusadas[0].item, 'F99');
+  assert.equal(c.mutantes().length, 2, 'só o F7');
+});
+test('(concluidas-6) paridade: o que --concluidas arquiva é o que `arquivar <ctx_…>` arquivaria, e a recusa traz as mesmas faltas', () => {
+  const c = cenarioDeDuas({ prsF8: [{ number: 13, state: 'OPEN' }] });
+  const avulso = (ctx, item) => painel(['orquestradora', 'arquivar', ctx, '--item', item, '--seco'], { env: c.env });
+  assert.equal(avulso('ctx_aaa111', 'F7').json?.seco, true, 'prova: o avulso diz que F7 arquivaria');
+  const f8 = avulso('ctx_bbb222', 'F8');
+  assert.equal(f8.status, 1);
+  assert.match(f8.json.faltam.join(' '), /PR #13/);
+  const lote = concluidas(c, ['--seco']);
+  assert.deepEqual(lote.json?.aptas?.map((x) => x.item), ['F7']);
+  assert.deepEqual(lote.json.recusadas[0].faltam, f8.json.faltam, 'mesmas faltas do avulso');
+});
+test('(concluidas-7) worker ainda trabalhando no mesmo terminal: não é arquivada', () => {
+  const c = cenarioDeDuas({ workersExtra: [worker(join(base, 'wt-f8'), 'retained', { dispatchId: 'ctx_ccc333', state: 'ready', terminal: 'structworker_t2' })] });
+  const r = concluidas(c);
+  assert.deepEqual(r.json?.arquivadas?.map((x) => x.item), ['F7']);
+  assert.match(JSON.stringify(r.json.recusadas), /ctx_ccc333/);
+});
+test('(concluidas-8b) --remover-worktree: cada concluída que passa também sai da barra lateral, pelo mesmo `worktree rm` do avulso, nunca --force; a recusada não remove nada', () => {
+  const c = cenarioDeDuas();
+  writeFileSync(join(base, 'painel', 'perguntas', 'Q5.json'), JSON.stringify({ id: 'Q5', version: 1, data: { item: 'F8', estado: 'aberta', sessaoId: ORCA_ID, projeto: 'kit' } }));
+  const r = concluidas(c, ['--remover-worktree']);
+  assert.deepEqual(r.json?.arquivadas?.map((x) => x.item), ['F7']);
+  assert.equal(r.json.recusadas[0].item, 'F8');
+  const ms = c.mutantes();
+  assert.deepEqual(ms.map((a) => a.slice(0, 2).join(' ')), ['orchestration worker-release', 'worktree set', 'worktree rm']);
+  assert.deepEqual(ms.at(-1), ['worktree', 'rm', '--worktree', `path:${pasta}`, '--json']);
+  assert.ok(ms.every((a) => !a.includes('--force')), 'nenhum --force');
+  // paridade com o avulso (arquivar-2): worker-release, worktree set completed e o mesmo `worktree rm path:` da pasta
+  assert.deepEqual(ms, [
+    ['orchestration', 'worker-release', '--dispatch', 'ctx_aaa111', '--json'],
+    ['worktree', 'set', '--worktree', `path:${pasta}`, '--workspace-status', 'completed', '--json'],
+    ['worktree', 'rm', '--worktree', `path:${pasta}`, '--json'],
+  ]);
+});
+test('(concluidas-10) dona reaproveitada: sessão que também trabalha um item vivo não é candidata, mesmo com o item fechado achando-a', () => {
+  const c = cenarioDeDuas();
+  const dir = join(base, 'orq', 'orca-sessoes');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'dona-f8.json'), JSON.stringify({ orcaId: 'orca_session_id:dona-f8', cliAtual: 'x', cliIds: ['x'], terminal: 'structworker_t2', enderecoDoSend: 'orca_session_id:dona-f8', cwd: c.pasta8, em: new Date().toISOString() }));
+  writeFileSync(join(base, 'painel', 'fila', 'F8.json'), JSON.stringify({ id: 'F8', version: 1, data: { titulo: 'tema', etapa: 'feito', projeto: 'kit', branch: null, prs: [], donoLocalId: 'orca_session_id:dona-f8', com: [], perguntas: [] } }));
+  writeFileSync(join(base, 'painel', 'fila', 'F9.json'), JSON.stringify({ id: 'F9', version: 1, data: { titulo: 'item vivo', etapa: 'implementacao', projeto: 'kit', branch: null, prs: [], donoLocalId: 'orca_session_id:dona-f8', com: [], perguntas: [] } }));
+  const antes = concluidas(c, ['--seco']);
+  assert.deepEqual(antes.json?.aptas?.map((x) => x.item), ['F7'], 'F8 compartilha a dona com o F9 vivo: fora');
+  assert.deepEqual(c.mutantes(), []);
+});
+test('(concluidas-8) recusa --item e despacho junto; --itens sem --concluidas', () => {
+  const c = cenarioDeDuas();
+  for (const extra of [['--item', 'F7'], ['ctx_aaa111']]) {
+    const r = concluidas(c, extra);
+    assert.notEqual(r.status, 0, extra.join(' '));
+    assert.match(r.stderr, /uso:/);
+  }
+  const sem = painel(['orquestradora', 'arquivar', 'ctx_aaa111', '--itens', 'F7'], { env: c.env });
+  assert.notEqual(sem.status, 0);
+  assert.deepEqual(c.mutantes(), []);
+});
+test('(concluidas-9) sem concluída com worker: lista vazia e exit 0', () => {
+  const c = cenarioDeDuas({ itemF8: { etapa: 'execucao' } });
+  writeFileSync(join(base, 'painel', 'fila', 'F7.json'), JSON.stringify({ id: 'F7', version: 1, data: { titulo: 'tema', etapa: 'execucao', branch: 'f7-tema' } }));
+  const r = concluidas(c, ['--seco']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(r.json, { seco: true, aptas: [], arquivadas: [], recusadas: [] });
+});

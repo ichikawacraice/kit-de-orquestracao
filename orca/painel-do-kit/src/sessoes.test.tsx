@@ -46,7 +46,7 @@ const teste = (nome: string, corpo: () => Promise<void>) => test(nome, async () 
   try { await corpo() } finally { for (const v of montadas.splice(0)) await v.unmount() }
 })
 async function montar(ler: () => Leitura) {
-  const v = await mount(painel, { host: mockHost({ requests: { 'kit.ler': () => ler() } }), })
+  const v = await mount(painel, { host: mockHost({ requests: { 'kit.ler': () => ler(), 'kit.concluidas': () => ({ aptas: [], erro: null, lidoEm: Date.now() }) } }), })
   montadas.push(v)
   const nos = (q: Record<string, unknown>) => v.findAll(q) as No[]
   /** O `Box` do cartão do item (chave `s-<item>`), achado na árvore desenhada: o `find` só devolve o nó mais fundo. */

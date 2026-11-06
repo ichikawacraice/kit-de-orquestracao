@@ -126,6 +126,13 @@ export type Leitura = {
   acompanhadas?: Record<string, Acompanhada | null>
 }
 
+/** Uma sessão dona concluída que passa nas condições do arquivar (F469). */
+export type Concluida = { item: string; titulo: string }
+/** As concluídas que o `painel orquestradora arquivar --concluidas --seco` diz que dá para arquivar; `erro` quando não deu para conferir. */
+export type ConcluidasLidas = { aptas: Concluida[]; erro: string | null; lidoEm: number }
+/** O desfecho de arquivar: o que saiu, o que o script recusou (com o motivo) e o erro de quem não conseguiu nem tentar. */
+export type DesfechoDoArquivar = { arquivadas: Concluida[]; recusadas: (Concluida & { motivo: string })[]; erro: string | null }
+
 export type EstadoDaEntrega = { estado: 'entregue' | 'pendente' | 'falhou'; via: 'orca'; destino?: string; em: string; motivo?: string }
 export type Resultado = { gravou: true; entrega: EstadoDaEntrega } | { gravou: false; motivo: string; codigo: string }
 
@@ -136,6 +143,8 @@ declare module 'orca' {
     'kit.confirmar': { input: { itens: { id: string; versao: number }[] }; output: { confirmadas: string[]; recusadas: { id: string; motivo: string }[]; versoes: Record<string, number> } }
     'kit.desfazer': { input: { itens: { id: string; versao: number }[] }; output: { desfeitas: string[]; recusadas: { id: string; motivo: string }[] } }
     'kit.reentregar': { input: { id: string }; output: EstadoDaEntrega }
+    'kit.concluidas': { input: { forcar?: boolean }; output: ConcluidasLidas }
+    'kit.arquivar': { input: { itens: string[] }; output: DesfechoDoArquivar }
     'kit.seguimento': { input: { destino: string; titulo: string; texto: string }; output: { ok: boolean; motivo?: string } }
   }
 }
@@ -146,5 +155,7 @@ export const JANELA_DA_ENTREGA_MS = 5_000
 export const ESPERA_ENVIO_MS = 30_000
 /** O prazo dos pedidos do painel que enviam: a janela do lote e a espera do envio, mais folga para abrir o terminal e gravar (o Orca aceita até 120 s). */
 export const PRAZO_DO_ENVIO_MS = 90_000
+/** O prazo dos pedidos de arquivar: o teto que o Orca aceita (120 s); cada concluída confere git e gh e chama o Orca. */
+export const PRAZO_DO_ARQUIVAR_MS = 120_000
 /** Quantas mensagens da caixa do Orca a aba lê por vez. */
 export const LIMITE_DA_CAIXA = 1000
