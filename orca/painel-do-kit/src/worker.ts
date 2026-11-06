@@ -18,7 +18,7 @@ import { sessoesDoKit } from './nucleo/sessoes.mjs'
 import { precisaDaBatida, scriptDaBatida, ambienteDaBatida, TOQUE_MS } from './nucleo/batida.mjs'
 import { lerInstalados, publicadoDoCache, cacheVale, paraBaixar, atualizarCache, cloneDoMarketplace } from './nucleo/atualizacao.mjs'
 import { inicioDoDiaSP } from './vista'
-import type { AtualizacaoDoKit, Leitura, Resultado, Entrega, EstadoDaEntrega, VistaDasSessoes } from './protocol'
+import type { AtualizacaoDoKit, Concluida, ConcluidasLidas, DesfechoDoArquivar, Leitura, Resultado, Entrega, EstadoDaEntrega, VistaDasSessoes } from './protocol'
 import { ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, LIMITE_DA_CAIXA } from './protocol'
 
 const DIAS = 7
@@ -43,6 +43,24 @@ function rodarJson(args: string[]): Promise<unknown> {
       if (err) return reject(new Error(String(err.message).split('\n')[0]))
       try { resolve(JSON.parse(so)) } catch { reject(new Error('o Orca devolveu algo que não é JSON')) }
     }))
+}
+
+/** O que o script diz de cada condição que faltou, em palavras de quem usa a aba; o texto cru vai ao log do plugin. */
+export function motivoCurto(faltam: string[]): string {
+  const curtos = faltam.map((f) => {
+    if (/worker não está parado/.test(f)) return 'a sessão ainda está rodando'
+    if (/não está limpa/.test(f)) return 'tem arquivo sem commit na worktree'
+    if (/commit sem push/.test(f)) return 'tem commit sem push'
+    const aberto = /PR #(\d+) está aberto/.exec(f)
+    if (aberto) return `o PR #${aberto[1]} ainda está aberto`
+    if (/fechado sem merge/.test(f)) return 'tem PR fechado sem merge'
+    if (/commit\(s\) fora|commit depois do PR/.test(f)) return 'tem trabalho fora de PR mergeado'
+    const pergunta = /pergunta aberta do (F\d+): (.+)/.exec(f)
+    if (pergunta) return `tem pergunta aberta (${pergunta[2]})`
+    if (/falhou:/.test(f) && /orca /.test(f)) return 'o Orca recusou a ação; veja o log do plugin'
+    return 'não deu para conferir; veja o log do plugin'
+  })
+  return [...new Set(curtos)].join('; ') || 'não passou nas condições'
 }
 
 export default function activate(orca: OrcaWorkerApi): void {
@@ -135,6 +153,54 @@ export default function activate(orca: OrcaWorkerApi): void {
   void rodarBatida()
   const relogioDaBatida = setInterval(() => { void rodarBatida() }, TOQUE_MS)
   relogioDaBatida.unref?.()
+
+  // Arquivar as concluídas (F469): quem decide é o `painel.mjs orquestradora arquivar --concluidas` do plugin orquestracao, o mesmo
+  // código das condições do `arquivar <ctx_…>` (PR mergeado, worker parado, worktree limpa e empurrada, sem pergunta aberta).
+  // O worker só o chama: o seco (a contagem do botão) não muda nada; o arquivar vai com --remover-worktree (a sessão some da barra lateral), nunca --force. A conferência faz git e gh
+  // por concluída, então fica em cache de 2 min e uma por vez.
+  const chamarPainel = (args: string[], prazoMs: number) => new Promise<{ json: Record<string, unknown> | null; erro: string | null }>((resolve) => {
+    const script = scriptDaBatida()
+    if (!script) return resolve({ json: null, erro: 'o plugin orquestracao não está instalado no escopo do usuário' })
+    execFile(process.env.PAINEL_DO_KIT_NODE || process.execPath, [script, ...args],
+      { env: ambienteDaBatida(process.env), timeout: prazoMs, killSignal: 'SIGKILL', maxBuffer: 4 * 1024 * 1024 },
+      (err, so, se) => {
+        // `recusadas` sai com exit 1 e o JSON inteiro: vale o JSON, não o código.
+        try { const j = JSON.parse(so); if (j && typeof j === 'object') return resolve({ json: j as Record<string, unknown>, erro: null }) } catch { /* sem JSON: erro de uso ou de execução */ }
+        const ultima = String(se || err?.message || 'sem resposta').trim().split('\n').pop() ?? ''
+        resolve({ json: null, erro: ultima.slice(0, 200) })
+      })
+  })
+  const dadosDa = (x: unknown): Concluida[] => (Array.isArray(x) ? x : []).filter((c): c is Concluida => typeof c?.item === 'string' && /^F\d+$/.test(c.item)).map((c) => ({ item: c.item, titulo: String(c.titulo ?? c.item) }))
+  const CONCLUIDAS_MS = 120_000
+  let concluidasCache: ConcluidasLidas | null = null
+  let conferindoConcluidas: Promise<ConcluidasLidas> | null = null
+  const lerConcluidas = (forcar: boolean): Promise<ConcluidasLidas> => {
+    if (!forcar && concluidasCache && Date.now() - concluidasCache.lidoEm < CONCLUIDAS_MS) return Promise.resolve(concluidasCache)
+    conferindoConcluidas ??= chamarPainel(['orquestradora', 'arquivar', '--concluidas', '--seco'], 100_000).then(({ json, erro }) => {
+      const motivo = erro ?? (typeof json?.erro === 'string' ? json.erro : null)
+      concluidasCache = { aptas: motivo ? [] : dadosDa(json?.aptas), erro: motivo, lidoEm: Date.now() }
+      if (motivo) orca.log(`concluídas: ${motivo}`)
+      return concluidasCache
+    }).finally(() => { conferindoConcluidas = null })
+    return conferindoConcluidas
+  }
+  orca.panels.handle('kit.concluidas', async (input?: { forcar?: boolean }): Promise<ConcluidasLidas> => lerConcluidas(Boolean(input?.forcar)))
+
+  // Só os itens que a pessoa viu e confirmou vão ao script, que confere tudo de novo na hora e recusa o que deixou de valer.
+  orca.panels.handle('kit.arquivar', async (input: { itens: string[] }): Promise<DesfechoDoArquivar> => {
+    const itens = Array.isArray(input?.itens) ? input.itens : []
+    if (!itens.length || itens.some((i) => typeof i !== 'string' || !/^F\d+$/.test(i))) return { arquivadas: [], recusadas: [], erro: 'a lista de itens a arquivar é inválida' }
+    const { json, erro } = await chamarPainel(['orquestradora', 'arquivar', '--concluidas', '--itens', itens.join(','), '--remover-worktree'], 110_000)
+    concluidasCache = null // o que arquivou sai da lista na próxima conferência
+    if (!json) return { arquivadas: [], recusadas: [], erro: erro ?? 'o painel não respondeu' }
+    const recusadas = (Array.isArray(json.recusadas) ? json.recusadas : []).flatMap((r: { item?: string; titulo?: string; faltam?: unknown }) => {
+      const [c] = dadosDa([r])
+      const faltam = (Array.isArray(r.faltam) ? r.faltam : []).map(String)
+      if (faltam.length) console.warn(`[kit] ${r.item} não arquivada: ${faltam.join(' | ')}`)
+      return c ? [{ ...c, motivo: motivoCurto(faltam) }] : []
+    })
+    return { arquivadas: dadosDa(json.arquivadas), recusadas, erro: typeof json.erro === 'string' ? json.erro : null }
+  })
 
   // Envio por terminal criado pelo worker: o worker do plugin não tem remetente próprio (`no_active_sender_terminal`).
   async function enviar(destino: string, assunto: string, corpo: string): Promise<{ ok: boolean; motivo?: string }> {

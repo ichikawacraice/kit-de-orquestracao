@@ -8,8 +8,8 @@ import {
 import { cortar, haQuanto, horaSP, itemDe, listaDePRs, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem, quando, semPrefixoDoItem, tempoDaSessao } from './vista'
 import { SeloDoProjeto, partesDoSelo } from './selo-do-projeto'
 import { separarLidas, limpar as limparLidas, desfazer as desfazerLidas, podarLidas } from './nucleo/lidas.mjs'
-import type { Acompanhada, AtualizacaoDoKit, Bolinha as BolinhaDaSessao, Entrega, EstadoDaEntrega, GrupoDeSessoes, Leitura, Pendente, Pergunta, Sessao, VistaDasSessoes } from './protocol'
-import { PRAZO_DO_ENVIO_MS } from './protocol'
+import type { Acompanhada, AtualizacaoDoKit, Bolinha as BolinhaDaSessao, Concluida, ConcluidasLidas, DesfechoDoArquivar, Entrega, EstadoDaEntrega, GrupoDeSessoes, Leitura, Pendente, Pergunta, Sessao, VistaDasSessoes } from './protocol'
+import { PRAZO_DO_ARQUIVAR_MS, PRAZO_DO_ENVIO_MS } from './protocol'
 
 // O "Sim" do painel (o mesmo texto do pane do app): a sessão e a trava de limpeza o reconhecem.
 const SIM = 'sim (segue a recomendação)'
@@ -92,6 +92,13 @@ const limpasAgora = atom<Record<string, number>>('limpasAgora', {})
 const verLimpas = atom('verLimpas', false)
 // Os cartões de sessão abertos, por item: sobrevivem à releitura e à troca de lugar; fecham ao sair da aba.
 const sessoesAbertas = atom<Record<string, boolean>>('sessoesAbertas', {})
+// "Arquivar concluídas" (F469): as sessões que passam nas condições do arquivar, lidas pelo worker, e o que a pessoa fez com elas.
+type Arquivo =
+  | { tipo: 'confirmando'; itens: Concluida[] }
+  | { tipo: 'andando'; itens: Concluida[] }
+  | { tipo: 'feito'; desfecho: DesfechoDoArquivar }
+const concluidas = atom<ConcluidasLidas | null>('concluidas', null)
+const arquivo = atom<Arquivo | null>('arquivo', null)
 
 const sem = <T,>(o: Record<string, T>, k: string) => Object.fromEntries(Object.entries(o).filter(([c]) => c !== k)) as Record<string, T>
 const tocar = (ms: number) => setTimeout(() => set(tique, relogio.agora()), ms + 50)
@@ -161,6 +168,7 @@ async function reler(forcar: boolean) {
       return d ? [[id, d]] : []
     })))
     set(falha, null)
+    void lerConcluidas(forcar)
     const ids = (x: Leitura | null) => (x?.assumidas ?? []).map((q) => `${q.id}:${q.versao}`).join()
     if (read(armado) !== null && ids(antes) !== ids(l)) set(armado, null)
     // Quem respondeu fora desta aba: a recusa pediu releitura e a pergunta não está mais na lista.
@@ -178,6 +186,28 @@ async function reler(forcar: boolean) {
   }
 }
 
+/** As concluídas aptas a arquivar (o worker as confere com git e gh e guarda 2 min); falhar só some o botão. */
+async function lerConcluidas(forcar: boolean) {
+  try {
+    set(concluidas, await plugin.request('kit.concluidas', { forcar }, { timeoutMs: PRAZO_DO_ARQUIVAR_MS }))
+  } catch (e) {
+    console.warn('[kit] não li as concluídas:', e)
+  }
+}
+
+/** Arquiva os itens confirmados: o efeito entra na hora (o botão dá lugar ao "Arquivando…") e a recusa aparece com o motivo. */
+async function arquivar(itens: Concluida[]) {
+  set(arquivo, { tipo: 'andando', itens })
+  let desfecho: DesfechoDoArquivar
+  try {
+    desfecho = await plugin.request('kit.arquivar', { itens: itens.map((c) => c.item) }, { timeoutMs: PRAZO_DO_ARQUIVAR_MS })
+  } catch (e) {
+    desfecho = { arquivadas: [], recusadas: [], erro: motivoDe(e) }
+  }
+  set(arquivo, { tipo: 'feito', desfecho })
+  await lerConcluidas(true)
+}
+
 /** O reler da pessoa: força a caixa do Orca e tira o que ela já resolveu nesta visita. */
 async function relerAgora() {
   const andando = new Set(['andando', 'incerto', 'confirmando', 'erro'])
@@ -187,6 +217,7 @@ async function relerAgora() {
   set(reentregas, {})
   set(envios, {})
   set(armado, null)
+  if (read(arquivo)?.tipo === 'feito') set(arquivo, null)
   await reler(true)
 }
 
@@ -1086,6 +1117,45 @@ function AvisoDasSessoes(props: { v: VistaDasSessoes }) {
   return <Callout tone="warning"><Text size="sm">{texto}</Text></Callout>
 }
 
+/** "Arquivar concluídas (N)": só com sessão concluída que passa nas condições; confirma com a lista e mostra o desfecho no lugar. */
+function ArquivarConcluidas() {
+  const aptas = read(concluidas)?.aptas ?? []
+  const a = read(arquivo)
+  if (a?.tipo === 'andando') return <Spinner label={`Arquivando ${plural(a.itens.length, 'sessão', 'sessões')}…`} />
+  if (a?.tipo === 'confirmando') {
+    const n = a.itens.length
+    return (
+      <Box gap="sm">
+        <Text size="sm" weight="semibold">{`Arquivar ${plural(n, 'sessão concluída', 'sessões concluídas')}?`}</Text>
+        <Box gap="xs">{a.itens.map((c) => <Text key={`c-${c.item}`} size="xs">{`${c.item} · ${semPrefixoDoItem(c.titulo, c.item)}`}</Text>)}</Box>
+        <Text size="xs" tone="muted">{n === 1
+          ? 'A pasta dela é apagada (o que o git ignora, como .env, vai junto) e ela some da barra lateral.'
+          : 'A pasta de cada uma é apagada (o que o git ignora, como .env, vai junto) e elas somem da barra lateral.'}</Text>
+        <Row gap="sm" wrap>
+          <Button variant="ghost" onPress={() => set(arquivo, null)}>Cancelar</Button>
+          <Button variant="solid" tone="accent" onPress={() => void arquivar(a.itens)}>{n === 1 ? 'Arquivar' : `Arquivar as ${n}`}</Button>
+        </Row>
+      </Box>
+    )
+  }
+  if (a?.tipo === 'feito') {
+    const { arquivadas, recusadas, erro } = a.desfecho
+    const tom = erro || !arquivadas.length ? 'danger' : recusadas.length ? 'warning' : 'success'
+    return (
+      <Box gap="xs">
+        {erro ? <Text size="sm" tone="danger">{`Não arquivou: ${erro}.`}</Text> : <Text size="sm" tone={tom}>{arquivadas.length ? `${plural(arquivadas.length, 'sessão arquivada', 'sessões arquivadas')}.` : 'Nenhuma sessão arquivada.'}</Text>}
+        {recusadas.map((r) => <Text key={`r-${r.item}`} size="xs" tone={tom}>{`${r.item} ficou: ${r.motivo}.`}</Text>)}
+        <Row gap="sm" wrap>
+          {erro ? <Button variant="outline" size="sm" onPress={() => { set(arquivo, null); void lerConcluidas(true) }}>Tentar de novo</Button> : null}
+          <Button variant="ghost" size="sm" onPress={() => set(arquivo, null)}>Fechar</Button>
+        </Row>
+      </Box>
+    )
+  }
+  if (!aptas.length) return null
+  return <Row><Button variant="outline" size="sm" tooltip="Só as que têm PR mergeado, a worktree limpa e a sessão parada. A pasta é apagada." onPress={() => set(arquivo, { tipo: 'confirmando', itens: aptas })}>{`Arquivar concluídas (${aptas.length})`}</Button></Row>
+}
+
 function Sessoes(props: { v: VistaDasSessoes }) {
   const v = props.v
   if (v.erro) {
@@ -1102,6 +1172,7 @@ function Sessoes(props: { v: VistaDasSessoes }) {
   return (
     <Box gap="lg">
       <AvisoDasSessoes v={v} />
+      <ArquivarConcluidas />
       {!vivas ? <EmptyState title="Nenhuma sessão trabalhando agora" description="Quando a orquestradora abrir uma sessão para um item, ela aparece aqui." icon="activity" /> : null}
       {v.projetos.map((g) => <GrupoDoProjeto key={`g-${g.projeto ?? 'sem-projeto'}`} g={g} />)}
     </Box>

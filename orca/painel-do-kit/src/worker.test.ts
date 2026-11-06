@@ -43,6 +43,12 @@ else if (a[1] === 'send') { fs.writeFileSync(${JSON.stringify(args)}, JSON.strin
   const script = join(raiz, 'painel-falso.cjs')
   writeFileSync(script, `const fs = require('fs'); const path = require('path');
 fs.appendFileSync(${JSON.stringify(logDaBatida)}, JSON.stringify({ argv: process.argv.slice(2), base: process.env.HOOKS_CREWAI_BASE, electron: process.env.ELECTRON_RUN_AS_NODE }) + '\\n');
+if (process.argv[2] === 'orquestradora') { // F469: o arquivar --concluidas; a resposta do cenário está em arquivar.json
+  const r = JSON.parse(fs.readFileSync(path.join(path.dirname(${JSON.stringify(log)}), 'arquivar.json'), 'utf8'));
+  const x = process.argv.includes('--seco') ? r.seco : r.real;
+  if (r.uso) { process.stderr.write('uso: painel.mjs orquestradora arquivar <ctx_…>'); process.exitCode = 1; return; }
+  process.stdout.write(JSON.stringify(x)); process.exitCode = x.recusadas && x.recusadas.length ? 1 : 0; return;
+}
 const d = path.join(process.env.HOOKS_CREWAI_BASE, 'batida'); fs.mkdirSync(d, { recursive: true });
 fs.writeFileSync(path.join(d, 'deduzido.json'), JSON.stringify({ em: new Date().toISOString(), fonte: 'leitura', itens: {} }));
 console.log(JSON.stringify({ gravado: true }));
@@ -64,9 +70,10 @@ console.log(JSON.stringify({ gravado: true }));
       },
     },
   })
+  const respostaDoArquivar = (r: object) => writeFileSync(join(raiz, 'arquivar.json'), JSON.stringify(r))
   const todosEnviados = () => (existsSync(args + 'l') ? readFileSync(args + 'l', 'utf8').trim().split('\n').map((l) => JSON.parse(l) as string[]) : [])
   const batidas = () => (existsSync(logDaBatida) ? readFileSync(logDaBatida, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { argv: string[]; base: string; electron: string }) : [])
-  return { painel, host, pergunta, doc, chamadas, enviados: () => JSON.parse(readFileSync(args, 'utf8')), todosEnviados, batidas }
+  return { painel, host, pergunta, doc, chamadas, enviados: () => JSON.parse(readFileSync(args, 'utf8')), todosEnviados, batidas, respostaDoArquivar }
 }
 
 test('ler não acorda ninguém: nenhum terminal, nenhum agente, nenhuma mensagem; só inbox e worker-list do CLI', async () => {
@@ -449,4 +456,81 @@ test('F460: PAINEL_DO_KIT_BATIDA=off desliga a batida da aba', async () => {
     await new Promise((r) => setTimeout(r, 1000))
     assert.deepEqual(a.batidas(), [])
   } finally { await w.deactivate() }
+})
+
+// F469: o botão "Arquivar concluídas". O worker só chama o `painel.mjs orquestradora arquivar --concluidas` (as condições são as do
+// script, provadas nos testes dele); aqui se prova o que o worker passa e o que devolve.
+const APTAS = [{ item: 'F7', titulo: 'tema sete', dispatchId: 'ctx_a' }, { item: 'F8', titulo: 'tema oito', dispatchId: 'ctx_b' }]
+const argsDoPainel = (a: ReturnType<typeof ambiente>) => a.batidas().filter((b) => b.argv[0] === 'orquestradora')
+
+test('F469: kit.concluidas roda o arquivar --concluidas --seco, devolve as aptas e guarda em cache por 2 min', async () => {
+  const a = ambiente()
+  a.respostaDoArquivar({ seco: { seco: true, aptas: APTAS, arquivadas: [], recusadas: [] } })
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    const r = await w.request('kit.concluidas', {})
+    assert.deepEqual(r.aptas, [{ item: 'F7', titulo: 'tema sete' }, { item: 'F8', titulo: 'tema oito' }], 'sem o dispatchId: a aba só conhece o item')
+    assert.equal(r.erro, null)
+    assert.deepEqual(argsDoPainel(a).map((b) => b.argv), [['orquestradora', 'arquivar', '--concluidas', '--seco']])
+    await w.request('kit.concluidas', {})
+    assert.equal(argsDoPainel(a).length, 1, 'cache')
+    await w.request('kit.concluidas', { forcar: true })
+    assert.equal(argsDoPainel(a).length, 2, 'forçar confere de novo')
+  } finally { await w.dispose?.() }
+})
+
+test('F469: kit.arquivar manda só os itens confirmados, com --remover-worktree (nunca --force), e devolve o desfecho com o motivo da recusa', async () => {
+  const a = ambiente()
+  a.respostaDoArquivar({
+    seco: { seco: true, aptas: APTAS, arquivadas: [], recusadas: [] },
+    real: { seco: false, aptas: [], arquivadas: [APTAS[0]], recusadas: [{ item: 'F8', titulo: 'tema oito', dispatchId: 'ctx_b', faltam: ['pergunta aberta do F8: Q5', 'PR #13 está aberto'] }] },
+  })
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    await w.request('kit.concluidas', {})
+    const r = await w.request('kit.arquivar', { itens: ['F7', 'F8'] })
+    assert.deepEqual(r.arquivadas, [{ item: 'F7', titulo: 'tema sete' }])
+    assert.deepEqual(r.recusadas, [{ item: 'F8', titulo: 'tema oito', motivo: 'tem pergunta aberta (Q5); o PR #13 ainda está aberto' }])
+    assert.equal(r.erro, null)
+    const real = argsDoPainel(a).map((b) => b.argv).at(-1)
+    assert.deepEqual(real, ['orquestradora', 'arquivar', '--concluidas', '--itens', 'F7,F8', '--remover-worktree'])
+    assert.ok(!real!.includes('--force'))
+    // arquivar invalida o cache: a próxima leitura confere de novo
+    await w.request('kit.concluidas', {})
+    assert.equal(argsDoPainel(a).length, 3)
+  } finally { await w.dispose?.() }
+})
+
+test('F469: kit.arquivar recusa lista vazia ou item que não é F<n> sem chamar o painel (nada vira argumento de shell)', async () => {
+  const a = ambiente()
+  a.respostaDoArquivar({ seco: { aptas: [] }, real: { arquivadas: [], recusadas: [] } })
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    for (const itens of [[], ['F7; rm -rf /'], ['--remover-worktree'], ['F7,F8']]) {
+      const r = await w.request('kit.arquivar', { itens })
+      assert.match(r.erro ?? '', /inválida/, JSON.stringify(itens))
+    }
+    assert.deepEqual(argsDoPainel(a), [], 'o painel não foi chamado')
+  } finally { await w.dispose?.() }
+})
+
+test('F469: painel.mjs antigo (sem --concluidas) ou ausente: sem aptas e com o motivo, sem derrubar a aba', async () => {
+  const a = ambiente()
+  a.respostaDoArquivar({ uso: true })
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    const r = await w.request('kit.concluidas', {})
+    assert.deepEqual(r.aptas, [])
+    assert.match(r.erro ?? '', /uso:/)
+    const d = await w.request('kit.arquivar', { itens: ['F7'] })
+    assert.deepEqual(d.arquivadas, [])
+    assert.match(d.erro ?? '', /uso:/)
+  } finally { await w.dispose?.() }
+  process.env.PAINEL_DO_KIT_SCRIPT = ''
+  process.env.HOME = join(tmpdir(), 'f469-sem-plugin-' + Date.now())
+  const b = await mountWorker(main, { host: a.host })
+  try {
+    const r = await b.request('kit.concluidas', { forcar: true })
+    assert.match(r.erro ?? '', /não está instalado/)
+  } finally { await b.dispose?.() }
 })

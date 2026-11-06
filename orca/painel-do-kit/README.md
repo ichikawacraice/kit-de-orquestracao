@@ -40,8 +40,14 @@ orca plugin check orca/painel-do-kit                                         # r
 ## Como está organizado
 
 - `src/nucleo/*.mjs`: leitura e gravação do painel, entregas, envio pelo Orca e as contas do "Limpar". Só módulos nativos; o painel importa apenas `lidas.mjs`, que não usa `node:fs`.
-- `src/worker.ts`: os pedidos que o painel faz (`kit.ler`, `kit.responder`, `kit.confirmar`, `kit.desfazer`, `kit.reentregar`, `kit.seguimento`), o contador da barra de status e o relógio da batida de leitura (`src/nucleo/batida.mjs` diz quando e com que script).
+- `src/worker.ts`: os pedidos que o painel faz (`kit.ler`, `kit.responder`, `kit.confirmar`, `kit.desfazer`, `kit.reentregar`, `kit.seguimento`, `kit.concluidas`, `kit.arquivar`), o contador da barra de status e o relógio da batida de leitura (`src/nucleo/batida.mjs` diz quando e com que script).
 - `src/panel.tsx`: a aba. `src/vista.ts`: tempo em português, dia de São Paulo e agrupamentos.
 - O texto que você escreve nunca entra numa linha de shell: o worker o grava em arquivo e o comando fixo o lê de lá.
 
 Desenho: `docs/design/revisoes/2026-11-06-aba-do-kit-no-orca.md`. Plano: `docs/planos/2026-11-06-aba-do-kit-no-orca.md`.
+
+## Arquivar concluídas (seção Sessões)
+
+- O botão "Arquivar concluídas (N)" só aparece quando há dona de item `feito`/`descartado` que passa nas condições do arquivar. Quem confere e executa é o `painel.mjs orquestradora arquivar --concluidas` do plugin `orquestracao` (as mesmas condições do `arquivar <ctx_…>`); a aba não reimplementa nada e não pede capacidade nova (o worker roda o script como a batida de leitura roda).
+- `kit.concluidas` lê as aptas (`--seco`, sem efeito; cache de 2 min). `kit.arquivar` manda só os itens que a pessoa viu e confirmou, com `--remover-worktree`: libera o worker, marca a worktree como concluída e a remove (`worktree rm`, nunca `--force`; só com a worktree limpa e empurrada), então a sessão some da barra lateral. O que deixou de valer na hora volta com o motivo.
+- Sem o plugin `orquestracao` atualizado (script sem `--concluidas`), o botão não aparece.
