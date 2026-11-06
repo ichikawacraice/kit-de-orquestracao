@@ -62,7 +62,7 @@ import { DIAS_ARQUIVO, arquivarFechados, arquivarItem, desarquivarItem, limparAr
 import { BATIDA_SOLTA_MIN, cartoesResolvidos, julgar } from './batida.mjs';
 import { coletar as coletarDeduzidos } from './estado-deduzido.mjs';
 import { MOTIVO_DO_FORK, SHA_VALIDADO, arquivosDoPr, conferir, dadosDoPr, deFork, estadoDoPr, mergearNoGitHub, soDocumentacao } from './mergear.mjs';
-import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
+import { julgarReinicio, lerFichas, lerInicioDoApp, lerParaBaixar, lerPs, orcaNoReinicio, pluginsEsperandoReinicio, textoDoReinicio } from './pode-reiniciar.mjs';
 import { GATE_PADRAO, montarLote, motivoDeConflito, padroesDeInfra, ESPERA_DE_INFRA_S } from './fila-de-merge.mjs';
 import { donoDaFilaVivo, filaOrfa } from './fila-orfa.mjs';
 import { registrarAcerto } from './testes-afetados.mjs';
@@ -139,6 +139,29 @@ const regras = CONFERE_MEMBRO
     return null;
   })
   : null;
+// F444 (ADR 0030, item 6): a batida e o `pode-reiniciar` leem a lista de workers do Orca (a vida da dona do Orca, a conta do
+// reinício) e o registro das sessões do Orca (orca-sessoes/).
+const moduloOrca = DA_BATIDA || DO_REINICIO
+  ? await Promise.all([import(pathToFileURL(join(HOOKS_DIR, 'orca-workers.mjs')).href), import(pathToFileURL(join(HOOKS_DIR, 'orca-sessoes.mjs')).href)])
+    .then(([w, s]) => ({ ...w, ...s }))
+  : null;
+// A lista uma vez por comando: null (sem orca), { erro } ou { workers }. Falhar ao chamar é erro (falha fechada), nunca "sem orca".
+function listaDoOrca() {
+  try { return moduloOrca.workersDoOrca(); } catch (e) { return { erro: `orca worker-list: ${e?.message || e}` }; }
+}
+// A vida de cada dona do Orca dos itens: id → { viva: true|false|null, cwd }. null = fora da vista (sem a lista, sem registro).
+function vidaDasDonasDoOrca(itens, lista) {
+  const vidas = new Map();
+  for (const [, d] of itens) {
+    for (const id of [d?.donoLocalId, ...(Array.isArray(d?.com) ? d.com.map((c) => c?.localId) : [])]) {
+      if (typeof id !== 'string' || !id.startsWith('orca_session_id:') || vidas.has(id)) continue;
+      let reg = null;
+      try { reg = moduloOrca.lerSessaoDoOrca(id); } catch { /* sem registro: fora da vista */ }
+      vidas.set(id, { viva: moduloOrca.vidaDoRegistro(reg, lista), cwd: reg?.cwd ?? null });
+    }
+  }
+  return vidas;
+}
 // F370: a reabertura do item confere se a dona lembrada foi arquivada (o registro do app); sem o módulo, restaura sem conferir.
 const GRAVA_FILA = ['update', 'set'].includes(process.argv[2]) ? process.argv[3] === 'fila' : process.argv[2] === 'batch';
 const registroDoApp = regras ?? (GRAVA_FILA ? await import(pathToFileURL(POOL_COMUM).href).catch(() => null) : null);
@@ -1474,7 +1497,7 @@ function eusDestaSessao() {
   try { const l = regras?.registroDaSessao(MEU_CLI)?.localId; if (l) s.add(l); } catch { /* sem registro */ }
   return s;
 }
-function conferirReinicio({ linhas, listaEm, sessoesDe, agoraMs = Date.now() }) {
+function conferirReinicio({ linhas, listaEm, sessoesDe, agoraMs = Date.now(), orca = listaDoOrca() }) {
   const euPid = new Set([process.pid, process.ppid]);
   const ps = lerPs(process.env);
   const motivos = julgarReinicio({ sessoes: linhas, fichas: lerFichas(regras.pastaDoTeto(process.env)), ps, euPid });
@@ -1484,7 +1507,8 @@ function conferirReinicio({ linhas, listaEm, sessoesDe, agoraMs = Date.now() }) 
   try { paraAplicar = pluginsEsperandoReinicio({ home: homedir(), inicioDoApp: lerInicioDoApp(process.env) }); } catch { /* sem plugins */ }
   let paraBaixar = [];
   try { paraBaixar = lerParaBaixar({ home: homedir(), cache: join(ORQ(), 'batida', 'kit-publicado.json'), agoraMs }); } catch { /* sem conferência */ }
-  const att = { ...(paraAplicar.length ? { paraAplicar } : {}), ...(paraBaixar.length ? { paraBaixar } : {}) };
+  const doOrca = orcaNoReinicio(orca);
+  const att = { ...(paraAplicar.length ? { paraAplicar } : {}), ...(paraBaixar.length ? { paraBaixar } : {}), ...(doOrca ? { orca: doOrca } : {}) };
   const completo = { pode: motivos.length === 0, motivos, sessoesDe, em, listaEm: new Date(listaEm).toISOString(), ...att };
   const idadeMin = Math.max(0, Math.round((agoraMs - listaEm) / 60_000));
   const eu = eusDestaSessao();
@@ -1635,9 +1659,13 @@ function comandoBatida(args) {
   const prazoMin = prazoEmMin([]);
   // F423 (ADR 0027): o estado deduzido do git, do gh e das sessões se coleta fora da trava (o gh é lento); KIT_ESTADO_DEDUZIDO=off
   // volta ao declarado. Falhar aqui não derruba a batida: sem dedução, cada item segue pelo que declara.
+  // F444: a lista do Orca se lê uma vez, fora da trava; a dona do Orca que entrou depois dela fica fora da vista nesta batida
+  const orca = listaDoOrca();
+  if (orca?.erro) process.stderr.write(`batida: a lista de workers do Orca falhou; as donas do Orca ficam fora da vista: ${orca.erro}\n`);
+  const vidasDoOrca = vidaDasDonasDoOrca(itensVivos(), orca);
   let deduzidos = new Map();
   if (process.env.KIT_ESTADO_DEDUZIDO !== 'off') {
-    try { deduzidos = coletarDeduzidos({ itens: itensVivos(), linhas, projetoDe: projetoDeUmaLinha(), slug: (p) => arq.slugDoProjeto(p), agoraMs, prazoMin }); } catch (e) { process.stderr.write(`batida: não deduzi o estado dos itens: ${e?.message || e}\n`); }
+    try { deduzidos = coletarDeduzidos({ itens: itensVivos(), linhas, projetoDe: projetoDeUmaLinha(), slug: (p) => arq.slugDoProjeto(p), agoraMs, prazoMin, donaDoOrca: (id) => vidasDoOrca.get(id) ?? null }); } catch (e) { process.stderr.write(`batida: não deduzi o estado dos itens: ${e?.message || e}\n`); }
   }
   // o custo lê transcripts: mede-se fora da trava (F348), só para o item que a dedução viu mergeado
   const custos = new Map();
@@ -1653,7 +1681,7 @@ function comandoBatida(args) {
       ultimo: (nome) => arquivoJson(join(pasta, `${nome}.json`), null),
       caminhoDoRelatorio: (nome) => join(pasta, `${nome}.json`),
       prazoMin, soltaMin: Number.isInteger(solta) && solta > 0 ? solta : BATIDA_SOLTA_MIN,
-      limites, handoffDe: handoffDoItem, deduzidos,
+      limites, handoffDe: handoffDoItem, deduzidos, vidaDoOrca: (id) => vidasDoOrca.get(id)?.viva ?? null,
     });
     const marcadoresApagados = marcadoresMortos(new Map(linhas.map((r) => [r.sessionId, r])), agoraMs);
     const cartoesApagados = cartoesResolvidos({ cartoes: cartoesDoPainel(), linhas, projetoDe: projetoDeUmaLinha(), agoraMs, itens: new Map(itens) });
@@ -1697,7 +1725,7 @@ function comandoBatida(args) {
     for (const id of marcadoresApagados) rmSync(join(ORQ(), 'ativas', id), { force: true });
     for (const id of cartoesApagados) rmSync(caminho('cartoes', id), { force: true });
     // o mesmo julgamento de `pode-reiniciar`, com a lista que a batida já tem (F152); falhar aqui não derruba a batida
-    try { gravarReinicio(conferirReinicio({ linhas, listaEm: statSync(arquivo).mtimeMs, sessoesDe: 'lista', agoraMs }).completo); } catch (e) { process.stderr.write(`batida: não gravei pode-reiniciar.json: ${e?.message || e}\n`); }
+    try { gravarReinicio(conferirReinicio({ linhas, listaEm: statSync(arquivo).mtimeMs, sessoesDe: 'lista', agoraMs, orca }).completo); } catch (e) { process.stderr.write(`batida: não gravei pode-reiniciar.json: ${e?.message || e}\n`); }
     return saida;
   };
   if (seco) return rodar();

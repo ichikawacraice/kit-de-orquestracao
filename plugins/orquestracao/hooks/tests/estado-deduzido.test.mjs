@@ -293,3 +293,30 @@ test('F430: com o gh caído nada se descarta nem se dá por mergeado; o JSON gra
   assert.deepEqual(ida.prsMergeados, [7]);
   assert.deepEqual(ida.prsDescartados, []);
 });
+
+// F444 (ADR 0030, item 6): a dona do Orca não tem linha na lista do app; a vida dela vem da lista de workers do Orca
+const ORCA = 'orca_session_id:abc-123';
+test('dona do Orca: viva pela lista do Orca, morta só com a prova, fora da vista (null) sem ela; sem a linha do app não é "morta"', () => {
+  const it = item({ donoLocalId: ORCA });
+  // a prova de que a regra morde: sem o dado do Orca, a dona sem linha conta como morta (o comportamento antigo)
+  assert.equal(ded({ item: it, prs: [] }).donaViva, false);
+  assert.equal(ded({ item: it, prs: [], orca: { viva: true } }).donaViva, true);
+  assert.equal(ded({ item: it, prs: [], orca: { viva: false } }).donaViva, false);
+  assert.equal(ded({ item: it, prs: [], orca: { viva: null } }).donaViva, null);
+  const v = ded({ item: it, prs: [], orca: { viva: true } });
+  assert.equal(v.rodando, false);
+  assert.equal(v.fontes.dona, 'orca');
+});
+test('coletar: dona do Orca não provada morta → o git sai da pasta registrada; provada morta → sem git', () => {
+  const pastas = [];
+  const ler = { prsDoRepositorio: () => [], gitDoWorktree: (cwd) => { pastas.push(cwd); return { branch: 'f1-x', aFrente: 1, sujo: false, ultimoCommitMs: T - 2 * MIN }; } };
+  const itens = new Map([['F1', item({ donoLocalId: ORCA, etapa: 'planejamento' })]]);
+  const viva = coletar({ itens, linhas: [], projetoDe: () => 'kit', agoraMs: T, prazoMin: 15, ler, donaDoOrca: () => ({ viva: null, cwd: '/orca/wt/f1' }) });
+  assert.deepEqual(pastas, ['/orca/wt/f1']);
+  assert.equal(viva.get('F1').donaViva, null);
+  assert.equal(viva.get('F1').etapa, 'execucao');
+  pastas.length = 0;
+  const morta = coletar({ itens, linhas: [], projetoDe: () => 'kit', agoraMs: T, prazoMin: 15, ler, donaDoOrca: () => ({ viva: false, cwd: '/orca/wt/f1' }) });
+  assert.deepEqual(pastas, []);
+  assert.equal(morta.get('F1').donaViva, false);
+});

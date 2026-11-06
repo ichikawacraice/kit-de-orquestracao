@@ -7,6 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { orcaFalso, recibo, worker } from './orca-falso.mjs';
 
 const SCRIPTS = process.env.SCRIPTS_DIR || join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'orquestradora', 'scripts');
 const PAINEL = join(SCRIPTS, 'painel.mjs');
@@ -49,7 +50,8 @@ afterEach(() => { rmSync(base, { recursive: true, force: true }); });
 
 const ambiente = (extra = {}) => ({
   ...process.env, PAINEL_DIR: pastaPainel(), CLAUDE_CODE_SESSION_ID: '', CLAUDE_CODE_HOST_SESSION_ID: '', HOME: join(base, 'home'), HOOKS_CREWAI_BASE: pastaOrq(),
-  POOL_APP_SESSOES_DIR: join(base, 'appsess'), GH_BIN: join(base, 'gh'), GH_PRS: join(base, 'prs.json'), KIT_CARGA_1MIN: '0', KIT_NUCLEOS_DIR: join(base, 'nuc'), KIT_NUCLEOS_DE_TESTE: '4', ...extra,
+  POOL_APP_SESSOES_DIR: join(base, 'appsess'), GH_BIN: join(base, 'gh'), GH_PRS: join(base, 'prs.json'), KIT_CARGA_1MIN: '0', KIT_NUCLEOS_DIR: join(base, 'nuc'), KIT_NUCLEOS_DE_TESTE: '4',
+  KIT_ORCA_BIN: 'off', ...extra, // F444: nunca o orca real; quem testa o Orca passa o falso
 });
 function painel(args, { env = {}, cwd = repo } = {}) {
   const r = spawnSync('node', [PAINEL, ...args], { encoding: 'utf8', timeout: 60000, killSignal: 'SIGKILL', cwd, env: ambiente(env) });
@@ -712,4 +714,58 @@ test('batida: sessão do Orca registrada mantém o marcador da id atual e apaga 
   assert.equal(r.exit, 0, r.err);
   assert.deepEqual(r.json().marcadoresApagados, ['cli-orca-antigo', 'cli-sem-registro'], r.out);
   assert.ok(existsSync(join(pastaOrq(), 'ativas', 'cli-orca-atual')), 'o marcador da sessão do Orca viva saiu');
+});
+
+// F444 (ADR 0030, item 6): a dona do Orca não está na lista do app. A vida dela vem da lista de workers do Orca: worker vivo na
+// worktree dela (ou com o terminal dela) = viva; o terminal dela todo `released` = acabou; sem a lista = fora da vista, nunca
+// morta. A batida não manda mensagem a id do Orca (o send_message do app não a alcança) e só solta o item da dona que acabou.
+const ORCA_ID = 'orca_session_id:4f1c2d3e-0000-4000-8000-00000000f444';
+function donaDoOrca(F, { terminal = 'structworker_f444' } = {}) {
+  const wt = join(base, 'wt-f444');
+  mkdirSync(wt, { recursive: true });
+  mkdirSync(join(pastaOrq(), 'orca-sessoes'), { recursive: true });
+  writeFileSync(join(pastaOrq(), 'orca-sessoes', `${ORCA_ID.split(':')[1]}.json`), JSON.stringify({
+    orcaId: ORCA_ID, cliAtual: 'cli-f444', cliIds: ['cli-f444'], terminal, enderecoDoSend: ORCA_ID, cwd: wt, em: iso(T - 60 * MIN),
+  }));
+  item(F, { donoLocalId: ORCA_ID, com: [{ localId: ORCA_ID, apelido: 'dona', oQue: 'faz o item' }] });
+  return wt;
+}
+const deduzidoDe = (F) => JSON.parse(readFileSync(join(pastaOrq(), 'batida', 'deduzido.json'), 'utf8')).itens[F];
+
+test('batida: dona do Orca com o terminal todo liberado → solta (a prova de que a regra morde), sem mensagem a ela', () => {
+  donaDoOrca('F1');
+  const o = orcaFalso({ '': recibo([worker('/outra/pasta', 'released', { terminal: 'structworker_f444' })]) });
+  const r = painel(['batida', '--sessoes', sessoes(sessao(9, 'F9 · outra')), '--agora', iso(T)], { env: o.env });
+  assert.equal(r.exit, 0, r.err);
+  assert.deepEqual(r.json().soltos, ['F1'], r.out);
+  assert.deepEqual(msgs(r).filter((m) => m.para === ORCA_ID), []);
+  assert.equal(deduzidoDe('F1').donaViva, false);
+  assert.ok(o.chamadas().length >= 1, 'a batida não consultou a lista do Orca');
+});
+
+test('batida: dona do Orca com worker vivo na worktree → viva: não solta nem cutuca', () => {
+  const wt = donaDoOrca('F1', { terminal: 'structworker_outro' });
+  const o = orcaFalso({ '': recibo([worker(wt, 'retained')]) });
+  const a = painel(['batida', '--sessoes', sessoes(sessao(9, 'F9 · outra')), '--agora', iso(T)], { env: o.env });
+  assert.equal(a.exit, 0, a.err);
+  assert.deepEqual(a.json().soltos, [], a.out);
+  assert.deepEqual(msgs(a), []);
+  assert.equal(deduzidoDe('F1').donaViva, true);
+  const b = painel(['batida', '--sessoes', sessoes(sessao(9, 'F9 · outra')), '--agora', iso(T + 60 * MIN)], { env: o.env });
+  assert.deepEqual(b.json().soltos, [], 'uma hora depois, ainda viva: não solta');
+  assert.equal(lerItem('F1').data.donoLocalId, ORCA_ID);
+});
+
+test('batida: dona do Orca sem a lista (sem orca, ou orca falhando) → fora da vista, nunca morta', () => {
+  donaDoOrca('F1');
+  const falha = orcaFalso({ '': { stdout: '', exit: 1 } });
+  for (const env of [{ KIT_ORCA_BIN: 'off' }, falha.env]) {
+    rmSync(join(pastaOrq(), 'batida'), { recursive: true, force: true });
+    const r = painel(['batida', '--sessoes', sessoes(sessao(9, 'F9 · outra')), '--agora', iso(T + 60 * MIN)], { env });
+    assert.equal(r.exit, 0, r.err);
+    assert.deepEqual(r.json().soltos, [], `${JSON.stringify(env)}: ${r.out}`);
+    assert.deepEqual(msgs(r), []);
+    assert.equal(deduzidoDe('F1').donaViva, null);
+  }
+  assert.equal(lerItem('F1').data.donoLocalId, ORCA_ID);
 });

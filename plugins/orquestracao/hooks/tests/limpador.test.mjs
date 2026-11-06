@@ -9,6 +9,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { orcaFalso, recibo, worker } from './orca-falso.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const LIMPADOR = process.env.LIMPADOR_SCRIPT || join(AQUI, '..', '..', 'limpeza', 'limpador.mjs'); // LIMPADOR_SCRIPT: prova de mutação
@@ -106,6 +107,8 @@ function rodar(env, args = ['--aplicar'], extra = {}) {
       LIMPADOR_SESSOES_DIR: env.sessoes, LIMPADOR_APP_WORKTREES: env.appWt, LIMPADOR_PROJETOS_DIR: env.projetos,
       LIMPADOR_LSOF: join(env.T, 'stubs', 'lsof'), LIMPADOR_GH: join(env.T, 'stubs', 'gh'),
       LIMPADOR_AGORA: String(env.A), LIMPADOR_SAIDA_DIR: env.saida, STUB_DIR: join(env.T, 'stubs'),
+      // F444: nunca o orca real (o PATH do Orca o tem); `env.orca` é o falso do teste
+      ...(env.orca ? env.orca.env : { KIT_ORCA_BIN: 'off' }),
       ...extra,
     },
     encoding: 'utf8', timeout: 90_000, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024,
@@ -911,6 +914,113 @@ describe('F428: agendamento', () => {
     const r = spawnSync(bin, ['--plist'], { encoding: 'utf8', timeout: 30_000, killSignal: 'SIGKILL', env: { ...process.env, HOME: mkdtempSync(join(tmpdir(), 'limp-h-')) } });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /limpar-disco/);
+  });
+});
+
+// F444 (ADR 0030, fatia 4): a worktree com sessão do Orca viva fica (critério 11); a lista do Orca ilegível é falha fechada;
+// o registro `orca-sessoes/` da sessão que a lista dá por encerrada sai, só com --aplicar.
+const regDoOrca = (env, cru, { cwd, terminal }) => {
+  const dir = join(env.T, 'base', 'orca-sessoes');
+  mkdirSync(dir, { recursive: true });
+  const arq = join(dir, `${cru}.json`);
+  writeFileSync(arq, JSON.stringify({ orcaId: `orca_session_id:${cru}`, cliAtual: `cli-${cru}`, cliIds: [`cli-${cru}`], terminal, enderecoDoSend: `orca_session_id:${cru}`, cwd, em: new Date().toISOString() }));
+  return arq;
+};
+describe('F444: critério 11, sessão do Orca', () => {
+  mantem('worker do Orca vivo com a worktree dele aqui: fica, com o motivo', 11, /worker do Orca vivo/,
+    (env, wt) => { env.orca = orcaFalso({ '': recibo([worker(join(env.T, 'outra')), worker(wt, 'retained')]) }); });
+  mantem('registro do orca-sessoes com o cwd aqui e a sessão fora da lista: fica', 11, /sessão do Orca/,
+    (env, wt) => { regDoOrca(env, 'r1', { cwd: join(wt, 'sub'), terminal: 'structworker_fora' }); env.orca = orcaFalso({ '': recibo([]) }); });
+  mantem('registro com o cwd aqui e sem orca na máquina: fica (sem a lista, nunca encerrada)', 11, /sessão do Orca/,
+    (env, wt) => { regDoOrca(env, 'r1', { cwd: wt, terminal: 'structworker_1' }); });
+  remove('worker do Orca liberado (released) não segura a worktree', (env, wt) => {
+    env.orca = orcaFalso({ '': recibo([worker(wt, 'released')]) });
+  });
+  remove('worker vivo na pasta-mãe (o checkout principal) não segura a worktree de dentro dela', (env) => {
+    env.orca = orcaFalso({ '': recibo([worker(env.repo, 'retained')]) });
+  });
+  falhaFechada('orca instalado e a lista falhando', /orca/i, (env) => { env.orca = orcaFalso({ '': { stdout: '', exit: 1 } }); });
+  falhaFechada('orca devolvendo a lista de uma Run só (escopo não all)', /escopo/i, (env) => { env.orca = orcaFalso({ '': recibo([], { source: 'bound' }) }); });
+  falhaFechada('registro do orca-sessoes ilegível', /orca-sessoes/i, (env) => {
+    regDoOrca(env, 'r1', { cwd: '/x', terminal: 't' });
+    writeFileSync(join(env.T, 'base', 'orca-sessoes', 'r1.json'), '{');
+  });
+  it('worker vivo que aparece entre a medição e a remoção: a reconferência relê a lista e a worktree fica', () => {
+    const env = ambiente();
+    const wt = novoWt(env, 'base');
+    env.orca = orcaFalso([{ '': recibo([]) }, { '': recibo([worker(wt)]) }]);
+    const r = rodar(env, ['--aplicar']);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(env.orca.chamadas().length, 2, 'a lista é lida na medição e de novo antes de remover');
+    assert.ok(existsSync(wt));
+    assert.ok(temCriterio(r.json, wt, 11), JSON.stringify(mantido(r.json, wt)));
+    assert.match(r.md, /reconferência antes de remover: .*worker do Orca vivo/);
+  });
+  it('a lista que falha na reconferência mantém a worktree, com o motivo', () => {
+    const env = ambiente();
+    const wt = novoWt(env, 'base');
+    env.orca = orcaFalso([{ '': recibo([]) }, { '': { stdout: 'quebrado' } }]);
+    const r = rodar(env, ['--aplicar']);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.ok(existsSync(wt));
+    assert.ok(temCriterio(r.json, wt, 11), JSON.stringify(mantido(r.json, wt)));
+  });
+  it('apaga o registro da sessão que a lista dá por encerrada, só com --aplicar; os outros ficam', () => {
+    const env = ambiente();
+    const encerrada = regDoOrca(env, 'fim', { cwd: join(env.T, 'wt-fim'), terminal: 'structworker_fim' });
+    const viva = regDoOrca(env, 'viva', { cwd: join(env.T, 'wt-viva'), terminal: 'structworker_viva' });
+    const fora = regDoOrca(env, 'fora', { cwd: join(env.T, 'wt-fora'), terminal: 'structworker_coord' });
+    env.orca = orcaFalso({ '': recibo([
+      worker(join(env.T, 'wt-fim'), 'released', { terminal: 'structworker_fim' }),
+      worker(join(env.T, 'wt-viva'), 'retained', { terminal: 'structworker_viva' }),
+    ]) });
+    const rel = rodar(env, []);
+    assert.equal(rel.status, 0, rel.stdout + rel.stderr);
+    assert.deepEqual(rel.json.orcaSessoes.seriamApagados.map((x) => x.arquivo), [encerrada]);
+    assert.deepEqual(rel.json.orcaSessoes.apagados, []);
+    assert.ok(existsSync(encerrada), 'o relatório não apaga');
+    assert.match(rel.md, /Registros de sessão do Orca que seriam apagados com --aplicar \(1\)/);
+    const ap = rodar(env, ['--aplicar']);
+    assert.equal(ap.status, 0, ap.stdout + ap.stderr);
+    assert.deepEqual(ap.json.orcaSessoes.apagados.map((x) => x.arquivo), [encerrada]);
+    assert.ok(!existsSync(encerrada), 'o registro encerrado sai');
+    assert.ok(existsSync(viva) && existsSync(fora), 'o da sessão viva e o da que a lista não mostra ficam');
+    assert.match(ap.stdout + readFileSync(join(env.saida, 'historico.log'), 'utf8'), /orca-sessoes=1/);
+  });
+  it('sem a lista (orca ausente), nenhum registro sai', () => {
+    const env = ambiente();
+    const arq = regDoOrca(env, 'fim', { cwd: join(env.T, 'wt-fim'), terminal: 'structworker_fim' });
+    const ap = rodar(env, ['--aplicar']);
+    assert.equal(ap.status, 0, ap.stdout + ap.stderr);
+    assert.ok(existsSync(arq));
+    assert.deepEqual(ap.json.orcaSessoes.apagados, []);
+  });
+  it('passo builds: worktree com worker do Orca vivo não perde o build', () => {
+    const env = ambiente();
+    const wt = novoWt(env, 'base');
+    mkdirSync(join(wt, 'node_modules', 'p'), { recursive: true });
+    writeFileSync(join(wt, 'node_modules', 'p', 'i.js'), 'x');
+    mkdirSync(join(wt, '.estudos'), { recursive: true });
+    writeFileSync(join(wt, '.estudos', 'n.md'), 'x\n');
+    const longe = { LIMPADOR_AGORA: String(env.A + 8 * 24 * H) };
+    const PASSOS = ['--passos', 'worktrees,builds'];
+    // a prova de que o build sairia: sem worker, o relatório o lista
+    env.orca = orcaFalso({ '': recibo([worker(wt, 'released')]) });
+    const antes = rodar(env, PASSOS, longe);
+    assert.equal(antes.status, 0, antes.stdout + antes.stderr);
+    assert.ok(antes.json.builds.seriamLiberados.some((x) => x.caminho === wt), JSON.stringify(antes.json.builds));
+    env.orca = orcaFalso({ '': recibo([worker(wt, 'retained')]) });
+    const ap = rodar(env, ['--aplicar', ...PASSOS], longe);
+    assert.equal(ap.status, 0, ap.stdout + ap.stderr);
+    assert.deepEqual(ap.json.builds.liberados, []);
+    assert.ok(existsSync(join(wt, 'node_modules')));
+  });
+  it('só o passo logs não chama o orca', () => {
+    const env = ambiente();
+    env.orca = orcaFalso({ '': { stdout: '', exit: 1 } });
+    const r = rodar(env, ['--passos', 'logs']);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(env.orca.chamadas().length, 0);
   });
 });
 
