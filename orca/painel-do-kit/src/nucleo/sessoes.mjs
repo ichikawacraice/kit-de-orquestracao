@@ -69,21 +69,25 @@ function filaDeMerge(base, projeto, cache) {
   return cache.get(chave);
 }
 
-// O worker do Orca deste item falhou? Liga o `donoLocalId` (orca_session_id:<id>) ao terminal gravado pelo hook. O terminal
-// tem uma linha por despacho, sem ordem nem data: só falhou quando todas falharam (um despacho antigo com falha não pinta
-// de vermelho a dona que seguiu).
-function sessaoFalhou(base, d, workers) {
-  if (!Array.isArray(workers) || !workers.length) return false;
+// Os workers do Orca deste item: liga o `donoLocalId` (orca_session_id:<id>) ao terminal gravado pelo hook. O terminal tem uma
+// linha por despacho, sem ordem nem data: `falhou` só quando todas falharam (um despacho antigo com falha não pinta de
+// vermelho a dona que seguiu); `entregou` quando todas terminaram com sucesso (worker_done: o PR dela já está aberto).
+function workersDoItem(base, d, workers) {
+  const nada = { falhou: false, entregou: false };
+  if (!Array.isArray(workers) || !workers.length) return nada;
   const id = /^orca_session_id:([\w-]+)$/.exec(texto(d.donoLocalId) ?? '')?.[1];
-  if (!id) return false;
+  if (!id) return nada;
   const terminal = texto(lerJson(join(base, 'orca-sessoes', `${id}.json`))?.terminal);
   const meus = terminal ? workers.filter((x) => x?.terminal === terminal) : [];
-  return meus.length > 0 && meus.every((w) => w.state === 'failed' || w.outcome === 'failed');
+  return {
+    falhou: meus.length > 0 && meus.every((w) => w.state === 'failed' || w.outcome === 'failed'),
+    entregou: meus.length > 0 && meus.every((w) => w.outcome === 'succeeded'),
+  };
 }
 
 // O estado de um item vivo, pela primeira regra que casa: a causa vence o sintoma.
 // Sem a batida, o `prs` do item guarda todos os PRs que ele já teve: só a fila de merge prova que um deles está aberto.
-function estadoDoItem(d, ded, fila, perguntas, falhou) {
+function estadoDoItem(d, ded, fila, perguntas, { falhou, entregou }) {
   const etapa = ded?.etapa ?? d.etapa;
   const abertos = ded ? inteiros(ded.prsAbertos) : [];
   const candidatos = ded ? abertos : inteiros(d.prs);
@@ -93,18 +97,21 @@ function estadoDoItem(d, ded, fila, perguntas, falhou) {
   if (trava && TRAVA_DA_PESSOA.has(trava.motivo)) return { estado: 'esperando', motivo: texto(trava.texto), desdeEm: iso(d.atualizadoEm) };
   if (d.espera?.motivo === 'operador') return { estado: 'esperando', motivo: texto(d.espera.texto), desdeEm: iso(d.atualizadoEm) };
   if (trava) return { estado: 'parada', tipoDeParada: texto(trava.motivo) ?? 'outra', motivo: texto(trava.texto), desdeEm: iso(d.atualizadoEm) };
+  // F474: o PR do item na fila de merge vale antes da dona encerrada ou parada: a dona entregou e o PR espera a vez, mesmo
+  // que ela não tenha gravado a etapa `merge` (o CLI do painel não roda no worker do Orca).
+  const naFila = fila.ilegivel ? null : candidatos.find((n) => fila.ordem.includes(n));
+  if (naFila && fila.emVoo.has(naFila) && fila.ocupada) return { estado: 'mergeando', prNaFila: naFila, desdeEm: iso(fila.ocupada.desde) ?? ativ };
+  if (naFila) return { estado: 'na-fila', prNaFila: naFila, posicaoNaFila: fila.ordem.indexOf(naFila) + 1, foraDaFila: false, desdeEm: ativ };
   if (falhou) return { estado: 'parada', tipoDeParada: 'falhou', desdeEm: iso(ded?.ultimaAtividade) ?? ativ };
   // F470: parada de propósito esperando OUTRO item ou PR: não é sem-movimento nem sem-dona, e não pede nada ao operador.
   if (d.espera?.motivo === 'item') return { estado: 'esperando', tipoDeEspera: 'item', motivo: texto(d.espera.texto), desdeEm: iso(d.atualizadoEm) };
-  // Na etapa merge, a dona já entregou o PR: dona encerrada e parado não são parada, o PR espera a fila.
-  if (etapa !== 'merge') {
+  // Na etapa merge, ou com o worker_done de sucesso e PR aberto, a dona já entregou: dona encerrada e parado não são parada.
+  if (etapa !== 'merge' && !(entregou && abertos.length)) {
     // `null` com dona é a sessão do Orca fora da vista da batida, não a dona sumida.
     if (ded && (ded.donaViva === false || (ded.donaViva === null && !texto(d.donoLocalId)))) return { estado: 'parada', tipoDeParada: 'sem-dona', desdeEm: iso(d.atualizadoEm) };
     if (ded?.parado === true) return { estado: 'parada', tipoDeParada: 'sem-movimento', desdeEm: iso(ded.ultimaAtividade) ?? ativ };
   }
-  const naFila = fila.ilegivel ? null : candidatos.find((n) => fila.ordem.includes(n));
-  if (naFila && fila.emVoo.has(naFila) && fila.ocupada) return { estado: 'mergeando', prNaFila: naFila, desdeEm: iso(fila.ocupada.desde) ?? ativ };
-  if (naFila) return { estado: 'na-fila', prNaFila: naFila, posicaoNaFila: fila.ordem.indexOf(naFila) + 1, foraDaFila: false, desdeEm: ativ };
+  if (entregou && abertos.length) return { estado: 'na-fila', prNaFila: abertos[0], foraDaFila: true, desdeEm: ativ };
   // Sem a batida, a etapa merge declarada diz que há PR aberto fora da fila, sem dizer qual.
   if (etapa === 'merge' && (abertos.length || !ded)) return { estado: 'na-fila', prNaFila: abertos[0] ?? null, foraDaFila: true, desdeEm: ativ };
   if (d.espera?.motivo === 'gate') return { estado: 'na-fila', foraDaFila: false, desdeEm: ativ };
@@ -174,7 +181,7 @@ export function sessoesDoKit(pasta, { agoraMs = Date.now(), desdeMs, abertas = [
     const projeto = texto(d.projeto);
     const fila = filaDeMerge(base, projeto, filas);
     const minhas = (Array.isArray(abertas) ? abertas : []).filter((q) => q?.item === id);
-    const est = entregue ? { estado: 'entregue', desdeEm: iso(d.feitoEm) } : estadoDoItem(d, ded, fila, minhas, sessaoFalhou(base, d, workers));
+    const est = entregue ? { estado: 'entregue', desdeEm: iso(d.feitoEm) } : estadoDoItem(d, ded, fila, minhas, workersDoItem(base, d, workers));
     // Sem a batida não se sabe quais PRs entraram: nem lista de PRs nem número de fatia (vale só a etapa declarada).
     const mergeados = entregue ? inteiros(d.prs) : ded ? inteiros(ded.prsMergeados) : [];
     const abertos = entregue || !ded ? [] : inteiros(ded.prsAbertos);
