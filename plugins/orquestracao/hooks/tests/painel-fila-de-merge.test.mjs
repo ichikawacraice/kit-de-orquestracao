@@ -678,7 +678,7 @@ test('F474: dona do Orca (sem linha no app) com a fila ocupada: o PR pendente li
     assert.equal(r0.exit, 0, r0.err + r0.out);
     const arq = join(c.raiz, 'estado.json');
     const est = JSON.parse(readFileSync(arq, 'utf8'));
-    est.prs[24].headRefName = 'ichikawacraice/f9-entrega';
+    est.prs[24].headRefName = 'fulano/f9-entrega';
     writeFileSync(arq, JSON.stringify(est));
     mkdirSync(dirname(c.estadoDaFila), { recursive: true });
     writeFileSync(c.estadoDaFila, JSON.stringify({ ocupada: { pid: process.pid, desde: new Date().toISOString() }, pendentes: [] }));
