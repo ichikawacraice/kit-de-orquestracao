@@ -166,8 +166,10 @@ export default function activate(orca: OrcaWorkerApi): void {
       (err, so, se) => {
         // `recusadas` sai com exit 1 e o JSON inteiro: vale o JSON, não o código.
         try { const j = JSON.parse(so); if (j && typeof j === 'object') return resolve({ json: j as Record<string, unknown>, erro: null }) } catch { /* sem JSON: erro de uso ou de execução */ }
+        // O texto cru vai ao log do plugin; a tela recebe só o motivo curto.
         const ultima = String(se || err?.message || 'sem resposta').trim().split('\n').pop() ?? ''
-        resolve({ json: null, erro: ultima.slice(0, 200) })
+        console.warn(`[kit] painel ${args.slice(0, 3).join(' ')}: ${ultima.slice(0, 300)}`)
+        resolve({ json: null, erro: err?.killed ? 'demorou demais; confira o que ainda falta arquivar' : 'o script do painel falhou; veja o log do plugin' })
       })
   })
   const dadosDa = (x: unknown): Concluida[] => (Array.isArray(x) ? x : []).filter((c): c is Concluida => typeof c?.item === 'string' && /^F\d+$/.test(c.item)).map((c) => ({ item: c.item, titulo: String(c.titulo ?? c.item) }))

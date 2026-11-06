@@ -521,10 +521,10 @@ test('F469: painel.mjs antigo (sem --concluidas) ou ausente: sem aptas e com o m
   try {
     const r = await w.request('kit.concluidas', {})
     assert.deepEqual(r.aptas, [])
-    assert.match(r.erro ?? '', /uso:/)
+    assert.equal(r.erro, 'o script do painel falhou; veja o log do plugin')
     const d = await w.request('kit.arquivar', { itens: ['F7'] })
     assert.deepEqual(d.arquivadas, [])
-    assert.match(d.erro ?? '', /uso:/)
+    assert.equal(d.erro, 'o script do painel falhou; veja o log do plugin')
   } finally { await w.dispose?.() }
   process.env.PAINEL_DO_KIT_SCRIPT = ''
   process.env.HOME = join(tmpdir(), 'f469-sem-plugin-' + Date.now())

@@ -1128,22 +1128,22 @@ function ArquivarConcluidas() {
       <Box gap="sm">
         <Text size="sm" weight="semibold">{`Arquivar ${plural(n, 'sessão concluída', 'sessões concluídas')}?`}</Text>
         <Box gap="xs">{a.itens.map((c) => <Text key={`c-${c.item}`} size="xs">{`${c.item} · ${semPrefixoDoItem(c.titulo, c.item)}`}</Text>)}</Box>
-        <Text size="xs" tone="muted">{n === 1
+        <Text size="xs" muted>{n === 1
           ? 'A pasta dela é apagada (o que o git ignora, como .env, vai junto) e ela some da barra lateral.'
           : 'A pasta de cada uma é apagada (o que o git ignora, como .env, vai junto) e elas somem da barra lateral.'}</Text>
         <Row gap="sm" wrap>
           <Button variant="ghost" onPress={() => set(arquivo, null)}>Cancelar</Button>
-          <Button variant="solid" tone="accent" onPress={() => void arquivar(a.itens)}>{n === 1 ? 'Arquivar' : `Arquivar as ${n}`}</Button>
+          <Button variant="outline" tone="danger" onPress={() => void arquivar(a.itens)}>{n === 1 ? 'Arquivar' : `Arquivar as ${n}`}</Button>
         </Row>
       </Box>
     )
   }
   if (a?.tipo === 'feito') {
     const { arquivadas, recusadas, erro } = a.desfecho
-    const tom = erro || !arquivadas.length ? 'danger' : recusadas.length ? 'warning' : 'success'
+    const tom = erro ? 'danger' : recusadas.length ? 'warning' : 'success'
     return (
       <Box gap="xs">
-        {erro ? <Text size="sm" tone="danger">{`Não arquivou: ${erro}.`}</Text> : <Text size="sm" tone={tom}>{arquivadas.length ? `${plural(arquivadas.length, 'sessão arquivada', 'sessões arquivadas')}.` : 'Nenhuma sessão arquivada.'}</Text>}
+        {erro ? <Text size="sm" tone="danger">{`Não arquivou: ${erro}.`}</Text> : <Text size="sm" tone={arquivadas.length ? 'success' : tom}>{arquivadas.length ? `${plural(arquivadas.length, 'sessão arquivada', 'sessões arquivadas')}.` : 'Nenhuma sessão arquivada.'}</Text>}
         {recusadas.map((r) => <Text key={`r-${r.item}`} size="xs" tone={tom}>{`${r.item} ficou: ${r.motivo}.`}</Text>)}
         <Row gap="sm" wrap>
           {erro ? <Button variant="outline" size="sm" onPress={() => { set(arquivo, null); void lerConcluidas(true) }}>Tentar de novo</Button> : null}
