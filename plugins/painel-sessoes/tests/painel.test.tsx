@@ -3312,3 +3312,183 @@ test('F404: o item feito com entrega mostra "Entregue:" no lugar do agora, e os 
   expect(linha.alt).toMatch(/Entregue: a home caiu de 984 ms para 270 ms · próximos: 2/)
   expect(D.itemSvg(360, por.F2!, AGORA).source, 'sem entrega, a linha como antes').toMatch(/mergeado, ponta def5678/)
 })
+
+// F425 (ADR 0027): o pane lê `batida/deduzido.json`; fresco, a etapa e os PRs do cartão são os deduzidos, e o parado vem junto.
+const DD = (itens: Record<string, Record<string, unknown>>, minAtras = 5) => ({ em: new Date(AGORA - minAtras * 60_000).toISOString(), itens })
+const montaDD = (docs: ReturnType<typeof docF>[], dd: unknown) => montarItens(docs, TEMAS_T, [], undefined, [], AGORA, R.deduzidosValidos(dd, AGORA))
+
+test('F425: deduzido fresco troca a etapa e os PRs e traz o parado', () => {
+  const dd = DD({ F1: { etapa: 'merge', prs: [170], prsAbertos: [170], parado: true, minParado: 47, fontes: { etapa: 'gh', prs: 'gh', dona: 'item' } } })
+  const [i] = montaDD([docF('F1', { etapa: 'execucao', prs: [] })], dd)
+  expect(i, 'a montagem não pode vir vazia').toBeDefined()
+  expect(i!.etapa).toBe('merge')
+  expect(i!.prs).toEqual([170])
+  expect(i!.deduzido).toEqual({ parado: true, ultimaAtividade: undefined, em: dd.em, etapaDeclarada: 'execucao', fontes: { etapa: 'gh', prs: 'gh', dona: 'item' }, prsAbertos: [170], mergeado: false })
+})
+
+test('F425: sem deduzido, velho ou fora do formato, vale o declarado', () => {
+  const doc = docF('F1', { etapa: 'execucao', prs: [9] })
+  const presente = montaDD([doc], DD({ F1: { etapa: 'merge', prs: [170], parado: false, minParado: 1, fontes: { etapa: 'gh', prs: 'gh' } } }))[0]!
+  expect(presente.etapa, 'o deduzido fresco seria detectado').toBe('merge')
+  for (const dd of [null, DD({ F1: { etapa: 'merge', prs: [170] } }, 26), DD({ F1: { etapa: 'merge', prs: [170] } }, -2), { em: 'x', itens: {} }, { itens: { F1: { etapa: 'merge' } } }, 'lixo']) {
+    const [i] = montaDD([doc], dd)
+    expect(i!.etapa).toBe('execucao')
+    expect(i!.prs).toEqual([9])
+    expect(i!.deduzido).toBeUndefined()
+  }
+})
+
+test('F425: a etapa deduzida feito não fecha o item no pane; etapa fora da lista é ignorada; PRs de fonte item ficam os declarados', () => {
+  const dd = DD({
+    F1: { etapa: 'feito', prs: [5], parado: false, minParado: 0, fontes: { etapa: 'gh', prs: 'gh' } },
+    F2: { etapa: 'voando', prs: [6], parado: false, minParado: 0, fontes: { etapa: 'item', prs: 'item' } },
+  })
+  const por = Object.fromEntries(montaDD([docF('F1', { etapa: 'merge', prs: [5] }), docF('F2', { etapa: 'execucao', prs: [7] })], dd).map(i => [i.id, i]))
+  expect(por.F1!.etapa).toBe('merge')
+  expect(por.F1!.situacao).not.toBe('feito')
+  expect(por.F2!.etapa).toBe('execucao')
+  expect(por.F2!.prs).toEqual([7])
+})
+
+test('F425: item final não usa o deduzido', () => {
+  const [i] = montaDD([docF('F1', { etapa: 'feito', feitoEm: new Date(AGORA).toISOString(), prs: [5] })], DD({ F1: { etapa: 'merge', prs: [8], parado: true, minParado: 99, fontes: { etapa: 'gh', prs: 'gh' } } }))
+  expect(i!.etapa).toBe('feito')
+  expect(i!.prs).toEqual([5])
+  expect(i!.deduzido).toBeUndefined()
+})
+
+// F425, o desenho (revisão 2026-11-05-pane-estado-deduzido): o parado mora no canto, o PR mergeado ganha a palavra, a origem vai ao alt.
+const EM_DD = new Date(AGORA - 5 * 60_000).toISOString()
+const ATIV_45 = new Date(AGORA - 45 * 60_000).toISOString()
+const ded = (extra: Partial<NonNullable<Linha['deduzido']>> = {}): NonNullable<Linha['deduzido']> =>
+  ({ parado: true, ultimaAtividade: ATIV_45, em: EM_DD, etapaDeclarada: 'execucao', fontes: { etapa: 'item', prs: 'gh', dona: 'sessoes' }, prsAbertos: [], mergeado: false, ...extra })
+const DONA_V1 = { apelido: 'F7', localId: 'local_v1', dona: true as const }
+const paradoF7 = (extra: Partial<Linha> = {}) => linha('F7', { dono: DONA_V1, atualizadoEm: ATIV_45, deduzido: ded(), ...extra })
+const cartaoF7 = (i: Linha, situacao = situacaoDoTeste) => cartaoSvg(360, i, AGORA, { situacao })
+
+test('F425: o item parado em Executando diz "parado há X" no canto e a dona fica "ociosa"', () => {
+  const sem = cartaoF7(paradoF7({ deduzido: undefined }))
+  expect(sem.source, 'sem dedução, o canto é o de hoje').toContain('há 45 min')
+  expect(sem.source).toContain('parada há 40 min')
+  expect(sem.source).not.toContain('parado há')
+  const r = cartaoF7(paradoF7())
+  expect(r.source).toContain('parado há 45 min')
+  expect(r.source).toMatch(/class="t"[^>]*font-weight="600"[^>]*>parado há 45 min</)
+  expect(r.source).toContain('ociosa')
+  expect(r.source).not.toContain('parada há 40 min')
+  expect(r.alt).toContain('parado há 45 min')
+})
+
+test('F425: o parado some quando a dona trabalha, há atividade depois da batida, falta dona, espera, trava, pergunta ou o item está em merge', () => {
+  expect(cartaoF7(paradoF7()).source, 'o caso base mostra o parado').toContain('parado há')
+  const casos: Array<[string, Linha, typeof situacaoDoTeste?]> = [
+    ['trabalhando', paradoF7(), (id: string) => (id === 'local_v1' ? 'trabalhando agora' : undefined)],
+    ['gravou depois da batida', paradoF7({ atualizadoEm: new Date(AGORA - 60_000).toISOString() })],
+    ['sem dona', paradoF7({ esperando: { desde: ATIV_45 } })],
+    ['espera', paradoF7({ espera: { motivo: 'gate', texto: 'gate' } })],
+    ['trava', paradoF7({ trava: { motivo: 'x', texto: 'y' } })],
+    ['pergunta', paradoF7({ perguntas: ['Q1'] })],
+    ['merge', paradoF7({ etapa: 'merge' })],
+    ['não parado', paradoF7({ deduzido: ded({ parado: false }) })],
+  ]
+  for (const [nome, i, sit] of casos) expect(cartaoF7(i, sit).source, nome).not.toContain('parado há')
+})
+
+test('F425: o chip do PR mostra o aberto; sem aberto, o mergeado com a palavra em verde; o fechado sem merge some', () => {
+  const aberto = cartaoF7(paradoF7({ prs: [160, 164], deduzido: ded({ parado: false, prsAbertos: [164] }) })).source
+  expect(aberto, 'o fechado não conta no +M').toMatch(/>#164</)
+  const merg = cartaoF7(paradoF7({ prs: [160], deduzido: ded({ parado: false, mergeado: true }) })).source
+  expect(merg).toContain('#160 mergeado')
+  expect(merg).toMatch(/class="oks"/)
+  const fechado = cartaoF7(paradoF7({ prs: [160], deduzido: ded({ parado: false }) })).source
+  expect(fechado, 'o fechado sem merge não vira chip').not.toContain('#160')
+  expect(cartaoF7(paradoF7({ prs: [160], deduzido: undefined })).source, 'sem dedução, o chip de hoje').toContain('#160')
+})
+
+test('F425: a origem do dado e a etapa declarada que diverge vão só ao alt', () => {
+  const r = cartaoF7(paradoF7({ etapa: 'merge', prs: [164], deduzido: ded({ parado: false, etapaDeclarada: 'validacao', fontes: { etapa: 'gh', prs: 'gh' }, prsAbertos: [164] }) }))
+  expect(r.alt).toContain('etapa pelo GitHub')
+  expect(r.alt).toContain('PRs pelo GitHub')
+  expect(r.alt).toContain('declarada: validação')
+  expect(r.source).not.toContain('pelo GitHub')
+  expect(r.source).not.toContain('declarada')
+  const igual = cartaoF7(paradoF7({ deduzido: ded({ parado: false, fontes: { etapa: 'item', prs: 'item' } }) })).alt
+  expect(igual).toContain('etapa declarada')
+  expect(igual).toContain('PRs declarados')
+  expect(igual).not.toContain('declarada:')
+})
+
+// F425, os consertos da revisão: a gravação mais nova que a batida vence; o PR mergeado só leva número quando é um só;
+// o `+M` conta só os abertos; a etapa `feito` deduzida aparece como merge; o parado conta da atividade mais nova.
+test('F425: a troca de etapa da dona depois da batida vence a dedução; só gravar o agora não; etapa de fonte item não troca a declarada', () => {
+  const dd = DD({
+    F1: { etapa: 'merge', prs: [170], prsAbertos: [170], parado: false, fontes: { etapa: 'gh', prs: 'gh' } },
+    F2: { etapa: 'validacao', prs: [], prsAbertos: [], parado: false, fontes: { etapa: 'item', prs: 'item' } },
+  })
+  const antes = new Date(AGORA - 10 * 60_000).toISOString()
+  const depois = new Date(AGORA - 60_000).toISOString()
+  const hist = (em: string) => [{ etapa: 'execucao', em }]
+  const velha = montaDD([docF('F1', { etapa: 'execucao', historico: hist(antes), atualizadoEm: depois })], dd)[0]!
+  expect(velha.etapa, 'gravar só o agora depois da batida não derruba a dedução').toBe('merge')
+  expect(D.origemNoAlt(velha)).toContain('etapa pelo GitHub')
+  const nova = montaDD([docF('F1', { etapa: 'execucao', historico: hist(depois), atualizadoEm: depois })], dd)[0]!
+  expect(nova.etapa, 'a troca de etapa depois da batida vale').toBe('execucao')
+  expect(D.origemNoAlt(nova), 'o alt não diz GitHub sobre a etapa declarada').toContain('etapa declarada')
+  const item = montaDD([docF('F2', { etapa: 'execucao', historico: hist(antes) })], dd)[0]!
+  expect(item.etapa, 'etapa deduzida de fonte item é só a declarada da hora da batida').toBe('execucao')
+})
+
+test('F425: o PR gravado de número maior que os da batida entra como aberto; o que a batida descartou não volta, nem com troca de etapa', () => {
+  const dd = DD({ F1: { etapa: 'merge', prs: [170], prsAbertos: [170], parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
+  const antes = new Date(AGORA - 10 * 60_000).toISOString()
+  const depois = new Date(AGORA - 60_000).toISOString()
+  const reaberto = montaDD([docF('F1', { etapa: 'execucao', prs: [150, 170], historico: [{ etapa: 'execucao', em: antes }] })], dd)[0]!
+  expect(reaberto.prs, 'o PR que a batida descartou (item reaberto) não volta').toEqual([170])
+  expect(D.textoDoPr(reaberto)?.t).toBe('#170')
+  const trocou = montaDD([docF('F1', { etapa: 'validacao', prs: [150, 170], historico: [{ etapa: 'validacao', em: depois }] })], dd)[0]!
+  expect(trocou.prs, 'nem depois de a dona trocar de etapa').toEqual([170])
+  expect(D.textoDoPr(trocou)?.t).toBe('#170')
+  const semTroca = montaDD([docF('F1', { etapa: 'merge', prs: [170, 171], historico: [{ etapa: 'merge', em: antes }] })], dd)[0]!
+  expect(semTroca.prs, 'o PR novo (número maior) entra sem troca de etapa').toEqual([170, 171])
+  expect(D.textoDoPr(semTroca)?.t).toBe('#171 +1')
+  const ddVazio = DD({ F1: { etapa: 'execucao', prs: [], prsAbertos: [], parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
+  expect(montaDD([docF('F1', { etapa: 'execucao', prs: [150], historico: [{ etapa: 'execucao', em: antes }] })], ddVazio)[0]!.prs, 'batida sem PR: o gravado antigo não volta').toEqual([])
+  const ddSem = DD({ F1: { etapa: 'execucao', prs: [160], prsAbertos: [], mergeado: true, parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
+  const novo = montaDD([docF('F1', { etapa: 'merge', prs: [160, 171], historico: [{ etapa: 'merge', em: depois }] })], ddSem)[0]!
+  expect(novo.prs).toEqual([160, 171])
+  expect(novo.deduzido!.prsAbertos).toEqual([171])
+  expect(D.textoDoPr(novo)?.t).toBe('#171')
+})
+
+test('F425: sem o GitHub (PRs de fonte item), o chip do PR é o declarado', () => {
+  const dd = DD({ F1: { etapa: 'execucao', prs: [], prsAbertos: [], parado: false, fontes: { etapa: 'git', prs: 'item' } } })
+  const [i] = montaDD([docF('F1', { etapa: 'execucao', prs: [171] })], dd)
+  expect(i!.deduzido, 'a dedução existe').toBeDefined()
+  expect(D.textoDoPr(i!)?.t).toBe('#171')
+})
+
+test('F425: a etapa deduzida feito aparece como merge e cala o parado', () => {
+  const dd = DD({ F1: { etapa: 'feito', prs: [5], prsAbertos: [], mergeado: true, parado: true, fontes: { etapa: 'gh', prs: 'gh' } } })
+  const [i] = montaDD([docF('F1', { etapa: 'execucao', prs: [5] })], dd)
+  expect(i!.etapa).toBe('merge')
+  expect(i!.situacao).not.toBe('feito')
+  expect(D.origemNoAlt(i!)).toContain('declarada: execução')
+})
+
+test('F425: o PR mergeado só leva número quando o item tem um PR; o +M conta só os abertos', () => {
+  expect(D.textoDoPr(paradoF7({ prs: [160], deduzido: ded({ mergeado: true }) }))?.t).toBe('#160 mergeado')
+  const dois = D.textoDoPr(paradoF7({ prs: [158, 160], deduzido: ded({ mergeado: true }) }))
+  expect(dois, 'o pedaço existe').toBeDefined()
+  expect(dois!.t).toBe('PR mergeado')
+  expect(dois!.mergeado).toBe(true)
+  expect(D.textoDoPr(paradoF7({ prs: [150, 160, 164], deduzido: ded({ prsAbertos: [164] }) }))?.t, 'fechado e mergeado fora da conta').toBe('#164')
+  expect(D.textoDoPr(paradoF7({ prs: [160, 164], deduzido: ded({ prsAbertos: [160, 164] }) }))?.t).toBe('#164 +1')
+})
+
+test('F425: o parado conta da atividade mais nova entre a dedução, a gravação e a sessão', () => {
+  const ativ20 = new Date(AGORA - 20 * 60_000).toISOString()
+  expect(cartaoF7(paradoF7()).source, 'a régua base').toContain('parado há 45 min')
+  expect(cartaoF7(paradoF7({ atualizadoEm: ativ20 })).source).toContain('parado há 20 min')
+  const r = cartaoSvg(360, paradoF7(), AGORA, { situacao: situacaoDoTeste, atividade: id => (id === 'local_v1' ? ativ20 : undefined) })
+  expect(r.source).toContain('parado há 20 min')
+})

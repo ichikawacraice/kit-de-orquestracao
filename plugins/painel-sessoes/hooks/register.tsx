@@ -2,11 +2,11 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, Register, RenderSurface } from 'claude-code'
 
 import { cartaoACaminho, semDona, semDonoDesde } from './sem-dona'
-import type { CartaoDeSessao, Citado, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
+import type { CartaoDeSessao, Citado, DeduzidoDaBatida, EstadoPedido, ItemDoIndice, LinhaItem, Leitura, PerguntaAberta, PerguntaAnterior, Reinicio, Situacao, Tema, TravaDoKit } from '../types'
 import { AVISO_MIN, BANDEIRA_DO_APP, CACHE_TTL_MS, GLIFO_REINICIO, LEITURA_MS, VIGIA_MS, LIMPANDO_ABAIXO_DE, LIMPANDO_MAX_MS, ESPERA_DA_LIMPEZA_DIRETA_MS, PROMPT_DE_LIMPAR, promptDaVolta, PAINEL_NA_VOLTA_MS, idadeDaVolta, paraAcordar, limpezaAconteceu, abertasDoProjeto, cacheFrio, contarDonas, desenharBarra, janelaDeCompactacao, meuItem, orquestradorasDoProjeto, papelEApelido, relogio as relogioDoCache, oQueMostrarDoReinicio, estadoDoReinicio, proximoDaVigia, vigiaSumiu } from './barra'
 import type { AvisoDeReinicio, ArquivoDeReinicio } from './barra'
 import type { Barra } from '../types'
-import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
+import { papelDe as papelDeDesenho, altDosCitados, fraseDoGrupoSvg, paraQueDoCartao, sessaoParaAbrirSvg, anteriorSvg, cartaoSvg, desde, faixaSvg, paradoDoCartao, textoDoPr, fileteSvg, filaSvg, modoDescrito, modoSvg, parouSvg, perguntaSvg, quemDoItem, quemSaiu, BOTAO_DO_KIT, aplicacaoSvg, fraseDaAplicacao, fraseDoKit, kitSvg, reinicioSvg, resumoSvg, rotuloModoSvg, secaoSvg, seloDaEspera, textoDaTrava, textoEsperando, tituloDoTema, todosSvg } from './desenho'
 
 // Painel num pane (Q63, opção A; F27): lê os documentos de ~/.claude/orquestracao/painel/<coleção>/<id>.json,
 // que as sessões gravam pelo script painel.mjs da skill orquestradora, e a lista de temas (temas.json).
@@ -191,6 +191,23 @@ export function lerTemas(texto_: string): Tema[] {
   })
 }
 
+/** F425: o `deduzido.json` com mais que isto é de uma batida que parou: vale o declarado (duas batidas e meia). */
+export const DEDUZIDO_VALE_MS = 25 * 60_000
+export const ARQUIVO_DEDUZIDO = 'deduzido.json'
+
+/** Os itens de `batida/deduzido.json` (`{em, itens}`) que ainda valem; ausente, velho ou fora do formato = vazio, sem alarme. */
+export function deduzidosValidos(v: unknown, agora: number): Map<string, DeduzidoDaBatida> {
+  const vazio = new Map<string, DeduzidoDaBatida>()
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return vazio
+  const { em, itens } = v as { em?: unknown; itens?: unknown }
+  const quando = typeof em === 'string' ? Date.parse(em) : NaN
+  if (Number.isNaN(quando) || agora - quando > DEDUZIDO_VALE_MS || quando > agora + 60_000 || !itens || typeof itens !== 'object' || Array.isArray(itens)) return vazio
+  const saida = new Map<string, DeduzidoDaBatida>()
+  for (const [F, x] of Object.entries(itens as Record<string, unknown>)) if (/^F\d+$/.test(F) && x && typeof x === 'object' && !Array.isArray(x)) saida.set(F, { ...(x as DeduzidoDaBatida), em: em as string })
+
+  return saida
+}
+
 /**
  * Os itens da fila prontos para desenhar. `vivas` é a lista ao vivo do app (sem arquivadas), ou `null` quando ela
  * falhou ou não diz quem é esta sessão: aí nenhum item vira "sem ninguém", porque a falha já aparece em `⚠`.
@@ -203,8 +220,9 @@ export function montarItens(
   proprio: string | undefined,
   perguntasAbertas: Array<{ id: string; item?: string }>,
   agora: number,
+  deduzidos: Map<string, DeduzidoDaBatida> = new Map(),
 ): LinhaItem[] {
-  return montarTodos(docs, temas, vivas, proprio, perguntasAbertas, agora)
+  return montarTodos(docs, temas, vivas, proprio, perguntasAbertas, agora, deduzidos)
     .filter(t => !t.antigo)
     .map(t => t.linha)
 }
@@ -239,6 +257,7 @@ function montarTodos(
   proprio: string | undefined,
   perguntasAbertas: Array<{ id: string; item?: string }>,
   agora: number,
+  deduzidos: Map<string, DeduzidoDaBatida> = new Map(),
 ): Array<{ linha: LinhaItem; antigo: boolean; projeto?: string }> {
   const vivos = vivas === null ? null : new Set([...vivas.filter(v => v.isArchived !== true).map(v => v.sessionId), ...(proprio ? [proprio] : [])])
   const abertas = new Set(perguntasAbertas.map(q => q.id))
@@ -278,6 +297,20 @@ function montarTodos(
     const historico = Array.isArray(d.data.historico) ? (d.data.historico as Array<Record<string, unknown>>) : []
     const feitoEm = texto(d.data.feitoEm)
     const final = etapaCrua === 'feito' || etapaCrua === 'descartado'
+    // F425: no item vivo, a etapa e os PRs deduzidos valem mais que os gravados; `feito` deduzido não fecha aqui (a batida fecha)
+    const dd = final || !etapaOk ? undefined : deduzidos.get(d.id)
+    // a etapa de fonte `item` é só a declarada da hora da batida; a troca de etapa (o `historico`, não o `agora` de todo turno)
+    // depois da batida vence; `feito` deduzido aparece como merge
+    const mudouDepois = dd ? Date.parse(texto(historico[historico.length - 1]?.em) ?? '') > Date.parse(dd.em as string) : false
+    const etapaBruta = dd && !mudouDepois && dd.fontes?.etapa !== 'item' && typeof dd.etapa === 'string' ? (dd.etapa === 'feito' ? 'merge' : dd.etapa) : undefined
+    const etapaDeduzida = etapaBruta && ETAPAS.includes(etapaBruta) && etapaBruta !== 'descartado' ? etapaBruta : undefined
+    // o PR gravado depois da batida entra como aberto: só o de número maior que os dela (o menor é o que ela descartou, como o do
+    // item reaberto); com a batida sem PR, só com a troca de etapa depois dela
+    const prsGravados = inteiros(d.data.prs)
+    const prsDaBatida = dd && dd.fontes?.prs === 'gh' ? inteiros(dd.prs) : undefined
+    const prsNovos =
+      prsDaBatida && (prsDaBatida.length > 0 || mudouDepois) ? prsGravados.filter(n => !prsDaBatida.includes(n) && prsDaBatida.every(b => n > b)) : []
+    const prsDeduzidos = prsDaBatida ? [...prsDaBatida, ...prsNovos] : undefined
     let situacao: Situacao
     let trava: LinhaItem['trava']
     const donoVivo = donoLocalId !== undefined && vivos !== null && vivos.has(donoLocalId)
@@ -306,7 +339,7 @@ function montarTodos(
       temaProjeto: tema && motivos.length === 0 ? tema.projeto?.toLowerCase() : undefined,
       temaRotulo: tema && motivos.length === 0 ? tema.rotulo : 'Sem tema',
       projeto: projetoDoItem,
-      etapa: etapaCrua ?? '?',
+      etapa: etapaDeduzida ?? etapaCrua ?? '?',
       situacao,
       dono,
       com,
@@ -315,7 +348,7 @@ function montarTodos(
       // Sem dona no item há tempo: some quando o item está final ou travado (a trava já diz o que o prende).
       esperando: final || situacao === 'travado' ? undefined : (s => (s ? { desde: s.desde } : undefined))(semDona(d.data, agora)),
       semDonoDesde: (t => (t === null ? undefined : t))(semDonoDesde(d.data)),
-      prs: inteiros(d.data.prs),
+      prs: prsDeduzidos ?? prsGravados,
       depois: Array.isArray(d.data.depois)
         ? d.data.depois.flatMap(x => {
             const o = x as Record<string, unknown> | null
@@ -339,6 +372,17 @@ function montarTodos(
       // o descartado não entregou: a entrega gravada no PR que fechou sem merge não aparece
       entrega: etapaCrua === 'feito' ? entregaDoItem(d.data.entrega) : undefined,
       foraDoContrato: motivos.length > 0 ? motivos.join('; ') : undefined,
+      deduzido: dd
+        ? {
+            parado: dd.parado === true,
+            ultimaAtividade: texto(dd.ultimaAtividade),
+            em: dd.em as string,
+            etapaDeclarada: etapaCrua as string,
+            fontes: { ...(dd.fontes ?? {}), etapa: etapaDeduzida ? dd.fontes?.etapa : 'item' },
+            prsAbertos: [...inteiros(dd.prsAbertos), ...prsNovos],
+            mergeado: dd.mergeado === true || dd.fatiaMergeada === true,
+          }
+        : undefined,
     } })
   }
 
@@ -1063,7 +1107,9 @@ async function ler($: EngineInterface): Promise<void> {
 
   const agora = await $.clock.now()
   // Sem a lista ao vivo ou sem saber quem sou, o dono "sumido" pode ser só falha de leitura: nenhum item vira "sem ninguém".
-  const itens = montarItens(docsFila, temas, vivasLidas && proprio !== undefined ? vivas : null, proprio, perguntas, agora)
+  // F425: o estado que a batida deduziu; sem ele (ausente, velho, ilegível), o declarado, sem alarme: é a batida que avisa a falha dela
+  const deduzidos = deduzidosValidos(await lerArquivoDaBatida($, `${await $.env.get('HOME')}/${BASE_ORQUESTRACAO}/batida`, ARQUIVO_DEDUZIDO, (v): v is unknown => true, []), agora)
+  const itens = montarItens(docsFila, temas, vivasLidas && proprio !== undefined ? vivas : null, proprio, perguntas, agora, deduzidos)
   const indice = montarIndice(docsFila, temas)
   const porId = new Map(indice.map(i => [i.id, i]))
   for (const q of [...perguntas, ...assumidas]) {
@@ -2423,6 +2469,8 @@ export const register: Register = on => {
     const lido = l.lidoEm !== null
     const parada = leituraParada(l.lidoEm, agora)
     const situacao = (localId: string) => situacaoDe(localId, l.sessoes ?? [], undefined, l.semLista ?? false, agora)
+    // F425: a atividade da sessão na lista ao vivo desmente o parado que a batida deduziu antes dela
+    const atividade = (localId: string) => (l.sessoes ?? []).find(v => v.sessionId === localId)?.lastActivityAt
     const trabalhando = sec.executando.filter(i => pessoasVivas(i).some(p => situacao(p.localId) === 'trabalhando agora')).length
 
     const aberta = await read($, respondendoEm)
@@ -2720,7 +2768,7 @@ export const register: Register = on => {
       }
       // A moldura é do `Box round`, na cor do tom; o desenho e os botões ficam dentro dela.
       const cartao = (i: LinhaItem, tom: 'subtle' | 'error' | 'warning') => {
-        const r = cartaoSvg(Wc, i, agora, { situacao, citados: citadosDoCartao(i) })
+        const r = cartaoSvg(Wc, i, agora, { situacao, atividade, citados: citadosDoCartao(i) })
         const botoes = [...(() => { const a = acaoDoPedido(i, false); return [a.botao, a.orq].filter(Boolean) })(), ...botoesAbrir(i)]
         const a = acaoDoPedido(i, false)
 
@@ -2959,22 +3007,33 @@ export const register: Register = on => {
     const linhaItem = (i: LinhaItem) => {
       const cor = i.situacao === 'travado' ? 'error' : i.situacao === 'fila' ? 'inactive' : (COR_ETAPA_TERMINAL[i.etapa] ?? 'inactive')
       const etapa = ROTULO_ETAPA_TERMINAL[i.etapa] ?? i.etapa
-      const info = [
-        i.situacao === 'fila' ? `espera ${etapa}` : etapa,
+      // o parado deduzido sai em negrito, fora do apagado, como no canto do cartão
+      const parado = paradoDoCartao(i, agora, situacao, atividade)
+      const cabeca = i.situacao === 'fila' ? `espera ${etapa}` : etapa
+      const resto = [
         tituloDoTema(i),
         i.perguntas[0] ? `aguarda você · ${i.perguntas[0]}` : undefined,
         seloDaEspera(i),
         ...quemDoItem(i).map(q => q.t),
-        i.prs.length > 0 ? `#${i.prs[i.prs.length - 1]}${i.prs.length > 1 ? ` +${i.prs.length - 1}` : ''}` : undefined,
+        textoDoPr(i)?.t,
         ...quemSaiu(i).map(q => q.t),
-      ].filter(Boolean).join(' · ')
+      ].filter(Boolean)
+      const info = [cabeca, ...resto].join(' · ')
 
       return (
         <Box key={`item:${i.id}`} flexDirection="row" columnGap={1}>
           <Text color={cor}>●</Text>
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">{`${i.id} · ${i.titulo}`}</Text>
-            <Text dimColor wrap="wrap">{info}</Text>
+            {parado ? (
+              <Text wrap="wrap">
+                <Text dimColor>{`${cabeca} · `}</Text>
+                <Text bold>{parado}</Text>
+                {resto.length > 0 && <Text dimColor>{` · ${resto.join(' · ')}`}</Text>}
+              </Text>
+            ) : (
+              <Text dimColor wrap="wrap">{info}</Text>
+            )}
             {(() => {
               const c = i.situacao === 'fila' ? citadosDaFila(i) : citadosDoCartao(i)
 

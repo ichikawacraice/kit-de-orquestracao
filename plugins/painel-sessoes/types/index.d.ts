@@ -47,6 +47,39 @@ export type LinhaItem = {
   /** F404: o que o item fechado entregou (o `resultado`) e quantos próximos passos a dona viu; só no item final. */
   entrega?: { resultado: string; proximos: number }
   foraDoContrato?: string
+  /**
+   * F425 (ADR 0027): o que a batida deduziu do git, do GitHub e das sessões, quando o `deduzido.json` está fresco e o item vivo.
+   * A `etapa` e os `prs` do item já vêm trocados pelos deduzidos; aqui fica o resto: o parado, de onde veio cada fato e a etapa
+   * que a dona tinha gravado (para o texto alternativo).
+   */
+  deduzido?: Deduzido
+}
+
+export type Deduzido = {
+  parado: boolean
+  /** A última atividade que a batida viu (gravação, sessão, commit ou PR); os minutos do parado contam dela na hora do desenho. */
+  ultimaAtividade?: string
+  /** Quando a batida deduziu: atividade depois disto desmente o parado. */
+  em: string
+  etapaDeclarada: string
+  fontes: { etapa?: string; prs?: string; dona?: string }
+  prsAbertos: number[]
+  /** Todos os PRs que valem estão mergeados (o item inteiro ou a fatia). */
+  mergeado: boolean
+}
+
+/** Um item de `batida/deduzido.json`, como `estado-deduzido.mjs#deduzir` o grava (só os campos que o pane lê). */
+export type DeduzidoDaBatida = {
+  etapa?: string | null
+  prs?: number[]
+  prsAbertos?: number[]
+  parado?: boolean
+  ultimaAtividade?: string | null
+  mergeado?: boolean
+  fatiaMergeada?: boolean
+  fontes?: { etapa?: string; prs?: string; dona?: string }
+  /** O `em` do arquivo, que o pane copia em cada item. */
+  em?: string
 }
 
 /** Um item de qualquer etapa e idade, para resolver número citado e listar todos os itens. */

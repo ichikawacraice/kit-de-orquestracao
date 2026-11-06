@@ -371,7 +371,8 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
   y += (titulo.length - 1) * 20
 
   // O que gera decisão (etapa, selo) vem antes do que só informa (dono, PR): o corte com reticências come o fim da linha.
-  const ultimoPr = item.prs.length > 0 ? `#${item.prs[item.prs.length - 1]}${item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''}` : ''
+  const pr = textoDoPr(item)
+  const ultimoPr = pr?.t ?? ''
   const montar = (quem: Trecho[]): Trecho[] => [
     item.situacao === 'fila'
       ? { t: `espera ${rotulo}${item.esperando ? ` · ${minutosDesde(item.esperando.desde, agora)} min` : ''}`, classe: 's', peso: true }
@@ -383,7 +384,7 @@ export function itemSvg(W: number, item: LinhaItem, agora: number, opcoes: { noT
     // O dono sem ninguém já está escrito na trava: repetir faria dois textos sobre a mesma sessão que sumiu.
     ...quem,
     // O PR não se corta: ou entra inteiro, ou as pessoas encolhem antes ("E1 +1", o nome completo no alt).
-    ...(ultimoPr ? [{ t: ultimoPr, classe: ANDA, peso: true }] : []),
+    ...(ultimoPr ? [{ t: ultimoPr, classe: pr?.mergeado ? OK : ANDA, peso: true }] : []),
     ...quemSaiu(item),
   ]
   const TAM = 13
@@ -533,11 +534,63 @@ function chipsSvg(x0: number, y0: number, larguraLinha: number, chips: Chip[]): 
   return { partes, altura: chips.length > 0 ? y - y0 + ALTURA_CHIP : 0 }
 }
 
-const chipDoPr = (item: LinhaItem): Chip[] => {
-  if (item.prs.length === 0) return []
-  const ultimo = item.prs[item.prs.length - 1]
+/**
+ * O PR do item. Com dedução fresca (F425): o aberto primeiro; sem aberto, `#N mergeado` em verde quando todos os que valem
+ * mergearam; o fechado sem merge não vira chip. Sem dedução, o último gravado, como antes.
+ */
+export function textoDoPr(item: LinhaItem): { t: string; mergeado: boolean } | undefined {
+  if (item.prs.length === 0) return undefined
+  const mais = item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''
+  const dd = item.deduzido
+  // sem o GitHub (PRs de fonte item) a dedução não sabe o estado dos PRs: o chip é o declarado
+  if (!dd || dd.fontes.prs !== 'gh') return { t: `#${item.prs[item.prs.length - 1]}${mais}`, mergeado: false }
+  // com dedução, o `+M` conta só os outros abertos; o mergeado sem saber qual (a batida não grava) só leva número se o PR é um só
+  const abertos = item.prs.filter(n => dd.prsAbertos.includes(n))
+  if (abertos.length > 0) return { t: `#${abertos[abertos.length - 1]}${abertos.length > 1 ? ` +${abertos.length - 1}` : ''}`, mergeado: false }
+  if (!dd.mergeado) return undefined
 
-  return [{ t: `#${ultimo}${item.prs.length > 1 ? ` +${item.prs.length - 1}` : ''}`, texto: ANDA, traco: 'ans' }]
+  return { t: item.prs.length === 1 ? `#${item.prs[0]} mergeado` : 'PR mergeado', mergeado: true }
+}
+
+const chipDoPr = (item: LinhaItem): Chip[] => {
+  const pr = textoDoPr(item)
+  if (!pr) return []
+
+  return [pr.mergeado ? { t: pr.t, texto: OK, traco: 'oks' } : { t: pr.t, texto: ANDA, traco: 'ans' }]
+}
+
+const FONTE_DA_ETAPA: Record<string, string> = { gh: 'etapa pelo GitHub', git: 'etapa pelo git', item: 'etapa declarada' }
+
+/** F425: de onde veio a etapa e os PRs, e a etapa declarada quando a deduzida diverge; só o alt os leva. */
+export function origemNoAlt(item: LinhaItem): string | undefined {
+  const dd = item.deduzido
+  if (!dd) return undefined
+  const partes = [
+    FONTE_DA_ETAPA[dd.fontes.etapa ?? 'item'] ?? 'etapa declarada',
+    dd.fontes.prs === 'gh' ? 'PRs pelo GitHub' : 'PRs declarados',
+    dd.etapaDeclarada !== item.etapa ? `declarada: ${ROTULO_ETAPA[dd.etapaDeclarada] ?? dd.etapaDeclarada}` : undefined,
+  ]
+
+  return partes.filter(Boolean).join(' · ')
+}
+
+/**
+ * F425: `parado há X` no canto do cartão em Executando, quando a batida deduziu o item parado e nada o desmente: a dona
+ * trabalhando agora, atividade (gravação ou sessão) depois da batida, falta de dona, espera, trava, pergunta ou a etapa
+ * `merge` (que espera o gate de propósito). Os minutos contam da última atividade, na hora do desenho.
+ */
+export function paradoDoCartao(item: LinhaItem, agora: number, situacao: (localId: string) => string | undefined, atividade?: (localId: string) => string | undefined): string | undefined {
+  const dd = item.deduzido
+  if (!dd?.parado || item.situacao !== 'andando' || item.etapa === 'merge' || item.esperando || item.espera || item.trava || item.perguntas.length > 0) return undefined
+  const pessoas = pessoasDoItem(item)
+  if (pessoas.some(p => situacao(p.localId) === 'trabalhando agora')) return undefined
+  const em = Date.parse(dd.em)
+  const depois = [item.atualizadoEm, ...pessoas.map(p => atividade?.(p.localId))].map(t => (t ? Date.parse(t) : NaN)).filter(t => !Number.isNaN(t))
+  if (Number.isNaN(em) || depois.some(t => t > em)) return undefined
+  const ultima = Math.max(...[dd.ultimaAtividade ? Date.parse(dd.ultimaAtividade) : NaN, ...depois].filter(t => !Number.isNaN(t)))
+  const d = Number.isFinite(ultima) ? desde(new Date(ultima).toISOString(), agora) : undefined
+
+  return d && d !== 'agora' ? `parado ${d}` : 'parado'
 }
 
 /** O `Chip` tem a classe do texto em `texto`; a pílula da etapa leva o fundo `tile`, onde as quatro cores de etapa passam de 4,5:1. */
@@ -566,6 +619,8 @@ export type OpcoesDoCartao = {
   citados?: Citado[]
   /** O que a sessão faz agora ("trabalhando agora", "parada há X", "sem leitura da sessão"); `undefined` é a sessão fora da lista. */
   situacao: (localId: string) => string | undefined
+  /** F425: a última atividade da sessão na lista ao vivo (ISO), que desmente o parado deduzido antes dela. */
+  atividade?: (localId: string) => string | undefined
 }
 
 /** A linha "quem": o selo do apelido (com o ponto vivo se trabalha agora), o papel por extenso e a situação da sessão. */
@@ -603,10 +658,12 @@ export const textoDoCusto = (relativo: number): string => `custo ${relativo.toFi
 
 export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: OpcoesDoCartao): { source: string; height: number; alt: string } {
   const partes: string[] = []
-  const tempo = tempoDoItem(item, agora)
+  // F425: o parado deduzido toma o canto, em `t` 600, no lugar do "há X"
+  const parado = paradoDoCartao(item, agora, opcoes.situacao, opcoes.atividade)
+  const tempo = parado ?? tempoDoItem(item, agora)
   const tempoW = tempo ? largura(tempo, 12) + 10 : 0
   partes.push(sobreSvg(0, 11, W - tempoW, item))
-  if (tempo) partes.push(texto(W, 11.5, 12, 'm', xml(tempo), ' text-anchor="end" font-variant-numeric="tabular-nums"'))
+  if (tempo) partes.push(texto(W, 11.5, 12, parado ? 't' : 'm', xml(tempo), ` text-anchor="end"${parado ? ' font-weight="600"' : ''} font-variant-numeric="tabular-nums"`))
 
   let y = 11
   const titulo = quebrarEmDuas(item.titulo, 15, W, W)
@@ -627,6 +684,8 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   y += 9 + linhaDeChips.altura
 
   const alt = [`${item.id} · ${tituloDoTema(item)}`, item.titulo, chips.map(c => c.t).join(' · ')]
+  const origem = origemNoAlt(item)
+  if (origem) alt.push(origem)
 
   if (item.trava) {
     const sem = item.trava.motivo === 'sem-ninguem'
@@ -663,6 +722,8 @@ export function cartaoSvg(W: number, item: LinhaItem, agora: number, opcoes: Opc
   const esperaOGate = item.etapa === 'merge' || item.espera?.motivo === 'gate'
   const situacaoDe = (localId: string): string | undefined => {
     const s = opcoes.situacao(localId)
+    // F425: com o parado no canto, a linha quem não repete o relógio
+    if (parado && s?.startsWith('parada')) return 'ociosa'
     return esperaOGate && s?.startsWith('parada') ? 'esperando o gate' : s
   }
   for (const p of mostradas) {
