@@ -1,6 +1,8 @@
 // Worker da aba do kit no Orca (F436). Lê o painel do kit e a caixa do Orca, grava as respostas do operador e entrega
 // o que precisa acordar uma sessão. Ler nunca aciona modelo: só arquivos e o CLI do Orca em modo leitura (`inbox`,
 // `worker-list`). Só "responder", "discordar" e o seguimento de uma entrega abrem um terminal que envia uma mensagem.
+// F460 (ADR 0032): a cada 10 min o worker roda a batida de leitura (`painel.mjs batida --leitura`), que só deduz o estado
+// dos itens e grava `batida/deduzido.json`; não acorda nem solta ninguém.
 import type { OrcaWorkerApi } from 'orca/worker'
 import { execFile } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
@@ -13,6 +15,7 @@ import { entregasDoPainel, entregasDoOrca, juntarEntregas } from './nucleo/entre
 import { prepararEnvio, lerResultado, destinoValido, destinoDoSeguimento } from './nucleo/envio.mjs'
 import { criarFilaDeEntrega } from './nucleo/fila-de-entrega.mjs'
 import { sessoesDoKit } from './nucleo/sessoes.mjs'
+import { precisaDaBatida, scriptDaBatida, ambienteDaBatida, BATIDA_MIN } from './nucleo/batida.mjs'
 import { inicioDoDiaSP } from './vista'
 import type { Leitura, Resultado, Entrega, EstadoDaEntrega, VistaDasSessoes } from './protocol'
 import { ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, LIMITE_DA_CAIXA } from './protocol'
@@ -84,6 +87,31 @@ export default function activate(orca: OrcaWorkerApi): void {
   relogio.unref?.() // o relógio da barra não segura o processo do worker (nem o do teste) aberto
 
   const avisarPaineis = () => { void atualizarBarra(); orca.panels.post('kit.mudou', { em: Date.now() }) }
+
+  // A batida de leitura (F460): ao ativar e a cada 10 min, só se o deduzido tem 10 min ou mais (o app desktop pode estar
+  // rodando a dele); uma por vez. O binário do Orca roda o painel.mjs como Node. Falhar só vai ao log: a seção Sessões
+  // segue avisando que o estado está velho.
+  let batendo = false
+  const rodarBatida = async () => {
+    if (batendo || process.env.PAINEL_DO_KIT_BATIDA === 'off' || !precisaDaBatida(pasta(), Date.now())) return
+    const script = scriptDaBatida()
+    if (!script) { orca.log('batida: o plugin orquestracao não está instalado no escopo do usuário'); return }
+    batendo = true
+    try {
+      const saida = await new Promise<string>((resolve, reject) =>
+        execFile(process.env.PAINEL_DO_KIT_NODE || process.execPath, [script, 'batida', '--leitura'],
+          { env: ambienteDaBatida(process.env), timeout: 60_000, killSignal: 'SIGKILL', maxBuffer: 4 * 1024 * 1024 },
+          (err, so, se) => (err ? reject(new Error(`${String(err.message).split('\n')[0]}${se ? ` · ${String(se).trim().split('\n').pop()}` : ''}`)) : resolve(so))))
+      const r = JSON.parse(saida) as { gravado?: boolean; pulou?: string }
+      if (r.gravado) avisarPaineis()
+      else if (r.pulou) orca.log(`batida: pulou (${r.pulou})`)
+    } catch (e) {
+      orca.log(`batida: ${msg(e)}`)
+    } finally { batendo = false }
+  }
+  void rodarBatida()
+  const relogioDaBatida = setInterval(() => { void rodarBatida() }, BATIDA_MIN * 60_000)
+  relogioDaBatida.unref?.()
 
   // Envio por terminal criado pelo worker: o worker do plugin não tem remetente próprio (`no_active_sender_terminal`).
   async function enviar(destino: string, assunto: string, corpo: string): Promise<{ ok: boolean; motivo?: string }> {
@@ -198,7 +226,7 @@ export default function activate(orca: OrcaWorkerApi): void {
     return enviar(input.destino, `Seguimento · ${input.titulo}`.slice(0, 120), corpo)
   })
 
-  pararRelogio = () => clearInterval(relogio)
+  pararRelogio = () => { clearInterval(relogio); clearInterval(relogioDaBatida) }
 }
 
 let pararRelogio = () => {}

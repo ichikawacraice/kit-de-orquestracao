@@ -769,3 +769,102 @@ test('batida: dona do Orca sem a lista (sem orca, ou orca falhando) → fora da 
   }
   assert.equal(lerItem('F1').data.donoLocalId, ORCA_ID);
 });
+
+// F460: no Orca, o worker da aba roda `batida --leitura`, sem a lista do app. Ela só coleta o estado deduzido e grava
+// `batida/deduzido.json` (com `fonte: 'leitura'`); não julga, não cutuca, não solta, não fecha, não lança fila e não apaga nada.
+// O repositório de cada projeto sai da pasta dos workers do Orca; a dona `local_` (do app desktop) fica fora da vista.
+const leitura = (agoraMs = T, env = {}, extra = []) => painel(['batida', '--leitura', '--agora', iso(agoraMs), ...extra], { env });
+const arquivoDeduzido = () => join(pastaOrq(), 'batida', 'deduzido.json');
+const gravarDeduzido = (em, itens = {}) => { mkdirSync(join(pastaOrq(), 'batida'), { recursive: true }); writeFileSync(arquivoDeduzido(), JSON.stringify({ em: iso(em), itens })); };
+
+test('batida --leitura: item vencido de dona local_ fora da lista não sai solto nem cutucado (a batida completa o soltaria)', () => {
+  item('F1');
+  mkdirSync(join(pastaOrq(), 'ativas'), { recursive: true });
+  const onzeMin = new Date(T - 11 * MIN);
+  writeFileSync(join(pastaOrq(), 'ativas', 'cli-sem-registro'), `${repo}/.git\n`);
+  utimesSync(join(pastaOrq(), 'ativas', 'cli-sem-registro'), onzeMin, onzeMin);
+  const r = leitura();
+  assert.equal(r.exit, 0, r.err);
+  const s = r.json();
+  assert.equal(s.gravado, true, r.out);
+  assert.equal(s.mensagens, undefined, 'a leitura não manda mensagem');
+  assert.equal(s.soltos, undefined, 'a leitura não solta');
+  const dd = JSON.parse(readFileSync(arquivoDeduzido(), 'utf8'));
+  assert.equal(dd.fonte, 'leitura');
+  assert.equal(dd.em, iso(T));
+  assert.ok(dd.itens.F1, 'o F1 não foi deduzido');
+  assert.equal(dd.itens.F1.donaViva, null, 'sem a lista do app, a dona local_ fica fora da vista');
+  const d = lerItem('F1').data;
+  assert.equal(d.donoLocalId, lid(1));
+  assert.equal(lerItem('F1').version, 1, 'o item não pode ser regravado');
+  assert.equal(existsSync(join(pastaOrq(), 'batida', 'estado.json')), false, 'a leitura não grava a memória das cutucadas');
+  assert.equal(existsSync(join(pastaOrq(), 'batida', 'pode-reiniciar.json')), false);
+  assert.ok(existsSync(join(pastaOrq(), 'ativas', 'cli-sem-registro')), 'a leitura não apaga marcador');
+  // o contraste: a batida completa, com a lista do app sem a dona, solta o mesmo item
+  rmSync(arquivoDeduzido());
+  const c = batida(sessoes(sessao(9, 'F9 · outra')));
+  assert.deepEqual(c.json().soltos, ['F1'], c.out);
+});
+
+test('batida --leitura: o repositório sai da pasta do worker do Orca; o PR mergeado é deduzido mas o item não fecha', () => {
+  item('F1', { etapa: 'merge', prs: [7] });
+  prsNoGh([{ number: 7, state: 'MERGED', headRefName: 'f1-x', mergedAt: iso(T - 5 * MIN), createdAt: iso(T - 30 * MIN), updatedAt: iso(T - 5 * MIN) }]);
+  const sem = leitura();
+  assert.equal(sem.exit, 0, sem.err);
+  assert.equal(JSON.parse(readFileSync(arquivoDeduzido(), 'utf8')).itens.F1.fontes.prs, 'item', 'sem o Orca não há repositório: vale o declarado');
+  rmSync(arquivoDeduzido());
+  const o = orcaFalso({ '': recibo([worker(repo, 'retained')]) });
+  const r = leitura(T, o.env);
+  assert.equal(r.exit, 0, r.err);
+  const dd = JSON.parse(readFileSync(arquivoDeduzido(), 'utf8')).itens.F1;
+  assert.equal(dd.fontes.prs, 'gh', JSON.stringify(dd));
+  assert.equal(dd.mergeado, true);
+  assert.equal(r.json().fechados, undefined, 'a leitura não fecha pelo merge');
+  assert.equal(lerItem('F1').data.etapa, 'merge');
+});
+
+test('batida --leitura: dona do Orca viva pela lista sai viva no deduzido', () => {
+  const wt = donaDoOrca('F1', { terminal: 'structworker_outro' });
+  const o = orcaFalso({ '': recibo([worker(wt, 'retained')]) });
+  const r = leitura(T, o.env);
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(deduzidoDe('F1').donaViva, true);
+});
+
+test('batida --leitura: deduzido com menos de 10 min → pula sem chamar o Orca; com 10 min ou mais, roda', () => {
+  item('F1');
+  gravarDeduzido(T - 3 * MIN, { F1: { etapa: 'execucao' } });
+  const o = orcaFalso({ '': recibo([worker(repo, 'retained')]) });
+  const a = leitura(T, o.env);
+  assert.equal(a.exit, 0, a.err);
+  assert.equal(a.json().gravado, false, a.out);
+  assert.match(a.json().pulou, /3 min/);
+  assert.equal(o.chamadas().length, 0, 'pulou depois de ler a lista do Orca');
+  assert.equal(JSON.parse(readFileSync(arquivoDeduzido(), 'utf8')).em, iso(T - 3 * MIN));
+  const b = leitura(T + 7 * MIN, o.env);
+  assert.equal(b.json().gravado, true, b.out);
+  assert.equal(JSON.parse(readFileSync(arquivoDeduzido(), 'utf8')).em, iso(T + 7 * MIN));
+});
+
+test('batida --leitura: outra batida que grava o deduzido no meio da rodada ganha; a leitura não o sobrescreve', () => {
+  item('F1');
+  const conteudo = JSON.stringify({ em: iso(T - 1 * MIN), itens: { F1: { etapa: 'merge' } } });
+  mkdirSync(join(pastaOrq(), 'batida'), { recursive: true });
+  const o = orcaFalso({ '': { ...recibo([worker(repo, 'retained')]), escrever: { arquivo: arquivoDeduzido(), conteudo } } });
+  const r = leitura(T, o.env);
+  assert.equal(r.exit, 0, r.err);
+  assert.equal(r.json().gravado, false, r.out);
+  assert.ok(o.chamadas().length >= 1, 'o Orca não foi lido: o teste não simulou a corrida');
+  assert.equal(readFileSync(arquivoDeduzido(), 'utf8'), conteudo);
+});
+
+test('batida --leitura: KIT_ESTADO_DEDUZIDO=off não grava; --leitura com --sessoes recusa', () => {
+  item('F1');
+  const off = leitura(T, { KIT_ESTADO_DEDUZIDO: 'off' });
+  assert.equal(off.exit, 0, off.err);
+  assert.equal(off.json().gravado, false);
+  assert.equal(existsSync(arquivoDeduzido()), false);
+  const dupla = painel(['batida', '--leitura', '--sessoes', sessoes(sessao(1, 'F1 · a'))]);
+  assert.equal(dupla.exit, 1);
+  assert.match(dupla.err, /--leitura/);
+});

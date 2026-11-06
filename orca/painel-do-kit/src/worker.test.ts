@@ -12,7 +12,9 @@ const PERIGOSO = `sim, "aspas" 'simples' $(touch /tmp/f436-w-pwned) \`id\` $HOME
 
 type Ws = { id: string; kind: 'worktree' | 'folder'; name: string; path: string; branch: string | null; hostId: string | null }
 // `janelaMs`: a janela do lote de respostas (F448); 0 entrega na hora, para os casos que não medem o lote.
-function ambiente(opcoes: { workspaces?: (raiz: string) => Ws[]; mensagens?: object[]; janelaMs?: number; workers?: object[] } = {}) {
+// `batida`: liga a batida de leitura (F460) com um `painel.mjs` falso que grava o deduzido; sem ela, a batida fica desligada
+// (nenhum teste roda o painel.mjs instalado nem toca o ~/.claude real).
+function ambiente(opcoes: { workspaces?: (raiz: string) => Ws[]; mensagens?: object[]; janelaMs?: number; workers?: object[]; batida?: boolean } = {}) {
   const raiz = mkdtempSync(join(tmpdir(), 'f436-worker-'))
   const painel = join(raiz, 'painel')
   mkdirSync(join(painel, 'perguntas'), { recursive: true })
@@ -36,6 +38,17 @@ else if (a[1] === 'send') { fs.writeFileSync(${JSON.stringify(args)}, JSON.strin
   process.env.PAINEL_DIR = painel
   process.env.PAINEL_DO_KIT_ORCA = orca
   process.env.PAINEL_DO_KIT_JANELA_MS = String(opcoes.janelaMs ?? 0)
+  const logDaBatida = join(raiz, 'batida.log')
+  const script = join(raiz, 'painel-falso.cjs')
+  writeFileSync(script, `const fs = require('fs'); const path = require('path');
+fs.appendFileSync(${JSON.stringify(logDaBatida)}, JSON.stringify({ argv: process.argv.slice(2), base: process.env.HOOKS_CREWAI_BASE, electron: process.env.ELECTRON_RUN_AS_NODE }) + '\\n');
+const d = path.join(process.env.HOOKS_CREWAI_BASE, 'batida'); fs.mkdirSync(d, { recursive: true });
+fs.writeFileSync(path.join(d, 'deduzido.json'), JSON.stringify({ em: new Date().toISOString(), fonte: 'leitura', itens: {} }));
+console.log(JSON.stringify({ gravado: true }));
+`)
+  process.env.PAINEL_DO_KIT_SCRIPT = script
+  process.env.PAINEL_DO_KIT_BATIDA = opcoes.batida ? '' : 'off'
+  delete process.env.HOOKS_CREWAI_BASE
   const pergunta = (id: string, data: object, version = 1) =>
     writeFileSync(join(painel, 'perguntas', `${id}.json`), JSON.stringify({ id, version, data }))
   const doc = (id: string) => JSON.parse(readFileSync(join(painel, 'perguntas', `${id}.json`), 'utf8'))
@@ -51,7 +64,8 @@ else if (a[1] === 'send') { fs.writeFileSync(${JSON.stringify(args)}, JSON.strin
     },
   })
   const todosEnviados = () => (existsSync(args + 'l') ? readFileSync(args + 'l', 'utf8').trim().split('\n').map((l) => JSON.parse(l) as string[]) : [])
-  return { painel, host, pergunta, doc, chamadas, enviados: () => JSON.parse(readFileSync(args, 'utf8')), todosEnviados }
+  const batidas = () => (existsSync(logDaBatida) ? readFileSync(logDaBatida, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { argv: string[]; base: string; electron: string }) : [])
+  return { painel, host, pergunta, doc, chamadas, enviados: () => JSON.parse(readFileSync(args, 'utf8')), todosEnviados, batidas }
 }
 
 test('ler não acorda ninguém: nenhum terminal, nenhum agente, nenhuma mensagem; só inbox e worker-list do CLI', async () => {
@@ -342,5 +356,54 @@ test('F452: a leitura traz as sessões por projeto, só de arquivos e do worker-
     assert.equal(s[1].tipoDeParada, 'falhou', 'o worker do Orca que falhou chega à sessão')
     assert.equal(r.sessoes.paradas, 1, 'a espera com pergunta não conta: Perguntas já a conta')
     assert.deepEqual(a.chamadas().sort(), ['inbox', 'worker-list'])
+  } finally { await w.deactivate() }
+})
+
+// F460 (ADR 0032): no Orca ninguém rodava a batida, e a seção Sessões avisava o tempo todo que o estado não se atualiza. O
+// worker roda `painel.mjs batida --leitura` ao ativar e a cada 10 min, só quando o deduzido tem 10 min ou mais.
+const deduzidoCom = (painel: string, emMs: number) => {
+  mkdirSync(join(painel, '..', 'batida'), { recursive: true })
+  writeFileSync(join(painel, '..', 'batida', 'deduzido.json'), JSON.stringify({ em: new Date(emMs).toISOString(), itens: {} }))
+}
+async function ate(cond: () => boolean, ms = 5000) {
+  const fim = Date.now() + ms
+  while (!cond() && Date.now() < fim) await new Promise((r) => setTimeout(r, 50))
+  return cond()
+}
+
+test('F460: com o deduzido velho, a aba roda a batida de leitura ao ativar e a seção Sessões perde o aviso de estado velho', async () => {
+  const a = ambiente({ batida: true })
+  const velho = Date.now() - 30 * 60_000
+  deduzidoCom(a.painel, velho)
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    assert.ok(await ate(() => a.batidas().length === 1), 'a batida não rodou')
+    const b = a.batidas()[0]
+    assert.deepEqual(b.argv, ['batida', '--leitura'])
+    assert.equal(b.electron, '1', 'o binário do Orca precisa rodar como Node')
+    assert.equal(b.base, join(a.painel, '..'), 'a batida grava ao lado da pasta do painel, onde a aba lê')
+    assert.ok(await ate(() => { try { return Date.parse(JSON.parse(readFileSync(join(a.painel, '..', 'batida', 'deduzido.json'), 'utf8')).em) > velho } catch { return false } }))
+    const r = await w.request('kit.ler', { forcar: true })
+    assert.ok(r.sessoes.batidaEm, 'sem batidaEm na leitura')
+    assert.ok(Date.now() - Date.parse(r.sessoes.batidaEm) < 5 * 60_000, `a batida ainda parece velha: ${r.sessoes.batidaEm}`)
+  } finally { await w.deactivate() }
+})
+
+test('F460: com o deduzido fresco (menos de 10 min), a aba não roda a batida', async () => {
+  const a = ambiente({ batida: true })
+  deduzidoCom(a.painel, Date.now() - 2 * 60_000)
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    await new Promise((r) => setTimeout(r, 1000))
+    assert.deepEqual(a.batidas(), [], 'rodou a batida com o deduzido fresco')
+  } finally { await w.deactivate() }
+})
+
+test('F460: PAINEL_DO_KIT_BATIDA=off desliga a batida da aba', async () => {
+  const a = ambiente({ batida: false })
+  const w = await mountWorker(main, { host: a.host })
+  try {
+    await new Promise((r) => setTimeout(r, 1000))
+    assert.deepEqual(a.batidas(), [])
   } finally { await w.deactivate() }
 })
