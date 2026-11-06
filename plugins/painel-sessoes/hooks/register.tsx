@@ -304,10 +304,12 @@ function montarTodos(
     const mudouDepois = dd ? Date.parse(texto(historico[historico.length - 1]?.em) ?? '') > Date.parse(dd.em as string) : false
     const etapaBruta = dd && !mudouDepois && dd.fontes?.etapa !== 'item' && typeof dd.etapa === 'string' ? (dd.etapa === 'feito' ? 'merge' : dd.etapa) : undefined
     const etapaDeduzida = etapaBruta && ETAPAS.includes(etapaBruta) && etapaBruta !== 'descartado' ? etapaBruta : undefined
-    // o PR gravado com a troca de etapa depois da batida entra como aberto; fora disso, o que a batida descartou (item reaberto) fica fora
+    // o PR gravado depois da batida entra como aberto: só o de número maior que os dela (o menor é o que ela descartou, como o do
+    // item reaberto); com a batida sem PR, só com a troca de etapa depois dela
     const prsGravados = inteiros(d.data.prs)
     const prsDaBatida = dd && dd.fontes?.prs === 'gh' ? inteiros(dd.prs) : undefined
-    const prsNovos = prsDaBatida && mudouDepois ? prsGravados.filter(n => !prsDaBatida.includes(n)) : []
+    const prsNovos =
+      prsDaBatida && (prsDaBatida.length > 0 || mudouDepois) ? prsGravados.filter(n => !prsDaBatida.includes(n) && prsDaBatida.every(b => n > b)) : []
     const prsDeduzidos = prsDaBatida ? [...prsDaBatida, ...prsNovos] : undefined
     let situacao: Situacao
     let trava: LinhaItem['trava']

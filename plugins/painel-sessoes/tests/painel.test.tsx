@@ -3438,13 +3438,21 @@ test('F425: a troca de etapa da dona depois da batida vence a dedução; só gra
   expect(item.etapa, 'etapa deduzida de fonte item é só a declarada da hora da batida').toBe('execucao')
 })
 
-test('F425: o PR gravado com a troca de etapa depois da batida entra como aberto; o que a batida descartou não volta', () => {
+test('F425: o PR gravado de número maior que os da batida entra como aberto; o que a batida descartou não volta, nem com troca de etapa', () => {
   const dd = DD({ F1: { etapa: 'merge', prs: [170], prsAbertos: [170], parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
   const antes = new Date(AGORA - 10 * 60_000).toISOString()
   const depois = new Date(AGORA - 60_000).toISOString()
   const reaberto = montaDD([docF('F1', { etapa: 'execucao', prs: [150, 170], historico: [{ etapa: 'execucao', em: antes }] })], dd)[0]!
   expect(reaberto.prs, 'o PR que a batida descartou (item reaberto) não volta').toEqual([170])
   expect(D.textoDoPr(reaberto)?.t).toBe('#170')
+  const trocou = montaDD([docF('F1', { etapa: 'validacao', prs: [150, 170], historico: [{ etapa: 'validacao', em: depois }] })], dd)[0]!
+  expect(trocou.prs, 'nem depois de a dona trocar de etapa').toEqual([170])
+  expect(D.textoDoPr(trocou)?.t).toBe('#170')
+  const semTroca = montaDD([docF('F1', { etapa: 'merge', prs: [170, 171], historico: [{ etapa: 'merge', em: antes }] })], dd)[0]!
+  expect(semTroca.prs, 'o PR novo (número maior) entra sem troca de etapa').toEqual([170, 171])
+  expect(D.textoDoPr(semTroca)?.t).toBe('#171 +1')
+  const ddVazio = DD({ F1: { etapa: 'execucao', prs: [], prsAbertos: [], parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
+  expect(montaDD([docF('F1', { etapa: 'execucao', prs: [150], historico: [{ etapa: 'execucao', em: antes }] })], ddVazio)[0]!.prs, 'batida sem PR: o gravado antigo não volta').toEqual([])
   const ddSem = DD({ F1: { etapa: 'execucao', prs: [160], prsAbertos: [], mergeado: true, parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
   const novo = montaDD([docF('F1', { etapa: 'merge', prs: [160, 171], historico: [{ etapa: 'merge', em: depois }] })], ddSem)[0]!
   expect(novo.prs).toEqual([160, 171])
