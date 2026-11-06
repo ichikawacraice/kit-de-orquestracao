@@ -101,22 +101,15 @@ const leitura = (l: Partial<Leitura> = {}): Leitura =>
   ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: semSessoes, lidoEm: AGORA - 20_000, ...l })
 const cheia = leitura({ abertas, assumidas, entregas })
 
+// O cenário não aperta botão e a aba não grava a seção: só Sessões (a de abertura) e o vazio se desenham aqui; as
+// outras seções, com o trilho apertado, são montadas e checadas por `orca plugin test` (panel.test.tsx).
 export default defineCheck({
   vazio: { requests: { 'kit.ler': leitura() } },
-  perguntas: { requests: { 'kit.ler': cheia } },
-  'perguntas (claro)': { requests: { 'kit.ler': cheia }, theme: 'light' },
-  decisoes: { requests: { 'kit.ler': leitura({ assumidas, entregas }) }, persisted: { plugin: { secao: 'decisoes' } } },
-  'decisoes (claro)': { requests: { 'kit.ler': leitura({ assumidas, entregas }) }, persisted: { plugin: { secao: 'decisoes' } }, theme: 'light' },
-  'perguntas (sem projeto)': { requests: { 'kit.ler': leitura({ abertas: [semProjeto, ...abertas] }) } },
-  'decisoes (dois projetos)': { requests: { 'kit.ler': leitura({ assumidas: [...assumidas, ...doOutroProjeto] }) }, persisted: { plugin: { secao: 'decisoes' } } },
-  'decisoes (dois projetos, claro)': { requests: { 'kit.ler': leitura({ assumidas: [...assumidas, ...doOutroProjeto] }) }, persisted: { plugin: { secao: 'decisoes' } }, theme: 'light' },
-  'perguntas (sem projeto, claro)': { requests: { 'kit.ler': leitura({ abertas: [semProjeto, ...abertas] }) }, theme: 'light' },
-  entregas: { requests: { 'kit.ler': leitura({ assumidas, entregas }) }, persisted: { plugin: { secao: 'entregas' } } },
   'entregas com a caixa fora': { requests: { 'kit.ler': leitura({ entregas: entregas.filter((e) => e.origem === 'painel'), erroDaCaixa: 'o Orca não respondeu à leitura da caixa' }) }, persisted: { plugin: { secao: 'entregas' } } },
-  sessoes: { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) }, persisted: { plugin: { secao: 'sessoes' } } },
-  'sessoes (claro)': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) }, persisted: { plugin: { secao: 'sessoes' } }, theme: 'light' },
-  'sessoes com o estado velho': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ batidaEm: iso(40 * MIN), projetos: [{ ...kit, filaIlegivel: true }] }) }) }, persisted: { plugin: { secao: 'sessoes' } } },
-  'sessoes vazias': { requests: { 'kit.ler': leitura() }, persisted: { plugin: { secao: 'sessoes' } } },
-  'sessoes nao lidas': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ projetos: [], erro: 'o worker não leu a pasta do painel' }) }) }, persisted: { plugin: { secao: 'sessoes' } } },
+  sessoes: { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) } },
+  'sessoes (claro)': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) }, theme: 'light' },
+  'sessoes com o estado velho': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ batidaEm: iso(40 * MIN), projetos: [{ ...kit, filaIlegivel: true }] }) }) } },
+  'sessoes vazias': { requests: { 'kit.ler': leitura() } },
+  'sessoes nao lidas': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ projetos: [], erro: 'o worker não leu a pasta do painel' }) }) } },
   'falha ao ler': { requests: { 'kit.ler': () => { throw new Error('worker parado') } } },
 })

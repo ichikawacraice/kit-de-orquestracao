@@ -1,10 +1,19 @@
 // Painel da aba do kit (F436), montado com o runtime de verdade do Orca (`orca plugin test`). O worker é trocado por
 // `requests` que anotam cada pedido: prova o que cada gesto pede e que ler não pede nada além de `kit.ler`.
-import { assert, mount, mockHost, test } from 'orca/testing'
+import { assert, mount as montarAba, mockHost, test } from 'orca/testing'
 import * as painel from './panel'
 import type { Entrega, Leitura, Pergunta } from './protocol'
 
 const AGORA = Date.now()
+
+const NOME_DA_SECAO: Record<string, RegExp> = { perguntas: /^Perguntas · /, decisoes: /^Decisões · /, entregas: /^Entregas · /, sessoes: /^Sessões · / }
+/** A aba abre em Sessões e não grava a seção: o teste que quer outra seção abre-a pelo trilho, como a pessoa (padrão: Perguntas). */
+async function mount(p: Parameters<typeof montarAba>[0], opts: Parameters<typeof montarAba>[1] & { persisted?: { plugin?: Record<string, unknown> } } = {}) {
+  const { secao = 'perguntas', ...plugin } = (opts.persisted?.plugin ?? {}) as Record<string, unknown>
+  const v = await montarAba(p, { ...opts, persisted: { ...opts.persisted, plugin } })
+  if (secao !== 'sessoes') await v.press({ label: NOME_DA_SECAO[secao as string] })
+  return v
+}
 const iso = (msAtras: number) => new Date(AGORA - msAtras).toISOString()
 
 const pergunta = (id: string, extra: Partial<Pergunta> = {}): Pergunta => ({
@@ -238,16 +247,34 @@ test('responder a uma entrega vai ao destino que o worker calculou; sem rota o b
   await v.unmount()
 })
 
+test('a aba abre em Sessões, mesmo com pergunta aberta; a seção antiga gravada não vale; trocar de seção não grava', async () => {
+  const w = worker({ 'kit.ler': leitura({ abertas: [pergunta('Q1')] }) })
+  const v = await montarAba(painel, { host: w.host, persisted: { plugin: { secao: 'entregas' } } })
+  assert.ok(v.find({ role: 'heading', text: 'Sessões' }), 'mesmo com a seção antiga gravada, abre em Sessões')
+  assert.equal(v.find({ role: 'button', text: 'Aceitar a recomendação' }), null)
+  assert.ok(v.find({ text: '1 pergunta esperando você' }))
+  await v.press({ label: 'Decisões · nenhuma a confirmar' })
+  assert.equal(v.persisted.plugin?.secao, 'entregas', 'trocar de seção não grava nada')
+  semErros(v)
+  await v.unmount()
+})
+
+test('o trilho segue a ordem Sessões, Perguntas, Decisões, Entregas', async () => {
+  const w = worker({ 'kit.ler': leitura() })
+  const v = await montarAba(painel, { host: w.host })
+  const rotulos = v.findAll({ role: 'button', label: /^(Sessões|Perguntas|Decisões|Entregas) · / }).map((n: { label?: string }) => (n.label ?? '').split(' · ')[0])
+  assert.deepEqual(rotulos, ['Sessões', 'Perguntas', 'Decisões', 'Entregas'])
+  await v.unmount()
+})
+
 test('fora de Perguntas, a pergunta aberta aparece numa faixa que leva a ela', async () => {
   const w = worker({ 'kit.ler': leitura({ abertas: [pergunta('Q1')] }) })
-  const v = await mount(painel, { host: w.host, persisted: { plugin: { secao: 'entregas' } } })
-  // Com pergunta aberta, a aba abre em Perguntas; a faixa aparece quando a pessoa sai dela.
+  const v = await mount(painel, { host: w.host })
   assert.ok(v.find({ role: 'button', text: 'Aceitar a recomendação' }))
   await v.press({ label: 'Entregas · nenhuma nova' })
   assert.ok(v.find({ text: '1 pergunta esperando você' }))
   await v.press({ role: 'button', text: 'Ver' })
   assert.ok(v.find({ role: 'button', text: 'Aceitar a recomendação' }))
-  assert.deepEqual(v.persisted.plugin.secao, 'perguntas')
   semErros(v)
   await v.unmount()
 })

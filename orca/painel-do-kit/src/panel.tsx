@@ -53,7 +53,8 @@ type Envio = { tipo: 'andando' } | { tipo: 'ok'; texto: string } | { tipo: 'erro
 /** A nova tentativa de entrega em voo guarda a anotação de antes: outra anotação no arquivo é o desfecho dela. */
 type Reentrega = { tipo: 'andando' | 'incerto'; desde: number; antes: string | null } | EstadoDaEntrega
 
-const secao = atom<Secao>('secao', 'perguntas', { persist: 'plugin' })
+/** A aba sempre abre em Sessões; a escolha vale só enquanto o painel está aberto (sem `persist`). */
+const secao = atom<Secao>('secao', 'sessoes')
 const leitura = atom<Leitura | null>('leitura', null)
 const lendo = atom('lendo', false)
 const falha = atom<string | null>('falha', null)
@@ -140,7 +141,6 @@ function desfechoDaReentrega(r: Reentrega, p: Pendente | undefined, agora: numbe
 }
 
 // ── Leitura ──────────────────────────────────────────────────────────────────────────────────────────────────────
-let primeira = true
 async function reler(forcar: boolean) {
   set(lendo, true)
   try {
@@ -161,8 +161,6 @@ async function reler(forcar: boolean) {
       return d ? [[id, d]] : []
     })))
     set(falha, null)
-    if (primeira && l.abertas.length > 0) set(secao, 'perguntas')
-    primeira = false
     const ids = (x: Leitura | null) => (x?.assumidas ?? []).map((q) => `${q.id}:${q.versao}`).join()
     if (read(armado) !== null && ids(antes) !== ids(l)) set(armado, null)
     // Quem respondeu fora desta aba: a recusa pediu releitura e a pergunta não está mais na lista.
@@ -193,7 +191,6 @@ async function relerAgora() {
 }
 
 export function setup(ctx: { subscriptions: { dispose(): void }[]; visible: unknown }) {
-  primeira = true
   void carregarLidas()
   void reler(false)
   ctx.subscriptions.push(plugin.on('kit.mudou', () => void reler(false)))
@@ -1098,6 +1095,14 @@ function Sessoes(props: { v: VistaDasSessoes }) {
 
 // ── Casca ────────────────────────────────────────────────────────────────────────────────────────────────────────
 const SECOES: { id: Secao; nome: string; icone: string; rotulo: (l: Leitura | null) => string; numero: (l: Leitura | null) => number; tom: 'warning' | 'neutral' }[] = [
+  // O número conta só o que nenhuma outra seção mostra: paradas e esperas sem pergunta aberta.
+  { id: 'sessoes', nome: 'Sessões', icone: 'activity', tom: 'neutral',
+    numero: (l) => l?.sessoes?.paradas ?? 0,
+    rotulo: (l) => {
+      if (l?.sessoes?.erro) return 'Sessões · não li as sessões'
+      const n = l?.sessoes?.paradas ?? 0
+      return `Sessões · ${n ? plural(n, 'parada', 'paradas') : 'nenhuma parada'}`
+    } },
   { id: 'perguntas', nome: 'Perguntas', icone: 'bell', tom: 'warning',
     numero: (l) => (l ? abertasAtivas(l) : 0),
     rotulo: (l) => { const n = l ? abertasAtivas(l) : 0; return `Perguntas · ${n ? plural(n, 'aberta', 'abertas') : 'nenhuma aberta'}` } },
@@ -1107,14 +1112,6 @@ const SECOES: { id: Secao; nome: string; icone: string; rotulo: (l: Leitura | nu
   { id: 'entregas', nome: 'Entregas', icone: 'package', tom: 'neutral',
     numero: (l) => (l ? entregasVisiveis(l).lista.filter((e) => !(e.chave in read(limpasAgora))).length : 0),
     rotulo: (l) => { const n = l ? entregasVisiveis(l).lista.filter((e) => !(e.chave in read(limpasAgora))).length : 0; return `Entregas · ${n ? plural(n, 'nova', 'novas') : 'nenhuma nova'}` } },
-  // O número conta só o que nenhuma outra seção mostra: paradas e esperas sem pergunta aberta.
-  { id: 'sessoes', nome: 'Sessões', icone: 'activity', tom: 'neutral',
-    numero: (l) => l?.sessoes?.paradas ?? 0,
-    rotulo: (l) => {
-      if (l?.sessoes?.erro) return 'Sessões · não li as sessões'
-      const n = l?.sessoes?.paradas ?? 0
-      return `Sessões · ${n ? plural(n, 'parada', 'paradas') : 'nenhuma parada'}`
-    } },
 ]
 
 function Trilho(props: { l: Leitura | null; atual: Secao }) {
