@@ -54,9 +54,12 @@ const branchesDoItem = (d, branchDaDona) => [...new Set([d?.branch, branchDaDona
 // A branch da dona: a do worktree (o git) vale sobre a da lista do app, que é a branch com que o app criou a sessão.
 const branchDe = ({ linha, git }) => (texto(git?.branch) ? git.branch : linha?.branch ?? null);
 
-// → { etapa, prs, prsAbertos, mergeado, fatiaMergeada, donaViva, rodando, ultimaAtividade, parado, minParado, fontes }
+// → { etapa, prs, prsAbertos, prsMergeados, prsDescartados, mergeado, fatiaMergeada, donaViva, rodando, ultimaAtividade, parado, minParado, fontes }
 // `linha`: a sessão da dona na lista do app (ou undefined); `git`: { aFrente, sujo, ultimoCommitMs } da branch dela, ou null;
 // `prs`: os PRs do repositório que o `gh` leu (null: o gh não leu, vale o declarado).
+// F430: `prsMergeados` são os ligados que o gh leu mergeados (o pane mostra `#N mergeado` com o número certo); `prsDescartados`,
+// os gravados em `prs` que a batida tirou da conta (o merge de antes do item nascer ou da reabertura): o pane trata como novo o
+// PR gravado que não está em nenhum dos dois, sem adivinhar pelo número.
 export function deduzir({ item: d, linha = null, prs = null, git = null, agoraMs, prazoMin, ambiguos = null }) {
   const ligados = prsDoItem(d, { prs, branchDaDona: branchDe({ linha, git }), ambiguos });
   const lidos = ligados.filter((p) => p.state); // os que o gh leu
@@ -85,6 +88,8 @@ export function deduzir({ item: d, linha = null, prs = null, git = null, agoraMs
   return {
     // o PR que o gh não leu conta como aberto (o declarado): a cobrança do `--anotar` não some porque o gh caiu
     etapa, prs: ligados.map((p) => p.number), prsAbertos: ligados.filter((p) => !p.state || p.state === 'OPEN').map((p) => p.number),
+    prsMergeados: ligados.filter((p) => p.state === 'MERGED').map((p) => p.number),
+    prsDescartados: [...new Set(inteiros(d?.prs))].filter((n) => !ligados.some((p) => p.number === n)).sort((a, b) => a - b),
     mergeado: todosMergeados && !fatia, fatiaMergeada: todosMergeados && fatia,
     donaViva, rodando, ultimaAtividade: ultimaAtividade === null ? null : new Date(ultimaAtividade).toISOString(), parado,
     minParado: ultimaAtividade === null ? null : Math.floor((agoraMs - ultimaAtividade) / 60_000), fontes,

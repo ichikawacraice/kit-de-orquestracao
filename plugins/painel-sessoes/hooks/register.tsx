@@ -304,12 +304,19 @@ function montarTodos(
     const mudouDepois = dd ? Date.parse(texto(historico[historico.length - 1]?.em) ?? '') > Date.parse(dd.em as string) : false
     const etapaBruta = dd && !mudouDepois && dd.fontes?.etapa !== 'item' && typeof dd.etapa === 'string' ? (dd.etapa === 'feito' ? 'merge' : dd.etapa) : undefined
     const etapaDeduzida = etapaBruta && ETAPAS.includes(etapaBruta) && etapaBruta !== 'descartado' ? etapaBruta : undefined
-    // o PR gravado depois da batida entra como aberto: só o de número maior que os dela (o menor é o que ela descartou, como o do
-    // item reaberto); com a batida sem PR, só com a troca de etapa depois dela
+    // o PR gravado depois da batida entra como aberto. F430: a batida grava os que descartou (item reaberto, número colidindo), e
+    // o gravado fora dos dela e dos descartados é novo, de qualquer número. O `deduzido.json` de antes do F430 (sem
+    // `prsDescartados`): só o de número maior que os dela; com a batida sem PR, só com a troca de etapa depois dela
     const prsGravados = inteiros(d.data.prs)
     const prsDaBatida = dd && dd.fontes?.prs === 'gh' ? inteiros(dd.prs) : undefined
-    const prsNovos =
-      prsDaBatida && (prsDaBatida.length > 0 || mudouDepois) ? prsGravados.filter(n => !prsDaBatida.includes(n) && prsDaBatida.every(b => n > b)) : []
+    const descartados = dd && Array.isArray(dd.prsDescartados) ? inteiros(dd.prsDescartados) : undefined
+    const prsNovos = !prsDaBatida
+      ? []
+      : descartados
+        ? prsGravados.filter(n => !prsDaBatida.includes(n) && !descartados.includes(n))
+        : prsDaBatida.length > 0 || mudouDepois
+          ? prsGravados.filter(n => !prsDaBatida.includes(n) && prsDaBatida.every(b => n > b))
+          : []
     const prsDeduzidos = prsDaBatida ? [...prsDaBatida, ...prsNovos] : undefined
     let situacao: Situacao
     let trava: LinhaItem['trava']
@@ -380,6 +387,7 @@ function montarTodos(
             etapaDeclarada: etapaCrua as string,
             fontes: { ...(dd.fontes ?? {}), etapa: etapaDeduzida ? dd.fontes?.etapa : 'item' },
             prsAbertos: [...inteiros(dd.prsAbertos), ...prsNovos],
+            ...(Array.isArray(dd.prsMergeados) ? { prsMergeados: inteiros(dd.prsMergeados) } : {}),
             mergeado: dd.mergeado === true || dd.fatiaMergeada === true,
           }
         : undefined,

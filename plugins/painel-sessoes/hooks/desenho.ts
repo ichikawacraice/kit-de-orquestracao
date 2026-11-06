@@ -544,10 +544,13 @@ export function textoDoPr(item: LinhaItem): { t: string; mergeado: boolean } | u
   const dd = item.deduzido
   // sem o GitHub (PRs de fonte item) a dedução não sabe o estado dos PRs: o chip é o declarado
   if (!dd || dd.fontes.prs !== 'gh') return { t: `#${item.prs[item.prs.length - 1]}${mais}`, mergeado: false }
-  // com dedução, o `+M` conta só os outros abertos; o mergeado sem saber qual (a batida não grava) só leva número se o PR é um só
+  // com dedução, o `+M` conta só os outros abertos; o mergeado leva o maior número entre os que a batida viu mergeados (F430); o
+  // `deduzido.json` de antes do F430, sem `prsMergeados`, só leva número se o PR é um só
   const abertos = item.prs.filter(n => dd.prsAbertos.includes(n))
   if (abertos.length > 0) return { t: `#${abertos[abertos.length - 1]}${abertos.length > 1 ? ` +${abertos.length - 1}` : ''}`, mergeado: false }
   if (!dd.mergeado) return undefined
+  const mergeados = dd.prsMergeados ? item.prs.filter(n => dd.prsMergeados!.includes(n)) : []
+  if (mergeados.length > 0) return { t: `#${mergeados[mergeados.length - 1]} mergeado`, mergeado: true }
 
   return { t: item.prs.length === 1 ? `#${item.prs[0]} mergeado` : 'PR mergeado', mergeado: true }
 }

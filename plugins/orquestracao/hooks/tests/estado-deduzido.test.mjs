@@ -266,3 +266,30 @@ test('painel: "feito" declarado num update é recusado; descartado passa; criar 
   const fechado = p('update', 'fila', 'F2', JSON.stringify({ titulo: 'Velho', etapa: 'feito', tema: 'geral', projeto: 'kit' }));
   assert.equal(fechado.status, 0, fechado.stderr);
 });
+
+// ---- F430: os PRs mergeados e os descartados, para o pane ----
+test('F430: prsMergeados lista os ligados mergeados; o fechado sem merge e o aberto ficam fora', () => {
+  const d = ded({ item: item({ etapa: 'merge', prs: [5] }), linha: linha(), prs: [pr(5, 'CLOSED', { headRefName: 'z' }), pr(7, 'MERGED'), pr(9, 'OPEN')], git: null });
+  assert.deepEqual(d.prs, [5, 7, 9], 'precondição: os três estão ligados');
+  assert.deepEqual(d.prsMergeados, [7]);
+  assert.deepEqual(d.prsDescartados, []);
+});
+test('F430: prsDescartados lista o PR gravado que a batida tirou da conta (item reaberto, número colidindo)', () => {
+  const historico = [{ em: iso(T - 300 * MIN), etapa: 'execucao' }, { em: iso(T - 100 * MIN), etapa: 'feito' }, { em: iso(T - 50 * MIN), etapa: 'execucao' }];
+  const velho = pr(7, 'MERGED', { createdAt: iso(T - 200 * MIN), mergedAt: iso(T - 110 * MIN) });
+  const novo = pr(8, 'MERGED', { createdAt: iso(T - 30 * MIN), mergedAt: iso(T - 5 * MIN) });
+  const reaberto = ded({ item: item({ prs: [7, 8], historico }), linha: linha(), prs: [velho, novo], git: null });
+  assert.deepEqual(reaberto.prs, [8]);
+  assert.deepEqual(reaberto.prsDescartados, [7]);
+  assert.deepEqual(reaberto.prsMergeados, [8], 'o descartado não conta como mergeado do item');
+  const colide = ded({ item: item({ prs: [3] }), linha: linha(), prs: [pr(3, 'MERGED', { headRefName: 'z', createdAt: iso(T - 900 * MIN), mergedAt: iso(T - 800 * MIN) })], git: null });
+  assert.deepEqual(colide.prsDescartados, [3]);
+});
+test('F430: com o gh caído nada se descarta nem se dá por mergeado; o JSON gravado leva os dois campos', () => {
+  const caido = ded({ item: item({ etapa: 'merge', prs: [7] }), linha: linha(), prs: null, git: null });
+  assert.deepEqual(caido.prsDescartados, []);
+  assert.deepEqual(caido.prsMergeados, []);
+  const ida = JSON.parse(JSON.stringify(ded({ item: item({ prs: [7] }), linha: linha(), prs: [pr(7, 'MERGED')], git: null })));
+  assert.deepEqual(ida.prsMergeados, [7]);
+  assert.deepEqual(ida.prsDescartados, []);
+});

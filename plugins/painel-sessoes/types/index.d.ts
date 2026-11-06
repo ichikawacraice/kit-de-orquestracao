@@ -64,6 +64,8 @@ export type Deduzido = {
   etapaDeclarada: string
   fontes: { etapa?: string; prs?: string; dona?: string }
   prsAbertos: number[]
+  /** F430: os PRs do item que a batida viu mergeados; ausente no `deduzido.json` de antes do F430. */
+  prsMergeados?: number[]
   /** Todos os PRs que valem estão mergeados (o item inteiro ou a fatia). */
   mergeado: boolean
 }
@@ -73,6 +75,9 @@ export type DeduzidoDaBatida = {
   etapa?: string | null
   prs?: number[]
   prsAbertos?: number[]
+  /** F430: os ligados mergeados e os gravados no item que a batida tirou da conta (item reaberto, número colidindo). */
+  prsMergeados?: number[]
+  prsDescartados?: number[]
   parado?: boolean
   ultimaAtividade?: string | null
   mergeado?: boolean
