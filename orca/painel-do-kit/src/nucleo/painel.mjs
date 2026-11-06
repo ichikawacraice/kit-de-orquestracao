@@ -26,7 +26,10 @@ function opcoesDe(v) {
 }
 
 function resumo(id, version, d) {
-  const endereco = typeof d.endereco?.orca === 'string' && destinoValido(d.endereco.orca) ? d.endereco.orca : null;
+  // O endereço gravado manda (o inválido não vira destino). Sem ele, a pergunta do Orca gravada antes do campo existir
+  // (F448) vai ao próprio sessaoId, que é o mesmo endereço que o painel do kit derivaria.
+  const doOrca = typeof d.sessaoId === 'string' && d.sessaoId.startsWith('orca_session_id:') && destinoValido(d.sessaoId) ? d.sessaoId : null;
+  const endereco = d.endereco != null ? (typeof d.endereco.orca === 'string' && destinoValido(d.endereco.orca) ? d.endereco.orca : null) : doOrca;
   return {
     id, versao: Number.isInteger(version) ? version : 0, estado: d.estado,
     titulo: texto(d.titulo) ?? '(sem título)', caso: texto(d.caso), seNaoDecidir: texto(d.seNaoDecidir), recomendacao: texto(d.recomendacao),

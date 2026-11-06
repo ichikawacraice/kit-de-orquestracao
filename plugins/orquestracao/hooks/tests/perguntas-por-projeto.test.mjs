@@ -39,7 +39,7 @@ afterEach(() => { rmSync(base, { recursive: true, force: true }); });
 function painel(args, { cwd = repo } = {}) {
   const r = spawnSync('node', [PAINEL, ...args], {
     encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL', cwd,
-    env: { ...process.env, PAINEL_DIR: join(base, 'painel'), HOME: join(base, 'home'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), KIT_ORCA_BIN: 'off' }, // F444: nunca o orca real
+    env: { ...process.env, PAINEL_DIR: join(base, 'painel'), HOME: join(base, 'home'), CLAUDE_CODE_SESSION_ID: '', ORCA_AGENT_SESSION_ID: '', ORCA_STRUCTURED_SESSION: '', KIT_ANFITRIAO: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), KIT_ORCA_BIN: 'off' }, // F444: nunca o orca real; F448: nem os sinais do Orca do shell (lá a pergunta local_ é recusada)
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr, json: () => JSON.parse(r.stdout) };

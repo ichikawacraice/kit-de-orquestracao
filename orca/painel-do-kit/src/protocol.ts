@@ -68,9 +68,11 @@ declare module 'orca' {
   }
 }
 
+/** Quanto o worker junta as respostas ao mesmo destino numa mensagem só, contado da primeira (F448). */
+export const JANELA_DA_ENTREGA_MS = 5_000
 /** Quanto o worker espera o terminal de envio confirmar a entrega. */
 export const ESPERA_ENVIO_MS = 30_000
-/** O prazo dos pedidos do painel que enviam: a espera do envio, mais folga para abrir o terminal e gravar (o Orca aceita até 120 s). */
+/** O prazo dos pedidos do painel que enviam: a janela do lote e a espera do envio, mais folga para abrir o terminal e gravar (o Orca aceita até 120 s). */
 export const PRAZO_DO_ENVIO_MS = 90_000
 /** Quantas mensagens da caixa do Orca a aba lê por vez. */
 export const LIMITE_DA_CAIXA = 1000

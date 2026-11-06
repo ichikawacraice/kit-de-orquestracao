@@ -24,7 +24,7 @@ const painelAceita = (frase) => {
     mkdirSync(join(base, 'painel')); mkdirSync(join(base, 'app')); mkdirSync(join(base, 'orq'));
     const r = spawnSync('node', [PAINEL, 'set', 'perguntas', 'Q1', JSON.stringify({ estado: 'aberta', sessaoId: 'local_a', caso: frase })], {
       encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL',
-      env: { ...process.env, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq') },
+      env: { ...process.env, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', ORCA_AGENT_SESSION_ID: '', ORCA_STRUCTURED_SESSION: '', KIT_ANFITRIAO: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq') },
     });
     return r.status === 0;
   } finally { rmSync(base, { recursive: true, force: true }); }

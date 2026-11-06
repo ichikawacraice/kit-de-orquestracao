@@ -33,6 +33,21 @@ test('lê abertas e assumidas com versão e endereço; ignora fechadas e ilegív
   assert.equal(r.abertas.find((q) => q.id === 'Q4').endereco, null, 'endereço que não passa na validação não vira destino');
 });
 
+// F448: a pergunta do Orca gravada antes do endereço existir (só com o sessaoId do Orca) ainda tem para onde ir; o
+// endereço explícito manda, e o explícito inválido não cai para o sessaoId.
+test('sem endereço gravado, o sessaoId do Orca vira o destino; o do app não; o explícito inválido não cai para ele', () => {
+  const p = novoPainel();
+  pergunta(p, 'Q1', { estado: 'aberta', titulo: 'antiga do Orca', sessaoId: 'orca_session_id:880dae07-91e8-4aae-9a46-0e857a656849' });
+  pergunta(p, 'Q2', { estado: 'aberta', titulo: 'do app', sessaoId: 'local_00000000-0000-4000-8000-0000000000a1' });
+  pergunta(p, 'Q3', { estado: 'aberta', titulo: 'explícito ruim', sessaoId: 'orca_session_id:abc', endereco: { orca: 'dispatch:a b' } });
+  pergunta(p, 'Q4', { estado: 'aberta', titulo: 'sessaoId ruim', sessaoId: "orca_session_id:x'; id" });
+  const por = Object.fromEntries(lerPerguntas(p).abertas.map((q) => [q.id, q.endereco]));
+  assert.equal(por.Q1, 'orca_session_id:880dae07-91e8-4aae-9a46-0e857a656849');
+  assert.equal(por.Q2, null);
+  assert.equal(por.Q3, null);
+  assert.equal(por.Q4, null);
+});
+
 test('pasta sem perguntas devolve listas vazias, sem erro', () => {
   const p = mkdtempSync(join(tmpdir(), 'f436-vazio-'));
   assert.deepEqual(lerPerguntas(p), { abertas: [], assumidas: [], pendentes: [], ilegiveis: 0 });

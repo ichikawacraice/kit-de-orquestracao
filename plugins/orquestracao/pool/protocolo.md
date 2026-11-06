@@ -139,7 +139,7 @@ Cada sessão cuida do próprio item e a orquestradora só lê. O mecânico roda 
 
 <a id="perguntas-proprias"></a>
 ## Perguntas da própria sessão, depois de uma limpeza
-A limpeza apaga a lembrança, não as perguntas: elas ficam no painel com `sessaoId` = você. No início da conversa nova, o hook `sessao-inicio.mjs` lista as abertas e as respondidas nas últimas 24 h que são suas; sem a lista, rode `painel list perguntas aberta --sessao <seu local_…>`. Mensagem que começa com `Q<n> — pergunta aberta POR ESTA SESSÃO` é sua: retome pelo `caso` e pelo `handoff` do item, sem devolver à orquestradora. Resposta já atendida (o handoff diz) não se refaz.
+A limpeza apaga a lembrança, não as perguntas: elas ficam no painel com `sessaoId` = você. No início da conversa nova, o hook `sessao-inicio.mjs` lista as abertas e as respondidas nas últimas 24 h que são suas; sem a lista, rode `painel list perguntas aberta --sessao <seu local_…>`. Mensagem que começa com `Q<n> — pergunta aberta POR ESTA SESSÃO` (ou que traz uma lista numerada delas: no Orca, as respostas que saem a poucos segundos uma da outra chegam juntas) é sua: retome pelo `caso` e pelo `handoff` do item, sem devolver à orquestradora. Resposta já atendida (o handoff diz) não se refaz. No Orca, o `sessaoId` é o seu `orca_session_id:…`: dele o painel grava o endereço de entrega (`endereco.orca`), o único lugar aonde a aba do kit manda a resposta ([tabela do Orca](anfitriao-orca.md#tabela)).
 
 <a id="via-rapida"></a>
 ## Tela: revisão de design e via rápida

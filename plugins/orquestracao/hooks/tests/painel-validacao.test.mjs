@@ -23,11 +23,11 @@ function novoBase() {
   writeFileSync(join(base, 'app', 'local_SELF.json'), JSON.stringify({ sessionId: 'local_SELF', cliSessionId: 'cli-self', title: 'E1 · x', isArchived: false }));
 }
 function painel(...args) { return painelComo({}, ...args); }
-// `env`: CLAUDE_CODE_SESSION_ID é neutralizada por padrão (a do shell real mudaria o desfecho dos testes).
+// `env`: CLAUDE_CODE_SESSION_ID e os sinais do Orca são neutralizados por padrão (os do shell real mudariam o desfecho dos testes: no Orca, F448, a pergunta com sessaoId local_ é recusada).
 function painelComo(env, ...args) {
   const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
     encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL',
-    env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), ...env },
+    env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', ORCA_AGENT_SESSION_ID: '', ORCA_STRUCTURED_SESSION: '', KIT_ANFITRIAO: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), ...env },
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -167,7 +167,7 @@ caso('5b (h) sem CLAUDE_CODE_SESSION_ID → grava como hoje; env sem registro �
 function rodarPainel(env, cwd, ...args) {
   const r = spawnSync('node', [join(SCRIPTS, 'painel.mjs'), ...args], {
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', cwd,
-    env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), KIT_HOOKS_DIR: '', ...env },
+    env: { ...process.env, ...fechaDeclarado(args), PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: '', ORCA_AGENT_SESSION_ID: '', ORCA_STRUCTURED_SESSION: '', KIT_ANFITRIAO: '', POOL_APP_SESSOES_DIR: join(base, 'app'), HOOKS_CREWAI_BASE: join(base, 'orq'), KIT_HOOKS_DIR: '', ...env },
   });
   if (r.error) throw r.error;
   return { exit: r.status, out: r.stdout, err: r.stderr };
@@ -208,7 +208,7 @@ caso('c4 R1: o painel.mjs do plugin não cai para ~/.claude/hooks (só vale onde
   writeFileSync(join(plugin, 'skills', 'orquestradora', 'scripts', 'estado-deduzido.mjs'), readFileSync(join(SCRIPTS, 'estado-deduzido.mjs'), 'utf8')); // idem (F423)
   const r = spawnSync('node', [join(plugin, 'skills', 'orquestradora', 'scripts', 'painel.mjs'), 'set', 'sessoes', 'local_OUTRA', '{"titulo":"x"}'], {
     encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', cwd: base,
-    env: { ...process.env, HOME: lar, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: 'cli-self', KIT_HOOKS_DIR: '' },
+    env: { ...process.env, HOME: lar, PAINEL_DIR: join(base, 'painel'), CLAUDE_CODE_SESSION_ID: 'cli-self', ORCA_AGENT_SESSION_ID: '', ORCA_STRUCTURED_SESSION: '', KIT_ANFITRIAO: '', KIT_HOOKS_DIR: '' },
   });
   igual(r.status, 0, `exit (${r.stderr})`);
   ok(r.stderr.includes(join(plugin, 'hooks', 'pool-comum.mjs')), `não tentou o caminho do plugin: ${r.stderr}`);

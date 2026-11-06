@@ -11,8 +11,9 @@ import {
 } from './nucleo/painel.mjs'
 import { entregasDoPainel, entregasDoOrca, juntarEntregas } from './nucleo/entregas.mjs'
 import { prepararEnvio, lerResultado, destinoValido, destinoDoSeguimento } from './nucleo/envio.mjs'
+import { criarFilaDeEntrega } from './nucleo/fila-de-entrega.mjs'
 import type { Leitura, Resultado, Entrega, EstadoDaEntrega } from './protocol'
-import { ESPERA_ENVIO_MS, LIMITE_DA_CAIXA } from './protocol'
+import { ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, LIMITE_DA_CAIXA } from './protocol'
 
 const DIAS = 7
 const CAIXA_MS = 60_000
@@ -23,6 +24,11 @@ const pasta = () => process.env.PAINEL_DIR || join(homedir(), '.claude', 'orques
 const orcaBin = () => process.env.PAINEL_DO_KIT_ORCA || (existsSync(ORCA_APP) ? ORCA_APP : 'orca')
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
+// A janela do lote: a do contrato, ou a do teste (variável), que não espera 5 s por caso.
+const janelaDaEntrega = () => {
+  const v = Number(process.env.PAINEL_DO_KIT_JANELA_MS)
+  return process.env.PAINEL_DO_KIT_JANELA_MS && Number.isFinite(v) && v >= 0 ? v : JANELA_DA_ENTREGA_MS
+}
 
 function rodarJson(args: string[]): Promise<unknown> {
   return new Promise((resolve, reject) =>
@@ -100,6 +106,12 @@ export default function activate(orca: OrcaWorkerApi): void {
     }
   }
 
+  // Respostas ao mesmo destino a poucos segundos uma da outra saem numa mensagem só (cada mensagem custa um turno).
+  const filaDeEntrega = criarFilaDeEntrega({
+    janelaMs: janelaDaEntrega(),
+    enviarLote: (destino: string, lote: { assunto: string; corpo: string }) => enviar(destino, lote.assunto, lote.corpo),
+  })
+
   orca.panels.handle('kit.ler', async (input?: { forcar?: boolean }): Promise<Leitura> => {
     const p = pasta()
     const perguntas = lerPerguntas(p)
@@ -127,11 +139,12 @@ export default function activate(orca: OrcaWorkerApi): void {
     return { gravou: true, entrega }
   })
 
-  // Entrega à sessão a resposta já gravada e anota o desfecho na pergunta (presa à versão que a gravação deixou).
+  // Entrega à sessão a resposta já gravada e anota o desfecho na pergunta (presa à versão que a gravação deixou). O destino
+  // é só o endereço gravado na pergunta (F448): nem o título da sessão nem a orquestradora ativa entram na rota.
   async function entregarResposta(q: { id: string; titulo: string; caso: string | null; endereco: string | null }, esperado: 'aberta' | 'assumida', resposta: string, versao: number): Promise<EstadoDaEntrega> {
     const destino = q.endereco
     const texto = esperado === 'assumida' ? textoDaMudanca(q, resposta) : textoDaEntrega(q, resposta)
-    const r = destino ? await enviar(destino, `Resposta ${q.id}`, texto) : null
+    const r = destino ? await filaDeEntrega.entregar(destino, { id: q.id, texto }) : null
     const entrega: EstadoDaEntrega = destino
       ? { estado: r!.ok ? 'entregue' : 'falhou', via: 'orca', destino, em: new Date().toISOString(), ...(r!.ok ? {} : { motivo: r!.motivo }) }
       : { estado: 'pendente', via: 'orca', em: new Date().toISOString(), motivo: 'a pergunta não tem endereço no Orca' }
