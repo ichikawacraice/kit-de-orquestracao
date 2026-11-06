@@ -3492,3 +3492,32 @@ test('F425: o parado conta da atividade mais nova entre a dedução, a gravaçã
   const r = cartaoSvg(360, paradoF7(), AGORA, { situacao: situacaoDoTeste, atividade: id => (id === 'local_v1' ? ativ20 : undefined) })
   expect(r.source).toContain('parado há 20 min')
 })
+
+// F430: a batida grava `prsMergeados` e `prsDescartados`; o pane mostra o número do mergeado e trata como novo o PR gravado fora
+// dos dela e dos descartados, de qualquer número.
+test('F430: o mergeado leva o número do último que a batida viu mergeado; sem o campo, vale a regra de antes', () => {
+  const dois = D.textoDoPr(paradoF7({ prs: [158, 160], deduzido: ded({ mergeado: true, prsMergeados: [158, 160] }) }))
+  expect(dois, 'o pedaço existe').toBeDefined()
+  expect(dois!.t).toBe('#160 mergeado')
+  expect(dois!.mergeado).toBe(true)
+  const umFechado = D.textoDoPr(paradoF7({ prs: [158, 160], deduzido: ded({ mergeado: true, prsMergeados: [158] }) }))
+  expect(umFechado!.t, 'o fechado sem merge não leva o número').toBe('#158 mergeado')
+  expect(D.textoDoPr(paradoF7({ prs: [158, 160], deduzido: ded({ mergeado: true }) }))!.t, 'deduzido.json antigo').toBe('PR mergeado')
+  const [i] = montaDD([docF('F1', { etapa: 'merge', prs: [158, 160] })], DD({ F1: { etapa: 'feito', prs: [158, 160], prsAbertos: [], prsMergeados: [158, 160], prsDescartados: [], mergeado: true, parado: false, fontes: { etapa: 'gh', prs: 'gh' } } }))
+  expect(i!.deduzido!.prsMergeados).toEqual([158, 160])
+  expect(D.textoDoPr(i!)!.t).toBe('#160 mergeado')
+})
+
+test('F430: o PR gravado fora dos da batida e dos descartados entra como aberto, mesmo de número menor; o descartado não volta', () => {
+  const antes = new Date(AGORA - 10 * 60_000).toISOString()
+  const dd = DD({ F1: { etapa: 'merge', prs: [170], prsAbertos: [170], prsMergeados: [], prsDescartados: [150], parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
+  const i = montaDD([docF('F1', { etapa: 'merge', prs: [150, 170, 140], historico: [{ etapa: 'merge', em: antes }] })], dd)[0]!
+  expect(i.prs, 'o 140, novo e menor, entra; o 150 descartado não').toEqual([170, 140])
+  expect(i.deduzido!.prsAbertos).toEqual([170, 140])
+  const semCampo = DD({ F1: { etapa: 'merge', prs: [170], prsAbertos: [170], parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
+  expect(montaDD([docF('F1', { etapa: 'merge', prs: [150, 170, 140], historico: [{ etapa: 'merge', em: antes }] })], semCampo)[0]!.prs, 'deduzido.json antigo: o filtro por número').toEqual([170])
+  const vazio = DD({ F1: { etapa: 'execucao', prs: [], prsAbertos: [], prsMergeados: [], prsDescartados: [150], parado: false, fontes: { etapa: 'gh', prs: 'gh' } } })
+  const novo = montaDD([docF('F1', { etapa: 'execucao', prs: [150, 171], historico: [{ etapa: 'execucao', em: antes }] })], vazio)[0]!
+  expect(novo.prs, 'batida sem PR: o novo entra sem troca de etapa, o descartado fica fora').toEqual([171])
+  expect(D.textoDoPr(novo)?.t).toBe('#171')
+})
