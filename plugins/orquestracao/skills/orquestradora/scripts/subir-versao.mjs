@@ -21,8 +21,17 @@ function recusa(motivo) {
   process.exitCode = 1;
 }
 
+const USO = 'uso: subir-versao [--seco] [--empurrar] [--destacado] [--por-dia] [--forcar] [--base <branch>] | --help';
+const BOOLEANAS = ['--seco', '--empurrar', '--destacado', '--por-dia', '--forcar'];
+
 function main() {
   const args = process.argv.slice(2);
+  // F433: opção que o script não conhece nunca vira subida real (o `--help` gravou o commit de versão na main)
+  if (args.includes('--help') || args.includes('-h')) { process.stdout.write(`${USO}\n`); return; }
+  for (let k = 0; k < args.length; k++) {
+    if (args[k] === '--base') { k++; continue; }
+    if (!BOOLEANAS.includes(args[k])) { recusa(`opção desconhecida: ${args[k]}; ${USO}`); return; }
+  }
   const seco = args.includes('--seco');
   const empurrar = args.includes('--empurrar');
   const destacado = args.includes('--destacado');
