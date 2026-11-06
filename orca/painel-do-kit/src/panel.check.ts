@@ -62,7 +62,7 @@ const doOutroProjeto: Pergunta[] = [
 const semProjeto: Pergunta = { ...abertas[1], id: 'Q1075', projeto: null, item: null, titulo: 'Qual fuso mostrar nos horários do relatório?', caso: 'Hoje sai em UTC e a equipe lê em São Paulo.', recomendacao: 'São Paulo.' }
 const sessao = (item: string, titulo: string, extra: Partial<Sessao> = {}): Sessao => ({
   item, titulo, nome: `${item} · ${titulo}`, projeto: 'kit-de-orquestracao', etapa: 'execucao', estado: 'trabalhando', subEtapa: 'execucao',
-  tipoDeParada: null, motivo: null, prNaFila: null, posicaoNaFila: null, foraDaFila: false, desdeEm: iso(12 * MIN), agora: null, notaEm: null,
+  tipoDeParada: null, tipoDeEspera: null, motivo: null, prNaFila: null, posicaoNaFila: null, foraDaFila: false, desdeEm: iso(12 * MIN), agora: null, notaEm: null,
   rodando: false, perguntas: [], prs: { abertos: [], mergeados: [] }, fatia: null, todasFeitas: false, etapas: [], feitasJuntas: 0, maisBolinhas: 0,
   dependeDe: [], ...extra,
 })
@@ -93,6 +93,15 @@ const kit: GrupoDeSessoes = {
     sessao('F452', 'Aba nova "Sessões" no Orca', { estado: 'validando', etapa: 'validacao', agora: 'rodando o validador', notaEm: iso(4 * MIN), desdeEm: iso(4 * MIN), etapas: esteira(2) }),
   ],
 }
+// F470: a dona que roda no Orca (`rodando`) e o item parado esperando outro item, com o motivo.
+const kitComEspera: GrupoDeSessoes = {
+  projeto: 'kit-de-orquestracao', filaIlegivel: false, sessoes: [
+    sessao('F443', 'Rodapé do painel com a versão', { estado: 'parada', tipoDeParada: 'sem-movimento', desdeEm: iso(90 * MIN), etapas: esteira(1) }),
+    sessao('F444', 'Resumo da manhã', { estado: 'esperando', motivo: 'pausado para trocar de conta', desdeEm: iso(25 * MIN), etapas: esteira(1) }),
+    sessao('F441', 'Migração do site inteiro no motor novo', { agora: 'segue com a fatia 8', notaEm: iso(3 * MIN), desdeEm: iso(3 * MIN), rodando: true, etapas: esteira(1) }),
+    sessao('F442', 'Checkout e frete no motor novo', { estado: 'esperando', tipoDeEspera: 'item', motivo: 'aguarda o F462 mergear', desdeEm: iso(2 * H), etapas: esteira(1) }),
+  ],
+}
 const sessoes = (v: Partial<VistaDasSessoes> = {}): VistaDasSessoes =>
   ({ projetos: [izanagi, kit], paradas: 3, ilegiveis: 0, batidaEm: iso(MIN), erro: null, lidoEm: AGORA - 20_000, ...v })
 const semSessoes = sessoes({ projetos: [], paradas: 0 })
@@ -108,6 +117,7 @@ export default defineCheck({
   'entregas com a caixa fora': { requests: { 'kit.ler': leitura({ entregas: entregas.filter((e) => e.origem === 'painel'), erroDaCaixa: 'o Orca não respondeu à leitura da caixa' }) }, persisted: { plugin: { secao: 'entregas' } } },
   sessoes: { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) } },
   'sessoes com versao nova do kit': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes(), atualizacao: [{ nome: 'orquestracao', instalada: '0.1.108', publicada: '0.1.109' }, { nome: 'painel-sessoes', instalada: '0.9.20', publicada: '0.9.21' }] }) } },
+  'sessoes esperando item': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ projetos: [kitComEspera], paradas: 2 }) }) } },
   'sessoes (claro)': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) }, theme: 'light' },
   'sessoes com o estado velho': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ batidaEm: iso(40 * MIN), projetos: [{ ...kit, filaIlegivel: true }] }) }) } },
   'sessoes vazias': { requests: { 'kit.ler': leitura() } },

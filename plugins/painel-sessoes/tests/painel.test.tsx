@@ -1234,6 +1234,24 @@ test('espera: item final não a guarda e item travado não a mostra (trava vence
   expect(selo.source).not.toMatch(/espera o gate/)
 })
 
+// F470: a espera por outro item (`motivo: 'item'`) chega ao pane, e o item sem dona que a tem não é cobrado ("Pedir dona").
+test('espera por item: o pane a guarda e o item sem dona e sem gente não pede dona', () => {
+  const itens = montarItens(
+    [docF('F1', { etapa: 'execucao', espera: { motivo: 'item', texto: 'aguarda o F462 mergear' } }), docF('F2', { etapa: 'execucao' })],
+    TEMAS_T,
+    [] as never,
+    undefined,
+    [],
+    AGORA,
+  )
+  const por = Object.fromEntries(itens.map(i => [i.id, i]))
+  expect(itens.length, 'os dois itens vieram').toBe(2)
+  expect(por.F1!.espera, 'a espera por item chega').toEqual({ motivo: 'item', texto: 'aguarda o F462 mergear' })
+  expect(por.F2!.espera, 'contraste: sem a espera, nada').toBeUndefined()
+  expect(R.papelQueFalta(por.F1!), 'esperar outro item não é item sem dona').toBeUndefined()
+  expect(R.papelQueFalta(por.F2!), 'contraste: sem a espera, falta a dona').toBe('dona')
+})
+
 test('com botões, o filete do item vem depois deles', () => {
   const sem = itemSvg(360, { ...itemBase, com: [] }, AGORA, { filete: false })
   const com = itemSvg(360, { ...itemBase, com: [] }, AGORA)

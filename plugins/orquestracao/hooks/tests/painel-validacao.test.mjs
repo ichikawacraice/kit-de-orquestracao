@@ -311,5 +311,18 @@ caso('A1b/R1/R3: nota e atualizadoEm não apagam a prova nem mexem no respondida
   igual(dado().respondidaPor, 'painel', 'apagou sem motivo'); igual(dado().respondidaEm, RESP.respondidaEm, 'o respondidaEm andou');
 });
 
+// F470: item parado de propósito esperando OUTRO item ou PR grava `espera: {motivo:'item', texto}`; a lista de motivos segue fechada.
+caso('F470: espera.motivo "item" é aceito e o texto continua obrigatório; motivo fora da lista segue recusado', () => {
+  igual(painel('set', 'fila', 'F470', '{"titulo":"x","etapa":"execucao","tema":"editor"}').exit, 0, 'item base');
+  igual(painel('update', 'fila', 'F470', '{"espera":{"motivo":"item","texto":"aguarda o F462 mergear"}}').exit, 0, 'espera por item');
+  igual(JSON.parse(readFileSync(arq('fila', 'F470'), 'utf8')).data.espera.motivo, 'item', 'não gravou a espera');
+  for (const [espera, trecho] of [['{"motivo":"item","texto":""}', 'espera.texto'], ['{"motivo":"outro-item","texto":"x"}', 'espera.motivo']]) {
+    const r = painel('update', 'fila', 'F470', `{"espera":${espera}}`);
+    igual(r.exit, 1, `exit (${r.out})`);
+    ok(r.err.includes(trecho), `stderr sem "${trecho}": ${r.err}`);
+  }
+  igual(JSON.parse(readFileSync(arq('fila', 'F470'), 'utf8')).data.espera.texto, 'aguarda o F462 mergear', 'a recusa mexeu na espera');
+});
+
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

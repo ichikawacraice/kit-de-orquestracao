@@ -147,22 +147,29 @@ const regras = CONFERE_MEMBRO
 // F444 (ADR 0030, item 6): a batida e o `pode-reiniciar` leem a lista de workers do Orca (a vida da dona do Orca, a conta do
 // reinício) e o registro das sessões do Orca (orca-sessoes/); F447: o `orquestradora arquivar` lê a lista e chama o `orca`.
 const moduloOrca = DA_BATIDA || DO_REINICIO || DA_ORQUESTRADORA
-  ? await Promise.all([import(pathToFileURL(join(HOOKS_DIR, 'orca-workers.mjs')).href), import(pathToFileURL(join(HOOKS_DIR, 'orca-sessoes.mjs')).href)])
-    .then(([w, s]) => ({ ...w, ...s }))
+  ? await Promise.all([import(pathToFileURL(join(HOOKS_DIR, 'orca-workers.mjs')).href), import(pathToFileURL(join(HOOKS_DIR, 'orca-sessoes.mjs')).href), import(pathToFileURL(join(HOOKS_DIR, 'orca-agentes.mjs')).href)])
+    .then(([w, s, a]) => ({ ...w, ...s, ...a }))
   : null;
 // A lista uma vez por comando: null (sem orca), { erro } ou { workers }. Falhar ao chamar é erro (falha fechada), nunca "sem orca".
 function listaDoOrca() {
   try { return moduloOrca.workersDoOrca(); } catch (e) { return { erro: `orca worker-list: ${e?.message || e}` }; }
 }
-// A vida de cada dona do Orca dos itens: id → { viva: true|false|null, cwd }. null = fora da vista (sem a lista, sem registro).
-function vidaDasDonasDoOrca(itens, lista) {
+// F470: o estado dos agentes do Orca (`orca worktree ps`), uma vez por comando: null (sem orca), { erro } ou { agentes }. Falhar aqui
+// só tira o "rodando" (ninguém roda sem a lista); não derruba a batida.
+function agentesDoOrcaUmaVez() {
+  try { return moduloOrca.agentesDoOrca(); } catch (e) { return { erro: `orca worktree ps: ${e?.message || e}` }; }
+}
+// A vida de cada dona do Orca dos itens: id → { viva: true|false|null, rodando: true|false|null, cwd }. null = fora da vista (sem a
+// lista, sem registro). `rodando` (F470) vem do agente da dona em `worktree ps`: só conta com a dona viva.
+function vidaDasDonasDoOrca(itens, lista, agentes = null) {
   const vidas = new Map();
   for (const [, d] of itens) {
     for (const id of [d?.donoLocalId, ...(Array.isArray(d?.com) ? d.com.map((c) => c?.localId) : [])]) {
       if (typeof id !== 'string' || !id.startsWith('orca_session_id:') || vidas.has(id)) continue;
       let reg = null;
       try { reg = moduloOrca.lerSessaoDoOrca(id); } catch { /* sem registro: fora da vista */ }
-      vidas.set(id, { viva: moduloOrca.vidaDoRegistro(reg, lista), cwd: reg?.cwd ?? null });
+      const viva = moduloOrca.vidaDoRegistro(reg, lista);
+      vidas.set(id, { viva, rodando: viva === false ? false : moduloOrca.rodandoDoRegistro(id, agentes), cwd: reg?.cwd ?? null });
     }
   }
   return vidas;
@@ -234,7 +241,8 @@ const MOTIVOS_DA_TRAVA = new Set([...MOTIVOS]);
 const DONOS_ANTIGOS = ['dono', 'dona', 'membro', 'executora'];
 // Só `com add|del` grava `com`: o símbolo não atravessa JSON, então um batch não o forja.
 const VIA_COM = Symbol('via-com');
-const MOTIVOS_DA_ESPERA = ['operador', 'gate'];
+// `item` (F470): parada de propósito esperando OUTRO item ou PR; a aba mostra Esperando com o texto e a batida não cobra.
+const MOTIVOS_DA_ESPERA = ['operador', 'gate', 'item'];
 const LOCAL_ID = /^local_[0-9a-f-]{36}$/;
 // F439 (ADR 0030): o endereço da sessão é o `local_…` do app ou o `orca_session_id:<id>` do Orca; o formato mora em
 // hooks/anfitriao.mjs. Sem o módulo (a cópia do script solta numa pasta sem `hooks/`), só o do app.
@@ -1768,7 +1776,7 @@ function comandoBatidaDeLeitura(args) {
   if (antes) return { gravado: false, pulou: antes };
   const orca = listaDoOrca();
   if (orca?.erro) process.stderr.write(`batida --leitura: a lista de workers do Orca falhou; as donas do Orca ficam fora da vista: ${orca.erro}\n`);
-  const vidasDoOrca = vidaDasDonasDoOrca(itensVivos(), orca);
+  const vidasDoOrca = vidaDasDonasDoOrca(itensVivos(), orca, agentesDoOrcaUmaVez());
   const deduzidos = coletarDeduzidos({ itens: itensVivos(), linhas: linhasDosWorkers(orca), projetoDe: projetoDeUmaLinha(), slug: (p) => arq.slugDoProjeto(p), agoraMs, prazoMin: prazoEmMin([]), donaDoOrca: (id) => vidasDoOrca.get(id) ?? null, semListaDoApp: true });
   return comTrava(() => {
     const depois = deduzidoFresco(agoraMs);
@@ -1796,7 +1804,7 @@ function comandoBatida(args) {
   // F444: a lista do Orca se lê uma vez, fora da trava; a dona do Orca que entrou depois dela fica fora da vista nesta batida
   const orca = listaDoOrca();
   if (orca?.erro) process.stderr.write(`batida: a lista de workers do Orca falhou; as donas do Orca ficam fora da vista: ${orca.erro}\n`);
-  const vidasDoOrca = vidaDasDonasDoOrca(itensVivos(), orca);
+  const vidasDoOrca = vidaDasDonasDoOrca(itensVivos(), orca, agentesDoOrcaUmaVez());
   let deduzidos = new Map();
   if (process.env.KIT_ESTADO_DEDUZIDO !== 'off') {
     try { deduzidos = coletarDeduzidos({ itens: itensVivos(), linhas, projetoDe: projetoDeUmaLinha(), slug: (p) => arq.slugDoProjeto(p), agoraMs, prazoMin, donaDoOrca: (id) => vidasDoOrca.get(id) ?? null }); } catch (e) { process.stderr.write(`batida: não deduzi o estado dos itens: ${e?.message || e}\n`); }

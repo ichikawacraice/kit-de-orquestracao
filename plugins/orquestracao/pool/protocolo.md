@@ -114,10 +114,17 @@ Abaixo, `main` é a branch de produção e `develop` a de integração (os nomes
 - Item numa etapa de trabalho **sem dona e sem ninguém no `com`**, sem `espera` nem `trava`, está *sem dona* desde que entrou na etapa (`painel list fila sem-dona`).
 - **A cobrança:** o ritual da orquestradora (`orquestradora-ritual.mjs`) recusa o fim do turno com item sem dona há `ESPERA_MIN` (padrão 5) minutos, sem `start_session` no turno; gravar o dono ou mandar mensagem que o cite também satisfaz. Com o modo ausente ligado não se cobra. O pane tem o botão "Pedir dona" ([a regra e o pedido](referencia.md#sem-dona)).
 
+<a id="a-espera"></a>
+## A espera do item
+- **Quando gravar:** item parado de propósito, sem trabalho a fazer agora. `painel update fila F<n> '{"espera":{"motivo":"…","texto":"…"}}'`; `null` desfaz quando a espera acaba. O `texto` é obrigatório e aparece na aba, em palavras de quem está de fora.
+- **`motivo: "item"`:** espera **outro item ou PR** (ex.: `{"motivo":"item","texto":"aguarda o F462 mergear"}`). A aba mostra *Esperando* com o texto, abaixo de quem trabalha, e não conta no trilho: não há nada a decidir. Não use `dependeDe` para isso: ele ordena o merge de dona que segue trabalhando.
+- **`motivo: "operador"`:** espera decisão ou gesto da pessoa (a aba mostra *Espera você*). **`motivo: "gate"`:** espera o gate da fila de merge.
+- **Nenhum dos três é cobrado pela batida** (nem a cutucada, nem a retomada, nem o `--anotar`); `trava` também não. Ao voltar a trabalhar, a dona limpa a espera.
+
 <a id="a-fila"></a>
 ## A fila
 - **Criar:** `proximo-item` e `painel set fila F<n> '{…}'` com `titulo` (sem `F<n>`), `etapa` e `tema` ([campos e recusas](referencia.md#a-fila)).
-- **`com`** (quem trabalha agora) só muda por `painel com add|del`. **`espera`** (`{motivo, texto}`) é o item parado num gesto de fora; **`trava`**, o que quebrou ou bloqueia. **`painel soltar <F<n>> "<motivo>"`** é o único caminho de volta à fila sem dona.
+- **`com`** (quem trabalha agora) só muda por `painel com add|del`. **`espera`** (`{motivo, texto}`, [os três motivos](#a-espera)) é o item parado num gesto de fora; **`trava`**, o que quebrou ou bloqueia. **`painel soltar <F<n>> "<motivo>"`** é o único caminho de volta à fila sem dona.
 - **O handoff do item** é o estado que sobrevive a uma limpeza de contexto:
 <!-- regra-do-handoff-do-item: início (texto idêntico em handoff-de-sessao/SKILL.md e pool/protocolo.md; um teste compara) -->
 - **Um arquivo por item, reescrito a cada vez.** O handoff do item é `~/.claude/orquestracao/pool/handoffs/F<n>.md`. Quem o grava (a dona antes de limpar o contexto, ou quem solta o item) **reescreve o arquivo inteiro** com o estado de agora, no molde da skill `handoff-de-sessao`: nunca acrescenta uma passagem nova ao fim. "Decidido" e "Tentado e falhou" levam tudo o que ainda vale, das vezes anteriores também, uma linha por item; o que deixou de valer sai. Plano, laudo e briefing do item podem morar em `F<n>-<slug>.md` ao lado.

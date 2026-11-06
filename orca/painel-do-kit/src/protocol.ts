@@ -66,6 +66,8 @@ export type Sessao = {
   subEtapa: string | null
   /** Na parada: o motivo da trava (conflito, gate-vermelho, outra), falhou (a sessão do Orca), sem-dona ou sem-movimento. */
   tipoDeParada: string | null
+  /** No esperando: `item` quando a sessão espera outro item ou PR (nada a decidir pela pessoa); null quando quem espera é a pessoa. */
+  tipoDeEspera: 'item' | null
   /** O texto da trava ou da espera. */
   motivo: string | null
   /** O PR do item que está na fila (ou fora dela, no merge). */
@@ -79,7 +81,7 @@ export type Sessao = {
   agora: string | null
   /** A idade da nota (`agora`). */
   notaEm: string | null
-  /** A sessão do app está rodando agora (a do Orca não diz). */
+  /** A sessão está rodando agora: o app diz `isRunning`; no Orca a batida deduz pelo estado do agente em `worktree ps` (F470). */
   rodando: boolean
   perguntas: { id: string; titulo: string }[]
   prs: { abertos: number[]; mergeados: number[] }

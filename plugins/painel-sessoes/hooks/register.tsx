@@ -293,7 +293,7 @@ function montarTodos(
     })
     const esp = d.data.espera as Record<string, unknown> | null | undefined
     const esperaGravada: LinhaItem['espera'] =
-      (esp?.motivo === 'operador' || esp?.motivo === 'gate') && texto(esp.texto) ? { motivo: esp.motivo, texto: texto(esp.texto) as string } : undefined
+      (esp?.motivo === 'operador' || esp?.motivo === 'gate' || esp?.motivo === 'item') && texto(esp.texto) ? { motivo: esp.motivo, texto: texto(esp.texto) as string } : undefined
     const historico = Array.isArray(d.data.historico) ? (d.data.historico as Array<Record<string, unknown>>) : []
     const feitoEm = texto(d.data.feitoEm)
     const final = etapaCrua === 'feito' || etapaCrua === 'descartado'
