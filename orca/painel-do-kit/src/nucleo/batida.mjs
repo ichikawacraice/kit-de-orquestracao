@@ -5,6 +5,7 @@
 // Aqui fica o que é puro ou só lê arquivo: quando rodar, qual script e com que ambiente.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 /** De quanto em quanto tempo (min), o mesmo intervalo da batida do mod e do pulo do `batida --leitura`. */
@@ -27,19 +28,22 @@ export function precisaDaBatida(painelDir, agoraMs) {
 }
 
 /**
- * O `painel.mjs` que a batida roda: `PAINEL_DO_KIT_SCRIPT` (teste), senão o do plugin `orquestracao` instalado no escopo do
- * usuário (`~/.claude/plugins/installed_plugins.json`, como o mod acha o dele). Sem ele, ou com o caminho sumido: null.
+ * O `painel.mjs` que a batida roda: `PAINEL_DO_KIT_SCRIPT` (teste), senão o núcleo ao lado de orca/ neste
+ * repositório; fora dele, o plugin orquestracao instalado na conta serve de compatibilidade. Sem nenhum dos dois: null.
  */
-export function scriptDaBatida({ env = process.env, home = homedir() } = {}) {
+export function scriptDaBatida({ env = process.env, home = homedir(), raizDoKit = fileURLToPath(new URL('../../../../', import.meta.url)) } = {}) {
   if (env.PAINEL_DO_KIT_SCRIPT) return env.PAINEL_DO_KIT_SCRIPT;
+  const local = raizDoKit ? join(raizDoKit, 'plugins', 'orquestracao', 'skills', 'orquestradora', 'scripts', 'painel.mjs') : null;
+  if (local && existsSync(local)) return local;
   try {
     const reg = JSON.parse(readFileSync(join(home, '.claude', 'plugins', 'installed_plugins.json'), 'utf8'));
     const chave = Object.keys(reg?.plugins ?? {}).find((k) => k.startsWith('orquestracao@'));
     const lista = chave ? reg.plugins[chave] : null;
     const e = Array.isArray(lista) ? lista.find((x) => x?.scope === 'user' && typeof x.installPath === 'string') : null;
     const f = e ? join(e.installPath, 'skills', 'orquestradora', 'scripts', 'painel.mjs') : null;
-    return f && existsSync(f) ? f : null;
-  } catch { return null; }
+    if (f && existsSync(f)) return f;
+  } catch { /* ORCA + Codex não precisa de registro de plugins Claude */ }
+  return null;
 }
 
 /**

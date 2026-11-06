@@ -6,6 +6,16 @@ Fonte única da equivalência (ADR 0030, item 2). As regras do kit são as mesma
 ## Em que anfitrião estou
 O `hooks/anfitriao.mjs` decide: `KIT_ANFITRIAO` no ambiente, depois a chave `anfitriao` do `.claude/kit.json` (padrão `auto`), depois os sinais (`CLAUDE_CODE_HOST_SESSION_ID` → `claude-desktop`; `ORCA_AGENT_SESSION_ID` ou `ORCA_STRUCTURED_SESSION=1` → `orca`; nenhum → `terminal`). O resumo do início já vem na variante do anfitrião; nenhum texto injetado manda usar ferramenta que o anfitrião não tem.
 
+## Claude e Codex
+
+A identidade e os comandos de mensagens valem para os dois agentes. Os exemplos
+abaixo com `--agent claude` e Sonnet ilustram o Claude. Para Codex, use
+`--agent codex`, com `--model` disponível na instalação e `--effort` explícitos;
+não passe nomes de modelos Claude. Preserve o agente do item na devolução.
+A guarda do Orca confere modelo, esforço e isolamento para ambos quando
+executada; a instalação do plugin Claude não ativa hooks no runtime Codex.
+Veja [a entrada compartilhada](../../../docs/guia/claude-e-codex.md).
+
 <a id="tabela"></a>
 ## A tabela (app desktop → Orca)
 Os comandos abaixo são exemplos completos e passam pela trava do `orca` (`hooks/trava-do-orca.mjs`; um teste confere). `$EU` é o seu `orca_session_id:<ORCA_AGENT_SESSION_ID>`.

@@ -4,7 +4,7 @@ As seções marcadas `kit:` são do kit de orquestração: o `kit atualizar` tro
 
 <!-- kit:projeto v1 -->
 ## O projeto
-Kit de orquestração de sessões do Claude Code (uma sessão dona por item, travas por hook, painel, fila de merge, teto de testes), instalável em qualquer projeto. Marketplace `ichikawa-kit` (nome de exibição "Ichikawa's Kit"; até o F344, `kit-de-orquestracao`: o código lê os dois nomes e grava só o novo) no repositório `kit-de-orquestracao`. Dois plugins em `plugins/` (`orquestracao`, `painel-sessoes`) e um CLI em `cli/` (`npx -y github:ichikawacraice/kit-de-orquestracao`). Decisão: `docs/adr/0001-*`; planos em `docs/planos/`.
+Kit de orquestração de sessões Claude e Codex na ORCA (uma sessão dona por item, travas por hook, painel, fila de merge, teto de testes), instalável em qualquer projeto. Marketplace `ichikawa-kit` (nome de exibição "Ichikawa's Kit"; até o F344, `kit-de-orquestracao`: o código lê os dois nomes e grava só o novo) no repositório `kit-de-orquestracao`. Dois plugins em `plugins/` (`orquestracao`, `painel-sessoes`) e um CLI em `cli/` (`npx -y github:ichikawacraice/kit-de-orquestracao`). Decisão: `docs/adr/0001-*`; planos em `docs/planos/`.
 
 Regras do código (valem para toda fatia):
 - Node ≥ 20, ESM, só módulos nativos: o kit não traz dependência npm. Testes em `node:test` (`node --test`), nunca vitest. A exceção é a pasta `design-system/` (ADR 0020): lá valem o `package.json`, o `CLAUDE.md` e o gate dela (`cd design-system && npm ci && node ../gate/com-fichas.mjs --quero 4 -- npm test`), e quem a muda cola a saída no PR.

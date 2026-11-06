@@ -50,13 +50,13 @@ test('o script da batida: a variável de teste, senão o painel.mjs do plugin or
     'outro@x': [{ scope: 'user', installPath: '/nao' }],
     'orquestracao@ichikawa-kit': [{ scope: 'project', projectPath: '/p', installPath: '/projeto' }, { scope: 'user', installPath: p }],
   } }));
-  assert.equal(scriptDaBatida({ env: {}, home: h }), join(p, 'skills', 'orquestradora', 'scripts', 'painel.mjs'));
+  assert.equal(scriptDaBatida({ env: {}, home: h, raizDoKit: null }), join(p, 'skills', 'orquestradora', 'scripts', 'painel.mjs'));
 });
 
 test('sem o plugin no escopo do usuário, ou com o caminho sumido, não há script (a aba não roda nada)', () => {
-  assert.equal(scriptDaBatida({ env: {}, home: home() }), null, 'sem installed_plugins.json');
-  assert.equal(scriptDaBatida({ env: {}, home: home({ plugins: { 'orquestracao@ichikawa-kit': [{ scope: 'project', installPath: '/p' }] } }) }), null);
-  assert.equal(scriptDaBatida({ env: {}, home: home({ plugins: { 'orquestracao@ichikawa-kit': [{ scope: 'user', installPath: '/nao/existe' }] } }) }), null);
+  assert.equal(scriptDaBatida({ env: {}, home: home(), raizDoKit: null }), null, 'sem installed_plugins.json');
+  assert.equal(scriptDaBatida({ env: {}, raizDoKit: null, home: home({ plugins: { 'orquestracao@ichikawa-kit': [{ scope: 'project', installPath: '/p' }] } }) }), null);
+  assert.equal(scriptDaBatida({ env: {}, raizDoKit: null, home: home({ plugins: { 'orquestracao@ichikawa-kit': [{ scope: 'user', installPath: '/nao/existe' }] } }) }), null);
 });
 
 test('o ambiente da batida: roda como Node no binário do Orca e grava onde a aba lê', () => {
@@ -81,4 +81,22 @@ test('o relógio confere a cada minuto e o aviso de estado velho só sai depois 
   const velha = readFileSync(new URL('panel.tsx', raiz), 'utf8').match(/const BATIDA_VELHA_MS = (\d+) \* 60_000/);
   assert.ok(velha, 'achei o limiar do aviso na aba');
   assert.ok(Number(velha[1]) > BATIDA_MIN + TOQUE_MS / MIN, `aviso aos ${velha[1]} min tem de passar da cadência (${BATIDA_MIN} min + 1 toque)`);
+});
+
+
+test('ORCA + Codex: sem registro Claude usa o núcleo do repositório', () => {
+  const script = scriptDaBatida({ env: {}, home: home() });
+  assert.ok(script, 'o painel precisa funcionar sem installed_plugins.json');
+  assert.ok(script.endsWith('/plugins/orquestracao/skills/orquestradora/scripts/painel.mjs'));
+});
+
+
+test('o núcleo desta release tem prioridade sobre um plugin Claude instalado antigo', () => {
+  const h = home(); const legado = instalacao(h);
+  writeFileSync(join(h, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ plugins: {
+    'orquestracao@ichikawa-kit': [{ scope: 'user', installPath: legado }],
+  } }));
+  const atual = scriptDaBatida({ env: {}, home: h });
+  assert.ok(atual);
+  assert.notEqual(atual, join(legado, 'skills', 'orquestradora', 'scripts', 'painel.mjs'));
 });

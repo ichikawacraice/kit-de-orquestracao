@@ -14,6 +14,8 @@ Abaixo, `kit` abrevia essa linha.
 
 | Comando | O que faz |
 |---|---|
+| `kit contexto` | Mostra o manual e o catálogo; aceita um caminho para ler a instrução original |
+| `kit executar` | Executa um comando do plugin com os argumentos seguintes, sem depender do PATH do Claude |
 | `kit ajuda` | Mostra a lista de subcomandos e flags |
 | `kit --version` | Mostra a versão do CLI |
 | `kit iniciar` | Prepara um projeto **sem** `CLAUDE.md`: cria o `CLAUDE.md`, o gate, a guarda, o `.claude/kit.json` e o lock, e troca o `npm test` pelo gate. Recusa se já há `CLAUDE.md` |
@@ -79,3 +81,11 @@ As skills do kit também se chamam por barra quando você quiser forçar uma: `/
 - *"você é a orquestradora"* — a sessão assume a orquestração do projeto.
 - *"Q12 sim"*, *"Q12 não, faz X"*, *"Q12 adiar"* — resposta a uma pergunta.
 - *"handoff"*, *"salva onde parei"* — grava o estado num arquivo para outra sessão (ou a mesma, depois de limpar) continuar.
+
+## Entrada para Codex
+
+`kit contexto [caminho]` mostra o manual e lê skills/agentes do catálogo.
+`kit executar <comando> [argumentos]` chama os comandos do plugin pelo CLI,
+inclusive no Codex sem o PATH do Claude. A entrada `AGENTS.md` é criada na
+instalação/atualização, preservando arquivos do projeto. Veja [Claude e
+Codex na ORCA](claude-e-codex.md) para modelos, identidade e limites dos hooks.

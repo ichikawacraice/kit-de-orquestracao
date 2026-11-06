@@ -5,6 +5,7 @@
 //   - `orca orchestration worker-start --agent claude`: modelo, esforço e worktree (current/active/ausente = a pasta de quem chama);
 //   - `orca agent launch --agent claude`: modelo, esforço e a pasta (sempre uma worktree que já existe; padrão, a de quem chama);
 //   - `orca worktree create --agent claude`: só modelo e esforço (já cria checkout novo).
+// Codex também exige modelo/esforço explícitos e isolamento, sem aplicar a política de modelos Claude.
 // Passam: `--terminal` (worker que já tem modelo), `--agent` de outro agente (vai ao log), `worktree create` sem `--agent`, `--help`.
 // Sem texto legível (`--task`, arquivo ausente, stdin de pipe) não há papel, gatilho nem `Só leitura:`: recusa o Opus e a pasta de
 // quem chama; o resto passa com `passou-sem-ler-spec`. A recusa traz o comando corrigido. Erro do próprio hook DEIXA PASSAR.
@@ -307,7 +308,7 @@ function decidirUm(o, { cwd, env }) {
   if (o.sub === 'worker-start' && b.terminal !== undefined) return { recusa: null, desfecho: 'passou-terminal', detalhe: base };
   const agente = typeof b.agent === 'string' ? b.agent : (o.sub === 'worktree-create' ? null : 'claude');
   if (!agente) return { recusa: null, desfecho: null };
-  if (agente.toLowerCase() !== 'claude') return { recusa: null, desfecho: 'outro-agente', detalhe: `${base} agent=${agente}` };
+  if (!['claude', 'codex'].includes(agente.toLowerCase())) return { recusa: null, desfecho: 'outro-agente', detalhe: `${base} agent=${agente}` };
 
   const texto = textoDoPedido(o, cwd);
   const legivel = texto !== null;
@@ -325,10 +326,12 @@ function decidirUm(o, { cwd, env }) {
 
   // O modelo sugerido: o que veio, quando serve ao papel; senão Sonnet.
   let motivoModelo = recusaDoModelo(id, { model, effort, prompt: legivel ? texto : '' }, { papel, sintaxe: 'orca' });
-  if (!legivel && ml.includes('opus')) {
+  const codex = agente.toLowerCase() === 'codex';
+  if (codex) motivoModelo = !model || !effort ? 'worker Codex exige --model e --effort explícitos.' : /sonnet|opus|haiku/.test(ml) ? 'modelo Claude não pode ser usado com --agent codex.' : null;
+  if (!codex && !legivel && ml.includes('opus')) {
     motivoModelo = 'worker em Opus sem texto legível do pedido (`--task`, arquivo ausente ou stdin de pipe): sem texto não há a linha `Gatilho do Opus:`. Ponha o pedido em `--spec`/`--spec-file` com a linha, ou abra em `--model sonnet --effort medium`.';
   }
-  const modelOk = model && (ml.includes('sonnet') || (ml.includes('haiku') && papel !== 'dona') || (ml.includes('opus') && legivel && gatilhoDoOpus(texto)));
+  const modelOk = codex ? model && !/sonnet|opus|haiku/.test(ml) : model && (ml.includes('sonnet') || (ml.includes('haiku') && papel !== 'dona') || (ml.includes('opus') && legivel && gatilhoDoOpus(texto)));
   const sugModel = modelOk ? model : 'sonnet';
   const sugEffort = modelOk && effort ? effort : esforcoDe(sugModel.toLowerCase());
 
@@ -339,14 +342,15 @@ function decidirUm(o, { cwd, env }) {
       ? `o seletor \`--worktree ${seletor}\` não se resolve para outra worktree e conta como a pasta de quem chama${/^(name|identity|issue):/.test(seletor) ? ' (o hook não lê o nome de exibição, a identidade nem a issue do Orca; para abrir na worktree do item, use `--worktree path:<pasta>` ou `branch:<branch>`)' : ''}`
       : 'abre na pasta de quem chama';
     const porque = legivel ? 'sem a linha `Só leitura: <motivo>` no texto do pedido' : 'e sem texto legível do pedido não há como ver a linha `Só leitura:`';
-    motivos.push(`${o.sub === 'agent-launch' ? 'agent launch' : 'worker-start'} ${onde}, ${porque}: dois Claudes escrevendo na mesma worktree se atropelam.`);
+    motivos.push(`${o.sub === 'agent-launch' ? 'agent launch' : 'worker-start'} ${onde}, ${porque}: dois agentes escrevendo na mesma worktree se atropelam.`);
   }
   if (!motivos.length) {
     if (!legivel) return { recusa: null, desfecho: 'passou-sem-ler-spec', detalhe };
-    const desfecho = ml.includes('opus') ? 'orca-abriu-opus' : ml.includes('haiku') ? 'orca-abriu-haiku' : 'orca-abriu-sonnet';
+    const desfecho = codex ? 'orca-abriu-codex' : ml.includes('opus') ? 'orca-abriu-opus' : ml.includes('haiku') ? 'orca-abriu-haiku' : 'orca-abriu-sonnet';
     return { recusa: null, desfecho, detalhe: ml.includes('opus') ? `${detalhe} gatilho=${gatilhoDoOpus(texto)}` : detalhe };
   }
 
+  if (codex) return { recusa: `${motivos.join(' ')} Use --agent codex com modelo disponível na ORCA, --effort explícito e --worktree new-child (ou declare Só leitura: <motivo>).`, desfecho: 'recusou-codex', detalhe };
   let sugestao;
   if (o.sub === 'agent-launch' && precisaPasta) {
     const prompt = o.crus.find((c) => c.nome === 'prompt');

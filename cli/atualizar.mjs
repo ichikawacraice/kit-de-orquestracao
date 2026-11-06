@@ -1,4 +1,5 @@
 // `kit atualizar [--simular]`: troca pela versão nova o que o projeto não editou; o que foi editado vira conflito com o diff.
+import { planejarEntrada } from './agentes.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
@@ -32,6 +33,7 @@ export function atualizar({ destino, versao, simular = false, trocarTest = false
     else conflito(`${rel} editado à mão — não troquei`, diffTexto(atual, novo, rel));
   }
 
+  planejarEntrada(destino, lock, mudancas, conflito);
   const modelo = blocosDoModelo();
   const claudeAtual = lerTexto(destino, 'CLAUDE.md');
   let claude = claudeAtual;

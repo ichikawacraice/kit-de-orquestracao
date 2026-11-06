@@ -234,3 +234,18 @@ MIT ([LICENSE](LICENSE)), com duas exceções no [NOTICE](NOTICE): a marca da em
 ## Para quem mexe no kit
 
 Regras do código e comandos em [`CLAUDE.md`](CLAUDE.md). O manual das sessões está em [`protocolo.md`](plugins/orquestracao/pool/protocolo.md) e as decisões de desenho nos [ADRs](docs/adr/README.md). Estudos, planos e o diário em [`docs/`](docs/README.md).
+
+## Claude e Codex na ORCA
+
+O kit oferece uma entrada `AGENTS.md` para Codex, com as mesmas regras de
+`CLAUDE.md`, e comandos independentes do PATH do plugin Claude:
+
+```bash
+node cli/kit.mjs contexto
+node cli/kit.mjs executar painel get
+```
+
+`kit iniciar`, `kit adotar` e `kit atualizar` criam a entrada quando ela não existe.
+Arquivos AGENTS.md preexistentes são preservados. Veja o [manual de Claude e
+Codex](docs/guia/claude-e-codex.md), incluindo a diferença entre instruções
+compartilhadas e hooks automáticos do runtime Claude.

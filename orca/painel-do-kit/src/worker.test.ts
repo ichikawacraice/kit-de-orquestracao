@@ -514,7 +514,7 @@ test('F469: kit.arquivar recusa lista vazia ou item que não é F<n> sem chamar 
   } finally { await w.dispose?.() }
 })
 
-test('F469: painel.mjs antigo (sem --concluidas) ou ausente: sem aptas e com o motivo, sem derrubar a aba', async () => {
+test('F469: script antigo informa falha; sem plugin Claude usa o núcleo local', async () => {
   const a = ambiente()
   a.respostaDoArquivar({ uso: true })
   const w = await mountWorker(main, { host: a.host })
@@ -531,6 +531,7 @@ test('F469: painel.mjs antigo (sem --concluidas) ou ausente: sem aptas e com o m
   const b = await mountWorker(main, { host: a.host })
   try {
     const r = await b.request('kit.concluidas', { forcar: true })
-    assert.match(r.erro ?? '', /não está instalado/)
+    assert.equal(r.erro, null, 'sem plugin Claude o núcleo local responde normalmente')
+    assert.deepEqual(r.aptas, [], 'painel temporário sem itens concluídos')
   } finally { await b.dispose?.() }
 })

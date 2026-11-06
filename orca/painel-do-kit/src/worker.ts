@@ -136,7 +136,7 @@ export default function activate(orca: OrcaWorkerApi): void {
   const rodarBatida = async () => {
     if (batendo || process.env.PAINEL_DO_KIT_BATIDA === 'off' || !precisaDaBatida(pasta(), Date.now())) return
     const script = scriptDaBatida()
-    if (!script) { orca.log('batida: o plugin orquestracao não está instalado no escopo do usuário'); return }
+    if (!script) { orca.log('batida: núcleo do kit não encontrado (repositório ou plugin orquestracao)'); return }
     batendo = true
     try {
       const saida = await new Promise<string>((resolve, reject) =>
@@ -160,7 +160,7 @@ export default function activate(orca: OrcaWorkerApi): void {
   // por concluída, então fica em cache de 2 min e uma por vez.
   const chamarPainel = (args: string[], prazoMs: number) => new Promise<{ json: Record<string, unknown> | null; erro: string | null }>((resolve) => {
     const script = scriptDaBatida()
-    if (!script) return resolve({ json: null, erro: 'o plugin orquestracao não está instalado no escopo do usuário' })
+    if (!script) return resolve({ json: null, erro: 'núcleo do kit não encontrado (repositório ou plugin orquestracao)' })
     execFile(process.env.PAINEL_DO_KIT_NODE || process.execPath, [script, ...args],
       { env: ambienteDaBatida(process.env), timeout: prazoMs, killSignal: 'SIGKILL', maxBuffer: 4 * 1024 * 1024 },
       (err, so, se) => {

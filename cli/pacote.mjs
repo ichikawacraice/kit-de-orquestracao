@@ -1,4 +1,5 @@
 // O que o kit põe num projeto e como: o plano é calculado em memória (iniciar, adotar e --simular usam o mesmo) e só então gravado.
+import { planejarEntrada } from './agentes.mjs';
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -604,6 +605,7 @@ export function planejar({ destino, perfil, trocarTest = false, nomeScript = 'te
 
   for (const m of modelosDeDoc.novos) mudancas.push({ arquivo: m.arquivo, antigo: null, novo: m.novo }); // por último: a ordem dos renames antigos não muda
   if (erros.length) return { erro: erros.join('; ') };
+  planejarEntrada(destino, lock, mudancas, (c) => conflitos.push(c), { recuperando });
   // hashes dos arquivos que o kit criou inteiros (o conteúdo novo)
   for (const rel of Object.keys(lock.arquivos)) if (lock.arquivos[rel] === null) lock.arquivos[rel] = sha256(mudancas.find((m) => m.arquivo === rel).novo);
   if (recuperando) {

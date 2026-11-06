@@ -108,12 +108,12 @@ test('worktree create --agent: só modelo e esforço; sem --agent passa', () => 
   assert.deepEqual(r.registros, []);
 });
 
-test('--terminal passa; --agent de outro agente passa e vai ao log; --help passa', () => {
+test('--terminal passa; --agent codex passa com modelo, esforço e isolamento; --help passa', () => {
   const t = passa('orca orchestration worker-start --terminal term_abc --spec "Devolução: conserte o teste."');
   assert.deepEqual(desfechos(t), ['passou-terminal']);
-  const c = passa('orca orchestration worker-start --agent codex --worktree current --spec "Faça X."');
-  assert.deepEqual(desfechos(c), ['outro-agente']);
-  assert.match(c.registros[0].detalhe, /codex/);
+  const c = passa('orca orchestration worker-start --agent codex --model modelo-codex --effort medium --worktree new-child --spec "Faça X."');
+  assert.deepEqual(desfechos(c), ['orca-abriu-codex']);
+  assert.match(c.registros[0].detalhe, /modelo-codex/);
   passa('orca orchestration worker-start --help');
 });
 

@@ -6,6 +6,7 @@ Para quem vai usar o kit num projeto e nunca o viu. Comece pelo primeiro dia; as
 |---|---|
 | [O primeiro dia](primeiro-dia.md) | Instalar, pôr o kit no projeto, declarar a orquestradora e pedir o primeiro item |
 | [O dia a dia](dia-a-dia.md) | Como pedir trabalho, responder às perguntas (Q-ID), usar o painel, sair com `/ausente`, limpar contexto e reiniciar o app |
+| [Claude e Codex na ORCA](claude-e-codex.md) | Entrada compartilhada, comandos e limites de cada runtime |
 | [Comandos](comandos.md) | O CLI `kit`, os comandos que o plugin põe no terminal das sessões e os comandos de barra |
 | [O que ligar e desligar](ligar-e-desligar.md) | Cada trava e opção: o que faz, quando incomoda, como desligar e o que se perde |
 | [Conflitos com outros plugins](conflitos.md) | Quando o kit convive com outros plugins, skills ou hooks seus |

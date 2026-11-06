@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { contexto, executar } from './agentes.mjs';
 import { adotar } from './adotar.mjs';
 import { atualizar } from './atualizar.mjs';
 import { doutor } from './doutor.mjs';
@@ -13,10 +14,10 @@ import { remover } from './remover.mjs';
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const versao = () => JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8')).version;
 
-const AJUDA = `kit — Ichikawa's Kit: orquestração de sessões do Claude Code
+const AJUDA = `kit — Ichikawa's Kit: orquestração de sessões do Claude e Codex
 
 uso:
-  kit --version                              mostra a versão
+  kit contexto [caminho]                     manual e catálogo compartilhado de skills/agentes\n  kit executar <comando> [argumentos]         comandos do plugin sem depender do Claude\n  kit --version                              mostra a versão
   kit ajuda                                  mostra esta ajuda
   kit iniciar [--perfil simples|pnpm-workspace] [--design <pasta do front>]
                                              prepara um projeto sem CLAUDE.md (gate, guarda, plugins, lock)
@@ -48,6 +49,12 @@ function main(argv) {
   const [cmd] = argv;
   if (cmd === '--version' || cmd === '-v') { process.stdout.write(`${versao()}\n`); return 0; }
   if (cmd === undefined || cmd === 'ajuda' || cmd === '--help' || cmd === '-h') { process.stdout.write(AJUDA); return 0; }
+  if (cmd === 'contexto' || cmd === 'executar') {
+    const r = cmd === 'contexto' ? contexto(argv[1]) : executar(argv[1], argv.slice(2));
+    if (r.saida) process.stdout.write(r.saida);
+    if (r.erro) process.stderr.write(`${r.erro}\n`);
+    return r.codigo;
+  }
   const ruim = flagDesconhecida(cmd, argv);
   if (ruim) { process.stderr.write(ruim); return 2; }
   if (cmd === 'iniciar') {
