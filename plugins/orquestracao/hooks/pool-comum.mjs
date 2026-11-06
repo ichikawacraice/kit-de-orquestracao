@@ -8,6 +8,7 @@ import { join, basename, dirname } from 'node:path';
 import { fechadasRecentes, slugDoProjeto } from '../skills/orquestradora/scripts/perguntas-arquivo.mjs';
 import { BASE } from './hooks-crewai-comum.mjs';
 import { registroDoOrca } from './orca-sessoes.mjs';
+import { textoDe, semLembretesNoInicio, ENVELOPE_DO_ORCA, PREAMBULO_DO_ORCA } from './varredura-entre-sessoes.mjs';
 
 export { BASE };
 const H = homedir();
@@ -339,16 +340,34 @@ export function origemDoTurno(transcriptPath) {
 // nele enfileiradas (`queued_command`, com a origem que o app lhes deu). Medido de 20/10 a 01/11 (docs/research/2026-11-01-travas-x-app.md):
 // o que o operador digita no meio de um turno de outra sessão chega só como `queued_command` `human`, e o aviso de fim de turno
 // marcado `human` é sempre o aviso pendente que o app cola na frente da mensagem do operador. null: transcript sem turno com origem.
-export function operadorNoTurno(transcriptPath) {
-  let origens = null;
+// `orca` (F445, o anfitrião é o Orca): o Orca não marca o operador. Medido nos transcripts dele em 06/11: todo turno abre com
+// `turnOrigin: 'sdk'` sem `origin` — o do operador, o do envelope de outra sessão (`──── From: …`), o da tarefa do coordenador
+// (preâmbulo `You are working inside Orca…`) e o resumo de compactação (`isCompactSummary`) —, e a mensagem enfileirada vem sem
+// origem. Ali, o `sdk` (ou a falta de origem) conta como o operador quando o texto, sem os lembretes do começo, não é vazio e
+// não abre com nenhuma das marcas de fora — e o turno não é o que abriu a sessão: o `--prompt` de `orca agent launch` e de
+// `orca worktree create --agent` chega cru, igual ao que o operador digitaria (a mensagem dele enfileirada nesse turno conta).
+// Fora do Orca o `sdk` segue sendo o aviso de fim de turno do app (F315).
+const DE_FORA_NO_ORCA = [ENVELOPE_DO_ORCA, PREAMBULO_DO_ORCA, /^<(?:cross-session-message|side-sessions-event|task-notification|command-[\w-]+)\b/,
+  /^This session is being continued\b/, /^(?:Task|Background) \(from the session that started/, /^The session "/,
+  /^I hit my usage limit while you were working/, /^The app was quit while you were working/];
+function doOperadorNoOrca(conteudo) {
+  const t = semLembretesNoInicio(textoDe(conteudo)).trimStart();
+  return t !== '' && !DE_FORA_NO_ORCA.some((re) => re.test(t));
+}
+export function operadorNoTurno(transcriptPath, { orca = false } = {}) {
+  let origens = null; let turnos = 0;
+  const leitura = (origem, conteudo, marcas = {}) => {
+    if (!orca || (origem !== null && origem !== 'sdk') || marcas.isMeta || marcas.isCompactSummary || marcas.abertura) return origem;
+    return doOperadorNoOrca(conteudo) ? 'human' : origem;
+  };
   for (const linha of readFileSync(transcriptPath, 'utf8').split('\n')) {
     if (!linha) continue;
     let e;
     try { e = JSON.parse(linha); } catch { continue; }
     const c = e.message?.content;
     const ehResultado = Array.isArray(c) && c.some((b) => b?.type === 'tool_result');
-    if (e.type === 'user' && !ehResultado && (e.origin?.kind || e.turnOrigin)) origens = [String(e.origin?.kind || e.turnOrigin)];
-    else if (origens && e.type === 'attachment' && e.attachment?.type === 'queued_command') origens.push(e.attachment.origin?.kind ?? null);
+    if (e.type === 'user' && !ehResultado && (e.origin?.kind || e.turnOrigin)) origens = [leitura(String(e.origin?.kind || e.turnOrigin), c, { ...e, abertura: turnos++ === 0 })];
+    else if (origens && e.type === 'attachment' && e.attachment?.type === 'queued_command') origens.push(leitura(e.attachment.origin?.kind ?? null, e.attachment.prompt));
   }
   return origens ? origens.includes('human') : null;
 }

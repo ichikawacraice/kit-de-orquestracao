@@ -162,7 +162,16 @@ const ehOrca = (p) => /(?:^|\/)orca$/.test(p.v) || /^\$\{?ORCA_CLI_COMMAND\}?$/.
  * Os comandos `orca` que abrem um Claude: `{ sub, bandeiras, crus, binario, stdin, porPipe }`. `bandeiras` é `{ nome: valor }`
  * (booleana: true); `crus` guarda a ordem e o texto original, para montar o comando corrigido.
  */
-export function comandosDoOrca(c, ctx = {}) {
+export const comandosDoOrca = (c, ctx = {}) => lerOrca(c, ctx, SUBCOMANDOS);
+
+/**
+ * Toda invocação do `orca`, qualquer subcomando (F445: o segredo-sai varre o que sai por qualquer uma delas). `sub` é o par de
+ * palavras depois das opções globais, como veio (`orchestration send`); o resto, como em `comandosDoOrca`.
+ */
+export const invocacoesDoOrca = (c, ctx = {}) => lerOrca(c, ctx, null);
+
+// `mapa` nulo: qualquer subcomando.
+function lerOrca(c, ctx, mapa) {
   const saida = [];
   for (const cmd of lerComandos(c, ctx)) {
     const ps = cmd.palavras; let i = 0;
@@ -174,12 +183,13 @@ export function comandosDoOrca(c, ctx = {}) {
     }
     if (!ps[i]) continue;
     // `bash -c "<script>"` e `eval <script>`: o script é outra linha de comando.
-    if (SHELL.test(ps[i].v)) { const c = ps.findIndex((p, n) => n > i && /^-[a-z]*c$/.test(p.v)); if (c > 0 && ps[c + 1]) saida.push(...comandosDoOrca(ps[c + 1].v, ctx)); continue; }
-    if (ps[i].v === 'eval') { saida.push(...comandosDoOrca(ps.slice(i + 1).map((p) => p.v).join(' '), ctx)); continue; }
+    if (SHELL.test(ps[i].v)) { const c = ps.findIndex((p, n) => n > i && /^-[a-z]*c$/.test(p.v)); if (c > 0 && ps[c + 1]) saida.push(...lerOrca(ps[c + 1].v, ctx, mapa)); continue; }
+    if (ps[i].v === 'eval') { saida.push(...lerOrca(ps.slice(i + 1).map((p) => p.v).join(' '), ctx, mapa)); continue; }
     if (!ehOrca(ps[i])) continue;
     let s = i + 1; // opções globais antes do subcomando (`orca --json orchestration worker-start`)
     while (ps[s] && /^-/.test(ps[s].v)) s += GLOBAIS_COM_VALOR.has(ps[s].v.slice(2)) ? 2 : 1;
-    const sub = SUBCOMANDOS[`${ps[s]?.v} ${ps[s + 1]?.v}`];
+    const par = `${ps[s]?.v ?? ''} ${ps[s + 1]?.v ?? ''}`.trim();
+    const sub = mapa ? mapa[par] : par;
     if (!sub) continue;
     const bandeiras = {}; const crus = []; const comSubst = new Set();
     for (let j = s + 2; j < ps.length; j++) {
@@ -204,7 +214,7 @@ export const soLeitura = (texto) => LINHA_SO_LEITURA.test(SEM_ACENTO(String(text
 // `$(cat <<'EOF' … EOF)` dentro de aspas: o corpo é o texto.
 const CAT_HEREDOC = /^\$\(\s*cat\s+<<-?\s*(['"]?)(\w+)\1[ \t]*\n([\s\S]*?)\n[ \t]*\2[ \t]*\n?\s*\)$/;
 
-function lerArquivo(caminho, cwd) {
+export function lerArquivo(caminho, cwd) {
   try { const p = isAbsolute(caminho) ? caminho : resolve(cwd, caminho); return existsSync(p) ? readFileSync(p, 'utf8') : null; } catch { return null; }
 }
 function deValor(v, sub) {
