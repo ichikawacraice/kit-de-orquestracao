@@ -6,14 +6,14 @@ Todo trabalho do projeto é um **item** (`F<n>`) na fila do painel. Uma **sessã
 ## O item e a dona
 - **Um item, uma sessão dona, do plano ao PR.** A dona mede, decide, escreve código e doc, testa, revisa por subagente, abre o PR e conserta o que a fila de merge devolver. Sem sessões separadas por papel, sem handoff entre papéis.
 - **Quem abre a dona é a orquestradora** ([a fila](#a-fila)), com `start_session` e o modelo pelo risco ([modelo e esforço](#modelo-e-esforco)). Título: `F<n> · <tema em palavras do produto>` (a trava `titulo-da-dona.mjs` recusa outro).
-- **No primeiro turno a dona** grava a si mesma (`painel update fila F<n> '{"donoLocalId":"<seu local_…>","donoApelido":"dona","agora":"começando"}'` e `painel com add`) e se desliga da orquestradora (`detach_session` com `"self"`; [ADR 0022](../../../docs/adr/0022-a-orquestradora-so-acorda-quando-precisa.md)). Troca a `etapa` (`planejamento` → `design`, só com tela → `execucao` → `validacao` → `merge`) com o `agora` no mesmo `update`.
+- **No primeiro turno a dona** grava a si mesma (`painel update fila F<n> '{"donoLocalId":"<seu local_…>","donoApelido":"dona"}'` e `painel com add`) e se desliga da orquestradora (`detach_session` com `"self"`; [ADR 0022](../../../docs/adr/0022-a-orquestradora-so-acorda-quando-precisa.md)). Troca a `etapa` (`planejamento` → `design`, só com tela → `execucao` → `validacao`) num `update` curto, sem o `agora`; a `merge` e o PR o `--anotar` grava.
 
 <a id="painel-em-dia"></a>
 ## Quem mantém o painel em dia
-- **A dona** grava o próprio item a cada passo: dono e `com` no primeiro turno, o `agora` a cada passo, a `etapa` quando muda, os `prs` ao abrir o PR, o motivo no `agora` quando a fila devolve ([dona.md](dona.md#painel-em-dia)).
+- **A dona** grava o que só ela sabe: dono e `com` no primeiro turno, as perguntas, a entrega no PR que fecha o item e o handoff; não anota o `agora` a cada passo ([dona.md](dona.md#painel-em-dia)).
 - **A orquestradora** grava ao criar o item, ao abrir a dona e ao mergear (`painel mergear` e `painel fila-de-merge` fecham o item; o devolvido volta a `execucao` com o motivo).
-- **A batida** só confere ([batida](#batida)); não grava `agora` por ninguém.
-- **As travas:** `fila-do-item.mjs` recusa o fim do turno da dona que mudou algo (arquivo, commit, push, PR) sem gravar o item no turno; `criterio-da-dona.mjs`, no turno que editou em `execucao`, `validacao` ou `merge`, recusa o relatório que a saída real contradiz ou que afirma sucesso sem teste rodado, e avisa (sem turno extra) o que só não traz a saída colada.
+- **A batida** deduz a `etapa`, os `prs` e as sessões do item pelo GitHub e fecha o item pelo merge ([batida](#batida), [ADR 0027](../../../docs/adr/0027-o-estado-do-item-e-deduzido-e-fecha-pelo-merge.md)).
+- **As travas:** `fila-do-item.mjs` recusa o fim do turno da dona que mudou algo (arquivo, commit, push, PR) com o item em `merge`, com PR e sem a `entrega` (salvo `maisFatias: true`); `painel-das-sessoes.mjs` recusa o turno que tirou ID de pergunta, ou recebeu resposta a uma pergunta aberta, sem gravar em `perguntas`; `criterio-da-dona.mjs`, no turno que editou em `execucao`, `validacao` ou `merge`, recusa o relatório que a saída real contradiz ou que afirma sucesso sem teste rodado, e avisa (sem turno extra) o que só não traz a saída colada.
 
 <a id="skills-da-etapa"></a>
 ## Skills por etapa
@@ -83,7 +83,7 @@ Ao fechar o item, `painel mergear` grava em `custo` o gasto das sessões que tra
 
 <a id="fila-de-merge"></a>
 ## A fila de merge da orquestradora
-- **A dona entrega anotando o PR** com o sha que testou: `painel fila-de-merge N:<sha completo> --anotar` (não roda gate nem mergeia), grava `{"etapa":"merge","prs":[N],"agora":"PR N na fila de merge"}` (mais a `entrega` quando o PR fecha o item) e para, sem trazer a base por merge alheio. Se o `--anotar` recusar, manda `PR N pronto, HEAD <sha completo>` à orquestradora.
+- **A dona entrega anotando o PR** com o sha que testou: `painel fila-de-merge N:<sha completo> --anotar` (não roda gate nem mergeia; ele mesmo grava a etapa `merge` e o PR), grava a `entrega` quando o PR fecha o item e para, sem trazer a base por merge alheio. Se o `--anotar` recusar, manda `PR N pronto, HEAD <sha completo>` à orquestradora.
 - **A fila** combina os PRs sobre a base por squash, roda o gate **uma vez**, mergeia o que passou e devolve o que conflitou ou ficou vermelho, achando por bisseção o PR que quebra ([por dentro](referencia.md#fila-de-merge)).
 - <a id="fila-sem-turno"></a>**Sem turno da orquestradora:** o `--anotar` da dona lança a fila na hora quando nenhum gate do projeto roda, a [batida](#batida) lança a que ficou parada e entrega o desfecho à dona; à orquestradora vai só o que é dela ([fila sem turno](referencia.md#fila-sem-turno)). <a id="aviso-de-fatia"></a>Fatia mergeada (`maisFatias: true`) devolve o item à dona com o aviso `fatia PR N mergeada (F<n>): siga com a próxima.`
 - **Conflito devolvido:** a dona traz a base pelo `sync_with_base_branch` do app ou, sem ele, rebaseia sobre `origin/<base>` ([dona](dona.md), passo 7); o merge commit do app fica só na branch dela, porque a fila mergeia por squash.

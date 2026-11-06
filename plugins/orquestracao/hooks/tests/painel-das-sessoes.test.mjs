@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Testes do Stop hook painel-das-sessoes.mjs, na parte do Qnn: só conta a pergunta que é DESTA sessão
-// (perguntas/<Qnn>.json com `sessaoId` igual ao local_… dela). HOME, painel e registro do app em pasta temporária.
+// Testes do Stop hook painel-das-sessoes.mjs: cobra só a pergunta (tirou ID, ou recebeu resposta a um Qnn DESTA sessão ainda
+// aberta: perguntas/<Qnn>.json com `sessaoId` igual ao local_… dela), satisfeita só por gravar a coleção `perguntas` (F424). HOME, painel e registro do app em pasta temporária.
 // Rodar: node ~/.claude/hooks/tests/painel-das-sessoes.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -29,7 +29,9 @@ function novoBase() {
   writeFileSync(dir('app', 'conta', `${LOCAL}.json`), JSON.stringify({ sessionId: LOCAL, cliSessionId: SID, title: 'E3 · x', isArchived: false }));
   mkdirSync(dir('painel', 'perguntas'), { recursive: true });
 }
-const pergunta = (id, sessaoId) => writeFileSync(dir('painel', 'perguntas', `${id}.json`), JSON.stringify({ id, version: 1, data: { estado: 'aberta', sessaoId } }));
+const pergunta = (id, sessaoId, estado = 'aberta') => writeFileSync(dir('painel', 'perguntas', `${id}.json`), JSON.stringify({ id, version: 1, data: { estado, sessaoId } }));
+const GRAVA_PERGUNTA = `painel update perguntas Q12 '{"estado":"respondida","resposta":"sim"}'`;
+const TIRA_ID = 'Q=$(proxima-pergunta)';
 function transcript(textoDoTurno, comandos = [], { origem = { origin: { kind: 'peer' } }, depois = [] } = {}) {
   const f = dir('t.jsonl');
   const linhas = [{ type: 'user', timestamp: '2026-10-24T12:00:00.000Z', ...origem, message: { role: 'user', content: textoDoTurno } }, ...depois];
@@ -63,7 +65,13 @@ caso('(b) resposta a Q12 desta sessão, sem gravar no painel: bloqueia', () => {
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
   ok(r.reason.includes('Qnn'), `motivo: ${r.reason}`);
 });
-caso('ADR 0007: sem orquestradora ativa no projeto, a sessão que abriu PR e não gravou também é cobrada', () => {
+caso('(b2) F424: a resposta a Q12 que já está respondida no painel (respondida pelo pane) não cobra', () => {
+  pergunta('Q12', LOCAL, 'respondida');
+  ok(rodar(transcript('Q12 — resposta do operador pelo painel: sim')) === null, 'respondida não cobra');
+  pergunta('Q12', LOCAL, 'assumida');
+  ok(rodar(transcript('Q12 — resposta do operador pelo painel: sim'))?.decision === 'block', 'prova: assumida ainda espera a resposta');
+});
+caso('ADR 0007: sem orquestradora ativa no projeto, a sessão que tirou ID e não gravou também é cobrada', () => {
   pergunta('Q12', LOCAL);
   const msg = 'Q12 — resposta do operador pelo painel: sim';
   ok(rodar(transcript(msg))?.decision === 'block', 'precondição: com orquestradora a cobrança aparece');
@@ -71,21 +79,24 @@ caso('ADR 0007: sem orquestradora ativa no projeto, a sessão que abriu PR e nã
   ok(!existsSync(dir('home', '.claude', 'orquestracao', 'ativas', ORQ)), 'precondição: o marcador saiu');
   const r = rodar(transcript(msg));
   ok(r?.decision === 'block', `esperava bloquear mesmo sem orquestradora: ${JSON.stringify(r)}`);
-  const pr = rodar(transcript('segue', ['gh pr create --title x']));
-  ok(pr?.decision === 'block' && pr.reason.includes('abriu PR'), `PR aberto e nada gravado: ${JSON.stringify(pr)}`);
+  const id = rodar(transcript('segue', [TIRA_ID]));
+  ok(id?.decision === 'block' && id.reason.includes('tirou ID de pergunta'), `ID tirado e nada gravado: ${JSON.stringify(id)}`);
 });
-caso('(c) igual a (b), com painel.mjs update no turno: passa', () => {
+caso('(c) igual a (b), com painel.mjs update perguntas no turno: passa; gravar só a fila ou a sessão não basta (F424)', () => {
   pergunta('Q12', LOCAL);
-  const r = rodar(transcript('Q12 — resposta do operador pelo painel: sim', [`node ~/.claude/skills/orquestradora/scripts/painel.mjs update sessoes ${LOCAL} '{"etapa":"x"}'`]));
+  const r = rodar(transcript('Q12 — resposta do operador pelo painel: sim', [`node ~/.claude/skills/orquestradora/scripts/painel.mjs update perguntas Q12 '{"estado":"respondida"}'`]));
   ok(r === null, `esperava passar: ${JSON.stringify(r)}`);
+  for (const cmd of [`painel update sessoes ${LOCAL} '{"etapa":"x"}'`, `painel update fila F9 '{"agora":"x"}'`]) {
+    ok(rodar(transcript('Q12 — resposta do operador pelo painel: sim', [cmd]))?.decision === 'block', `não grava a pergunta: ${cmd}`);
+  }
 });
 caso('(c2) K2: o comando `painel` do plugin (bin) também conta como gravar; só citar `painel` não conta', () => {
   pergunta('Q12', LOCAL);
-  for (const cmd of [`painel update sessoes ${LOCAL} '{"etapa":"x"}'`, `"\${CLAUDE_PLUGIN_ROOT}/bin/painel" update sessoes ${LOCAL} '{"etapa":"x"}'`, `cd x && painel batch '[]'`]) {
+  for (const cmd of [GRAVA_PERGUNTA, `"\${CLAUDE_PLUGIN_ROOT}/bin/painel" update perguntas Q12 '{"estado":"respondida"}'`, `cd x && painel batch '[{"op":"update","colecao":"perguntas","id":"Q12"}]'`]) {
     const r = rodar(transcript('Q12 — resposta do operador pelo painel: sim', [cmd]));
     ok(r === null, `devia contar como gravar: ${cmd} → ${JSON.stringify(r)}`);
   }
-  const cita = rodar(transcript('Q12 — resposta do operador pelo painel: sim', ['echo "grave com painel update sessoes x"']));
+  const cita = rodar(transcript('Q12 — resposta do operador pelo painel: sim', ['echo "grave com painel update perguntas x"']));
   ok(cita?.decision === 'block', 'só citar o comando no echo não é gravar');
 });
 caso('(d) Qnn sem documento no painel: não bloqueia', () => {
@@ -101,35 +112,52 @@ caso('(e) sessão sem local_ no registro: não conta o Qnn e registra no log', (
   ok(log.includes('sem local_'), `log: ${log}`);
 });
 
-caso('(f) turno aberto por turnOrigin "sdk" sem origin, com PR aberto e sem gravar no painel: bloqueia', () => {
-  const r = rodar(transcript('F7 para você', ['gh pr create --fill'], { origem: { turnOrigin: 'sdk' } }));
+caso('(f) turno aberto por turnOrigin "sdk" sem origin, que tirou ID sem gravar a pergunta: bloqueia', () => {
+  const r = rodar(transcript('F7 para você', [TIRA_ID], { origem: { turnOrigin: 'sdk' } }));
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
-  ok(r.reason.includes('abriu PR'), `motivo: ${r.reason}`);
+  ok(r.reason.includes('tirou ID de pergunta'), `motivo: ${r.reason}`);
 });
-caso('(g) F41 A1: entrada isMeta com turnOrigin (aviso do sistema, sem origin) abre o turno seguinte: o PR do turno anterior não conta', () => {
+caso('(f2) F424: abrir, mergear ou fechar PR e abrir ou arquivar sessão sem gravar no painel: passa (a batida deduz)', () => {
+  for (const cmd of ['gh pr create --fill', 'gh pr merge 9 --squash', 'gh pr ready 9', 'gh pr close 9']) {
+    ok(rodar(transcript('F7 para você', [cmd])) === null, `não devia cobrar: ${cmd}`);
+  }
+  const f = dir('t.jsonl');
+  const linhas = [
+    { type: 'user', timestamp: '2026-10-24T12:00:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'F7 para você' } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'mcp__ccd_session__start_session', input: {} }] } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't2', name: 'mcp__ccd_session_mgmt__archive_session', input: {} }] } },
+  ];
+  writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
+  ok(rodar(f) === null, 'abrir e arquivar sessão não cobram');
+  // Prova de presença: o mesmo turno que também tira ID é cobrado.
+  ok(rodar(transcript('F7 para você', ['gh pr create --fill', TIRA_ID]))?.decision === 'block', 'prova: tirar ID cobra');
+});
+caso('(g) F41 A1: entrada isMeta com turnOrigin (aviso do sistema, sem origin) abre o turno seguinte: o ID tirado no turno anterior não conta', () => {
   // Forma real das 41 linhas: `isMeta: true`, `turnOrigin: 'system'`, sem `origin`. Abre turno como nas outras duas cópias.
   const f = dir('t.jsonl');
   const linhas = [
     { type: 'user', timestamp: '2026-10-24T12:00:00.000Z', turnOrigin: 'sdk', message: { role: 'user', content: 'F7 para você' } },
-    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Bash', input: { command: 'gh pr create --fill' } }] } },
+    { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Bash', input: { command: TIRA_ID } }] } },
     { type: 'user', isMeta: true, timestamp: '2026-10-24T12:00:09.000Z', turnOrigin: 'system', message: { role: 'user', content: '[Cross-session delivery notice]' } },
   ];
   writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
   const r = rodar(f);
-  ok(r === null || r?.decision !== 'block', `o PR é do turno anterior, não devia bloquear: ${JSON.stringify(r)}`);
+  ok(r === null || r?.decision !== 'block', `o ID é do turno anterior, não devia bloquear: ${JSON.stringify(r)}`);
+  writeFileSync(f, `${linhas.slice(0, 2).map((l) => JSON.stringify(l)).join('\n')}\n`);
+  ok(rodar(f)?.decision === 'block', 'prova: sem o aviso, o ID é deste turno e bloqueia');
 });
 
 
 caso('R1 (F41): turno aberto por peer na forma real (isMeta + origin) depois de outro turno de peer que gravou no painel: bloqueia', () => {
-  // O turno A gravou no painel; o turno B (isMeta + origin peer, a forma gravada de verdade) abriu PR sem gravar.
-  // Pulando toda isMeta, o início ficava em A e o `painel update` de A escondia o PR de B.
+  // O turno A gravou a pergunta; o turno B (isMeta + origin peer, a forma gravada de verdade) tirou ID sem gravar.
+  // Pulando toda isMeta, o início ficava em A e o `painel update` de A escondia o ID de B.
   const f = dir('t.jsonl');
   const tu = (command) => ({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 't', name: 'Bash', input: { command } }] } });
   const linhas = [
     { type: 'user', timestamp: '2026-10-24T12:00:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'F7 para você' } },
-    tu(`node ~/x/painel.mjs update sessoes ${LOCAL} '{"etapa":"x"}'`),
+    tu(`node ~/x/painel.mjs update perguntas Q12 '{"estado":"respondida"}'`),
     { type: 'user', isMeta: true, timestamp: '2026-10-24T12:05:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'F8 para você' } },
-    tu('gh pr create --fill'),
+    tu(TIRA_ID),
   ];
   writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
   const r = rodar(f);
@@ -137,21 +165,21 @@ caso('R1 (F41): turno aberto por peer na forma real (isMeta + origin) depois de 
 });
 
 
-// ---- F27 fatia 3: a mensagem manda gravar no item quando a sessão é dona de um ----
+// ---- F27 fatia 3 / F424: a mensagem manda gravar a pergunta, com o item quando a sessão é dona de um ----
 const itemDoDono = (id, data) => { mkdirSync(dir('painel', 'fila'), { recursive: true }); writeFileSync(dir('painel', 'fila', `${id}.json`), JSON.stringify({ id, version: 1, data })); };
-caso('F27-3g: sessão dona de item vivo e com PR aberto sem gravar: a mensagem manda `update fila <F>` com etapa e agora', () => {
+caso('F27-3g: sessão dona de item vivo que tirou ID sem gravar: a mensagem manda gravar a pergunta com o item, sem fila nem agora', () => {
   itemDoDono('F27', { etapa: 'execucao', donoLocalId: LOCAL });
-  const r = rodar(transcript('F27 para você', ['gh pr create --fill']));
+  const r = rodar(transcript('F27 para você', [TIRA_ID]));
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
-  ok(r.reason.includes("painel update fila F27 '{\"etapa\":…,\"agora\":…}'"), `mensagem: ${r.reason}`);
-  ok(!r.reason.includes('update sessoes'), `não devia mandar a linha da sessão: ${r.reason}`);
+  ok(r.reason.includes('painel set perguntas <Q-ID>') && r.reason.includes(`"sessaoId":"${LOCAL}","item":"F27"`), `mensagem: ${r.reason}`);
+  ok(!r.reason.includes('update fila') && !r.reason.includes('"agora"') && !r.reason.includes('update sessoes'), `não devia mandar gravar fila, agora ou sessão: ${r.reason}`);
 });
-caso('F27-3h: sessão sem item (ou com item feito / de outro dono): a mensagem de hoje, a da linha da sessão', () => {
+caso('F27-3h: sessão sem item (ou com item feito / de outro dono): a pergunta sem o campo item', () => {
   itemDoDono('F1', { etapa: 'feito', donoLocalId: LOCAL });
   itemDoDono('F2', { etapa: 'execucao', donoLocalId: 'local_OUTRA' });
-  const r = rodar(transcript('F7 para você', ['gh pr create --fill']));
+  const r = rodar(transcript('F7 para você', [TIRA_ID]));
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
-  ok(r.reason.includes('painel update sessoes <sessionId>') && !r.reason.includes('update fila'), `mensagem: ${r.reason}`);
+  ok(r.reason.includes('painel set perguntas <Q-ID>') && !r.reason.includes('"item"') && !r.reason.includes('update fila'), `mensagem: ${r.reason}`);
 });
 
 // ---- F400: decisão marcada "assumida, a confirmar" (ou "Q-ID não reservado") na mensagem final sem a pergunta assumida no painel ----
@@ -233,9 +261,9 @@ caso('F400-h: assumida desta sessão gravada no turno por outro caminho (atualiz
 caso('F400-i: a marca numa mensagem do meio do turno, não na final: passa', () => {
   ok(rodar(turnoComFinal('PR na fila.', ['ls'], { antes: 'Vou usar o nome curto (*assumida, a confirmar*).' })) === null, 'só a mensagem final conta');
 });
-caso('F400-j: junto com outro motivo (abriu PR sem gravar), um bloqueio só com os dois', () => {
-  const r = rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', ['gh pr create --fill']));
-  ok(r?.decision === 'block' && r.reason.includes('abriu PR') && r.reason.includes('proxima-pergunta'), `esperava os dois motivos: ${JSON.stringify(r)}`);
+caso('F400-j: junto com outro motivo (tirou ID sem gravar), um bloqueio só com os dois', () => {
+  const r = rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).', [TIRA_ID]));
+  ok(r?.decision === 'block' && r.reason.includes('tirou ID de pergunta') && r.reason.includes('assumida, a confirmar'), `esperava os dois motivos: ${JSON.stringify(r)}`);
 });
 caso('F400-l: o Q-ID na linha seguinte do mesmo item, ou o cabeçalho marcado com a lista abaixo: passa', () => {
   assumidaNoPainel('Q50', LOCAL); assumidaNoPainel('Q51', LOCAL);
@@ -286,8 +314,8 @@ caso('F400-r: sem como gravar a marca do turno, não recusa de novo depois de um
   ok(rodar(tp, sem, { stop_hook_active: true }) === null, 'com stop_hook_active e sem estado gravável, passa');
 });
 caso('F400-s: a trava antiga não recusa duas vezes (stop_hook_active); last_assistant_message vazio cai no transcript', () => {
-  ok(rodar(turnoComFinal('PR na fila.', ['gh pr create --fill']), {}, { stop_hook_active: true }) === null, 'trava antiga presa a stop_hook_active');
-  ok(rodar(turnoComFinal('PR na fila.', ['gh pr create --fill']))?.decision === 'block', 'precondição: sem stop_hook_active recusa');
+  ok(rodar(turnoComFinal('PR na fila.', [TIRA_ID]), {}, { stop_hook_active: true }) === null, 'trava antiga presa a stop_hook_active');
+  ok(rodar(turnoComFinal('PR na fila.', [TIRA_ID]))?.decision === 'block', 'precondição: sem stop_hook_active recusa');
   ok(rodar(turnoComFinal('Nome curto (*assumida, a confirmar*).'), {}, { last_assistant_message: '' })?.decision === 'block', 'string vazia não esconde a marca');
 });
 const contador = (n) => writeFileSync(dir('home', '.claude', 'orquestracao', 'contador-de-perguntas'), `${n}\n`);

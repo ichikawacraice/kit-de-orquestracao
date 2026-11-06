@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Testes do Stop hook fila-do-item (a dona grava o item no turno que mudou algo): transcript sintético, registro de
-// sessões do app sintético, fila e log em pasta temporária (FILA_DIR, FILA_APP_SESSOES_DIR, FILA_LOG).
+// Testes do Stop hook fila-do-item (a dona grava a entrega no turno que mudou algo com o PR que fecha o item na fila; desde o
+// F424 o `agora` não se cobra): transcript sintético, registro de sessões do app sintético, fila, projeção da batida e log em
+// pasta temporária (FILA_DIR, FILA_APP_SESSOES_DIR, FILA_LOG, FILA_DEDUZIDO).
 // Rodar: node gate/com-fichas.mjs -- node plugins/orquestracao/hooks/tests/fila-do-item.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
@@ -27,6 +28,8 @@ function novoBase() {
 }
 const filaDir = () => join(base, 'fila');
 const logArq = () => join(base, 'fila-hook.log');
+const deduzidoArq = () => join(base, 'deduzido.json');
+function deduzido(itens, em = DEPOIS) { writeFileSync(deduzidoArq(), JSON.stringify({ em, itens })); }
 
 function item(id, data) {
   writeFileSync(join(filaDir(), `${id}.json`), `${JSON.stringify({ id, version: 1, data })}\n`);
@@ -55,7 +58,7 @@ function rodar(evento, sessoes = join(base, 'sessoes'), hooksDir = HOOKS) {
   const entrada = typeof evento === 'string' ? evento : JSON.stringify(evento);
   const out = execFileSync('node', [join(hooksDir, 'fila-do-item.mjs')], {
     input: entrada, encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL',
-    env: { ...process.env, FILA_DIR: filaDir(), FILA_APP_SESSOES_DIR: sessoes, FILA_LOG: logArq() },
+    env: { ...process.env, FILA_DIR: filaDir(), FILA_APP_SESSOES_DIR: sessoes, FILA_LOG: logArq(), FILA_DEDUZIDO: deduzidoArq() },
   });
   return out ? JSON.parse(out) : null;
 }
@@ -70,46 +73,47 @@ function caso(nome, fn) {
 function igual(a, b, msg) { if (a !== b) throw new Error(`${msg}: esperado ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); }
 function ok(cond, msg) { if (!cond) throw new Error(msg); }
 
-caso('1 item vivo da dona, gravado ANTES do início de um turno que editou: bloqueia, cita o ID e manda gravar agora', () => {
+// O item cuja entrega a trava cobra: o PR que fecha o item está na fila (merge, com PR, sem maisFatias) e sem entrega.
+const emMerge = (extra = {}) => vivo({ etapa: 'merge', prs: [77], atualizadoEm: DEPOIS, ...extra });
+
+caso('F424 item vivo da dona, sem o agora gravado no turno que editou: passa (a etapa e o parado são da batida)', () => {
   item('F12', vivo({ atualizadoEm: ANTES }));
   registroLocal(LOCAL, SID);
   const f = transcript(turno());
-  // Guardas contra insumo vazio: há item na fila e o transcript TEM a entrada de início do turno.
+  // Guardas contra insumo vazio: há item na fila e o transcript TEM a entrada de início do turno e a edição.
   ok(readdirSync(filaDir()).filter((n) => n.endsWith('.json')).length >= 1, 'precondição: a fila está vazia');
-  const inicio = readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l))
-    .filter((e) => e.type === 'user' && e.origin?.kind).pop();
-  ok(inicio && inicio.timestamp === INICIO, 'precondição: o transcript não tem a entrada de início do turno');
+  const linhas = readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  ok(linhas.filter((e) => e.type === 'user' && e.origin?.kind).pop()?.timestamp === INICIO, 'precondição: o transcript não tem a entrada de início do turno');
+  ok(linhas.some((e) => e.message?.content?.[0]?.name === 'Edit'), 'precondição: o turno não editou');
+  igual(rodar(stop()), null, 'saída');
+  igual(desfechos().join(','), 'passou', 'log');
+  // Sem atualizadoEm nenhum, também passa.
+  item('F12', vivo());
+  igual(rodar(stop()), null, 'sem atualizadoEm');
+  // Prova de presença: o mesmo turno, com o PR que fecha o item na fila sem entrega, bloqueia.
+  item('F12', emMerge({ atualizadoEm: ANTES }));
   const r = rodar(stop());
-  igual(r?.decision, 'block', 'decisão');
-  ok(r.reason.includes('F12') && r.reason.includes('"agora"') && r.reason.includes('protocolo.md#painel-em-dia'), `motivo: ${r.reason}`);
-  igual(desfechos().join(','), 'bloqueou', 'log');
+  igual(r?.decision, 'block', 'prova: sem entrega bloqueia');
+  ok(!r.reason.includes('"agora"') && !r.reason.includes('mudou algo neste turno e não o gravou'), `o motivo ainda cobra o agora: ${r.reason}`);
 });
-caso('1b dois itens pendentes: o motivo lista os dois', () => {
-  item('F12', vivo({ atualizadoEm: ANTES }));
-  item('F13', vivo({ etapa: 'planejamento', atualizadoEm: ANTES }));
+caso('1b dois itens sem entrega: o motivo lista os dois', () => {
+  item('F12', emMerge());
+  item('F13', emMerge({ prs: [78] }));
   registroLocal(LOCAL, SID);
   transcript(turno());
   const r = rodar(stop());
   ok(r?.decision === 'block' && r.reason.includes('F12') && r.reason.includes('F13'), `motivo: ${r?.reason}`);
 });
-caso('1c commit, push, PR e sed -i também mudam; em qualquer etapa viva, inclusive merge', () => {
-  for (const [etapa, cmd] of [['planejamento', 'git commit -m x'], ['validacao', 'git push -u origin b'], ['merge', 'gh pr create --title x'], ['execucao', 'git -C /r/wt commit -m x'], ['design', 'sed -i s/a/b/ /r/a.mjs']]) {
-    rmSync(join(filaDir(), 'F40.json'), { force: true });
-    item('F40', vivo({ etapa, atualizadoEm: ANTES }));
+caso('1c commit, push, PR e sed -i também mudam', () => {
+  for (const cmd of ['git commit -m x', 'git push -u origin b', 'gh pr create --title x', 'git -C /r/wt commit -m x', 'sed -i s/a/b/ /r/a.mjs']) {
+    item('F40', emMerge());
     registroLocal(LOCAL, SID);
     transcript(turno(usaNoTurno('Bash', { command: cmd })));
-    igual(rodar(stop())?.decision, 'block', `${etapa}: ${cmd}`);
+    igual(rodar(stop())?.decision, 'block', cmd);
   }
 });
-caso('2 o mesmo item gravado DEPOIS do início: passa', () => {
-  item('F12', vivo({ atualizadoEm: DEPOIS }));
-  registroLocal(LOCAL, SID);
-  transcript(turno());
-  igual(rodar(stop()), null, 'saída');
-  igual(desfechos().join(','), 'passou', 'log');
-});
 caso('2b turno que só leu ou esperou: passa (com edição, o mesmo item bloquearia)', () => {
-  item('F12', vivo({ etapa: 'merge', atualizadoEm: ANTES }));
+  item('F12', emMerge());
   registroLocal(LOCAL, SID);
   transcript(turno(usaNoTurno('Bash', { command: 'git status' }), usaNoTurno('Read', { file_path: '/r/a.mjs' })));
   igual(rodar(stop()), null, 'só leu');
@@ -118,7 +122,7 @@ caso('2b turno que só leu ou esperou: passa (com edição, o mesmo item bloquea
   igual(rodar(stop())?.decision, 'block', 'prova: com escrita bloqueia');
 });
 caso('2c a edição de um turno ANTERIOR não conta', () => {
-  item('F12', vivo({ atualizadoEm: ANTES }));
+  item('F12', emMerge());
   registroLocal(LOCAL, SID);
   const t = turno(usaNoTurno('Read', { file_path: '/r/a.mjs' }));
   t.splice(1, 0, usaNoTurno('Edit', { file_path: '/r/a.mjs' }, '2026-10-24T10:00:03.000Z'));
@@ -131,37 +135,37 @@ caso('3 sessão sem item: passa e não registra nada', () => {
   igual(rodar(stop()), null, 'saída');
   igual(desfechos().length, 0, 'log');
 });
-caso('4 item de OUTRA dona, desatualizado: passa', () => {
-  item('F12', vivo({ donoLocalId: OUTRO, atualizadoEm: ANTES }));
+caso('4 item de OUTRA dona, sem entrega: passa', () => {
+  item('F12', emMerge({ donoLocalId: OUTRO }));
   registroLocal(LOCAL, SID);
   transcript(turno());
   igual(rodar(stop()), null, 'saída');
 });
-caso('5 item da dona em feito, descartado ou sem etapa: passa (a presença é detectada em execucao)', () => {
+caso('5 item da dona em feito, descartado ou sem etapa: passa (a presença é detectada em merge)', () => {
   for (const extra of [{ etapa: 'feito' }, { etapa: 'descartado' }, { etapa: undefined, estado: 'em-andamento' }]) {
-    item('F12', vivo({ ...extra, atualizadoEm: ANTES }));
+    item('F12', emMerge(extra));
     registroLocal(LOCAL, SID);
     transcript(turno());
     igual(rodar(stop()), null, `${JSON.stringify(extra)} devia passar`);
   }
-  item('F12', vivo({ atualizadoEm: ANTES }));
-  igual(rodar(stop())?.decision, 'block', 'prova: em execucao bloqueia');
+  item('F12', emMerge());
+  igual(rodar(stop())?.decision, 'block', 'prova: em merge bloqueia');
 });
 caso('6 session_id só em priorCliSessionIds (sessão limpa): resolve e bloqueia', () => {
-  item('F12', vivo({ atualizadoEm: ANTES }));
+  item('F12', emMerge());
   registroLocal(LOCAL, 'cccccccc-atual', [SID_ANTIGO, SID]);
   transcript(turno());
   igual(rodar(stop())?.decision, 'block', 'decisão');
 });
 caso('7 local_… não encontrado: passa e o log tem sem-local-id', () => {
-  item('F12', vivo({ atualizadoEm: ANTES }));
+  item('F12', emMerge());
   registroLocal(LOCAL, 'dddddddd-de-outra-sessao');
   transcript(turno());
   igual(rodar(stop()), null, 'saída');
   igual(desfechos().join(','), 'sem-local-id', 'log');
 });
 caso('8 stop_hook_active: passa e registra repetido', () => {
-  item('F12', vivo({ atualizadoEm: ANTES }));
+  item('F12', emMerge());
   registroLocal(LOCAL, SID);
   transcript(turno());
   igual(rodar(stop({ stop_hook_active: true })), null, 'saída');
@@ -173,7 +177,7 @@ caso('8b sem session_id ou sem transcript_path: passa e registra sem-entrada', (
   igual(desfechos().join(','), 'sem-entrada,sem-entrada', 'log');
 });
 caso('8c transcript sem entrada de início de turno: passa e registra sem-inicio', () => {
-  item('F12', vivo({ atualizadoEm: ANTES }));
+  item('F12', emMerge());
   registroLocal(LOCAL, SID);
   transcript([{ type: 'assistant', uuid: 'a1', timestamp: INICIO, message: { role: 'assistant', content: [] } }]);
   igual(rodar(stop()), null, 'saída');
@@ -183,8 +187,8 @@ caso('8d entrada quebrada: sai 0, sem saída, erro no log', () => {
   igual(rodar('{nao json'), null, 'saída');
   igual(desfechos().join(','), 'erro', 'log');
 });
-caso('9a turno aberto por turnOrigin "sdk" (sem origin), item antes do início: bloqueia', () => {
-  item('F12', vivo({ atualizadoEm: ANTES }));
+caso('9a turno aberto por turnOrigin "sdk" (sem origin) que editou: bloqueia', () => {
+  item('F12', emMerge());
   registroLocal(LOCAL, SID);
   const f = transcript([
     { type: 'user', uuid: 'u1', timestamp: INICIO, turnOrigin: 'sdk', message: { role: 'user', content: 'siga com o F12' } },
@@ -194,61 +198,56 @@ caso('9a turno aberto por turnOrigin "sdk" (sem origin), item antes do início: 
   ok(linhas.some((e) => e.turnOrigin === 'sdk' && !e.origin), 'precondição: sem a entrada sdk sem origin');
   igual(rodar(stop())?.decision, 'block', 'decisão');
 });
-caso('9b turno sdk depois de um turno humano antigo: bloqueia (não cai no turno antigo)', () => {
-  item('F12', vivo({ atualizadoEm: '2026-10-24T11:00:00.000Z' }));
+caso('9b turno sdk que só leu, depois de um turno humano antigo que editou: passa (não cai no turno antigo)', () => {
+  item('F12', emMerge());
   registroLocal(LOCAL, SID);
   transcript([
     { type: 'user', uuid: 'u0', timestamp: '2026-10-24T10:00:00.000Z', origin: { kind: 'human' }, message: { role: 'user', content: 'antigo' } },
-    { type: 'assistant', uuid: 'a0', timestamp: '2026-10-24T10:00:05.000Z', message: { role: 'assistant', content: [] } },
+    usaNoTurno('Edit', { file_path: '/r/a.mjs' }, '2026-10-24T10:00:05.000Z'),
     { type: 'user', uuid: 'u1', timestamp: INICIO, turnOrigin: 'sdk', message: { role: 'user', content: 'siga com o F12' } },
     { type: 'user', uuid: 'u2', timestamp: '2026-10-24T12:00:03.000Z', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'x', content: 'ok' }] } },
-    EDITA(),
+    usaNoTurno('Read', { file_path: '/r/a.mjs' }),
   ]);
-  // Com o critério antigo o início seria 10:00 e o item (11:00) "passaria" calado.
-  igual(rodar(stop())?.decision, 'block', 'decisão');
+  // Com o início no turno antigo (10:00), a edição dele contaria e o item bloquearia.
+  igual(rodar(stop()), null, 'saída');
+  igual(desfechos().join(','), 'passou-sem-mudar', 'log');
 });
-caso('9c item vivo da dona SEM atualizadoEm: bloqueia', () => {
-  item('F12', vivo());
-  registroLocal(LOCAL, SID);
-  transcript(turno());
-  igual(rodar(stop())?.decision, 'block', 'decisão');
-});
-caso('9d item gravado ENTRE o turno real (T1) e uma entrada isMeta SEM origem (T3): passa; se ela virasse início (T3) bloquearia', () => {
-  item('F12', vivo({ atualizadoEm: '2026-10-24T12:25:00.000Z' }));
+caso('9d edição ENTRE o turno real (T1) e uma entrada isMeta SEM origem (T3): bloqueia; se ela virasse início (T3) passaria', () => {
+  item('F12', emMerge());
   registroLocal(LOCAL, SID);
   transcript([
     { type: 'user', uuid: 'u1', timestamp: '2026-10-24T12:20:00.000Z', turnOrigin: 'sdk', message: { role: 'user', content: 'siga com o F12' } },
     usaNoTurno('Edit', { file_path: '/r/a.mjs' }, '2026-10-24T12:21:00.000Z'),
     { type: 'user', uuid: 'u2', isMeta: true, timestamp: '2026-10-24T12:30:00.000Z', message: { role: 'user', content: 'lembrete' } },
   ]);
-  igual(rodar(stop()), null, 'saída');
-  igual(desfechos().join(','), 'passou', 'log');
+  igual(rodar(stop())?.decision, 'block', 'decisão');
+  igual(desfechos().join(','), 'bloqueou-entrega', 'log');
 });
 // R1: o início do turno é o do turno aberto por outra sessão (meta com origem), não o do turno humano anterior.
-caso('R1: item gravado ANTES de um turno aberto por peer (meta com origem), depois de um humano → bloqueia (o turno atual não o gravou)', () => {
-  item('F12', vivo({ atualizadoEm: '2026-10-24T12:20:00.000Z' }));
+caso('R1: edição só ANTES de um turno aberto por peer (meta com origem), depois de um humano → passa (o turno atual não mudou nada)', () => {
+  item('F12', emMerge());
   registroLocal(LOCAL, SID);
   transcript([
     { type: 'user', uuid: 'u1', timestamp: '2026-10-24T12:10:00.000Z', origin: { kind: 'human' }, message: { role: 'user', content: 'siga com o F12' } },
+    usaNoTurno('Edit', { file_path: '/r/a.mjs' }, '2026-10-24T12:20:00.000Z'),
     { type: 'user', uuid: 'u2', isMeta: true, timestamp: '2026-10-24T12:30:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: '<cross-session-message>conserte</cross-session-message>' } },
-    usaNoTurno('Edit', { file_path: '/r/a.mjs' }, '2026-10-24T12:31:00.000Z'),
+    usaNoTurno('Read', { file_path: '/r/a.mjs' }, '2026-10-24T12:31:00.000Z'),
   ]);
-  const r = rodar(stop());
-  ok(r?.decision === 'block' && /F12/.test(r.reason), `esperava block citando F12, veio ${JSON.stringify(r)}`);
+  igual(rodar(stop()), null, 'saída');
 });
-caso('R1: o mesmo item gravado DEPOIS do turno aberto por peer → passa', () => {
-  item('F12', vivo({ atualizadoEm: '2026-10-24T12:40:00.000Z' }));
+caso('R1: edição DEPOIS do turno aberto por peer → bloqueia citando o item', () => {
+  item('F12', emMerge());
   registroLocal(LOCAL, SID);
   transcript([
     { type: 'user', uuid: 'u1', timestamp: '2026-10-24T12:10:00.000Z', origin: { kind: 'human' }, message: { role: 'user', content: 'siga com o F12' } },
     { type: 'user', uuid: 'u2', isMeta: true, timestamp: '2026-10-24T12:30:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: 'conserte' } },
     usaNoTurno('Edit', { file_path: '/r/a.mjs' }, '2026-10-24T12:31:00.000Z'),
   ]);
-  igual(rodar(stop()), null, 'saída');
+  const r = rodar(stop());
+  ok(r?.decision === 'block' && /F12/.test(r.reason), `esperava block citando F12, veio ${JSON.stringify(r)}`);
 });
 
 // F404 (ADR 0024): o PR que fecha o item leva a entrega; a trava cobra.
-const emMerge = (extra = {}) => vivo({ etapa: 'merge', prs: [77], atualizadoEm: DEPOIS, ...extra });
 caso('F404: item meu em merge com PR, sem maisFatias e sem entrega: bloqueia com o comando da entrega', () => {
   item('F12', emMerge());
   registroLocal(LOCAL, SID);
@@ -285,12 +284,51 @@ caso('F404: turno que só leu não é cobrado pela entrega', () => {
   transcript(turno(usaNoTurno('Read', { file_path: '/r/a.mjs' })));
   igual(rodar(stop()), null, 'só leu');
 });
-caso('F404: sem gravar o item E sem entrega, um só bloqueio cita os dois', () => {
+caso('F424: item sem o agora gravado E sem entrega: o bloqueio cobra só a entrega', () => {
   registroLocal(LOCAL, SID);
   item('F12', emMerge({ atualizadoEm: ANTES }));
   transcript(turno());
   const r = rodar(stop());
-  ok(r?.decision === 'block' && r.reason.includes('"agora"') && r.reason.includes('"entrega"'), `motivo: ${r?.reason}`);
+  ok(r?.decision === 'block' && r.reason.includes('"entrega"') && !r.reason.includes('"agora"'), `motivo: ${r?.reason}`);
+  igual(desfechos().join(','), 'bloqueou-entrega', 'log');
+});
+
+// F424 (ADR 0027): a etapa e os PRs deduzidos pela batida valem sobre os declarados.
+caso('F424: o PR deduzido pela batida conta, mesmo sem a dona ter declarado etapa nem PR', () => {
+  registroLocal(LOCAL, SID);
+  transcript(turno());
+  item('F12', vivo());
+  igual(rodar(stop()), null, 'sem a projeção, o declarado (execucao, sem PR) passa');
+  deduzido({ F12: { etapa: 'merge', prs: [77], prsAbertos: [77] } });
+  ok(existsSync(deduzidoArq()), 'precondição: a projeção não foi gravada');
+  const r = rodar(stop());
+  ok(r?.decision === 'block' && r.reason.includes('F12') && r.reason.includes('"entrega"'), `esperava block da entrega, veio ${JSON.stringify(r)}`);
+});
+caso('F424: a etapa deduzida fora de merge (PR fechado sem merge) solta o item declarado em merge', () => {
+  registroLocal(LOCAL, SID);
+  transcript(turno());
+  item('F12', emMerge());
+  deduzido({ F12: { etapa: 'execucao', prs: [77], prsAbertos: [] } });
+  igual(rodar(stop()), null, 'deduzido em execucao passa');
+  deduzido({ F13: { etapa: 'execucao', prs: [] } });
+  igual(rodar(stop())?.decision, 'block', 'prova: projeção de outro item não mexe no F12');
+});
+caso('F424: projeção mais velha que a gravação do item (o --anotar depois da batida) não vale', () => {
+  registroLocal(LOCAL, SID);
+  transcript(turno());
+  item('F12', emMerge());
+  deduzido({ F12: { etapa: 'execucao', prs: [], prsAbertos: [] } }, ANTES);
+  igual(rodar(stop())?.decision, 'block', 'a batida de antes do PR não esconde o PR que o --anotar gravou');
+  deduzido({ F12: { etapa: 'execucao', prs: [], prsAbertos: [] } }, DEPOIS);
+  igual(rodar(stop()), null, 'prova: a mesma projeção, posterior à gravação, solta o item');
+});
+caso('F424: projeção ilegível vale como ausente (o declarado decide)', () => {
+  registroLocal(LOCAL, SID);
+  transcript(turno());
+  item('F12', emMerge());
+  writeFileSync(deduzidoArq(), '{quebrado');
+  igual(rodar(stop())?.decision, 'block', 'declarado em merge sem entrega bloqueia');
+  igual(desfechos().join(','), 'bloqueou-entrega', 'log sem erro');
 });
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
