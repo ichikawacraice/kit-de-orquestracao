@@ -106,12 +106,15 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     const prsDoItem = dd ? dd.prs : d.prs;
     const gente = [...new Set([d.donoLocalId, ...(Array.isArray(d.com) ? d.com.map((c) => c?.localId) : [])].filter(texto))];
     const t = dd ? ms(dd.ultimaAtividade) : ms(d.atualizadoEm);
-    const parado = dd ? dd.parado : !d.espera && !d.trava && (t === null || agoraMs - t >= prazoMin * 60_000);
+    // F446: a espera e a trava vêm do item relido dentro da trava, não do deduzido, que roda antes, fora dela, com até 25 s de gh:
+    // a espera gravada nesse meio tempo segura a cobrança, a retomada do limite e o relatório de merge parado
+    const emEspera = Boolean(d.espera || d.trava);
+    const parado = !emEspera && (dd ? dd.parado : t === null || agoraMs - t >= prazoMin * 60_000);
     const minParado = t === null ? null : Math.floor((agoraMs - t) / 60_000);
 
     // a recusa cujo reset passou há mais de 24 h é velha (a batida não a viu a tempo, ou a mensagem não mudou o transcript): fluxo
     // normal, para a retomada não sair em laço nem segurar o item; dona arquivada também segue o fluxo normal (o item é solto)
-    const lim = etapa !== 'merge' && texto(d.donoLocalId) && viva(d.donoLocalId) ? limites[d.donoLocalId] : null;
+    const lim = !emEspera && etapa !== 'merge' && texto(d.donoLocalId) && viva(d.donoLocalId) ? limites[d.donoLocalId] : null;
     if (lim && Number.isFinite(lim.resetsAtMs) && agoraMs - lim.resetsAtMs < LIMITE_VELHO_MS) {
       if (agoraMs < lim.resetsAtMs) { delete cutucadas[F]; continue; } // espera o reset: nem cutuca nem solta
       const r = porId.get(d.donoLocalId);
@@ -126,7 +129,7 @@ export function julgar({ agoraMs, itens, linhas, projetoDe, estado, semDona, fil
     if (etapa === 'merge') {
       if (Array.isArray(prsDoItem) && prsDoItem.some((p) => (filasVivas[nome] ?? []).includes(p))) continue;
       const naFilaOrfa = Array.isArray(prsDoItem) && (filasOrfas[nome]?.prs ?? []).some((p) => prsDoItem.includes(p.pr));
-      if (naFilaOrfa) { proj.merge.push(F); continue; }
+      if (naFilaOrfa) { if (!emEspera) proj.merge.push(F); continue; }
       if (!parado) continue;
       // F373: o PR fora da fila é da dona viva: a batida cobra o `--anotar` dela, uma vez por parada; a orquestradora só recebe o
       // item sem dona viva, sem PR em `prs`, cuja dona não respondeu à cobrança em `soltaMin`, ou já cobrado ANOTAR_MAX vezes pelos

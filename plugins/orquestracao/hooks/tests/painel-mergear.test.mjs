@@ -38,7 +38,7 @@ function git(cwd, ...args) {
 }
 
 // Monta: origin bare, clone `projx` (o nome da pasta é o projeto), PR 12 = commit em refs/pull/12/head.
-function montar({ conflito = false, bump = false } = {}) {
+function montar({ conflito = false, bump = false, soBranch = false } = {}) {
   const raiz = mkdtempSync(join(tmpdir(), 'painel-mergear-'));
   const origin = join(raiz, 'origin.git');
   const clone = join(raiz, 'projx');
@@ -54,7 +54,7 @@ function montar({ conflito = false, bump = false } = {}) {
   if (bump) writeFileSync(pluginJson, '{\n  "name": "p",\n  "version": "0.1.1"\n}\n');
   git(clone, 'add', '.'); git(clone, 'commit', '-qm', 'pr');
   const sha = git(clone, 'rev-parse', 'HEAD');
-  git(clone, 'push', '-q', 'origin', 'pr:refs/pull/12/head');
+  git(clone, 'push', '-q', 'origin', soBranch ? 'pr:refs/heads/pr' : 'pr:refs/pull/12/head');
   git(clone, 'checkout', '-q', 'main');
   if (conflito) { writeFileSync(join(clone, 'a.txt'), 'da main\n'); git(clone, 'commit', '-qam', 'main anda'); git(clone, 'push', '-q', 'origin', 'main'); }
   const gh = join(raiz, 'gh');
@@ -463,5 +463,30 @@ test('F370: com BATIDA=off o merge não grava aviso (ninguém o entregaria) e a 
     assert.equal(it.fatia, true); assert.equal(it.dona, LA);
     assert.equal(it.avisoGravado, undefined);
     assert.ok(!existsSync(join(c.raiz, 'fila-de-merge', 'projx.json')));
+  } finally { limpar(c); }
+});
+
+// F446: o remoto sem `refs/pull/N/head` tem a branch do PR (`headRefName` do gh): o mergear busca a ponta por ela.
+test('F446: sem refs/pull/12/head, o mergear confere pela branch do PR e mergeia', () => {
+  const c = montar({ soBranch: true });
+  try {
+    const r = c.painel('mergear', '12', c.sha.slice(0, 7));
+    assert.equal(r.exit, 0, r.err + r.out);
+    assert.equal(JSON.parse(r.out).mergeado, true);
+    assert.equal(c.merges().length, 1);
+  } finally { limpar(c); }
+});
+
+test('F446: a branch do PR que não tem o sha validado não serve de ponta', () => {
+  const c = montar({ soBranch: true });
+  try {
+    // o gh diz uma ponta que a branch não tem (ex.: a branch andou para trás num force-push)
+    const est = JSON.parse(readFileSync(c.estado, 'utf8'));
+    est.prs[12].headRefOid = 'f'.repeat(40);
+    writeFileSync(c.estado, JSON.stringify(est));
+    const r = c.painel('mergear', '12', 'fffffff');
+    assert.notEqual(r.exit, 0, r.out);
+    assert.match(r.err + r.out, /não tem o sha fffffff/);
+    assert.equal(c.merges().length, 0);
   } finally { limpar(c); }
 });

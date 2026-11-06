@@ -24,9 +24,11 @@ export function reabertoEm(d) {
 // (a `branch` do item, ou a do worktree dela). O PR da branch só conta se foi criado depois do item nascer: o worktree
 // reaproveitado não herda o PR do item anterior. O PR mergeado antes do item nascer não conta (o número de `prs` que é de outro
 // repositório e colide com um PR antigo deste), nem o mergeado antes da última reabertura (o item reaberto não refecha pelo
-// merge que já o tinha fechado). `ambiguos`: os números que a branch liga a mais de um item vivo (não ligam
-// nenhum). → [{number, state, mergedAt, updatedAt, headRefName, fonte}]
-export function prsDoItem(d, { prs = null, branchDaDona = null, ambiguos = null } = {}) {
+// merge que já o tinha fechado). `ambiguos`: os números que a branch liga a mais de um item vivo, ou a outro item (não ligam
+// nenhum). F446: com o `id` (F303), liga também o PR ABERTO cujo primeiro id de item na branch é o dele (`feat/f303-x`, não
+// `f450-conserta-o-f303`): a dona que roda no checkout principal e abre o PR num worktree ao lado não tem a branch dele no git
+// da sessão. Só o aberto: o id segura o fechamento, nunca fecha o item. → [{number, state, mergedAt, updatedAt, headRefName, fonte}]
+export function prsDoItem(d, { prs = null, branchDaDona = null, ambiguos = null, id = null } = {}) {
   const porNumero = new Map((prs ?? []).filter((p) => Number.isInteger(p?.number)).map((p) => [p.number, p]));
   const nasceu = ms(d?.historico?.[0]?.em);
   const reaberto = reabertoEm(d);
@@ -40,15 +42,21 @@ export function prsDoItem(d, { prs = null, branchDaDona = null, ambiguos = null 
     ligados.set(n, { number: n, ...(p ?? { state: null }), fonte: 'item' });
   }
   const branches = branchesDoItem(d, branchDaDona);
+  const doId = texto(id) && /^F\d+$/i.test(id.trim()) ? id.trim().toUpperCase() : null;
   for (const p of porNumero.values()) {
-    if (ligados.has(p.number) || inteiros(d?.prs).includes(p.number) || !branches.includes(p.headRefName)) continue;
+    if (ligados.has(p.number) || inteiros(d?.prs).includes(p.number)) continue;
+    const pelaBranch = branches.includes(p.headRefName);
+    const peloId = !pelaBranch && doId !== null && p.state === 'OPEN' && texto(p.headRefName) && !BRANCH_DE_BASE.test(p.headRefName) && primeiroId(p.headRefName) === doId;
+    if (!pelaBranch && !peloId) continue;
     if (ambiguos?.has(p.number) || jaFechou(p)) continue;
     const criado = ms(p.createdAt) ?? ms(p.mergedAt);
     if (nasceu !== null && criado !== null && criado < nasceu) continue;
-    ligados.set(p.number, { ...p, fonte: 'branch' });
+    ligados.set(p.number, { ...p, fonte: pelaBranch ? 'branch' : 'id' });
   }
   return [...ligados.values()].sort((a, b) => a.number - b.number);
 }
+// o primeiro id de item da branch, como palavra e sem diferenciar maiúsculas: `feat/f30-x` → F30; `ref30`, `f30x` → nenhum
+export const primeiroId = (branch) => { const m = /(?:^|[^a-z0-9])(f\d+)(?![a-z0-9])/i.exec(String(branch)); return m ? m[1].toUpperCase() : null; };
 const branchesDoItem = (d, branchDaDona) => [...new Set([d?.branch, branchDaDona].filter((b) => texto(b) && !BRANCH_DE_BASE.test(b)))];
 
 // A branch da dona: a do worktree (o git) vale sobre a da lista do app, que é a branch com que o app criou a sessão.
@@ -63,8 +71,8 @@ const ehDoOrca = (id) => typeof id === 'string' && id.startsWith('orca_session_i
 // F430: `prsMergeados` são os ligados que o gh leu mergeados (o pane mostra `#N mergeado` com o número certo); `prsDescartados`,
 // os gravados em `prs` que a batida tirou da conta (o merge de antes do item nascer ou da reabertura): o pane trata como novo o
 // PR gravado que não está em nenhum dos dois, sem adivinhar pelo número.
-export function deduzir({ item: d, linha = null, prs = null, git = null, agoraMs, prazoMin, ambiguos = null, orca = null }) {
-  const ligados = prsDoItem(d, { prs, branchDaDona: branchDe({ linha, git }), ambiguos });
+export function deduzir({ id = null, item: d, linha = null, prs = null, git = null, agoraMs, prazoMin, ambiguos = null, orca = null }) {
+  const ligados = prsDoItem(d, { prs, branchDaDona: branchDe({ linha, git }), ambiguos, id });
   const lidos = ligados.filter((p) => p.state); // os que o gh leu
   const abertos = lidos.filter((p) => p.state === 'OPEN');
   const valendo = lidos.filter((p) => p.state !== 'CLOSED'); // o PR fechado sem merge não conta
@@ -175,24 +183,25 @@ export function coletar({ itens, linhas, projetoDe, slug = (p) => String(p ?? ''
     }
     // 1ª passada: o git de cada dona e os PRs que a branch liga (para achar o PR que a branch liga a mais de um item vivo)
     const base = new Map();
-    const vezes = new Map(); // `projeto#número` → quantos itens a branch liga
+    const porBranch = new Map(); // `projeto#número` → os itens que a branch liga a ele
     for (const [F, d] of itens) {
       const linha = porId.get(d?.donoLocalId) ?? null;
       const orca = !linha && ehDoOrca(d?.donoLocalId) ? orcaDe(d.donoLocalId) : null;
       const git = viva(linha) ? ler.gitDoWorktree(linha.cwd) : orca && orca.viva !== false && texto(orca.cwd) ? ler.gitDoWorktree(orca.cwd) : null;
       const prs = prsPorProjeto.get(slug(d?.projeto)) ?? null;
       base.set(F, { linha, git, prs, orca });
-      for (const pr of prsDoItem(d, { prs, branchDaDona: branchDe({ linha, git }) })) {
-        if (pr.fonte === 'branch') { const k = `${slug(d?.projeto)}#${pr.number}`; vezes.set(k, (vezes.get(k) ?? 0) + 1); }
+      for (const pr of prsDoItem(d, { prs, branchDaDona: branchDe({ linha, git }), id: F })) {
+        if (pr.fonte === 'branch') { const k = `${slug(d?.projeto)}#${pr.number}`; porBranch.set(k, new Set([...(porBranch.get(k) ?? []), F])); }
       }
     }
     const saida = new Map();
     for (const [F, d] of itens) {
       const { linha, git, prs, orca } = base.get(F);
-      // fora da branch: o PR que ela liga a mais de um item, e o que outro item do projeto já lista em `prs` (é dele)
-      const ambiguos = new Set([...vezes].filter(([k, n]) => n > 1 && k.startsWith(`${slug(d?.projeto)}#`)).map(([k]) => Number(k.split('#').pop())));
+      // fora da branch: o PR que a branch liga a outro item (a mais de um, ou a outro que não este: o id não o tira dele, F446),
+      // e o que outro item do projeto já lista em `prs` (é dele)
+      const ambiguos = new Set([...porBranch].filter(([k, quem]) => k.startsWith(`${slug(d?.projeto)}#`) && [...quem].some((G) => G !== F)).map(([k]) => Number(k.split('#').pop())));
       for (const [G, e] of itens) if (G !== F && slug(e?.projeto) === slug(d?.projeto)) for (const n of inteiros(e?.prs)) ambiguos.add(n);
-      saida.set(F, deduzir({ item: d, linha, prs, git, agoraMs, prazoMin, ambiguos, orca }));
+      saida.set(F, deduzir({ id: F, item: d, linha, prs, git, agoraMs, prazoMin, ambiguos, orca }));
     }
     return saida;
   } finally { prazoFinal = Infinity; }
