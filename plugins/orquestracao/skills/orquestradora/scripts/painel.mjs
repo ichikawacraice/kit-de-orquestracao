@@ -36,6 +36,7 @@
 //   painel.mjs orquestradora assumir   (F447) declara esta sessão a orquestradora do projeto da pasta: grava <base>/ativas/<CLAUDE_CODE_SESSION_ID> com o git common dir e, no Orca, o orca_session_id na 2ª linha (as travas valem por ele; no Orca o título não se troca) → {marcador, repo, orcaId, outras}
 //   painel.mjs orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]   (F447) arquiva no Orca a dona do despacho: confere PR mergeado com o HEAD da worktree (ou nenhum PR e nenhum commit fora da base), nenhuma pergunta aberta do item (pelo item, por quem trabalhou nele ou pelo título), worktree ligada (nunca o checkout principal), limpa e empurrada e worker parado (todo despacho do mesmo terminal ou pasta em estado final); valendo, `orca orchestration worker-release` e `orca worktree set --workspace-status completed` (e `orca worktree rm`, nunca --force, com --remover-worktree) → {arquivado, condicoes, feitos}; faltando algo → {arquivado:false, faltam} e exit 1, sem chamar nada; --seco só confere
 //   painel.mjs orquestradora arquivar --concluidas [--itens F<n>,F<n>] [--remover-worktree] [--seco]   (F469) a aba do kit: as donas de item `feito`/`descartado` com worker no Orca, cada uma pelas MESMAS condições do arquivar acima, e com --remover-worktree também sai da barra lateral (a flag vale para todas, como no avulso) → {aptas, arquivadas, recusadas:[{item, faltam}]}; --seco só lista as aptas; --itens limita ao que a pessoa confirmou; exit 1 se alguma ficou recusada
+//   painel.mjs orquestradora retomar F<n> --dispatch <ctx_…> [--esperar <s>] [--seco]   (F479) passa o item à sessão nova que a orquestradora abriu na worktree (limite de uso, contexto cheio): espera até --esperar s (60) o registro da sessão do despacho em orca-sessoes/, troca a dona, o `com` (sem as sessões da worktree que saem) e o `sessaoId` das perguntas abertas/assumidas delas, põe a nova em `sessoes`, solta os despachos parados da worktree e lê de volta → {item, para, de, perguntas, liberados, conferido}; recusa sem gravar o despacho novo que não está vivo, o item de outra worktree e a sessão antiga ou outro despacho ainda vivos; --seco só diz o que faria
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
 //   painel.mjs handoffs limpar [--dias N] [--seco]   apaga de handoffs/arquivo/ o que passa de N dias (padrão 30: pelo `feitoEm` do item; sem item, pelo mtime); --seco só lista → {apagados:[…], seco}
 //   (item que vira feito/descartado arquiva os próprios handoffs e roda a limpeza; reaberto, eles voltam. Pasta: PAINEL_HANDOFFS_DIR, senão PAINEL_DIR/../pool/handoffs, senão ~/.claude/orquestracao/pool/handoffs)
@@ -2165,6 +2166,134 @@ function arquivarConcluidas(itensPedidos, seco, remover) {
   return { seco, aptas, arquivadas, recusadas };
 }
 
+// F479: `orquestradora retomar F<n> --dispatch <ctx novo> [--esperar <s>] [--seco]`. No Orca, a dona que para por limite de uso
+// (ou troca de sessão por contexto cheio) termina `stopped/failed`, e a orquestradora abre outra sessão na mesma worktree. O item
+// passa a ela aqui, sem depender de a sessão nova se regravar: `donoLocalId`, o `com` sem as sessões paradas da worktree, a nova
+// em `sessoes` e o `sessaoId` das perguntas que esperam resposta (o endereço de entrega se rederiva). Solta os despachos parados
+// da worktree que ficaram com o terminal preso, e lê de volta. Recusa (sem gravar nem chamar o orca) o despacho novo que não está
+// vivo, o item de outra worktree e a worktree com outra sessão viva: duas donas na mesma pasta.
+const parouDeVez = (w) => moduloOrca.estadoFinal(w?.state) || String(w?.state ?? '').toLowerCase() === 'stopped';
+const trabalhando = (w) => w?.vivo === true && !parouDeVez(w);
+function registrosDoOrca() {
+  const dir = moduloOrca.pastaDasSessoesDoOrca();
+  let nomes = [];
+  try { nomes = readdirSync(dir).filter((n) => n.endsWith('.json')); } catch { return []; }
+  return nomes.flatMap((n) => { try { const r = moduloOrca.lerSessaoDoOrca(`orca_session_id:${n.slice(0, -5)}`); return r ? [r] : []; } catch { return []; } });
+}
+function retomarNoOrca(args) {
+  const uso = 'uso: painel.mjs orquestradora retomar F<n> --dispatch <ctx_…> [--esperar <s>] [--seco]';
+  const seco = flag(args, '--seco', false);
+  const dispatchId = flag(args, '--dispatch');
+  const esperar = flag(args, '--esperar');
+  const [F, ...sobra] = args;
+  if (!/^F\d+$/.test(String(F ?? '')) || !/^ctx_[\w-]+$/.test(String(dispatchId ?? ''))) throw new Error(uso);
+  if (sobra.length) throw new Error(`argumento desconhecido: ${sobra[0]} (${uso})`);
+  const prazoS = esperar === null ? 60 : Number(esperar);
+  if (!Number.isFinite(prazoS) || prazoS < 0) throw new Error(`--esperar pede segundos (0 ou mais), veio ${JSON.stringify(esperar)}`);
+  const item0 = ler('fila', F);
+  if (!item0) throw new Error(`retomar: fila/${F} não existe`);
+  if (ETAPAS_FINAIS.has(item0.data?.etapa)) throw new Error(`retomar: ${F} está em etapa final (${item0.data.etapa}); não há dona a passar`);
+  const lista = listaDoOrca();
+  if (lista === null) throw new Error('retomar: sem orca nesta máquina (a retomada do Orca precisa do orca worker-list)');
+  if (lista.erro) throw new Error(`retomar: não li o Orca: ${lista.erro}`);
+  const novo = lista.workers.find((w) => w.dispatchId === dispatchId);
+  if (!novo) throw new Error(`retomar: o despacho ${dispatchId} não está no orca worker-list`);
+  if (!trabalhando(novo) || !novo.terminal) throw new Error(`retomar: o despacho ${dispatchId} não está vivo (${novo.state ?? '?'}, terminal ${novo.terminalState ?? '?'}): abra a sessão nova antes`);
+  const pasta = novo.pasta;
+  if (!pasta || !existsSync(pasta)) throw new Error(`retomar: a worktree ${pasta ?? '(sem pasta)'} do despacho ${dispatchId} não existe`);
+  // A sessão nova se acha pelo terminal do despacho, no registro que o início da sessão grava (segundos depois do worker-start).
+  const limite = Date.now() + prazoS * 1000;
+  let reg = null;
+  for (;;) {
+    reg = registrosDoOrca().filter((r) => r.terminal === novo.terminal).sort((a, b) => String(b.em ?? '').localeCompare(String(a.em ?? '')))[0] ?? null;
+    if (reg || Date.now() >= limite) break;
+    dormir(Math.min(1000, Math.max(0, limite - Date.now())));
+  }
+  if (!reg) throw new Error(`retomar: a sessão nova do despacho ${dispatchId} ainda não gravou o registro em orca-sessoes/ (terminal ${novo.terminal}); rode de novo depois do primeiro turno dela`);
+  if (!moduloOrca.dentroDe(reg.cwd, pasta)) throw new Error(`retomar: o registro da sessão nova (${reg.orcaId}) está em ${reg.cwd ?? '(sem pasta)'}, fora da worktree ${pasta}`);
+  const NOVA = reg.orcaId;
+  // Outra sessão trabalhando na mesma worktree: não se sabe qual é a dona; não passa nada.
+  const outros = lista.workers.filter((w) => w.terminal !== novo.terminal && w.pasta && moduloOrca.dentroDe(w.pasta, pasta) && trabalhando(w));
+  let branch = null;
+  try { branch = gitDe(pasta, ['branch', '--show-current']) || null; } catch { /* sem branch: o item se liga pelas sessões */ }
+  const registroDe = (id) => { try { return moduloOrca.lerSessaoDoOrca(id); } catch { return null; } };
+  const naWorktree = (id) => { const r = registroDe(id); return Boolean(r?.cwd && moduloOrca.dentroDe(r.cwd, pasta)); };
+  // Sem registro, a sessão morreu (o limpador apaga o de terminal solto) e não se sabe a pasta: conta como desta worktree, já que o
+  // item é dela. Com registro em outra pasta, é de outro lugar (quem ajuda de outra worktree fica).
+  const saiDaqui = (id) => { const r = registroDe(id); return !r || Boolean(r.cwd && moduloOrca.dentroDe(r.cwd, pasta)); };
+  const doOrca = (id) => textoNaoVazio(id) && String(id).startsWith('orca_session_id:');
+  // A branch da worktree segue `f<n>-…` (o item a nomeia); o campo `branch` do item quase nunca está gravado.
+  const branchDoItem = Boolean(branch && new RegExp(`^${F.toLowerCase()}(?:-|$)`).test(branch.toLowerCase()));
+  const vivaAinda = (id) => { const r = registroDe(id); return Boolean(r?.terminal) && lista.workers.some((w) => w.terminal === r.terminal && trabalhando(w)); };
+  const liberar = lista.workers.filter((w) => w.terminal !== novo.terminal && w.dispatchId && w.pasta && moduloOrca.dentroDe(w.pasta, pasta) && w.vivo && parouDeVez(w)).map((w) => w.dispatchId);
+
+  const plano = () => {
+    const d = ler('fila', F)?.data ?? {};
+    if (ETAPAS_FINAIS.has(d.etapa)) throw new Error(`retomar: ${F} está em etapa final (${d.etapa}); não há dona a passar`);
+    const com = Array.isArray(d.com) ? d.com : [];
+    const sessoes = Array.isArray(d.sessoes) ? d.sessoes : [];
+    const ligado = branchDoItem || d.donoLocalId === NOVA || [d.donoLocalId, ...com.map((c) => c?.localId)].some((id) => textoNaoVazio(id) && naWorktree(id)) || Boolean(branch && d.branch === branch);
+    if (!ligado) throw new Error(`retomar: ${F} não é da worktree ${pasta} (a branch dela, ${branch ?? '(sem branch)'}, não é f${F.slice(1)}-…, e nem a dona, nem quem está no com, nem a branch ${d.branch ?? '(sem branch)'} do item apontam para ela)`);
+    // As que saem: a dona gravada (quem a nova substitui) e as sessões do Orca do item (com e sessoes) desta worktree ou sem registro.
+    const antigas = new Set([d.donoLocalId, ...[...com.map((c) => c?.localId), ...sessoes].filter((id) => doOrca(id) && saiDaqui(id))].filter((id) => textoNaoVazio(id) && id !== NOVA));
+    const vivas = [...antigas].filter(vivaAinda);
+    if (vivas.length) throw new Error(`retomar: a sessão ${vivas.join(', ')} ainda está viva: duas donas na mesma worktree; solte a antiga antes`);
+    if (outros.length) throw new Error(`retomar: a worktree ${pasta} tem outro despacho que ainda está vivo (${outros.map((w) => w.dispatchId).join(', ')}): solte-o ou confira qual é a dona`);
+    const herdado = com.find((c) => c?.localId === d.donoLocalId)?.oQue ?? com.find((c) => antigas.has(c?.localId))?.oQue ?? d.titulo ?? F;
+    const comNovo = com.filter((c) => !antigas.has(c?.localId));
+    if (!comNovo.some((c) => c?.localId === NOVA)) comNovo.push({ localId: NOVA, apelido: 'dona', oQue: herdado });
+    const data = {};
+    if (d.donoLocalId !== NOVA || d.donoApelido !== 'dona') Object.assign(data, { donoLocalId: NOVA, donoApelido: 'dona' });
+    if (JSON.stringify(comNovo) !== JSON.stringify(com)) data.com = comNovo;
+    if (!sessoes.includes(NOVA)) data.sessoes = [...sessoes, NOVA];
+    const dir = caminho('perguntas');
+    const perguntas = antigas.size && existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.json')).flatMap((n) => {
+      try {
+        const doc = JSON.parse(readFileSync(join(dir, n), 'utf8'));
+        const p = doc?.data ?? {};
+        if (!ESPERA_ENTREGA.has(p.estado ?? p.status) || !antigas.has(p.sessaoId) || (p.item && p.item !== F)) return [];
+        // o endereço explícito a um despacho parado da worktree também morreu: volta a ser o da sessão nova
+        const doDespachoVelho = /^dispatch:/.test(String(p.endereco?.orca ?? '')) && liberar.concat(lista.workers.filter((w) => w.pasta && moduloOrca.dentroDe(w.pasta, pasta) && parouDeVez(w)).map((w) => w.dispatchId)).includes(p.endereco.orca.slice(9));
+        return [{ id: doc.id, de: p.sessaoId, data: { sessaoId: NOVA, ...(doDespachoVelho ? { endereco: null } : {}) } }];
+      } catch { return []; }
+    }) : [];
+    // `de`: quem de fato saiu (a dona trocada, quem saiu do com, o dono das perguntas que passaram); `sessoes` guarda todas (custo)
+    const de = [...antigas].filter((id) => id === d.donoLocalId || com.some((c) => c?.localId === id) || perguntas.some((q) => q.de === id));
+    return { de, data, perguntas };
+  };
+
+  if (seco) {
+    const p = plano();
+    return { seco: true, item: F, dispatchId, pasta, para: NOVA, de: p.de, grava: p.data, perguntas: p.perguntas.map((q) => q.id), liberaria: liberar };
+  }
+  const feito = comTrava(() => {
+    const p = plano();
+    const vista = new Map();
+    const ops = [
+      ...(Object.keys(p.data).length ? [{ op: 'update', colecao: 'fila', id: F, data: p.data, [VIA_COM]: true }] : []),
+      ...p.perguntas.map((q) => ({ op: 'update', colecao: 'perguntas', id: q.id, data: q.data })),
+    ];
+    ops.map((o) => planejar(o, undefined, vista)).forEach(efetivar);
+    return p;
+  });
+  const liberados = []; const falhas = [];
+  for (const ctx of liberar) {
+    const r = orcaMutante(['orchestration', 'worker-release', '--dispatch', ctx]);
+    if (r.ok) liberados.push(ctx); else falhas.push(`${r.comando} falhou: ${r.erro}`);
+  }
+  // lê de volta
+  const d = ler('fila', F)?.data ?? {};
+  const faltam = [];
+  if (d.donoLocalId !== NOVA) faltam.push(`o item ficou com donoLocalId ${d.donoLocalId ?? 'null'}`);
+  if (!(Array.isArray(d.com) && d.com.some((c) => c?.localId === NOVA))) faltam.push('a sessão nova não está no com');
+  for (const q of feito.perguntas) {
+    const lida = ler('perguntas', q.id)?.data;
+    if (lida?.sessaoId !== NOVA) faltam.push(`${q.id} ficou com sessaoId ${lida?.sessaoId ?? 'null'}`);
+  }
+  const conferido = faltam.length === 0;
+  return { item: F, dispatchId, pasta, para: NOVA, de: feito.de, perguntas: feito.perguntas.map((q) => q.id), liberados, conferido, ...(faltam.length ? { faltam } : {}), ...(falhas.length ? { falhas } : {}) };
+}
+
 function comandoOrquestradora(args) {
   const [sub, ...resto] = args;
   if (!regras) throw new Error(`orquestradora: não consegui carregar ${POOL_COMUM}`);
@@ -2173,7 +2302,8 @@ function comandoOrquestradora(args) {
     return assumir();
   }
   if (sub === 'arquivar') return arquivarNoOrca(resto);
-  throw new Error('uso: painel.mjs orquestradora assumir | orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]');
+  if (sub === 'retomar') return retomarNoOrca(resto);
+  throw new Error('uso: painel.mjs orquestradora assumir | orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco] | orquestradora retomar F<n> --dispatch <ctx_…> [--esperar <s>] [--seco]');
 }
 
 const MARCA_DA_MIGRACAO = () => join(BASE, '.migracao-F183');
@@ -2460,7 +2590,7 @@ function main(argv) {
       throw new Error('uso: painel.mjs get|list|set|update|delete|batch|temas|perguntas|com|soltar|batida|mergear|custo|entregas|pode-reiniciar|fila-de-merge|handoffs|orquestradora … (veja o cabeçalho do script)');
   }
   process.stdout.write(`${JSON.stringify(saida, null, 2)}\n`);
-  return (cmd === 'mergear' && saida.recusado) || (cmd === 'orquestradora' && saida.arquivado === false && !saida.seco) || (cmd === 'orquestradora' && Array.isArray(saida.recusadas) && saida.recusadas.length) ? 1 : 0;
+  return (cmd === 'mergear' && saida.recusado) || (cmd === 'orquestradora' && saida.arquivado === false && !saida.seco) || (cmd === 'orquestradora' && Array.isArray(saida.recusadas) && saida.recusadas.length) || (cmd === 'orquestradora' && (saida.conferido === false || saida.falhas?.length)) ? 1 : 0;
 }
 
 try {

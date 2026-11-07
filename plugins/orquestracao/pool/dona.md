@@ -37,7 +37,7 @@ O item no painel é o que o operador e a orquestradora leem de você. O que se v
 
 ## Contexto
 A régua da dona ([papeis-e-modelos](../skills/papeis-e-modelos/SKILL.md#contexto)): a partir de 350 mil, grave o handoff do item (`~/.claude/orquestracao/pool/handoffs/F<n>.md`, skill `handoff-de-sessao`) e limpe no próximo momento oportuno; você continua dona depois da limpeza (o `local_…` não muda). A volta é sozinha: o `clear_session "self"` de quem é dona de item vivo grava a marca de volta, e o mod de outra sessão viva te acorda com o caminho do handoff de cada item; grave o handoff **antes** de limpar. Parou no limite de uso? Não precisa fazer nada: passada a hora da volta, a batida te manda retomar pelo handoff ([limite de uso](protocolo.md#limite-de-uso)).
-No Orca não há `clear_session`: ao chegar no teto, grave o handoff e termine com `worker_done --outcome failed`, dizendo que é troca de sessão; no terminal, peça o `/clear` ao operador ([tabela](anfitriao-orca.md)).
+No Orca não há `clear_session`: ao chegar no teto, grave o handoff e termine com `worker_done --outcome failed`, dizendo que é troca de sessão; no terminal, peça o `/clear` ao operador ([tabela](anfitriao-orca.md)). A orquestradora abre a sessão nova na mesma worktree e passa o item a ela ([retomar a dona](../skills/orquestradora/SKILL.md#retomar-a-dona)); a sessão nova retoma pelo handoff.
 
 ## O que vai para o operador
 O estado do trabalho em palavras do produto: o que já funciona, o que falta, o PR. Item citado como `F13 · <título>` na primeira menção. Não narre a coordenação com a orquestradora.
