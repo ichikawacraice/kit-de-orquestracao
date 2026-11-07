@@ -27,12 +27,12 @@ export const INICIO_DE_COMANDO = String.raw`(?:^|[;&|(\n` + '`' + String.raw`])\
 // A invocação do painel: `node …/painel.mjs` (caminho antigo) ou o comando `painel` do bin/ do plugin (com ou sem caminho).
 export const INVOCACAO_DO_PAINEL = String.raw`(?:node\s+["']?\S*painel\.mjs["']?|["']?(?:\S*\/)?painel["']?)`;
 
-// Gravar no painel = invocar o painel com um verbo de escrita. O caminho do script pode vir por variável
+// Gravar no painel = invocar o painel com um verbo de escrita (`perguntas nova` reserva e grava: também conta). O caminho do script pode vir por variável
 // (`P=…/painel.mjs; node "$P" update …`): basta citar o script e um verbo de escrita vir logo depois dele ou da variável.
 export function gravaNoPainel(comando) {
   const c = String(comando ?? '');
-  const porScript = /painel\.mjs/.test(c) && /(painel\.mjs|\$\{?\w+\}?)['"]?\s+(set|update|batch|delete)\b/.test(c);
-  return porScript || new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:set|update|batch|delete)\b`).test(c);
+  const porScript = /painel\.mjs/.test(c) && /(painel\.mjs|\$\{?\w+\}?)['"]?\s+(set|update|batch|delete|perguntas\s+nova)\b/.test(c);
+  return porScript || new RegExp(INICIO_DE_COMANDO + INVOCACAO_DO_PAINEL + String.raw`\s+(?:set|update|batch|delete|perguntas\s+nova)\b`).test(c);
 }
 
 // Modo ausente (F48): ligado ⇔ a bandeira existe, é JSON válido, `desde` é data válida e `ligado !== false`. Qualquer outra

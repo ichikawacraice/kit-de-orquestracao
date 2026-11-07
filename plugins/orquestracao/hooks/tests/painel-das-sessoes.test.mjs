@@ -209,7 +209,7 @@ caso('F400-a: mensagem final sem a marca, sem gravar nada: passa (e a mesma com 
 caso('F400-b: a forma real de um projeto ("assumido", "Q-ID não reservado") sem gravar: bloqueia e diz o comando', () => {
   const r = rodar(turnoComFinal(FINAL_REAL));
   ok(r?.decision === 'block', `esperava bloquear: ${JSON.stringify(r)}`);
-  ok(r.reason.includes('proxima-pergunta') && r.reason.includes('painel set perguntas') && r.reason.includes('"estado":"assumida"'), `o motivo devia dar o comando: ${r.reason}`);
+  ok(r.reason.includes('painel perguntas nova') && r.reason.includes('"estado":"assumida"'), `o motivo devia dar o comando (F478: o que reserva e grava num passo): ${r.reason}`);
   ok(r.reason.includes(LOCAL), `o comando devia trazer o sessaoId desta sessão: ${r.reason}`);
 });
 caso('F400-c: só "Q-ID não reservado", sem a palavra assumida: bloqueia', () => {
@@ -359,9 +359,109 @@ caso('F400-w: a faixa do contador tem borda exata, e a cobrança do Q-ID não ga
   ok(rodar(tp, {}, { stop_hook_active: true, last_assistant_message: 'Nome curto (*assumida, a confirmar*).' })?.decision === 'block', 'a decisão assumida ainda é cobrada no mesmo turno');
   ok(rodar(tp, {}, { stop_hook_active: true, last_assistant_message: 'Nome curto (*assumida, a confirmar*).' }) === null, 'e só uma vez');
 });
-caso('F400-k: a orquestradora (marcador próprio em ativas/) fica de fora', () => {
+caso('F400-k: a orquestradora (marcador próprio em ativas/) fica de fora da decisão assumida e da resposta recebida', () => {
   writeFileSync(dir('home', '.claude', 'orquestracao', 'ativas', SID), 'x\n');
-  ok(rodar(turnoComFinal('Q50 e Q51 seguem *assumidas, a confirmar*.')) === null, 'a orquestradora tem o hook dela');
+  ok(rodar(turnoComFinal('Q50 e Q51 seguem *assumidas, a confirmar*.')) === null, 'relata decisões alheias: a marca não a cobra');
+  pergunta('Q12', LOCAL);
+  ok(rodar(transcript('Q12 — resposta do operador: sim')) === null, 'a resposta recebida não a cobra');
+});
+
+// ---- F478: o Q-ID que chega ao operador tem arquivo no painel, também na orquestradora e no `orca orchestration ask` ----
+// O turno com a saída real de cada comando (o tool_result), para a trava ler o Q-ID que o `proxima-pergunta` devolveu.
+function turnoComSaidas(final, pares, { abertura = 'F9 para você' } = {}) {
+  const f = dir('t.jsonl');
+  const linhas = [{ type: 'user', timestamp: '2026-10-24T12:00:00.000Z', origin: { kind: 'peer' }, message: { role: 'user', content: abertura } }];
+  pares.forEach(([c, saida], i) => {
+    linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: `t${i}`, name: 'Bash', input: { command: c } }] } });
+    linhas.push({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `t${i}`, content: [{ type: 'text', text: saida }] }] } });
+  });
+  linhas.push({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: final }] } });
+  writeFileSync(f, `${linhas.map((l) => JSON.stringify(l)).join('\n')}\n`);
+  return f;
+}
+const orquestradora = () => writeFileSync(dir('home', '.claude', 'orquestracao', 'ativas', SID), 'x\n');
+const SET_RECUSADO = `painel set perguntas Q988 '{"sessaoId":"${LOCAL}","estado":"aberta","titulo":"Dona do F13 parou","caso":"…","recomendacao":"…"}' | tail -3`;
+const ERRO_DO_PAINEL = 'painel.mjs: perguntas/Q988: titulo cita "F13" solto — na primeira menção escreva "F13 · <título do item>"';
+
+caso('F478-a: a orquestradora que cita na mensagem final um Q-ID recente sem arquivo no painel é cobrada', () => {
+  orquestradora(); contador(990);
+  const final = 'Q988 — Nome curto ou longo? Caso: … Recomendo o curto.';
+  const r = rodar(turnoComFinal(final));
+  ok(r?.decision === 'block' && r.reason.includes('Q988') && r.reason.includes('painel perguntas nova'), `esperava cobrar Q988 com o comando novo: ${JSON.stringify(r)}`);
+  const sugeridos = [...r.reason.matchAll(/painel (?:set perguntas Q\d+|perguntas nova) '(\{[^']*\})'/g)].map((m) => m[1]);
+  ok(sugeridos.length > 0, `o motivo devia trazer o comando com o JSON: ${r.reason}`);
+  for (const j of sugeridos) JSON.parse(j.replace(/<[^>]*>/g, 'x'));
+  pergunta('Q988', 'local_DONA');
+  ok(rodar(turnoComFinal(final)) === null, 'Q988 no painel (de outra sessão, que ela relata): passa');
+  pergunta('Q987', 'local_DONA', 'respondida');
+  ok(rodar(turnoComFinal('Q987 decidido: sigo com o curto.')) === null, 'citar pergunta já respondida passa');
+});
+
+caso('F478-b: tirou ID e o `painel set perguntas` foi recusado (o comando rodou, o arquivo não existe): cobra pelo efeito', () => {
+  contador(990);
+  const pares = [['Q=$(proxima-pergunta); echo $Q', 'Q988'], [SET_RECUSADO, ERRO_DO_PAINEL]];
+  const r = rodar(turnoComSaidas('Perguntei ao operador.', pares));
+  ok(r?.decision === 'block' && r.reason.includes('Q988'), `esperava cobrar Q988 pelo arquivo ausente: ${JSON.stringify(r)}`);
+  pergunta('Q988', LOCAL);
+  ok(rodar(turnoComSaidas('Perguntei ao operador.', pares)) === null, 'com o arquivo no painel passa');
+});
+
+caso('F478-c: na orquestradora, tirou ID e não gravou também é cobrado (pelo efeito)', () => {
+  orquestradora(); contador(990);
+  const pares = [['Q=$(proxima-pergunta) && painel set perguntas "$Q" \'{"estado":"aberta"}\'', `Q988\n${ERRO_DO_PAINEL}`]];
+  const r = rodar(turnoComSaidas('Gravei.', pares));
+  ok(r?.decision === 'block' && r.reason.includes('Q988'), `esperava cobrar: ${JSON.stringify(r)}`);
+  pergunta('Q988', LOCAL);
+  ok(rodar(turnoComSaidas('Gravei.', pares)) === null, 'com o arquivo passa');
+});
+
+caso('F478-d: a saída do proxima-pergunta sem Q-ID legível cai na regra antiga (o comando de gravar no turno basta)', () => {
+  contador(990);
+  ok(rodar(turnoComSaidas('Ok.', [['Q=$(proxima-pergunta)', '']]))?.decision === 'block', 'precondição: tirar ID sem gravar cobra');
+  ok(rodar(turnoComSaidas('Ok.', [['Q=$(proxima-pergunta)', ''], [`painel set perguntas "$Q" '{"estado":"aberta"}'`, '{"id":"x"}']])) === null, 'com o comando de gravar passa');
+});
+
+caso('F478-e: o `orca orchestration ask` que cita Q-ID recente sem arquivo no painel é cobrado', () => {
+  contador(990);
+  const ask = 'orca orchestration ask --from orca_session_id:abc --question "Q986 — Nome curto? Caso: … Recomendo o curto."';
+  const r = rodar(turnoComSaidas('Perguntei à coordenadora.', [[ask, 'ok']]));
+  ok(r?.decision === 'block' && r.reason.includes('Q986'), `esperava cobrar Q986: ${JSON.stringify(r)}`);
+  pergunta('Q986', LOCAL);
+  ok(rodar(turnoComSaidas('Perguntei à coordenadora.', [[ask, 'ok']])) === null, 'com o arquivo passa');
+  ok(rodar(turnoComSaidas('Ok.', [['echo "orca orchestration ask --question Q985"', 'x']])) === null, 'citar o comando dentro de string não conta');
+});
+
+caso('F478-f: o subagente (agent_id) segue de fora, também na orquestradora', () => {
+  orquestradora(); contador(990);
+  ok(rodar(turnoComFinal('Q988 — x? Recomendo y.'))?.decision === 'block', 'precondição: na sessão cobra');
+  ok(rodar(turnoComFinal('Q988 — x? Recomendo y.'), {}, { agent_id: 'sub-1' }) === null, 'o subagente não');
+});
+caso('F478-g: fora do registro (sem local_…), a decisão gravada por `painel perguntas nova` conta como gravada', () => {
+  assumidaNoPainel('Q988', 'local_TERM', '2026-10-24T12:01:00.000Z');
+  const final = 'Nome curto (*assumida, a confirmar*, Q988).';
+  const fora = { session_id: 'eeeeeeee-0000-0000-0000-000000000009' };
+  const r0 = rodar(turnoComFinal(final), {}, fora);
+  ok(r0?.decision === 'block', `precondição: sem gravar, cobra: ${JSON.stringify(r0)}`);
+  ok(r0.reason.includes('"sessaoId":"<'), `sem local_, o comando sugerido pede o sessaoId (no terminal o \`nova\` sem ele recusa): ${r0.reason}`);
+  const nova = `painel perguntas nova '{"estado":"assumida","sessaoId":"local_TERM","titulo":"x","caso":"y","recomendacao":"z"}'`;
+  ok(rodar(turnoComFinal(final, [nova]), {}, fora) === null, 'com o `perguntas nova` no turno passa');
+});
+
+caso('F478-h: todo JSON que a trava sugere faz parse (também o do Q-ID já reservado)', () => {
+  const r = rodar(transcript('F5 para você.', [TIRA_ID]));
+  ok(r?.decision === 'block', `precondição: tirar ID sem gravar cobra: ${JSON.stringify(r)}`);
+  const jsons = [...r.reason.matchAll(/'(\{[^']*\})'/g)].map((m) => m[1]);
+  ok(jsons.length >= 3, `o motivo devia trazer os comandos com JSON: ${r.reason}`);
+  for (const j of jsons) { try { JSON.parse(j.replace(/<[^>]*>/g, 'x')); } catch (e) { throw new Error(`JSON sugerido inválido: ${j} (${e.message})`); } }
+});
+
+caso('F478-i: só conta como reservado o Q-ID sozinho na linha (o que o contador imprime), não o de outra saída do mesmo comando', () => {
+  contador(990);
+  const pares = [[`Q=$(proxima-pergunta) && echo $Q && painel set perguntas "$Q" '{"estado":"aberta"}'; grep Q /tmp/log`, 'Q988\nlinha antiga Q970 cancelada']];
+  const r0 = rodar(turnoComSaidas('Gravei.', pares));
+  ok(r0?.decision === 'block' && r0.reason.includes('Q988'), `precondição: o Q988 da saída é lido e cobrado sem arquivo: ${JSON.stringify(r0)}`);
+  pergunta('Q988', LOCAL);
+  ok(rodar(turnoComSaidas('Gravei.', pares)) === null, 'Q988 no painel: o Q970 da linha do grep não conta');
 });
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntodos verdes');
 process.exitCode = falhas ? 1 : 0;

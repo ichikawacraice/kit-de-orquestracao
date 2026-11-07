@@ -72,7 +72,7 @@ caso('SessionStart injeta as regras globais (Q-ID, papéis e modelos, achar a or
   ok(r.hookEventName === 'SessionStart', `evento: ${r.hookEventName}`);
   const t = r.additionalContext;
   ok(typeof t === 'string' && t.length > 200, `texto curto demais: ${t?.length}`);
-  for (const termo of ['Q-ID', 'proxima-pergunta', 'papeis-e-modelos', 'orquestradora', 'list_sessions']) ok(t.includes(termo), `falta "${termo}"`);
+  for (const termo of ['Q-ID', 'proxima-pergunta', 'painel perguntas nova', 'papeis-e-modelos', 'orquestradora', 'list_sessions']) ok(t.includes(termo), `falta "${termo}"`);
   ok(t.length < 6000, `o resumo deve ser curto: ${t.length}`);
   ok(!/\/Users\/(?!x\/)[a-z]|\/home\/[a-z]/i.test(t), 'o texto do plugin não traz caminho da pasta pessoal de ninguém');
 });
