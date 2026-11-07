@@ -7,6 +7,9 @@
 //   painel.mjs list   <colecao> [estado] [--projeto <nome> | --todos] [--sessao <local_…|orca_session_id:…>]   (sem flag lista tudo; --sessao filtra pelo `sessaoId` do documento)
 //     (F183) `list perguntas` sem `--projeto`, `--todos` nem `--sessao` lista o projeto da pasta atual, e só a pasta quente (abertas e
 //     assumidas); `respondida`/`cancelada` ou `--arquivo` incluem o arquivo (`perguntas/arquivo/<projeto>/<AAAA-MM>/`)
+//   painel.mjs perguntas nova '<json>'   (F478) o jeito de perguntar ao operador: valida como o `set`, reserva o Q-ID (proxima-pergunta.sh), grava, relê e imprime
+//     só `Q<n>`; titulo, caso, recomendacao e (na aberta) seNaoDecidir obrigatórios; sessaoId padrão = a sessão que chama; estado aberta (padrão) ou assumida;
+//     recusa → exit 1 sem gastar número. Estado de pergunta, em qualquer gravação: só aberta · assumida · respondida · cancelada (sem estado = rascunho)
 //   painel.mjs perguntas arquivar [--seco]   leva ao arquivo as fechadas que ficaram na pasta quente (a resposta do pane); a batida roda junto, só depois da migração (marca <PAINEL_DIR>/.migracao-F183) → {arquivadas:[…]}
 //   painel.mjs perguntas migrar [--seco]   (F183, uma vez) `projeto` em slug nas quatro coleções; pergunta sem projeto pega o da sessão
 //     (sessoes/<sessaoId>, senão o registro do app), senão `sem-projeto`; sessão sem projeto, pelo registro; depois arquiva as fechadas.
@@ -509,6 +512,7 @@ function validarItemDaFila(chave, novo, base, op, existia, viaCom, antes) {
 // dela; o explícito (`dispatch:`, `run:`) fica; o derivado acompanha a troca de `sessaoId`. Numa sessão do Orca, a pergunta
 // que nasce (ou troca de sessaoId) esperando resposta sem endereço é recusada: a resposta dada na aba não teria aonde ir.
 const ESPERA_ENTREGA = new Set(['aberta', 'assumida']);
+const ESTADOS_DA_PERGUNTA = ['aberta', 'assumida', 'respondida', 'cancelada'];
 const ehDoOrca = (v) => typeof v === 'string' && v.startsWith('orca_session_id:') && ehDestinoDoOrca(v);
 function enderecoDaPergunta(chave, novo, base, antes) {
   if ('endereco' in novo && novo.endereco !== null) {
@@ -555,6 +559,12 @@ function validarPadrao(colecao, id, novo, base, vista, op, existia, viaCom, ante
   if (colecao === 'perguntas' && base.estado !== 'respondida' && base.estado !== 'cancelada') {
     const solto = itemSoltoNaPergunta(novo);
     if (solto) throw new Error(`${chave}: ${solto.campo} cita "${solto.numero}" solto — na primeira menção escreva "${solto.numero} · <título do item>" (painel get fila ${solto.numero}); o operador não sabe o que é o número (a tecla F5 se descreve por extenso)`);
+  }
+  // F478: o estado da pergunta é um dos que a tela mostra ou arquiva; outro some de todo mundo. Vale para o que esta op
+  // grava (o campo veio nela, ou o documento nasce agora): o documento antigo fora do contrato segue aceitando os demais campos.
+  // Sem estado nenhum é rascunho (ninguém espera por ele): segue aceito, como antes.
+  if (colecao === 'perguntas' && base.estado !== undefined && ('estado' in novo || !existia) && !ESTADOS_DA_PERGUNTA.includes(base.estado)) {
+    throw new Error(`${chave}: estado ${JSON.stringify(base.estado ?? null)} fora do contrato (${ESTADOS_DA_PERGUNTA.join(' · ')}); com outro, a pergunta não aparece a ninguém`);
   }
   if (colecao === 'perguntas' && ('respondidaPor' in novo || 'respondidaEm' in novo)) {
     throw new Error(`${chave}: ${'respondidaPor' in novo ? 'respondidaPor' : 'respondidaEm'} só o pane grava (é a prova do clique do operador)`);
@@ -2259,6 +2269,47 @@ function migrarProjetos(seco) {
   return { seco: false, backup, projeto: projetos, arquivadas, duplicadas };
 }
 
+// F478: `perguntas nova '<json>'` — a pergunta nasce num passo só: valida (as regras do `set`), reserva o Q-ID pelo
+// proxima-pergunta.sh (o mesmo contador e a mesma trava), grava, relê e imprime só o ID. A recusa não gasta número;
+// a falha depois de reservar diz qual Q-ID ficou sem arquivo.
+const ESTADOS_DE_PERGUNTA_NOVA = ['aberta', 'assumida'];
+const PROXIMA_PERGUNTA = join(dirname(fileURLToPath(import.meta.url)), 'proxima-pergunta.sh');
+function perguntaNova(args) {
+  if (args.length !== 1) throw new Error("uso: painel.mjs perguntas nova '<json>' (titulo, caso, recomendacao e, na aberta, seNaoDecidir; sessaoId padrão: a sessão que chama; estado padrão: aberta)");
+  const dados = objeto(args[0], 'perguntas nova');
+  if ('id' in dados) throw new Error('perguntas nova: o JSON não leva id (o Q-ID sai do contador)');
+  dados.estado ??= 'aberta';
+  if (!ESTADOS_DE_PERGUNTA_NOVA.includes(dados.estado)) throw new Error(`perguntas nova: estado ${JSON.stringify(dados.estado)}; a pergunta nasce ${ESTADOS_DE_PERGUNTA_NOVA.join(' ou ')}`);
+  if (dados.sessaoId === undefined || dados.sessaoId === null) {
+    const eu = quemSou();
+    if (!eu) throw new Error('perguntas nova: sem sessaoId e sem como saber a sessão que chama; grave sessaoId (local_… ou orca_session_id:…)');
+    dados.sessaoId = eu;
+  }
+  if (!ehIdDeSessao(dados.sessaoId)) throw new Error(`perguntas nova: sessaoId ${JSON.stringify(dados.sessaoId)} ${NAO_E_SESSAO}`);
+  const obrigatorios = ['titulo', 'caso', 'recomendacao', ...(dados.estado === 'aberta' ? ['seNaoDecidir'] : [])];
+  const falta = obrigatorios.find((k) => !textoNaoVazio(dados[k]));
+  if (falta) throw new Error(`perguntas nova: ${falta} é obrigatório (a pergunta vem inteira: o caso, o que acontece se não decidir e a recomendação)`);
+  planejar({ op: 'set', colecao: 'perguntas', id: 'nova', data: dados }, undefined, new Map());
+  let q;
+  try {
+    q = execFileSync('bash', [PROXIMA_PERGUNTA], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  } catch (e) {
+    throw new Error(`perguntas nova: não reservei o Q-ID (${String(e.stderr || e.message).trim()}); nada gravado`);
+  }
+  if (!/^Q[1-9]\d*$/.test(q)) throw new Error(`perguntas nova: o contador devolveu ${JSON.stringify(q)}; nada gravado`);
+  try {
+    if (ler('perguntas', q)) throw new Error(`${q} já existe no painel (o contador está atrás do painel)`);
+    aplicarLote([[{ op: 'set', colecao: 'perguntas', id: q, data: dados }, 0]]); // versão 0 = só se não existe, conferido dentro da trava
+    const gravada = ler('perguntas', q)?.data;
+    if (gravada?.estado !== dados.estado || gravada?.sessaoId !== dados.sessaoId) throw new Error('o arquivo relido não traz o estado e o sessaoId gravados');
+  } catch (e) {
+    throw new Error(`perguntas nova: ${q} ficou reservado e NÃO foi gravado (${e.message}); não o use na mensagem`);
+  }
+  // Onde o operador a acha: a aberta na seção Perguntas, a assumida em Decisões (a confirmar). Vai ao stderr: o stdout é só o ID.
+  process.stderr.write(`${q} gravada: o operador a acha em ${dados.estado === 'assumida' ? 'Decisões (a confirmar)' : 'Perguntas'}; diga isso ao citá-la\n`);
+  return q;
+}
+
 function comandoPerguntas(args) {
   const seco = flag(args, '--seco', false);
   const [sub, ...sobra] = args;
@@ -2363,6 +2414,7 @@ function main(argv) {
       saida = comandoTemas(resto);
       break;
     case 'perguntas':
+      if (a === 'nova') { process.stdout.write(`${perguntaNova(resto.slice(1))}\n`); return 0; }
       saida = comandoPerguntas(resto);
       break;
     case 'com':

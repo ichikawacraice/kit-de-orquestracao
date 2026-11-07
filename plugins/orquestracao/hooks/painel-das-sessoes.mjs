@@ -14,6 +14,11 @@
 // e, se aquele falhar, aqui pelo título, no fim do primeiro turno.
 // F400: o turno também não termina se a mensagem final marca decisão "assumida, a confirmar" (ou "Q-ID não reservado")
 // e a pergunta `estado:"assumida"` dela não está no painel (protocolo.md#nunca-travar): sem ela o operador não vê a decisão.
+// F478: "tirou ID" confere o efeito: o Q-ID que a saída do `proxima-pergunta` devolveu tem de existir no painel no fim do turno
+// (o `painel set` recusado, ou escondido por `| tail`, não conta mais como gravado); sem Q-ID legível na saída, vale o comando
+// de gravar. O texto de `orca orchestration ask|send` entra com a mensagem final na busca de Q-ID sem arquivo. E a orquestradora
+// deixa de ficar de fora: para ela valem as cobranças de Q-ID (o reservado sem arquivo, o citado sem arquivo); a da decisão
+// assumida e a da resposta recebida continuam só das outras sessões (ela relata decisões e respostas alheias).
 import { readFileSync, existsSync, appendFileSync, writeFileSync, mkdirSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
@@ -21,6 +26,7 @@ import { join } from 'node:path';
 import { gravaNoPainel, BASE as BASE_CREWAI, lerEstadoDe, gravarEstadoDe } from './hooks-crewai-comum.mjs';
 import { BASE as BASE_DO_POOL, registroDaSessao, gitCommonDir } from './pool-comum.mjs';
 import { acharPergunta } from '../skills/orquestradora/scripts/perguntas-arquivo.mjs';
+import { invocacoesDoOrca } from './trava-do-orca.mjs';
 
 const BASE = join(homedir(), '.claude', 'orquestracao');
 const ATIVAS = join(BASE_DO_POOL, 'ativas'); // o mesmo `ativas/` que projetoTemOrquestradora lê
@@ -31,6 +37,13 @@ function textoDe(msg) {
   const c = msg?.content;
   if (typeof c === 'string') return c;
   if (Array.isArray(c)) return c.filter((x) => x.type === 'text').map((x) => x.text).join('\n');
+  return '';
+}
+
+function textoDoResultado(b) {
+  const c = b?.content;
+  if (typeof c === 'string') return c;
+  if (Array.isArray(c)) return c.filter((x) => x?.type === 'text').map((x) => x.text).join('\n');
   return '';
 }
 
@@ -231,17 +244,28 @@ function assumidasSemPergunta(mensagem, inicioIso, comandos, local) {
 const JANELA_QID = 50;
 const CONTADOR = join(BASE, 'contador-de-perguntas');
 const SEM_BLOCO = /(```|~~~)[\s\S]*?(?:\1|$)/g;
+// Na saída de comando, só o Q-ID sozinho na linha (o que o contador e o `perguntas nova` imprimem): outro Q-ID da mesma saída
+// (um grep, um log) não foi reservado agora.
+const qidsDaSaida = (t) => new Set(String(t ?? '').match(/^\s*Q[1-9]\d*\s*$/gm)?.map((q) => q.trim()) ?? []);
 const qidsDe = (t) => new Set(String(t ?? '').replace(SEM_BLOCO, ' ').match(/\bQ\d+\b/g) ?? []);
+function tetoDoContador() {
+  try { const n = parseInt(readFileSync(CONTADOR, 'utf8'), 10); return Number.isInteger(n) ? n : null; } catch { return null; }
+}
+const naJanela = (q, teto) => { const n = Number(q.slice(1)); return n > teto - JANELA_QID && n <= teto; };
+const dirDasPerguntas = () => join(process.env.PAINEL_DIR || join(BASE, 'painel'), 'perguntas');
 function qidsSemPergunta(mensagem, abertura) {
-  const dir = join(process.env.PAINEL_DIR || join(BASE, 'painel'), 'perguntas');
-  let teto;
-  try { teto = parseInt(readFileSync(CONTADOR, 'utf8'), 10); } catch { return []; }
-  if (!Number.isInteger(teto) || !existsSync(dir)) return [];
+  const dir = dirDasPerguntas();
+  const teto = tetoDoContador();
+  if (teto === null || !existsSync(dir)) return [];
   const daAbertura = qidsDe(abertura);
-  return [...qidsDe(mensagem)].filter((q) => {
-    const n = Number(q.slice(1));
-    return n > teto - JANELA_QID && n <= teto && !daAbertura.has(q) && !acharPergunta(dir, q);
-  });
+  return [...qidsDe(mensagem)].filter((q) => naJanela(q, teto) && !daAbertura.has(q) && !acharPergunta(dir, q));
+}
+// F478: os Q-IDs que o `proxima-pergunta` devolveu no turno (lidos na saída da chamada) e que não têm arquivo no painel.
+function reservadosSemArquivo(reservados) {
+  const teto = tetoDoContador();
+  if (teto === null || reservados.size === 0) return [];
+  const dir = dirDasPerguntas();
+  return [...reservados].filter((q) => naJanela(q, teto) && !acharPergunta(dir, q));
 }
 
 // Uma cobrança por turno: o Stop que vem depois de uma recusa (de qualquer trava) traz `stop_hook_active`, e é nele que costuma
@@ -262,7 +286,8 @@ function main() {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   const { session_id, transcript_path, stop_hook_active, cwd } = input;
   if (!session_id || !transcript_path) return;
-  if (existsSync(join(ATIVAS, session_id))) return; // é a orquestradora: outro hook
+  // A orquestradora tem o ritual dela (orquestradora-ritual.mjs); daqui valem para ela só as cobranças de Q-ID (F478).
+  const ehOrquestradora = existsSync(join(ATIVAS, session_id));
 
   const meuRepo = gitCommonDir(cwd);
   if (!meuRepo) return;
@@ -277,7 +302,7 @@ function main() {
   // orquestradora e está sem marcador ganha um aqui; a partir do próximo turno o
   // orquestradora-ritual.mjs passa a valer para ela.
   const titulo = entradas.filter((e) => e.type === 'custom-title').pop()?.customTitle ?? '';
-  if (titulo.startsWith('🎛 orquestradora')) {
+  if (!ehOrquestradora && titulo.startsWith('🎛 orquestradora')) {
     mkdirSync(ATIVAS, { recursive: true });
     writeFileSync(join(ATIVAS, session_id), `${meuRepo}\n`);
     return;
@@ -288,10 +313,18 @@ function main() {
   if (inicio < 0) return;
 
   const motivos = new Set();
-  if (citaPerguntaDestaSessao(textoDe(entradas[inicio].message), session_id)) motivos.add('recebeu resposta a uma pergunta Qnn');
+  if (!ehOrquestradora && citaPerguntaDestaSessao(textoDe(entradas[inicio].message), session_id)) motivos.add('recebeu resposta a uma pergunta Qnn');
 
+  // A saída de cada chamada, pelo tool_use_id: é nela que o `proxima-pergunta` diz o Q-ID que reservou.
+  const saidas = new Map();
+  for (const e of entradas.slice(inicio + 1)) {
+    if (e.type !== 'user' || !Array.isArray(e.message?.content)) continue;
+    for (const b of e.message.content) if (b?.type === 'tool_result' && b.tool_use_id) saidas.set(b.tool_use_id, textoDoResultado(b));
+  }
   let gravou = false;
   const comandos = [];
+  const reservados = new Set();
+  const textoAoOrca = [];
   for (const e of entradas.slice(inicio + 1)) {
     if (e.type !== 'assistant' || !Array.isArray(e.message?.content)) continue;
     for (const it of e.message.content) {
@@ -300,7 +333,18 @@ function main() {
         const cmd = String(it.input?.command ?? '');
         comandos.push(cmd);
         if (GRAVA_NO_PAINEL.test(cmd) && /\bperguntas\b/.test(cmd)) gravou = true;
-        for (const [re, m] of GATILHOS_BASH) if (re.test(cmd)) motivos.add(m);
+        for (const [re, m] of GATILHOS_BASH) {
+          if (!re.test(cmd)) continue;
+          // Com o Q-ID na saída, quem decide é o arquivo; sem ele (saída perdida, comando sem echo), o comando de gravar.
+          const lidos = qidsDaSaida(saidas.get(it.id));
+          if (lidos.size) lidos.forEach((q) => reservados.add(q));
+          else motivos.add(m);
+        }
+        try {
+          for (const o of invocacoesDoOrca(cmd, { cwd })) {
+            if (o.sub === 'orchestration ask' || o.sub === 'orchestration send') textoAoOrca.push(...['question', 'subject', 'body'].map((k) => o.bandeiras[k]).filter((v) => typeof v === 'string'));
+          }
+        } catch { /* comando que a leitura do orca não entende: só a mensagem final conta */ }
       }
     }
   }
@@ -309,53 +353,72 @@ function main() {
   const turno = String(entradas[inicio].uuid ?? entradas[inicio].timestamp ?? inicio);
   let soltas = [];
   let fantasmas = [];
+  let semArquivo = [];
   let local;
+  const podeCobrarQid = !(stop_hook_active && jaCobrouNoTurno(session_id, turno, 'qid'));
+  if (podeCobrarQid) semArquivo = reservadosSemArquivo(reservados);
   if (!input.agent_id) {
     local = registroDaSessao(session_id)?.localId;
     const mensagem = String(input.last_assistant_message || mensagemFinal(entradas, inicio) || '');
-    if (!(stop_hook_active && jaCobrouNoTurno(session_id, turno, 'assumida'))) {
+    if (!ehOrquestradora && !(stop_hook_active && jaCobrouNoTurno(session_id, turno, 'assumida'))) {
       soltas = assumidasSemPergunta(mensagem, entradas[inicio].timestamp, comandos, local);
     }
-    if (!(stop_hook_active && jaCobrouNoTurno(session_id, turno, 'qid'))) {
-      fantasmas = qidsSemPergunta(mensagem, textoDe(entradas[inicio].message));
+    if (podeCobrarQid) {
+      fantasmas = qidsSemPergunta([mensagem, ...textoAoOrca].join('\n'), textoDe(entradas[inicio].message)).filter((q) => !semArquivo.includes(q));
     }
   }
   // Depois de uma recusa (stop_hook_active), sem a marca gravada não se recusa de novo: é o que impede o laço.
-  const tipos = [...(soltas.length ? ['assumida'] : []), ...(fantasmas.length ? ['qid'] : [])];
-  if (tipos.length && !marcarCobranca(session_id, turno, tipos) && stop_hook_active) { soltas = []; fantasmas = []; }
-  if (!cobraPainel && soltas.length === 0 && fantasmas.length === 0) return;
+  const tipos = [...(soltas.length ? ['assumida'] : []), ...(fantasmas.length || semArquivo.length ? ['qid'] : [])];
+  if (tipos.length && !marcarCobranca(session_id, turno, tipos) && stop_hook_active) { soltas = []; fantasmas = []; semArquivo = []; }
+  if (!cobraPainel && soltas.length === 0 && fantasmas.length === 0 && semArquivo.length === 0) return;
 
   const partes = [];
   if (cobraPainel) partes.push(motivoDoPainel(local ?? registroDaSessao(session_id)?.localId, motivos, itensDaSessao(session_id)));
+  if (semArquivo.length) partes.push(motivoDoReservadoSemArquivo(semArquivo, local, itensDaSessao(session_id)));
   if (soltas.length) partes.push(motivoDaAssumida(soltas, local, itensDaSessao(session_id)));
   if (fantasmas.length) partes.push(motivoDoQidSemPergunta(fantasmas, local, itensDaSessao(session_id)));
   process.stdout.write(JSON.stringify({ decision: 'block', reason: partes.join('\n\n') }));
 }
 
 function motivoDaAssumida(soltas, local, itens) {
-  const item = itens.length === 1 ? `,"item":"${itens[0]}"` : '';
+  const item = itens.length === 1 ? itens[0] : null;
   const exemplo = soltas.length ? ` (ex.: «${umaLinha(soltas[0]).slice(0, 120)}»)` : '';
   return `A mensagem final marca ${soltas.length} decisão(ões) como "assumida, a confirmar" ou "Q-ID não reservado"${exemplo}, ` +
     'e o turno não gravou a pergunta assumida no painel: sem ela o operador não vê a decisão (protocolo.md#nunca-travar). Para cada uma: ' +
-    `\`Q=$(proxima-pergunta) && painel set perguntas "$Q" '{"sessaoId":"${local ?? '<seu local_…>'}"${item},"estado":"assumida","titulo":"…","caso":"…","recomendacao":"o que você assumiu"}'\` ` +
+    `\`painel perguntas nova '${campos(local, item, '"estado":"assumida","titulo":"…","caso":"…","recomendacao":"o que você assumiu"')}'\` (imprime o Q-ID) ` +
     'e cite o Q-ID junto da decisão. A que já está no painel não se grava de novo: só cite o Q-ID dela no mesmo item. ' +
     'Se a mensagem só cita a regra, ponha a expressão entre crases. Depois encerre o turno.';
 }
 
+// O JSON de exemplo das mensagens. Com o local_… conhecido, ele já o traz; sem ele, `perguntas nova` usa a sessão que chama
+// (no `set`, o sessaoId é obrigatório na aberta: o marcador diz para preenchê-lo).
+// Sem o local_… desta sessão (fora do registro do app e do Orca), o comando leva o lugar do sessaoId: no terminal o `perguntas nova` sem ele recusa.
+const SEM_LOCAL = '<seu local_… ou orca_session_id:…>';
+const campos = (local, item, resto) => `{${[`"sessaoId":"${local ?? SEM_LOCAL}"`, item && `"item":"${item}"`, resto].filter(Boolean).join(',')}}`;
+const gravarComId = (ids, local, item) => ids.map((q) => `\`painel set perguntas ${q} '${campos(local, item, '"estado":"aberta","titulo":"…","caso":"…","seNaoDecidir":"…","recomendacao":"…"')}'\``).join(' · ');
+
 function motivoDoQidSemPergunta(ids, local, itens) {
-  const item = itens.length === 1 ? `,"item":"${itens[0]}"` : '';
-  return `A mensagem final cita ${ids.join(', ')}, número recente do contador de perguntas que não está no painel: ` +
-    'se é um Q-ID que você reservou, a pergunta não foi gravada e o operador não a vê. Para cada um: ' +
-    ids.map((q) => `\`painel set perguntas ${q} '{"sessaoId":"${local ?? '<seu local_…>'}"${item},"estado":"aberta","titulo":"…","caso":"…","recomendacao":"…"}'\``).join(' · ') +
-    ' (`"estado":"assumida"` se você já seguiu com a recomendação). Se não é Q-ID de pergunta (trimestre, exemplo, número errado), reescreva a mensagem sem ele. Depois encerre o turno.';
+  const item = itens.length === 1 ? itens[0] : null;
+  return `A mensagem final (ou o texto mandado por \`orca orchestration ask|send\`) cita ${ids.join(', ')}, número recente do contador de perguntas que não está no painel: ` +
+    'se é um Q-ID que você reservou, a pergunta não foi gravada e o operador não a vê. Para cada um: ' + gravarComId(ids, local, item) +
+    ' (`"estado":"assumida"` se você já seguiu com a recomendação; se a pergunta é de outra sessão, o `sessaoId` é o dela). Se não é Q-ID de pergunta (trimestre, exemplo, número errado), reescreva a mensagem sem ele. ' +
+    "Para a próxima pergunta, `painel perguntas nova '<json>'` reserva, grava e só então imprime o Q-ID. Depois encerre o turno.";
+}
+
+function motivoDoReservadoSemArquivo(ids, local, itens) {
+  const item = itens.length === 1 ? itens[0] : null;
+  return `O turno reservou ${ids.join(', ')} (\`proxima-pergunta\`) e a pergunta não está no painel: o comando de gravar falhou ou não rodou ` +
+    '(o `| tail` esconde a recusa do painel). Leia o erro, corrija o JSON e grave: ' + gravarComId(ids, local, item) +
+    ". Para a próxima, `painel perguntas nova '<json>'` valida antes de reservar e só imprime o Q-ID quando gravou. Depois encerre o turno.";
 }
 
 const umaLinha = (s) => String(s).replace(/\s+/g, ' ').trim();
 
 function motivoDoPainel(local, motivos, itens) {
-  const item = itens.length === 1 ? `,"item":"${itens[0]}"` : '';
+  const item = itens.length === 1 ? itens[0] : null;
   return `A pergunta deste turno não foi gravada no painel (${[...motivos].join('; ')}): sem ela o operador não a vê. ` +
-    `Pergunta nova: \`painel set perguntas <Q-ID> '{"sessaoId":"${local ?? '<seu local_…>'}"${item},"estado":"aberta","titulo":"…","caso":"…","recomendacao":"…"}'\`; ` +
+    `Pergunta nova: \`painel perguntas nova '${campos(local, item, '"titulo":"…","caso":"…","seNaoDecidir":"…","recomendacao":"…"')}'\` (reserva, grava e imprime o Q-ID); ` +
+    `o Q-ID já reservado: \`painel set perguntas <Q-ID> '${campos(local, item, '"estado":"aberta","titulo":"…","caso":"…","seNaoDecidir":"…","recomendacao":"…"')}'\`; ` +
     'resposta recebida no chat: `painel update perguntas <Q-ID> \'{"estado":"respondida","resposta":"…"}\'`. Depois encerre o turno.';
 }
 

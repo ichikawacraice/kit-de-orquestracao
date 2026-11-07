@@ -32,7 +32,7 @@ O item no painel é o que o operador e a orquestradora leem de você. O que se v
 - **O handoff** quando o trabalho passa para outra sessão ou para depois de compactar (skill `handoff-de-sessao`).
 - **O `agora`** só quando ajuda quem lê (ex.: o item espera algo fora do GitHub); é opcional.
 - **O `com`** entra no primeiro turno (`painel com add`) e fica até o item fechar.
-- **As travas:** o hook de fim de turno `fila-do-item.mjs` recusa terminar o turno que mudou algo com o item em `merge`, com PR e sem a `entrega` (salvo `maisFatias: true`); o `painel-das-sessoes.mjs` recusa o turno que tirou ID de pergunta, ou recebeu resposta a uma pergunta ainda aberta, sem gravar em `perguntas`. O turno que só leu ou esperou passa.
+- **As travas:** o hook de fim de turno `fila-do-item.mjs` recusa terminar o turno que mudou algo com o item em `merge`, com PR e sem a `entrega` (salvo `maisFatias: true`); o `painel-das-sessoes.mjs` recusa o turno que tirou ID de pergunta sem o arquivo dela no painel, que cita Q-ID recente sem arquivo (na mensagem final ou no `orca orchestration ask`), ou que recebeu resposta a uma pergunta ainda aberta sem gravar em `perguntas`. Pergunte com `painel perguntas nova` ([protocolo](protocolo.md#pergunta-nasce-no-painel)). O turno que só leu ou esperou passa.
 - **E o critério:** em `execucao`, `validacao` e `merge`, cole no relatório a saída real do comando de teste (`; echo "exit=$?"` e as últimas linhas). A trava `criterio-da-dona.mjs` recusa o relatório que a saída contradiz ou que afirma sucesso sem teste rodado no turno; a saída só não colada vira aviso ao operador.
 
 ## Contexto
