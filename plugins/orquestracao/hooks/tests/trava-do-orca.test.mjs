@@ -226,6 +226,19 @@ test('revisão F438: crase e $( entre aspas simples (ou escapados) são texto do
   assert.deepEqual(desfechos(passa(`${WS} ${OK} --worktree new-child --spec "Rode \`x\`"`)), ['passou-sem-ler-spec']);
 });
 
+// F484: a dona que não acorda depois do limite de uso é recriada na MESMA Task (`--task <id> --retry-of <ctx antigo>`, guia da
+// Orca); o texto da Task já passou pela trava no primeiro despacho, com a linha `Esforço alto:` quando era Opus alto.
+test('retry na mesma Task: Opus alto passa sem texto legível; a pasta, o modelo e o esforço seguem conferidos', () => {
+  const RETRY = `--task task_1 --retry-of ctx_velho --worktree path:${OUTRA} --keep-open`;
+  assert.deepEqual(desfechos(passa(`${WS} --model opus --effort high ${RETRY}`)), ['passou-retry-sem-ler-spec']);
+  assert.deepEqual(desfechos(passa(`${WS} --model opus --effort medium ${RETRY}`)), ['passou-retry-sem-ler-spec']);
+  recusa(`${WS} --model opus --effort max ${RETRY}`); // o esforço da dona é medium ou high
+  recusa(`${WS} --model opus --effort high --task task_1 --retry-of ctx_velho --worktree current`); // a pasta de quem chama
+  recusa(`${WS} --model opus --effort high --task task_1 --retry-of ctx_velho --worktree path:/nao/existe`); // não resolve
+  recusa(`${WS} --task task_1 --retry-of ctx_velho --worktree path:${OUTRA}`); // sem --model/--effort
+  recusa(`${WS} --model opus --effort high --retry-of ctx_velho --worktree path:${OUTRA}`); // retry sem a Task: não é a mesma cadeia
+});
+
 test('revisão F438: Opus sem texto legível diz como resolver em vez de pedir a linha num texto que não existe', () => {
   const m = recusa(`${WS} --model opus --effort high --worktree new-child --task task_1`);
   assert.match(m, /sem texto legível/);

@@ -34,7 +34,7 @@
 //   painel.mjs batida --sessoes <arquivo> [--seco] [--agora <ISO>]   a batida do mod: cutuca e solta o item parado, relata à orquestradora o merge parado e o item sem dona (vaga), lança a fila de merge anotada sem processo e entrega os desfechos dela (F351) → {mensagens, soltos, projetos, marcadoresApagados, filasLancadas?}; --seco não grava nem lança nada
 //   painel.mjs batida --leitura [--agora <ISO>]   (F460) a batida de leitura que a aba do kit roda no Orca: sem a lista do app, só deduz o estado dos itens (git, gh, workers do Orca) e grava batida/deduzido.json com fonte "leitura"; fecha o item cujos PRs ligados mergearam, pela mesma regra da batida completa, salvo o da dona local_ (F472); não julga nem grava mais nada; pula se o deduzido tem menos de 10 min → {gravado, em?, itens?, fechados?, pulou?}
 //   painel.mjs orquestradora assumir   (F447) declara esta sessão a orquestradora do projeto da pasta: grava <base>/ativas/<CLAUDE_CODE_SESSION_ID> com o git common dir e, no Orca, o orca_session_id na 2ª linha (as travas valem por ele; no Orca o título não se troca) → {marcador, repo, orcaId, outras}
-//   painel.mjs orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]   (F447) arquiva no Orca a dona do despacho: confere PR mergeado com o HEAD da worktree (ou nenhum PR e nenhum commit fora da base), nenhuma pergunta aberta do item (pelo item, por quem trabalhou nele ou pelo título), worktree ligada (nunca o checkout principal), limpa e empurrada e worker parado (todo despacho do mesmo terminal ou pasta em estado final); valendo, `orca orchestration worker-release` e `orca worktree set --workspace-status completed` (e `orca worktree rm`, nunca --force, com --remover-worktree) → {arquivado, condicoes, feitos}; faltando algo → {arquivado:false, faltam} e exit 1, sem chamar nada; --seco só confere
+//   painel.mjs orquestradora arquivar <ctx_…> [--item F<n>] [--remover-worktree] [--seco]   (F447) arquiva no Orca a dona do despacho: confere PR mergeado com o HEAD da worktree (ou nenhum PR e nenhum commit fora da base), nenhuma pergunta aberta do item (pelo item, por quem trabalhou nele ou pelo título), worktree ligada (nunca o checkout principal), limpa e empurrada e worker parado (todo despacho do mesmo terminal ou pasta em estado final, ou `stopped` com o terminal `released`); valendo, `orca orchestration worker-release` e `orca worktree set --workspace-status completed` (e `orca worktree rm`, nunca --force, com --remover-worktree) → {arquivado, condicoes, feitos}; faltando algo → {arquivado:false, faltam} e exit 1, sem chamar nada; --seco só confere
 //   painel.mjs orquestradora arquivar --concluidas [--itens F<n>,F<n>] [--remover-worktree] [--seco]   (F469) a aba do kit: as donas de item `feito`/`descartado` com worker no Orca, cada uma pelas MESMAS condições do arquivar acima, e com --remover-worktree também sai da barra lateral (a flag vale para todas, como no avulso) → {aptas, arquivadas, recusadas:[{item, faltam}]}; --seco só lista as aptas; --itens limita ao que a pessoa confirmou; exit 1 se alguma ficou recusada
 //   painel.mjs orquestradora retomar F<n> --dispatch <ctx_…> [--esperar <s>] [--seco]   (F479) passa o item à sessão nova que a orquestradora abriu na worktree (limite de uso, contexto cheio): espera até --esperar s (60) o registro da sessão do despacho em orca-sessoes/, troca a dona, o `com` (sem as sessões da worktree que saem) e o `sessaoId` das perguntas abertas/assumidas delas, põe a nova em `sessoes`, solta os despachos parados da worktree e lê de volta → {item, para, de, perguntas, liberados, conferido}; recusa sem gravar o despacho novo que não está vivo, o item de outra worktree e a sessão antiga ou outro despacho ainda vivos; --seco só diz o que faria
 //   painel.mjs handoffs arquivar   move para handoffs/arquivo/ os arquivos F<n>* dos itens já fechados que ficaram na raiz → {movidos:[…]}
@@ -1983,12 +1983,13 @@ function condicoesDeArquivar(dispatchId, itemPedido, lista) {
   const faltam = [];
   const condicoes = {};
   const w = lista.workers.find((x) => x.dispatchId === dispatchId);
-  if (!w) return { condicoes, faltam: [`o despacho ${dispatchId} não está no orca worker-list`], pasta: null, terminal: null, item: null };
+  if (!w) return { condicoes, faltam: [`o despacho ${dispatchId} não está no orca worker-list`], pasta: null, terminal: null, item: null, juntos: [] };
   const { pasta, terminal } = w;
   // parado: todo despacho do mesmo terminal ou da mesma pasta terminou (a devolução por `send --to dispatch:` cria um despacho
-  // novo no mesmo terminal, e o antigo fica `succeeded` enquanto o worker trabalha de novo)
+  // novo no mesmo terminal, e o antigo fica `succeeded` enquanto o worker trabalha de novo); F484: `stopped` com o terminal
+  // `released` (a dona que morreu no limite de uso) também terminou
   const juntos = lista.workers.filter((x) => (terminal && x.terminal === terminal) || (pasta && x.pasta && moduloOrca.dentroDe(x.pasta, pasta)));
-  const vivos = juntos.filter((x) => !moduloOrca.estadoFinal(x.state));
+  const vivos = juntos.filter((x) => !moduloOrca.despachoEncerrado(x));
   condicoes.parado = vivos.length === 0;
   for (const x of vivos) faltam.push(`worker não está parado: ${x.dispatchId ?? '?'} em ${x.state ?? 'estado desconhecido'}`);
   // limpa e empurrada
@@ -2060,7 +2061,7 @@ function condicoesDeArquivar(dispatchId, itemPedido, lista) {
     condicoes.perguntas = abertas.length === 0;
     if (abertas.length) faltam.push(`pergunta aberta do ${item}: ${abertas.join(', ')}`);
   }
-  return { condicoes, faltam, pasta, terminal, item };
+  return { condicoes, faltam, pasta, terminal, item, juntos };
 }
 
 function orcaMutante(args) {
@@ -2098,13 +2099,23 @@ function arquivarNoOrca(args) {
 
 // Confere as condições de UM despacho (`condicoesDeArquivar`) e, valendo e sem --seco, solta o worker e marca a worktree.
 function arquivarUm({ dispatchId, itemPedido, remover, seco, lista }) {
-  const { condicoes, faltam, pasta, item } = condicoesDeArquivar(dispatchId, itemPedido, lista);
+  const { condicoes, faltam, pasta, item, juntos } = condicoesDeArquivar(dispatchId, itemPedido, lista);
   const base = { dispatchId, item, pasta, condicoes };
   if (faltam.length) return { arquivado: false, ...base, faltam };
-  if (seco) return { arquivado: false, seco: true, ...base, faltam: [], chamaria: ['worker-release', 'worktree set', ...(remover ? ['worktree rm'] : [])] };
+  // F484: solta um despacho por terminal ainda retido entre os da mesma pasta ou terminal, o pedido primeiro. O terminal já
+  // solto (`released`) não se solta de novo (o Orca responde already_released); e, depois do retry na mesma Task, arquivar
+  // pelo despacho velho (já solto) ainda solta o terminal do novo.
+  const soltar = new Map();
+  for (const x of [...juntos].sort((m, n) => (n.dispatchId === dispatchId) - (m.dispatchId === dispatchId))) {
+    if (!x.dispatchId || x.terminalState === 'released') continue;
+    const chave = x.terminal || x.dispatchId;
+    if (!soltar.has(chave)) soltar.set(chave, x.dispatchId);
+  }
+  const releases = [...soltar.values()].map((ctx) => ['orchestration', 'worker-release', '--dispatch', ctx]);
+  if (seco) return { arquivado: false, seco: true, ...base, faltam: [], chamaria: [...releases.map(() => 'worker-release'), 'worktree set', ...(remover ? ['worktree rm'] : [])] };
   const feitos = [];
   for (const a of [
-    ['orchestration', 'worker-release', '--dispatch', dispatchId],
+    ...releases,
     ['worktree', 'set', '--worktree', `path:${pasta}`, '--workspace-status', 'completed'],
     ...(remover ? [['worktree', 'rm', '--worktree', `path:${pasta}`]] : []),
   ]) {
@@ -2131,7 +2142,7 @@ function candidatasConcluidas(lista, itens) {
   const vistas = new Set();
   const saida = [];
   for (const w of lista.workers) {
-    if (!w.dispatchId || !w.pasta || !moduloOrca.estadoFinal(w.state) || vistas.has(w.pasta) || !existsSync(w.pasta)) continue;
+    if (!w.dispatchId || !w.pasta || !moduloOrca.despachoEncerrado(w) || vistas.has(w.pasta) || !existsSync(w.pasta)) continue;
     let branch = null;
     try { branch = gitDe(w.pasta, ['branch', '--show-current']) || null; } catch { /* pasta sem git: só o registro da sessão acha o item */ }
     if (vivos.some((v) => casa(w, branch, v, v.registros))) continue;
@@ -2167,7 +2178,7 @@ function arquivarConcluidas(itensPedidos, seco, remover) {
 }
 
 // F479: `orquestradora retomar F<n> --dispatch <ctx novo> [--esperar <s>] [--seco]`. No Orca, a dona que para por limite de uso
-// (ou troca de sessão por contexto cheio) termina `stopped/failed`, e a orquestradora abre outra sessão na mesma worktree. O item
+// (ou troca de sessão por contexto cheio) termina `stopped/failed` (sem `--keep-open`; com ele o chat segue vivo e se acorda no mesmo despacho, skill `dona-no-limite`), e a orquestradora abre outra sessão na mesma worktree. O item
 // passa a ela aqui, sem depender de a sessão nova se regravar: `donoLocalId`, o `com` sem as sessões paradas da worktree, a nova
 // em `sessoes` e o `sessaoId` das perguntas que esperam resposta (o endereço de entrega se rederiva). Solta os despachos parados
 // da worktree que ficaram com o terminal preso, e lê de volta. Recusa (sem gravar nem chamar o orca) o despacho novo que não está
