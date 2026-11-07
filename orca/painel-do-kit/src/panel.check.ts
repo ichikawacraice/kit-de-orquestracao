@@ -121,7 +121,7 @@ const dasContas: ContaDeUso[] = [
   conta('agentes@wicomm.com.br', [51, 3 * H + 8 * MIN + 30_000], [16, 6 * D + 7 * H + 30_000], { ativa: true }),
   conta('acesso@wicomm.com.br', [56, 1 * H + 40 * MIN + 30_000], [100, 3 * D + 2 * H + 30_000]),
   conta('claude@wicomm.com.br', [0, null], [96, 1 * D + 5 * H + 30_000]),
-  conta('dev@wicomm.com.br', [17, 4 * H + 30_000], [72, 2 * D + 30_000], { antigo: true, antigoDesde: Date.now() - 4 * H }),
+  conta('dev@wicomm.com.br', [17, -1 * H], [72, 2 * D + 30_000], { antigo: true, antigoDesde: Date.now() - 4 * H }),
   conta('izanagi@wicomm.com.br', [100, 20 * MIN + 30_000], [65, 4 * D + 30_000]),
   conta('g.craice@gmail.com', [100, 2 * H + 30_000], [16, 5 * D + 30_000], { provedor: 'codex', ativa: true }),
 ]

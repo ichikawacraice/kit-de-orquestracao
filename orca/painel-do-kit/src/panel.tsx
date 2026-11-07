@@ -3,7 +3,7 @@
 // responder, discordar e responder a uma entrega acordam uma sessão. Desenho: docs/design/revisoes/2026-11-06-aba-do-kit-no-orca.md.
 import {
   atom, read, set, update, plugin, storage,
-  Badge, Box, Button, Callout, Code, Collapsible, EmptyState, Heading, IconButton, Row, Skeleton, Spinner, Text, Textarea,
+  Badge, Box, Button, Callout, Code, Collapsible, EmptyState, Heading, IconButton, Progress, Row, Skeleton, Spinner, Text, Textarea,
 } from 'orca'
 import { cortar, haQuanto, horaSP, itemDe, listaDePRs, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem, quando, semPrefixoDoItem, tempoDaSessao } from './vista'
 import { SeloDoProjeto, partesDoSelo } from './selo-do-projeto'
@@ -208,7 +208,7 @@ async function lerContas(forcar: boolean) {
     set(contasLidas, await plugin.request('kit.contas', { forcar }))
   } catch (e) {
     console.warn('[kit] não li o uso das contas:', e)
-    set(contasLidas, { contas: [], erro: motivoDe(e), lidoEm: relogio.agora() })
+    set(contasLidas, { contas: read(contasLidas)?.contas ?? [], erro: motivoDe(e), lidoEm: relogio.agora() })
   } finally {
     set(lendoContas, false)
   }
@@ -1191,33 +1191,30 @@ function ArquivarConcluidas() {
 
 // ── Uso das contas (F475) ────────────────────────────────────────────────────────────────────────────────────────
 const LARGURA_DA_BARRA = 36
-/** Abaixo de 80% a barra é neutra (nada a fazer); `warning` a partir de 80% e `danger` a partir de 95% (os mesmos do selo de estado). */
-const tomDoUso = (pct: number) => (pct >= 95 ? 'danger' : pct >= 80 ? 'warning' : 'neutral')
-/** Largura da coluna de cada janela: as barras e os números das contas ficam alinhados. */
-const LARGURA_DA_JANELA = 132
+/** O aviso mora no número, não na barra (a tinta do Orca some sobre a trilha): `warning` a partir de 80% e `danger` a partir de 95%; abaixo disso, sem tom. */
+const tomDoNumero = (pct: number) => (pct >= 95 ? 'danger' : pct >= 80 ? 'warning' : undefined)
 
-function MiniBarra(props: { pct: number }) {
-  const cheio = Math.round((LARGURA_DA_BARRA * Math.max(0, Math.min(100, props.pct))) / 100)
+/** Uma janela: barra, porcentagem e quanto falta para reiniciar. Janela que já reiniciou não mostra o número velho (ele deixou de valer). */
+function JanelaDeUso(props: { rotulo: string; j: NonNullable<ContaDeUso['sessao']>; agora: number }) {
+  const { j, agora, rotulo } = props
+  const reiniciou = j.resetsAt !== null && j.resetsAt <= agora
+  const pct = Math.max(0, Math.min(100, Math.round(j.usado)))
   return (
-    <Box width={LARGURA_DA_BARRA} height={6} radius="full" background="muted" direction="row" shrink={false}>
-      {cheio ? <Box width={cheio} height={6} radius="full" background={tomDoUso(props.pct)} shrink={false} /> : null}
-    </Box>
+    <Row align="center" gap="xs">
+      <Box width={LARGURA_DA_BARRA} shrink={false}>
+        <Progress value={reiniciou ? 0 : pct} label={reiniciou ? `${rotulo}: reiniciou` : `${rotulo}: ${pct}% usado`} labelHidden />
+      </Box>
+      {reiniciou
+        ? <Text size="xs" muted>reiniciou</Text>
+        : <>
+          <Text size="xs" tone={tomDoNumero(j.usado)}>{`${pct}%`}</Text>
+          <Text size="xs" muted>{contagem(j.resetsAt, agora)}</Text>
+        </>}
+    </Row>
   )
 }
 
-function JanelaDeUso(props: { j: NonNullable<ContaDeUso['sessao']>; agora: number }) {
-  return (
-    <Box width={LARGURA_DA_JANELA} shrink={false}>
-      <Row align="center" gap="xs">
-        <MiniBarra pct={props.j.usado} />
-        <Text size="xs">{`${Math.round(props.j.usado)}%`}</Text>
-        <Text size="xs" muted>{contagem(props.j.resetsAt, props.agora)}</Text>
-      </Row>
-    </Box>
-  )
-}
-
-/** Uma conta em duas linhas: `● e-mail` e, embaixo, as barras de 5 horas e da semana. Conta que não rodou traz o último número, com a idade dele. */
+/** Uma conta em duas linhas: `● e-mail` e, embaixo, as janelas de 5 horas e da semana. Conta que não rodou traz o último número, com a idade dele. */
 function LinhaDaConta(props: { c: ContaDeUso; agora: number }) {
   const { c, agora } = props
   const idade = c.antigo ? (c.antigoDesde ? `último número ${haQuanto(c.antigoDesde, agora)}` : 'número antigo') : null
@@ -1231,7 +1228,7 @@ function LinhaDaConta(props: { c: ContaDeUso; agora: number }) {
       </Row>
       {c.semDado || !c.sessao || !c.semana
         ? <Text size="xs" muted>o Orca ainda não mediu o uso desta conta</Text>
-        : <Row gap="sm"><JanelaDeUso j={c.sessao} agora={agora} /><JanelaDeUso j={c.semana} agora={agora} /></Row>}
+        : <Box columns={2} gap="sm"><JanelaDeUso rotulo="5 horas" j={c.sessao} agora={agora} /><JanelaDeUso rotulo="Semana" j={c.semana} agora={agora} /></Box>}
     </Box>
   )
 }
@@ -1242,22 +1239,32 @@ function UsoDasContas() {
   const agora = read(tique) || relogio.agora()
   const lendo = read(lendoContas)
   if (!l) return null
-  if (l.erro) {
+  const releitura = lendo
+    ? <Spinner label="Lendo o uso das contas…" labelHidden />
+    : <IconButton icon="refresh" label="Reler o uso das contas" variant="ghost" size="sm" onPress={() => void lerContas(true)} />
+  if (l.erro && !l.contas.length) {
     return (
       <Row align="center" gap="xs">
-        <Box grow minWidth={0}><Text size="xs" muted>{`Não li o uso das contas: ${l.erro}. Tento de novo em 1 min.`}</Text></Box>
-        <IconButton icon="refresh" label="Reler o uso das contas" variant="ghost" size="sm" disabled={lendo} onPress={() => void lerContas(true)} />
+        <Box grow minWidth={0}><Text size="xs" tone="warning">{lendo ? 'Lendo o uso das contas…' : `Não li o uso das contas: ${l.erro}. Tento de novo em 1 min.`}</Text></Box>
+        {releitura}
       </Row>
     )
   }
   if (!l.contas.length) return null
   return (
     <Box border radius="md" padding="sm" gap="sm">
-      <Text size="xs" muted>{`Uso das contas · ${haQuanto(l.lidoEm, agora)}`}</Text>
-      <Row gap="sm">
-        <Box width={LARGURA_DA_JANELA} shrink={false}><Text size="xs" muted>5 horas · reinicia em</Text></Box>
-        <Box width={LARGURA_DA_JANELA} shrink={false}><Text size="xs" muted>Semana · reinicia em</Text></Box>
+      <Row align="center" gap="xs">
+        <Box grow minWidth={0}>
+          {l.erro
+            ? <Text size="xs" tone="warning">{lendo ? 'Lendo o uso das contas…' : `Não consegui reler ${haQuanto(l.lidoEm, agora)}: ${l.erro}.`}</Text>
+            : <Text size="xs" muted>{lendo ? 'Lendo o uso das contas…' : `Uso das contas · ${haQuanto(l.lidoEm, agora)}`}</Text>}
+        </Box>
+        {l.erro || lendo ? releitura : null}
       </Row>
+      <Box columns={2} gap="sm">
+        <Text size="xs" muted>5 horas · reinicia em</Text>
+        <Text size="xs" muted>Semana · reinicia em</Text>
+      </Box>
       {l.contas.map((c) => <LinhaDaConta key={`c-${c.provedor}-${c.id}`} c={c} agora={agora} />)}
     </Box>
   )

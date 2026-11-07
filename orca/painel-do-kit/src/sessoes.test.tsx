@@ -524,17 +524,38 @@ teste('contas: abrir a aba pede leitura forçada uma vez; a contagem anda com o 
   }
 })
 
-teste('contas: a barra pequena de cada janela segue a porcentagem e só vira warning a partir de 80% e danger a partir de 95%', async () => {
+teste('contas: a barra segue a porcentagem; o número só ganha warning a partir de 80% e danger a partir de 95%', async () => {
   const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
     uso('a@x.com', { sessao: { usado: 79, resetsAt: null }, semana: { usado: 80, resetsAt: null } }),
     uso('b@x.com', { sessao: { usado: 94, resetsAt: null }, semana: { usado: 95, resetsAt: null } }),
     uso('c@x.com', { sessao: { usado: 100, resetsAt: null }, semana: { usado: 0, resetsAt: null } }),
   ]))
-  const barras = (id: string) => nos({ type: 'Box' }).filter((n) => n.path.includes(`:c-${id}/`) && n.props.height === 6 && n.props.background && n.props.background !== 'muted').map((n) => [n.props.background, n.props.width])
-  assert.deepEqual(barras('a@x.com').map((b) => b[0]), ['neutral', 'warning'])
-  assert.deepEqual(barras('b@x.com').map((b) => b[0]), ['warning', 'danger'])
-  assert.deepEqual(barras('c@x.com').map((b) => b[0]), ['danger'], 'zero por cento não desenha preenchimento')
-  assert.ok(Number(barras('a@x.com')[1][1]) > Number(barras('a@x.com')[0][1]), '80% é mais larga que 79%')
+  const dosNos = (id: string, tipo: string) => nos({ type: tipo }).filter((n) => n.path.includes(`:c-${id}/`))
+  const tons = (id: string) => dosNos(id, 'Text').filter((n) => /%$/.test(n.text ?? '')).map((n) => [n.text, n.props.tone])
+  assert.deepEqual(tons('a@x.com'), [['79%', undefined], ['80%', 'warning']])
+  assert.deepEqual(tons('b@x.com'), [['94%', 'warning'], ['95%', 'danger']])
+  assert.deepEqual(tons('c@x.com'), [['100%', 'danger'], ['0%', undefined]])
+  const barras = (id: string) => dosNos(id, 'Progress').map((n) => n.props.value)
+  assert.deepEqual(barras('a@x.com'), [79, 80])
+  assert.deepEqual(barras('c@x.com'), [100, 0])
+})
+
+teste('contas: janela que já reiniciou não mostra o número velho nem tom de alerta', async () => {
+  const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('velha@x.com', { antigo: true, antigoDesde: AGORA - 6 * H, sessao: { usado: 100, resetsAt: AGORA - H }, semana: { usado: 72, resetsAt: AGORA + 2 * D + 30_000 } }),
+  ]))
+  const textos = nos({ type: 'Text' }).filter((n) => n.path.includes(':c-velha@x.com/')).map((n) => n.text)
+  assert.ok(textos.includes('reiniciou'), JSON.stringify(textos))
+  assert.ok(!textos.includes('100%'), 'o 100% de antes do reinício não aparece')
+  assert.ok(textos.includes('72%'))
+  assert.deepEqual(nos({ type: 'Progress' }).filter((n) => n.path.includes(':c-velha@x.com/')).map((n) => n.props.value), [0, 72])
+})
+
+teste('contas: falha com leitura boa antes mantém as contas e avisa que não releu, com o botão de reler', async () => {
+  const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => ({ contas: [uso('a@x.com', { ativa: true })], erro: 'o Orca não respondeu', lidoEm: AGORA }))
+  assert.match(linhaDaConta(nos, 'a@x.com'), /51% 3h 8m 16% 6d 7h/)
+  assert.ok(nos({ type: 'Text' }).some((n) => /^Não consegui reler há .*: o Orca não respondeu\.$/.test(n.text ?? '')))
+  assert.ok(v.find({ label: 'Reler o uso das contas' }))
 })
 
 teste('contas: conta que não rodou mostra o último número com a idade dele; os rótulos das colunas aparecem uma vez só', async () => {

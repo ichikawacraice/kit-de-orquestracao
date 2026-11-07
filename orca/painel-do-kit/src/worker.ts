@@ -219,8 +219,10 @@ export default function activate(orca: OrcaWorkerApi): void {
         return { contas: contasDoOrca(resultado).contas, erro: null, lidoEm: Date.now() } as ContasLidas
       })
       .catch((e: unknown) => {
+        // A mensagem crua vai só ao log; a tela recebe um motivo curto. Com leitura boa antes, as contas dela ficam (a faixa avisa que não releu).
         orca.log(`contas: ${msg(e)}`)
-        return { contas: [], erro: msg(e), lidoEm: Date.now() } as ContasLidas
+        const formato = /não é a resposta do Orca/.test(msg(e))
+        return { contas: contasCache?.contas ?? [], erro: formato ? 'a resposta do Orca mudou de formato' : 'o Orca não respondeu', lidoEm: Date.now() } as ContasLidas
       })
       .then((l) => (contasCache = l))
       .finally(() => { lendoContas = null })
