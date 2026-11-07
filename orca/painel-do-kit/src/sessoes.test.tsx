@@ -453,7 +453,7 @@ teste('com muitas fatias todas mergeadas o cartão aberto mostra as feitas e o a
 const H = 60 * MIN
 const D = 24 * H
 const uso = (email: string, extra: Partial<ContaDeUso> = {}): ContaDeUso => ({
-  provedor: 'claude', id: email, email, ativa: false, semDado: false,
+  provedor: 'claude', id: email, email, ativa: false, semDado: false, antigo: false, antigoDesde: null,
   sessao: { usado: 51, resetsAt: AGORA + 3 * H + 8 * MIN + 30_000 }, semana: { usado: 16, resetsAt: AGORA + 6 * D + 7 * H + 20 * MIN }, ...extra,
 })
 const contasLidas = (contas: ContaDeUso[], erro: string | null = null): ContasLidas => ({ contas, erro, lidoEm: AGORA })
@@ -469,9 +469,9 @@ teste('contas: uma linha por conta, na ordem dada, com o e-mail, a janela de 5 h
     uso('acesso@x.com', { sessao: { usado: 56, resetsAt: AGORA + 25 * MIN + 30_000 }, semana: { usado: 100, resetsAt: AGORA + 1 * D + 2 * H + 30_000 } }),
     uso('izanagi@x.com', { sessao: { usado: 0, resetsAt: null }, semana: { usado: 65, resetsAt: null } }),
   ]))
-  assert.equal(linhaDaConta(nos, 'agentes@x.com'), '● agentes@x.com · 5h 51% 3h 8m · sem 16% 6d 7h')
-  assert.equal(linhaDaConta(nos, 'acesso@x.com'), '○ acesso@x.com · 5h 56% 25m · sem 100% 1d 2h')
-  assert.equal(linhaDaConta(nos, 'izanagi@x.com'), '○ izanagi@x.com · 5h 0% — · sem 65% —')
+  assert.equal(linhaDaConta(nos, 'agentes@x.com'), '● agentes@x.com 51% 3h 8m 16% 6d 7h')
+  assert.equal(linhaDaConta(nos, 'acesso@x.com'), '○ acesso@x.com 56% 25m 100% 1d 2h')
+  assert.equal(linhaDaConta(nos, 'izanagi@x.com'), '○ izanagi@x.com 0% — 65% —')
   const ordem = nos({ type: 'Text' }).map((n) => n.text).filter((t) => /@x\.com$/.test(t ?? ''))
   assert.deepEqual(ordem, ['agentes@x.com', 'acesso@x.com', 'izanagi@x.com'])
   semErros(v)
@@ -484,18 +484,19 @@ teste('contas: a conta ativa é marcada pela forma (● contra ○) e pelo peso,
   assert.notEqual(email('b@x.com').props.weight, 'semibold')
 })
 
-teste('contas: sem dado numa conta mostra "sem dado" só nela; as outras seguem', async () => {
+teste('contas: sem número numa conta diz que o Orca não mediu, só nela; as outras seguem', async () => {
   const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
     uso('a@x.com', { ativa: true }), uso('dev@x.com', { semDado: true, sessao: null, semana: null }),
   ]))
-  assert.equal(linhaDaConta(nos, 'dev@x.com'), '○ dev@x.com · sem dado')
-  assert.match(linhaDaConta(nos, 'a@x.com'), /5h 51%/)
+  assert.equal(linhaDaConta(nos, 'dev@x.com'), '○ dev@x.com o Orca ainda não mediu o uso desta conta')
+  assert.match(linhaDaConta(nos, 'a@x.com'), / 51% 3h 8m/)
   semErros(v)
 })
 
 teste('contas: falha total mostra uma linha "uso das contas indisponível" e a aba segue inteira', async () => {
   const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([], 'o Orca demorou'))
-  assert.ok(v.find({ text: 'Uso das contas indisponível' }))
+  assert.ok(v.find({ text: 'Não li o uso das contas: o Orca demorou. Tento de novo em 1 min.' }))
+  assert.ok(v.find({ label: 'Reler o uso das contas' }), 'há saída: reler na hora')
   assert.equal(semLinhas(nos), 0)
   assert.ok(v.find({ text: 'F1 · título do F1' }), 'as sessões continuam na aba')
   semErros(v)
@@ -503,21 +504,20 @@ teste('contas: falha total mostra uma linha "uso das contas indisponível" e a a
 
 teste('contas: sem nenhuma conta, a faixa não aparece; pedido que o worker nem respondeu também vira "indisponível"', async () => {
   const a = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])))
-  assert.equal(a.v.find({ text: 'Uso das contas' }), null)
-  assert.equal(a.v.find({ text: 'Uso das contas indisponível' }), null)
+  assert.equal(a.nos({ type: 'Text' }).filter((n) => /^(Uso das contas|Não li o uso)/.test(n.text ?? '')).length, 0)
   const b = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => { throw new Error('worker caiu') })
-  assert.ok(b.v.find({ text: 'Uso das contas indisponível' }))
+  assert.ok(b.v.find({ text: 'Não li o uso das contas: o worker do plugin não respondeu. Tento de novo em 1 min.' }))
   assert.ok(b.v.find({ text: 'F1 · título do F1' }))
 })
 
 teste('contas: abrir a aba pede leitura forçada uma vez; a contagem anda com o relógio sem novo pedido ao Orca', async () => {
   const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([uso('a@x.com', { ativa: true })]))
   assert.deepEqual(pedidosDeContas, [{ forcar: true }])
-  assert.match(linhaDaConta(nos, 'a@x.com'), /5h 51% 3h 8m/)
+  assert.match(linhaDaConta(nos, 'a@x.com'), /51% 3h 8m/)
   painel.relogio.agora = () => AGORA + 61 * MIN
   try {
     await v.press({ label: 'Reler agora' })
-    assert.match(linhaDaConta(nos, 'a@x.com'), /5h 51% 2h 7m · sem 16% 6d 6h/)
+    assert.match(linhaDaConta(nos, 'a@x.com'), /51% 2h 7m 16% 6d 6h/)
     assert.equal(pedidosDeContas.length, 1, 'reler as sessões não chama o Orca das contas')
   } finally {
     painel.relogio.agora = () => Date.now()
@@ -530,9 +530,22 @@ teste('contas: a barra pequena de cada janela segue a porcentagem e só vira war
     uso('b@x.com', { sessao: { usado: 94, resetsAt: null }, semana: { usado: 95, resetsAt: null } }),
     uso('c@x.com', { sessao: { usado: 100, resetsAt: null }, semana: { usado: 0, resetsAt: null } }),
   ]))
-  const barras = (id: string) => nos({ type: 'Box' }).filter((n) => n.path.includes(`:c-${id}/`) && n.props.height === 6 && n.props.background).map((n) => [n.props.background, n.props.width])
-  assert.deepEqual(barras('a@x.com').map((b) => b[0]), ['accent', 'warning'])
+  const barras = (id: string) => nos({ type: 'Box' }).filter((n) => n.path.includes(`:c-${id}/`) && n.props.height === 6 && n.props.background && n.props.background !== 'muted').map((n) => [n.props.background, n.props.width])
+  assert.deepEqual(barras('a@x.com').map((b) => b[0]), ['neutral', 'warning'])
   assert.deepEqual(barras('b@x.com').map((b) => b[0]), ['warning', 'danger'])
   assert.deepEqual(barras('c@x.com').map((b) => b[0]), ['danger'], 'zero por cento não desenha preenchimento')
   assert.ok(Number(barras('a@x.com')[1][1]) > Number(barras('a@x.com')[0][1]), '80% é mais larga que 79%')
+})
+
+teste('contas: conta que não rodou mostra o último número com a idade dele; os rótulos das colunas aparecem uma vez só', async () => {
+  const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('a@x.com', { ativa: true }),
+    uso('velha@x.com', { antigo: true, antigoDesde: AGORA - 3 * H, semana: { usado: 72, resetsAt: AGORA + 2 * D + 30_000 } }),
+  ]))
+  assert.match(linhaDaConta(nos, 'velha@x.com'), /^○ velha@x\.com último número há 3 h 51% 3h 8m 72% 2d 0h$/)
+  assert.doesNotMatch(linhaDaConta(nos, 'a@x.com'), /último número/)
+  const cabecalho = nos({ type: 'Text' }).map((n) => n.text).filter((t) => /reinicia em$/.test(t ?? ''))
+  assert.deepEqual(cabecalho, ['5 horas · reinicia em', 'Semana · reinicia em'], 'os rótulos das colunas aparecem uma vez só')
+  assert.ok(nos({ type: 'Text' }).some((n) => /^Uso das contas · há /.test(n.text ?? '')), 'o título diz a idade da leitura')
+  semErros(v)
 })

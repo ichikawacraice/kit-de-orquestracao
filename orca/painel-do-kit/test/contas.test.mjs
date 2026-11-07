@@ -54,9 +54,22 @@ test('conta removida (accountId sem conta em accounts) é ignorada', () => {
   assert.ok(!contas.some((c) => c.id === 'fantasma'));
 });
 
-test('status error ou limites ausentes: semDado, sem esconder as outras', () => {
+test('status error com número: mostra o último número marcado como antigo, com a hora da leitura', () => {
   const b = bruto();
-  b.rateLimits.inactiveClaudeAccounts[1] = { accountId: 'a', rateLimits: limites(janela(17), janela(72), { status: 'error', error: 'token velho' }) };
+  b.rateLimits.inactiveClaudeAccounts[1] = { accountId: 'a', rateLimits: limites(janela(17), janela(72), { status: 'error', error: 'token velho', updatedAt: AGORA - 3 * H }) };
+  const { contas } = contasDoOrca(b);
+  const alfa = contas.find((c) => c.email === 'alfa@x.com');
+  assert.equal(alfa.semDado, false);
+  assert.equal(alfa.antigo, true);
+  assert.equal(alfa.antigoDesde, AGORA - 3 * H);
+  assert.equal(alfa.semana.usado, 72);
+  assert.equal(contas[0].antigo, false);
+  assert.equal(contas[0].antigoDesde, null);
+});
+
+test('limites ausentes ou error sem número: semDado, sem esconder as outras', () => {
+  const b = bruto();
+  b.rateLimits.inactiveClaudeAccounts[1] = { accountId: 'a', rateLimits: limites(null, null, { status: 'error', error: 'sem token' }) };
   b.rateLimits.inactiveClaudeAccounts[0] = { accountId: 'b' }; // sem rateLimits
   const { contas } = contasDoOrca(b);
   assert.deepEqual(contas.map((c) => [c.email, c.semDado]), [['agentes@x.com', false], ['alfa@x.com', true], ['zeta@x.com', true]]);

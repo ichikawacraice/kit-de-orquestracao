@@ -1191,47 +1191,47 @@ function ArquivarConcluidas() {
 
 // ── Uso das contas (F475) ────────────────────────────────────────────────────────────────────────────────────────
 const LARGURA_DA_BARRA = 36
-/** Só 3 tons: o da barra comum, `warning` a partir de 80% e `danger` a partir de 95% (os mesmos do selo de estado). */
-const tomDoUso = (pct: number) => (pct >= 95 ? 'danger' : pct >= 80 ? 'warning' : 'accent')
+/** Abaixo de 80% a barra é neutra (nada a fazer); `warning` a partir de 80% e `danger` a partir de 95% (os mesmos do selo de estado). */
+const tomDoUso = (pct: number) => (pct >= 95 ? 'danger' : pct >= 80 ? 'warning' : 'neutral')
+/** Largura da coluna de cada janela: as barras e os números das contas ficam alinhados. */
+const LARGURA_DA_JANELA = 132
 
 function MiniBarra(props: { pct: number }) {
   const cheio = Math.round((LARGURA_DA_BARRA * Math.max(0, Math.min(100, props.pct))) / 100)
   return (
-    <Box width={LARGURA_DA_BARRA} height={6} radius="full" border="neutral" direction="row" shrink={false}>
+    <Box width={LARGURA_DA_BARRA} height={6} radius="full" background="muted" direction="row" shrink={false}>
       {cheio ? <Box width={cheio} height={6} radius="full" background={tomDoUso(props.pct)} shrink={false} /> : null}
     </Box>
   )
 }
 
-function JanelaDeUso(props: { rotulo: string; j: NonNullable<ContaDeUso['sessao']>; agora: number }) {
+function JanelaDeUso(props: { j: NonNullable<ContaDeUso['sessao']>; agora: number }) {
   return (
-    <Row align="center" gap="xs">
-      <Text size="xs" muted>{props.rotulo}</Text>
-      <MiniBarra pct={props.j.usado} />
-      <Text size="xs">{`${Math.round(props.j.usado)}%`}</Text>
-      <Text size="xs" muted>{contagem(props.j.resetsAt, props.agora)}</Text>
-    </Row>
+    <Box width={LARGURA_DA_JANELA} shrink={false}>
+      <Row align="center" gap="xs">
+        <MiniBarra pct={props.j.usado} />
+        <Text size="xs">{`${Math.round(props.j.usado)}%`}</Text>
+        <Text size="xs" muted>{contagem(props.j.resetsAt, props.agora)}</Text>
+      </Row>
+    </Box>
   )
 }
 
-/** Uma conta: `● e-mail · 5h 51% 3h 8m · sem 16% 6d 7h`. A ativa leva ● e o e-mail em destaque; as outras, ○. */
+/** Uma conta em duas linhas: `● e-mail` e, embaixo, as barras de 5 horas e da semana. Conta que não rodou traz o último número, com a idade dele. */
 function LinhaDaConta(props: { c: ContaDeUso; agora: number }) {
   const { c, agora } = props
+  const idade = c.antigo ? (c.antigoDesde ? `último número ${haQuanto(c.antigoDesde, agora)}` : 'número antigo') : null
   return (
-    <Box key={`c-${c.id}`}>
-      <Row align="center" gap="xs" wrap>
+    <Box key={`c-${c.id}`} gap="xs">
+      <Row align="center" gap="xs">
         {c.ativa ? <Text size="xs" tone="accent">●</Text> : <Text size="xs" muted>○</Text>}
-        <Text size="xs" weight={c.ativa ? 'semibold' : undefined}>{c.email}</Text>
+        <Box grow minWidth={0}><Text size="xs" truncate weight={c.ativa ? 'semibold' : undefined}>{c.email}</Text></Box>
         {c.provedor === 'codex' ? <Text size="xs" muted>Codex</Text> : null}
-        <Text size="xs" muted>·</Text>
-        {c.semDado || !c.sessao || !c.semana
-          ? <Text size="xs" muted>sem dado</Text>
-          : <>
-            <JanelaDeUso rotulo="5h" j={c.sessao} agora={agora} />
-            <Text size="xs" muted>·</Text>
-            <JanelaDeUso rotulo="sem" j={c.semana} agora={agora} />
-          </>}
+        {idade ? <Text size="xs" muted>{idade}</Text> : null}
       </Row>
+      {c.semDado || !c.sessao || !c.semana
+        ? <Text size="xs" muted>o Orca ainda não mediu o uso desta conta</Text>
+        : <Row gap="sm"><JanelaDeUso j={c.sessao} agora={agora} /><JanelaDeUso j={c.semana} agora={agora} /></Row>}
     </Box>
   )
 }
@@ -1240,12 +1240,24 @@ function LinhaDaConta(props: { c: ContaDeUso; agora: number }) {
 function UsoDasContas() {
   const l = read(contasLidas)
   const agora = read(tique) || relogio.agora()
+  const lendo = read(lendoContas)
   if (!l) return null
-  if (l.erro) return <Text size="xs" muted>Uso das contas indisponível</Text>
+  if (l.erro) {
+    return (
+      <Row align="center" gap="xs">
+        <Box grow minWidth={0}><Text size="xs" muted>{`Não li o uso das contas: ${l.erro}. Tento de novo em 1 min.`}</Text></Box>
+        <IconButton icon="refresh" label="Reler o uso das contas" variant="ghost" size="sm" disabled={lendo} onPress={() => void lerContas(true)} />
+      </Row>
+    )
+  }
   if (!l.contas.length) return null
   return (
-    <Box border radius="md" padding="sm" gap="xs">
-      <Text size="xs" muted>Uso das contas</Text>
+    <Box border radius="md" padding="sm" gap="sm">
+      <Text size="xs" muted>{`Uso das contas · ${haQuanto(l.lidoEm, agora)}`}</Text>
+      <Row gap="sm">
+        <Box width={LARGURA_DA_JANELA} shrink={false}><Text size="xs" muted>5 horas · reinicia em</Text></Box>
+        <Box width={LARGURA_DA_JANELA} shrink={false}><Text size="xs" muted>Semana · reinicia em</Text></Box>
+      </Row>
       {l.contas.map((c) => <LinhaDaConta key={`c-${c.provedor}-${c.id}`} c={c} agora={agora} />)}
     </Box>
   )

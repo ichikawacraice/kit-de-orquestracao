@@ -108,9 +108,9 @@ export type VistaDasSessoes = {
   lidoEm: number
 }
 
-/** O uso de uma conta Claude ou Codex, como a faixa de contas da aba o mostra (F475). `semDado`: o Orca não trouxe número que valha. */
+/** O uso de uma conta Claude ou Codex, como a faixa de contas da aba o mostra (F475). `semDado`: o Orca não trouxe número; `antigo`: o número é o último que ele leu (conta que não rodou), lido em `antigoDesde`. */
 export type JanelaDeUso = { usado: number; resetsAt: number | null }
-export type ContaDeUso = { provedor: 'claude' | 'codex'; id: string; email: string; ativa: boolean; semDado: boolean; sessao: JanelaDeUso | null; semana: JanelaDeUso | null }
+export type ContaDeUso = { provedor: 'claude' | 'codex'; id: string; email: string; ativa: boolean; semDado: boolean; antigo: boolean; antigoDesde: number | null; sessao: JanelaDeUso | null; semana: JanelaDeUso | null }
 /** A leitura das contas: `erro` quando o Orca não respondeu (a faixa diz "indisponível"). */
 export type ContasLidas = { contas: ContaDeUso[]; erro: string | null; lidoEm: number }
 

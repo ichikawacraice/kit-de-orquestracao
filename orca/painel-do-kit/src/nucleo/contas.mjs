@@ -23,13 +23,15 @@ const janela = (j) => {
   return { usado: j.usedPercent, resetsAt: typeof j.resetsAt === 'number' && Number.isFinite(j.resetsAt) ? j.resetsAt : null };
 };
 
-// Limite com `status` diferente de ok, sem uso numérico em alguma janela ou ausente: `semDado` (o Orca guarda o último
-// número em conta com erro, mas ele é velho: mostrar como se valesse hoje enganaria).
+// Conta inativa vem do Orca com `status: error` (ele só atualiza o uso dela quando ela roda) e ainda traz o último número:
+// mostra-se esse número marcado como antigo (`antigoDesde` = quando o Orca o leu). `semDado` só quando falta número nas janelas.
 function linha(provedor, ativa, conta, limites) {
-  const sessao = limites && limites.status === 'ok' ? janela(limites.session) : null;
-  const semana = limites && limites.status === 'ok' ? janela(limites.weekly) : null;
+  const sessao = janela(limites?.session);
+  const semana = janela(limites?.weekly);
   const semDado = !sessao || !semana;
-  return { provedor, id: conta.id, email: conta.email, ativa, semDado, sessao: semDado ? null : sessao, semana: semDado ? null : semana };
+  const antigo = !semDado && limites.status !== 'ok';
+  const lido = typeof limites?.updatedAt === 'number' && Number.isFinite(limites.updatedAt) ? limites.updatedAt : null;
+  return { provedor, id: conta.id, email: conta.email, ativa, semDado, antigoDesde: antigo ? lido : null, antigo, sessao: semDado ? null : sessao, semana: semDado ? null : semana };
 }
 
 function doProvedor(provedor, bruto, limitesDaAtiva, inativas) {

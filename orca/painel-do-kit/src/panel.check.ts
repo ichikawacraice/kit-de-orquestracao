@@ -110,10 +110,10 @@ const leitura = (l: Partial<Leitura> = {}): Leitura =>
   ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: semSessoes, atualizacao: [], lidoEm: AGORA - 20_000, ...l })
 const cheia = leitura({ abertas, assumidas, entregas })
 
-// F475: o uso das contas, como o Orca o mediu (5 h e semana por conta). A ativa primeiro; a conta com erro vai como "sem dado".
+// F475: o uso das contas, como o Orca o mediu (5 h e semana por conta). A ativa primeiro; a conta que não rodou traz o último número, com a idade.
 const D = 24 * H
 const conta = (email: string, sessao: [number, number | null], semana: [number, number | null], extra: Partial<ContaDeUso> = {}): ContaDeUso => ({
-  provedor: 'claude', id: email, email, ativa: false, semDado: false,
+  provedor: 'claude', id: email, email, ativa: false, semDado: false, antigo: false, antigoDesde: null,
   sessao: { usado: sessao[0], resetsAt: sessao[1] === null ? null : AGORA + sessao[1] }, semana: { usado: semana[0], resetsAt: semana[1] === null ? null : AGORA + semana[1] }, ...extra,
 })
 const contas = (cs: ContaDeUso[], erro: string | null = null): ContasLidas => ({ contas: cs, erro, lidoEm: AGORA })
@@ -121,7 +121,7 @@ const dasContas: ContaDeUso[] = [
   conta('agentes@wicomm.com.br', [51, 3 * H + 8 * MIN + 30_000], [16, 6 * D + 7 * H + 30_000], { ativa: true }),
   conta('acesso@wicomm.com.br', [56, 1 * H + 40 * MIN + 30_000], [100, 3 * D + 2 * H + 30_000]),
   conta('claude@wicomm.com.br', [0, null], [96, 1 * D + 5 * H + 30_000]),
-  conta('dev@wicomm.com.br', [17, 4 * H + 30_000], [72, 2 * D + 30_000], { semDado: true, sessao: null, semana: null }),
+  conta('dev@wicomm.com.br', [17, 4 * H + 30_000], [72, 2 * D + 30_000], { antigo: true, antigoDesde: Date.now() - 4 * H }),
   conta('izanagi@wicomm.com.br', [100, 20 * MIN + 30_000], [65, 4 * D + 30_000]),
   conta('g.craice@gmail.com', [100, 2 * H + 30_000], [16, 5 * D + 30_000], { provedor: 'codex', ativa: true }),
 ]
