@@ -229,6 +229,45 @@ for (const [nome, montar, motivo] of FALTAS) {
     assert.deepEqual(c.mutantes(), [], 'nenhum worker-release, worktree set nem worktree rm');
   });
 }
+// F484: o despacho que morreu no limite de uso fica `stopped`, outcome failed, terminal `released` (medido em 07/11/2026: o
+// `worker-release` responde already_released). Isso é parado de vez: arquiva sem soltar de novo o que já está solto.
+const morto = (extra = {}) => worker(pasta, 'released', { dispatchId: 'ctx_aaa111', state: 'stopped', terminal: 'structworker_t1', ...extra });
+test('(arquivar-7) despacho stopped com terminal released conta como parado: arquiva e não chama worker-release', () => {
+  const c = cenario({ workers: [morto()] });
+  const r = arquivar(c);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(r.json?.arquivado, true);
+  assert.equal(r.json?.condicoes?.parado, true);
+  assert.deepEqual(c.mutantes(), [['worktree', 'set', '--worktree', `path:${pasta}`, '--workspace-status', 'completed', '--json']]);
+});
+test('(arquivar-8) stopped com o terminal ainda vivo não é parado de vez: recusa sem chamar nada', () => {
+  const c = cenario({ workers: [morto({ terminalState: 'retained' })] });
+  const r = arquivar(c, ['--remover-worktree']);
+  assert.equal(r.status, 1, r.stderr + r.stdout);
+  assert.match(r.stdout + r.stderr, /worker não está parado: ctx_aaa111 em stopped/);
+  assert.deepEqual(c.mutantes(), []);
+});
+test('(arquivar-9) um despacho velho stopped/released e o follow-up succeeded no mesmo terminal: o release vai só ao vivo', () => {
+  const c = cenario({ workers: [morto(), worker(pasta, 'retained', { dispatchId: 'ctx_bbb222', state: 'succeeded', terminal: 'structworker_t1' })] });
+  const r = painel(['orquestradora', 'arquivar', 'ctx_bbb222'], { env: c.env });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.deepEqual(c.mutantes()[0], ['orchestration', 'worker-release', '--dispatch', 'ctx_bbb222', '--json']);
+});
+// F484 (validador): depois do retry na mesma Task, a pasta tem o despacho velho (stopped, terminal released) e o novo, sempre
+// `--keep-open`, num terminal retido. Arquivar pelo velho tem de soltar o terminal do novo, senão ele fica aberto para sempre.
+test('(arquivar-10) retry: arquivar pelo despacho velho solta o terminal do novo, um release por terminal', () => {
+  const c = cenario({ workers: [
+    worker(pasta, 'released', { dispatchId: 'ctx_velho0', state: 'stopped', terminal: 'structworker_t0' }),
+    worker(pasta, 'retained', { dispatchId: 'ctx_aaa111', state: 'succeeded', terminal: 'structworker_t1' }),
+    worker(pasta, 'retained', { dispatchId: 'ctx_aaa112', state: 'succeeded', terminal: 'structworker_t1' }),
+  ] });
+  const r = painel(['orquestradora', 'arquivar', 'ctx_velho0'], { env: c.env });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const releases = c.mutantes().filter((m) => m[1] === 'worker-release');
+  assert.equal(releases.length, 1, JSON.stringify(c.mutantes()));
+  assert.match(releases[0][3], /^ctx_aaa11[12]$/);
+  assert.ok(!c.mutantes().some((m) => m.includes('ctx_velho0')), 'o terminal já solto não se solta de novo');
+});
 test('(arquivar-6) a decisão assumida (a confirmar) não segura o worker: só a pergunta aberta trava', () => {
   const c = cenario();
   writeFileSync(join(base, 'painel', 'perguntas', 'Q5.json'), JSON.stringify({ id: 'Q5', version: 1, data: { item: 'F7', estado: 'assumida', sessaoId: ORCA_ID, projeto: 'kit' } }));
@@ -289,6 +328,15 @@ test('(concluidas-1) --seco lista as aptas (achadas pela branch) e não chama na
   assert.deepEqual(r.json.aptas.map((x) => x.dispatchId), ['ctx_aaa111', 'ctx_bbb222']);
   assert.deepEqual(r.json.arquivadas, []);
   assert.deepEqual(c.mutantes(), [], 'só lê');
+});
+test('(concluidas-1b) F484: a dona que morreu no limite (stopped, terminal released) é concluída apta', () => {
+  const c = cenarioDeDuas();
+  const w7 = worker(pasta, 'released', { dispatchId: 'ctx_aaa111', state: 'stopped', terminal: 'structworker_t1' });
+  const w8 = worker(c.pasta8, 'retained', { dispatchId: 'ctx_bbb222', state: 'succeeded', terminal: 'structworker_t2' });
+  writeFileSync(join(c.orca.dir, 'paginas.json'), JSON.stringify({ '': recibo([w7, w8]) }));
+  const r = concluidas(c, ['--seco']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.deepEqual(r.json?.aptas?.map((x) => x.item), ['F7', 'F8']);
 });
 test('(concluidas-2) sem branch no item, acha pela sessão que o trabalhou (orca-sessoes: terminal)', () => {
   const c = cenarioDeDuas({ itemF8: { branch: undefined, donaAoFechar: { donoLocalId: 'orca_session_id:dona-f8', com: [] } } });
@@ -386,6 +434,16 @@ test('(concluidas-8) recusa --item e despacho junto; --itens sem --concluidas', 
   const sem = painel(['orquestradora', 'arquivar', 'ctx_aaa111', '--itens', 'F7'], { env: c.env });
   assert.notEqual(sem.status, 0);
   assert.deepEqual(c.mutantes(), []);
+});
+test('(concluidas-1c) retry: o despacho velho stopped/released vem antes do novo retido na mesma pasta; o novo é solto', () => {
+  const c = cenarioDeDuas();
+  const velho = worker(pasta, 'released', { dispatchId: 'ctx_velho0', state: 'stopped', terminal: 'structworker_t0' });
+  const novo = worker(pasta, 'retained', { dispatchId: 'ctx_aaa111', state: 'succeeded', terminal: 'structworker_t1' });
+  const w8 = worker(c.pasta8, 'retained', { dispatchId: 'ctx_bbb222', state: 'succeeded', terminal: 'structworker_t2' });
+  writeFileSync(join(c.orca.dir, 'paginas.json'), JSON.stringify({ '': recibo([velho, novo, w8]) }));
+  const r = concluidas(c, ['--itens', 'F7']);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.ok(c.mutantes().some((m) => m.join(' ').includes('worker-release --dispatch ctx_aaa111')), JSON.stringify(c.mutantes()));
 });
 test('(concluidas-9) sem concluída com worker: lista vazia e exit 0', () => {
   const c = cenarioDeDuas({ itemF8: { etapa: 'execucao' } });

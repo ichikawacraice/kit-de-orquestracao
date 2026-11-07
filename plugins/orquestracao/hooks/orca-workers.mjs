@@ -39,6 +39,9 @@ const texto = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 const ESTADOS_FINAIS = new Set(['succeeded', 'failed', 'cancelled', 'canceled', 'completed', 'done', 'expired']);
 /** O estado do despacho é final (o worker terminou o que recebeu). */
 export const estadoFinal = (state) => ESTADOS_FINAIS.has(String(state ?? '').toLowerCase());
+// F484: o despacho que morreu no limite de uso fica `stopped` com o terminal `released` (medido em 07/11/2026; o `worker-release`
+// responde already_released). Parado de vez, como o estado final; o `stopped` com terminal vivo ainda não.
+export const despachoEncerrado = (w) => estadoFinal(w?.state) || (String(w?.state ?? '').toLowerCase() === 'stopped' && w?.terminalState === 'released');
 
 function normalizar(w) {
   const ws = texto(w?.workspace);

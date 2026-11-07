@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, afterEach } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { rmSync, existsSync, readFileSync } from 'node:fs';
+import { orcaFalso, recibo, worker, escalacao, reciboCaixa } from './orca-falso.mjs';
 
 const HOOK = join(dirname(fileURLToPath(import.meta.url)), '..', 'orquestradora-ritual.mjs');
 const haH = (h) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -121,7 +122,9 @@ function rodar(ferramentas, { extra = {}, env = {}, orca = false } = {}) {
       PAINEL_DIR: join(base, 'painel'), FILA_DIR: '', ESPERA_MIN: '', KIT_TETO_DE_DONAS: '',
       // a máquina do teste nunca está cheia por acaso: sem fichas e com carga zero, a menos que o caso diga o contrário
       KIT_NUCLEOS_DIR: join(base, 'nucleos-vazia'), KIT_NUCLEOS_DE_TESTE: '', CI: '', KIT_CARGA_1MIN: '0',
-      KIT_ANFITRIAO: orca ? 'orca' : 'claude-desktop', ORCA_AGENT_SESSION_ID: orca ? 'orq-do-orca' : '', CLAUDE_CODE_HOST_SESSION_ID: '', ...env },
+      KIT_ANFITRIAO: orca ? 'orca' : 'claude-desktop', ORCA_AGENT_SESSION_ID: orca ? 'orq-do-orca' : '', CLAUDE_CODE_HOST_SESSION_ID: '',
+      // o `orca` real nunca é chamado: sem o falso do caso, não há orca
+      KIT_ORCA_BIN: 'off', ...env },
   });
   assert.equal(r.status, 0, r.stderr);
   return r.stdout ? JSON.parse(r.stdout) : null;
@@ -260,5 +263,46 @@ test('(orca-3) no Orca a batida parada não é cobrada (não há mod do app); no
 test('(orca-4) no Orca o resumo do ausente segue cobrado', () => {
   writeFileSync(join(base, 'orq', 'operador-ausente.json'), JSON.stringify({ ligado: false, desde: minAtras(12 * 60), desligadoEm: minAtras(120), por: 'painel' }));
   assert.match(rodar([], { orca: true })?.reason ?? '', /resumo/);
+});
+
+// F484: a dona que bateu o limite de uso antes de se gravar no item. No Orca a escalation `usageLimitReached` cita o item no
+// título da tarefa e o chat segue com ela (despacho `ready`, terminal ativo): o item tem dona, em espera, e não é cobrado.
+// O despacho parado (dona que não volta) e a leitura que falha seguem cobrando.
+test('(limite-1) no Orca, a dona do item no limite de uso com o chat vivo: o item não é cobrado como sem dona', () => {
+  semDona('F7'); semDona('F8');
+  const vivo = worker('/w/f7', 'active', { terminal: 'structworker_7', dispatchId: 'ctx_7', state: 'ready' });
+  const o = orcaFalso({ '': recibo([vivo]), outros: { 'orchestration inbox': reciboCaixa([escalacao('F7', { handle: 'structworker_7', dispatchId: 'ctx_7' })]) } });
+  try {
+    const r = rodar([], { orca: true, env: o.env });
+    assert.equal(r?.decision, 'block', 'precondição: o F8, sem escalation, segue cobrado');
+    assert.match(r.reason, /F8 sem dona/);
+    assert.doesNotMatch(r.reason, /F7 sem dona/, 'o F7 tem dona no limite, em espera');
+    assert.ok(o.chamadas().some((c) => c.argv.slice(0, 2).join(' ') === 'orchestration inbox'), 'a trava leu a caixa do Orca');
+    rmSync(join(base, 'painel', 'fila', 'F8.json'));
+    assert.equal(rodar([], { orca: true, env: o.env }), null, 'só o F7, em espera: o turno termina');
+  } finally { rmSync(o.dir, { recursive: true, force: true }); }
+});
+test('(limite-2) o despacho da dona parado, a escalation de outro tipo ou a caixa ilegível: segue cobrando', () => {
+  semDona('F7');
+  const casos = [
+    [worker('/w/f7', 'released', { terminal: 'structworker_7', dispatchId: 'ctx_7', state: 'stopped' }), reciboCaixa([escalacao('F7', { handle: 'structworker_7', dispatchId: 'ctx_7' })])],
+    [worker('/w/f7', 'active', { terminal: 'structworker_7', dispatchId: 'ctx_7', state: 'ready' }), reciboCaixa([escalacao('F7', { handle: 'structworker_7', dispatchId: 'ctx_7', kind: 'hostFault' })])],
+    [worker('/w/f7', 'active', { terminal: 'structworker_7', dispatchId: 'ctx_7', state: 'ready' }), { stdout: 'não é json' }],
+  ];
+  for (const [w, caixa] of casos) {
+    const o = orcaFalso({ '': recibo([w]), outros: { 'orchestration inbox': caixa } });
+    try { assert.match(rodar([], { orca: true, env: o.env })?.reason ?? '', /F7 sem dona/, JSON.stringify(caixa).slice(0, 120)); } finally { rmSync(o.dir, { recursive: true, force: true }); }
+  }
+});
+test('(limite-3) no app a caixa do Orca não é lida; sem item sem dona, o orca nem é chamado', () => {
+  const o = orcaFalso({ '': recibo([]), outros: { 'orchestration inbox': reciboCaixa([escalacao('F7')]) } });
+  try {
+    semDona('F7');
+    assert.match(rodar([], { env: o.env })?.reason ?? '', /F7 sem dona/);
+    assert.equal(o.chamadas().length, 0, 'no app nada chama o orca');
+    rmSync(join(base, 'painel', 'fila', 'F7.json'));
+    assert.equal(rodar([], { orca: true, env: o.env }), null);
+    assert.equal(o.chamadas().length, 0, 'sem item a cobrar, o orca não é chamado');
+  } finally { rmSync(o.dir, { recursive: true, force: true }); }
 });
 }

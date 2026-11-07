@@ -68,3 +68,14 @@ export const agenteDoOrca = (cru, state, extra = {}) => ({
   paneKey: `structured-agent-session-${cru}:af1bbe52-8eb9-457f-a5c3-8db0ec5559fe`, parentPaneKey: null, state, agentType: 'claude',
   mainAgent: { state, stateStartedAt: Date.now() }, stateStartedAt: Date.now(), ...extra,
 });
+
+// F484: a escalation como o Orca a grava (medida em 07/11/2026 no Izanagi, `orca orchestration inbox --json --full`).
+export const escalacao = (F, { handle = 'structworker_aaa', dispatchId = 'ctx_aaa', kind = 'usageLimitReached', min = 10, titulo, agoraMs = Date.now() } = {}) => ({
+  id: `msg_chaterr_${F}`, type: 'escalation', priority: 'high', from_handle: handle, to_handle: 'run:run_x',
+  subject: 'Agent hit an error: Claude hit its session limit.',
+  body: `Worker ${handle} hit an error while running task "${titulo ?? `Você é a dona do ${F} · tema do item...`}" (task_x).\nError: Claude hit its session limit.\nDetails from the agent: You've hit your 5-hour limit · resets 11am (America/Sao_Paulo)\nThe task is still assigned to this chat, which keeps its history.`,
+  payload: JSON.stringify({ taskId: 'task_x', dispatchId, handle, sessionId: 'cli-x', agent: 'claude', turnOutcome: 'failure', failureKind: kind, error: 'Claude hit its session limit.', detail: "You've hit your 5-hour limit · resets 11am (America/Sao_Paulo)" }),
+  created_at: new Date(agoraMs - min * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+});
+/** O recibo do `inbox --json --full`. O falso o serve pelo mapa 'outros' de paginas.json, na chave 'orchestration inbox'. */
+export const reciboCaixa = (messages) => ({ stdout: { ok: true, result: { messages } } });

@@ -9,7 +9,8 @@
 // Codex também exige modelo/esforço explícitos e isolamento, sem aplicar a política de modelos Claude.
 // Passam: `--terminal` (worker que já tem modelo), `--agent` de outro agente (vai ao log), `worktree create` sem `--agent`, `--help`.
 // Sem texto legível (`--task`, arquivo ausente, stdin de pipe) não há papel, gatilho nem `Só leitura:`: recusa o Opus fora do esforço
-// médio (não há como ver a linha) e a pasta de quem chama; o resto, Opus médio incluído, passa com `passou-sem-ler-spec`. A recusa traz o comando corrigido. Erro do próprio hook DEIXA PASSAR.
+// médio (não há como ver a linha) e a pasta de quem chama; o resto, Opus médio incluído, passa com `passou-sem-ler-spec`. O retry na
+// mesma Task (`--task` + `--retry-of`, F484) aceita também o Opus alto, de qualquer Task (a trava não sabe com que modelo saiu o primeiro despacho; decisão assumida Q1202). A recusa traz o comando corrigido. Erro do próprio hook DEIXA PASSAR.
 // O leitor de comando (`comandosDoOrca`) separa os comandos simples respeitando aspas, heredoc e redirecionamento: `orca …` dentro de
 // string, de heredoc de outro comando ou de comentário não é comando. É ele que a fatia 8 reaproveita.
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -332,6 +333,10 @@ function decidirUm(o, { cwd, env }) {
   if (!codex && !legivel && ml.includes('opus') && effort.toLowerCase() !== 'medium') {
     motivoModelo = 'worker em Opus fora do esforço médio sem texto legível do pedido (`--task`, arquivo ausente ou stdin de pipe): sem texto não há a linha `Esforço alto: <gatilho>`. Use `--effort medium`, ou ponha o pedido em `--spec`/`--spec-file` com a linha.';
   }
+  // F484: o retry na mesma Task (`--task` + `--retry-of`, a dona recriada depois do limite de uso) reusa o texto da Task, que a
+  // trava não lê; o Opus alto passa sem a linha `Esforço alto:`, para qualquer Task (Q1202). A pasta e o esforço até high seguem conferidos.
+  const retry = o.sub === 'worker-start' && !legivel && typeof b.task === 'string' && typeof b['retry-of'] === 'string';
+  if (!codex && retry && ml.includes('opus') && effort.toLowerCase() === 'high') motivoModelo = null;
   const modelOk = codex ? model && !/sonnet|opus|haiku/.test(ml) : Boolean(model && effort && !motivoModelo);
   const sugModel = modelOk ? model : (papel === 'dona' ? 'opus' : 'sonnet');
   const sugEffort = modelOk && effort ? effort : esforcoDe(sugModel.toLowerCase());
@@ -346,7 +351,7 @@ function decidirUm(o, { cwd, env }) {
     motivos.push(`${o.sub === 'agent-launch' ? 'agent launch' : 'worker-start'} ${onde}, ${porque}: dois agentes escrevendo na mesma worktree se atropelam.`);
   }
   if (!motivos.length) {
-    if (!legivel) return { recusa: null, desfecho: 'passou-sem-ler-spec', detalhe };
+    if (!legivel) return { recusa: null, desfecho: retry ? 'passou-retry-sem-ler-spec' : 'passou-sem-ler-spec', detalhe };
     const desfecho = codex ? 'orca-abriu-codex' : ml.includes('opus') ? 'orca-abriu-opus' : ml.includes('haiku') ? 'orca-abriu-haiku' : 'orca-abriu-sonnet';
     return { recusa: null, desfecho, detalhe: ml.includes('opus') ? `${detalhe} gatilho=${(legivel && gatilhoDoOpus(texto)) || '-'}` : detalhe };
   }

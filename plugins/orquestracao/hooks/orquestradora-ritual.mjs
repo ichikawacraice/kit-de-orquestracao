@@ -20,6 +20,7 @@ import { filaDir } from './pool-comum.mjs';
 import { pendente, projetoDoRepo } from '../skills/orquestradora/scripts/ausencia.mjs';
 import { anfitriao } from './anfitriao.mjs';
 import { invocacoesDoOrca } from './trava-do-orca.mjs';
+import { donasNoLimite } from './dona-no-limite.mjs';
 
 const AUSENCIA = join(dirname(fileURLToPath(import.meta.url)), '..', 'skills', 'orquestradora', 'scripts', 'ausencia.mjs');
 
@@ -64,12 +65,18 @@ function itensSemDona(nomeProjeto) {
 
 // O item sem dona pede a sessão dona, sem teto. Satisfaz: um `start_session` no turno, o modo ausente ligado (ninguém para
 // abrir), gravar o dono do item ou mandar mensagem que o cite. O item com cartão esperando o clique já tem dona a caminho.
+// F484: no Orca, o item cuja dona bateu o limite de uso com o chat ainda vivo tem dona, em espera (skill orquestradora,
+// `dona-no-limite`); a caixa do Orca só é lida quando sobra item a cobrar, e a leitura que falha não tira ninguém da cobrança.
 function cobrancaDeDona(nomeProjeto, comandos, usadas, mensagens, noOrca) {
   const { itens } = itensSemDona(nomeProjeto);
   if (itens.length === 0) return [];
   if ([...usadas].some((n) => n.endsWith('start_session')) || modoAusente()) return [];
   const cita = (id, x) => new RegExp(`\\b${id}\\b`).test(x);
-  const faltam = itens.filter((it) => !comandos.some((c) => cita(it.id, c) && /donoLocalId/.test(c)) && !mensagens.some((m) => cita(it.id, m)));
+  let faltam = itens.filter((it) => !comandos.some((c) => cita(it.id, c) && /donoLocalId/.test(c)) && !mensagens.some((m) => cita(it.id, m)));
+  if (noOrca && faltam.length > 0) {
+    const noLimite = donasNoLimite();
+    if (noLimite) faltam = faltam.filter((it) => !noLimite.has(it.id));
+  }
   const como = noOrca
     ? 'orca orchestration worker-start; pool/anfitriao-orca.md#tabela'
     : 'start_session; fora do turno do operador, cartão';

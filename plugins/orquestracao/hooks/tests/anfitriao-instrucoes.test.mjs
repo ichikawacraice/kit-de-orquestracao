@@ -110,6 +110,17 @@ test('doc × código: toda ferramenta mcp__ccd_* (e nome curto) citada em plugin
   assert.deepEqual(ferramentasSemLinha(arquivos, tabela), []);
 });
 
+// O marcador `/caminho/da/worktree` dos exemplos vira uma worktree de verdade, fora da pasta de quem chama (F484: o retry da dona
+// no limite leva `--worktree path:` sem `--terminal`, e um caminho que não existe conta como a pasta de quem chama).
+const MARCADOR_DA_WORKTREE = '/caminho/da/worktree';
+function pastasDoTeste(dir) {
+  const repo = join(dir, 'repo'); mkdirSync(repo);
+  execFileSync('git', ['-C', repo, 'init', '-q', '-b', 'principal'], { timeout: 15000, killSignal: 'SIGKILL' });
+  const wt = join(dir, 'worktree-da-dona'); mkdirSync(wt);
+  execFileSync('git', ['-C', wt, 'init', '-q', '-b', 'f123-tema'], { timeout: 15000, killSignal: 'SIGKILL' });
+  return { repo, comWorktree: (c) => c.replaceAll(MARCADOR_DA_WORKTREE, wt) };
+}
+
 // ── doc × trava: todo comando de exemplo da tabela passa ───────────────────────────────────────────────────────────────
 
 test('doc × trava: todo comando `orca …` de exemplo da tabela passa pela trava do orca', () => {
@@ -119,10 +130,9 @@ test('doc × trava: todo comando `orca …` de exemplo da tabela passa pela trav
   assert.ok(comandos.some((c) => /worker-start --agent claude/.test(c)), 'a tabela não traz o worker-start da dona');
   const dir = mkdtempSync(join(tmpdir(), 'anfitriao-trava-'));
   try {
-    const repo = join(dir, 'repo'); mkdirSync(repo);
-    execFileSync('git', ['-C', repo, 'init', '-q', '-b', 'principal'], { timeout: 15000, killSignal: 'SIGKILL' });
+    const { repo, comWorktree } = pastasDoTeste(dir);
     for (const c of comandos) {
-      const r = decidir(c, { cwd: repo, env: { HOME: dir } });
+      const r = decidir(comWorktree(c), { cwd: repo, env: { HOME: dir } });
       assert.equal(r.recusa, null, `a trava recusa o exemplo da tabela: ${c}\nmotivo: ${r.recusa}`);
     }
     // a trava enxerga os exemplos: o mesmo worker-start sem --model é recusado
@@ -138,15 +148,17 @@ test('doc × trava: todo comando `orca …` da seção "No Orca" da skill orques
   assert.ok(i >= 0, 'a skill não tem a âncora no-orca');
   const secao = texto.slice(i, texto.indexOf('\n<a id=', i + 1));
   const comandos = [...secao.matchAll(/`(orca [^`\n]+)`/g)].map((m) => m[1]);
-  for (const sub of ['worker-start --agent claude', 'worker-start --terminal', 'send --from', 'worker-release', 'worktree set', 'worktree rm', 'worker-list']) {
+  for (const sub of ['worker-start --agent claude', 'worker-start --terminal', 'send --from', 'worker-release', 'worktree set', 'worktree rm', 'worker-list', 'worker-keep-open', 'worker-read', 'worker-stop', 'worker-start --task']) {
     assert.ok(comandos.some((c) => c.includes(sub)), `a seção não traz o exemplo de ${sub}`);
   }
   const dir = mkdtempSync(join(tmpdir(), 'anfitriao-no-orca-'));
   try {
-    const repo = join(dir, 'repo'); mkdirSync(repo);
-    execFileSync('git', ['-C', repo, 'init', '-q', '-b', 'principal'], { timeout: 15000, killSignal: 'SIGKILL' });
+    const { repo, comWorktree } = pastasDoTeste(dir);
+    // prova: sem a troca do marcador, o retry da dona no limite cairia na pasta de quem chama e a trava o recusaria
+    const retry = comandos.find((c) => c.includes('--retry-of'));
+    assert.ok(retry && decidir(retry, { cwd: repo, env: { HOME: dir } }).recusa, 'o retry sem a worktree de verdade deveria ser recusado');
     for (const c of comandos) {
-      const r = decidir(c, { cwd: repo, env: { HOME: dir } });
+      const r = decidir(comWorktree(c), { cwd: repo, env: { HOME: dir } });
       assert.equal(r.recusa, null, `a trava recusa o exemplo da skill: ${c}\nmotivo: ${r.recusa}`);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
