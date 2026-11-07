@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // PreToolUse (F181, Q473): start_session cujo prompt é de dona ("Você é a dona do F<n>") só passa com título que começa por `F<n> · `.
 // O ID primeiro dá ao operador a referência do item; a regra só no texto da skill foi violada (F140, F172, F174).
-// F419 (ADR 0025): e só com `model` e `effort` explícitos, em sessão `fresh` (o fork herda modelo e contexto de quem abre);
-// Sonnet é o padrão, Opus só com a linha `Gatilho do Opus: <gatilho>` no prompt, de uma lista fechada. Nuvem passa sem modelo.
-// Cada dona que passa vai ao log (`abriu-sonnet`, `abriu-opus` com o gatilho, `abriu-nuvem`): é a contagem do roteamento.
+// F419 (ADR 0025): e só com `model` e `effort` explícitos, em sessão `fresh` (o fork herda modelo e contexto de quem abre).
+// F477 (ADR 0036): a dona planeja e documenta em Opus, com esforço médio; `high` só com a linha `Esforço alto: <gatilho>` (ou a antiga
+// `Gatilho do Opus: <gatilho>`, sinônimo) no prompt, de uma lista fechada. Sonnet e Haiku não abrem dona: a execução vai ao subagente
+// `orquestracao:executor` em Sonnet. Quem não é dona, no Orca (`papel` worker), segue com Sonnet/Haiku. Nuvem passa sem modelo.
+// Cada dona que passa vai ao log (`abriu-opus` com o gatilho e o esforço, `abriu-nuvem`): é a contagem do roteamento.
 // A recusa traz o título certo. Sem título nem prompt (`proposal_id` sozinho) passa: o cartão já foi checado ao nascer.
 // Erro do próprio hook vai para o log e DEIXA PASSAR: a trava não pode derrubar as sessões.
 import { resolve } from 'node:path';
@@ -18,22 +20,22 @@ export const MARCA_DE_DONA = /\b(?:você|voce)\s+é\s+a\s+dona\s+do\s+`?(F\d+)\b
 // Um ID solto no começo do título (`F180 · `, `F181 - `, `F181: `) sai da sugestão: o certo entra no lugar dele.
 const ID_NO_COMECO = /^\s*F\d+\b\s*[·:\-–—]?\s*/i;
 
-// Os gatilhos do Opus (ADR 0025, protocolo#modelo-e-esforco). Fora deles, a dona nasce em Sonnet.
+// Os gatilhos do esforço alto (ADR 0025, ADR 0036, protocolo#modelo-e-esforco). Fora deles, a dona nasce em Opus médio.
 export const GATILHOS_DO_OPUS = ['decisao', 'contrato', 'estado', 'seguranca', 'producao', 'devolvido'];
 const SEM_ACENTO = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 // Linha própria (pode vir em item de lista, citação ou negrito); a menção em prosa ("não há gatilho do Opus: estado") não conta.
-const LINHA_DO_GATILHO = /^[\s>*_`-]*gatilho do opus[*_`]*:[*_`]*\s*[`*_]*([a-z]+)/m;
+const LINHA_DO_GATILHO = /^[\s>*_`-]*(?:gatilho do opus|esforco alto)[*_`]*:[*_`]*\s*[`*_]*([a-z]+)/m;
 
-/** O gatilho do Opus nomeado no prompt, ou null. */
+/** O gatilho nomeado no prompt (`Esforço alto:` ou a antiga `Gatilho do Opus:`), ou null. */
 export function gatilhoDoOpus(prompt) {
   const m = LINHA_DO_GATILHO.exec(SEM_ACENTO(String(prompt ?? '')));
   return m && GATILHOS_DO_OPUS.includes(m[1]) ? m[1] : null;
 }
 
 const LISTA = GATILHOS_DO_OPUS.join(', ') + ' (skill papeis-e-modelos).';
-const PADRAO = 'Padrão: `model: "sonnet"`, `effort: "medium"`; Opus (`effort: "high"`) só com a linha `Gatilho do Opus: <gatilho>` no prompt, um de: ' + LISTA;
+const PADRAO = 'Padrão da dona: `model: "opus"`, `effort: "medium"`; `effort: "high"` só com a linha `Esforço alto: <gatilho> — <motivo>` no prompt, um de: ' + LISTA;
 // F438 (ADR 0030): no Orca o modelo vai em bandeira do `orca` (que o repassa ao `claude --model`, que aceita o apelido).
-const PADRAO_ORCA = 'Padrão: `--model sonnet --effort medium`; Opus (`--model opus --effort high`) só com a linha `Gatilho do Opus: <gatilho>` no texto do pedido, um de: ' + LISTA;
+const PADRAO_ORCA = 'Padrão da dona: `--model opus --effort medium`; `--effort high` só com a linha `Esforço alto: <gatilho> — <motivo>` no texto do pedido, um de: ' + LISTA;
 
 /**
  * A recusa pelo modelo, ou null quando passa. No app (padrão), só para prompt de dona.
@@ -50,18 +52,22 @@ export function recusaDoModelo(id, input, { papel = 'dona', sintaxe = 'app' } = 
   const [m, e] = orca ? ['`--model`', '`--effort`'] : ['`model`', '`effort`'];
   const herda = orca ? 'sem eles o worker nasce no modelo da configuração do Orca, e não no do risco do item' : 'sem eles a dona herda o Opus de quem abre';
   if (!model || !effort) return `${quem} sem ${!model ? m : ''}${!model && !effort ? ' nem ' : ''}${!effort ? e : ''}: ${herda}. ${padrao}`;
-  if (model.includes('haiku')) return papel === 'dona' ? `${quem} em Haiku: Haiku só lê, e a dona escreve. ${padrao}` : null;
-  if (model.includes('sonnet')) return null;
+  const dona = papel === 'dona';
+  if (model.includes('haiku')) return dona ? `${quem} em Haiku: Haiku só lê; a dona planeja e documenta em Opus. ${padrao}` : null;
+  if (model.includes('sonnet')) return dona ? `${quem} em Sonnet: a dona planeja e documenta em Opus; a execução do código vai ao subagente \`orquestracao:executor\`, em Sonnet. ${padrao}` : null;
   if (!model.includes('opus')) return `${quem} com modelo desconhecido ("${input.model}"). ${padrao}`;
+  const esforco = effort.toLowerCase();
+  if (esforco === 'medium') return null;
+  if (dona && esforco !== 'high') return `${quem} em Opus com esforço "${effort}": o esforço da dona é medium ou high. ${padrao}`;
   if (gatilhoDoOpus(input?.prompt)) return null;
-  return `${quem} em Opus sem gatilho nomeado. ${padrao}`;
+  return dona ? `${quem} em Opus alto sem gatilho nomeado; o padrão é médio. ${padrao}` : `${quem} em Opus com esforço "${effort}" sem gatilho nomeado; o padrão é médio. ${padrao}`;
 }
 
 /** O que vai ao log quando a dona passa. */
 export function desfechoDoModelo(input) {
   if (input?.target === 'cloud') return ['abriu-nuvem', ''];
   const model = String(input?.model ?? '').toLowerCase();
-  if (model.includes('opus')) return ['abriu-opus', `${gatilhoDoOpus(input?.prompt)} effort=${input?.effort}`];
+  if (model.includes('opus')) return ['abriu-opus', `gatilho=${gatilhoDoOpus(input?.prompt) ?? '-'} effort=${input?.effort}`];
   return ['abriu-sonnet', `effort=${input?.effort}`];
 }
 

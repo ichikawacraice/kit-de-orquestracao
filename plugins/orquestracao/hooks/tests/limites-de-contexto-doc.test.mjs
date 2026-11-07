@@ -31,12 +31,12 @@ test('F219 a skill orquestradora cita o destaque do botão de limpar na régua d
   assert.ok(!/a partir de 150 mil/.test(skill), 'skill ainda cita a régua velha de 150 mil');
 });
 test('F54.d3 o frontmatter dos agentes tem 400000 / 200000 e a skill diz o mesmo', () => {
-  const esperado = { validador: 400000, explorador: 200000 };
+  const esperado = { validador: 400000, executor: 400000, explorador: 200000 };
   for (const [ag, n] of Object.entries(esperado)) {
     const t = ler('agents', `${ag}.md`);
     assert.ok(t.length > 0, `${ag}.md vazio`);
     assert.match(t, new RegExp(`^autoCompactWindow: ${n}$`, 'm'), `${ag}.md sem autoCompactWindow: ${n}`);
   }
   const skill = ler('skills', 'papeis-e-modelos', 'SKILL.md');
-  assert.ok(skill.includes('validador **400 mil**, explorador **200 mil**'));
+  assert.ok(skill.includes('validador e executor **400 mil**, explorador **200 mil**'));
 });

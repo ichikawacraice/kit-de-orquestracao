@@ -2,7 +2,7 @@
 // Testes das travas da CrewAI (Q62): eventos JSON no formato do Claude Code 2.1.289,
 // transcripts sintéticos no formato real (.jsonl), log e estado num diretório temporário.
 // Rodar: node gate/com-fichas.mjs -- node plugins/orquestracao/hooks/tests/hooks-crewai.test.mjs   (HOOKS_DIR troca a pasta dos hooks)
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync, symlinkSync, statSync, unlinkSync, linkSync } from "node:fs";
 import { tmpdir, homedir, userInfo } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -40,10 +40,10 @@ function novoBase() {
   base = mkdtempSync(join(tmpdir(), 'hooks-crewai-'));
   mkdirSync(join(base, 'ativas'));
 }
-function rodar(hook, evento, extraEnv = {}) {
+function rodar(hook, evento, { __cwd, ...extraEnv } = {}) { // `__cwd`: a pasta do processo do hook (evento sem `cwd`)
   const entrada = typeof evento === 'string' ? evento : JSON.stringify(evento);
   const out = execFileSync('node', [join(HOOKS, hook)], {
-    input: entrada, encoding: 'utf8', env: { ...process.env, HOOKS_CREWAI_BASE: base, ...extraEnv },
+    input: entrada, encoding: 'utf8', cwd: __cwd, env: { ...process.env, HOOKS_CREWAI_BASE: base, ...extraEnv },
     timeout: 10000, killSignal: 'SIGKILL',
   });
   return out ? JSON.parse(out) : null;
@@ -276,6 +276,58 @@ caso('2.1e comando que só cita teste (git add, ls, cat, grep) ou log velho não
     const r = rc(subStop(transcript(comSaida(cmd, saida)), 'Pronto, os testes passaram.', { chave: `nt${i++}` }));
     if (!avisou(r)) throw new Error(`saída com resultado não contou: ${cmd} → ${JSON.stringify(r)}`);
   }
+});
+// F477 (ADR 0036): o executor grava pela dona; o turno dela que só delegou também editou, e a cobrança do critério vale.
+const delegou = (tipo) => [abertura('Plano: o executor edita a.ts; critério: vitest run a.test.ts'),
+  usa('Agent', { subagent_type: tipo, description: 'executar o plano', prompt: 'edite a.ts e rode o teste' }, 't1'),
+  resultado('t1', 'Editei src/a.ts e tests/a.test.ts; os testes passaram.')];
+caso('2.1f turno que só delegou ao executor conta como turno que editou: afirmar sucesso sem teste bloqueia', () => {
+  let i = 0;
+  for (const tipo of ['orquestracao:executor', 'executor']) {
+    const r = rc(subStop(transcript(delegou(tipo)), 'Pronto, o executor editou a.ts e os testes passaram.', { chave: `ex${i++}` }));
+    if (!bloqueou(r) || !/nenhum teste rodou/.test(r.reason)) throw new Error(`não cobrou o turno do ${tipo}: ${JSON.stringify(r)}`);
+  }
+  // Controle: o validador e o explorador não gravam; o turno que só os lançou não é cobrado.
+  for (const tipo of ['orquestracao:validador', 'orquestracao:explorador']) {
+    igual(rc(subStop(transcript(delegou(tipo)), 'Pronto, os testes passaram.', { chave: `ex${i++}` })), null, tipo);
+  }
+});
+// F477: o executor em segundo plano (o que o protocolo manda) devolve o relato no <result> da notificação.
+// O relato é texto do subagente, não saída de comando: não vale como saída real nem como teste rodado.
+const RELATO_DO_EXECUTOR = 'Editei src/a.ts.\n```\nℹ tests 12\nℹ pass 12\nℹ fail 0\nexit=0\n```';
+const notifDoAgente = (tid) => `<task-notification>\n<task-id>a${tid}</task-id>\n<tool-use-id>${tid}</tool-use-id>\n<output-file>/tmp/x/tasks/a${tid}.output</output-file>\n<status>completed</status>\n<summary>Agent "executar o plano" finished</summary>\n<result>${RELATO_DO_EXECUTOR}</result>\n</task-notification>`;
+const lancouNoFundo = (tipo = 'orquestracao:executor') => [abertura('Plano: o executor edita a.ts; critério: node --test a.test.mjs'),
+  usa('Agent', { subagent_type: tipo, description: 'executar o plano', prompt: 'edite a.ts', run_in_background: true }, 'tx'),
+  resultado('tx', 'Async agent launched successfully.')];
+caso('2.1g o <result> do executor em segundo plano não vale como saída real', () => {
+  const relatos = ['Pronto: exit=0.', 'Pronto, 12 testes verdes.', 'Pronto:\n```\nℹ pass 12\nexit=0\n```'];
+  // Notificação dentro do turno (chega como queued_command).
+  const dentro = { type: 'attachment', uuid: id(), attachment: { type: 'queued_command', prompt: notifDoAgente('tx') } };
+  for (const [i, rel] of relatos.entries()) {
+    const r = rc(subStop(transcript([...lancouNoFundo(), dentro]), rel, { chave: `bg${i}` }));
+    if (!bloqueou(r)) throw new Error(`relato do executor valeu como saída (dentro): ${JSON.stringify(rel)} → ${JSON.stringify(r)}`);
+  }
+  // Notificação que abre o turno seguinte: o turno do lançamento adiou e a cobrança ficou pendente.
+  const t1 = lancouNoFundo();
+  igual(rc({ ...subStop(transcript(t1), 'Executor rodando.', { chave: 'bga' }), background_tasks: [{ id: 'atx', status: 'running' }] }), null, 'turno do lançamento');
+  const notif = abertura(notifDoAgente('tx'), { origin: { kind: 'task-notification' } });
+  const r = rc(subStop(transcript([...t1, notif]), 'Pronto, exit=0 e 12 testes verdes.', { chave: 'bga' }));
+  if (!bloqueou(r)) throw new Error(`relato do executor valeu como saída (abertura): ${JSON.stringify(r)}`);
+  // Controle: a dona que roda o tail do .log pelo Bash tem a saída real e passa.
+  const log = '/tmp/r/afetados.log';
+  const comTail = [...lancouNoFundo(), dentro, usa('Bash', { command: `tail -20 ${log}` }, 'ty'), resultado('ty', 'ℹ tests 12\nℹ pass 12\nℹ fail 0\nexit=0')];
+  igual(rc(subStop(transcript(comTail), 'Pronto, exit=0 e 12 testes verdes.', { chave: 'bgt' })), null, 'tail pelo Bash');
+});
+caso('2.1h .log lido pelo Read (com o número de linha na frente) ainda mostra a falha e a contagem', () => {
+  const log = '/tmp/r/afetados.log';
+  const numerado = (s) => s.split('\n').map((l, i) => `${String(i + 1).padStart(6)}\t${l}`).join('\n');
+  const leu = (saida) => transcript([abertura('Plano'), usa('Edit', { file_path: '/r/a.ts' }, 't1'), resultado('t1', 'ok'),
+    usa('Bash', { command: `node gate/com-fichas.mjs -- node --test > ${log} 2>&1; echo "exit=$?" >> ${log}` }, 't2'), resultado('t2', ''),
+    usa('Read', { file_path: log }, 't3'), resultado('t3', numerado(saida))]);
+  const vermelho = leu('ℹ tests 12\nℹ pass 10\nℹ fail 2\nexit=1');
+  const r = rc(subStop(vermelho, 'Pronto, os afetados passaram.', { chave: 'rl1' }));
+  if (!bloqueou(r) || !/falha que o relatório não cita/.test(r.reason)) throw new Error(`falha escondida passou pelo Read: ${JSON.stringify(r)}`);
+  igual(rc(subStop(leu('ℹ tests 12\nℹ pass 12\nℹ fail 0\nexit=0'), 'Pronto, 12 testes verdes.', { chave: 'rl2' })), null, 'contagem verdadeira pelo Read');
 });
 caso('2.2 no máximo 2 cobranças; a terceira deixa passar e registra', () => {
   const f = transcript(semTeste());
@@ -553,7 +605,7 @@ caso('4.2 sessão aberta com --agent executor (agent_type sem agent_id): passa',
   igual(rodar(SN, editar(`${REPO}/apps/web/a.ts`, { agent_type: 'executor' })), null, 'saída');
 });
 caso('4.3 subagente Edit no produto: recusa (deny) e registra', () => {
-  const r = rodar(SN, editar(`${REPO}/apps/web/a.ts`, sub()));
+  const r = rodar(SN, editar(`${REPO}/apps/web/a.ts`, sub('orquestracao:validador')));
   igual(decisao(r), 'deny', 'decisão');
   igual(r.hookSpecificOutput.hookEventName, 'PreToolUse', 'evento');
   igual(r.hookSpecificOutput.permissionDecisionReason.includes(`${REPO}/apps/web/a.ts`), true, 'motivo cita o caminho');
@@ -584,7 +636,8 @@ caso('4.7 tipo liberado na lista: exato e prefixo com *, comentário ignorado; o
   igual(rodar(SN, editar(`${REPO}/apps/web/a.tsx`, sub('impeccable:impeccable-documenter'))), null, 'prefixo');
   igual(log()[0][3], 'liberado-por-tipo', 'log');
   igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, sub('designerX')))), 'deny', 'designerX');
-  igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, sub('executor')))), 'deny', 'executor');
+  // O executor tem cerca própria (F477), medida nos casos F477.*; aqui, um tipo que a lista não cobre.
+  igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, sub('validador')))), 'deny', 'validador');
   igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, { agent_id: 'a1' }))), 'deny', 'sem agent_type');
 });
 caso('4.8 sem lista de tipos: todo subagente recusa, inclusive o designer', () => {
@@ -599,10 +652,19 @@ caso('4.9 Bash fora da configuração das travas não é coberto; sem caminho pa
 });
 
 // K2: o agent do plugin chega como `orquestracao:<tipo>`; a lista casa as duas formas.
-caso('K2 subagente-nao-edita: a lista casa `orquestracao:designer` com `designer`; `orquestracao:executor` segue recusado', () => {
+caso('K2 subagente-nao-edita: a lista casa `orquestracao:designer` com `designer`; `orquestracao:executor` fora de repositório segue recusado', () => {
   writeFileSync(join(base, 'subagente-pode-escrever.txt'), 'designer\n');
   igual(rodar(SN, editar(`${REPO}/docs/design/revisoes/a.md`, sub('orquestracao:designer'))), null, 'designer com prefixo');
-  igual(decisao(rodar(SN, editar(`${REPO}/a.ts`, sub('orquestracao:executor')))), 'deny', 'executor com prefixo');
+  // Pasta que existe, fora de qualquer repositório (o HOME do teste pode morar dentro do kit): a recusa é por "sem
+  // repositório", não por caminho que não existe.
+  const solta = mkdtempSync(join(tmpdir(), 'sem-repo-'));
+  try {
+    igual(spawnSync('git', ['rev-parse', '--show-toplevel'], { cwd: solta, encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' }).status !== 0, true, 'precondição: a pasta não está num repositório');
+    // O `cwd` da sessão na pasta solta; o arquivo fora das pastas livres (o tmpdir é livre para todo subagente).
+    const r = rodar(SN, editar(`${REPO}/a.ts`, { ...sub('orquestracao:executor'), cwd: solta }));
+    igual(decisao(r), 'deny', 'executor com prefixo, sem repositório');
+    igual(r.hookSpecificOutput.permissionDecisionReason.includes('não está dentro de um repositório git'), true, `motivo: ${r.hookSpecificOutput.permissionDecisionReason}`);
+  } finally { rmSync(solta, { recursive: true, force: true }); }
 });
 // F60: o designer do kit grava a revisão sem a lista da máquina, só na pasta de revisões do projeto.
 const REV = 'docs/design/revisoes';
@@ -651,6 +713,83 @@ caso('F60.6 os outros tipos não ganham a pasta de revisões', () => comRepo(() 
   for (const t of ['designerX', 'kit-design:critico-de-ui', 'executor']) {
     igual(decisao(rodar(SN, editar(`${REPO}/${REV}/a.md`, sub(t)))), 'deny', t);
   }
+}));
+// F477 (ADR 0036): o executor grava código e teste dentro do repositório da sessão; docs/, .claude/, .git/ e .md são da dona.
+// O HOME do teste é uma pasta temporária; `outro-repo` mora nele (a pasta temporária do sistema é livre para qualquer subagente).
+const comExecutor = (fn) => comRepo(() => {
+  const FORA = join(homedir(), 'Developer/Projects/OutroRepo');
+  mkdirSync(join(FORA, '.git'), { recursive: true });
+  mkdirSync(join(REPO, 'src'), { recursive: true });
+  mkdirSync(join(REPO, 'docs'), { recursive: true });
+  mkdirSync(join(REPO, '.claude'), { recursive: true });
+  try { fn(FORA); } finally { rmSync(FORA, { recursive: true, force: true }); }
+});
+const exe = (tipo = 'orquestracao:executor') => sub(tipo);
+caso('F477.1 o executor grava código e teste no próprio repositório (liberado-executor)', () => comExecutor(() => {
+  igual(existsSync(LISTA()), false, 'precondição: sem lista');
+  for (const tipo of ['orquestracao:executor', 'executor']) {
+    igual(rodar(SN, editar(`${REPO}/src/a.mjs`, exe(tipo))), null, `src/a.mjs ${tipo}`);
+    igual(rodar(SN, editar(`${REPO}/a.test.mjs`, exe(tipo))), null, `a.test.mjs ${tipo}`);
+  }
+  igual(rodar(SN, pre('Write', { file_path: 'src/novo.mjs', content: 'x' }, exe())), null, 'Write relativo ao cwd');
+  igual(rodar(SN, pre('MultiEdit', { file_path: `${REPO}/src/a.mjs`, edits: [] }, exe())), null, 'MultiEdit');
+  igual(rodar(SN, pre('NotebookEdit', { notebook_path: `${REPO}/n.ipynb`, new_source: 'x' }, exe())), null, 'NotebookEdit');
+  const l = log().filter((x) => x[3] === 'liberado-executor');
+  igual(l.length, 7, 'um registro por gravação liberada');
+  igual(l.some((x) => x[4].includes('src/a.mjs')), true, 'o log cita o arquivo');
+  igual(log().some((x) => x[3].startsWith('recusou')), false, 'nenhuma recusa');
+}));
+caso('F477.2 o executor é recusado em docs/, .md, .mdx, .claude/ e .git/ (com o motivo da regra)', () => comExecutor(() => {
+  const casos = [
+    [`${REPO}/docs/x.mjs`, 'docs/'], [`${REPO}/docs/sub/y.test.mjs`, 'docs/'], [`${REPO}/README.md`, '.md'], [`${REPO}/src/LEIA.Md`, '.md'],
+    [`${REPO}/notas.MDX`, '.md'], [`${REPO}/.claude/kit.json`, '.claude/'], [`${REPO}/.git/hooks/pre-commit`, '.git/'],
+  ];
+  for (const [p, regra] of casos) {
+    const r = rodar(SN, editar(p, exe()));
+    igual(decisao(r), 'deny', p);
+    const m = r.hookSpecificOutput.permissionDecisionReason;
+    igual(m.includes('O executor grava só código e testes dentro do repositório da dona'), true, `${p}: motivo`);
+    igual(m.includes(regra), true, `${p}: diz qual regra pegou (${regra})`);
+    igual(m.includes('a documentação é da dona'), true, `${p}: manda devolver`);
+  }
+  igual(log().filter((x) => x[3] === 'recusou-executor').length, casos.length, 'log');
+  igual(log().some((x) => x[3] === 'liberado-executor'), false, 'nada liberado');
+}));
+caso('F477.3 o executor é recusado em arquivo de outro repositório e por symlink de dentro para fora', () => comExecutor((FORA) => {
+  const r = rodar(SN, editar(`${FORA}/src/a.mjs`, exe()));
+  igual(decisao(r), 'deny', 'outro repositório');
+  igual(r.hookSpecificOutput.permissionDecisionReason.includes('fora do repositório'), true, 'motivo: fora');
+  mkdirSync(join(FORA, 'src'), { recursive: true });
+  writeFileSync(join(FORA, 'src', 'alvo.mjs'), 'x');
+  symlinkSync(join(FORA, 'src'), join(REPO, 'src', 'ponte'));
+  symlinkSync(join(FORA, 'src', 'alvo.mjs'), join(REPO, 'src', 'atalho.mjs'));
+  igual(rodar(SN, editar(`${REPO}/src/a.mjs`, exe())), null, 'precondição: o mesmo repositório passa');
+  for (const p of [`${REPO}/src/ponte/alvo.mjs`, `${REPO}/src/atalho.mjs`]) {
+    const s = rodar(SN, editar(p, exe()));
+    igual(decisao(s), 'deny', p);
+    igual(s.hookSpecificOutput.permissionDecisionReason.includes('link simbólico'), true, `${p}: motivo diz link`);
+  }
+  symlinkSync(join(REPO, 'docs'), join(REPO, 'src', 'para-docs'));
+  igual(decisao(rodar(SN, editar(`${REPO}/src/para-docs/a.mjs`, exe()))), 'deny', 'link para docs/');
+}));
+caso('F477.4 o executor sem cwd no evento usa o cwd do processo; cwd noutro repositório ou inexistente recusa', () => comExecutor((FORA) => {
+  const semCwd = pre('Edit', { file_path: `${REPO}/src/a.mjs`, old_string: 'a', new_string: 'b' }, exe());
+  delete semCwd.cwd;
+  igual(decisao(rodar(SN, semCwd, { __cwd: FORA })), 'deny', 'sem cwd, processo noutro repositório');
+  igual(rodar(SN, semCwd, { __cwd: REPO }), null, 'sem cwd, processo no repositório do arquivo: passa (o cwd do processo vale)');
+  igual(decisao(rodar(SN, semCwd, { __cwd: tmpdir() })), 'deny', 'sem cwd, processo fora de repositório');
+  igual(decisao(rodar(SN, editar(`${REPO}/src/a.mjs`, { ...exe(), cwd: FORA }))), 'deny', 'cwd em outro repositório');
+  igual(decisao(rodar(SN, editar(`${REPO}/src/a.mjs`, { ...exe(), cwd: join(base, 'nao-existe') }))), 'deny', 'cwd que não existe: na dúvida, nega');
+  igual(rodar(SN, editar(`${REPO}/src/a.mjs`, { ...exe(), cwd: `${REPO}/src` })), null, 'precondição: cwd numa subpasta do repositório passa');
+}));
+caso('F477.5 a liberação é do tipo: validador e outros no mesmo caminho seguem recusados; a configuração das travas também', () => comExecutor(() => {
+  igual(rodar(SN, editar(`${REPO}/src/a.mjs`, exe())), null, 'precondição: o executor passa neste caminho');
+  for (const t of ['orquestracao:validador', 'orquestracao:explorador', 'outro:executor', 'executorX']) {
+    igual(decisao(rodar(SN, editar(`${REPO}/src/a.mjs`, sub(t)))), 'deny', t);
+  }
+  igual(decisao(rodar(SN, editar(join(homedir(), '.claude', 'settings.json'), exe()))), 'deny', 'configuração do Claude');
+  igual(decisao(rodar(SN, editar(join(base, 'trava-edicao-repos.txt'), exe()))), 'deny', 'configuração das travas');
+  igual(rodar(SN, pre('Bash', { command: 'echo x > a.ts' }, exe())), null, 'Bash continua fora');
 }));
 // F350: o designer do plugin design-system (o sucessor do kit-design) é liberado pelo papel, com a mesma cerca.
 caso('F350.1 design-system:designer sem lista grava só na pasta de revisões', () => comRepo(() => {

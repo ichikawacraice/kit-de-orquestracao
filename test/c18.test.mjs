@@ -150,11 +150,17 @@ describe('c18.2 subagente-pode-escrever.txt', () => {
     assert.equal(a.kit(e, 'remover').status, 0);
     assert.equal(a.lista('subagente-pode-escrever.txt'), proprio, 'e o remover não a apaga');
   });
-  it('o texto das skills e do pool não diz que o executor é liberado como subagente', () => {
+  // Desde o ADR 0036 o executor grava pela cerca própria da trava (só o repositório da sessão, fora de docs/ e .md),
+  // nunca pela lista: o texto não manda pôr o executor em subagente-pode-escrever.txt.
+  it('o texto das skills e do pool não libera o executor pela lista subagente-pode-escrever.txt', () => {
     const pastas = [join(RAIZ, 'plugins', 'orquestracao', 'skills'), join(RAIZ, 'plugins', 'orquestracao', 'pool')];
     const arquivos = []; const anda = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) anda(p); else if (p.endsWith('.md')) arquivos.push(p); } };
     pastas.forEach(anda); assert.ok(arquivos.length >= 5, 'insumo vazio: sem docs');
-    const ruins = arquivos.filter((f) => /executor[^.\n]{0,40}\b(liberado|pode escrever)\b|\blibera\w* o executor/i.test(readFileSync(f, 'utf8')));
+    const frasesDaLista = (t) => t.split(/\.\s|\n/).filter((f) => f.includes('subagente-pode-escrever'));
+    assert.ok(arquivos.some((f) => frasesDaLista(readFileSync(f, 'utf8')).length > 0), 'insumo vazio: nenhuma frase cita a lista');
+    const ruim = /\bexecutor\b/i;
+    assert.ok(ruim.test('ponha o executor em `subagente-pode-escrever.txt`'), 'o padrão pega a frase errada');
+    const ruins = arquivos.filter((f) => frasesDaLista(readFileSync(f, 'utf8')).some((frase) => ruim.test(frase)));
     assert.deepEqual(ruins, []);
   });
 });

@@ -87,6 +87,16 @@ describe('blocos do modelos/CLAUDE.md (K10)', () => {
     }
   });
 
+  // F477 (ADR 0036): o modelo da dona no CLAUDE.md dos projetos concorda com a trava (`titulo-da-dona` recusa a dona em Sonnet).
+  test('kit:regras-de-operacao diz a dona em Opus médio e a execução no executor em Sonnet (F477)', () => {
+    const b = bloco(t, 'regras-de-operacao');
+    assert.ok(b && b[2].trim(), 'bloco ausente ou vazio');
+    const modelo = /Modelo: [^\n]+/.exec(b[2]);
+    assert.ok(modelo && modelo[0].length > 20, 'o bloco não diz o modelo da dona');
+    for (const frase of ['Opus', 'esforço médio', 'orquestracao:executor', 'Sonnet']) assert.ok(modelo[0].includes(frase), `o modelo da dona não diz "${frase}"`);
+    assert.doesNotMatch(modelo[0], /Sonnet por padrão/);
+  });
+
   test('o protocolo tem a âncora ci-so-na-producao e o dona.md aponta para ela (F298)', () => {
     const pool = join(RAIZ, 'plugins/orquestracao/pool');
     const protocolo = ler('protocolo.md', pool);

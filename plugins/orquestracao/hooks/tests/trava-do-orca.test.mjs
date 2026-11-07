@@ -25,7 +25,7 @@ git('add', '.');
 git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'inicio');
 git('worktree', 'add', '-q', '-b', 'outra', OUTRA);
 writeFileSync(join(REPO, 'spec-sonnet.md'), 'Faça a fatia X.\nSó leitura: só lê o log\n');
-writeFileSync(join(REPO, 'spec-dona-opus.md'), 'Você é a dona do F77 · Tema.\nGatilho do Opus: contrato\n');
+writeFileSync(join(REPO, 'spec-dona-opus.md'), 'Você é a dona do F77 · Tema.\nEsforço alto: contrato\n');
 test.after(() => rmSync(BASE, { recursive: true, force: true }));
 
 const ENV = { HOME: BASE };
@@ -86,7 +86,27 @@ test('modelo pelo papel: Opus só com gatilho; dona em Haiku recusa; worker em H
   assert.deepEqual(desfechos(h), ['orca-abriu-haiku']);
   recusa(`${WS} --model gpt-5 --effort medium --worktree new-child --spec "Você é a dona do F12 · Tema."`);
   recusa(`${WS} --model gpt-5 --effort medium --worktree new-child --spec "Leia o log."`);
-  passa(`${WS} --model sonnet --effort medium --worktree new-child --spec "Você é a dona do F12 · Tema."`);
+  // F477 (ADR 0036): dona em Sonnet recusa, com a sugestão de Opus médio; em Opus médio passa sem linha.
+  const s = recusa(`${WS} --model sonnet --effort medium --worktree new-child --spec "Você é a dona do F12 · Tema."`);
+  assert.match(s, /orquestracao:executor/);
+  assert.match(s, /--model opus --effort medium/);
+  const dm = passa(`${WS} --model opus --effort medium --worktree new-child --spec "Você é a dona do F12 · Tema."`);
+  assert.deepEqual(desfechos(dm), ['orca-abriu-opus']);
+  assert.match(dm.registros[0].detalhe, /gatilho=-$/);
+  // Opus alto: só com a linha (nova ou antiga); low recusa mesmo com a linha.
+  const alto = recusa(`${WS} --model opus --effort high --worktree new-child --spec "Você é a dona do F12 · Tema."`);
+  assert.match(alto, /Opus alto sem gatilho nomeado; o padrão é médio/);
+  assert.match(alto, /--effort medium/);
+  assert.match(alto, /Esforço alto: <gatilho>/);
+  const novaLinha = passa(`${WS} --model opus --effort high --worktree new-child --spec "Você é a dona do F12 · Tema.\nEsforço alto: contrato"`);
+  assert.match(novaLinha.registros[0].detalhe, /gatilho=contrato/);
+  passa(`${WS} --model opus --effort high --worktree new-child --spec "Você é a dona do F12 · Tema.\nGatilho do Opus: contrato"`);
+  recusa(`${WS} --model opus --effort low --worktree new-child --spec "Você é a dona do F12 · Tema.\nEsforço alto: contrato"`);
+  // Worker que não é dona: Sonnet e Opus médio passam; Opus em outro esforço pede a linha.
+  passa(`${WS} --model sonnet --effort medium --worktree new-child --spec "Faça X."`);
+  passa(`${WS} --model opus --effort medium --worktree new-child --spec "Faça X."`);
+  recusa(`${WS} --model opus --effort low --worktree new-child --spec "Faça X."`);
+  passa(`${WS} --model opus --effort high --worktree new-child --spec "Faça X.\nEsforço alto: estado"`);
 });
 
 test('agent launch: modelo e esforço; na pasta de quem chama só com `Só leitura:`, e a recusa sugere new-child', () => {
@@ -135,12 +155,14 @@ test('o texto do pedido sai de --spec, --spec-file <arquivo>, --spec-file - com 
 test('sem texto legível (--task, arquivo ausente, pipe): bandeiras conferidas, Opus e current recusam, o resto passa no log', () => {
   recusa('orca orchestration worker-start --agent claude --task task_1 --worktree new-child');
   recusa(`${WS} --model opus --effort high --worktree new-child --task task_1`);
+  assert.deepEqual(desfechos(passa(`${WS} --model opus --effort medium --worktree new-child --task task_1`)), ['passou-sem-ler-spec']);
   recusa(`${WS} ${OK} --worktree current --task task_1`);
   recusa(`${WS} ${OK} --task task_1`);
   const r = passa(`${WS} ${OK} --worktree new-child --task task_1`);
   assert.deepEqual(desfechos(r), ['passou-sem-ler-spec']);
   assert.deepEqual(desfechos(passa(`${WS} ${OK} --worktree new-child --spec-file nao-existe.md`)), ['passou-sem-ler-spec']);
   recusa(`${WS} --model opus --effort high --worktree new-child --spec-file nao-existe.md`);
+  assert.deepEqual(desfechos(passa(`${WS} --model opus --effort medium --worktree new-child --spec-file nao-existe.md`)), ['passou-sem-ler-spec']);
   assert.deepEqual(desfechos(passa(`cat spec.md | ${WS} ${OK} --worktree new-child --spec-file -`)), ['passou-sem-ler-spec']);
   recusa(`cat spec-sonnet.md | ${WS} ${OK} --worktree current --spec-file -`);
 });
@@ -152,10 +174,13 @@ test('a recusa traz o comando corrigido, com o modelo que o Orca aceita', () => 
   assert.match(w, /--worktree new-child/);
   assert.match(w, /Só leitura:/);
   const o = recusa(`${WS} --model opus --effort high --worktree new-child --spec "Faça X."`);
-  assert.match(o, /Gatilho do Opus:/);
-  assert.match(o, /--model sonnet --effort medium/);
-  const e = recusa(`${WS} --model opus --worktree new-child --spec "Gatilho do Opus: estado"`);
-  assert.match(e, /--model opus --effort high/);
+  assert.match(o, /Esforço alto: <gatilho>/);
+  assert.match(o, /--model sonnet --effort medium/); // worker: o corrigido cai em Sonnet médio
+  const dona = recusa(`${WS} --model sonnet --effort medium --worktree new-child --spec "Você é a dona do F12 · Tema."`);
+  assert.match(dona, /--model opus --effort medium/);
+  const e = recusa(`${WS} --model opus --worktree new-child --spec "Esforço alto: estado"`);
+  assert.match(e, /Comando corrigido: .*--model sonnet --effort medium/);
+  assert.doesNotMatch(e.slice(e.indexOf('Comando corrigido')), /--effort high/);
   // Spec longo é abreviado na sugestão.
   const longo = 'x'.repeat(500);
   const l = recusa(`${WS} --worktree new-child --spec "${longo}"`);
@@ -194,7 +219,7 @@ test('revisão F438: substituição entre aspas duplas, <( ), opção global, ba
 test('revisão F438: crase e $( entre aspas simples (ou escapados) são texto do pedido, não substituição', () => {
   passa(`${WS} ${OK} --worktree current --spec 'Só leitura: medir o \`npm test\`'`);
   passa(`${WS} ${OK} --worktree current --spec "Só leitura: medir o \\\`npm test\\\`"`);
-  passa(`${WS} --model opus --effort high --worktree new-child --spec 'Gatilho do Opus: estado\nRode \`x\` e $(y)'`);
+  passa(`${WS} --model opus --effort high --worktree new-child --spec 'Esforço alto: estado\nRode \`x\` e $(y)'`);
   recusa(`${WS} --model haiku --effort low --worktree new-child --spec 'Você é a dona do F12. Rode \`npm test\` antes do PR.'`);
   // A substituição de verdade continua ilegível.
   assert.deepEqual(desfechos(passa(`${WS} ${OK} --worktree new-child --spec "$(cat spec.md)"`)), ['passou-sem-ler-spec']);
@@ -204,7 +229,8 @@ test('revisão F438: crase e $( entre aspas simples (ou escapados) são texto do
 test('revisão F438: Opus sem texto legível diz como resolver em vez de pedir a linha num texto que não existe', () => {
   const m = recusa(`${WS} --model opus --effort high --worktree new-child --task task_1`);
   assert.match(m, /sem texto legível/);
-  assert.match(m, /--model sonnet --effort medium/);
+  assert.match(m, /--effort medium/);
+  assert.match(m, /--model sonnet --effort medium/); // o comando corrigido do worker
 });
 
 test('`orca …` dentro de string, heredoc de outro comando ou comentário não é comando', () => {

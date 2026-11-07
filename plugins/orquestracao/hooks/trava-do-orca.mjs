@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 // PreToolUse de Bash (F438, ADR 0030 item 3): todo worker Claude aberto pelo `orca` nasce com modelo e esforço explícitos, no
-// modelo do papel (dona: Sonnet, ou Opus com `Gatilho do Opus:`; worker que não é dona aceita também o Haiku) e fora da pasta
+// modelo do papel (F477, ADR 0036: dona em Opus médio, ou Opus alto com a linha `Esforço alto: <gatilho>` (ou a antiga
+// `Gatilho do Opus:`); worker que não é dona aceita Sonnet e Haiku, e Opus médio ou com a linha) e fora da pasta
 // de quem chama, salvo com a linha `Só leitura: <motivo>` no texto do pedido. Vale em qualquer anfitrião que chame o `orca`.
 //   - `orca orchestration worker-start --agent claude`: modelo, esforço e worktree (current/active/ausente = a pasta de quem chama);
 //   - `orca agent launch --agent claude`: modelo, esforço e a pasta (sempre uma worktree que já existe; padrão, a de quem chama);
 //   - `orca worktree create --agent claude`: só modelo e esforço (já cria checkout novo).
 // Codex também exige modelo/esforço explícitos e isolamento, sem aplicar a política de modelos Claude.
 // Passam: `--terminal` (worker que já tem modelo), `--agent` de outro agente (vai ao log), `worktree create` sem `--agent`, `--help`.
-// Sem texto legível (`--task`, arquivo ausente, stdin de pipe) não há papel, gatilho nem `Só leitura:`: recusa o Opus e a pasta de
-// quem chama; o resto passa com `passou-sem-ler-spec`. A recusa traz o comando corrigido. Erro do próprio hook DEIXA PASSAR.
+// Sem texto legível (`--task`, arquivo ausente, stdin de pipe) não há papel, gatilho nem `Só leitura:`: recusa o Opus fora do esforço
+// médio (não há como ver a linha) e a pasta de quem chama; o resto, Opus médio incluído, passa com `passou-sem-ler-spec`. A recusa traz o comando corrigido. Erro do próprio hook DEIXA PASSAR.
 // O leitor de comando (`comandosDoOrca`) separa os comandos simples respeitando aspas, heredoc e redirecionamento: `orca …` dentro de
 // string, de heredoc de outro comando ou de comentário não é comando. É ele que a fatia 8 reaproveita.
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
@@ -283,7 +284,7 @@ export function ondeCai(seletor, cwd, env = {}) {
   return achada ? comparar(achada.pasta) : 'nao-resolve';
 }
 
-const esforcoDe = (model) => (model.includes('opus') ? 'high' : 'medium');
+const esforcoDe = () => 'medium';
 const abreviar = (cru) => (cru.length > 80 ? `${cru.slice(0, 1) === '"' || cru.slice(0, 1) === "'" ? cru[0] : '"'}…${cru.slice(0, 1) === "'" ? "'" : '"'}` : cru);
 
 // O comando com as bandeiras trocadas; o resto como veio (valor longo abreviado).
@@ -324,15 +325,15 @@ function decidirUm(o, { cwd, env }) {
   const precisaPasta = pastaDeQuemChama && !(legivel && soLeitura(texto));
   const detalhe = `${base} model=${model || '-'} effort=${effort || '-'} worktree=${o.sub === 'worktree-create' ? 'nova' : seletor}${id ? ` ${id}` : ''}`;
 
-  // O modelo sugerido: o que veio, quando serve ao papel; senão Sonnet.
+  // O modelo sugerido: o que veio, quando serve ao papel; senão o do papel (dona: Opus médio; worker: Sonnet médio).
   let motivoModelo = recusaDoModelo(id, { model, effort, prompt: legivel ? texto : '' }, { papel, sintaxe: 'orca' });
   const codex = agente.toLowerCase() === 'codex';
   if (codex) motivoModelo = !model || !effort ? 'worker Codex exige --model e --effort explícitos.' : /sonnet|opus|haiku/.test(ml) ? 'modelo Claude não pode ser usado com --agent codex.' : null;
-  if (!codex && !legivel && ml.includes('opus')) {
-    motivoModelo = 'worker em Opus sem texto legível do pedido (`--task`, arquivo ausente ou stdin de pipe): sem texto não há a linha `Gatilho do Opus:`. Ponha o pedido em `--spec`/`--spec-file` com a linha, ou abra em `--model sonnet --effort medium`.';
+  if (!codex && !legivel && ml.includes('opus') && effort.toLowerCase() !== 'medium') {
+    motivoModelo = 'worker em Opus fora do esforço médio sem texto legível do pedido (`--task`, arquivo ausente ou stdin de pipe): sem texto não há a linha `Esforço alto: <gatilho>`. Use `--effort medium`, ou ponha o pedido em `--spec`/`--spec-file` com a linha.';
   }
-  const modelOk = codex ? model && !/sonnet|opus|haiku/.test(ml) : model && (ml.includes('sonnet') || (ml.includes('haiku') && papel !== 'dona') || (ml.includes('opus') && legivel && gatilhoDoOpus(texto)));
-  const sugModel = modelOk ? model : 'sonnet';
+  const modelOk = codex ? model && !/sonnet|opus|haiku/.test(ml) : Boolean(model && effort && !motivoModelo);
+  const sugModel = modelOk ? model : (papel === 'dona' ? 'opus' : 'sonnet');
   const sugEffort = modelOk && effort ? effort : esforcoDe(sugModel.toLowerCase());
 
   const motivos = [];
@@ -347,7 +348,7 @@ function decidirUm(o, { cwd, env }) {
   if (!motivos.length) {
     if (!legivel) return { recusa: null, desfecho: 'passou-sem-ler-spec', detalhe };
     const desfecho = codex ? 'orca-abriu-codex' : ml.includes('opus') ? 'orca-abriu-opus' : ml.includes('haiku') ? 'orca-abriu-haiku' : 'orca-abriu-sonnet';
-    return { recusa: null, desfecho, detalhe: ml.includes('opus') ? `${detalhe} gatilho=${gatilhoDoOpus(texto)}` : detalhe };
+    return { recusa: null, desfecho, detalhe: ml.includes('opus') ? `${detalhe} gatilho=${(legivel && gatilhoDoOpus(texto)) || '-'}` : detalhe };
   }
 
   if (codex) return { recusa: `${motivos.join(' ')} Use --agent codex com modelo disponível na ORCA, --effort explícito e --worktree new-child (ou declare Só leitura: <motivo>).`, desfecho: 'recusou-codex', detalhe };
@@ -361,7 +362,10 @@ function decidirUm(o, { cwd, env }) {
   } else {
     sugestao = `Comando corrigido: \`${corrigido(o, { model: sugModel, effort: sugEffort, worktree: precisaPasta ? 'new-child' : null })}\``;
     if (precisaPasta) sugestao += ' (ou, se o worker só lê, ponha no texto do pedido a linha `Só leitura: <motivo>`)';
-    if (motivoModelo && legivel && ml.includes('opus') && !modelOk) sugestao += '; para manter o Opus, ponha no texto do pedido a linha `Gatilho do Opus: <gatilho>`';
+    if (motivoModelo && legivel && ml.includes('opus') && !modelOk) {
+      sugestao += papel === 'dona' && effort.toLowerCase() !== 'high' ? '; para manter o Opus, use `--effort medium`'
+        : '; para manter o Opus, use `--effort medium` ou ponha no texto do pedido a linha `Esforço alto: <gatilho>`';
+    }
     sugestao += '.';
   }
   return { recusa: `${motivos.join(' ')} ${sugestao}`, desfecho: 'recusou', detalhe };
