@@ -1189,47 +1189,69 @@ function ArquivarConcluidas() {
   return <Row><Button variant="outline" size="sm" tooltip="Só as que têm PR mergeado, a worktree limpa e a sessão parada. A pasta é apagada." onPress={() => set(arquivo, { tipo: 'confirmando', itens: aptas })}>{`Arquivar concluídas (${aptas.length})`}</Button></Row>
 }
 
-// ── Uso das contas (F475) ────────────────────────────────────────────────────────────────────────────────────────
-const LARGURA_DA_BARRA = 36
-/** O aviso mora no número, não na barra (a tinta do Orca some sobre a trilha): `warning` a partir de 80% e `danger` a partir de 95%; abaixo disso, sem tom. */
+// ── Uso das contas (F476): uma linha por conta, fixa no rodapé da aba ────────────────────────────────────────────
+/** Larguras das células (px), fixas para as barras e os números alinharem de uma conta para a outra; folgadas para "100%" e "2h 37m" na fonte xs: o espaço sai do e-mail, que corta pelo fim. */
+const LARGURA = { barra: 40, barraMinima: 16, pct: 34, contagem: 44, email: 36 } as const
+/** O aviso vai ao número (e, na janela de 5 h, ao enchimento da barra): `warning` a partir de 80% e `danger` a partir de 95%. */
 const tomDoNumero = (pct: number) => (pct >= 95 ? 'danger' : pct >= 80 ? 'warning' : undefined)
 
-/** Uma janela: barra, porcentagem e quanto falta para reiniciar. Janela que já reiniciou não mostra o número velho (ele deixou de valer). */
-function JanelaDeUso(props: { rotulo: string; j: NonNullable<ContaDeUso['sessao']>; agora: number }) {
-  const { j, agora, rotulo } = props
-  const reiniciou = j.resetsAt !== null && j.resetsAt <= agora
-  const pct = Math.max(0, Math.min(100, Math.round(j.usado)))
+/** O número de uma célula: à direita da largura fixa, apagado quando a linha está apagada. */
+function Celula(props: { largura: number; direita?: boolean; children: string; tone?: Tom; apagada: boolean }) {
+  const { largura, direita, children, tone, apagada } = props
   return (
-    <Row align="center" gap="xs">
-      <Box width={LARGURA_DA_BARRA} shrink={false}>
-        <Progress value={reiniciou ? 0 : pct} label={reiniciou ? `${rotulo}: reiniciou` : `${rotulo}: ${pct}% usado`} labelHidden />
-      </Box>
-      {reiniciou
-        ? <Text size="xs" muted>reiniciou</Text>
-        : <>
-          <Text size="xs" tone={tomDoNumero(j.usado)}>{`${pct}%`}</Text>
-          <Text size="xs" muted>{contagem(j.resetsAt, agora)}</Text>
-        </>}
-    </Row>
+    <Box width={largura} shrink={false} direction="row" justify={direita ? 'end' : 'start'}>
+      <Text size="xs" truncate muted={apagada || undefined} tone={apagada ? undefined : tone}>{children}</Text>
+    </Box>
   )
 }
 
-/** Uma conta em duas linhas: `● e-mail` e, embaixo, as janelas de 5 horas e da semana. Conta que não rodou traz o último número, com a idade dele. */
+/** A barra da janela de 5 h: trilha e enchimento são `Box` (a `Progress` do Orca não aceita cor). O fundo de `Box` só vem
+ *  em tom translúcido, invisível sobre o cartão; a borda vem no tom cheio: a trilha é contornada em `neutral` e o enchimento
+ *  é a borda no tom do número. Decorativa: o número ao lado diz o valor. */
+function Barra(props: { pct: number; tom: Tom }) {
+  const pct = Math.max(0, Math.min(100, Math.round(props.pct)))
+  return (
+    <Box key="barra" width={LARGURA.barra} minWidth={LARGURA.barraMinima} height={6} radius="full" border="neutral" background="muted" direction="row">
+      {pct > 0 ? <Box key="enchimento" width={`${pct}%`} height={4} radius="full" border={props.tom} background={props.tom} shrink={false} /> : null}
+    </Box>
+  )
+}
+
+/** A dica da linha, numa frase: o e-mail inteiro, a marca do Codex, a conta ativa e, se for o caso, por que a linha está apagada. */
+function dicaDaConta(c: ContaDeUso, agora: number): string {
+  const partes = [c.email]
+  if (c.provedor === 'codex') partes.push('Codex')
+  if (c.ativa) partes.push('conta ativa')
+  if (c.semDado || !c.sessao || !c.semana) partes.push('o Orca ainda não mediu o uso desta conta')
+  else if (c.antigo) partes.push(c.antigoDesde ? `último número lido ${haQuanto(c.antigoDesde, agora)}` : 'número antigo')
+  return partes.join(' · ')
+}
+
+/** Uma conta numa linha só: `● e-mail ▬▬ 70% 2h 37m · 18% 6d 6h`. Linha apagada quando não há leitura ou o número é velho. */
 function LinhaDaConta(props: { c: ContaDeUso; agora: number }) {
   const { c, agora } = props
-  const idade = c.antigo ? (c.antigoDesde ? `último número ${haQuanto(c.antigoDesde, agora)}` : 'número antigo') : null
+  const vazia = c.semDado || !c.sessao || !c.semana
+  const apagada = vazia || c.antigo
+  const passou = (j: ContaDeUso['sessao']) => !!j && j.resetsAt !== null && j.resetsAt <= agora
+  const reiniciou = !vazia && passou(c.sessao)
+  const pct = (j: ContaDeUso['sessao']) => (j ? Math.max(0, Math.min(100, Math.round(j.usado))) : 0)
+  const p5 = reiniciou || vazia ? 0 : pct(c.sessao)
+  const tom5 = reiniciou || vazia ? undefined : tomDoNumero(c.sessao!.usado)
+  // A semana que já reiniciou também não mostra o número de antes (nem o tom), como a 5 h.
+  const sem = vazia || passou(c.semana) ? null : c.semana
+  const textoSem = sem ? `${pct(sem)}%` : '—'
+  const tomBarra: Tom = apagada ? 'neutral' : tom5 ?? 'accent'
   return (
-    <Box key={`c-${c.id}`} gap="xs">
-      <Row align="center" gap="xs">
-        {c.ativa ? <Text size="xs" tone="accent">●</Text> : <Text size="xs" muted>○</Text>}
-        <Box grow minWidth={0}><Text size="xs" truncate weight={c.ativa ? 'semibold' : undefined}>{c.email}</Text></Box>
-        {c.provedor === 'codex' ? <Text size="xs" muted>Codex</Text> : null}
-        {idade ? <Text size="xs" muted>{idade}</Text> : null}
-      </Row>
-      {c.semDado || !c.sessao || !c.semana
-        ? <Text size="xs" muted>o Orca ainda não mediu o uso desta conta</Text>
-        : <Box columns={2} gap="sm"><JanelaDeUso rotulo="5 horas" j={c.sessao} agora={agora} /><JanelaDeUso rotulo="Semana" j={c.semana} agora={agora} /></Box>}
-    </Box>
+    <Row key={`c-${c.id}`} align="center" gap="xs">
+      <Button variant="ghost" size="xs" tone={c.ativa ? 'accent' : 'neutral'} tooltip={dicaDaConta(c, agora)}>{c.ativa ? '●' : '○'}</Button>
+      <Box grow width={0} minWidth={LARGURA.email}><Text size="xs" truncate muted={apagada || undefined} weight={c.ativa ? 'semibold' : undefined}>{c.email}</Text></Box>
+      <Barra pct={p5} tom={tomBarra} />
+      <Celula largura={LARGURA.pct} direita apagada={apagada} tone={tom5}>{reiniciou || vazia ? '—' : `${p5}%`}</Celula>
+      <Celula largura={LARGURA.contagem} apagada={apagada}>{vazia || reiniciou ? '' : contagem(c.sessao!.resetsAt, agora)}</Celula>
+      <Text size="xs" muted>·</Text>
+      <Celula largura={LARGURA.pct} direita apagada={apagada} tone={sem ? tomDoNumero(sem.usado) : undefined}>{textoSem}</Celula>
+      <Celula largura={LARGURA.contagem} apagada={apagada}>{sem ? contagem(sem.resetsAt, agora) : ''}</Celula>
+    </Row>
   )
 }
 
@@ -1244,27 +1266,25 @@ function UsoDasContas() {
     : <IconButton icon="refresh" label="Reler o uso das contas" variant="ghost" size="sm" onPress={() => void lerContas(true)} />
   if (l.erro && !l.contas.length) {
     return (
-      <Row align="center" gap="xs">
-        <Box grow minWidth={0}><Text size="xs" tone="warning">{lendo ? 'Lendo o uso das contas…' : `Não li o uso das contas: ${l.erro}. Tento de novo em 1 min.`}</Text></Box>
-        {releitura}
-      </Row>
+      <Box key="rodape-de-contas" border radius="md" padding="sm" shrink={false}>
+        <Row align="center" gap="xs">
+          <Box grow minWidth={0}><Text size="xs" tone="warning">{lendo ? 'Lendo o uso das contas…' : `Não li o uso das contas: ${l.erro}. Tento de novo em 1 min.`}</Text></Box>
+          {releitura}
+        </Row>
+      </Box>
     )
   }
   if (!l.contas.length) return null
   return (
-    <Box border radius="md" padding="sm" gap="sm">
+    <Box key="rodape-de-contas" border radius="md" paddingX="xs" paddingY="sm" gap="xs" shrink={false}>
       <Row align="center" gap="xs">
         <Box grow minWidth={0}>
           {l.erro
             ? <Text size="xs" tone="warning">{lendo ? 'Lendo o uso das contas…' : `Não consegui reler ${haQuanto(l.lidoEm, agora)}: ${l.erro}.`}</Text>
-            : <Text size="xs" muted>{lendo ? 'Lendo o uso das contas…' : `Uso das contas · ${haQuanto(l.lidoEm, agora)}`}</Text>}
+            : <Text size="xs" muted>{lendo ? 'Lendo o uso das contas…' : 'Uso das contas'}</Text>}
         </Box>
         {l.erro || lendo ? releitura : null}
       </Row>
-      <Box columns={2} gap="sm">
-        <Text size="xs" muted>5 horas · reinicia em</Text>
-        <Text size="xs" muted>Semana · reinicia em</Text>
-      </Box>
       {l.contas.map((c) => <LinhaDaConta key={`c-${c.provedor}-${c.id}`} c={c} agora={agora} />)}
     </Box>
   )
@@ -1387,10 +1407,12 @@ export default function Painel() {
   } else if (!l) corpo = <Carregando atual={atual} />
   else if (atual === 'perguntas') corpo = <Perguntas l={l} />
   else if (atual === 'decisoes') corpo = <Box gap="sm"><Text size="xs" muted>Confirmar só grava; ninguém é acordado.</Text><Decisoes l={l} /></Box>
-  else if (atual === 'sessoes') corpo = <Box gap="lg"><UsoDasContas /><Sessoes v={l.sessoes ?? SEM_SESSOES} /></Box>
+  else if (atual === 'sessoes') corpo = <Sessoes v={l.sessoes ?? SEM_SESSOES} />
   else corpo = <Entregas l={l} />
-  return (
-    <Box direction="row" gap="sm" padding="sm" align="start">
+  const lc = read(contasLidas)
+  const comRodape = atual === 'sessoes' && !!l && !!lc && (lc.contas.length > 0 || !!lc.erro)
+  const principal = (
+    <Box direction="row" gap="sm" align="start">
       <Trilho l={l} atual={s.id} />
       <Box grow gap="md" minWidth={0}>
         <Cabecalho nome={s.nome} l={l} />
@@ -1407,4 +1429,14 @@ export default function Painel() {
       </Box>
     </Box>
   )
+  // Com a faixa de contas: a lista rola na área de cima e a faixa fica no pé, sob o trilho também (mais largura para o e-mail).
+  if (comRodape) {
+    return (
+      <Box height="100%" gap="sm" padding="sm">
+        <Box grow minHeight={0} scroll="y">{principal}</Box>
+        <UsoDasContas />
+      </Box>
+    )
+  }
+  return <Box padding="sm">{principal}</Box>
 }

@@ -110,7 +110,7 @@ const leitura = (l: Partial<Leitura> = {}): Leitura =>
   ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: semSessoes, atualizacao: [], lidoEm: AGORA - 20_000, ...l })
 const cheia = leitura({ abertas, assumidas, entregas })
 
-// F475: o uso das contas, como o Orca o mediu (5 h e semana por conta). A ativa primeiro; a conta que não rodou traz o último número, com a idade.
+// F476: o uso das contas, como o Orca o mediu (5 h e semana por conta), na ordem do operador: a conta que não rodou traz o último número (apagada), a sem leitura traz traços.
 const D = 24 * H
 const conta = (email: string, sessao: [number, number | null], semana: [number, number | null], extra: Partial<ContaDeUso> = {}): ContaDeUso => ({
   provedor: 'claude', id: email, email, ativa: false, semDado: false, antigo: false, antigoDesde: null,
@@ -118,12 +118,13 @@ const conta = (email: string, sessao: [number, number | null], semana: [number, 
 })
 const contas = (cs: ContaDeUso[], erro: string | null = null): ContasLidas => ({ contas: cs, erro, lidoEm: AGORA })
 const dasContas: ContaDeUso[] = [
-  conta('agentes@wicomm.com.br', [51, 3 * H + 8 * MIN + 30_000], [16, 6 * D + 7 * H + 30_000], { ativa: true }),
-  conta('acesso@wicomm.com.br', [56, 1 * H + 40 * MIN + 30_000], [100, 3 * D + 2 * H + 30_000]),
   conta('claude@wicomm.com.br', [0, null], [96, 1 * D + 5 * H + 30_000]),
-  conta('dev@wicomm.com.br', [17, -1 * H], [72, 2 * D + 30_000], { antigo: true, antigoDesde: Date.now() - 4 * H }),
-  conta('izanagi@wicomm.com.br', [100, 20 * MIN + 30_000], [65, 4 * D + 30_000]),
-  conta('g.craice@gmail.com', [100, 2 * H + 30_000], [16, 5 * D + 30_000], { provedor: 'codex', ativa: true }),
+  conta('agentes@wicomm.com.br', [70, 2 * H + 37 * MIN + 30_000], [18, 6 * D + 6 * H + 30_000], { ativa: true }),
+  conta('gabriel.craice@wicomm.com.br', [100, 1 * H + 5 * MIN + 30_000], [100, 2 * D + 11 * H + 30_000]),
+  conta('acesso@wicomm.com.br', [56, 1 * H + 40 * MIN + 30_000], [66, 3 * D + 16 * H + 30_000]),
+  conta('dev@wicomm.com.br', [17, -1 * H], [72, 2 * D + 30_000], { antigo: true, antigoDesde: Date.now() - 3 * H }),
+  conta('izanagi@wicomm.com.br', [0, null], [0, null], { semDado: true, sessao: null, semana: null }),
+  conta('g.craice@gmail.com', [100, 1 * H + 5 * MIN + 30_000], [16, 6 * D + 20 * H + 30_000], { provedor: 'codex', ativa: true }),
 ]
 
 // O cenário não aperta botão e a aba não grava a seção: só Sessões (a de abertura) e o vazio se desenham aqui; as
@@ -149,6 +150,8 @@ const cenarios = {
 const comContas = {
   'contas de todas as contas': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }), 'kit.contas': contas(dasContas) } },
   'contas (claro)': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }), 'kit.contas': contas(dasContas) }, theme: 'light' as const },
+  // Lista mais alta que a aba: prova no shot que ela rola por cima e a faixa fica no pé.
+  'contas com lista longa': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes({ projetos: [izanagi, kit, { ...kitComEspera, projeto: 'loja-nova' }] }) }), 'kit.contas': contas(dasContas) } },
   'contas indisponiveis': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }), 'kit.contas': contas([], 'o Orca não respondeu') } },
 }
 

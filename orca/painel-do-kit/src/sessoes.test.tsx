@@ -449,7 +449,7 @@ teste('com muitas fatias todas mergeadas o cartão aberto mostra as feitas e o a
   semErros(v)
 })
 
-// ── Uso das contas (F475) ────────────────────────────────────────────────────────────────────────────────────────
+// ── Uso das contas (F476): uma linha por conta, fixa no rodapé da aba ───────────────────────────────────────────────
 const H = 60 * MIN
 const D = 24 * H
 const uso = (email: string, extra: Partial<ContaDeUso> = {}): ContaDeUso => ({
@@ -457,40 +457,206 @@ const uso = (email: string, extra: Partial<ContaDeUso> = {}): ContaDeUso => ({
   sessao: { usado: 51, resetsAt: AGORA + 3 * H + 8 * MIN + 30_000 }, semana: { usado: 16, resetsAt: AGORA + 6 * D + 7 * H + 20 * MIN }, ...extra,
 })
 const contasLidas = (contas: ContaDeUso[], erro: string | null = null): ContasLidas => ({ contas, erro, lidoEm: AGORA })
-const linhaDaConta = (nos: (q: Record<string, unknown>) => No[], id: string) => {
-  const textos = nos({ type: 'Text' }).filter((n) => n.path.includes(`:c-${id}/`)).map((n) => n.text)
-  return textos.join(' ')
+const daLinha = (nos: (q: Record<string, unknown>) => No[], id: string, tipo: string) => nos({ type: tipo }).filter((n) => n.path.includes(`:c-${id}/`))
+/** O que a pessoa lê na linha da conta, na ordem: os Text (e o texto do botão do ponto). */
+const linhaDaConta = (nos: (q: Record<string, unknown>) => No[], id: string) =>
+  [...daLinha(nos, id, 'Button'), ...daLinha(nos, id, 'Text')].sort((a, b) => a.path.localeCompare(b.path, 'en', { numeric: true })).map((n) => n.text).filter((t) => t !== '').join(' ')
+/** Todos os nós desenhados abaixo de `no` (inclusive ele), na ordem; o `findAll` do teste só vê o que tem papel de acessibilidade, e `Box` sem rótulo não tem. */
+const descendentes = (no: unknown): Desenhado[] => {
+  if (Array.isArray(no)) return no.flatMap(descendentes)
+  if (!no || typeof no !== 'object') return []
+  const d = no as Desenhado
+  return [d, ...descendentes(d.children)]
+}
+const caixasDaLinha = (v: { drawnTree: () => unknown }, id: string) => {
+  const linha = acharPelaChave(v.drawnTree(), `:c-${id}`)
+  assert.ok(linha, `a linha de ${id} existe`)
+  return descendentes(linha!.children).filter((d) => d.type === 'Box')
+}
+/** A barra da janela de 5 h: a trilha (`background: muted`, largura fixa) e o enchimento dentro dela, com largura (px) e tom (`background`). */
+const barraDaLinha = (v: { drawnTree: () => unknown }, id: string) => {
+  const caixas = caixasDaLinha(v, id)
+  const trilhas = caixas.filter((b) => b.props?.background === 'muted')
+  const enchimentos = trilhas.flatMap((t) => descendentes(t.children).filter((d) => d !== t && d.type === 'Box'))
+  return { trilhas: trilhas.length, larguraDaTrilha: trilhas[0]?.props?.width, enchimentos: enchimentos.map((b) => ({ largura: b.props?.width, tom: b.props?.background })) }
 }
 const semLinhas = (nos: (q: Record<string, unknown>) => No[]) => nos({ type: 'Text' }).filter((n) => /:c-[^/]+\//.test(n.path)).length
+/** O ponto: um botão discreto que só carrega a dica (tooltip) da linha. */
+const dicaDaLinha = (nos: (q: Record<string, unknown>) => No[], id: string) => daLinha(nos, id, 'Button').map((n) => n.props.tooltip)
+const NOMES_DAS_CONTAS = (nos: (q: Record<string, unknown>) => No[]) => nos({ type: 'Text' }).map((n) => n.text).filter((t) => /@[a-z.]+\.(com|br)|…/.test(t ?? '') && !/ /.test(t ?? ''))
 
-teste('contas: uma linha por conta, na ordem dada, com o e-mail, a janela de 5 h e a semana, e a contagem até o reinício', async () => {
+teste('contas: uma linha só por conta — ponto, e-mail, UMA barra (a de 5 h), % e contagem da 5 h, "·", % e contagem da semana', async () => {
   const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
     uso('agentes@x.com', { ativa: true }),
     uso('acesso@x.com', { sessao: { usado: 56, resetsAt: AGORA + 25 * MIN + 30_000 }, semana: { usado: 100, resetsAt: AGORA + 1 * D + 2 * H + 30_000 } }),
     uso('izanagi@x.com', { sessao: { usado: 0, resetsAt: null }, semana: { usado: 65, resetsAt: null } }),
   ]))
-  assert.equal(linhaDaConta(nos, 'agentes@x.com'), '● agentes@x.com 51% 3h 8m 16% 6d 7h')
-  assert.equal(linhaDaConta(nos, 'acesso@x.com'), '○ acesso@x.com 56% 25m 100% 1d 2h')
-  assert.equal(linhaDaConta(nos, 'izanagi@x.com'), '○ izanagi@x.com 0% — 65% —')
-  const ordem = nos({ type: 'Text' }).map((n) => n.text).filter((t) => /@x\.com$/.test(t ?? ''))
-  assert.deepEqual(ordem, ['agentes@x.com', 'acesso@x.com', 'izanagi@x.com'])
+  assert.equal(linhaDaConta(nos, 'agentes@x.com'), '● agentes@x.com 51% 3h 8m · 16% 6d 7h')
+  assert.equal(linhaDaConta(nos, 'acesso@x.com'), '○ acesso@x.com 56% 25m · 100% 1d 2h')
+  assert.equal(linhaDaConta(nos, 'izanagi@x.com'), '○ izanagi@x.com 0% — · 65% —')
+  for (const id of ['agentes@x.com', 'acesso@x.com', 'izanagi@x.com']) {
+    assert.equal(barraDaLinha(v, id).trilhas, 1, `${id}: uma barra só`)
+    // Linha única: nenhum Row/Box de colunas dentro da linha (o que seria uma segunda linha ou coluna).
+    assert.equal(daLinha(nos, id, 'Row').length + caixasDaLinha(v, id).filter((b) => b.props?.columns).length, 0, `${id}: sem segunda linha`)
+  }
+  assert.equal(descendentes(v.drawnTree()).filter((d) => d.type === 'Box' && d.props?.background === 'muted').length, 3, 'três contas, três barras (não seis)')
+  const b = barraDaLinha(v, 'agentes@x.com')
+  assert.equal(b.larguraDaTrilha, 40)
+  assert.deepEqual(b.enchimentos, [{ largura: '51%', tom: 'accent' }], 'o enchimento é 51% da trilha (em %, para seguir a trilha quando ela encolhe)')
   semErros(v)
 })
 
-teste('contas: a conta ativa é marcada pela forma (● contra ○) e pelo peso, não só pela cor', async () => {
+teste('contas: sem cabeçalho de colunas; só o título pequeno "Uso das contas", sem "há quanto tempo"', async () => {
+  const velho = /reinicia em|^5 horas|^Semana/
+  // Prova que o detector enxerga o que o F475 desenhava (senão a ausência abaixo não mede nada).
+  assert.ok(velho.test('5 horas · reinicia em') && velho.test('Semana · reinicia em'))
+  const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([uso('a@x.com', { ativa: true })]))
+  const textos = nos({ type: 'Text' }).map((n) => n.text ?? '')
+  assert.ok(textos.includes('Uso das contas'), 'o título está lá')
+  assert.deepEqual(textos.filter((t) => velho.test(t)), [])
+  assert.deepEqual(textos.filter((t) => /^Uso das contas/.test(t)), ['Uso das contas'], 'título sem o "há 39 s"')
+})
+
+teste('contas: ponto cheio e e-mail em negrito só na ativa; as outras com ponto vazado', async () => {
   const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([uso('a@x.com', { ativa: true }), uso('b@x.com')]))
   const email = (e: string) => nos({ type: 'Text', text: e })[0]
   assert.equal(email('a@x.com').props.weight, 'semibold')
   assert.notEqual(email('b@x.com').props.weight, 'semibold')
+  assert.match(linhaDaConta(nos, 'a@x.com'), /^● /)
+  assert.match(linhaDaConta(nos, 'b@x.com'), /^○ /)
 })
 
-teste('contas: sem número numa conta diz que o Orca não mediu, só nela; as outras seguem', async () => {
+teste('contas: a ordem das linhas é a que o núcleo entregou (a ativa não sobe) e o Codex fica no fim, sem a palavra Codex na linha', async () => {
+  const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('claude@x.com'), uso('agentes@x.com'), uso('izanagi@x.com', { ativa: true }), uso('g@gmail.com', { provedor: 'codex', ativa: true }),
+  ]))
+  assert.deepEqual(NOMES_DAS_CONTAS(nos), ['claude@x.com', 'agentes@x.com', 'izanagi@x.com', 'g@gmail.com'])
+  const textos = nos({ type: 'Text' }).map((n) => n.text)
+  assert.equal(textos.includes('Codex'), false, 'a marca fica só na dica')
+  assert.ok(dicaDaLinha(nos, 'g@gmail.com').some((d) => /Codex/.test(String(d))), 'a dica diz Codex')
+  assert.ok(!dicaDaLinha(nos, 'claude@x.com').some((d) => /Codex/.test(String(d))), 'a dica de outra conta não diz Codex')
+})
+
+teste('contas: o e-mail vai inteiro e corta pelo fim (o começo, que distingue a conta, fica à vista); o inteiro também vai na dica', async () => {
+  const longo = 'gabriel.craice@wicomm.com.br'
+  const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([uso(longo), uso('dev@wicomm.com')]))
+  const email = nos({ type: 'Text', text: longo })
+  assert.equal(email.length, 1, 'o e-mail inteiro está no texto da linha')
+  assert.equal(email[0].props.truncate, true, 'e corta pelo fim quando não cabe')
+  assert.ok(dicaDaLinha(nos, longo).some((d) => String(d).includes(longo)), 'o inteiro está na dica')
+  assert.match(linhaDaConta(nos, 'dev@wicomm.com'), /^○ dev@wicomm\.com /)
+})
+
+teste('contas: número e contagem nunca quebram linha (cada célula corta em vez de quebrar) e cabem "100%" e "2h 37m"', async () => {
+  const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('a@x.com', { sessao: { usado: 100, resetsAt: AGORA + 2 * H + 37 * MIN + 30_000 }, semana: { usado: 100, resetsAt: AGORA + 6 * D + 20 * H + 30_000 } }),
+  ]))
+  const celulas = daLinha(nos, 'a@x.com', 'Text').filter((n) => /%|\d[hmd]/.test(n.text ?? ''))
+  assert.deepEqual(celulas.map((n) => n.text), ['100%', '2h 37m', '100%', '6d 20h'], 'as quatro células estão lá')
+  assert.deepEqual(celulas.filter((n) => n.props.truncate !== true).map((n) => n.text), [], 'nenhuma célula pode quebrar linha')
+})
+
+teste('contas: a barra mostra a trilha também em 0% (sem enchimento), para as linhas alinharem', async () => {
+  const { v } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('a@x.com', { sessao: { usado: 0, resetsAt: null } }), uso('b@x.com', { semDado: true, sessao: null, semana: null }),
+  ]))
+  for (const id of ['a@x.com', 'b@x.com']) {
+    const b = barraDaLinha(v, id)
+    assert.equal(b.trilhas, 1, `${id}: a trilha está lá`)
+    assert.deepEqual(b.enchimentos, [], `${id}: sem enchimento de largura zero`)
+  }
+})
+
+teste('contas: sem leitura vira "—" no lugar do número, a linha toda apagada, e a explicação vai só na dica (nunca no texto da linha)', async () => {
   const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
     uso('a@x.com', { ativa: true }), uso('dev@x.com', { semDado: true, sessao: null, semana: null }),
   ]))
-  assert.equal(linhaDaConta(nos, 'dev@x.com'), '○ dev@x.com o Orca ainda não mediu o uso desta conta')
+  assert.equal(linhaDaConta(nos, 'dev@x.com'), '○ dev@x.com — · —')
+  assert.ok(dicaDaLinha(nos, 'dev@x.com').some((d) => /o Orca ainda não mediu o uso desta conta/.test(String(d))))
+  assert.ok(daLinha(nos, 'dev@x.com', 'Text').every((n) => n.props.muted === true), 'linha toda apagada')
+  assert.ok(!daLinha(nos, 'a@x.com', 'Text').some((n) => n.props.muted === true && /%/.test(n.text ?? '')), 'conta com leitura boa não está apagada (senão o teste acima não distingue nada)')
+  assert.ok(!nos({ type: 'Text' }).some((n) => /ainda não mediu|último número/.test(n.text ?? '')), 'nenhuma explicação solta no texto')
   assert.match(linhaDaConta(nos, 'a@x.com'), / 51% 3h 8m/)
   semErros(v)
+})
+
+teste('contas: número velho (conta que não rodou) aparece apagado, e a idade vai só na dica', async () => {
+  const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('a@x.com', { ativa: true }),
+    uso('velha@x.com', { antigo: true, antigoDesde: AGORA - 3 * H, semana: { usado: 72, resetsAt: AGORA + 2 * D + 30_000 } }),
+  ]))
+  assert.equal(linhaDaConta(nos, 'velha@x.com'), '○ velha@x.com 51% 3h 8m · 72% 2d 0h')
+  assert.ok(dicaDaLinha(nos, 'velha@x.com').some((d) => /último número lido há 3 h/.test(String(d))), JSON.stringify(dicaDaLinha(nos, 'velha@x.com')))
+  assert.ok(daLinha(nos, 'velha@x.com', 'Text').every((n) => n.props.muted === true))
+  assert.ok(!dicaDaLinha(nos, 'a@x.com').some((d) => /último número/.test(String(d))))
+  semErros(v)
+})
+
+teste('contas: o número ganha warning a partir de 80% e danger a partir de 95% (5 h e semana); a barra da 5 h segue o valor e o tom', async () => {
+  const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('a@x.com', { sessao: { usado: 79, resetsAt: null }, semana: { usado: 80, resetsAt: null } }),
+    uso('b@x.com', { sessao: { usado: 94, resetsAt: null }, semana: { usado: 95, resetsAt: null } }),
+    uso('c@x.com', { sessao: { usado: 100, resetsAt: null }, semana: { usado: 0, resetsAt: null } }),
+  ]))
+  const tons = (id: string) => daLinha(nos, id, 'Text').filter((n) => /%$/.test(n.text ?? '')).map((n) => [n.text, n.props.tone])
+  assert.deepEqual(tons('a@x.com'), [['79%', undefined], ['80%', 'warning']])
+  assert.deepEqual(tons('b@x.com'), [['94%', 'warning'], ['95%', 'danger']])
+  assert.deepEqual(tons('c@x.com'), [['100%', 'danger'], ['0%', undefined]])
+  assert.deepEqual(barraDaLinha(v, 'a@x.com').enchimentos, [{ largura: '79%', tom: 'accent' }])
+  assert.deepEqual(barraDaLinha(v, 'b@x.com').enchimentos, [{ largura: '94%', tom: 'warning' }], 'a 5 h acima de 80% pinta a barra')
+  assert.deepEqual(barraDaLinha(v, 'c@x.com').enchimentos, [{ largura: '100%', tom: 'danger' }], '100% enche a trilha e pinta de vermelho')
+  // A semana só pinta o número, nunca a barra (a barra é só da 5 h).
+  assert.equal(barraDaLinha(v, 'a@x.com').trilhas, 1)
+})
+
+teste('contas: janela de 5 h que já reiniciou não mostra o número velho nem tom de alerta', async () => {
+  const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('velha@x.com', { antigo: true, antigoDesde: AGORA - 6 * H, sessao: { usado: 100, resetsAt: AGORA - H }, semana: { usado: 72, resetsAt: AGORA + 2 * D + 30_000 } }),
+  ]))
+  const textos = daLinha(nos, 'velha@x.com', 'Text').map((n) => n.text)
+  assert.ok(textos.includes('72%'), JSON.stringify(textos))
+  assert.ok(!textos.includes('100%'), 'o 100% de antes do reinício não aparece')
+  assert.ok(textos.includes('—'), 'no lugar dele, o traço')
+  assert.deepEqual(barraDaLinha(v, 'velha@x.com').enchimentos, [], 'barra vazia: só a trilha, sem enchimento nem tom')
+})
+
+teste('contas: janela da semana que já reiniciou também não mostra o número velho nem tom de alerta', async () => {
+  const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('parada@x.com', { antigo: true, antigoDesde: AGORA - 8 * D, sessao: { usado: 40, resetsAt: AGORA - 7 * D }, semana: { usado: 100, resetsAt: AGORA - H } }),
+    uso('boa@x.com', { semana: { usado: 100, resetsAt: AGORA + D + 30_000 } }),
+  ]))
+  // Prova que o 100% da semana aparece quando a janela ainda vale (senão a ausência abaixo não mede nada).
+  assert.ok(daLinha(nos, 'boa@x.com', 'Text').some((n) => n.text === '100%' && n.props.tone === 'danger'))
+  const textos = daLinha(nos, 'parada@x.com', 'Text').map((n) => n.text)
+  assert.ok(!textos.includes('100%'), `o 100% de antes do reinício da semana não aparece: ${JSON.stringify(textos)}`)
+  assert.equal(linhaDaConta(nos, 'parada@x.com'), '○ parada@x.com — · —')
+  assert.ok(!daLinha(nos, 'parada@x.com', 'Text').some((n) => n.props.tone === 'danger'), 'sem tom de alerta')
+  semErros(v)
+})
+
+teste('contas: a faixa fica no rodapé, fora da área que rola; a lista de sessões rola por cima dela', async () => {
+  const { v } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([uso('a@x.com', { ativa: true })]))
+  const raiz = v.drawnTree() as Desenhado
+  assert.equal(raiz.props?.height, '100%', 'a raiz tem a altura da aba, para o rodapé ir ao pé')
+  const [rolavel, rodape, resto] = raiz.children as Desenhado[]
+  assert.equal(resto, undefined, 'a raiz tem só dois filhos: a área que rola e o rodapé')
+  assert.equal(rolavel.props?.scroll, 'y')
+  assert.equal(rolavel.props?.grow, true)
+  assert.equal(rolavel.props?.minHeight, 0, 'a área que rola pode encolher abaixo do conteúdo (senão a lista empurra o rodapé para fora)')
+  assert.equal(rodape.props?.shrink, false, 'o rodapé não encolhe quando a lista é maior que a aba')
+  assert.ok(rodape.key?.endsWith('rodape-de-contas'), String(rodape.key))
+  const textos = (d: Desenhado) => descendentes(d).filter((n) => n.type === 'Text').map((n) => (n.children as string[]).join(''))
+  assert.ok(textos(rolavel).includes('F1 · título do F1'), 'a lista está na área que rola')
+  assert.ok(!textos(rolavel).includes('Uso das contas'), 'a faixa não está na área que rola')
+  assert.ok(textos(rodape).includes('Uso das contas'), 'a faixa está no rodapé')
+  assert.equal(descendentes(raiz).filter((n) => n.props?.scroll === 'y').length, 1, 'uma área rolável só')
+})
+
+teste('contas: sem conta nenhuma não há rodapé nem área que rola (a aba fica como antes)', async () => {
+  const { v } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])))
+  const todos = descendentes(v.drawnTree())
+  assert.ok(todos.length > 20, 'a aba desenhou (senão a ausência abaixo não mede nada)')
+  assert.equal(todos.filter((n) => n.props?.scroll === 'y' || n.key?.endsWith('rodape-de-contas')).length, 0)
 })
 
 teste('contas: falha total mostra uma linha "uso das contas indisponível" e a aba segue inteira', async () => {
@@ -517,56 +683,16 @@ teste('contas: abrir a aba pede leitura forçada uma vez; a contagem anda com o 
   painel.relogio.agora = () => AGORA + 61 * MIN
   try {
     await v.press({ label: 'Reler agora' })
-    assert.match(linhaDaConta(nos, 'a@x.com'), /51% 2h 7m 16% 6d 6h/)
+    assert.match(linhaDaConta(nos, 'a@x.com'), /51% 2h 7m · 16% 6d 6h/)
     assert.equal(pedidosDeContas.length, 1, 'reler as sessões não chama o Orca das contas')
   } finally {
     painel.relogio.agora = () => Date.now()
   }
 })
 
-teste('contas: a barra segue a porcentagem; o número só ganha warning a partir de 80% e danger a partir de 95%', async () => {
-  const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
-    uso('a@x.com', { sessao: { usado: 79, resetsAt: null }, semana: { usado: 80, resetsAt: null } }),
-    uso('b@x.com', { sessao: { usado: 94, resetsAt: null }, semana: { usado: 95, resetsAt: null } }),
-    uso('c@x.com', { sessao: { usado: 100, resetsAt: null }, semana: { usado: 0, resetsAt: null } }),
-  ]))
-  const dosNos = (id: string, tipo: string) => nos({ type: tipo }).filter((n) => n.path.includes(`:c-${id}/`))
-  const tons = (id: string) => dosNos(id, 'Text').filter((n) => /%$/.test(n.text ?? '')).map((n) => [n.text, n.props.tone])
-  assert.deepEqual(tons('a@x.com'), [['79%', undefined], ['80%', 'warning']])
-  assert.deepEqual(tons('b@x.com'), [['94%', 'warning'], ['95%', 'danger']])
-  assert.deepEqual(tons('c@x.com'), [['100%', 'danger'], ['0%', undefined]])
-  const barras = (id: string) => dosNos(id, 'Progress').map((n) => n.props.value)
-  assert.deepEqual(barras('a@x.com'), [79, 80])
-  assert.deepEqual(barras('c@x.com'), [100, 0])
-})
-
-teste('contas: janela que já reiniciou não mostra o número velho nem tom de alerta', async () => {
-  const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
-    uso('velha@x.com', { antigo: true, antigoDesde: AGORA - 6 * H, sessao: { usado: 100, resetsAt: AGORA - H }, semana: { usado: 72, resetsAt: AGORA + 2 * D + 30_000 } }),
-  ]))
-  const textos = nos({ type: 'Text' }).filter((n) => n.path.includes(':c-velha@x.com/')).map((n) => n.text)
-  assert.ok(textos.includes('reiniciou'), JSON.stringify(textos))
-  assert.ok(!textos.includes('100%'), 'o 100% de antes do reinício não aparece')
-  assert.ok(textos.includes('72%'))
-  assert.deepEqual(nos({ type: 'Progress' }).filter((n) => n.path.includes(':c-velha@x.com/')).map((n) => n.props.value), [0, 72])
-})
-
 teste('contas: falha com leitura boa antes mantém as contas e avisa que não releu, com o botão de reler', async () => {
   const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => ({ contas: [uso('a@x.com', { ativa: true })], erro: 'o Orca não respondeu', lidoEm: AGORA }))
-  assert.match(linhaDaConta(nos, 'a@x.com'), /51% 3h 8m 16% 6d 7h/)
+  assert.match(linhaDaConta(nos, 'a@x.com'), /51% 3h 8m · 16% 6d 7h/)
   assert.ok(nos({ type: 'Text' }).some((n) => /^Não consegui reler há .*: o Orca não respondeu\.$/.test(n.text ?? '')))
   assert.ok(v.find({ label: 'Reler o uso das contas' }))
-})
-
-teste('contas: conta que não rodou mostra o último número com a idade dele; os rótulos das colunas aparecem uma vez só', async () => {
-  const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
-    uso('a@x.com', { ativa: true }),
-    uso('velha@x.com', { antigo: true, antigoDesde: AGORA - 3 * H, semana: { usado: 72, resetsAt: AGORA + 2 * D + 30_000 } }),
-  ]))
-  assert.match(linhaDaConta(nos, 'velha@x.com'), /^○ velha@x\.com último número há 3 h 51% 3h 8m 72% 2d 0h$/)
-  assert.doesNotMatch(linhaDaConta(nos, 'a@x.com'), /último número/)
-  const cabecalho = nos({ type: 'Text' }).map((n) => n.text).filter((t) => /reinicia em$/.test(t ?? ''))
-  assert.deepEqual(cabecalho, ['5 horas · reinicia em', 'Semana · reinicia em'], 'os rótulos das colunas aparecem uma vez só')
-  assert.ok(nos({ type: 'Text' }).some((n) => /^Uso das contas · há /.test(n.text ?? '')), 'o título diz a idade da leitura')
-  semErros(v)
 })
