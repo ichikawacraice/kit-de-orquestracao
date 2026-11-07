@@ -45,11 +45,20 @@ function doProvedor(provedor, bruto, limitesDaAtiva, inativas) {
     // Conta que está em `accounts` mas não aparece nas inativas (nem é a ativa) ainda não foi lida: sem dado.
     else linhas.push(linha(provedor, false, c, dosInativos.get(c.id)));
   }
-  // A ativa primeiro; as outras por e-mail. (`accountId` de inativa sem conta em `accounts` é conta removida: nunca entra.)
-  return linhas.sort((a, b) => Number(b.ativa) - Number(a.ativa) || a.email.localeCompare(b.email));
+  // (`accountId` de inativa sem conta em `accounts` é conta removida: nunca entra.) A ordem é a de `ordemDaConta`.
+  return linhas.sort((a, b) => ordemDaConta(a.email) - ordemDaConta(b.email) || a.email.localeCompare(b.email));
 }
 
-/** As contas na ordem da tela: Claude (ativa e depois por e-mail), depois Codex. Lança se a resposta não for a do Orca. */
+// A preferência do operador, pelo prefixo do e-mail; quem não está na lista vem depois, por e-mail. A ativa não sobe: só tem o ponto cheio.
+// A conta real é `agentes@`; o operador a escreveu `agents@` no pedido: as duas grafias valem o mesmo lugar.
+const PREFERIDAS = [['claude'], ['agentes', 'agents'], ['gabriel.craice'], ['acesso'], ['dev'], ['izanagi']];
+const ordemDaConta = (email) => {
+  const prefixo = String(email).split('@')[0].toLowerCase();
+  const i = PREFERIDAS.findIndex((nomes) => nomes.includes(prefixo));
+  return i === -1 ? PREFERIDAS.length : i;
+};
+
+/** As contas na ordem da tela: Claude na ordem de preferência do operador, depois Codex. Lança se a resposta não for a do Orca. */
 export function contasDoOrca(json) {
   if (!json || typeof json !== 'object' || !Array.isArray(json.claude?.accounts)) throw new Error('não é a resposta do Orca');
   const limites = json.rateLimits ?? {};
@@ -59,4 +68,13 @@ export function contasDoOrca(json) {
       ...doProvedor('codex', json.codex, limites.codex, limites.inactiveCodexAccounts),
     ],
   };
+}
+
+/** O e-mail que cabe na linha única: inteiro se couber em `max` caracteres; senão corta no meio com `…`, guardando o começo e o fim (o domínio). */
+export function emailCurto(email, max) {
+  const e = String(email);
+  if (e.length <= max) return e;
+  const sobra = max - 1;
+  const fim = Math.ceil(sobra / 2.5);
+  return `${e.slice(0, sobra - fim)}…${e.slice(e.length - fim)}`;
 }

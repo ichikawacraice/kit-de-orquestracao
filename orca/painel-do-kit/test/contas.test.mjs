@@ -1,7 +1,7 @@
 // Uso das contas (F475): o que o `orca account list --json` diz vira uma linha por conta. Contas puras, sem Orca.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { contagem, contasDoOrca } from '../src/nucleo/contas.mjs';
+import { contagem, contasDoOrca, emailCurto } from '../src/nucleo/contas.mjs';
 
 const AGORA = Date.parse('2026-11-06T20:32:00Z'); // 17:32 em São Paulo
 const MIN = 60_000, H = 60 * MIN, D = 24 * H;
@@ -38,12 +38,27 @@ const bruto = (extra = {}) => ({
   },
 });
 
-test('a ativa vem primeiro e marcada; as outras por e-mail; o e-mail vem de accounts pelo id', () => {
+test('a ordem é a da preferência do operador (pelo prefixo do e-mail); a ativa não sobe; o e-mail vem de accounts pelo id', () => {
   const { contas } = contasDoOrca(bruto());
+  // agentes@ (ativa) vem antes de alfa@ e zeta@ por estar na lista; fora da lista, por e-mail.
   assert.deepEqual(contas.map((c) => [c.email, c.ativa]), [['agentes@x.com', true], ['alfa@x.com', false], ['zeta@x.com', false]]);
   assert.deepEqual(contas[0].sessao, { usado: 51, resetsAt: AGORA + H });
   assert.deepEqual(contas[0].semana, { usado: 16, resetsAt: AGORA + H });
   assert.equal(contas[1].semana.usado, 72);
+});
+
+test('ordem fixa: claude > agentes (a conta real; "agents" também vale) > gabriel.craice > acesso > dev > izanagi > fora da lista por e-mail; Codex no fim; a ativa não sobe', () => {
+  const emails = ['izanagi@w.com', 'zz@w.com', 'dev@w.com', 'acesso@w.com', 'gabriel.craice@w.com', 'agentes@w.com', 'claude@w.com', 'aa@w.com'];
+  const b = {
+    claude: { accounts: emails.map((e) => conta(e, e)), activeAccountId: 'izanagi@w.com' },
+    codex: { accounts: [conta('cx', 'g.craice@gmail.com')], activeAccountId: 'cx' },
+    rateLimits: { claude: limites(janela(1), janela(1)), inactiveClaudeAccounts: [], inactiveCodexAccounts: [], codex: limites(janela(2), janela(2)) },
+  };
+  const { contas } = contasDoOrca(b);
+  assert.equal(contas.length, 9, 'a conta existe antes de testar a ordem');
+  assert.deepEqual(contas.map((c) => c.email), ['claude@w.com', 'agentes@w.com', 'gabriel.craice@w.com', 'acesso@w.com', 'dev@w.com', 'izanagi@w.com', 'aa@w.com', 'zz@w.com', 'g.craice@gmail.com']);
+  assert.equal(contas.find((c) => c.ativa && c.provedor === 'claude').email, 'izanagi@w.com');
+  assert.notEqual(contas[0].ativa, true, 'a ativa (izanagi) não está no topo');
 });
 
 test('conta removida (accountId sem conta em accounts) é ignorada', () => {
@@ -108,4 +123,22 @@ test('entrada que não é a resposta do Orca: lança erro, para a aba dizer "ind
 
 test('sem conta nenhuma: lista vazia, sem erro', () => {
   assert.deepEqual(contasDoOrca({ claude: { accounts: [], activeAccountId: null }, rateLimits: {} }).contas, []);
+});
+
+test('emailCurto: cabe inteiro fica igual; senão corta no meio com reticências, mantendo o começo e o fim, no tamanho pedido', () => {
+  assert.equal(emailCurto('dev@wicomm.com.br', 20), 'dev@wicomm.com.br');
+  const curto = emailCurto('gabriel.craice@wicomm.com.br', 20);
+  assert.equal(curto.length, 20);
+  assert.match(curto, /^gabriel\.c.*….*com\.br$/);
+  assert.notEqual(curto, 'gabriel.craice@wicomm.com.br', 'o corte aconteceu (senão o teste não mede nada)');
+  assert.equal(emailCurto('a@b.c', 20), 'a@b.c');
+});
+
+test('ordem: "agents@" (como o operador escreveu) e "agentes@" (a conta real) ficam ambos em 2º, logo depois de claude@', () => {
+  for (const nome of ['agentes', 'agents']) {
+    const b = { claude: { accounts: [conta('z', 'aaa@w.com'), conta('g', 'gabriel.craice@w.com'), conta('a', `${nome}@w.com`), conta('c', 'claude@w.com')], activeAccountId: 'g' }, rateLimits: {} };
+    const emails = contasDoOrca(b).contas.map((c) => c.email);
+    assert.equal(emails.length, 4, 'as contas existem antes de medir a ordem');
+    assert.deepEqual(emails, ['claude@w.com', `${nome}@w.com`, 'gabriel.craice@w.com', 'aaa@w.com'], nome);
+  }
 });
