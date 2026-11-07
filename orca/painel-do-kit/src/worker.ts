@@ -15,11 +15,12 @@ import { entregasDoPainel, entregasDoOrca, juntarEntregas } from './nucleo/entre
 import { prepararEnvio, lerResultado, destinoValido, destinoDoSeguimento } from './nucleo/envio.mjs'
 import { criarFilaDeEntrega } from './nucleo/fila-de-entrega.mjs'
 import { sessoesDoKit } from './nucleo/sessoes.mjs'
+import { contasDoOrca } from './nucleo/contas.mjs'
 import { precisaDaBatida, scriptDaBatida, ambienteDaBatida, TOQUE_MS } from './nucleo/batida.mjs'
 import { lerInstalados, publicadoDoCache, cacheVale, paraBaixar, atualizarCache, cloneDoMarketplace } from './nucleo/atualizacao.mjs'
 import { inicioDoDiaSP } from './vista'
-import type { AtualizacaoDoKit, Concluida, ConcluidasLidas, DesfechoDoArquivar, Leitura, Resultado, Entrega, EstadoDaEntrega, VistaDasSessoes } from './protocol'
-import { ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, LIMITE_DA_CAIXA } from './protocol'
+import type { AtualizacaoDoKit, ContasLidas, Concluida, ConcluidasLidas, DesfechoDoArquivar, Leitura, Resultado, Entrega, EstadoDaEntrega, VistaDasSessoes } from './protocol'
+import { CONTAS_MS, ESPERA_ENVIO_MS, JANELA_DA_ENTREGA_MS, LIMITE_DA_CAIXA } from './protocol'
 
 const DIAS = 7
 const CAIXA_MS = 60_000
@@ -203,6 +204,31 @@ export default function activate(orca: OrcaWorkerApi): void {
     })
     return { arquivadas: dadosDa(json.arquivadas), recusadas, erro: typeof json.erro === 'string' ? json.erro : null }
   })
+
+  // Uso das contas (F475): `orca account list --json`, só leitura, no máximo uma vez a cada 5 min (a pessoa abrindo a aba pede
+  // `forcar`; a leitura do Orca já respeita o Retry-After do provedor). A contagem até o reinício a aba calcula sozinha.
+  // Falha total vira `erro` e é tentada de novo em 1 min, para a faixa não ficar "indisponível" por 5.
+  let contasCache: ContasLidas | null = null
+  let lendoContas: Promise<ContasLidas> | null = null
+  const lerContas = (forcar: boolean): Promise<ContasLidas> => {
+    const vale = contasCache && Date.now() - contasCache.lidoEm < (contasCache.erro ? CAIXA_MS : CONTAS_MS)
+    if (!forcar && vale) return Promise.resolve(contasCache!)
+    lendoContas ??= rodarJson(['account', 'list', '--json'])
+      .then((r) => {
+        const resultado = (r as { result?: unknown } | null)?.result
+        return { contas: contasDoOrca(resultado).contas, erro: null, lidoEm: Date.now() } as ContasLidas
+      })
+      .catch((e: unknown) => {
+        // A mensagem crua vai só ao log; a tela recebe um motivo curto. Com leitura boa antes, as contas dela ficam (a faixa avisa que não releu).
+        orca.log(`contas: ${msg(e)}`)
+        const formato = /não é a resposta do Orca/.test(msg(e))
+        return { contas: contasCache?.contas ?? [], erro: formato ? 'a resposta do Orca mudou de formato' : 'o Orca não respondeu', lidoEm: Date.now() } as ContasLidas
+      })
+      .then((l) => (contasCache = l))
+      .finally(() => { lendoContas = null })
+    return lendoContas
+  }
+  orca.panels.handle('kit.contas', async (input?: { forcar?: boolean }): Promise<ContasLidas> => lerContas(Boolean(input?.forcar)))
 
   // Envio por terminal criado pelo worker: o worker do plugin não tem remetente próprio (`no_active_sender_terminal`).
   async function enviar(destino: string, assunto: string, corpo: string): Promise<{ ok: boolean; motivo?: string }> {
