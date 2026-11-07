@@ -42,6 +42,7 @@ function worker(respostas: Record<string, unknown>) {
     }
   }
   requests['kit.concluidas'] = () => ({ aptas: [], erro: null, lidoEm: Date.now() }) // F469: o botão de arquivar tem testes próprios; aqui não há concluída
+  requests['kit.contas'] = () => ({ contas: [], erro: null, lidoEm: Date.now() }) // F475: a faixa de contas tem testes próprios
   return { host: mockHost({ requests }), pedidos, nomes: () => pedidos.map((p) => p.nome) }
 }
 

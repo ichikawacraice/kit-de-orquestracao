@@ -29,8 +29,9 @@ function ambiente(opcoes: { workspaces?: (raiz: string) => Ws[]; mensagens?: obj
   writeFileSync(workers, JSON.stringify({ result: { workers: opcoes.workers ?? [] } }))
   writeFileSync(orca, `#!/usr/bin/env node
 const fs = require('fs'); const a = process.argv.slice(2);
-fs.appendFileSync(${JSON.stringify(log)}, a[1] + '\\n');
-if (a[1] === 'inbox') { const m = JSON.parse(fs.readFileSync(${JSON.stringify(caixa)}, 'utf8')); const i = a.indexOf('--limit'); console.log(JSON.stringify({ result: { messages: i < 0 ? m : m.slice(0, Number(a[i + 1])) } })); }
+fs.appendFileSync(${JSON.stringify(log)}, (a[0] === 'account' ? 'account-' : '') + a[1] + '\\n');
+if (a[0] === 'account') { const f = ${JSON.stringify(join(raiz, 'contas.json'))}; if (!fs.existsSync(f)) { console.error('orca: sem conta'); process.exit(2); } console.log(fs.readFileSync(f, 'utf8')); }
+else if (a[1] === 'inbox') { const m = JSON.parse(fs.readFileSync(${JSON.stringify(caixa)}, 'utf8')); const i = a.indexOf('--limit'); console.log(JSON.stringify({ result: { messages: i < 0 ? m : m.slice(0, Number(a[i + 1])) } })); }
 else if (a[1] === 'worker-list') console.log(fs.readFileSync(${JSON.stringify(workers)}, 'utf8'));
 else if (a[1] === 'send') { fs.writeFileSync(${JSON.stringify(args)}, JSON.stringify(a)); fs.appendFileSync(${JSON.stringify(args)} + 'l', JSON.stringify(a) + '\\n'); console.log('{"ok":true,"result":{"messageId":"msg_x"}}'); }
 `)
@@ -73,7 +74,8 @@ console.log(JSON.stringify({ gravado: true }));
   const respostaDoArquivar = (r: object) => writeFileSync(join(raiz, 'arquivar.json'), JSON.stringify(r))
   const todosEnviados = () => (existsSync(args + 'l') ? readFileSync(args + 'l', 'utf8').trim().split('\n').map((l) => JSON.parse(l) as string[]) : [])
   const batidas = () => (existsSync(logDaBatida) ? readFileSync(logDaBatida, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as { argv: string[]; base: string; electron: string }) : [])
-  return { painel, host, pergunta, doc, chamadas, enviados: () => JSON.parse(readFileSync(args, 'utf8')), todosEnviados, batidas, respostaDoArquivar }
+  const respostaDasContas = (r: object | string) => writeFileSync(join(raiz, 'contas.json'), typeof r === 'string' ? r : JSON.stringify(r))
+  return { painel, host, respostaDasContas, pergunta, doc, chamadas, enviados: () => JSON.parse(readFileSync(args, 'utf8')), todosEnviados, batidas, respostaDoArquivar }
 }
 
 test('ler não acorda ninguém: nenhum terminal, nenhum agente, nenhuma mensagem; só inbox e worker-list do CLI', async () => {
@@ -534,4 +536,54 @@ test('F469: script antigo informa falha; sem plugin Claude usa o núcleo local',
     assert.equal(r.erro, null, 'sem plugin Claude o núcleo local responde normalmente')
     assert.deepEqual(r.aptas, [], 'painel temporário sem itens concluídos')
   } finally { await b.dispose?.() }
+})
+
+// F475: o uso das contas vem de `orca account list --json` (só leitura), uma vez a cada 5 min; a contagem é da aba.
+const contasDoOrca = () => ({
+  result: {
+    claude: { accounts: [{ id: 'a', email: 'agentes@x.com' }, { id: 'b', email: 'acesso@x.com' }], activeAccountId: 'a' },
+    codex: { accounts: [], activeAccountId: null },
+    rateLimits: {
+      claude: { status: 'ok', session: { usedPercent: 51, resetsAt: 1_800_000_000_000 }, weekly: { usedPercent: 16, resetsAt: 1_800_500_000_000 } },
+      inactiveClaudeAccounts: [
+        { accountId: 'b', rateLimits: { status: 'ok', session: { usedPercent: 56, resetsAt: null }, weekly: { usedPercent: 100, resetsAt: 1_800_500_000_000 } } },
+        { accountId: 'removida', rateLimits: { status: 'ok', session: { usedPercent: 1, resetsAt: null }, weekly: { usedPercent: 1, resetsAt: null } } },
+      ],
+      inactiveCodexAccounts: [],
+    },
+  },
+})
+
+test('F475: kit.contas lê o Orca, ignora a conta removida e guarda 5 min; forcar lê de novo; ler as sessões não chama o Orca das contas', async () => {
+  const a = ambiente()
+  a.respostaDasContas(contasDoOrca())
+  const w = await mountWorker(main, { host: a.host })
+  const r = await w.request('kit.contas', {})
+  assert.equal(r.erro, null)
+  assert.deepEqual(r.contas.map((c: { email: string; ativa: boolean }) => [c.email, c.ativa]), [['agentes@x.com', true], ['acesso@x.com', false]])
+  assert.equal(r.contas[1].semana.usado, 100)
+  await w.request('kit.contas', {})
+  await w.request('kit.ler', { forcar: true })
+  assert.equal(a.chamadas().filter((c: string) => c === 'account-list').length, 1, 'a segunda leitura usa o cache de 5 min')
+  await w.request('kit.contas', { forcar: true })
+  assert.equal(a.chamadas().filter((c: string) => c === 'account-list').length, 2)
+  assert.equal(a.host.callsOf('terminal.create').length, 0)
+  assert.deepEqual(w.refusals, [])
+  await w.deactivate()
+})
+
+test('F475: kit.contas com o Orca falhando ou devolvendo lixo diz o erro, sem lançar, e tenta de novo depois de 1 min (não de 5)', async () => {
+  const a = ambiente()
+  const w = await mountWorker(main, { host: a.host }) // sem contas.json: o orca falso sai com 2
+  const r = await w.request('kit.contas', {})
+  assert.deepEqual(r.contas, [])
+  assert.match(String(r.erro), /orca/)
+  a.respostaDasContas('isto não é json')
+  assert.match(String((await w.request('kit.contas', {})).erro), /orca/, 'dentro de 1 min vale a falha guardada')
+  assert.equal(a.chamadas().filter((c: string) => c === 'account-list').length, 1)
+  const l = await w.request('kit.contas', { forcar: true })
+  assert.match(String(l.erro), /JSON/)
+  a.respostaDasContas({ result: { nada: true } })
+  assert.match(String((await w.request('kit.contas', { forcar: true })).erro), /resposta do Orca/)
+  await w.deactivate()
 })

@@ -108,6 +108,12 @@ export type VistaDasSessoes = {
   lidoEm: number
 }
 
+/** O uso de uma conta Claude ou Codex, como a faixa de contas da aba o mostra (F475). `semDado`: o Orca não trouxe número que valha. */
+export type JanelaDeUso = { usado: number; resetsAt: number | null }
+export type ContaDeUso = { provedor: 'claude' | 'codex'; id: string; email: string; ativa: boolean; semDado: boolean; sessao: JanelaDeUso | null; semana: JanelaDeUso | null }
+/** A leitura das contas: `erro` quando o Orca não respondeu (a faixa diz "indisponível"). */
+export type ContasLidas = { contas: ContaDeUso[]; erro: string | null; lidoEm: number }
+
 /** Um plugin do kit com versão publicada mais nova que a instalada (F463). */
 export type AtualizacaoDoKit = { nome: string; instalada: string; publicada: string }
 
@@ -146,6 +152,7 @@ declare module 'orca' {
     'kit.desfazer': { input: { itens: { id: string; versao: number }[] }; output: { desfeitas: string[]; recusadas: { id: string; motivo: string }[] } }
     'kit.reentregar': { input: { id: string }; output: EstadoDaEntrega }
     'kit.concluidas': { input: { forcar?: boolean }; output: ConcluidasLidas }
+    'kit.contas': { input: { forcar?: boolean }; output: ContasLidas }
     'kit.arquivar': { input: { itens: string[] }; output: DesfechoDoArquivar }
     'kit.seguimento': { input: { destino: string; titulo: string; texto: string }; output: { ok: boolean; motivo?: string } }
   }
@@ -161,3 +168,5 @@ export const PRAZO_DO_ENVIO_MS = 90_000
 export const PRAZO_DO_ARQUIVAR_MS = 120_000
 /** Quantas mensagens da caixa do Orca a aba lê por vez. */
 export const LIMITE_DA_CAIXA = 1000
+/** A cada quanto a aba pede o uso das contas ao worker (que só chama o Orca depois desse prazo). */
+export const CONTAS_MS = 5 * 60_000

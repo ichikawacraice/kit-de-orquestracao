@@ -1,7 +1,7 @@
 // Cenários do `orca plugin check` e do `orca plugin shot` da aba do kit (F436): cada seção cheia, as vazias, a falha
 // de leitura e o tema claro. Conteúdo de exemplo, no tom das perguntas reais do painel.
 import { defineCheck } from 'orca/testing'
-import type { Entrega, GrupoDeSessoes, Leitura, Pergunta, Sessao, VistaDasSessoes } from './protocol'
+import type { ContaDeUso, ContasLidas, Entrega, GrupoDeSessoes, Leitura, Pergunta, Sessao, VistaDasSessoes } from './protocol'
 
 const AGORA = Date.now()
 const iso = (msAtras: number) => new Date(AGORA - msAtras).toISOString()
@@ -110,9 +110,25 @@ const leitura = (l: Partial<Leitura> = {}): Leitura =>
   ({ abertas: [], assumidas: [], pendentes: [], ilegiveis: 0, entregas: [], erroDaCaixa: null, caixaAte: null, sessoes: semSessoes, atualizacao: [], lidoEm: AGORA - 20_000, ...l })
 const cheia = leitura({ abertas, assumidas, entregas })
 
+// F475: o uso das contas, como o Orca o mediu (5 h e semana por conta). A ativa primeiro; a conta com erro vai como "sem dado".
+const D = 24 * H
+const conta = (email: string, sessao: [number, number | null], semana: [number, number | null], extra: Partial<ContaDeUso> = {}): ContaDeUso => ({
+  provedor: 'claude', id: email, email, ativa: false, semDado: false,
+  sessao: { usado: sessao[0], resetsAt: sessao[1] === null ? null : AGORA + sessao[1] }, semana: { usado: semana[0], resetsAt: semana[1] === null ? null : AGORA + semana[1] }, ...extra,
+})
+const contas = (cs: ContaDeUso[], erro: string | null = null): ContasLidas => ({ contas: cs, erro, lidoEm: AGORA })
+const dasContas: ContaDeUso[] = [
+  conta('agentes@wicomm.com.br', [51, 3 * H + 8 * MIN + 30_000], [16, 6 * D + 7 * H + 30_000], { ativa: true }),
+  conta('acesso@wicomm.com.br', [56, 1 * H + 40 * MIN + 30_000], [100, 3 * D + 2 * H + 30_000]),
+  conta('claude@wicomm.com.br', [0, null], [96, 1 * D + 5 * H + 30_000]),
+  conta('dev@wicomm.com.br', [17, 4 * H + 30_000], [72, 2 * D + 30_000], { semDado: true, sessao: null, semana: null }),
+  conta('izanagi@wicomm.com.br', [100, 20 * MIN + 30_000], [65, 4 * D + 30_000]),
+  conta('g.craice@gmail.com', [100, 2 * H + 30_000], [16, 5 * D + 30_000], { provedor: 'codex', ativa: true }),
+]
+
 // O cenário não aperta botão e a aba não grava a seção: só Sessões (a de abertura) e o vazio se desenham aqui; as
 // outras seções, com o trilho apertado, são montadas e checadas por `orca plugin test` (panel.test.tsx).
-export default defineCheck({
+const cenarios = {
   vazio: { requests: { 'kit.ler': leitura() } },
   'entregas com a caixa fora': { requests: { 'kit.ler': leitura({ entregas: entregas.filter((e) => e.origem === 'painel'), erroDaCaixa: 'o Orca não respondeu à leitura da caixa' }) }, persisted: { plugin: { secao: 'entregas' } } },
   sessoes: { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }) } },
@@ -128,4 +144,16 @@ export default defineCheck({
   'sessoes vazias': { requests: { 'kit.ler': leitura() } },
   'sessoes nao lidas': { requests: { 'kit.ler': leitura({ sessoes: sessoes({ projetos: [], erro: 'o worker não leu a pasta do painel' }) }) } },
   'falha ao ler': { requests: { 'kit.ler': () => { throw new Error('worker parado') } } },
+}
+
+const comContas = {
+  'contas de todas as contas': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }), 'kit.contas': contas(dasContas) } },
+  'contas (claro)': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }), 'kit.contas': contas(dasContas) }, theme: 'light' as const },
+  'contas indisponiveis': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }), 'kit.contas': contas([], 'o Orca não respondeu') } },
+}
+
+// Os cenários de antes não têm conta: a faixa não aparece neles.
+export default defineCheck({
+  ...Object.fromEntries(Object.entries(cenarios).map(([nome, c]) => [nome, { ...c, requests: { 'kit.contas': contas([]), ...c.requests } }])),
+  ...comContas,
 })

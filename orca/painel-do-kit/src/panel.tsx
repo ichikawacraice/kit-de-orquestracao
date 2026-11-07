@@ -7,9 +7,10 @@ import {
 } from 'orca'
 import { cortar, haQuanto, horaSP, itemDe, listaDePRs, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem, quando, semPrefixoDoItem, tempoDaSessao } from './vista'
 import { SeloDoProjeto, partesDoSelo } from './selo-do-projeto'
+import { contagem } from './nucleo/contas.mjs'
 import { separarLidas, limpar as limparLidas, desfazer as desfazerLidas, podarLidas } from './nucleo/lidas.mjs'
-import type { Acompanhada, AtualizacaoDoKit, Bolinha as BolinhaDaSessao, Concluida, ConcluidasLidas, DesfechoDoArquivar, Entrega, EstadoDaEntrega, GrupoDeSessoes, Leitura, Pendente, Pergunta, Sessao, VistaDasSessoes } from './protocol'
-import { PRAZO_DO_ARQUIVAR_MS, PRAZO_DO_ENVIO_MS } from './protocol'
+import type { Acompanhada, AtualizacaoDoKit, Bolinha as BolinhaDaSessao, Concluida, ConcluidasLidas, ContaDeUso, ContasLidas, DesfechoDoArquivar, Entrega, EstadoDaEntrega, GrupoDeSessoes, Leitura, Pendente, Pergunta, Sessao, VistaDasSessoes } from './protocol'
+import { CONTAS_MS, PRAZO_DO_ARQUIVAR_MS, PRAZO_DO_ENVIO_MS } from './protocol'
 
 // O "Sim" do painel (o mesmo texto do pane do app): a sessão e a trava de limpeza o reconhecem.
 const SIM = 'sim (segue a recomendação)'
@@ -26,6 +27,7 @@ const SEM_RESPOSTA = 'Não gravou: a aba não recebeu resposta do worker. Tente 
 export const relogio = { agora: () => Date.now() }
 
 const RELER_MS = 30_000
+const RELER_CONTAS_COM_ERRO_MS = 60_000
 /** Depois do prazo do envio, quanto a aba ainda espera o arquivo dizer o desfecho antes de desistir do "Entregando…". */
 const FOLGA_DO_DESFECHO_MS = 15_000
 /** A diferença tolerada entre o relógio da aba e a hora gravada no arquivo, para reconhecer a resposta desta vez. */
@@ -98,6 +100,9 @@ type Arquivo =
   | { tipo: 'andando'; itens: Concluida[] }
   | { tipo: 'feito'; desfecho: DesfechoDoArquivar }
 const concluidas = atom<ConcluidasLidas | null>('concluidas', null)
+// O uso das contas (F475): lido pelo worker a cada 5 min e ao abrir a aba; a contagem até o reinício é daqui, pelo relógio.
+const contasLidas = atom<ContasLidas | null>('contasLidas', null)
+const lendoContas = atom('lendoContas', false)
 const arquivo = atom<Arquivo | null>('arquivo', null)
 
 const sem = <T,>(o: Record<string, T>, k: string) => Object.fromEntries(Object.entries(o).filter(([c]) => c !== k)) as Record<string, T>
@@ -195,6 +200,20 @@ async function lerConcluidas(forcar: boolean) {
   }
 }
 
+/** O uso das contas: o worker guarda 5 min (1 min depois de uma falha). Só `forcar` ao abrir a aba. Falhar vira "indisponível", nunca derruba a aba. */
+async function lerContas(forcar: boolean) {
+  if (read(lendoContas)) return
+  set(lendoContas, true)
+  try {
+    set(contasLidas, await plugin.request('kit.contas', { forcar }))
+  } catch (e) {
+    console.warn('[kit] não li o uso das contas:', e)
+    set(contasLidas, { contas: [], erro: motivoDe(e), lidoEm: relogio.agora() })
+  } finally {
+    set(lendoContas, false)
+  }
+}
+
 /** Arquiva os itens confirmados: o efeito entra na hora (o botão dá lugar ao "Arquivando…") e a recusa aparece com o motivo. */
 async function arquivar(itens: Concluida[]) {
   set(arquivo, { tipo: 'andando', itens })
@@ -224,11 +243,14 @@ async function relerAgora() {
 export function setup(ctx: { subscriptions: { dispose(): void }[]; visible: unknown }) {
   void carregarLidas()
   void reler(false)
+  void lerContas(true)
   ctx.subscriptions.push(plugin.on('kit.mudou', () => void reler(false)))
   const relogioDaAba = setInterval(() => {
     if (!read(ctx.visible as never)) return
     set(tique, relogio.agora())
     if (relogio.agora() - (read(leitura)?.lidoEm ?? 0) >= RELER_MS && !read(lendo)) void reler(false)
+    const c = read(contasLidas)
+    if (relogio.agora() - (c?.lidoEm ?? 0) >= (c?.erro ? RELER_CONTAS_COM_ERRO_MS : CONTAS_MS)) void lerContas(false)
   }, 10_000)
   return () => clearInterval(relogioDaAba)
 }
@@ -1167,6 +1189,68 @@ function ArquivarConcluidas() {
   return <Row><Button variant="outline" size="sm" tooltip="Só as que têm PR mergeado, a worktree limpa e a sessão parada. A pasta é apagada." onPress={() => set(arquivo, { tipo: 'confirmando', itens: aptas })}>{`Arquivar concluídas (${aptas.length})`}</Button></Row>
 }
 
+// ── Uso das contas (F475) ────────────────────────────────────────────────────────────────────────────────────────
+const LARGURA_DA_BARRA = 36
+/** Só 3 tons: o da barra comum, `warning` a partir de 80% e `danger` a partir de 95% (os mesmos do selo de estado). */
+const tomDoUso = (pct: number) => (pct >= 95 ? 'danger' : pct >= 80 ? 'warning' : 'accent')
+
+function MiniBarra(props: { pct: number }) {
+  const cheio = Math.round((LARGURA_DA_BARRA * Math.max(0, Math.min(100, props.pct))) / 100)
+  return (
+    <Box width={LARGURA_DA_BARRA} height={6} radius="full" border="neutral" direction="row" shrink={false}>
+      {cheio ? <Box width={cheio} height={6} radius="full" background={tomDoUso(props.pct)} shrink={false} /> : null}
+    </Box>
+  )
+}
+
+function JanelaDeUso(props: { rotulo: string; j: NonNullable<ContaDeUso['sessao']>; agora: number }) {
+  return (
+    <Row align="center" gap="xs">
+      <Text size="xs" muted>{props.rotulo}</Text>
+      <MiniBarra pct={props.j.usado} />
+      <Text size="xs">{`${Math.round(props.j.usado)}%`}</Text>
+      <Text size="xs" muted>{contagem(props.j.resetsAt, props.agora)}</Text>
+    </Row>
+  )
+}
+
+/** Uma conta: `● e-mail · 5h 51% 3h 8m · sem 16% 6d 7h`. A ativa leva ● e o e-mail em destaque; as outras, ○. */
+function LinhaDaConta(props: { c: ContaDeUso; agora: number }) {
+  const { c, agora } = props
+  return (
+    <Box key={`c-${c.id}`}>
+      <Row align="center" gap="xs" wrap>
+        {c.ativa ? <Text size="xs" tone="accent">●</Text> : <Text size="xs" muted>○</Text>}
+        <Text size="xs" weight={c.ativa ? 'semibold' : undefined}>{c.email}</Text>
+        {c.provedor === 'codex' ? <Text size="xs" muted>Codex</Text> : null}
+        <Text size="xs" muted>·</Text>
+        {c.semDado || !c.sessao || !c.semana
+          ? <Text size="xs" muted>sem dado</Text>
+          : <>
+            <JanelaDeUso rotulo="5h" j={c.sessao} agora={agora} />
+            <Text size="xs" muted>·</Text>
+            <JanelaDeUso rotulo="sem" j={c.semana} agora={agora} />
+          </>}
+      </Row>
+    </Box>
+  )
+}
+
+/** A faixa de uso de todas as contas, só leitura: nada aqui troca, escolhe ou trava conta. Sem conta e sem leitura ainda, nada. */
+function UsoDasContas() {
+  const l = read(contasLidas)
+  const agora = read(tique) || relogio.agora()
+  if (!l) return null
+  if (l.erro) return <Text size="xs" muted>Uso das contas indisponível</Text>
+  if (!l.contas.length) return null
+  return (
+    <Box border radius="md" padding="sm" gap="xs">
+      <Text size="xs" muted>Uso das contas</Text>
+      {l.contas.map((c) => <LinhaDaConta key={`c-${c.provedor}-${c.id}`} c={c} agora={agora} />)}
+    </Box>
+  )
+}
+
 function Sessoes(props: { v: VistaDasSessoes }) {
   const v = props.v
   if (v.erro) {
@@ -1284,7 +1368,7 @@ export default function Painel() {
   } else if (!l) corpo = <Carregando atual={atual} />
   else if (atual === 'perguntas') corpo = <Perguntas l={l} />
   else if (atual === 'decisoes') corpo = <Box gap="sm"><Text size="xs" muted>Confirmar só grava; ninguém é acordado.</Text><Decisoes l={l} /></Box>
-  else if (atual === 'sessoes') corpo = <Sessoes v={l.sessoes ?? SEM_SESSOES} />
+  else if (atual === 'sessoes') corpo = <Box gap="lg"><UsoDasContas /><Sessoes v={l.sessoes ?? SEM_SESSOES} /></Box>
   else corpo = <Entregas l={l} />
   return (
     <Box direction="row" gap="sm" padding="sm" align="start">

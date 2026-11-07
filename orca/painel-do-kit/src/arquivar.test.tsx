@@ -24,6 +24,7 @@ async function montar(aptas: () => Concluida[] | 'quebra', desfecho: (itens: str
     host: mockHost({
       requests: {
         'kit.ler': () => leitura(),
+        'kit.contas': () => ({ contas: [], erro: null, lidoEm: Date.now() }),
         'kit.concluidas': (): ConcluidasLidas => { const a = aptas(); if (a === 'quebra') throw new Error('sem painel'); return { aptas: a, erro: null, lidoEm: Date.now() } },
         'kit.arquivar': (i: { itens: string[] }) => { pedidos.push(i); return desfecho(i.itens) },
       },
