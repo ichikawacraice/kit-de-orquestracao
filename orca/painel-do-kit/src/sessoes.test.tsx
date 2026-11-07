@@ -589,6 +589,7 @@ teste('contas: número velho (conta que não rodou) aparece apagado, e a idade v
   assert.ok(dicaDaLinha(nos, 'velha@x.com').some((d) => /último número lido há 3 h/.test(String(d))), JSON.stringify(dicaDaLinha(nos, 'velha@x.com')))
   assert.ok(daLinha(nos, 'velha@x.com', 'Text').every((n) => n.props.muted === true))
   assert.ok(!dicaDaLinha(nos, 'a@x.com').some((d) => /último número/.test(String(d))))
+  semErros(v)
 })
 
 teste('contas: o número ganha warning a partir de 80% e danger a partir de 95% (5 h e semana); a barra da 5 h segue o valor e o tom', async () => {
@@ -619,6 +620,20 @@ teste('contas: janela de 5 h que já reiniciou não mostra o número velho nem t
   assert.deepEqual(barraDaLinha(v, 'velha@x.com').enchimentos, [], 'barra vazia: só a trilha, sem enchimento nem tom')
 })
 
+teste('contas: janela da semana que já reiniciou também não mostra o número velho nem tom de alerta', async () => {
+  const { v, nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('parada@x.com', { antigo: true, antigoDesde: AGORA - 8 * D, sessao: { usado: 40, resetsAt: AGORA - 7 * D }, semana: { usado: 100, resetsAt: AGORA - H } }),
+    uso('boa@x.com', { semana: { usado: 100, resetsAt: AGORA + D + 30_000 } }),
+  ]))
+  // Prova que o 100% da semana aparece quando a janela ainda vale (senão a ausência abaixo não mede nada).
+  assert.ok(daLinha(nos, 'boa@x.com', 'Text').some((n) => n.text === '100%' && n.props.tone === 'danger'))
+  const textos = daLinha(nos, 'parada@x.com', 'Text').map((n) => n.text)
+  assert.ok(!textos.includes('100%'), `o 100% de antes do reinício da semana não aparece: ${JSON.stringify(textos)}`)
+  assert.equal(linhaDaConta(nos, 'parada@x.com'), '○ parada@x.com — · —')
+  assert.ok(!daLinha(nos, 'parada@x.com', 'Text').some((n) => n.props.tone === 'danger'), 'sem tom de alerta')
+  semErros(v)
+})
+
 teste('contas: a faixa fica no rodapé, fora da área que rola; a lista de sessões rola por cima dela', async () => {
   const { v } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([uso('a@x.com', { ativa: true })]))
   const raiz = v.drawnTree() as Desenhado
@@ -627,6 +642,8 @@ teste('contas: a faixa fica no rodapé, fora da área que rola; a lista de sess�
   assert.equal(resto, undefined, 'a raiz tem só dois filhos: a área que rola e o rodapé')
   assert.equal(rolavel.props?.scroll, 'y')
   assert.equal(rolavel.props?.grow, true)
+  assert.equal(rolavel.props?.minHeight, 0, 'a área que rola pode encolher abaixo do conteúdo (senão a lista empurra o rodapé para fora)')
+  assert.equal(rodape.props?.shrink, false, 'o rodapé não encolhe quando a lista é maior que a aba')
   assert.ok(rodape.key?.endsWith('rodape-de-contas'), String(rodape.key))
   const textos = (d: Desenhado) => descendentes(d).filter((n) => n.type === 'Text').map((n) => (n.children as string[]).join(''))
   assert.ok(textos(rolavel).includes('F1 · título do F1'), 'a lista está na área que rola')

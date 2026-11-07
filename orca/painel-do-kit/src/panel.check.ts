@@ -150,6 +150,8 @@ const cenarios = {
 const comContas = {
   'contas de todas as contas': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }), 'kit.contas': contas(dasContas) } },
   'contas (claro)': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }), 'kit.contas': contas(dasContas) }, theme: 'light' as const },
+  // Lista mais alta que a aba: prova no shot que ela rola por cima e a faixa fica no pé.
+  'contas com lista longa': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes({ projetos: [izanagi, kit, { ...kitComEspera, projeto: 'loja-nova' }] }) }), 'kit.contas': contas(dasContas) } },
   'contas indisponiveis': { requests: { 'kit.ler': leitura({ entregas, sessoes: sessoes() }), 'kit.contas': contas([], 'o Orca não respondeu') } },
 }
 

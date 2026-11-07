@@ -14,7 +14,7 @@ Lido do catálogo de componentes do Orca 1.4.248 (`out/shared/plugins/declarativ
 `[●] e-mail ············ ▬▬▬ 70%  2h 37m · 18%  6d 6h`
 - Linha = um `Row` `align="center"` `gap="xs"` com chave `c-<id>`, sem filhos que empilhem.
 - `●` cheio + e-mail `semibold` só na ativa; `○` nas outras.
-- E-mail num `Box grow minWidth={0}` com `Text truncate`, já cortado no meio por `emailCurto(email, MAX)` (núcleo); o inteiro vai no tooltip. `MAX` é decidido pelo shot a 310 px.
+- E-mail num `Box grow minWidth={0}` com `Text truncate`, o inteiro vai no tooltip (o corte no meio por `emailCurto` saiu depois do shot; ver o ajuste abaixo).
 - Células de largura fixa (px) para as barras e os números alinharem entre as linhas: barra 28, % 5 h, contagem 5 h, `·`, % semana, contagem semana.
 - Sem dado (`semDado`): `—` nas duas porcentagens, contagens vazias ou `—`, barra vazia, linha apagada; tooltip: "o Orca ainda não mediu o uso desta conta".
 - Número velho (`antigo`): números normais, linha apagada; tooltip "último número lido há 3 h".
@@ -27,8 +27,8 @@ Lido do catálogo de componentes do Orca 1.4.248 (`out/shared/plugins/declarativ
 - `Painel`: com a seção Sessões e a faixa visível, a raiz vira coluna de altura `100%`: em cima a linha atual (trilho + conteúdo) num `Box grow minHeight={0} scroll="y"`; embaixo, a faixa num `Box` com chave `rodape-de-contas`, largura cheia (também sob o trilho, para dar ~50 px a mais ao e-mail), borda em cima e `padding="sm"`. Nas outras seções, nada muda.
 
 ## O que muda em cada arquivo
-- `orca/painel-do-kit/src/nucleo/contas.mjs`: ordem fixa do operador e `emailCurto` (já escritos pela dona anterior, ficam). Nada mais.
-- `orca/painel-do-kit/test/contas.test.mjs`: testes da ordem e do `emailCurto` (já escritos, ficam).
+- `orca/painel-do-kit/src/nucleo/contas.mjs`: ordem fixa do operador (já escrita pela dona anterior, fica). O `emailCurto` saiu (ajuste abaixo).
+- `orca/painel-do-kit/test/contas.test.mjs`: testes da ordem (já escritos, ficam); o do `emailCurto` saiu com ele.
 - `orca/painel-do-kit/src/panel.tsx`: `JanelaDeUso`/`LinhaDaConta`/`UsoDasContas` refeitos; `Painel` com o rodapé fixo.
 - `orca/painel-do-kit/src/sessoes.test.tsx`: os testes da faixa (já reescritos pela dona anterior) ajustados à barra de `Box` em vez de `Progress`.
 - `orca/painel-do-kit/src/panel.check.ts`: cenário com os dados do F475 (6 Claude + 1 Codex, uma `status: error` com número velho, uma com 100%, uma sem leitura) e lista de sessões longa o bastante para rolar.

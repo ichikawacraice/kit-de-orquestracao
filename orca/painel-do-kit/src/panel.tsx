@@ -1190,8 +1190,7 @@ function ArquivarConcluidas() {
 }
 
 // ── Uso das contas (F476): uma linha por conta, fixa no rodapé da aba ────────────────────────────────────────────
-/** Larguras das células (px): fixas, para as barras e os números alinharem de uma conta para a outra. */
-/** Folgadas para "100%" e "2h 37m" na fonte xs: o espaço sai do e-mail, que corta pelo fim. */
+/** Larguras das células (px), fixas para as barras e os números alinharem de uma conta para a outra; folgadas para "100%" e "2h 37m" na fonte xs: o espaço sai do e-mail, que corta pelo fim. */
 const LARGURA = { barra: 40, barraMinima: 16, pct: 34, contagem: 44, email: 36 } as const
 /** O aviso vai ao número (e, na janela de 5 h, ao enchimento da barra): `warning` a partir de 80% e `danger` a partir de 95%. */
 const tomDoNumero = (pct: number) => (pct >= 95 ? 'danger' : pct >= 80 ? 'warning' : undefined)
@@ -1233,11 +1232,13 @@ function LinhaDaConta(props: { c: ContaDeUso; agora: number }) {
   const { c, agora } = props
   const vazia = c.semDado || !c.sessao || !c.semana
   const apagada = vazia || c.antigo
-  const reiniciou = !vazia && c.sessao!.resetsAt !== null && c.sessao!.resetsAt <= agora
+  const passou = (j: ContaDeUso['sessao']) => !!j && j.resetsAt !== null && j.resetsAt <= agora
+  const reiniciou = !vazia && passou(c.sessao)
   const pct = (j: ContaDeUso['sessao']) => (j ? Math.max(0, Math.min(100, Math.round(j.usado))) : 0)
   const p5 = reiniciou || vazia ? 0 : pct(c.sessao)
   const tom5 = reiniciou || vazia ? undefined : tomDoNumero(c.sessao!.usado)
-  const sem = vazia ? null : c.semana
+  // A semana que já reiniciou também não mostra o número de antes (nem o tom), como a 5 h.
+  const sem = vazia || passou(c.semana) ? null : c.semana
   const textoSem = sem ? `${pct(sem)}%` : '—'
   const tomBarra: Tom = apagada ? 'neutral' : tom5 ?? 'accent'
   return (
