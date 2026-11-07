@@ -501,8 +501,8 @@ teste('contas: uma linha só por conta — ponto, e-mail, UMA barra (a de 5 h), 
   }
   assert.equal(descendentes(v.drawnTree()).filter((d) => d.type === 'Box' && d.props?.background === 'muted').length, 3, 'três contas, três barras (não seis)')
   const b = barraDaLinha(v, 'agentes@x.com')
-  assert.equal(b.larguraDaTrilha, 28)
-  assert.deepEqual(b.enchimentos, [{ largura: Math.round(51 * 28 / 100), tom: 'accent' }], 'o enchimento é 51% da trilha')
+  assert.equal(b.larguraDaTrilha, 40)
+  assert.deepEqual(b.enchimentos, [{ largura: '51%', tom: 'accent' }], 'o enchimento é 51% da trilha (em %, para seguir a trilha quando ela encolhe)')
   semErros(v)
 })
 
@@ -537,14 +537,34 @@ teste('contas: a ordem das linhas é a que o núcleo entregou (a ativa não sobe
   assert.ok(!dicaDaLinha(nos, 'claude@x.com').some((d) => /Codex/.test(String(d))), 'a dica de outra conta não diz Codex')
 })
 
-teste('contas: e-mail longo corta no meio com reticências e o inteiro vai na dica; e-mail que cabe fica inteiro', async () => {
+teste('contas: o e-mail vai inteiro e corta pelo fim (o começo, que distingue a conta, fica à vista); o inteiro também vai na dica', async () => {
   const longo = 'gabriel.craice@wicomm.com.br'
   const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([uso(longo), uso('dev@wicomm.com')]))
-  const texto = linhaDaConta(nos, longo)
-  assert.ok(texto.includes('…'), texto)
-  assert.ok(!texto.includes(longo), 'o inteiro não está no texto da linha')
+  const email = nos({ type: 'Text', text: longo })
+  assert.equal(email.length, 1, 'o e-mail inteiro está no texto da linha')
+  assert.equal(email[0].props.truncate, true, 'e corta pelo fim quando não cabe')
   assert.ok(dicaDaLinha(nos, longo).some((d) => String(d).includes(longo)), 'o inteiro está na dica')
   assert.match(linhaDaConta(nos, 'dev@wicomm.com'), /^○ dev@wicomm\.com /)
+})
+
+teste('contas: número e contagem nunca quebram linha (cada célula corta em vez de quebrar) e cabem "100%" e "2h 37m"', async () => {
+  const { nos } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('a@x.com', { sessao: { usado: 100, resetsAt: AGORA + 2 * H + 37 * MIN + 30_000 }, semana: { usado: 100, resetsAt: AGORA + 6 * D + 20 * H + 30_000 } }),
+  ]))
+  const celulas = daLinha(nos, 'a@x.com', 'Text').filter((n) => /%|\d[hmd]/.test(n.text ?? ''))
+  assert.deepEqual(celulas.map((n) => n.text), ['100%', '2h 37m', '100%', '6d 20h'], 'as quatro células estão lá')
+  assert.deepEqual(celulas.filter((n) => n.props.truncate !== true).map((n) => n.text), [], 'nenhuma célula pode quebrar linha')
+})
+
+teste('contas: a barra mostra a trilha também em 0% (sem enchimento), para as linhas alinharem', async () => {
+  const { v } = await montar(() => leitura(vista([grupo('kit', [sessao('F1')])])), () => contasLidas([
+    uso('a@x.com', { sessao: { usado: 0, resetsAt: null } }), uso('b@x.com', { semDado: true, sessao: null, semana: null }),
+  ]))
+  for (const id of ['a@x.com', 'b@x.com']) {
+    const b = barraDaLinha(v, id)
+    assert.equal(b.trilhas, 1, `${id}: a trilha está lá`)
+    assert.deepEqual(b.enchimentos, [], `${id}: sem enchimento de largura zero`)
+  }
 })
 
 teste('contas: sem leitura vira "—" no lugar do número, a linha toda apagada, e a explicação vai só na dica (nunca no texto da linha)', async () => {
@@ -581,9 +601,9 @@ teste('contas: o número ganha warning a partir de 80% e danger a partir de 95% 
   assert.deepEqual(tons('a@x.com'), [['79%', undefined], ['80%', 'warning']])
   assert.deepEqual(tons('b@x.com'), [['94%', 'warning'], ['95%', 'danger']])
   assert.deepEqual(tons('c@x.com'), [['100%', 'danger'], ['0%', undefined]])
-  assert.deepEqual(barraDaLinha(v, 'a@x.com').enchimentos, [{ largura: Math.round(79 * 28 / 100), tom: 'accent' }])
-  assert.deepEqual(barraDaLinha(v, 'b@x.com').enchimentos, [{ largura: Math.round(94 * 28 / 100), tom: 'warning' }], 'a 5 h acima de 80% pinta a barra')
-  assert.deepEqual(barraDaLinha(v, 'c@x.com').enchimentos, [{ largura: 28, tom: 'danger' }], '100% enche a trilha e pinta de vermelho')
+  assert.deepEqual(barraDaLinha(v, 'a@x.com').enchimentos, [{ largura: '79%', tom: 'accent' }])
+  assert.deepEqual(barraDaLinha(v, 'b@x.com').enchimentos, [{ largura: '94%', tom: 'warning' }], 'a 5 h acima de 80% pinta a barra')
+  assert.deepEqual(barraDaLinha(v, 'c@x.com').enchimentos, [{ largura: '100%', tom: 'danger' }], '100% enche a trilha e pinta de vermelho')
   // A semana só pinta o número, nunca a barra (a barra é só da 5 h).
   assert.equal(barraDaLinha(v, 'a@x.com').trilhas, 1)
 })
@@ -596,7 +616,7 @@ teste('contas: janela de 5 h que já reiniciou não mostra o número velho nem t
   assert.ok(textos.includes('72%'), JSON.stringify(textos))
   assert.ok(!textos.includes('100%'), 'o 100% de antes do reinício não aparece')
   assert.ok(textos.includes('—'), 'no lugar dele, o traço')
-  assert.deepEqual(barraDaLinha(v, 'velha@x.com').enchimentos, [{ largura: 0, tom: 'neutral' }], 'barra vazia e sem tom')
+  assert.deepEqual(barraDaLinha(v, 'velha@x.com').enchimentos, [], 'barra vazia: só a trilha, sem enchimento nem tom')
 })
 
 teste('contas: a faixa fica no rodapé, fora da área que rola; a lista de sessões rola por cima dela', async () => {

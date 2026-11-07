@@ -47,3 +47,11 @@ Item na barra de status do Orca; mudar o worker ou a frequência de leitura.
 
 ## Critério de pronto
 Testes da aba e afetados verdes; shot conferido ponto a ponto contra o modelo; validador e crítico de UI sem achado médio/alto.
+
+## Ajuste depois do shot (retomada, 06/11)
+O primeiro shot e o print do operador mostraram "100 %" e "2h 37m" quebrando linha, a barra quase invisível e o e-mail sumindo a 310 px. O que mudou:
+- **Células sem quebra:** cada `Text` de número/contagem tem `truncate` (nunca quebra; corta se faltar espaço). Larguras: % 34 px, contagem 44 px.
+- **E-mail inteiro, cortado pelo fim** (`Text truncate`), num `Box grow width={0} minWidth={36}`: o começo do e-mail é o que distingue a conta (o domínio se repete), e a base zero faz todas as linhas darem o mesmo espaço à barra. O `emailCurto` (corte no meio) saiu do núcleo. *Assumida, a confirmar.*
+- **Barra visível:** o fundo de `Box` no Orca é só tom translúcido (12%), invisível sobre o cartão; a borda vem no tom cheio. Trilha = `border="neutral"`; enchimento = `border` + `background` no tom, largura em %. Barra de 40 px, que cede até 16 px quando a aba é estreita.
+- **Faixa** com `paddingX="xs"` para caber a 310 px.
+- Shots: `orca/painel-do-kit/.orca/shots/f476-contas-{310,400,480}.png` e `f476-contas-claro-400.png`.

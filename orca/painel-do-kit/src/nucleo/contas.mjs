@@ -69,12 +69,3 @@ export function contasDoOrca(json) {
     ],
   };
 }
-
-/** O e-mail que cabe na linha única: inteiro se couber em `max` caracteres; senão corta no meio com `…`, guardando o começo e o fim (o domínio). */
-export function emailCurto(email, max) {
-  const e = String(email);
-  if (e.length <= max) return e;
-  const sobra = max - 1;
-  const fim = Math.ceil(sobra / 2.5);
-  return `${e.slice(0, sobra - fim)}…${e.slice(e.length - fim)}`;
-}

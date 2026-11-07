@@ -1,7 +1,7 @@
 // Uso das contas (F475): o que o `orca account list --json` diz vira uma linha por conta. Contas puras, sem Orca.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { contagem, contasDoOrca, emailCurto } from '../src/nucleo/contas.mjs';
+import { contagem, contasDoOrca } from '../src/nucleo/contas.mjs';
 
 const AGORA = Date.parse('2026-11-06T20:32:00Z'); // 17:32 em São Paulo
 const MIN = 60_000, H = 60 * MIN, D = 24 * H;
@@ -123,15 +123,6 @@ test('entrada que não é a resposta do Orca: lança erro, para a aba dizer "ind
 
 test('sem conta nenhuma: lista vazia, sem erro', () => {
   assert.deepEqual(contasDoOrca({ claude: { accounts: [], activeAccountId: null }, rateLimits: {} }).contas, []);
-});
-
-test('emailCurto: cabe inteiro fica igual; senão corta no meio com reticências, mantendo o começo e o fim, no tamanho pedido', () => {
-  assert.equal(emailCurto('dev@wicomm.com.br', 20), 'dev@wicomm.com.br');
-  const curto = emailCurto('gabriel.craice@wicomm.com.br', 20);
-  assert.equal(curto.length, 20);
-  assert.match(curto, /^gabriel\.c.*….*com\.br$/);
-  assert.notEqual(curto, 'gabriel.craice@wicomm.com.br', 'o corte aconteceu (senão o teste não mede nada)');
-  assert.equal(emailCurto('a@b.c', 20), 'a@b.c');
 });
 
 test('ordem: "agents@" (como o operador escreveu) e "agentes@" (a conta real) ficam ambos em 2º, logo depois de claude@', () => {

@@ -7,7 +7,7 @@ import {
 } from 'orca'
 import { cortar, haQuanto, horaSP, itemDe, listaDePRs, ms, nomeDoDestino, nomeDoDia, plural, porDia, porItem, quando, semPrefixoDoItem, tempoDaSessao } from './vista'
 import { SeloDoProjeto, partesDoSelo } from './selo-do-projeto'
-import { contagem, emailCurto } from './nucleo/contas.mjs'
+import { contagem } from './nucleo/contas.mjs'
 import { separarLidas, limpar as limparLidas, desfazer as desfazerLidas, podarLidas } from './nucleo/lidas.mjs'
 import type { Acompanhada, AtualizacaoDoKit, Bolinha as BolinhaDaSessao, Concluida, ConcluidasLidas, ContaDeUso, ContasLidas, DesfechoDoArquivar, Entrega, EstadoDaEntrega, GrupoDeSessoes, Leitura, Pendente, Pergunta, Sessao, VistaDasSessoes } from './protocol'
 import { CONTAS_MS, PRAZO_DO_ARQUIVAR_MS, PRAZO_DO_ENVIO_MS } from './protocol'
@@ -1191,9 +1191,8 @@ function ArquivarConcluidas() {
 
 // ── Uso das contas (F476): uma linha por conta, fixa no rodapé da aba ────────────────────────────────────────────
 /** Larguras das células (px): fixas, para as barras e os números alinharem de uma conta para a outra. */
-const LARGURA = { barra: 28, pct: 26, contagem: 42 } as const
-/** O e-mail que cabe na linha a 310 px: o que passar disso é cortado no meio (o inteiro vai na dica). */
-export const MAX_DO_EMAIL = 14
+/** Folgadas para "100%" e "2h 37m" na fonte xs: o espaço sai do e-mail, que corta pelo fim. */
+const LARGURA = { barra: 40, barraMinima: 16, pct: 34, contagem: 44, email: 36 } as const
 /** O aviso vai ao número (e, na janela de 5 h, ao enchimento da barra): `warning` a partir de 80% e `danger` a partir de 95%. */
 const tomDoNumero = (pct: number) => (pct >= 95 ? 'danger' : pct >= 80 ? 'warning' : undefined)
 
@@ -1202,17 +1201,19 @@ function Celula(props: { largura: number; direita?: boolean; children: string; t
   const { largura, direita, children, tone, apagada } = props
   return (
     <Box width={largura} shrink={false} direction="row" justify={direita ? 'end' : 'start'}>
-      <Text size="xs" muted={apagada || undefined} tone={apagada ? undefined : tone}>{children}</Text>
+      <Text size="xs" truncate muted={apagada || undefined} tone={apagada ? undefined : tone}>{children}</Text>
     </Box>
   )
 }
 
-/** A barra da janela de 5 h: trilha e enchimento são `Box` (a `Progress` do Orca não aceita cor). Decorativa: o número ao lado diz o valor. */
+/** A barra da janela de 5 h: trilha e enchimento são `Box` (a `Progress` do Orca não aceita cor). O fundo de `Box` só vem
+ *  em tom translúcido, invisível sobre o cartão; a borda vem no tom cheio: a trilha é contornada em `neutral` e o enchimento
+ *  é a borda no tom do número. Decorativa: o número ao lado diz o valor. */
 function Barra(props: { pct: number; tom: Tom }) {
-  const largura = Math.round((props.pct * LARGURA.barra) / 100)
+  const pct = Math.max(0, Math.min(100, Math.round(props.pct)))
   return (
-    <Box key="barra" width={LARGURA.barra} height={6} radius="full" background="muted" shrink={false} direction="row">
-      <Box key="enchimento" width={largura} height={6} radius="full" background={props.tom} shrink={false} />
+    <Box key="barra" width={LARGURA.barra} minWidth={LARGURA.barraMinima} height={6} radius="full" border="neutral" background="muted" direction="row">
+      {pct > 0 ? <Box key="enchimento" width={`${pct}%`} height={4} radius="full" border={props.tom} background={props.tom} shrink={false} /> : null}
     </Box>
   )
 }
@@ -1242,7 +1243,7 @@ function LinhaDaConta(props: { c: ContaDeUso; agora: number }) {
   return (
     <Row key={`c-${c.id}`} align="center" gap="xs">
       <Button variant="ghost" size="xs" tone={c.ativa ? 'accent' : 'neutral'} tooltip={dicaDaConta(c, agora)}>{c.ativa ? '●' : '○'}</Button>
-      <Box grow minWidth={0}><Text size="xs" truncate muted={apagada || undefined} weight={c.ativa ? 'semibold' : undefined}>{emailCurto(c.email, MAX_DO_EMAIL)}</Text></Box>
+      <Box grow width={0} minWidth={LARGURA.email}><Text size="xs" truncate muted={apagada || undefined} weight={c.ativa ? 'semibold' : undefined}>{c.email}</Text></Box>
       <Barra pct={p5} tom={tomBarra} />
       <Celula largura={LARGURA.pct} direita apagada={apagada} tone={tom5}>{reiniciou || vazia ? '—' : `${p5}%`}</Celula>
       <Celula largura={LARGURA.contagem} apagada={apagada}>{vazia || reiniciou ? '' : contagem(c.sessao!.resetsAt, agora)}</Celula>
@@ -1274,7 +1275,7 @@ function UsoDasContas() {
   }
   if (!l.contas.length) return null
   return (
-    <Box key="rodape-de-contas" border radius="md" padding="sm" gap="xs" shrink={false}>
+    <Box key="rodape-de-contas" border radius="md" paddingX="xs" paddingY="sm" gap="xs" shrink={false}>
       <Row align="center" gap="xs">
         <Box grow minWidth={0}>
           {l.erro
