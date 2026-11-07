@@ -3,7 +3,8 @@
 // `guardrail_max_retries` da CrewAI: o critério de pronto não depende do relato).
 // Quem é cobrada: a dona de item vivo da fila em execução, validação ou merge (o conserto que a fila devolve); em
 // planejamento e design ela escreve plano e revisão, não roda critério.
-// Só cobra turno que editou arquivo — por Edit/Write ou por Bash que grava (mais da metade das edições reais é por Bash).
+// Só cobra turno que editou arquivo — por Edit/Write, por Bash que grava (mais da metade das edições reais é por Bash) ou
+// pelo subagente `orquestracao:executor` que ela lançou (F477).
 // Status ("exit=0", "Found 0 errors") e contagem ("98 passed") só valem se aparecem na saída real do turno (Bash, Read de
 // .output/.log, Monitor, TaskOutput, notificação).
 // O turno que para esperando gate em background adia para o da notificação, no máximo 2 turnos seguidos: dev server ou
@@ -25,6 +26,8 @@ const ESTADO = join(BASE, 'hooks-crewai-estado.json');
 const MAX_COBRANCAS = 2;
 const MAX_ADIAMENTOS = 2;
 const EDITA = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
+// F477 (ADR 0036): o executor grava pela dona; o turno que o lançou editou, mesmo sem Edit na transcrição dela.
+const DELEGA_EDICAO = (c) => (c.name === 'Agent' || c.name === 'Task') && /^(?:orquestracao:)?executor$/.test(String(c.input?.subagent_type || ''));
 // Bash que grava arquivo: sed/perl -i, redireção para arquivo (não /dev/null nem &N), tee, heredoc
 // para interpretador, git apply/am, patch. Basta para separar "editou" de "só conferiu".
 const BASH_GRAVA = [
@@ -167,8 +170,31 @@ const CONTAGEM = /(\d+)\s+(?:testes?\s+|casos?\s+)?(passaram|verdes|passou|passe
 const STATUS = /\b(?:exit(?:\s*code|\s*status)?\s*[=:]?\s*-?\d+|\w+_EXIT\s*=\s*\d+|(?:test|tests|typecheck|gate|lint|build)\s*=\s*\d+|Found\s+\d+\s+errors?)\b/gi;
 const normalizarStatus = (s) => s.toLowerCase().replace(/\bexit(?:\s*code|\s*status)?\s*[=:]?\s*/, 'exit=').replace(/\s+/g, ' ').trim();
 
+// F477: a notificação de subagente em segundo plano traz no <result> o relato dele: texto do modelo, não saída
+// de comando. Sai das saídas (e não conta como teste rodado); a de Bash em fundo continua valendo.
+const BLOCO_DE_NOTIFICACAO = /<task-notification>[\s\S]*?(?:<\/task-notification>|$)/g;
+function semRelatoDeSubagente(texto, agentes) {
+  let sobrou = false;
+  const limpo = texto.replace(BLOCO_DE_NOTIFICACAO, (b) => {
+    const ids = [...b.matchAll(/<tool-use-id>([^<]+)<\/tool-use-id>/g)].map((m) => m[1]);
+    if (ids.some((i) => agentes.has(i)) || /<summary>\s*Agent\s+"/.test(b)) return '';
+    sobrou = true;
+    return b;
+  });
+  return { limpo, comando: sobrou };
+}
+// O Read devolve cada linha com o número na frente ("     1\t…"): sem tirar, "ℹ fail 2" e "exit=1" não casam no começo da linha.
+const semNumeroDeLinha = (texto) => texto.replace(/^ *\d+\t/gm, '');
+
 function turnoAtual(entradas) {
   const { inicio } = aberturaDoTurno(entradas);
+  // Os subagentes lançados em todo o transcript: a notificação que abre o turno é de um lançamento de antes.
+  const agentes = new Set();
+  for (const e of entradas) {
+    if (e.type !== 'assistant' || !Array.isArray(e.message?.content)) continue;
+    for (const c of e.message.content) if (c.type === 'tool_use' && (c.name === 'Agent' || c.name === 'Task')) agentes.add(c.id);
+  }
+  let notificouComando = false;
   const turno = entradas.slice(inicio + 1);
   const usos = new Map();
   let editou = false;
@@ -191,6 +217,7 @@ function turnoAtual(entradas) {
     for (const c of e.message.content) {
       if (c.type !== 'tool_use') continue;
       usos.set(c.id, c);
+      if (DELEGA_EDICAO(c)) editou = true;
       if (EDITA.has(c.name)) {
         editou = true;
         const alvo = String(c.input?.file_path || c.input?.notebook_path || '');
@@ -208,7 +235,11 @@ function turnoAtual(entradas) {
   }
   // A notificação de tarefa em background que abriu o turno traz o status do comando.
   const abertura = entradas[inicio];
-  const saidas = abertura?.origin?.kind === 'task-notification' ? [textoDe(abertura.message)] : [];
+  const saidas = [];
+  if (abertura?.origin?.kind === 'task-notification') {
+    const { limpo, comando } = semRelatoDeSubagente(textoDe(abertura.message), agentes);
+    if (comando) { saidas.push(limpo); notificouComando = true; }
+  }
   let rodou = saidas.length > 0;
   for (const e of turno) {
     if (e.type !== 'user' || !Array.isArray(e.message?.content)) continue;
@@ -217,7 +248,7 @@ function turnoAtual(entradas) {
       const uso = usos.get(c.tool_use_id);
       const lido = uso?.name === 'Read' && /\.(output|log)$/.test(String(uso.input?.file_path || ''));
       if (!uso || !(SAIDA_DE_TOOL.has(uso.name) || lido)) continue;
-      const texto = conteudoDe(c.content);
+      const texto = lido ? semNumeroDeLinha(conteudoDe(c.content)) : conteudoDe(c.content);
       saidas.push(texto);
       rodou = true;
       const arquivo = String(uso.input?.file_path || '');
@@ -229,12 +260,15 @@ function turnoAtual(entradas) {
   for (const e of turno) {
     const t = e.type === 'user' ? textoDe(e.message) : e.attachment?.type === 'queued_command' ? String(e.attachment.prompt || '') : '';
     if (!t.includes('<task-notification>')) continue;
-    saidas.push(t);
-    rodou = true;
     for (const m of t.matchAll(/<tool-use-id>([^<]+)<\/tool-use-id>/g)) fundo.delete(m[1]);
+    const { limpo, comando } = semRelatoDeSubagente(t, agentes);
+    if (!comando) continue;
+    saidas.push(limpo);
+    rodou = true;
+    notificouComando = true;
   }
-  // A notificação (a que abriu o turno ou uma dentro dele) é de trabalho em background: conta como teste rodado.
-  if (saidas.length && (abertura?.origin?.kind === 'task-notification' || saidas.some((s) => s.includes('<task-notification>')))) rodouTeste = true;
+  // A notificação de comando em background (a que abriu o turno ou uma dentro dele) conta como teste rodado.
+  if (notificouComando) rodouTeste = true;
   return { chave: abertura?.uuid || 'inicio', editou, rodouTeste, testes: [...testes], esperaFundo: fundo.size > 0, rodou, saidas: saidas.join("\n"), lista: saidas, ultimoTexto };
 }
 

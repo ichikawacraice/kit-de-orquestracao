@@ -20,6 +20,11 @@
 // `*:designer` daria escrita a todo plugin instalado); a pasta é
 // cercada: valor inválido (absoluto, `..`, a própria raiz) vale o padrão e symlink não libera
 // (recusa com o motivo e o rótulo `recusou-symlink` no log).
+// Exceção do executor (F477, ADR 0036): o subagente `orquestracao:executor` (ou `executor`), em Sonnet, grava o CÓDIGO e os testes que a
+// dona pediu, só dentro do repositório da sessão (a pasta mais próxima, subindo do `cwd`, com `.git`, arquivo ou pasta), e nunca em
+// `docs/`, `.claude/` ou `.git/` da raiz nem em `.md`/`.mdx`: a documentação é da dona. Comparado pelo caminho real na forma do disco;
+// symlink de dentro para fora recusa com o motivo. A configuração das travas segue recusada antes (nem o executor se libera) e o Bash
+// continua fora. Dúvida ou erro nesse caminho: recusa (`recusou-executor`); o resto do hook segue como estava.
 // Erro do hook vai para o log e a ferramenta segue.
 import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -203,6 +208,35 @@ function designerNaRevisao(tipo, p) {
   }
 }
 
+const ehExecutor = (tipo) => tipo === 'executor' || tipo === 'orquestracao:executor';
+// A raiz do repositório da sessão: do caminho real do `cwd`, a pasta mais próxima (ela própria incluída) com `.git`.
+function raizDoRepo(cwd) {
+  for (let d = realpathSync(cwd); ; d = dirname(d)) {
+    if (existsSync(join(d, '.git'))) return d;
+    if (dirname(d) === d) return null;
+  }
+}
+// `null` quando o executor pode gravar `p`; senão o motivo da regra que pegou. Erro vira recusa.
+function recusaDoExecutor(e, p) {
+  try {
+    const raiz = raizDoRepo(e.cwd || process.cwd());
+    if (!raiz) return 'A pasta da sessão não está dentro de um repositório git';
+    const fr = forma(raiz);
+    const fp = forma(caminhoReal(p));
+    if (!fp.startsWith(fr + '/')) {
+      const lido = forma(p);
+      const dentroLido = [raiz, resolve(e.cwd || process.cwd())].some((r) => lido.startsWith(forma(r) + '/'));
+      return dentroLido ? `O caminho passa por um link simbólico que leva para fora do repositório (${p})` : `O arquivo está fora do repositório da sessão (${p})`;
+    }
+    const rel = fp.slice(fr.length + 1);
+    for (const pasta of ['docs', '.claude', '.git']) if (rel === pasta || rel.startsWith(`${pasta}/`)) return `O arquivo mora em ${pasta}/`;
+    if (/\.mdx?$/.test(rel)) return 'O arquivo é .md ou .mdx';
+    return null;
+  } catch (err) {
+    return `Não foi possível conferir o caminho (${err?.code ?? err?.message ?? 'erro'})`;
+  }
+}
+
 function caminhoDe(entrada) {
   const ti = entrada.tool_input || {};
   let p = ti.file_path || ti.notebook_path || '';
@@ -237,6 +271,25 @@ function main() {
   const p = caminhoDe(e);
   if (p && daConfiguracaoDasTravas(p)) return recusarTrava(e, quem, p);
   if (!p || LIVRES.some((f) => f(p))) return;
+  // A lista de tipos da máquina segue valendo para quem a pôs lá: a regra do executor só acrescenta a liberação.
+  if (ehExecutor(e.agent_type) && !tipoLiberado(e.agent_type)) {
+    const motivo = recusaDoExecutor(e, p);
+    if (!motivo) {
+      registrar(e.session_id || '-', HOOK, 'liberado-executor', `${quem} ${e.tool_name} ${p}`);
+      return;
+    }
+    registrar(e.session_id || '-', HOOK, 'recusou-executor', `${quem} ${e.tool_name} ${p} (${motivo})`);
+    process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason:
+          'O executor grava só código e testes dentro do repositório da dona: fora de docs/, de .claude/, de .git/ e de .md. ' +
+          `${motivo}. Pare e devolva no relatório o que gravaria; a documentação é da dona.`,
+      },
+    }));
+    return;
+  }
   if (tipoLiberado(e.agent_type)) {
     registrar(e.session_id || '-', HOOK, 'liberado-por-tipo', `${quem} ${e.tool_name} ${p}`);
     return;
